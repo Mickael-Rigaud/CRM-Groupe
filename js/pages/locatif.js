@@ -294,9 +294,9 @@ export const locatifPage = {
     if (!scope.canRental) return denied(root);
     const state = { month: isoDay().slice(0, 7), props: null, ddOpen: false }; // props = null → tous les immeubles
     let prepared = new Set();
-    const draw = async () => {
+    const drawInner = async () => {
       const k = state.month;
-      if (!prepared.has(k) && k <= isoDay().slice(0, 7)) { prepared.add(k); const n = await prepareMonth(k); if (n) toast(`${n} ligne(s) préparée(s) pour ${monthLabel(k)}`); }
+      if (!prepared.has(k) && k <= isoDay().slice(0, 7)) { prepared.add(k); try { const n = await prepareMonth(k); if (n) toast(`${n} ligne(s) préparée(s) pour ${monthLabel(k)}`); } catch (err) { toast('Préparation du mois : ' + err.message, 'err'); } }
       const allProps = db.t('properties').filter(p => db.t('units').some(u => u.property_id === p.id) || db.t('leases').some(l => l.property_id === p.id)).sort((a, b) => a.name.localeCompare(b.name));
       if (state.props === null) state.props = new Set(allProps.map(p => p.id));
       const props = allProps.filter(p => state.props.has(p.id));
@@ -317,7 +317,7 @@ export const locatifPage = {
       const line = ({ u, l }) => {
         if (!l) { tot.vacant++; sub.vacant++; return `<tr class="vacant"><td><b>${esc(u.name)}</b><div class="small muted">${esc([u.unit_type, u.surface ? num(u.surface) + ' m²' : '', u.dpe ? 'DPE ' + u.dpe : ''].filter(Boolean).join(' · '))}</div></td><td colspan="11" class="muted"><span class="pill warn">Vacant</span> <button class="btn ghost sm" data-newlease="${u.id}">+ Bail</button></td><td></td></tr>`; }
         const row = rowOf(l.id, k); const due = dueOf(l, row); const apl = Number(row?.apl) || 0; const tp = Number(row?.tenant_paid ?? (row?.amount ?? 0)) || 0; const rec = apl + tp;
-        const missing = round2(due - rec); const prev = round2(balanceOf(l.id, shiftMonth(k, -1))); const bal = round2(missing + prev + (Number(row?.adjustment) || 0));
+        const missing = round2(due - rec); const prev = round2(balanceOf(l.id, shiftMonth(k, -1))); const bal = round2(balanceOf(l.id, k));
         for (const t of [tot, sub]) { t.due += due; t.apl += apl; t.tenant += tp; t.rec += rec; t.missing += missing; t.prev += prev; t.bal += bal; t.leases++; }
         const inp = (name, val, w = 70) => `<input type="number" step="0.01" class="cell-in" style="width:${w}px" data-lease="${l.id}" data-f="${name}" value="${val ?? ''}">`;
         return `<tr>
@@ -371,6 +371,7 @@ export const locatifPage = {
       });
       root.querySelector('#lo-export').onclick = () => csvDownload(`loyers-${k}.csv`, groups.flatMap(g => g.lines.filter(x => x.l).map(({ u, l }) => { const row = rowOf(l.id, k); const due = dueOf(l, row); const rec = receivedOf(row); return { immeuble: g.p.name, lot: u?.name || l.lot, locataire: l.tenant, entree: l.start_date, loyer_hc: l.rent, charges: l.charges, du: due, apl: row?.apl || 0, locataire_paye: row?.tenant_paid || 0, recu: rec, mode: row?.mode || '', manquant: round2(due - rec), retard_anterieur: round2(balanceOf(l.id, shiftMonth(k, -1))), reste: round2(balanceOf(l.id, k)), commentaire: row?.note || '' }; })));
     };
+    const draw = async () => { try { await drawInner(); } catch (err) { console.error(err); root.innerHTML = `<div class="card"><div class="empty">Erreur d'affichage : ${esc(err.message)}<br><span class="small">Faites une capture de ce message et envoyez-la à Claude.</span></div></div>`; } };
     draw();
     return { refresh: draw };
   },

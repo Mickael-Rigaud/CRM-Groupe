@@ -164,7 +164,7 @@ export function openProperty(id, onChange) {
     const year = new Date().getFullYear();
     const m0 = propertyMetrics(p, db.t('loans'), db.t('leases'), db.t('expenses'), db.t('rent_payments'), year);
     const loans = db.t('loans').filter(l => l.property_id === id);
-    const leases = db.t('leases').filter(l => l.property_id === id).sort((a, b) => (b.active === true) - (a.active === true));
+    const leases = db.t('leases').filter(l => l.property_id === id && l.active !== false).sort((a, b) => String(a.lot || '').localeCompare(String(b.lot || ''), 'fr', { numeric: true }));
     const expenses = db.t('expenses').filter(x => x.property_id === id).sort((a, b) => monthlyEquivalent(b) - monthlyEquivalent(a));
     const html = `
       <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px">
@@ -180,7 +180,7 @@ export function openProperty(id, onChange) {
       <div class="detail">
         <div>
           <div class="section"><h3>Prêts (${loans.length})</h3>${loans.map(l => { const st = loanStatus(l); return `<div class="act-row" style="cursor:pointer;margin-bottom:6px" data-loan="${l.id}"><div style="flex:1"><b>${esc(l.label || 'Prêt')}</b> <span class="muted small">${esc(l.bank || '')} · ${num(l.rate)} % · ${totalMonths(l)} mois</span><div class="small muted">CRD ${eur(st.balance)} · ${eur2(st.monthly)}/mois · fin ${fmtDate(st.endDate)}</div></div></div>`; }).join('') || '<div class="empty">Aucun prêt (bien payé comptant ?)</div>'}</div>
-          <div class="section"><h3>Baux (${leases.length})</h3>${leases.map(l => `<div class="act-row ${l.active === false ? 'done' : ''}" style="cursor:pointer;margin-bottom:6px" data-lease="${l.id}"><div style="flex:1"><b>${esc(l.lot || 'Logement')}</b> — ${esc(l.tenant)}<div class="small muted">${eur(l.rent)}/mois${l.charges ? ' + ' + eur(l.charges) + ' charges' : ''} · depuis ${fmtDate(l.start_date)}${l.end_date ? ' → ' + fmtDate(l.end_date) : ''}</div></div></div>`).join('') || '<div class="empty">Aucun bail</div>'}</div>
+          <div class="section"><h3>Baux en cours (${leases.length}) <a href="#/locatif/baux" data-close class="small" style="text-transform:none;letter-spacing:0;margin-left:8px">tous les baux →</a></h3>${leases.map(l => `<div class="act-row ${l.active === false ? 'done' : ''}" style="cursor:pointer;margin-bottom:6px" data-lease="${l.id}"><div style="flex:1"><b>${esc(l.lot || 'Logement')}</b> — ${esc(l.tenant)}<div class="small muted">${eur(l.rent)}/mois${l.charges ? ' + ' + eur(l.charges) + ' charges' : ''} · depuis ${fmtDate(l.start_date)}${l.end_date ? ' → ' + fmtDate(l.end_date) : ''}</div></div></div>`).join('') || '<div class="empty">Aucun bail</div>'}</div>
         </div>
         <div>
           <div class="section"><h3>Charges — ${eur(m0.chargesMonthly)}/mois équivalent</h3>${expenses.map(x => `<div class="act-row" style="cursor:pointer;margin-bottom:6px" data-exp="${x.id}"><div style="flex:1"><b>${esc(x.label)}</b> <span class="muted small">${esc(x.category)}</span><div class="small muted">${eur2(x.amount)} · ${esc(RECURRENCES.find(r => r[0] === x.recurrence)?.[1] || '')}${x.date ? ' · ' + fmtDate(x.date) : ''}</div></div></div>`).join('') || '<div class="empty">Aucune charge saisie</div>'}</div>
@@ -214,6 +214,9 @@ export const patrimoinePage = {
       const year = new Date().getFullYear(); const monthKey = isoDay().slice(0, 7);
       const rows = allMetrics(year);
       const tot = rows.reduce((t, { m }) => ({ cost: t.cost + m.cost, value: t.value + m.value, debt: t.debt + m.debt, rent: t.rent + m.rentMonthly, charges: t.charges + m.chargesMonthly, loan: t.loan + m.loanMonthly, cashflow: t.cashflow + m.cashflow }), { cost: 0, value: 0, debt: 0, rent: 0, charges: 0, loan: 0, cashflow: 0 });
+      // Prêts encore en cours sur des biens vendus : ils pèsent sur la dette et le cash-flow même sans bien en face
+      const soldIds = db.t('properties').filter(p => p.status === 'Vendu').map(p => p.id);
+      for (const l of db.t('loans').filter(l => soldIds.includes(l.property_id))) { const st = loanStatus(l); if (st.balance > 0) { tot.debt += st.balance; tot.loan += st.monthly; tot.cashflow -= st.monthly; } }
       const activeLeases = db.t('leases').filter(l => l.active !== false);
       const expectedMonth = activeLeases.reduce((s, l) => s + (Number(l.rent) || 0), 0);
       const receivedMonth = db.t('rent_payments').filter(x => x.month === monthKey && activeLeases.some(l => l.id === x.lease_id)).reduce((s, x) => s + (Number(x.amount) || 0), 0);

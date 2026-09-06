@@ -41,7 +41,8 @@ export const homePage = {
       if (scope.canPatrimony) {
         const props = db.t('properties').filter(p => p.status !== 'Vendu'); const loans = db.t('loans'), leases = db.t('leases'), exps = db.t('expenses'), pays = db.t('rent_payments');
         const ms = props.map(p => propertyMetrics(p, loans, leases, exps, pays));
-        const value = ms.reduce((s, m) => s + m.value, 0), debt = ms.reduce((s, m) => s + m.debt, 0), cf = ms.reduce((s, m) => s + m.cashflow, 0);
+        const soldLoans = loans.filter(l => db.t('properties').some(p => p.id === l.property_id && p.status === 'Vendu')).map(l => loanStatus(l)).filter(st => st.balance > 0);
+        const value = ms.reduce((s, m) => s + m.value, 0), debt = ms.reduce((s, m) => s + m.debt, 0) + soldLoans.reduce((s, st) => s + st.balance, 0), cf = ms.reduce((s, m) => s + m.cashflow, 0) - soldLoans.reduce((s, st) => s + st.monthly, 0);
         const mk = isoDay().slice(0, 7); const active = leases.filter(l => l.active !== false);
         const expected = active.reduce((s, l) => s + (Number(l.rent) || 0), 0); const received = pays.filter(x => x.month === mk && active.some(l => l.id === x.lease_id)).reduce((s, x) => s + (Number(x.amount) || 0), 0);
         modules.push({ key: 'pat', title: 'Patrimoine immobilier', icon: '🏠', color: '#0f9d58', link: '#/patrimoine', body: `

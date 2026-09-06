@@ -3,7 +3,7 @@ import { CONFIG } from './config.js';
 import { db } from './data/db.js';
 import { scope } from './data/scope.js';
 import { ACTIVITIES, ROLES } from './data/schema.js';
-import { esc, toast, isoDay, daysSince, closeModal } from './ui.js';
+import { esc, toast, isoDay, daysSince, closeModal, openModal } from './ui.js';
 import { pages } from './pages/index.js';
 
 
@@ -24,10 +24,16 @@ function renderLogin(error = '') {
         <div class="field"><label>Email</label><input type="email" name="email" required autocomplete="username"></div>
         <div class="field"><label>Mot de passe</label><input type="password" name="password" required autocomplete="current-password"></div>
         ${error ? `<p style="color:var(--red);flex-basis:100%;margin:0">${esc(error)}</p>` : ''}
-        <div class="form-actions"><button class="btn" type="submit">Se connecter</button></div>
+        <div class="form-actions"><a href="#" id="forgot" class="small muted" style="margin-right:auto">Mot de passe oublié ?</a><button class="btn" type="submit">Se connecter</button></div>
       </form>`}
   </div></div>`;
   app.querySelectorAll('[data-u]').forEach(b => b.onclick = async () => { const u = await db.signIn(b.dataset.u); start(u); });
+  app.querySelector('#forgot')?.addEventListener('click', async e => {
+    e.preventDefault(); const email = app.querySelector('[name="email"]').value.trim();
+    if (!email) return renderLogin('Saisissez votre email, puis cliquez sur « Mot de passe oublié ? »');
+    try { await db.resetPassword(email); renderLogin('Email envoyé : ouvrez le lien reçu pour choisir un nouveau mot de passe (vérifiez les spams).'); }
+    catch (err) { renderLogin(err.message); }
+  });
   app.querySelector('#login-form')?.addEventListener('submit', async e => {
     e.preventDefault();
     const f = new FormData(e.target);
@@ -69,12 +75,13 @@ function renderLayout() {
     <aside class="sidebar">
       <div class="brand"><div class="logo">${esc(CONFIG.APP_NAME)}</div><small>Pilotage des activités</small></div>
       <nav class="nav" id="nav"></nav>
-      <div class="userbox"><div class="role">${esc(ROLES[u.role]?.label || u.role)}</div><div class="name">${esc(u.full_name)}</div><button class="btn ghost sm" id="logout" style="color:#fff;background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.25)">Déconnexion</button></div>
+      <div class="userbox"><div class="role">${esc(ROLES[u.role]?.label || u.role)}</div><div class="name">${esc(u.full_name)}</div><div style="display:flex;gap:6px">${db.demo ? '' : '<button class="icon-btn" id="pwd" title="Changer mon mot de passe" style="color:#fff">🔑</button>'}<button class="btn ghost sm" id="logout" style="flex:1;color:#fff;background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.25)">Déconnexion</button></div></div>
     </aside>
     <div class="main">
       <header class="topbar"><h1 id="page-title">—</h1><div class="datepill"><span>Aujourd'hui</span>${new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</div></header>
       <main class="content" id="content"></main>
     </div>`;
+  app.querySelector('#pwd')?.addEventListener('click', () => passwordForm(false));
   app.querySelector('#logout').onclick = async () => { await db.signOut(); location.hash = ''; scope.set(null); renderLogin(); };
   renderNav();
 }
@@ -109,6 +116,19 @@ function route() {
   window.scrollTo(0, 0);
 }
 
+export function passwordForm(forced = false) {
+  const m = openModal(forced ? 'Choisissez votre nouveau mot de passe' : 'Changer mon mot de passe', `<form class="form" id="pw-form">
+    <div class="field"><label>Nouveau mot de passe (8 caractères minimum)</label><input type="password" name="p1" required minlength="8" autocomplete="new-password"></div>
+    <div class="field"><label>Confirmer</label><input type="password" name="p2" required minlength="8" autocomplete="new-password"></div>
+    <div class="form-actions">${forced ? '' : '<button type="button" class="btn ghost" data-close>Annuler</button>'}<button class="btn" type="submit">Enregistrer</button></div></form>`);
+  m.querySelector('#pw-form').onsubmit = async e => {
+    e.preventDefault(); const f = new FormData(e.target);
+    if (f.get('p1') !== f.get('p2')) return toast('Les deux mots de passe sont différents', 'warn');
+    try { await db.updatePassword(f.get('p1')); closeModal(true); toast('Mot de passe modifié'); if (forced) { history.replaceState(null, '', location.pathname); location.hash = '#/home'; } }
+    catch (err) { toast(err.message, 'err'); }
+  };
+}
+
 async function start(user) {
   scope.set(user);
   if (!scope.isDirection && location.hash === '#/dashboard') location.hash = '#/home';
@@ -116,6 +136,7 @@ async function start(user) {
   unsubscribe?.();
   unsubscribe = db.onChange(() => { renderNav(); current?.refresh?.(); });
   route();
+  if (db.isRecovery()) setTimeout(() => passwordForm(true), 300);
 }
 
 window.addEventListener('hashchange', route);

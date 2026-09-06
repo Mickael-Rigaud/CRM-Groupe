@@ -64,6 +64,9 @@ const localAdapter = {
   async currentUser() { const id = localStorage.getItem(LS_USER); return this.data.profiles.find(u => u.id === id) || null; },
   async signIn(userId) { localStorage.setItem(LS_USER, userId); return this.data.profiles.find(u => u.id === userId); },
   async signOut() { localStorage.removeItem(LS_USER); },
+  async resetPassword() { throw new Error('Pas de mot de passe en mode démo'); },
+  async updatePassword() { throw new Error('Pas de mot de passe en mode démo'); },
+  isRecovery() { return false; },
 };
 
 // ---------- Adaptateur Supabase ----------
@@ -76,10 +79,17 @@ const supabaseAdapter = {
   },
   async load() {
     const out = {};
+    const PAGE = 1000; // Supabase limite chaque requête à 1 000 lignes : on pagine
     for (const t of TABLES) {
-      const { data, error } = await this.client.from(t).select('*').limit(10000);
-      if (error) { console.warn(`Table ${t} : ${error.message}`); out[t] = []; continue; } // table absente (module non installé) : on continue
-      out[t] = data || [];
+      const rows = []; let from = 0; let failed = false;
+      while (true) {
+        const { data, error } = await this.client.from(t).select('*').range(from, from + PAGE - 1);
+        if (error) { console.warn(`Table ${t} : ${error.message}`); failed = true; break; } // table absente (module non installé) : on continue
+        rows.push(...(data || []));
+        if (!data || data.length < PAGE) break;
+        from += PAGE;
+      }
+      out[t] = failed ? [] : rows;
     }
     // Gestion locative sans accès patrimoine : les biens viennent d'une vue allégée (sans prix ni financement)
     if (!out.properties.length) { const { data } = await this.client.from('v_properties_rental').select('*'); if (data?.length) out.properties = data; }
@@ -110,6 +120,15 @@ const supabaseAdapter = {
     return this.currentUser();
   },
   async signOut() { await this.client.auth.signOut(); },
+  async resetPassword(email) {
+    const { error } = await this.client.auth.resetPasswordForEmail(email, { redirectTo: location.href.split('#')[0] });
+    if (error) throw new Error(error.message);
+  },
+  async updatePassword(password) {
+    const { error } = await this.client.auth.updateUser({ password });
+    if (error) throw new Error(error.message);
+  },
+  isRecovery() { return /type=recovery/.test(location.hash) || /type=recovery/.test(location.search); },
   // fichiers : bucket privé « documents », accès par lien signé (1 h)
   async uploadFile(path, file) {
     const { error } = await this.client.storage.from('documents').upload(path, file, { upsert: false, contentType: file.type || undefined });
@@ -171,5 +190,8 @@ export const db = {
   currentUser() { return this.adapter.currentUser(); },
   signIn(a, b) { return this.adapter.signIn(a, b); },
   signOut() { return this.adapter.signOut(); },
+  resetPassword(email) { return this.adapter.resetPassword(email); },
+  updatePassword(pw) { return this.adapter.updatePassword(pw); },
+  isRecovery() { return this.adapter.isRecovery(); },
   resetDemo() { if (this.demo) localAdapter.reset(); },
 };

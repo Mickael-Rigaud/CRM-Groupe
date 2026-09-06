@@ -1,8 +1,8 @@
 // Module Patrimoine : référentiel et calculs financiers (amortissement, rendement, cash-flow).
 
-export const INVEST_TYPES = ['Locatif nu', 'Meublé / LMNP', 'Colocation', 'Immeuble de rapport', 'Local commercial', 'Parking / garage', 'Résidence principale', 'Terrain', 'Autre'];
+export const INVEST_TYPES = ['Locatif nu', 'Meublé / LMNP', 'Colocation', 'Immeuble de rapport', 'Local commercial', 'Parking / garage', 'Résidence principale', 'Résidence secondaire', 'Terrain', 'Autre'];
 export const STRUCTURES = ['Nom propre', 'Indivision', 'SCI à l\'IR', 'SCI à l\'IS', 'SARL de famille', 'SAS / SASU', 'Holding', 'Autre'];
-export const PROPERTY_STATUS = ['Loué', 'Résidence principale', 'Vacant', 'En travaux', 'En vente', 'Vendu'];
+export const PROPERTY_STATUS = ['Loué', 'Résidence principale', 'Résidence secondaire', 'Vacant', 'En travaux', 'En vente', 'Vendu'];
 export const EXPENSE_CATEGORIES = ['Taxe foncière', 'Charges de copropriété', 'Assurance PNO', 'Assurance emprunteur', 'Gestion locative', 'Entretien / réparations', 'Travaux', 'CFE', 'Comptable', 'Eau / électricité / gaz', 'Internet', 'Frais bancaires', 'Autre'];
 export const RECURRENCES = [['monthly', 'Mensuelle'], ['quarterly', 'Trimestrielle'], ['yearly', 'Annuelle'], ['once', 'Ponctuelle']];
 

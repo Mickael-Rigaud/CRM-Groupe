@@ -254,3 +254,4 @@ select.cell-in { text-align: left; }
 .dd-panel .check { font-size: 13px; font-weight: 600; padding: 4px 2px; }
 .dd-foot { border-top: 1px solid var(--line); padding-top: 8px; margin-top: 4px; display: flex; justify-content: flex-end; }
 .rent-sheet tr.subtotal td { font-weight: 700; background: #FFF8EC; border-bottom: 2px solid var(--line-strong); }
+.dd-panel[hidden] { display: none; }
