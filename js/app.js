@@ -56,8 +56,9 @@ const NAV = [
   { sep: 'Gestion locative', show: () => scope.canRental },
   { hash: '#/locatif', label: 'Suivi des loyers', icon: '💶', show: () => scope.canRental, exact: true },
   { hash: '#/locatif/baux', label: 'Baux et locataires', icon: '📝', sub: true, show: () => scope.canRental },
+  { hash: '#/locatif/contacts', label: 'Contacts locataires', icon: '☎', sub: true, show: () => scope.canRental },
   { hash: '#/locatif/lots', label: 'Lots', icon: '🚪', sub: true, show: () => scope.canRental },
-  { hash: '#/locatif/suivi', label: 'À faire locatif', icon: '⚠', sub: true, show: () => scope.canRental, count: () => db.t('leases').filter(l => db.t('rent_payments').filter(x => x.lease_id === l.id).reduce((s, x) => s + (Number(x.due) || 0) - ((x.apl != null || x.tenant_paid != null) ? (Number(x.apl) || 0) + (Number(x.tenant_paid) || 0) : Number(x.amount) || 0) + (Number(x.adjustment) || 0), 0) > 0.005).length },
+  { hash: '#/locatif/suivi', label: 'À faire locatif', icon: '⚠', sub: true, show: () => scope.canRental, count: () => { const k = isoDay().slice(0, 7); return db.t('leases').filter(l => l.active !== false && (!l.start_date || l.start_date.slice(0, 7) <= k) && (!l.end_date || l.end_date.slice(0, 7) >= k) && db.t('rent_payments').filter(x => x.lease_id === l.id && x.month.slice(0, 7) <= k).reduce((s, x) => s + (Number(x.due) || 0) - ((x.apl != null || x.tenant_paid != null) ? (Number(x.apl) || 0) + (Number(x.tenant_paid) || 0) : Number(x.amount) || 0) + (Number(x.adjustment) || 0), 0) > 0.005).length; } },
   { sep: 'Réglages' },
   { hash: '#/settings', label: 'Paramètres', icon: '⚙' },
 ];

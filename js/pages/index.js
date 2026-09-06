@@ -9,7 +9,7 @@ import { homePage } from './home.js';
 import { patrimoinePage, propertiesPage, loansPage, expensesPage } from './patrimoine.js';
 import { vivierPage } from './vivier.js';
 
-import { locatifPage, leasesPage, unitsPage, rentalTodoPage } from './locatif.js';
+import { locatifPage, leasesPage, unitsPage, rentalTodoPage, tenantContactsPage } from './locatif.js';
 export const pages = {
   home: homePage,
   patrimoine_home: patrimoinePage,
@@ -20,6 +20,7 @@ export const pages = {
   locatif_baux: leasesPage,
   locatif_lots: unitsPage,
   locatif_suivi: rentalTodoPage,
+  locatif_contacts: tenantContactsPage,
   patrimoine_charges: expensesPage,
   vivier: vivierPage,
   dashboard: dashboardPage,

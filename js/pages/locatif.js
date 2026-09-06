@@ -292,12 +292,14 @@ export const locatifPage = {
   title: () => 'Gestion locative — suivi des loyers',
   render(root) {
     if (!scope.canRental) return denied(root);
-    const state = { month: isoDay().slice(0, 7), prop: '' };
+    const state = { month: isoDay().slice(0, 7), props: null, ddOpen: false }; // props = null → tous les immeubles
     let prepared = new Set();
     const draw = async () => {
       const k = state.month;
       if (!prepared.has(k) && k <= isoDay().slice(0, 7)) { prepared.add(k); const n = await prepareMonth(k); if (n) toast(`${n} ligne(s) préparée(s) pour ${monthLabel(k)}`); }
-      const props = db.t('properties').filter(p => !state.prop || p.id === state.prop).sort((a, b) => a.name.localeCompare(b.name));
+      const allProps = db.t('properties').filter(p => db.t('units').some(u => u.property_id === p.id) || db.t('leases').some(l => l.property_id === p.id)).sort((a, b) => a.name.localeCompare(b.name));
+      if (state.props === null) state.props = new Set(allProps.map(p => p.id));
+      const props = allProps.filter(p => state.props.has(p.id));
       const allLeases = db.t('leases');
       const groups = props.map(p => {
         const units = db.t('units').filter(u => u.property_id === p.id && u.active !== false).sort(unitSort);
@@ -310,12 +312,13 @@ export const locatifPage = {
         for (const l of leasesP.filter(l => !l.unit_id || !units.some(u => u.id === l.unit_id))) lines.push({ u: null, l });
         return { p, lines };
       }).filter(g => g.lines.length);
-      const tot = { due: 0, apl: 0, tenant: 0, rec: 0, missing: 0, prev: 0, bal: 0, vacant: 0 };
+      const zero = () => ({ due: 0, apl: 0, tenant: 0, rec: 0, missing: 0, prev: 0, bal: 0, vacant: 0, leases: 0 });
+      const tot = zero(); let sub = zero();
       const line = ({ u, l }) => {
-        if (!l) { tot.vacant++; return `<tr class="vacant"><td><b>${esc(u.name)}</b><div class="small muted">${esc([u.unit_type, u.surface ? num(u.surface) + ' m²' : '', u.dpe ? 'DPE ' + u.dpe : ''].filter(Boolean).join(' · '))}</div></td><td colspan="11" class="muted"><span class="pill warn">Vacant</span> <button class="btn ghost sm" data-newlease="${u.id}">+ Bail</button></td><td></td></tr>`; }
+        if (!l) { tot.vacant++; sub.vacant++; return `<tr class="vacant"><td><b>${esc(u.name)}</b><div class="small muted">${esc([u.unit_type, u.surface ? num(u.surface) + ' m²' : '', u.dpe ? 'DPE ' + u.dpe : ''].filter(Boolean).join(' · '))}</div></td><td colspan="11" class="muted"><span class="pill warn">Vacant</span> <button class="btn ghost sm" data-newlease="${u.id}">+ Bail</button></td><td></td></tr>`; }
         const row = rowOf(l.id, k); const due = dueOf(l, row); const apl = Number(row?.apl) || 0; const tp = Number(row?.tenant_paid ?? (row?.amount ?? 0)) || 0; const rec = apl + tp;
         const missing = round2(due - rec); const prev = round2(balanceOf(l.id, shiftMonth(k, -1))); const bal = round2(missing + prev + (Number(row?.adjustment) || 0));
-        tot.due += due; tot.apl += apl; tot.tenant += tp; tot.rec += rec; tot.missing += missing; tot.prev += prev; tot.bal += bal;
+        for (const t of [tot, sub]) { t.due += due; t.apl += apl; t.tenant += tp; t.rec += rec; t.missing += missing; t.prev += prev; t.bal += bal; t.leases++; }
         const inp = (name, val, w = 70) => `<input type="number" step="0.01" class="cell-in" style="width:${w}px" data-lease="${l.id}" data-f="${name}" value="${val ?? ''}">`;
         return `<tr>
           <td><b>${esc(u?.name || l.lot || '')}</b><div class="small muted">${esc([u?.unit_type, u?.surface ? num(u.surface) + ' m²' : '', u?.dpe ? 'DPE ' + u.dpe : ''].filter(Boolean).join(' · '))}</div></td>
@@ -331,12 +334,14 @@ export const locatifPage = {
           <td><input type="text" class="cell-in" style="width:180px" data-lease="${l.id}" data-f="note" value="${esc(row?.note || '')}" placeholder="Commentaire"></td>
         </tr>`;
       };
-      const body = groups.map(g => `<tr class="grp"><td colspan="13"><b>${esc(g.p.name)}</b> <span class="muted small">${esc([g.p.holding_name, g.p.address, g.p.city].filter(Boolean).join(' · '))}</span></td></tr>${g.lines.map(line).join('')}`).join('');
+      const totalRow = (label, t, cls = 'total') => `<tr class="${cls}"><td colspan="4">${label} <span class="muted small" style="font-weight:400">${t.leases} bail${t.leases > 1 ? 'x' : ''}${t.vacant ? ` · ${t.vacant} vacant${t.vacant > 1 ? 's' : ''}` : ''}${t.due ? ` · encaissé ${pct(t.rec / t.due * 100)}` : ''}</span></td><td class="num">${eur2(t.due)}</td><td class="num">${eur2(t.apl)}</td><td class="num">${eur2(t.tenant)}</td><td class="num">${eur2(t.rec)}</td><td></td><td class="num ${t.missing > 0.005 ? 'status-lost' : ''}">${eur2(t.missing)}</td><td class="num">${eur2(t.prev)}</td><td class="num ${t.bal > 0.005 ? 'status-lost' : ''}">${eur2(t.bal)}</td><td></td></tr>`;
+      const body = groups.map(g => { sub = zero(); const rows = g.lines.map(line).join(''); return `<tr class="grp"><td colspan="13"><b>${esc(g.p.name)}</b> <span class="muted small">${esc([g.p.holding_name, g.p.address, g.p.city].filter(Boolean).join(' · '))}</span></td></tr>${rows}${totalRow('Sous-total ' + esc(g.p.name), sub, 'subtotal')}`; }).join('');
       const rate = tot.due ? tot.rec / tot.due * 100 : 0;
       root.innerHTML = `
         <div class="toolbar">
           <div class="seg"><button data-m="-1">‹</button><button class="active" style="min-width:150px;text-transform:capitalize">${monthLabel(k)}</button><button data-m="1">›</button></div>
-          <select id="lo-prop"><option value="">Tous les immeubles</option>${db.t('properties').map(p => `<option value="${p.id}" ${state.prop === p.id ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select>
+          <div class="dd" id="lo-dd"><button type="button" class="dd-btn" id="lo-dd-btn">${props.length === allProps.length ? 'Tous les immeubles' : props.length === 0 ? 'Aucun immeuble' : props.length === 1 ? esc(props[0].name) : props.length + ' immeubles sur ' + allProps.length} ▾</button>
+            <div class="dd-panel" ${state.ddOpen ? '' : 'hidden'}>${allProps.map(p => `<label class="check"><input type="checkbox" data-prop="${p.id}" ${state.props.has(p.id) ? 'checked' : ''}> ${esc(p.name)}</label>`).join('')}<div class="dd-foot"><button type="button" class="btn ghost sm" id="lo-all">${state.props.size === allProps.length ? 'Aucun' : 'Tous'}</button></div></div></div>
           <span class="grow"></span>
           <button class="btn ghost sm" id="lo-bank">Importer un relevé bancaire</button><button class="btn ghost sm" id="lo-export">Export CSV</button><button class="btn ghost sm" id="lo-landlord">Bailleur</button><button class="btn sm" id="lo-newlease">+ Bail</button>
         </div>
@@ -348,10 +353,13 @@ export const locatifPage = {
         </div>
         <div class="card"><div class="table-wrap"><table class="rent-sheet"><thead><tr><th>Lot</th><th>Locataire</th><th class="num">Loyer HC</th><th class="num">Charges</th><th class="num">Dû</th><th class="num">APL</th><th class="num">Locataire</th><th class="num">Reçu</th><th>Mode</th><th class="num">Manquant</th><th class="num">Retard ant.</th><th class="num">Reste</th><th>Commentaire</th></tr></thead><tbody>
           ${body || '<tr><td colspan="13" class="empty">Aucun lot. Créez d\'abord les lots dans « Lots » ou importez le suivi Excel.</td></tr>'}
-          <tr class="total"><td colspan="4">Total ${state.prop ? '' : 'tous immeubles'}</td><td class="num">${eur2(tot.due)}</td><td class="num">${eur2(tot.apl)}</td><td class="num">${eur2(tot.tenant)}</td><td class="num">${eur2(tot.rec)}</td><td></td><td class="num">${eur2(tot.missing)}</td><td class="num">${eur2(tot.prev)}</td><td class="num">${eur2(tot.bal)}</td><td></td></tr>
+          ${totalRow(`Total ${props.length === allProps.length ? 'tous immeubles' : props.length + ' immeuble' + (props.length > 1 ? 's' : '')}`, tot)}
         </tbody></table></div><p class="muted small">Saisie directe dans les cases (dû, APL, locataire, mode, commentaire) : enregistrement automatique. « Manquant » = dû − reçu du mois ; « Reste » = manquant + retards antérieurs.</p></div>`;
       root.querySelectorAll('[data-m]').forEach(b => b.onclick = () => { state.month = shiftMonth(state.month, Number(b.dataset.m)); draw(); });
-      root.querySelector('#lo-prop').onchange = e => { state.prop = e.target.value; draw(); };
+      root.querySelector('#lo-dd-btn').onclick = () => { state.ddOpen = !state.ddOpen; root.querySelector('#lo-dd .dd-panel').hidden = !state.ddOpen; };
+      document.addEventListener('click', e => { if (state.ddOpen && !e.target.closest('#lo-dd')) { state.ddOpen = false; const pn = root.querySelector('#lo-dd .dd-panel'); if (pn) pn.hidden = true; } }, { capture: true });
+      root.querySelectorAll('[data-prop]').forEach(cb => cb.onchange = () => { if (cb.checked) state.props.add(cb.dataset.prop); else state.props.delete(cb.dataset.prop); draw(); });
+      root.querySelector('#lo-all').onclick = () => { state.props = state.props.size === allProps.length ? new Set() : new Set(allProps.map(p => p.id)); draw(); };
       root.querySelector('#lo-bank').onclick = () => bankImport(k, draw);
       root.querySelector('#lo-landlord').onclick = () => landlordForm();
       root.querySelector('#lo-newlease').onclick = () => leaseForm(null, {}, draw);
@@ -429,29 +437,66 @@ export const unitsPage = {
 //  À faire locatif : impayés, vacants, révisions, coordonnées manquantes
 // ======================================================================
 export const rentalTodoPage = {
-  title: () => 'Gestion locative — à faire',
+  title: () => 'Gestion locative — à faire ce mois',
   render(root) {
     if (!scope.canRental) return denied(root);
     const draw = () => {
       const k = isoDay().slice(0, 7);
-      const leases = db.t('leases');
-      const arrears = leases.map(l => ({ l, bal: round2(balanceOf(l.id)) })).filter(x => x.bal > 0.005).sort((a, b) => b.bal - a.bal);
-      const vacants = db.t('units').filter(u => u.active !== false && !leases.some(l => l.unit_id === u.id && l.active !== false && activeInMonth(l, k)));
-      const revisions = leases.filter(l => l.active !== false && l.revision_date && daysSince(l.revision_date) >= -60).sort((a, b) => a.revision_date.localeCompare(b.revision_date));
-      const noContact = leases.filter(l => l.active !== false && !l.tenant_phone && !l.tenant_email && !l.guardian_phone);
-      const credit = leases.map(l => ({ l, bal: round2(balanceOf(l.id)) })).filter(x => x.bal < -0.005);
-      const row = (l, right) => `<div class="act-row" style="cursor:pointer;margin-bottom:6px" data-lease="${l.id}"><div style="flex:1"><b>${esc(l.tenant)}</b> <span class="muted small">${esc(propName(l.property_id))} · lot ${esc(lotName(l))}${l.active === false ? ' · bail terminé' : ''}</span></div>${right}</div>`;
-      root.innerHTML = `<div class="grid c2">
-        <div class="card"><h3>Loyers en retard — ${eur2(arrears.reduce((s, x) => s + x.bal, 0))} sur ${arrears.length} locataire${arrears.length > 1 ? 's' : ''}</h3>${arrears.map(({ l, bal }) => row(l, `<b class="status-lost">${eur2(bal)}</b> <button class="btn ghost sm" data-relance="${l.id}">Relance</button>`)).join('') || '<div class="empty">Aucun retard</div>'}</div>
+      const current = db.t('leases').filter(l => l.active !== false && activeInMonth(l, k));
+      const withBal = current.map(l => ({ l, bal: round2(balanceOf(l.id, k)) }));
+      const arrears = withBal.filter(x => x.bal > 0.005).sort((a, b) => b.bal - a.bal);
+      const credit = withBal.filter(x => x.bal < -0.005).sort((a, b) => a.bal - b.bal);
+      const vacants = db.t('units').filter(u => u.active !== false && !current.some(l => l.unit_id === u.id));
+      const revisions = current.filter(l => l.revision_date && daysSince(l.revision_date) >= -60).sort((a, b) => a.revision_date.localeCompare(b.revision_date));
+      const oldDebts = db.t('leases').filter(l => !current.includes(l)).map(l => round2(balanceOf(l.id))).filter(b => b > 0.005);
+      const row = (l, right) => `<div class="act-row" style="cursor:pointer;margin-bottom:6px" data-lease="${l.id}"><div style="flex:1"><b>${esc(l.tenant)}</b> <span class="muted small">${esc(propName(l.property_id))} · lot ${esc(lotName(l))}</span></div>${right}</div>`;
+      root.innerHTML = `<div class="toolbar"><span class="muted small">Situation au mois de <b style="text-transform:capitalize">${monthLabel(k)}</b> — locataires en place et lots du mois.</span></div>
+        <div class="grid c2">
+        <div class="card"><h3>Loyers en retard — ${eur2(arrears.reduce((s, x) => s + x.bal, 0))} · ${arrears.length} locataire${arrears.length > 1 ? 's' : ''}</h3>${arrears.map(({ l, bal }) => row(l, `<b class="status-lost">${eur2(bal)}</b> <button class="btn ghost sm" data-relance="${l.id}">Relance</button>`)).join('') || '<div class="empty">Aucun retard</div>'}
+          ${oldDebts.length ? `<p class="muted small" style="margin:12px 0 0">+ ${oldDebts.length} ancien${oldDebts.length > 1 ? 's' : ''} locataire${oldDebts.length > 1 ? 's' : ''} parti${oldDebts.length > 1 ? 's' : ''} avec un reste dû (${eur2(oldDebts.reduce((s, b) => s + b, 0))}) — voir Baux › Terminés</p>` : ''}</div>
         <div>
           <div class="card" style="margin-bottom:18px"><h3>Lots vacants (${vacants.length})</h3>${vacants.map(u => `<div class="act-row" style="margin-bottom:6px"><div style="flex:1"><b>${esc(propName(u.property_id))}</b> · lot ${esc(u.name)} <span class="muted small">${esc(u.unit_type || '')}${u.surface ? ' · ' + num(u.surface) + ' m²' : ''}</span></div><button class="btn ghost sm" data-newlease="${u.id}">+ Bail</button></div>`).join('') || '<div class="empty">Aucun lot vacant</div>'}</div>
-          <div class="card" style="margin-bottom:18px"><h3>Révisions de loyer à venir / dépassées</h3>${revisions.map(l => row(l, `<span class="${daysSince(l.revision_date) >= 0 ? 'status-lost' : ''}">${fmtDate(l.revision_date)}</span>`)).join('') || '<div class="empty">Aucune révision planifiée — renseignez la date de révision IRL dans chaque bail</div>'}</div>
           <div class="card" style="margin-bottom:18px"><h3>Trop-perçus / avances (${credit.length})</h3>${credit.map(({ l, bal }) => row(l, `<b class="status-won">${eur2(-bal)}</b>`)).join('') || '<div class="empty">Aucun</div>'}</div>
-          <div class="card"><h3>Baux sans coordonnées (${noContact.length})</h3>${noContact.map(l => row(l, '')).join('') || '<div class="empty">Tous les locataires ont un contact</div>'}</div>
+          <div class="card"><h3>Révisions de loyer à venir / dépassées</h3>${revisions.map(l => row(l, `<span class="${daysSince(l.revision_date) >= 0 ? 'status-lost' : ''}">${fmtDate(l.revision_date)}</span>`)).join('') || '<div class="empty">Aucune révision planifiée — renseignez la date de révision IRL dans chaque bail</div>'}</div>
         </div></div>`;
       root.querySelectorAll('[data-lease]').forEach(el => el.onclick = () => openLease(el.dataset.lease, draw));
       root.querySelectorAll('[data-relance]').forEach(b => b.onclick = e => { e.stopPropagation(); generateDocument('relance', db.byId('leases', b.dataset.relance)); });
       root.querySelectorAll('[data-newlease]').forEach(b => b.onclick = () => { const u = db.byId('units', b.dataset.newlease); leaseForm(null, { unit_id: u.id, property_id: u.property_id }, draw); });
+    };
+    draw();
+    return { refresh: draw };
+  },
+};
+
+// ======================================================================
+//  Contacts locataires : téléphones, emails, tutelles, consignes
+// ======================================================================
+export const tenantContactsPage = {
+  title: () => 'Contacts locataires',
+  render(root) {
+    if (!scope.canRental) return denied(root);
+    const state = { q: '', prop: '', ended: false };
+    const draw = () => {
+      const k = isoDay().slice(0, 7); const q = state.q.toLowerCase();
+      const list = db.t('leases').filter(l => (state.ended || (l.active !== false && activeInMonth(l, k))) && (!state.prop || l.property_id === state.prop) && (!q || [l.tenant, l.tenant_phone, l.tenant_email, l.guardian_name, l.guardian_phone, l.guardian_email, lotName(l), propName(l.property_id)].join(' ').toLowerCase().includes(q)))
+        .sort((a, b) => propName(a.property_id).localeCompare(propName(b.property_id)) || String(lotName(a)).localeCompare(String(lotName(b)), 'fr', { numeric: true }));
+      const tel = (t) => t ? String(t).split(/\n|\/| ou /i).map(x => x.trim()).filter(Boolean).map(x => `<a href="tel:${esc(x.replace(/[^\d+]/g, ''))}">${esc(x)}</a>`).join('<br>') : '<span class="muted">—</span>';
+      const mail = (m) => m ? String(m).split(/\s*\/\s*|\s+/).filter(x => x.includes('@')).map(x => `<a href="mailto:${esc(x)}">${esc(x)}</a>`).join('<br>') : '<span class="muted">—</span>';
+      const missing = list.filter(l => !l.tenant_phone && !l.tenant_email && !l.guardian_phone).length;
+      root.innerHTML = `
+        <div class="toolbar"><input type="search" class="grow" id="tc-q" placeholder="Nom, téléphone, email, lot…" value="${esc(state.q)}">
+          <select id="tc-prop"><option value="">Tous les immeubles</option>${db.t('properties').map(p => `<option value="${p.id}" ${state.prop === p.id ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select>
+          <label class="check"><input type="checkbox" id="tc-ended" ${state.ended ? 'checked' : ''}> Inclure les anciens locataires</label>
+          <button class="btn ghost sm" id="tc-export">Export CSV</button></div>
+        ${missing ? `<div class="alert"><b>${missing}</b><div>locataire${missing > 1 ? 's' : ''} sans aucun téléphone ni email — à compléter (ouvrir la fiche, Modifier)</div></div>` : ''}
+        <div class="card"><div class="table-wrap"><table><thead><tr><th>Immeuble · lot</th><th>Locataire</th><th>Téléphone</th><th>Email</th><th>Tutelle / curatelle / garant</th><th>Consignes</th></tr></thead><tbody>
+          ${list.map(l => `<tr class="click ${l.active === false ? 'muted' : ''}" data-lease="${l.id}"><td><b>${esc(propName(l.property_id).replace(/^Immeuble /, ''))}</b><div class="small muted">lot ${esc(lotName(l))}</div></td><td><b>${esc(l.tenant)}</b>${l.active === false ? '<div class="small muted">ancien locataire</div>' : ''}</td><td class="nowrap">${tel(l.tenant_phone)}</td><td>${mail(l.tenant_email)}</td><td class="small">${esc(l.guardian_name || '')}${l.guardian_name ? '<br>' : ''}${tel(l.guardian_phone).replace('<span class="muted">—</span>', '')}${l.guardian_phone && l.guardian_email ? '<br>' : ''}${mail(l.guardian_email).replace('<span class="muted">—</span>', '')}</td><td class="small">${esc(l.comments || '')}</td></tr>`).join('') || '<tr><td colspan="6" class="empty">Aucun locataire</td></tr>'}
+        </tbody></table></div><p class="muted small">${list.length} locataire${list.length > 1 ? 's' : ''} · cliquer sur une ligne pour ouvrir le bail et modifier les coordonnées</p></div>`;
+      root.querySelector('#tc-q').oninput = e => { state.q = e.target.value; draw(); const i = root.querySelector('#tc-q'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); };
+      root.querySelector('#tc-prop').onchange = e => { state.prop = e.target.value; draw(); };
+      root.querySelector('#tc-ended').onchange = e => { state.ended = e.target.checked; draw(); };
+      root.querySelectorAll('[data-lease]').forEach(tr => tr.onclick = e => { if (e.target.closest('a')) return; openLease(tr.dataset.lease, draw); });
+      root.querySelector('#tc-export').onclick = () => csvDownload('contacts-locataires.csv', list.map(l => ({ immeuble: propName(l.property_id), lot: lotName(l), locataire: l.tenant, telephone: l.tenant_phone, email: l.tenant_email, tutelle: l.guardian_name, tutelle_tel: l.guardian_phone, tutelle_email: l.guardian_email, consignes: l.comments, statut: l.active === false ? 'ancien' : 'en place' })));
     };
     draw();
     return { refresh: draw };

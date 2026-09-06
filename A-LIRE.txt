@@ -1,0 +1,2 @@
+Mise a jour Gestion locative : menu deroulant a cases, sous-totaux, A faire du mois en cours, onglet Contacts locataires.
+Pas de SQL. GitHub > Add file > Upload files > glisser les dossiers css et js > Commit changes.
