@@ -1,7 +1,8 @@
 // Module Patrimoine immobilier : vue d'ensemble, biens, prêts, loyers, charges.
 import { db } from '../data/db.js';
 import { scope } from '../data/scope.js';
-import { INVEST_TYPES, STRUCTURES, PROPERTY_STATUS, EXPENSE_CATEGORIES, RECURRENCES, schedule, loanStatus, monthlyPayment, monthlyEquivalent, propertyMetrics } from '../data/finance.js';
+import { INVEST_TYPES, STRUCTURES, PROPERTY_STATUS, EXPENSE_CATEGORIES, RECURRENCES, schedule, loanStatus, monthlyPayment, monthlyEquivalent, propertyMetrics, totalMonths } from '../data/finance.js';
+import { documentsSection, bindDocuments } from '../documents.js';
 import { esc, eur, pct, num, openModal, closeModal, renderForm, readForm, toast, fmtDate, confirm, csvDownload, isoDay } from '../ui.js';
 
 const eur2 = (n) => eur(n, { maximumFractionDigits: 2 });
@@ -57,21 +58,28 @@ export function loanForm(existing = null, presets = {}, onSaved, onClose = null)
     { key: 'property_id', label: 'Bien financé', type: 'select', options: props.map(p => [p.id, p.name]), required: true, half: true },
     { key: 'bank', label: 'Banque', type: 'text', half: true },
     { key: 'label', label: 'Intitulé', type: 'text', half: true, placeholder: 'Ex. Prêt principal' },
-    { key: 'start_date', label: '1re échéance (date)', type: 'date', required: true, half: true },
+    { key: 'loan_number', label: 'N° de crédit', type: 'text', half: true },
     { key: 'principal', label: 'Capital emprunté (€)', type: 'number', required: true, half: true, step: '0.01' },
     { key: 'rate', label: 'Taux nominal annuel (%)', type: 'number', required: true, half: true, step: '0.001' },
-    { key: 'duration_months', label: 'Durée (mois)', type: 'number', required: true, half: true },
+    { key: 'start_date', label: '1re échéance (date)', type: 'date', required: true, half: true, hint: 'Date du premier prélèvement (différé compris), pas la date de déblocage' },
+    { key: 'duration_months', label: "Durée d'amortissement (mois, hors différé)", type: 'number', required: true, half: true },
+    { key: 'deferral_months', label: 'Différé (mois)', type: 'number', half: true, value: 0 },
+    { key: 'deferral_type', label: 'Type de différé', type: 'select', options: [['partial', 'Partiel — intérêts payés, capital gelé'], ['total', 'Total — rien payé, intérêts ajoutés au capital']], half: true, value: 'partial' },
     { key: 'insurance_monthly', label: 'Assurance (€/mois)', type: 'number', half: true, step: '0.01' },
-    { key: 'deferral_months', label: 'Différé partiel (mois, intérêts seuls)', type: 'number', half: true, value: 0 },
-    { key: 'monthly_payment', label: 'Mensualité hors assurance imposée (€) — facultatif', type: 'number', half: true, step: '0.01' },
+    { key: 'monthly_payment', label: 'Mensualité hors assurance imposée (€) — facultatif', type: 'number', half: true, step: '0.01', hint: 'À renseigner seulement si la banque affiche une mensualité différente du calcul' },
     { key: 'notes', label: 'Notes', type: 'textarea', rows: 2 },
   ];
   const m = openModal(existing ? 'Modifier le prêt' : 'Nouveau prêt', `<form class="form" id="lf">${renderForm(spec, existing || presets)}
     <div class="field"><div class="small muted" id="lf-preview"></div></div>
     <div class="form-actions">${existing ? '<button type="button" class="btn ghost left" id="lf-del">Supprimer</button>' : ''}<button type="button" class="btn ghost" data-close>Annuler</button><button class="btn" type="submit">Enregistrer</button></div></form>`, { wide: true, onClose });
   const form = m.querySelector('#lf');
-  const preview = () => { const v = readForm(form, spec); const n = (v.duration_months || 0) - (v.deferral_months || 0); const pm = v.monthly_payment || monthlyPayment(v.principal || 0, v.rate || 0, n); m.querySelector('#lf-preview').textContent = v.principal && v.duration_months ? `Mensualité calculée : ${eur2(pm)} hors assurance, ${eur2(pm + (v.insurance_monthly || 0))} avec assurance.` : ''; };
-  form.addEventListener('input', preview); preview();
+  const preview = () => {
+    const v = readForm(form, spec); const el = m.querySelector('#lf-preview');
+    if (!(v.principal && v.duration_months && v.start_date)) { el.textContent = ''; return; }
+    const st = loanStatus(v); const rows = schedule(v); const first = rows.find(r => !r.deferred);
+    el.innerHTML = `Mensualité d'amortissement : <b>${eur2(first ? first.payment - (v.insurance_monthly || 0) : 0)}</b> hors assurance, ${eur2(first ? first.payment : 0)} avec assurance${v.deferral_months ? ` · pendant le différé : ${eur2(rows[0].payment)}/mois` : ''} · ${totalMonths(v)} échéances · dernière le <b>${fmtDate(st.endDate)}</b> · coût total ${eur(st.totalCost)}`;
+  };
+  form.addEventListener('input', preview); form.addEventListener('change', preview); preview();
   form.onsubmit = async e => {
     e.preventDefault(); const v = readForm(form, spec);
     try { let id = existing?.id; if (existing) await db.update('loans', id, v); else id = (await db.insert('loans', v)).id; closeModal(true); toast('Prêt enregistré'); onSaved?.(id); }
@@ -140,6 +148,19 @@ export function openLoanSchedule(id, onChange) {
     const byYear = {};
     for (const r of rows) { const y = r.date.slice(0, 4); byYear[y] ||= { interest: 0, capital: 0, insurance: 0, payment: 0, balance: 0 }; byYear[y].interest += r.interest; byYear[y].capital += r.capital; byYear[y].insurance += r.insurance; byYear[y].payment += r.payment; byYear[y].balance = r.balance; }
     const html = `
+      <div class="loan-summary">
+        <div><span>Montant emprunté</span><b>${eur2(l.principal)}</b></div>
+        <div><span>Capital restant dû</span><b>${eur2(st.balance)}</b></div>
+        <div><span>Déjà remboursé (capital)</span><b>${eur2(st.capitalPaid)}</b></div>
+        <div><span>Prochaine échéance</span><b>${st.nextDate ? fmtDate(st.nextDate) : '—'}</b></div>
+        <div><span>Montant de l'échéance</span><b>${eur2(st.monthly)}</b></div>
+        <div><span>Taux fixe</span><b>${num(l.rate)} %</b></div>
+        <div><span>Durée</span><b>${l.duration_months} mois${l.deferral_months ? ` + ${l.deferral_months} de différé ${l.deferral_type === 'total' ? 'total' : 'partiel'}` : ''}</b></div>
+        <div><span>1re échéance</span><b>${fmtDate(st.startDate)}</b></div>
+        <div><span>Dernière échéance</span><b>${fmtDate(st.endDate)}</b></div>
+        ${l.loan_number ? `<div><span>N° de crédit</span><b>${esc(l.loan_number)}</b></div>` : ''}
+        ${l.insurance_monthly ? `<div><span>Assurance</span><b>${eur2(l.insurance_monthly)}/mois</b></div>` : ''}
+      </div>
       <div class="grid c4" style="margin-bottom:16px">
         <div class="card tight kpi"><div class="lbl">Capital restant dû</div><div class="val">${eur(st.balance)}</div><div class="sub">${st.paidCount}/${st.total} échéances réglées</div></div>
         <div class="card tight kpi" style="--kpi:#dbeafe;--kpi-c:var(--blue)"><div class="lbl">Mensualité</div><div class="val">${eur2(st.monthly)}</div><div class="sub">assurance incluse</div></div>
@@ -151,12 +172,14 @@ export function openLoanSchedule(id, onChange) {
         ${Object.entries(byYear).map(([y, v]) => `<tr><td><b>${y}</b></td><td class="num">${eur2(v.payment)}</td><td class="num">${eur2(v.interest)}</td><td class="num">${eur2(v.capital)}</td><td class="num">${eur2(v.insurance)}</td><td class="num"><b>${eur(v.balance)}</b></td></tr>`).join('')}
       </tbody></table></div>
       <div class="table-wrap" id="ls-month" hidden style="max-height:420px;overflow:auto"><table><thead><tr><th>#</th><th>Date</th><th class="num">Échéance</th><th class="num">Intérêts</th><th class="num">Capital</th><th class="num">Assurance</th><th class="num">CRD</th></tr></thead><tbody>
-        ${rows.map(r => `<tr style="${r.date <= todayIso ? 'color:var(--muted)' : ''}${st.next && r.k === st.next.k ? ';background:#fff7ed;font-weight:700' : ''}"><td>${r.k}</td><td class="nowrap">${fmtDate(r.date)}</td><td class="num">${eur2(r.payment)}</td><td class="num">${eur2(r.interest)}</td><td class="num">${eur2(r.capital)}</td><td class="num">${eur2(r.insurance)}</td><td class="num">${eur2(r.balance)}</td></tr>`).join('')}
-      </tbody></table></div>`;
+        ${rows.map(r => `<tr style="${r.date <= todayIso ? 'color:var(--muted)' : ''}${st.next && r.k === st.next.k ? ';background:#fff7ed;font-weight:700' : ''}"><td>${r.k}${r.deferred ? ' <span class="pill warn" style="font-size:10px;padding:1px 6px">différé</span>' : ''}</td><td class="nowrap">${fmtDate(r.date)}</td><td class="num">${eur2(r.payment)}</td><td class="num">${eur2(r.interest)}</td><td class="num">${eur2(r.capital)}</td><td class="num">${eur2(r.insurance)}</td><td class="num">${eur2(r.balance)}</td></tr>`).join('')}
+      </tbody></table></div>
+      ${documentsSection('loans', l.id)}`;
     const m = openModal(`${l.label || 'Prêt'} — ${propName(l.property_id)}${l.bank ? ' · ' + l.bank : ''}`, html, { wide: true, onClose: () => onChange?.() });
     m.querySelectorAll('[data-v]').forEach(b => b.onclick = () => { m.querySelectorAll('[data-v]').forEach(x => x.classList.remove('active')); b.classList.add('active'); m.querySelector('#ls-year').hidden = b.dataset.v !== 'year'; m.querySelector('#ls-month').hidden = b.dataset.v !== 'month'; });
     m.querySelector('#ls-export').onclick = () => csvDownload(`amortissement-${(l.label || 'pret').replace(/\s+/g, '-')}.csv`, rows.map(r => ({ echeance: r.k, date: r.date, mensualite: r.payment, interets: r.interest, capital: r.capital, assurance: r.insurance, capital_restant_du: r.balance })));
     m.querySelector('#ls-edit').onclick = () => loanForm(l, {}, (nid) => nid ? render() : onChange?.(), render);
+    bindDocuments(m, 'loans', l.id, render);
   };
   render();
 }
@@ -171,7 +194,7 @@ export function openProperty(id, onChange) {
     const expenses = db.t('expenses').filter(x => x.property_id === id).sort((a, b) => monthlyEquivalent(b) - monthlyEquivalent(a));
     const html = `
       <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px">
-        <div><span class="pill ${p.status === 'Loué' ? 'ok' : p.status === 'Vacant' ? 'bad' : 'warn'}">${esc(p.status)}</span> <span class="pill">${esc(p.invest_type || '')}</span> <span class="pill info">${esc(p.structure || '')}</span><div class="muted small" style="margin-top:4px">${esc([p.address, p.postal_code, p.city].filter(Boolean).join(', '))}${p.surface ? ' · ' + num(p.surface) + ' m²' : ''}${p.purchase_date ? ' · acheté le ' + fmtDate(p.purchase_date) : ''}</div></div>
+        <div><span class="pill ${p.status === 'Loué' ? 'ok' : p.status === 'Vacant' ? 'bad' : p.status === 'Résidence principale' ? 'info' : 'warn'}">${esc(p.status)}</span> <span class="pill">${esc(p.invest_type || '')}</span> <span class="pill info">${esc(p.structure || '')}</span><div class="muted small" style="margin-top:4px">${esc([p.address, p.postal_code, p.city].filter(Boolean).join(', '))}${p.surface ? ' · ' + num(p.surface) + ' m²' : ''}${p.purchase_date ? ' · acheté le ' + fmtDate(p.purchase_date) : ''}</div></div>
         <div class="toolbar"><button class="btn sm" id="p-loan">+ Prêt</button><button class="btn sm" id="p-lease">+ Bail</button><button class="btn sm" id="p-exp">+ Charge</button><button class="btn ghost sm" id="p-edit">✎ Modifier</button></div>
       </div>
       <div class="grid c4" style="margin-bottom:18px">
@@ -182,12 +205,13 @@ export function openProperty(id, onChange) {
       </div>
       <div class="detail">
         <div>
-          <div class="section"><h3>Prêts (${loans.length})</h3>${loans.map(l => { const st = loanStatus(l); return `<div class="act-row" style="cursor:pointer;margin-bottom:6px" data-loan="${l.id}"><div style="flex:1"><b>${esc(l.label || 'Prêt')}</b> <span class="muted small">${esc(l.bank || '')} · ${num(l.rate)} % · ${l.duration_months} mois</span><div class="small muted">CRD ${eur(st.balance)} · ${eur2(st.monthly)}/mois · fin ${fmtDate(st.endDate)}</div></div></div>`; }).join('') || '<div class="empty">Aucun prêt (bien payé comptant ?)</div>'}</div>
+          <div class="section"><h3>Prêts (${loans.length})</h3>${loans.map(l => { const st = loanStatus(l); return `<div class="act-row" style="cursor:pointer;margin-bottom:6px" data-loan="${l.id}"><div style="flex:1"><b>${esc(l.label || 'Prêt')}</b> <span class="muted small">${esc(l.bank || '')} · ${num(l.rate)} % · ${totalMonths(l)} mois</span><div class="small muted">CRD ${eur(st.balance)} · ${eur2(st.monthly)}/mois · fin ${fmtDate(st.endDate)}</div></div></div>`; }).join('') || '<div class="empty">Aucun prêt (bien payé comptant ?)</div>'}</div>
           <div class="section"><h3>Baux (${leases.length})</h3>${leases.map(l => `<div class="act-row ${l.active === false ? 'done' : ''}" style="cursor:pointer;margin-bottom:6px" data-lease="${l.id}"><div style="flex:1"><b>${esc(l.lot || 'Logement')}</b> — ${esc(l.tenant)}<div class="small muted">${eur(l.rent)}/mois${l.charges ? ' + ' + eur(l.charges) + ' charges' : ''} · depuis ${fmtDate(l.start_date)}${l.end_date ? ' → ' + fmtDate(l.end_date) : ''}</div></div></div>`).join('') || '<div class="empty">Aucun bail</div>'}</div>
         </div>
         <div>
           <div class="section"><h3>Charges — ${eur(m0.chargesMonthly)}/mois équivalent</h3>${expenses.map(x => `<div class="act-row" style="cursor:pointer;margin-bottom:6px" data-exp="${x.id}"><div style="flex:1"><b>${esc(x.label)}</b> <span class="muted small">${esc(x.category)}</span><div class="small muted">${eur2(x.amount)} · ${esc(RECURRENCES.find(r => r[0] === x.recurrence)?.[1] || '')}${x.date ? ' · ' + fmtDate(x.date) : ''}</div></div></div>`).join('') || '<div class="empty">Aucune charge saisie</div>'}</div>
           ${p.notes ? `<div class="section"><h3>Notes</h3><div class="small">${esc(p.notes)}</div></div>` : ''}
+          ${documentsSection('properties', p.id)}
         </div>
       </div>`;
     const m = openModal(p.name, html, { wide: true, onClose: () => onChange?.() });
@@ -196,6 +220,7 @@ export function openProperty(id, onChange) {
     m.querySelector('#p-loan').onclick = () => loanForm(null, { property_id: id }, refresh, render);
     m.querySelector('#p-lease').onclick = () => leaseForm(null, { property_id: id }, refresh, render);
     m.querySelector('#p-exp').onclick = () => expenseForm(null, { property_id: id }, refresh, render);
+    bindDocuments(m, 'properties', id, render);
     m.querySelectorAll('[data-loan]').forEach(el => el.onclick = () => openLoanSchedule(el.dataset.loan, render));
     m.querySelectorAll('[data-lease]').forEach(el => el.onclick = () => leaseForm(db.byId('leases', el.dataset.lease), {}, refresh, render));
     m.querySelectorAll('[data-exp]').forEach(el => el.onclick = () => expenseForm(db.byId('expenses', el.dataset.exp), {}, refresh, render));
@@ -277,7 +302,7 @@ export const loansPage = {
           <div class="card tight kpi" style="--kpi:#fef3c7;--kpi-c:var(--amber)"><div class="lbl">Coût des intérêts</div><div class="val">${eur(tot.interest)}</div><div class="sub">sur la durée totale</div></div>
         </div>
         <div class="card"><div class="table-wrap"><table><thead><tr><th>Prêt</th><th>Bien</th><th>Banque</th><th class="num">Capital</th><th class="num">Taux</th><th class="num">Durée</th><th>Début</th><th class="num">Mensualité</th><th class="num">CRD</th><th>Avancement</th><th>Fin</th></tr></thead><tbody>
-          ${loans.map(({ l, st }) => `<tr class="click" data-loan="${l.id}"><td><b>${esc(l.label || 'Prêt')}</b></td><td>${esc(propName(l.property_id))}</td><td class="small">${esc(l.bank || '')}</td><td class="num">${eur(l.principal)}</td><td class="num">${num(l.rate)} %</td><td class="num">${l.duration_months} mois</td><td class="nowrap">${fmtDate(l.start_date)}</td><td class="num">${eur2(st.monthly)}</td><td class="num"><b>${eur(st.balance)}</b></td><td><div style="background:#eee;border-radius:99px;height:8px;width:120px;overflow:hidden"><div style="background:var(--green);height:8px;width:${st.total ? Math.round(st.paidCount / st.total * 100) : 0}%"></div></div><span class="small muted">${st.paidCount}/${st.total}</span></td><td class="nowrap">${fmtDate(st.endDate)}</td></tr>`).join('') || '<tr><td colspan="11" class="empty">Aucun prêt</td></tr>'}
+          ${loans.map(({ l, st }) => `<tr class="click" data-loan="${l.id}"><td><b>${esc(l.label || 'Prêt')}</b></td><td>${esc(propName(l.property_id))}</td><td class="small">${esc(l.bank || '')}</td><td class="num">${eur(l.principal)}</td><td class="num">${num(l.rate)} %</td><td class="num">${totalMonths(l)} mois</td><td class="nowrap">${fmtDate(l.start_date)}</td><td class="num">${eur2(st.monthly)}</td><td class="num"><b>${eur(st.balance)}</b></td><td><div style="background:#eee;border-radius:99px;height:8px;width:120px;overflow:hidden"><div style="background:var(--green);height:8px;width:${st.total ? Math.round(st.paidCount / st.total * 100) : 0}%"></div></div><span class="small muted">${st.paidCount}/${st.total}</span></td><td class="nowrap">${fmtDate(st.endDate)}</td></tr>`).join('') || '<tr><td colspan="11" class="empty">Aucun prêt</td></tr>'}
         </tbody></table></div></div>`;
       root.querySelector('#ln-new').onclick = () => loanForm(null, {}, (id) => { draw(); if (id) openLoanSchedule(id, draw); });
       root.querySelectorAll('[data-loan]').forEach(tr => tr.onclick = () => openLoanSchedule(tr.dataset.loan, draw));
@@ -375,7 +400,7 @@ export const propertiesPage = {
       root.innerHTML = `
         <div class="toolbar"><span class="muted small">${rows.length} bien${rows.length > 1 ? 's' : ''}</span><span class="grow"></span><button class="btn" id="pb-new">+ Bien</button></div>
         <div class="grid c3">${rows.map(({ p, m }) => `<div class="card click" data-prop="${p.id}" style="cursor:pointer;border-top:4px solid ${p.status === 'Loué' ? 'var(--green)' : p.status === 'Vacant' ? 'var(--red)' : 'var(--amber)'}">
-          <div class="card-head"><h2>${esc(p.name)}</h2><span class="pill ${p.status === 'Loué' ? 'ok' : p.status === 'Vacant' ? 'bad' : 'warn'}">${esc(p.status)}</span></div>
+          <div class="card-head"><h2>${esc(p.name)}</h2><span class="pill ${p.status === 'Loué' ? 'ok' : p.status === 'Vacant' ? 'bad' : p.status === 'Résidence principale' ? 'info' : 'warn'}">${esc(p.status)}</span></div>
           <div class="muted small">${esc([p.address, p.city].filter(Boolean).join(', '))}</div>
           <div class="small" style="margin:6px 0 12px"><span class="pill">${esc(p.invest_type || '')}</span> <span class="pill info">${esc(p.structure || '')}</span>${p.surface ? ` <span class="pill">${num(p.surface)} m²</span>` : ''}</div>
           <div class="hub-kpis"><div><b>${eur(m.value)}</b><span>valeur</span></div><div><b>${eur(m.debt)}</b><span>CRD</span></div><div><b>${eur(m.rentMonthly)}</b><span>loyer / mois</span></div><div><b class="${m.cashflow >= 0 ? 'status-won' : 'status-lost'}">${eur2(m.cashflow)}</b><span>cash-flow</span></div></div>

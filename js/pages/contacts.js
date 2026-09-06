@@ -6,6 +6,7 @@ import { esc, eur, openModal, closeModal, renderForm, readForm, refField, bindRe
 import { openDeal, dealForm } from './deal.js';
 import { activityForm, activityRowHtml, bindActivityRows } from './activity.js';
 import { orgForm, openOrg } from './organisations.js';
+import { documentsSection, bindDocuments } from '../documents.js';
 
 const orgLabel = o => o.name;
 const contactLabel = c => `${contactName(c)}${c.city ? ' (' + c.city + ')' : ''}`;
@@ -91,6 +92,7 @@ export function openContact(id, onChange) {
         <div>
           <div class="section"><h3>Actions à venir</h3><div id="c-acts" style="display:flex;flex-direction:column;gap:8px">${acts.length ? acts.map(a => activityRowHtml(a)).join('') : '<div class="empty">Aucune</div>'}</div></div>
           <div class="section"><h3>Derniers échanges</h3><div class="timeline">${events.length ? events.map(e => `<div class="tl ${e.kind}"><div class="meta">${fmtDateTime(e.created_at)} · ${esc(userName(e.author_id))}</div>${esc(e.body)}</div>`).join('') : '<div class="empty">Aucun</div>'}</div></div>
+          ${documentsSection('contacts', id)}
         </div>
       </div>`;
     const m = openModal(contactName(c), html, { wide: true, onClose: () => onChange?.() });
@@ -104,6 +106,7 @@ export function openContact(id, onChange) {
     m.querySelectorAll('[data-deal]').forEach(el => el.onclick = () => openDeal(el.dataset.deal, refresh));
     m.querySelector('[data-org]')?.addEventListener('click', e => { e.preventDefault(); openOrg(e.currentTarget.dataset.org, refresh); });
     bindActivityRows(m.querySelector('#c-acts'), refresh, render);
+    bindDocuments(m, 'contacts', id, render);
   };
   render();
 }

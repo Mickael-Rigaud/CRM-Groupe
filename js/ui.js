@@ -94,7 +94,8 @@ export function renderForm(spec, values = {}) {
       default:
         input = `<input type="${f.type || 'text'}" name="${f.key}" value="${esc(v)}" ${req} ${f.step ? `step="${f.step}"` : ''} ${f.placeholder ? `placeholder="${esc(f.placeholder)}"` : ''}>`;
     }
-    return `<div class="${cls}"><label>${esc(f.label)}${f.required ? ' *' : ''}</label>${input}</div>`;
+    const hint = f.hint && f.type !== 'checkbox' ? `<div class="small muted" style="margin-top:4px">${esc(f.hint)}</div>` : '';
+    return `<div class="${cls}"><label>${esc(f.label)}${f.required ? ' *' : ''}</label>${input}${hint}</div>`;
   }).join('');
 }
 export function readForm(formEl, spec) {

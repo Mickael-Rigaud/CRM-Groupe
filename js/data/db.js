@@ -8,7 +8,10 @@ export const TABLES = ['profiles', 'organisations', 'contacts', 'deals', 'activi
   // module Patrimoine
   'properties', 'loans', 'leases', 'rent_payments', 'expenses',
   // module Vivier courtiers
-  'broker_profiles'];
+  'broker_profiles',
+  // documents (pièces jointes)
+  'documents'];
+const LS_FILES = 'crm_local_files';
 const LS_KEY = 'crm_local_v1';
 const LS_USER = 'crm_local_user';
 
@@ -46,7 +49,17 @@ const localAdapter = {
   async remove(table, id) {
     this.data[table] = this.data[table].filter(r => (r.id ?? r.key) !== id); this.save();
   },
-  reset() { localStorage.removeItem(LS_KEY); localStorage.removeItem(LS_USER); },
+  reset() { localStorage.removeItem(LS_KEY); localStorage.removeItem(LS_USER); localStorage.removeItem(LS_FILES); },
+  // fichiers (démo) : conservés dans le navigateur en base64, petits fichiers uniquement
+  files() { try { return JSON.parse(localStorage.getItem(LS_FILES)) || {}; } catch { return {}; } },
+  async uploadFile(path, file) {
+    if (file.size > 3 * 1048576) throw new Error('En mode démo, 3 Mo max par fichier (sans limite en production)');
+    const dataUrl = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(file); });
+    const all = this.files(); all[path] = dataUrl;
+    try { localStorage.setItem(LS_FILES, JSON.stringify(all)); } catch { throw new Error('Espace du navigateur saturé (mode démo)'); }
+  },
+  async fileUrl(path) { const u = this.files()[path]; if (!u) throw new Error('Fichier introuvable'); return u; },
+  async deleteFile(path) { const all = this.files(); delete all[path]; localStorage.setItem(LS_FILES, JSON.stringify(all)); },
   // auth
   async currentUser() { const id = localStorage.getItem(LS_USER); return this.data.profiles.find(u => u.id === id) || null; },
   async signIn(userId) { localStorage.setItem(LS_USER, userId); return this.data.profiles.find(u => u.id === userId); },
@@ -95,6 +108,19 @@ const supabaseAdapter = {
     return this.currentUser();
   },
   async signOut() { await this.client.auth.signOut(); },
+  // fichiers : bucket privé « documents », accès par lien signé (1 h)
+  async uploadFile(path, file) {
+    const { error } = await this.client.storage.from('documents').upload(path, file, { upsert: false, contentType: file.type || undefined });
+    if (error) throw new Error(error.message);
+  },
+  async fileUrl(path) {
+    const { data, error } = await this.client.storage.from('documents').createSignedUrl(path, 3600);
+    if (error) throw new Error(error.message); return data.signedUrl;
+  },
+  async deleteFile(path) {
+    const { error } = await this.client.storage.from('documents').remove([path]);
+    if (error) throw new Error(error.message);
+  },
 };
 
 // ---------- Façade ----------
@@ -135,6 +161,10 @@ export const db = {
   onChange(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); },
   emit() { for (const fn of this.listeners) { try { fn(); } catch (e) { console.error(e); } } },
 
+  // fichiers
+  uploadFile(path, file) { return this.adapter.uploadFile(path, file); },
+  fileUrl(path) { return this.adapter.fileUrl(path); },
+  deleteFile(path) { return this.adapter.deleteFile(path); },
   // auth
   currentUser() { return this.adapter.currentUser(); },
   signIn(a, b) { return this.adapter.signIn(a, b); },

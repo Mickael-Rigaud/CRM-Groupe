@@ -4,6 +4,7 @@ import { scope } from '../data/scope.js';
 import { ACTIVITIES, CHANNELS, LOST_REASONS, stageOf, stageIndex } from '../data/schema.js';
 import { esc, eur, openModal, closeModal, renderForm, readForm, refField, bindRefFields, toast, fmtDate, fmtDateTime, userName, contactName, dealParty, actBadge, daysSince, confirm } from '../ui.js';
 import { activityForm, activityRowHtml, bindActivityRows, nextActivity } from './activity.js';
+import { documentsSection, bindDocuments } from '../documents.js';
 
 const contactLabel = c => `${contactName(c)}${c.city ? ' (' + c.city + ')' : ''}`;
 const orgLabel = o => o.name;
@@ -159,6 +160,7 @@ export function openDeal(id, onChange) {
           <div class="section"><h3 style="display:flex;justify-content:space-between;align-items:center">Activités <button class="btn sm" id="d-add-act">+ Activité</button></h3>
             <div style="display:flex;flex-direction:column;gap:8px" id="d-acts">${acts.length ? acts.map(a => activityRowHtml(a)).join('') : '<div class="empty">Aucune activité</div>'}</div>
           </div>
+          ${documentsSection('deals', id)}
         </div>
       </div>`;
     const m = openModal(d.title, html, { wide: true, onClose: () => onChange?.() });
@@ -173,6 +175,7 @@ export function openDeal(id, onChange) {
     m.querySelector('#d-add-act-inline')?.addEventListener('click', e => { e.preventDefault(); addAct(); });
     m.querySelector('#note-form').onsubmit = async e => { e.preventDefault(); const body = e.target.body.value.trim(); if (!body) return; await logEvent(d, 'note', body); refresh(); };
     bindActivityRows(m.querySelector('#d-acts'), refresh, render);
+    bindDocuments(m, 'deals', id, render);
   };
   render();
 }

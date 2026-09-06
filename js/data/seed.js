@@ -85,7 +85,7 @@ export const SEED = {
   ],
   loans: [
     { id: 'l1', property_id: 'p1', bank: 'Crédit Agricole', label: 'Prêt T2 Halles', principal: 130000, rate: 1.35, duration_months: 240, start_date: '2021-04-05', insurance_monthly: 28.5, deferral_months: 0, created_at: d(-900) },
-    { id: 'l2', property_id: 'p2', bank: 'BNP Paribas', label: 'Prêt SCI Saint-Pierre', principal: 300000, rate: 3.85, duration_months: 240, start_date: '2023-07-05', insurance_monthly: 62, deferral_months: 12, created_at: d(-700) },
+    { id: 'l2', property_id: 'p2', bank: 'BNP Paribas', label: 'Prêt SCI Saint-Pierre', principal: 300000, rate: 3.85, duration_months: 228, start_date: '2023-07-05', insurance_monthly: 62, deferral_months: 12, deferral_type: 'partial', created_at: d(-700) },
   ],
   leases: [
     { id: 'b1', property_id: 'p1', lot: 'T2', tenant: 'Léa Martin', rent: 620, charges: 40, deposit: 620, start_date: '2024-09-01', end_date: null, active: true, created_at: d(-400) },

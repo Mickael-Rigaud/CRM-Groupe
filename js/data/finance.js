@@ -2,7 +2,7 @@
 
 export const INVEST_TYPES = ['Locatif nu', 'Meublé / LMNP', 'Colocation', 'Immeuble de rapport', 'Local commercial', 'Parking / garage', 'Résidence principale', 'Terrain', 'Autre'];
 export const STRUCTURES = ['Nom propre', 'Indivision', 'SCI à l\'IR', 'SCI à l\'IS', 'SARL de famille', 'SAS / SASU', 'Holding', 'Autre'];
-export const PROPERTY_STATUS = ['Loué', 'Vacant', 'En travaux', 'En vente', 'Vendu'];
+export const PROPERTY_STATUS = ['Loué', 'Résidence principale', 'Vacant', 'En travaux', 'En vente', 'Vendu'];
 export const EXPENSE_CATEGORIES = ['Taxe foncière', 'Charges de copropriété', 'Assurance PNO', 'Assurance emprunteur', 'Gestion locative', 'Entretien / réparations', 'Travaux', 'CFE', 'Comptable', 'Eau / électricité / gaz', 'Internet', 'Frais bancaires', 'Autre'];
 export const RECURRENCES = [['monthly', 'Mensuelle'], ['quarterly', 'Trimestrielle'], ['yearly', 'Annuelle'], ['once', 'Ponctuelle']];
 
@@ -17,20 +17,27 @@ export function monthlyPayment(principal, annualRatePct, months) {
 }
 
 // Tableau d'amortissement complet.
-// loan: { principal, rate, duration_months, start_date, insurance_monthly, deferral_months (différé partiel : intérêts seuls), monthly_payment (facultatif : mensualité imposée) }
+// loan: { principal, rate, duration_months (durée d'amortissement, hors différé), start_date (1re échéance),
+//         insurance_monthly, deferral_months, deferral_type ('partial' = intérêts seuls payés pendant le différé,
+//         'total' = rien n'est payé, les intérêts s'ajoutent au capital), monthly_payment (facultatif : mensualité imposée) }
+export function totalMonths(loan) { return (Number(loan.duration_months) || 0) + (Number(loan.deferral_months) || 0); }
 export function schedule(loan) {
-  const P = Number(loan.principal) || 0; const n = Number(loan.duration_months) || 0; const r = (Number(loan.rate) || 0) / 100 / 12;
-  const ins = Number(loan.insurance_monthly) || 0; const defer = Math.min(Number(loan.deferral_months) || 0, n);
-  const amortMonths = n - defer;
-  const pay = loan.monthly_payment ? Number(loan.monthly_payment) : monthlyPayment(P, loan.rate, amortMonths);
+  const P = Number(loan.principal) || 0; const amort = Number(loan.duration_months) || 0; const r = (Number(loan.rate) || 0) / 100 / 12;
+  const ins = Number(loan.insurance_monthly) || 0; const defer = Number(loan.deferral_months) || 0; const total = amort + defer;
+  const totalDeferral = loan.deferral_type === 'total';
   const rows = []; let balance = P; const start = loan.start_date ? new Date(loan.start_date + 'T00:00:00') : new Date();
-  for (let k = 1; k <= n; k++) {
+  // Différé total : le capital à amortir est le capital emprunté augmenté des intérêts capitalisés
+  let capitalToAmortize = P; if (totalDeferral && defer) capitalToAmortize = P * Math.pow(1 + r, defer);
+  const pay = loan.monthly_payment ? Number(loan.monthly_payment) : monthlyPayment(capitalToAmortize, loan.rate, amort);
+  for (let k = 1; k <= total; k++) {
     const d = new Date(start.getFullYear(), start.getMonth() + k - 1, start.getDate() > 28 ? 28 : start.getDate());
     const interest = balance * r;
-    let capital = 0;
-    if (k <= defer) capital = 0; else { capital = Math.min(pay - interest, balance); if (k === n) capital = balance; }
-    balance = Math.max(0, balance - capital);
-    rows.push({ k, date: d.toISOString().slice(0, 10), interest: r2(interest), capital: r2(capital), insurance: ins, payment: r2(interest + capital + ins), balance: r2(balance) });
+    let capital = 0, interestPaid = interest;
+    if (k <= defer) {
+      if (totalDeferral) { balance += interest; interestPaid = 0; capital = 0; }
+      else capital = 0;
+    } else { capital = Math.min(pay - interest, balance); if (k === total) capital = balance; balance = Math.max(0, balance - capital); }
+    rows.push({ k, date: d.toISOString().slice(0, 10), interest: r2(interestPaid), interestAccrued: r2(interest), capital: r2(capital), insurance: ins, payment: r2(interestPaid + capital + ins), balance: r2(balance), deferred: k <= defer });
   }
   return rows;
 }
@@ -47,6 +54,8 @@ export function loanStatus(loan, at = new Date()) {
     interestPaid: r2(paid.reduce((s, x) => s + x.interest, 0)),
     capitalPaid: r2(paid.reduce((s, x) => s + x.capital, 0)),
     monthly: next ? next.payment : (last ? last.payment : 0),
+    nextDate: next ? next.date : null,
+    startDate: rows.length ? rows[0].date : null,
     endDate: rows.length ? rows[rows.length - 1].date : null,
     next,
     totalInterest: r2(rows.reduce((s, x) => s + x.interest, 0)),

@@ -6,6 +6,7 @@ import { esc, eur, openModal, closeModal, renderForm, readForm, toast, fmtDate, 
 import { openDeal, dealForm } from './deal.js';
 import { activityForm, activityRowHtml, bindActivityRows } from './activity.js';
 import { openContact } from './contacts.js';
+import { documentsSection, bindDocuments } from '../documents.js';
 
 export function orgForm(existing = null, onSaved, onClose = null, presetType = null, switchTo = null) {
   const users = scope.users();
@@ -102,6 +103,7 @@ export function openOrg(id, onChange) {
         </div>
         <div>
           <div class="section"><h3>Actions à venir</h3><div id="o-acts" style="display:flex;flex-direction:column;gap:8px">${acts.length ? acts.map(a => activityRowHtml(a)).join('') : '<div class="empty">Aucune</div>'}</div></div>
+          ${documentsSection('organisations', id)}
         </div>
       </div>`;
     const m = openModal(o.name, html, { wide: true, onClose: () => onChange?.() });
@@ -113,6 +115,7 @@ export function openOrg(id, onChange) {
     m.querySelectorAll('[data-deal]').forEach(el => el.onclick = () => openDeal(el.dataset.deal, refresh));
     m.querySelectorAll('[data-contact]').forEach(el => el.onclick = () => openContact(el.dataset.contact, refresh));
     bindActivityRows(m.querySelector('#o-acts'), refresh, render);
+    bindDocuments(m, 'organisations', id, render);
   };
   const dealRow = d => `<div class="act-row" style="cursor:pointer;margin-bottom:6px" data-deal="${d.id}"><div style="flex:1">${actBadge(d.activity)} <b>${esc(d.title)}</b><div class="small muted">${d.status === 'won' ? '<span class="status-won">Gagnée</span>' : d.status === 'lost' ? '<span class="status-lost">Perdue</span>' : esc(ACTIVITIES[d.activity].stages.find(s => s.key === d.stage)?.label)} · ${eur(d.amount)} · ${fmtDate(d.created_at)}</div></div></div>`;
   render();

@@ -132,3 +132,11 @@ Installation : exécuter `supabase/modules-lot2.sql` puis `supabase/vivier-impor
 - Pas de logo : le nom « CRM Groupe » en texte ; icônes d'application sobres (`assets/icon-192.png`, `assets/icon-512.png`).
 - **Contacts fusionnés** : un seul onglet Contacts qui liste les personnes (👤) et les entreprises / structures (🏢). Le bouton « + Contact » propose un sélecteur Personne / Entreprise en haut du formulaire. L'onglet Organisations a disparu ; les partenaires et apporteurs restent dans Partenaires. Aucune modification de base de données (les tables `contacts` et `organisations` sont conservées).
 - Couleurs des activités (`js/data/schema.js`) : RGD Renova orange, BTP Expertise bleu marine, La Référence Courtage bleu mer, Propulsion rose.
+
+## Lot 3 — Prêts avec différé total, statut Résidence principale, documents (06/09/2026)
+
+- **Prêts** : la durée saisie est désormais la durée d'amortissement *hors différé* ; le différé s'ajoute et peut être *partiel* (intérêts payés, capital gelé) ou *total* (rien payé, intérêts ajoutés au capital). Nouveau champ N° de crédit. La fiche du prêt affiche le résumé façon relevé bancaire : montant emprunté, capital restant dû, déjà remboursé, prochaine échéance et son montant, taux, durée, 1re et dernière échéance. Vérifié sur un prêt réel à la dizaine de centimes près.
+- **Biens** : statut « Résidence principale ».
+- **Documents** : bloc « Documents » sur les fiches bien, prêt, contact, entreprise et affaire — dépôt de fichiers (PDF, images, Office… 25 Mo max), catégorie, ouverture dans le navigateur par lien sécurisé (1 h), suppression. Fichiers stockés dans le bucket privé `documents` de Supabase (1 Go inclus dans l'offre gratuite), droits identiques à la fiche (patrimoine réservé aux profils autorisés).
+
+Installation : exécuter `supabase/lot3-documents-prets.sql` dans Supabase > SQL Editor, puis déposer `css`, `js`, `README.md` sur GitHub.
