@@ -60,7 +60,7 @@ export const homePage = {
 
       root.innerHTML = `
         ${db.demo ? '<div class="demo-banner"><b>Mode démo</b> — données d\'exemple stockées dans ce navigateur.</div>' : ''}
-        <div class="card" style="display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;background:linear-gradient(120deg,#1f1f1f,#3a3a3a);color:#fff">
+        <div class="card" style="display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;background:linear-gradient(120deg,#15384E,#0A6F86);color:#fff;border:0">
           <div><div style="font-size:12px;text-transform:uppercase;letter-spacing:.1em;opacity:.7">${new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</div><h2 style="font-size:24px;margin-top:4px">${hello}, ${esc((u.full_name || '').split(' ')[0])}.</h2>
             <div style="opacity:.8;margin-top:4px">${late ? `<b style="color:#fca5a5">${late} action${late > 1 ? 's' : ''} en retard</b> · ` : ''}${today} à faire aujourd'hui · ${noNext ? `<b style="color:#fcd34d">${noNext} affaire${noNext > 1 ? 's' : ''} sans prochaine action</b>` : 'toutes les affaires ont une prochaine action'}</div></div>
           <a class="btn" href="#/today" style="background:var(--orange)">Ouvrir ma journée →</a>

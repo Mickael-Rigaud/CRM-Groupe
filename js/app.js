@@ -6,6 +6,7 @@ import { ACTIVITIES, ROLES } from './data/schema.js';
 import { esc, toast, isoDay, daysSince, closeModal } from './ui.js';
 import { pages } from './pages/index.js';
 
+
 const app = document.getElementById('app');
 let current = null; // page en cours
 let unsubscribe = null;
@@ -14,7 +15,7 @@ let unsubscribe = null;
 function renderLogin(error = '') {
   const users = db.t('profiles');
   app.innerHTML = `<div class="login"><div class="card">
-    <div class="brand"><div class="logo"><i>C</i> ${esc(CONFIG.APP_NAME)}</div><small>RGD Renova · BTP Expertise · La Référence Courtage · Propulsion</small></div>
+    <div class="brand"><div class="logo">${esc(CONFIG.APP_NAME)}</div><small>RGD Renova · BTP Expertise · La Référence Courtage · Propulsion</small></div>
     ${db.demo ? `
       <p class="muted small">Mode démo — données d'exemple stockées dans ce navigateur. Choisissez un profil pour tester les droits :</p>
       <div class="userpick">${users.map(u => `<button data-u="${u.id}"><span class="avatar">${esc(u.full_name.split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase())}</span><span><b>${esc(u.full_name)}</b><small>${esc(ROLES[u.role]?.label || u.role)} — ${esc(ROLES[u.role]?.description || '')}</small></span></button>`).join('')}</div>
@@ -43,7 +44,6 @@ const NAV = [
   { hash: '#/dashboard', label: "Vue d'ensemble", icon: '📊', direction: true },
   ...Object.values(ACTIVITIES).map(a => ({ hash: `#/pipeline/${a.key}`, label: a.label, dot: a.color, sub: true, activity: a.key, count: () => scope.deals().filter(d => d.activity === a.key && d.status === 'open').length })),
   { hash: '#/contacts', label: 'Contacts', icon: '👤' },
-  { hash: '#/organisations', label: 'Organisations', icon: '🏢' },
   { hash: '#/partners', label: 'Partenaires', icon: '🤝' },
   { hash: '#/acquisition', label: 'Acquisition', icon: '📈', direction: true },
   { sep: 'Recrutement', show: () => scope.isDirection || scope.activityKeys.includes('courtage') },
@@ -62,9 +62,9 @@ function renderLayout() {
   const u = scope.user;
   app.innerHTML = `
     <aside class="sidebar">
-      <div class="brand"><div class="logo"><i>C</i> ${esc(CONFIG.APP_NAME)}</div><small>Pilotage commercial</small></div>
+      <div class="brand"><div class="logo">${esc(CONFIG.APP_NAME)}</div><small>Pilotage des activités</small></div>
       <nav class="nav" id="nav"></nav>
-      <div class="userbox"><div class="role">${esc(ROLES[u.role]?.label || u.role)}</div><div class="name">${esc(u.full_name)}</div><button class="btn ghost sm" id="logout" style="color:#fff;border-color:rgba(255,255,255,.2)">Déconnexion</button></div>
+      <div class="userbox"><div class="role">${esc(ROLES[u.role]?.label || u.role)}</div><div class="name">${esc(u.full_name)}</div><button class="btn ghost sm" id="logout" style="color:#fff;background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.25)">Déconnexion</button></div>
     </aside>
     <div class="main">
       <header class="topbar"><h1 id="page-title">—</h1><div class="datepill"><span>Aujourd'hui</span>${new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</div></header>
@@ -80,7 +80,7 @@ function renderNav() {
     if (n.sep) return `<div class="sep">${esc(n.sep)}</div>`;
     const active = (n.exact ? hash === n.hash : hash.startsWith(n.hash)) ? 'active' : '';
     const cnt = n.count ? n.count() : 0;
-    return `<a href="${n.hash}" class="${active} ${n.sub ? 'sub' : ''}">${n.dot ? `<span class="dot" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${n.dot}"></span>` : `<span>${n.icon}</span>`}${esc(n.label)}${cnt ? `<span class="cnt">${cnt}</span>` : ''}</a>`;
+    return `<a href="${n.hash}" class="${active} ${n.sub ? 'sub' : ''}">${n.dot ? `<span class="dot" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${n.dot};box-shadow:0 0 0 2px rgba(255,255,255,.35)"></span>` : `<span>${n.icon}</span>`}${esc(n.label)}${cnt ? `<span class="cnt">${cnt}</span>` : ''}</a>`;
   }).join('');
 }
 

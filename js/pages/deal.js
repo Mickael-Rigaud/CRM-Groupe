@@ -76,7 +76,7 @@ export function dealForm(activityKey, existing = null, presets = {}, onSaved, on
   const html = `<form class="form" id="deal-form">
     ${renderForm(base, vals)}
     ${refField('contact_id', 'Contact', contacts, contactLabel, vals.contact_id)}
-    ${refField('organisation_id', 'Organisation', orgs, orgLabel, vals.organisation_id)}
+    ${refField('organisation_id', 'Entreprise / structure', orgs, orgLabel, vals.organisation_id)}
     ${refField('referrer_org_id', 'Apporteur (organisation)', orgs, orgLabel, vals.referrer_org_id)}
     ${refField('referrer_contact_id', 'Apporteur (contact)', contacts, contactLabel, vals.referrer_contact_id)}
     <div class="field"><label style="font-size:12px;text-transform:uppercase;letter-spacing:.06em">Informations ${esc(act.label)}</label></div>
@@ -144,7 +144,7 @@ export function openDeal(id, onChange) {
         <div>
           <div class="section"><h3>Informations</h3><dl>
             <dt>Contact</dt><dd>${contact ? `<a href="#/contacts/${contact.id}" data-close>${esc(contactName(contact))}</a> ${contact.phone ? '· <a href="tel:' + esc(contact.phone) + '">' + esc(contact.phone) + '</a>' : ''} ${contact.email ? '· <a href="mailto:' + esc(contact.email) + '">' + esc(contact.email) + '</a>' : ''}` : '—'}</dd>
-            <dt>Organisation</dt><dd>${org ? `<a href="#/organisations/${org.id}" data-close>${esc(org.name)}</a>` : '—'}</dd>
+            <dt>Entreprise</dt><dd>${org ? `<a href="#/contacts/${org.id}" data-close>${esc(org.name)}</a>` : '—'}</dd>
             <dt>${esc(act.amountLabel)}</dt><dd>${eur(d.amount)}</dd>
             <dt>Canal</dt><dd>${esc(d.channel || '—')}${d.campaign ? ` <span class="pill">${esc(d.campaign)}</span>` : ''}</dd>
             <dt>Apporteur</dt><dd>${refOrg ? esc(refOrg.name) : refC ? esc(contactName(refC)) : '—'}</dd>

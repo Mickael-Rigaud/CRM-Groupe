@@ -2,7 +2,7 @@ import { dashboardPage } from './dashboard.js';
 import { todayPage } from './today.js';
 import { pipelinePage } from './pipeline.js';
 import { contactsPage } from './contacts.js';
-import { organisationsPage, partnersPage } from './organisations.js';
+import { partnersPage } from './organisations.js';
 import { acquisitionPage } from './acquisition.js';
 import { settingsPage } from './settings.js';
 import { homePage } from './home.js';
@@ -21,7 +21,7 @@ export const pages = {
   today: todayPage,
   pipeline: pipelinePage,
   contacts: contactsPage,
-  organisations: organisationsPage,
+  organisations: contactsPage,
   partners: partnersPage,
   acquisition: acquisitionPage,
   settings: settingsPage,

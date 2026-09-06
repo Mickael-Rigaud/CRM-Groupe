@@ -7,7 +7,7 @@ import { openDeal, dealForm } from './deal.js';
 import { activityForm, activityRowHtml, bindActivityRows } from './activity.js';
 import { openContact } from './contacts.js';
 
-export function orgForm(existing = null, onSaved, onClose = null, presetType = null) {
+export function orgForm(existing = null, onSaved, onClose = null, presetType = null, switchTo = null) {
   const users = scope.users();
   const spec = [
     { key: 'name', label: 'Nom', type: 'text', required: true, half: true },
@@ -35,10 +35,12 @@ export function orgForm(existing = null, onSaved, onClose = null, presetType = n
     { key: 'renewal_date', label: 'Date de renouvellement', type: 'date', half: true },
   ];
   const vals = existing ? { ...existing, last_contact_at: existing.last_contact_at ? existing.last_contact_at.slice(0, 10) : '' } : {};
-  const m = openModal(existing ? "Modifier l'organisation" : 'Nouvelle organisation', `<form class="form" id="o-form">${renderForm(spec, vals)}
+  const kindSwitch = !existing && switchTo ? `<div class="kind-switch"><button type="button" data-kind="person">👤 Personne</button><button type="button" class="active" data-kind="org">🏢 Entreprise / structure</button></div>` : '';
+  const m = openModal(existing ? "Modifier l'entreprise" : 'Nouvelle entreprise / structure', `${kindSwitch}<form class="form" id="o-form">${renderForm(spec, vals)}
     <div class="field"><label style="font-size:12px;text-transform:uppercase;letter-spacing:.06em">Abonnement Propulsion (si client Propulsion)</label></div>${renderForm(propulsion, vals)}
     <div class="form-actions">${existing ? '<button type="button" class="btn ghost left" id="o-del">Supprimer</button>' : ''}<button type="button" class="btn ghost" data-close>Annuler</button><button class="btn" type="submit">Enregistrer</button></div></form>`, { wide: true, onClose });
   const form = m.querySelector('#o-form');
+  m.querySelector('[data-kind="person"]')?.addEventListener('click', () => switchTo(form.querySelector('[name="name"]').value));
   form.onsubmit = async e => {
     e.preventDefault();
     const v = { ...readForm(form, spec), ...readForm(form, propulsion) };
@@ -48,13 +50,13 @@ export function orgForm(existing = null, onSaved, onClose = null, presetType = n
     try {
       let id = existing?.id;
       if (existing) await db.update('organisations', id, v); else id = (await db.insert('organisations', v)).id;
-      closeModal(true); toast('Organisation enregistrée'); onSaved?.(id);
+      closeModal(true); toast('Entreprise enregistrée'); onSaved?.(id);
     } catch (err) { toast(err.message, 'err'); }
   };
   m.querySelector('#o-del')?.addEventListener('click', async () => {
-    if (db.t('deals').some(d => d.organisation_id === existing.id || d.referrer_org_id === existing.id)) return toast('Cette organisation est liée à des affaires', 'warn');
-    if (!await confirm('Supprimer cette organisation ?')) return;
-    await db.remove('organisations', existing.id); closeModal(true); toast('Organisation supprimée'); onSaved?.(null);
+    if (db.t('deals').some(d => d.organisation_id === existing.id || d.referrer_org_id === existing.id)) return toast('Cette entreprise est liée à des affaires', 'warn');
+    if (!await confirm('Supprimer cette entreprise ?')) return;
+    await db.remove('organisations', existing.id); closeModal(true); toast('Entreprise supprimée'); onSaved?.(null);
   });
 }
 
@@ -95,7 +97,7 @@ export function openOrg(id, onChange) {
             ${o.notes ? `<dt>Notes</dt><dd style="font-weight:400">${esc(o.notes)}</dd>` : ''}
           </dl></div>
           <div class="section"><h3>Contacts (${contacts.length})</h3>${contacts.map(c => `<div class="act-row" style="cursor:pointer;margin-bottom:6px" data-contact="${c.id}"><div style="flex:1"><b>${esc(contactName(c))}</b><div class="small muted">${esc(c.phone || '')} ${esc(c.email || '')}</div></div></div>`).join('') || '<div class="empty">Aucun contact rattaché</div>'}</div>
-          <div class="section"><h3>Affaires de l'organisation (${deals.length})</h3>${deals.map(d => dealRow(d)).join('') || '<div class="empty">Aucune</div>'}</div>
+          <div class="section"><h3>Affaires de l'entreprise (${deals.length})</h3>${deals.map(d => dealRow(d)).join('') || '<div class="empty">Aucune</div>'}</div>
           ${isPartner ? `<div class="section"><h3>Affaires apportées (${brought.length})</h3>${brought.map(d => dealRow(d)).join('') || '<div class="empty">Aucune — renseignez cet apporteur sur les affaires qu\'il vous envoie</div>'}</div>` : ''}
         </div>
         <div>
@@ -157,5 +159,4 @@ function listPage(kind) {
     },
   };
 }
-export const organisationsPage = listPage('orgs');
 export const partnersPage = listPage('partners');

@@ -105,7 +105,7 @@ Hors périmètre v1 (prévu ensuite) : synchronisation Gmail (adresse BCC via Ma
 ```
 crm/
 ├── index.html              page unique
-├── css/app.css             styles (charte RGD Renova)
+├── css/app.css             styles (charte « Côte d’Azur » commune avec La Référence Courtage)
 ├── assets/chart.umd.js     Chart.js (graphiques)
 ├── js/config.js            URL et clé Supabase (vide = mode démo)
 ├── js/app.js               connexion, navigation, mise en page
@@ -125,3 +125,10 @@ crm/
 - **Vivier courtiers** (`#/vivier`) : base de recrutement de mandataires pour La Référence Courtage (338 profils importés de l'outil « Vivier Courtiers »), filtres, suivi (à contacter → contacté → RDV → recruté / écarté), notes, archivage, export. Accessible à la direction et aux profils ayant l'activité `courtage`.
 
 Installation : exécuter `supabase/modules-lot2.sql` puis `supabase/vivier-import.sql` dans Supabase > SQL Editor, et déposer les dossiers `css`, `js`, `supabase` sur GitHub.
+
+## Thème et logo (06/09/2026)
+
+- Charte graphique alignée sur le site La Référence Courtage : bleu marine `#15384E`, orange `#F4801C`, bleu mer `#0FA3C4`, fond crème `#FFFCF6`, polices Fraunces (titres) et Inter (texte). Tout est centralisé dans les variables `:root` de `css/app.css`.
+- Pas de logo : le nom « CRM Groupe » en texte ; icônes d'application sobres (`assets/icon-192.png`, `assets/icon-512.png`).
+- **Contacts fusionnés** : un seul onglet Contacts qui liste les personnes (👤) et les entreprises / structures (🏢). Le bouton « + Contact » propose un sélecteur Personne / Entreprise en haut du formulaire. L'onglet Organisations a disparu ; les partenaires et apporteurs restent dans Partenaires. Aucune modification de base de données (les tables `contacts` et `organisations` sont conservées).
+- Couleurs des activités (`js/data/schema.js`) : RGD Renova orange, BTP Expertise bleu marine, La Référence Courtage bleu mer, Propulsion rose.
