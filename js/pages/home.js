@@ -6,6 +6,7 @@ import { propertyMetrics, loanStatus } from '../data/finance.js';
 import { esc, eur, eur as _e, daysSince, periodRange, inRange, isoDay, userName } from '../ui.js';
 import { nextActivity } from './activity.js';
 import { SUIVI } from './vivier.js';
+import { activeInMonth, rowOf, dueOf, receivedOf, balanceOf, monthLabel } from './locatif.js';
 
 const eur2 = (n) => eur(n, { maximumFractionDigits: 2 });
 
@@ -46,6 +47,16 @@ export const homePage = {
         modules.push({ key: 'pat', title: 'Patrimoine immobilier', icon: '🏠', color: '#0f9d58', link: '#/patrimoine', body: `
           <div class="hub-kpis"><div><b>${eur(value)}</b><span>valeur · ${props.length} bien${props.length > 1 ? 's' : ''}</span></div><div><b>${eur(debt)}</b><span>capital restant dû</span></div><div><b class="${cf >= 0 ? 'status-won' : 'status-lost'}">${eur2(cf)}</b><span>cash-flow / mois</span></div><div><b>${eur(received)}<span style="font-size:12px;color:var(--muted)"> / ${eur(expected)}</span></b><span>loyers du mois</span></div></div>
           <div class="hub-lines"><a href="#/patrimoine/biens">Biens<span class="grow"></span><b>${props.length}</b></a><a href="#/patrimoine/prets">Prêts<span class="grow"></span><b>${loans.length}</b></a><a href="#/patrimoine/loyers">Loyers<span class="grow"></span><b>${active.length} bau${active.length > 1 ? 'x' : 'l'}</b></a><a href="#/patrimoine/charges">Charges<span class="grow"></span><b>${exps.length}</b></a></div>` });
+      }
+      // ---- Gestion locative
+      if (scope.canRental) {
+        const mk = isoDay().slice(0, 7);
+        const act = db.t('leases').filter(l => l.active !== false && activeInMonth(l, mk));
+        const due = act.reduce((s, l) => s + dueOf(l, rowOf(l.id, mk)), 0); const rec = act.reduce((s, l) => s + receivedOf(rowOf(l.id, mk)), 0);
+        const arrears = db.t('leases').map(l => balanceOf(l.id)).filter(b => b > 0.005); const vac = db.t('units').filter(u => u.active !== false && !act.some(l => l.unit_id === u.id)).length;
+        modules.push({ key: 'loc', title: 'Gestion locative', icon: '💶', color: '#0FA3C4', link: '#/locatif', body: `
+          <div class="hub-kpis"><div><b>${eur(rec)}<span style="font-size:12px;color:var(--muted)"> / ${eur(due)}</span></b><span>loyers de ${monthLabel(mk)}</span></div><div><b class="${arrears.length ? 'status-lost' : ''}">${eur(arrears.reduce((s, b) => s + b, 0))}</b><span>reste à récupérer · ${arrears.length} locataire${arrears.length > 1 ? 's' : ''}</span></div><div><b class="${vac ? 'status-lost' : ''}">${vac}</b><span>lot${vac > 1 ? 's' : ''} vacant${vac > 1 ? 's' : ''}</span></div></div>
+          <div class="hub-lines"><a href="#/locatif">Suivi du mois<span class="grow"></span><b>${act.length} baux</b></a><a href="#/locatif/suivi">Retards et vacants<span class="grow"></span><b>${arrears.length + vac}</b></a><a href="#/locatif/baux">Baux et locataires</a></div>` });
       }
       // ---- Vivier courtiers
       if (scope.isDirection || scope.activityKeys.includes('courtage')) {

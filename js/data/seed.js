@@ -7,7 +7,7 @@ const day = (offsetDays) => d(offsetDays).slice(0, 10);
 
 export const SEED_USERS = [
   { id: 'u-mickael', full_name: 'Mickael Rigaud', email: 'mickael@exemple.fr', role: 'direction', activities: ['rgd', 'btp', 'courtage', 'propulsion'], active: true, patrimony_access: true },
-  { id: 'u-stephanie', full_name: 'Stéphanie', email: 'stephanie@exemple.fr', role: 'propulsion', activities: ['propulsion'], active: true },
+  { id: 'u-stephanie', full_name: 'Stéphanie', email: 'stephanie@exemple.fr', role: 'propulsion', activities: ['propulsion'], active: true, rental_access: true },
   { id: 'u-elodie', full_name: 'Élodie', email: 'elodie@exemple.fr', role: 'propulsion', activities: ['propulsion'], active: true },
   { id: 'u-charge', full_name: "Chargé d'affaires (démo)", email: 'charge@exemple.fr', role: 'commercial', activities: ['rgd', 'btp'], active: true },
 ];
@@ -87,21 +87,29 @@ export const SEED = {
     { id: 'l1', property_id: 'p1', bank: 'Crédit Agricole', label: 'Prêt T2 Halles', principal: 130000, rate: 1.35, duration_months: 240, start_date: '2021-04-05', insurance_monthly: 28.5, deferral_months: 0, created_at: d(-900) },
     { id: 'l2', property_id: 'p2', bank: 'BNP Paribas', label: 'Prêt SCI Saint-Pierre', principal: 300000, rate: 3.85, duration_months: 228, start_date: '2023-07-05', insurance_monthly: 62, deferral_months: 12, deferral_type: 'partial', created_at: d(-700) },
   ],
+  units: [
+    { id: 'un1', property_id: 'p1', name: 'T2', unit_type: 'T2', surface: 42, dpe: 'D', ges: 'D', sort_order: 1, active: true, created_at: d(-400) },
+    { id: 'un2', property_id: 'p2', name: 'RDC', unit_type: 'T2', surface: 45, dpe: 'E', ges: 'D', sort_order: 1, active: true, created_at: d(-650) },
+    { id: 'un3', property_id: 'p2', name: '1er', unit_type: 'T2', surface: 47, dpe: 'D', ges: 'D', sort_order: 2, active: true, created_at: d(-650) },
+    { id: 'un4', property_id: 'p2', name: '2e', unit_type: 'T3', surface: 64, dpe: 'C', ges: 'C', sort_order: 3, active: true, created_at: d(-650) },
+    { id: 'un5', property_id: 'p2', name: '3e', unit_type: 'Studio', surface: 22, dpe: 'F', ges: 'E', sort_order: 4, active: true, created_at: d(-650) },
+    { id: 'un6', property_id: 'p3', name: 'Place 14', unit_type: 'Parking', sort_order: 1, active: true, created_at: d(-790) },
+  ],
   leases: [
-    { id: 'b1', property_id: 'p1', lot: 'T2', tenant: 'Léa Martin', rent: 620, charges: 40, deposit: 620, start_date: '2024-09-01', end_date: null, active: true, created_at: d(-400) },
-    { id: 'b2', property_id: 'p2', lot: 'RDC — T2', tenant: 'M. et Mme Petit', rent: 560, charges: 50, deposit: 560, start_date: '2023-11-01', end_date: null, active: true, created_at: d(-650) },
-    { id: 'b3', property_id: 'p2', lot: '1er — T2', tenant: 'Nadia Benali', rent: 580, charges: 50, deposit: 580, start_date: '2024-02-01', end_date: null, active: true, created_at: d(-580) },
-    { id: 'b4', property_id: 'p2', lot: '2e — T3', tenant: 'Famille Roux', rent: 720, charges: 60, deposit: 720, start_date: '2023-12-15', end_date: null, active: true, created_at: d(-620) },
-    { id: 'b5', property_id: 'p3', lot: 'Place 14', tenant: 'Thomas Girard', rent: 75, charges: 0, deposit: 75, start_date: '2022-10-01', end_date: null, active: true, created_at: d(-790) },
+    { id: 'b1', unit_id: 'un1', tenant_phone: '06 12 34 56 78', tenant_email: 'lea.martin@mail.fr', apl: 0, payment_mode: 'Virement', lease_type: 'meuble', property_id: 'p1', lot: 'T2', tenant: 'Léa Martin', rent: 620, charges: 40, deposit: 620, start_date: '2024-09-01', end_date: null, active: true, created_at: d(-400) },
+    { id: 'b2', unit_id: 'un2', tenant_phone: '06 23 45 67 89', apl: 180, payment_mode: 'Virement', lease_type: 'vide', property_id: 'p2', lot: 'RDC — T2', tenant: 'M. et Mme Petit', rent: 560, charges: 50, deposit: 560, start_date: '2023-11-01', end_date: null, active: true, created_at: d(-650) },
+    { id: 'b3', unit_id: 'un3', tenant_phone: '06 34 56 78 90', apl: 0, payment_mode: 'Prélèvement', lease_type: 'vide', revision_date: '2026-10-01', property_id: 'p2', lot: '1er — T2', tenant: 'Nadia Benali', rent: 580, charges: 50, deposit: 580, start_date: '2024-02-01', end_date: null, active: true, created_at: d(-580) },
+    { id: 'b4', unit_id: 'un4', guardian_name: 'Curatelle UDAF 37', guardian_phone: '02 47 00 00 10', apl: 250, payment_mode: 'Virement', lease_type: 'vide', property_id: 'p2', lot: '2e — T3', tenant: 'Famille Roux', rent: 720, charges: 60, deposit: 720, start_date: '2023-12-15', end_date: null, active: true, created_at: d(-620) },
+    { id: 'b5', unit_id: 'un6', apl: 0, payment_mode: 'Virement', lease_type: 'autre', property_id: 'p3', lot: 'Place 14', tenant: 'Thomas Girard', rent: 75, charges: 0, deposit: 75, start_date: '2022-10-01', end_date: null, active: true, created_at: d(-790) },
   ],
   rent_payments: (() => {
-    const out = []; const now = new Date(); const rents = { b1: 620, b2: 560, b3: 580, b4: 720, b5: 75 };
+    const out = []; const now = new Date(); const rents = { b1: 660, b2: 610, b3: 630, b4: 780, b5: 75 }; const apls = { b1: 0, b2: 180, b3: 0, b4: 250, b5: 0 };
     for (let i = 8; i >= 0; i--) {
       const m = new Date(now.getFullYear(), now.getMonth() - i, 1); const key = m.toISOString().slice(0, 7);
       for (const [lease, rent] of Object.entries(rents)) {
         if (i === 0 && (lease === 'b3' || lease === 'b4')) continue; // loyers du mois en cours pas encore reçus
-        if (i === 2 && lease === 'b2') { out.push({ id: `rp-${lease}-${key}`, lease_id: lease, month: key, amount: 300, received_at: key + '-12', note: 'Paiement partiel' }); continue; }
-        out.push({ id: `rp-${lease}-${key}`, lease_id: lease, month: key, amount: rent, received_at: key + '-05' });
+        if (i === 2 && lease === 'b2') { out.push({ id: `rp-${lease}-${key}`, lease_id: lease, month: key, due: rent, apl: apls[lease], tenant_paid: 300 - apls[lease], amount: 300, mode: 'Virement', received_at: key + '-12', note: 'Paiement partiel' }); continue; }
+        out.push({ id: `rp-${lease}-${key}`, lease_id: lease, month: key, due: rent, apl: apls[lease], tenant_paid: rent - apls[lease], amount: rent, mode: 'Virement', received_at: key + '-05' });
       }
     }
     return out;

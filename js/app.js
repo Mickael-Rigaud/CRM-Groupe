@@ -52,8 +52,12 @@ const NAV = [
   { hash: '#/patrimoine', label: "Vue d'ensemble", icon: '🏠', show: () => scope.canPatrimony, exact: true },
   { hash: '#/patrimoine/biens', label: 'Biens', icon: '🏘', sub: true, show: () => scope.canPatrimony },
   { hash: '#/patrimoine/prets', label: 'Prêts', icon: '🏦', sub: true, show: () => scope.canPatrimony },
-  { hash: '#/patrimoine/loyers', label: 'Loyers', icon: '💶', sub: true, show: () => scope.canPatrimony },
   { hash: '#/patrimoine/charges', label: 'Charges', icon: '🧾', sub: true, show: () => scope.canPatrimony },
+  { sep: 'Gestion locative', show: () => scope.canRental },
+  { hash: '#/locatif', label: 'Suivi des loyers', icon: '💶', show: () => scope.canRental, exact: true },
+  { hash: '#/locatif/baux', label: 'Baux et locataires', icon: '📝', sub: true, show: () => scope.canRental },
+  { hash: '#/locatif/lots', label: 'Lots', icon: '🚪', sub: true, show: () => scope.canRental },
+  { hash: '#/locatif/suivi', label: 'À faire locatif', icon: '⚠', sub: true, show: () => scope.canRental, count: () => db.t('leases').filter(l => db.t('rent_payments').filter(x => x.lease_id === l.id).reduce((s, x) => s + (Number(x.due) || 0) - ((x.apl != null || x.tenant_paid != null) ? (Number(x.apl) || 0) + (Number(x.tenant_paid) || 0) : Number(x.amount) || 0) + (Number(x.adjustment) || 0), 0) > 0.005).length },
   { sep: 'Réglages' },
   { hash: '#/settings', label: 'Paramètres', icon: '⚙' },
 ];
@@ -91,6 +95,7 @@ function route() {
   const [, name, param] = hash.split('/');
   let page = pages[name] || pages.home;
   if (name === 'patrimoine') page = pages['patrimoine_' + (param || 'home')] || pages.patrimoine_home;
+  if (name === 'locatif') page = pages['locatif_' + (param || 'home')] || pages.locatif_home;
   if (page.directionOnly && !scope.isDirection) page = pages.today;
   if (name === 'pipeline' && !scope.activityKeys.includes(param)) { location.hash = `#/pipeline/${scope.activityKeys[0] || 'rgd'}`; return; }
   closeModal(true);

@@ -8,6 +8,7 @@ export const scope = {
   get role() { return this.user?.role || 'commercial'; },
   get isDirection() { return this.role === 'direction'; },
   get canPatrimony() { return this.isDirection && this.user?.patrimony_access === true; },
+  get canRental() { return this.canPatrimony || this.user?.rental_access === true; },
   get activityKeys() { return this.isDirection ? ['rgd', 'btp', 'courtage', 'propulsion'] : (this.user?.activities || []); },
 
   canSeeDeal(d) {

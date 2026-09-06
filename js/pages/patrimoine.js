@@ -3,6 +3,7 @@ import { db } from '../data/db.js';
 import { scope } from '../data/scope.js';
 import { INVEST_TYPES, STRUCTURES, PROPERTY_STATUS, EXPENSE_CATEGORIES, RECURRENCES, schedule, loanStatus, monthlyPayment, monthlyEquivalent, propertyMetrics, totalMonths } from '../data/finance.js';
 import { documentsSection, bindDocuments } from '../documents.js';
+import { leaseForm, openLease } from './locatif.js';
 import { esc, eur, pct, num, openModal, closeModal, renderForm, readForm, toast, fmtDate, confirm, csvDownload, isoDay } from '../ui.js';
 
 const eur2 = (n) => eur(n, { maximumFractionDigits: 2 });
@@ -86,33 +87,6 @@ export function loanForm(existing = null, presets = {}, onSaved, onClose = null)
     catch (err) { toast(err.message, 'err'); }
   };
   m.querySelector('#lf-del')?.addEventListener('click', async () => { if (!await confirm('Supprimer ce prêt ?')) return; await db.remove('loans', existing.id); closeModal(true); toast('Prêt supprimé'); onSaved?.(null); });
-}
-
-export function leaseForm(existing = null, presets = {}, onSaved, onClose = null) {
-  const props = db.t('properties');
-  const spec = [
-    { key: 'property_id', label: 'Bien', type: 'select', options: props.map(p => [p.id, p.name]), required: true, half: true },
-    { key: 'lot', label: 'Lot / logement', type: 'text', half: true, placeholder: 'Ex. RDC — T2' },
-    { key: 'tenant', label: 'Locataire', type: 'text', required: true, half: true },
-    { key: 'tenant_phone', label: 'Téléphone locataire', type: 'tel', half: true },
-    { key: 'rent', label: 'Loyer hors charges (€/mois)', type: 'number', required: true, half: true, step: '0.01' },
-    { key: 'charges', label: 'Provision charges (€/mois)', type: 'number', half: true, step: '0.01' },
-    { key: 'deposit', label: 'Dépôt de garantie (€)', type: 'number', half: true },
-    { key: 'start_date', label: 'Début du bail', type: 'date', half: true },
-    { key: 'end_date', label: 'Fin du bail (si terminé)', type: 'date', half: true },
-    { key: 'active', label: 'Bail en cours', type: 'checkbox', hint: 'Actif', half: true, value: true },
-    { key: 'notes', label: 'Notes', type: 'textarea', rows: 2 },
-  ];
-  const vals = existing || { active: true, ...presets };
-  const m = openModal(existing ? 'Modifier le bail' : 'Nouveau bail', `<form class="form" id="bf">${renderForm(spec, vals)}
-    <div class="form-actions">${existing ? '<button type="button" class="btn ghost left" id="bf-del">Supprimer</button>' : ''}<button type="button" class="btn ghost" data-close>Annuler</button><button class="btn" type="submit">Enregistrer</button></div></form>`, { wide: true, onClose });
-  const form = m.querySelector('#bf');
-  form.onsubmit = async e => {
-    e.preventDefault(); const v = readForm(form, spec); for (const k of ['start_date', 'end_date']) if (!v[k]) v[k] = null;
-    try { let id = existing?.id; if (existing) await db.update('leases', id, v); else id = (await db.insert('leases', v)).id; closeModal(true); toast('Bail enregistré'); onSaved?.(id); }
-    catch (err) { toast(err.message, 'err'); }
-  };
-  m.querySelector('#bf-del')?.addEventListener('click', async () => { if (!await confirm('Supprimer ce bail et ses encaissements ?')) return; for (const x of db.t('rent_payments').filter(x => x.lease_id === existing.id)) await db.remove('rent_payments', x.id); await db.remove('leases', existing.id); closeModal(true); toast('Bail supprimé'); onSaved?.(null); });
 }
 
 export function expenseForm(existing = null, presets = {}, onSaved, onClose = null) {
@@ -222,7 +196,7 @@ export function openProperty(id, onChange) {
     m.querySelector('#p-exp').onclick = () => expenseForm(null, { property_id: id }, refresh, render);
     bindDocuments(m, 'properties', id, render);
     m.querySelectorAll('[data-loan]').forEach(el => el.onclick = () => openLoanSchedule(el.dataset.loan, render));
-    m.querySelectorAll('[data-lease]').forEach(el => el.onclick = () => leaseForm(db.byId('leases', el.dataset.lease), {}, refresh, render));
+    m.querySelectorAll('[data-lease]').forEach(el => el.onclick = () => openLease(el.dataset.lease, render));
     m.querySelectorAll('[data-exp]').forEach(el => el.onclick = () => expenseForm(db.byId('expenses', el.dataset.exp), {}, refresh, render));
   };
   render();
@@ -306,53 +280,6 @@ export const loansPage = {
         </tbody></table></div></div>`;
       root.querySelector('#ln-new').onclick = () => loanForm(null, {}, (id) => { draw(); if (id) openLoanSchedule(id, draw); });
       root.querySelectorAll('[data-loan]').forEach(tr => tr.onclick = () => openLoanSchedule(tr.dataset.loan, draw));
-    };
-    draw();
-    return { refresh: draw };
-  },
-};
-
-export const rentsPage = {
-  title: () => 'Suivi des loyers',
-  render(root) {
-    if (!scope.canPatrimony) return denied(root);
-    const state = { year: new Date().getFullYear() };
-    const draw = () => {
-      const leases = db.t('leases').filter(l => l.active !== false).sort((a, b) => propName(a.property_id).localeCompare(propName(b.property_id)));
-      const pays = db.t('rent_payments');
-      const now = isoDay().slice(0, 7);
-      const key = (m) => `${state.year}-${String(m + 1).padStart(2, '0')}`;
-      const cell = (l, m) => {
-        const k = key(m); const rent = Number(l.rent) || 0;
-        const started = !l.start_date || l.start_date.slice(0, 7) <= k; const ended = l.end_date && l.end_date.slice(0, 7) < k;
-        if (!started || ended) return '<td class="num muted">—</td>';
-        const paid = pays.filter(x => x.lease_id === l.id && x.month === k).reduce((s, x) => s + (Number(x.amount) || 0), 0);
-        const future = k > now;
-        const cls = paid >= rent && rent > 0 ? 'ok' : paid > 0 ? 'warn' : future ? '' : 'bad';
-        return `<td class="num"><button class="pill ${cls}" style="border:0;cursor:pointer;min-width:64px" data-pay="${l.id}" data-month="${k}" title="Cliquer pour saisir l'encaissement">${paid ? eur(paid) : future ? '·' : '0 €'}</button></td>`;
-      };
-      const totals = Array.from({ length: 12 }, (_, m) => { const k = key(m); return { expected: leases.filter(l => (!l.start_date || l.start_date.slice(0, 7) <= k) && !(l.end_date && l.end_date.slice(0, 7) < k)).reduce((s, l) => s + (Number(l.rent) || 0), 0), received: pays.filter(x => x.month === k && leases.some(l => l.id === x.lease_id)).reduce((s, x) => s + (Number(x.amount) || 0), 0) }; });
-      const yr = totals.reduce((t, x) => ({ expected: t.expected + x.expected, received: t.received + x.received }), { expected: 0, received: 0 });
-      root.innerHTML = `
-        <div class="toolbar"><div class="seg"><button data-y="${state.year - 1}">${state.year - 1}</button><button class="active">${state.year}</button><button data-y="${state.year + 1}">${state.year + 1}</button></div>
-          <span class="muted small">Encaissé ${eur(yr.received)} sur ${eur(yr.expected)} attendus (${yr.expected ? pct(yr.received / yr.expected * 100) : '—'}) · cliquez sur une case pour saisir un encaissement</span><span class="grow"></span><button class="btn" id="rt-new">+ Bail</button></div>
-        <div class="card"><div class="table-wrap"><table><thead><tr><th>Bien · lot</th><th>Locataire</th><th class="num">Loyer</th>${MONTHS.map((m, i) => `<th class="num ${key(i) === now ? 'status-won' : ''}">${m}</th>`).join('')}</tr></thead><tbody>
-          ${leases.map(l => `<tr><td><b>${esc(propName(l.property_id))}</b><div class="small muted">${esc(l.lot || '')}</div></td><td><a href="#" data-lease="${l.id}">${esc(l.tenant)}</a></td><td class="num">${eur(l.rent)}</td>${MONTHS.map((_, m) => cell(l, m)).join('')}</tr>`).join('') || `<tr><td colspan="15" class="empty">Aucun bail actif</td></tr>`}
-          ${leases.length ? `<tr class="total"><td colspan="2">Encaissé / attendu</td><td></td>${totals.map(t => `<td class="num small">${t.received ? eur(t.received) : '—'}<div class="muted">/ ${eur(t.expected)}</div></td>`).join('')}</tr>` : ''}
-        </tbody></table></div></div>`;
-      root.querySelectorAll('[data-y]').forEach(b => b.onclick = () => { state.year = Number(b.dataset.y); draw(); });
-      root.querySelector('#rt-new').onclick = () => leaseForm(null, {}, draw);
-      root.querySelectorAll('[data-lease]').forEach(a => a.onclick = e => { e.preventDefault(); leaseForm(db.byId('leases', a.dataset.lease), {}, draw); });
-      root.querySelectorAll('[data-pay]').forEach(b => b.onclick = () => paymentForm(b.dataset.pay, b.dataset.month, draw));
-    };
-    const paymentForm = (leaseId, month, onSaved) => {
-      const l = db.byId('leases', leaseId); const existing = db.t('rent_payments').filter(x => x.lease_id === leaseId && x.month === month);
-      const spec = [{ key: 'amount', label: 'Montant encaissé (€)', type: 'number', required: true, half: true, step: '0.01', value: Number(l.rent) || 0 }, { key: 'received_at', label: 'Date de réception', type: 'date', half: true, value: isoDay() }, { key: 'note', label: 'Note (retard, partiel, régularisation…)', type: 'text' }];
-      const m = openModal(`${propName(l.property_id)} · ${l.tenant} — ${MONTHS[Number(month.slice(5, 7)) - 1]} ${month.slice(0, 4)}`, `
-        ${existing.length ? `<div class="section"><h3>Déjà saisi</h3>${existing.map(x => `<div class="act-row" style="margin-bottom:6px"><div style="flex:1">${eur2(x.amount)} le ${fmtDate(x.received_at)}${x.note ? ' · ' + esc(x.note) : ''}</div><button class="icon-btn" data-del="${x.id}">🗑</button></div>`).join('')}</div>` : ''}
-        <form class="form" id="rpf">${renderForm(spec)}<div class="form-actions"><button type="button" class="btn ghost" data-close>Annuler</button><button class="btn">Enregistrer l'encaissement</button></div></form>`);
-      m.querySelector('#rpf').onsubmit = async e => { e.preventDefault(); const v = readForm(e.target, spec); await db.insert('rent_payments', { lease_id: leaseId, month, ...v }); closeModal(true); toast('Encaissement enregistré'); onSaved(); };
-      m.querySelectorAll('[data-del]').forEach(b => b.onclick = async () => { await db.remove('rent_payments', b.dataset.del); closeModal(true); onSaved(); });
     };
     draw();
     return { refresh: draw };

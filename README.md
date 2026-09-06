@@ -140,3 +140,17 @@ Installation : exécuter `supabase/modules-lot2.sql` puis `supabase/vivier-impor
 - **Documents** : bloc « Documents » sur les fiches bien, prêt, contact, entreprise et affaire — dépôt de fichiers (PDF, images, Office… 25 Mo max), catégorie, ouverture dans le navigateur par lien sécurisé (1 h), suppression. Fichiers stockés dans le bucket privé `documents` de Supabase (1 Go inclus dans l'offre gratuite), droits identiques à la fiche (patrimoine réservé aux profils autorisés).
 
 Installation : exécuter `supabase/lot3-documents-prets.sql` dans Supabase > SQL Editor, puis déposer `css`, `js`, `README.md` sur GitHub.
+
+## Lot 4 — Gestion locative (06/09/2026)
+
+Module `#/locatif`, accessible aux profils ayant `rental_access = true` (Stéphanie) et à la direction avec accès patrimoine. Sans accès patrimoine, l'utilisateur voit les biens par une vue allégée (`v_properties_rental` : nom, adresse, détenteur) — jamais les prix, valeurs, prêts ni rendements.
+
+- **Suivi des loyers** : reproduit le suivi Excel mois par mois, immeuble par immeuble — lot, locataire, loyer HC, charges, dû, APL, part locataire, reçu, mode, manquant du mois, retard antérieur, reste à récupérer, commentaire. Saisie directe dans les cases. Les lignes du mois sont préparées automatiquement à partir des baux (dû = loyer + charges, APL attendue).
+- **Import de relevé bancaire (CSV)** : rapprochement automatique des virements avec les locataires (nom, puis montant), CAF reconnue, validation en un clic.
+- **Baux et locataires** : type de bail, coordonnées, tutelle / curatelle / garant, APL, mode et jour de paiement, dépôt, révision IRL, consignes, documents du bail, historique complet, clôture.
+- **Lots** : logements / locaux par immeuble (type, surface, DPE, GES, forfait eau), vacance.
+- **À faire locatif** : loyers en retard (avec relance), lots vacants, révisions à venir, trop-perçus, baux sans coordonnées.
+- **Documents générés** (impression / PDF) : quittance de loyer (ou reçu partiel si non soldé), rappel de loyer impayé, attestation de loyer. Coordonnées du bailleur : bouton « Bailleur » (réservé à la direction).
+- Les encaissements saisis alimentent directement le cash-flow du module Patrimoine.
+
+Installation : `supabase/lot4-gestion-locative.sql` dans Supabase > SQL Editor, puis le fichier d'import privé des loyers (fourni à part, **jamais sur GitHub**), puis `css`, `js`, `README.md` sur GitHub. Donner l'accès à Stéphanie : `update public.profiles set rental_access = true where lower(email) = 'son-email';`

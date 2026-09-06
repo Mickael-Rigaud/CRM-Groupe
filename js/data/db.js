@@ -6,7 +6,7 @@ import { SEED, SEED_USERS } from './seed.js';
 
 export const TABLES = ['profiles', 'organisations', 'contacts', 'deals', 'activities', 'events', 'ad_spend', 'settings',
   // module Patrimoine
-  'properties', 'loans', 'leases', 'rent_payments', 'expenses',
+  'properties', 'units', 'loans', 'leases', 'rent_payments', 'expenses',
   // module Vivier courtiers
   'broker_profiles',
   // documents (pièces jointes)
@@ -81,6 +81,8 @@ const supabaseAdapter = {
       if (error) { console.warn(`Table ${t} : ${error.message}`); out[t] = []; continue; } // table absente (module non installé) : on continue
       out[t] = data || [];
     }
+    // Gestion locative sans accès patrimoine : les biens viennent d'une vue allégée (sans prix ni financement)
+    if (!out.properties.length) { const { data } = await this.client.from('v_properties_rental').select('*'); if (data?.length) out.properties = data; }
     return out;
   },
   async insert(table, row) {
