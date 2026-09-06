@@ -1,11 +1,12 @@
 // Jeu de données de démonstration (mode local uniquement).
+import { SEED_BROKERS } from './seed-vivier.js';
 const d = (offsetDays, h = 9) => {
   const x = new Date(); x.setHours(h, 0, 0, 0); x.setDate(x.getDate() + offsetDays); return x.toISOString();
 };
 const day = (offsetDays) => d(offsetDays).slice(0, 10);
 
 export const SEED_USERS = [
-  { id: 'u-mickael', full_name: 'Mickael Rigaud', email: 'mickael@exemple.fr', role: 'direction', activities: ['rgd', 'btp', 'courtage', 'propulsion'], active: true },
+  { id: 'u-mickael', full_name: 'Mickael Rigaud', email: 'mickael@exemple.fr', role: 'direction', activities: ['rgd', 'btp', 'courtage', 'propulsion'], active: true, patrimony_access: true },
   { id: 'u-stephanie', full_name: 'Stéphanie', email: 'stephanie@exemple.fr', role: 'propulsion', activities: ['propulsion'], active: true },
   { id: 'u-elodie', full_name: 'Élodie', email: 'elodie@exemple.fr', role: 'propulsion', activities: ['propulsion'], active: true },
   { id: 'u-charge', full_name: "Chargé d'affaires (démo)", email: 'charge@exemple.fr', role: 'commercial', activities: ['rgd', 'btp'], active: true },
@@ -74,5 +75,46 @@ export const SEED = {
   ],
   settings: [
     { key: 'intake_token', value: 'demo-token-a-changer' },
+  ],
+  broker_profiles: SEED_BROKERS,
+  // ---------- Patrimoine (démo) ----------
+  properties: [
+    { id: 'p1', name: 'T2 rue des Halles', address: '8 rue des Halles', city: 'Tours', postal_code: '37000', invest_type: 'Meublé / LMNP', structure: 'Nom propre', status: 'Loué', purchase_date: '2021-03-15', price: 118000, notary_fees: 9200, works: 14000, other_costs: 0, current_value: 150000, surface: 42, notes: 'Meublé étudiant, proche fac', created_at: d(-900) },
+    { id: 'p2', name: 'Immeuble Saint-Pierre', address: '21 rue Saint-Pierre', city: 'Joué-lès-Tours', postal_code: '37300', invest_type: 'Immeuble de rapport', structure: 'SCI à l\'IS', status: 'Loué', purchase_date: '2023-06-01', price: 265000, notary_fees: 20500, works: 48000, other_costs: 2500, current_value: 360000, surface: 190, notes: '3 lots : 2 T2 + 1 T3', created_at: d(-700) },
+    { id: 'p3', name: 'Parking Gare', address: 'Résidence Le Quai, place 14', city: 'Tours', postal_code: '37000', invest_type: 'Parking / garage', structure: 'Nom propre', status: 'Loué', purchase_date: '2022-09-10', price: 14000, notary_fees: 1900, works: 0, other_costs: 0, current_value: 15000, surface: 12, created_at: d(-800) },
+  ],
+  loans: [
+    { id: 'l1', property_id: 'p1', bank: 'Crédit Agricole', label: 'Prêt T2 Halles', principal: 130000, rate: 1.35, duration_months: 240, start_date: '2021-04-05', insurance_monthly: 28.5, deferral_months: 0, created_at: d(-900) },
+    { id: 'l2', property_id: 'p2', bank: 'BNP Paribas', label: 'Prêt SCI Saint-Pierre', principal: 300000, rate: 3.85, duration_months: 240, start_date: '2023-07-05', insurance_monthly: 62, deferral_months: 12, created_at: d(-700) },
+  ],
+  leases: [
+    { id: 'b1', property_id: 'p1', lot: 'T2', tenant: 'Léa Martin', rent: 620, charges: 40, deposit: 620, start_date: '2024-09-01', end_date: null, active: true, created_at: d(-400) },
+    { id: 'b2', property_id: 'p2', lot: 'RDC — T2', tenant: 'M. et Mme Petit', rent: 560, charges: 50, deposit: 560, start_date: '2023-11-01', end_date: null, active: true, created_at: d(-650) },
+    { id: 'b3', property_id: 'p2', lot: '1er — T2', tenant: 'Nadia Benali', rent: 580, charges: 50, deposit: 580, start_date: '2024-02-01', end_date: null, active: true, created_at: d(-580) },
+    { id: 'b4', property_id: 'p2', lot: '2e — T3', tenant: 'Famille Roux', rent: 720, charges: 60, deposit: 720, start_date: '2023-12-15', end_date: null, active: true, created_at: d(-620) },
+    { id: 'b5', property_id: 'p3', lot: 'Place 14', tenant: 'Thomas Girard', rent: 75, charges: 0, deposit: 75, start_date: '2022-10-01', end_date: null, active: true, created_at: d(-790) },
+  ],
+  rent_payments: (() => {
+    const out = []; const now = new Date(); const rents = { b1: 620, b2: 560, b3: 580, b4: 720, b5: 75 };
+    for (let i = 8; i >= 0; i--) {
+      const m = new Date(now.getFullYear(), now.getMonth() - i, 1); const key = m.toISOString().slice(0, 7);
+      for (const [lease, rent] of Object.entries(rents)) {
+        if (i === 0 && (lease === 'b3' || lease === 'b4')) continue; // loyers du mois en cours pas encore reçus
+        if (i === 2 && lease === 'b2') { out.push({ id: `rp-${lease}-${key}`, lease_id: lease, month: key, amount: 300, received_at: key + '-12', note: 'Paiement partiel' }); continue; }
+        out.push({ id: `rp-${lease}-${key}`, lease_id: lease, month: key, amount: rent, received_at: key + '-05' });
+      }
+    }
+    return out;
+  })(),
+  expenses: [
+    { id: 'x1', property_id: 'p1', category: 'Taxe foncière', label: 'Taxe foncière 2026', amount: 890, recurrence: 'yearly', date: '2026-10-15', created_at: d(-30) },
+    { id: 'x2', property_id: 'p1', category: 'Charges de copropriété', label: 'Copropriété', amount: 95, recurrence: 'monthly', date: null, created_at: d(-300) },
+    { id: 'x3', property_id: 'p1', category: 'Assurance PNO', label: 'PNO', amount: 145, recurrence: 'yearly', date: '2026-03-01', created_at: d(-300) },
+    { id: 'x4', property_id: 'p2', category: 'Taxe foncière', label: 'Taxe foncière 2026', amount: 2650, recurrence: 'yearly', date: '2026-10-15', created_at: d(-30) },
+    { id: 'x5', property_id: 'p2', category: 'Assurance PNO', label: 'PNO immeuble', amount: 420, recurrence: 'yearly', date: '2026-06-01', created_at: d(-300) },
+    { id: 'x6', property_id: 'p2', category: 'Comptable', label: 'Bilan SCI', amount: 780, recurrence: 'yearly', date: '2026-04-30', created_at: d(-300) },
+    { id: 'x7', property_id: 'p2', category: 'Entretien / réparations', label: 'Chauffe-eau lot 1er', amount: 640, recurrence: 'once', date: d(-45).slice(0, 10), created_at: d(-45) },
+    { id: 'x8', property_id: 'p2', category: 'Eau / électricité / gaz', label: 'Électricité parties communes', amount: 38, recurrence: 'monthly', date: null, created_at: d(-300) },
+    { id: 'x9', property_id: 'p3', category: 'Taxe foncière', label: 'Taxe foncière parking', amount: 110, recurrence: 'yearly', date: '2026-10-15', created_at: d(-30) },
   ],
 };

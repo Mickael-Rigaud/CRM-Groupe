@@ -117,3 +117,11 @@ crm/
 ├── js/pages/               dashboard, today, pipeline, deal, activity, contacts, organisations, acquisition, settings
 └── supabase/schema.sql     tables, droits RLS, fonction intake_lead, vue v_deals
 ```
+
+## Lot 2 — Tableau de bord central, Patrimoine immobilier, Vivier courtiers (06/09/2026)
+
+- **Tableau de bord** (`#/home`) : page d'accueil qui résume chaque module (commercial, journée, patrimoine, vivier) ; le menu est organisé par modules.
+- **Patrimoine immobilier** (`#/patrimoine`) : biens, prêts avec tableau d'amortissement calculé (différé partiel, assurance, mensualité imposée), baux et encaissements mois par mois, charges récurrentes ou ponctuelles, indicateurs (CRD, cash-flow, rendements brut/net, désendettement, répartition par type et structure). Réservé aux profils direction avec `patrimony_access = true`.
+- **Vivier courtiers** (`#/vivier`) : base de recrutement de mandataires pour La Référence Courtage (338 profils importés de l'outil « Vivier Courtiers »), filtres, suivi (à contacter → contacté → RDV → recruté / écarté), notes, archivage, export. Accessible à la direction et aux profils ayant l'activité `courtage`.
+
+Installation : exécuter `supabase/modules-lot2.sql` puis `supabase/vivier-import.sql` dans Supabase > SQL Editor, et déposer les dossiers `css`, `js`, `supabase` sur GitHub.

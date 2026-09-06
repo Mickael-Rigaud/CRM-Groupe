@@ -7,6 +7,7 @@ export const scope = {
   set(user) { this.user = user; },
   get role() { return this.user?.role || 'commercial'; },
   get isDirection() { return this.role === 'direction'; },
+  get canPatrimony() { return this.isDirection && this.user?.patrimony_access === true; },
   get activityKeys() { return this.isDirection ? ['rgd', 'btp', 'courtage', 'propulsion'] : (this.user?.activities || []); },
 
   canSeeDeal(d) {

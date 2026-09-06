@@ -37,16 +37,24 @@ function renderLogin(error = '') {
 
 // ---------- Mise en page ----------
 const NAV = [
-  { hash: '#/dashboard', label: "Vue d'ensemble", icon: '◫', direction: true },
+  { hash: '#/home', label: 'Tableau de bord', icon: '◫' },
   { hash: '#/today', label: "À faire aujourd'hui", icon: '☑', count: () => scope.activities().filter(a => !a.done && a.due_date && daysSince(a.due_date) >= 0).length },
-  { sep: 'Pipelines' },
+  { sep: 'Commercial' },
+  { hash: '#/dashboard', label: "Vue d'ensemble", icon: '📊', direction: true },
   ...Object.values(ACTIVITIES).map(a => ({ hash: `#/pipeline/${a.key}`, label: a.label, dot: a.color, sub: true, activity: a.key, count: () => scope.deals().filter(d => d.activity === a.key && d.status === 'open').length })),
-  { sep: 'Base' },
   { hash: '#/contacts', label: 'Contacts', icon: '👤' },
   { hash: '#/organisations', label: 'Organisations', icon: '🏢' },
   { hash: '#/partners', label: 'Partenaires', icon: '🤝' },
-  { sep: 'Pilotage' },
   { hash: '#/acquisition', label: 'Acquisition', icon: '📈', direction: true },
+  { sep: 'Recrutement', show: () => scope.isDirection || scope.activityKeys.includes('courtage') },
+  { hash: '#/vivier', label: 'Vivier courtiers', icon: '🏦', show: () => scope.isDirection || scope.activityKeys.includes('courtage'), count: () => db.t('broker_profiles').filter(r => !r.archive && ['contact', 'rdv'].includes(r.suivi)).length },
+  { sep: 'Patrimoine', show: () => scope.canPatrimony },
+  { hash: '#/patrimoine', label: "Vue d'ensemble", icon: '🏠', show: () => scope.canPatrimony, exact: true },
+  { hash: '#/patrimoine/biens', label: 'Biens', icon: '🏘', sub: true, show: () => scope.canPatrimony },
+  { hash: '#/patrimoine/prets', label: 'Prêts', icon: '🏦', sub: true, show: () => scope.canPatrimony },
+  { hash: '#/patrimoine/loyers', label: 'Loyers', icon: '💶', sub: true, show: () => scope.canPatrimony },
+  { hash: '#/patrimoine/charges', label: 'Charges', icon: '🧾', sub: true, show: () => scope.canPatrimony },
+  { sep: 'Réglages' },
   { hash: '#/settings', label: 'Paramètres', icon: '⚙' },
 ];
 
@@ -67,10 +75,10 @@ function renderLayout() {
 }
 function renderNav() {
   const nav = document.getElementById('nav'); if (!nav) return;
-  const hash = location.hash || '#/dashboard';
-  nav.innerHTML = NAV.filter(n => n.sep || !n.direction || scope.isDirection).filter(n => !n.activity || scope.activityKeys.includes(n.activity)).map(n => {
+  const hash = location.hash || '#/home';
+  nav.innerHTML = NAV.filter(n => !n.direction || scope.isDirection).filter(n => !n.activity || scope.activityKeys.includes(n.activity)).filter(n => !n.show || n.show()).map(n => {
     if (n.sep) return `<div class="sep">${esc(n.sep)}</div>`;
-    const active = hash.startsWith(n.hash) ? 'active' : '';
+    const active = (n.exact ? hash === n.hash : hash.startsWith(n.hash)) ? 'active' : '';
     const cnt = n.count ? n.count() : 0;
     return `<a href="${n.hash}" class="${active} ${n.sub ? 'sub' : ''}">${n.dot ? `<span class="dot" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${n.dot}"></span>` : `<span>${n.icon}</span>`}${esc(n.label)}${cnt ? `<span class="cnt">${cnt}</span>` : ''}</a>`;
   }).join('');
@@ -79,9 +87,10 @@ function renderNav() {
 // ---------- Routeur ----------
 function route() {
   if (!scope.user) return;
-  const hash = location.hash || '#/dashboard';
+  const hash = location.hash || '#/home';
   const [, name, param] = hash.split('/');
-  let page = pages[name] || pages.dashboard;
+  let page = pages[name] || pages.home;
+  if (name === 'patrimoine') page = pages['patrimoine_' + (param || 'home')] || pages.patrimoine_home;
   if (page.directionOnly && !scope.isDirection) page = pages.today;
   if (name === 'pipeline' && !scope.activityKeys.includes(param)) { location.hash = `#/pipeline/${scope.activityKeys[0] || 'rgd'}`; return; }
   closeModal(true);
@@ -96,7 +105,7 @@ function route() {
 
 async function start(user) {
   scope.set(user);
-  if (!scope.isDirection && (location.hash === '' || location.hash === '#/dashboard')) location.hash = '#/today';
+  if (!scope.isDirection && location.hash === '#/dashboard') location.hash = '#/home';
   renderLayout();
   unsubscribe?.();
   unsubscribe = db.onChange(() => { renderNav(); current?.refresh?.(); });

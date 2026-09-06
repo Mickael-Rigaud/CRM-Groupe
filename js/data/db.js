@@ -4,7 +4,11 @@
 import { CONFIG } from '../config.js';
 import { SEED, SEED_USERS } from './seed.js';
 
-export const TABLES = ['profiles', 'organisations', 'contacts', 'deals', 'activities', 'events', 'ad_spend', 'settings'];
+export const TABLES = ['profiles', 'organisations', 'contacts', 'deals', 'activities', 'events', 'ad_spend', 'settings',
+  // module Patrimoine
+  'properties', 'loans', 'leases', 'rent_payments', 'expenses',
+  // module Vivier courtiers
+  'broker_profiles'];
 const LS_KEY = 'crm_local_v1';
 const LS_USER = 'crm_local_user';
 
@@ -19,6 +23,12 @@ const localAdapter = {
     if (!this.data) {
       this.data = { profiles: structuredClone(SEED_USERS), ...structuredClone(SEED) };
       this.save();
+    } else {
+      // Nouvelles tables ajoutées après une première utilisation : on complète avec l'exemple
+      let changed = false;
+      for (const t of TABLES) if (!this.data[t]) { this.data[t] = structuredClone(SEED[t] || []); changed = true; }
+      for (const u of this.data.profiles) { const su = SEED_USERS.find(x => x.id === u.id); if (su && u.patrimony_access === undefined) { u.patrimony_access = su.patrimony_access; changed = true; } }
+      if (changed) this.save();
     }
     return structuredClone(this.data);
   },
@@ -55,7 +65,7 @@ const supabaseAdapter = {
     const out = {};
     for (const t of TABLES) {
       const { data, error } = await this.client.from(t).select('*').limit(10000);
-      if (error) throw new Error(`${t}: ${error.message}`);
+      if (error) { console.warn(`Table ${t} : ${error.message}`); out[t] = []; continue; } // table absente (module non installé) : on continue
       out[t] = data || [];
     }
     return out;
