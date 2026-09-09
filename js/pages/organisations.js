@@ -2,7 +2,7 @@
 import { db } from '../data/db.js';
 import { scope } from '../data/scope.js';
 import { ACTIVITIES, ACTIVITY_KEYS, ORG_TYPES, PARTNER_JOBS, CLIENT_STATUS } from '../data/schema.js';
-import { esc, eur, openModal, closeModal, renderForm, readForm, toast, fmtDate, fmtDateTime, userName, contactName, actBadge, daysSince, csvDownload, confirm, isoDay } from '../ui.js';
+import { esc, eur, openModal, closeModal, renderForm, readForm, toast, fmtDate, fmtDateTime, userName, contactName, actBadge, daysSince, csvDownload, confirm, isoDay, terms, hit, searchInput, bindSearch, restoreFocus } from '../ui.js';
 import { openDeal, dealForm } from './deal.js';
 import { activityForm, activityRowHtml, bindActivityRows } from './activity.js';
 import { openContact } from './contacts.js';
@@ -125,18 +125,18 @@ function listPage(kind) {
   return {
     title: () => kind === 'partners' ? 'Partenaires & apporteurs' : 'Organisations',
     render(root, param) {
-      const state = { q: '', job: '', type: '' };
+      const state = { q: '', job: '', type: '', focus: null };
       const draw = () => {
         let list = scope.orgs();
         list = kind === 'partners' ? list.filter(o => o.type === 'Partenaire') : list.filter(o => o.type !== 'Partenaire');
-        list = list.filter(o => (!state.job || o.partner_job === state.job) && (!state.type || o.type === state.type) && (!state.q || [o.name, o.city, o.zone, o.email, o.partner_job].join(' ').toLowerCase().includes(state.q.toLowerCase())));
+        list = list.filter(o => (!state.job || o.partner_job === state.job) && (!state.type || o.type === state.type) && hit([o.name, o.city, o.zone, o.email, o.phone, o.partner_job, o.notes], terms(state.q)));
         const stats = Object.fromEntries(list.map(o => [o.id, partnerStats(o.id)]));
         if (kind === 'partners') list.sort((a, b) => stats[b.id].revenue - stats[a.id].revenue || stats[b.id].leads - stats[a.id].leads);
         else list.sort((a, b) => a.name.localeCompare(b.name));
         const mrr = list.filter(o => o.client_status === 'Client actif').reduce((s, o) => s + (Number(o.monthly_amount) || 0), 0);
         root.innerHTML = `
           <div class="toolbar">
-            <input type="search" class="grow" id="o-q" placeholder="Nom, ville, zone, métier…" value="${esc(state.q)}">
+            ${searchInput('o-q', state, 'Nom, ville, zone, métier, téléphone…')}
             ${kind === 'partners' ? `<select id="o-job"><option value="">Tous les métiers</option>${PARTNER_JOBS.map(j => `<option ${state.job === j ? 'selected' : ''}>${j}</option>`).join('')}</select>` : `<select id="o-type"><option value="">Tous les types</option>${ORG_TYPES.filter(t => t !== 'Partenaire').map(t => `<option ${state.type === t ? 'selected' : ''}>${t}</option>`).join('')}</select>`}
             <button class="btn ghost sm" id="o-export">Export CSV</button>
             <button class="btn" id="o-new">+ ${kind === 'partners' ? 'Partenaire' : 'Organisation'}</button>
@@ -149,7 +149,7 @@ function listPage(kind) {
           <div class="card"><div class="table-wrap"><table><thead><tr><th>Nom</th>${kind === 'partners' ? '<th>Métier</th><th>Zone</th>' : '<th>Type</th><th>Ville</th>'}<th>Activités</th><th>Responsable</th><th>Dernier contact</th>${kind === 'partners' ? '<th class="num">Leads</th><th class="num">Ventes</th><th class="num">CA généré</th>' : '<th>Statut</th><th class="num">Mensuel</th><th>Renouvellement</th>'}</tr></thead><tbody>
             ${list.map(o => { const s = stats[o.id]; const lc = o.last_contact_at ? daysSince(o.last_contact_at) : null; return `<tr class="click" data-o="${o.id}"><td><b>${esc(o.name)}</b></td>${kind === 'partners' ? `<td>${esc(o.partner_job || '')}</td><td>${esc(o.zone || '')}</td>` : `<td><span class="pill">${esc(o.type)}</span></td><td>${esc(o.city || '')}</td>`}<td>${(o.activities || []).map(actBadge).join(' ')}</td><td class="small">${esc(userName(o.owner_id))}</td><td class="${lc === null || lc > 60 ? 'status-lost' : ''}">${lc === null ? 'Jamais' : lc + ' j'}</td>${kind === 'partners' ? `<td class="num">${s.leads}</td><td class="num">${s.won}</td><td class="num"><b>${eur(s.revenue)}</b></td>` : `<td>${o.client_status ? `<span class="pill ${o.client_status === 'Client actif' ? 'ok' : ''}">${esc(o.client_status)}</span>` : ''}</td><td class="num">${o.monthly_amount ? eur(o.monthly_amount) : ''}</td><td class="${o.renewal_date && daysSince(o.renewal_date) >= -45 ? 'status-lost' : ''}">${o.renewal_date ? fmtDate(o.renewal_date) : ''}</td>`}</tr>`; }).join('') || `<tr><td colspan="9" class="empty">Aucune entrée</td></tr>`}
           </tbody></table></div></div>`;
-        root.querySelector('#o-q').oninput = e => { state.q = e.target.value; draw(); const i = root.querySelector('#o-q'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); };
+        bindSearch(root, 'o-q', state, draw); restoreFocus(root, state);
         root.querySelector('#o-job')?.addEventListener('change', e => { state.job = e.target.value; draw(); });
         root.querySelector('#o-type')?.addEventListener('change', e => { state.type = e.target.value; draw(); });
         root.querySelector('#o-new').onclick = () => orgForm(null, (id) => { draw(); if (id) openOrg(id, draw); }, null, kind === 'partners' ? 'Partenaire' : 'Client');

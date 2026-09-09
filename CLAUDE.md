@@ -17,7 +17,7 @@ Application interne de Mickael Rigaud pour piloter 4 activités (RGD Renova, BTP
 - `js/data/finance.js` — calculs de prêts (échéancier, différé partiel/total, CRD, mensualité imposée), types et statuts de biens.
 - `js/data/schema.js` — activités, rôles, étapes de pipeline.
 - `js/documents.js` — pièces jointes (Storage) par entité.
-- `js/ui.js` — helpers de rendu (`renderForm` avec `hint`, modales, tableaux, `esc`).
+- `js/ui.js` — helpers de rendu (`renderForm` avec `hint`, modales, tableaux, `esc`) et **filtres partagés** : `terms`/`hit` (recherche insensible aux accents, tous les mots exigés), `searchInput`/`bindSearch`/`restoreFocus` (barre de recherche + curseur conservé après redraw), `pickState`/`pickInit`/`multiPick`/`pickChips`/`bindMultiPick` (sélecteur multiple recherchable, mémorisé en localStorage — clé `crm_locatif_props` pour les biens loués, `crm_patrimoine_props` pour le patrimoine). Toute nouvelle liste filtrable doit réutiliser ces helpers plutôt que refaire un `<select>` ou un `toLowerCase().includes()`.
 - `css/app.css` — thème La Référence Courtage (navy / bleu mer / orange). Pas de logo.
 - `supabase/*.sql` — scripts à exécuter **à la main** dans Supabase > SQL Editor, dans l'ordre : `schema.sql` → `modules-lot2.sql` → `lot3-documents-prets.sql` → `lot4-gestion-locative.sql`. Tout nouveau changement de schéma = nouveau fichier `supabase/lotN-….sql` idempotent (`if not exists`, `drop policy if exists`…), jamais de modification des anciens.
 

@@ -2,13 +2,13 @@
 import { db } from '../data/db.js';
 import { scope } from '../data/scope.js';
 import { ACTIVITIES, ACTIVITY_KEYS, CHANNELS, PAID_CHANNELS, reachedRdv, stageIndex } from '../data/schema.js';
-import { esc, eur, pct, periodRange, inRange, PERIODS, openModal, closeModal, renderForm, readForm, toast, csvDownload, isoDay, confirm } from '../ui.js';
+import { esc, eur, pct, periodRange, inRange, PERIODS, openModal, closeModal, renderForm, readForm, toast, csvDownload, isoDay, confirm, terms, hit, searchInput, bindSearch, restoreFocus } from '../ui.js';
 
 export const acquisitionPage = {
   title: () => "Pilotage de l'acquisition",
   directionOnly: true,
   render(root) {
-    const state = { period: 'quarter', activity: '', groupBy: 'campaign' };
+    const state = { period: 'quarter', activity: '', groupBy: 'campaign', q: '', focus: null };
     const draw = () => {
       const r = periodRange(state.period);
       const deals = scope.deals().filter(d => inRange(d.created_at, r) && (!state.activity || d.activity === state.activity));
@@ -24,7 +24,8 @@ export const acquisitionPage = {
         if (reachedRdv(d)) row.rdv++;
         if (d.status === 'won') { row.won++; row.revenue += Number(d.amount) || 0; }
       }
-      const list = Object.values(rows).sort((a, b) => b.revenue - a.revenue || b.leads - a.leads);
+      const qt = terms(state.q);
+      const list = Object.values(rows).filter(x => hit([x.channel, x.campaign, ACTIVITIES[x.activity]?.label], qt)).sort((a, b) => b.revenue - a.revenue || b.leads - a.leads);
       const tot = list.reduce((t, x) => ({ spend: t.spend + x.spend, leads: t.leads + x.leads, reachable: t.reachable + x.reachable, rdv: t.rdv + x.rdv, won: t.won + x.won, revenue: t.revenue + x.revenue }), { spend: 0, leads: 0, reachable: 0, rdv: 0, won: 0, revenue: 0 });
       const ratio = (a, b) => b ? a / b : null;
       const cell = (v, f = eur) => v === null ? '<span class="muted">—</span>' : f(v);
@@ -34,7 +35,7 @@ export const acquisitionPage = {
           <div class="seg">${PERIODS.map(([k, l]) => `<button data-period="${k}" class="${state.period === k ? 'active' : ''}">${l}</button>`).join('')}</div>
           <select id="a-act"><option value="">Toutes les activités</option>${ACTIVITY_KEYS.map(k => `<option value="${k}" ${state.activity === k ? 'selected' : ''}>${esc(ACTIVITIES[k].label)}</option>`).join('')}</select>
           <div class="seg"><button data-g="campaign" class="${state.groupBy === 'campaign' ? 'active' : ''}">Par campagne</button><button data-g="channel" class="${state.groupBy === 'channel' ? 'active' : ''}">Par canal</button></div>
-          <span class="grow"></span>
+          ${searchInput('a-q', state, 'Canal, campagne…')}
           <button class="btn ghost sm" id="a-export">Export CSV</button>
           <button class="btn" id="a-spend">+ Dépense publicitaire</button>
         </div>
@@ -51,12 +52,13 @@ export const acquisitionPage = {
           </tbody></table></div></div>
         <div class="card"><div class="card-head"><h2>Dépenses publicitaires saisies</h2><span class="muted small">une ligne par mois, canal et campagne — le nom de campagne doit être identique à celui saisi sur les affaires</span></div>
           <div class="table-wrap"><table><thead><tr><th>Mois</th><th>Activité</th><th>Canal</th><th>Campagne</th><th class="num">Montant</th><th></th></tr></thead><tbody>
-            ${db.t('ad_spend').filter(s => !state.activity || s.activity === state.activity).sort((a, b) => b.month.localeCompare(a.month)).map(s => `<tr><td>${new Date(s.month + 'T00:00:00').toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}</td><td>${esc(ACTIVITIES[s.activity]?.short || '')}</td><td>${esc(s.channel)}</td><td>${esc(s.campaign || '')}</td><td class="num">${eur(s.amount)}</td><td class="right"><button class="icon-btn" data-edit-spend="${s.id}">✎</button><button class="icon-btn" data-del-spend="${s.id}">🗑</button></td></tr>`).join('') || '<tr><td colspan="6" class="empty">Aucune dépense saisie</td></tr>'}
+            ${db.t('ad_spend').filter(s => (!state.activity || s.activity === state.activity) && hit([s.channel, s.campaign, ACTIVITIES[s.activity]?.label], qt)).sort((a, b) => b.month.localeCompare(a.month)).map(s => `<tr><td>${new Date(s.month + 'T00:00:00').toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}</td><td>${esc(ACTIVITIES[s.activity]?.short || '')}</td><td>${esc(s.channel)}</td><td>${esc(s.campaign || '')}</td><td class="num">${eur(s.amount)}</td><td class="right"><button class="icon-btn" data-edit-spend="${s.id}">✎</button><button class="icon-btn" data-del-spend="${s.id}">🗑</button></td></tr>`).join('') || '<tr><td colspan="6" class="empty">Aucune dépense saisie</td></tr>'}
           </tbody></table></div></div>`;
 
       root.querySelectorAll('[data-period]').forEach(b => b.onclick = () => { state.period = b.dataset.period; draw(); });
       root.querySelectorAll('[data-g]').forEach(b => b.onclick = () => { state.groupBy = b.dataset.g; draw(); });
       root.querySelector('#a-act').onchange = e => { state.activity = e.target.value; draw(); };
+      bindSearch(root, 'a-q', state, draw); restoreFocus(root, state);
       root.querySelector('#a-spend').onclick = () => spendForm(null, draw);
       root.querySelectorAll('[data-edit-spend]').forEach(b => b.onclick = () => spendForm(db.byId('ad_spend', b.dataset.editSpend), draw));
       root.querySelectorAll('[data-del-spend]').forEach(b => b.onclick = async () => { if (await confirm('Supprimer cette dépense ?')) { await db.remove('ad_spend', b.dataset.delSpend); draw(); } });
