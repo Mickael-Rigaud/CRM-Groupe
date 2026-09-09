@@ -3,7 +3,7 @@
 // (Stéphanie) ou l'accès patrimoine (Mickael).
 import { db } from '../data/db.js';
 import { scope } from '../data/scope.js';
-import { esc, eur, num, pct, openModal, closeModal, renderForm, readForm, toast, fmtDate, confirm, csvDownload, isoDay, daysSince } from '../ui.js';
+import { esc, eur, num, pct, openModal, closeModal, renderForm, readForm, toast, fmtDate, confirm, csvDownload, isoDay, daysSince, terms, hit, searchInput, bindSearch, restoreFocus, pickState, pickInit, multiPick, pickChips, bindMultiPick } from '../ui.js';
 import { documentsSection, bindDocuments } from '../documents.js';
 
 const eur2 = (n) => eur(n, { maximumFractionDigits: 2 });
@@ -15,6 +15,10 @@ const propName = (id) => db.byId('properties', id)?.name || '—';
 const unitOf = (l) => l.unit_id ? db.byId('units', l.unit_id) : null;
 const lotName = (l) => unitOf(l)?.name || l.lot || '';
 const unitSort = (a, b) => (a.sort_order || 0) - (b.sort_order || 0) || String(a.name).localeCompare(String(b.name), 'fr', { numeric: true });
+// Biens proposés dans les sélecteurs de la gestion locative : ceux qui ont au moins un lot ou un bail
+const propItems = () => db.t('properties').filter(p => db.t('units').some(u => u.property_id === p.id) || db.t('leases').some(l => l.property_id === p.id))
+  .sort((a, b) => a.name.localeCompare(b.name))
+  .map(p => { const n = db.t('units').filter(u => u.property_id === p.id && u.active !== false).length; return { id: p.id, name: p.name, sub: [p.city, n ? `${n} lot${n > 1 ? 's' : ''}` : ''].filter(Boolean).join(' · ') }; });
 const LEASE_TYPES = [['vide', 'Location vide'], ['meuble', 'Location meublée'], ['colocation', 'Colocation'], ['commercial', 'Bail commercial'], ['professionnel', 'Bail professionnel'], ['autre', 'Autre']];
 const MODES = ['Virement', 'Chèque', 'Espèce', 'Prélèvement', 'CAF seule'];
 const UNIT_TYPES = ['Studio', 'T1', 'T2', 'T3', 'T4', 'T5', 'Maison', 'Local commercial', 'Bureaux', 'Parking', 'Cave', 'Autre'];
@@ -288,19 +292,21 @@ function bankImport(k, onDone) {
 // ======================================================================
 //  Page principale : suivi mensuel (réplique du suivi Excel)
 // ======================================================================
+
 export const locatifPage = {
   title: () => 'Gestion locative — suivi des loyers',
   render(root) {
     if (!scope.canRental) return denied(root);
-    const state = { month: isoDay().slice(0, 7), props: null, ddOpen: false }; // props = null → tous les immeubles
+    const state = { month: isoDay().slice(0, 7), q: '', focus: null };
+    const pick = pickState('crm_locatif_props');
     let prepared = new Set();
     const drawInner = async () => {
       const k = state.month;
       if (!prepared.has(k) && k <= isoDay().slice(0, 7)) { prepared.add(k); try { const n = await prepareMonth(k); if (n) toast(`${n} ligne(s) préparée(s) pour ${monthLabel(k)}`); } catch (err) { toast('Préparation du mois : ' + err.message, 'err'); } }
-      const allProps = db.t('properties').filter(p => db.t('units').some(u => u.property_id === p.id) || db.t('leases').some(l => l.property_id === p.id)).sort((a, b) => a.name.localeCompare(b.name));
-      if (state.props === null) state.props = new Set(allProps.map(p => p.id));
-      const props = allProps.filter(p => state.props.has(p.id));
+      const items = propItems();
+      const props = pickInit(pick, items).map(i => db.byId('properties', i.id));
       const allLeases = db.t('leases');
+      const qt = terms(state.q);
       const groups = props.map(p => {
         const units = db.t('units').filter(u => u.property_id === p.id && u.active !== false).sort(unitSort);
         const lines = [];
@@ -310,7 +316,9 @@ export const locatifPage = {
           if (ls.length) ls.forEach(l => lines.push({ u, l })); else lines.push({ u, l: null });
         }
         for (const l of leasesP.filter(l => !l.unit_id || !units.some(u => u.id === l.unit_id))) lines.push({ u: null, l });
-        return { p, lines };
+        // Recherche : lot, locataire, contact, mode de paiement, commentaire du mois, immeuble
+        const kept = qt.length ? lines.filter(({ u, l }) => { const row = l ? rowOf(l.id, k) : null; return hit([p.name, p.city, u?.name, u?.unit_type, l?.tenant, l?.lot, l?.tenant_phone, l?.tenant_email, l?.guardian_name, row?.note, row?.mode, l ? '' : 'vacant'], qt); }) : lines;
+        return { p, lines: kept };
       }).filter(g => g.lines.length);
       const zero = () => ({ due: 0, apl: 0, tenant: 0, rec: 0, missing: 0, prev: 0, bal: 0, vacant: 0, leases: 0 });
       const tot = zero(); let sub = zero();
@@ -337,29 +345,29 @@ export const locatifPage = {
       const totalRow = (label, t, cls = 'total') => `<tr class="${cls}"><td colspan="4">${label} <span class="muted small" style="font-weight:400">${t.leases} bail${t.leases > 1 ? 'x' : ''}${t.vacant ? ` · ${t.vacant} vacant${t.vacant > 1 ? 's' : ''}` : ''}${t.due ? ` · encaissé ${pct(t.rec / t.due * 100)}` : ''}</span></td><td class="num">${eur2(t.due)}</td><td class="num">${eur2(t.apl)}</td><td class="num">${eur2(t.tenant)}</td><td class="num">${eur2(t.rec)}</td><td></td><td class="num ${t.missing > 0.005 ? 'status-lost' : ''}">${eur2(t.missing)}</td><td class="num">${eur2(t.prev)}</td><td class="num ${t.bal > 0.005 ? 'status-lost' : ''}">${eur2(t.bal)}</td><td></td></tr>`;
       const body = groups.map(g => { sub = zero(); const rows = g.lines.map(line).join(''); return `<tr class="grp"><td colspan="13"><b>${esc(g.p.name)}</b> <span class="muted small">${esc([g.p.holding_name, g.p.address, g.p.city].filter(Boolean).join(' · '))}</span></td></tr>${rows}${totalRow('Sous-total ' + esc(g.p.name), sub, 'subtotal')}`; }).join('');
       const rate = tot.due ? tot.rec / tot.due * 100 : 0;
+      const allPicked = items.length > 0 && items.every(i => pick.sel.has(i.id));
       root.innerHTML = `
         <div class="toolbar">
           <div class="seg"><button data-m="-1">‹</button><button class="active" style="min-width:150px;text-transform:capitalize">${monthLabel(k)}</button><button data-m="1">›</button></div>
-          <div class="dd" id="lo-dd"><button type="button" class="dd-btn" id="lo-dd-btn">${props.length === allProps.length ? 'Tous les immeubles' : props.length === 0 ? 'Aucun immeuble' : props.length === 1 ? esc(props[0].name) : props.length + ' immeubles sur ' + allProps.length} ▾</button>
-            <div class="dd-panel" ${state.ddOpen ? '' : 'hidden'}>${allProps.map(p => `<label class="check"><input type="checkbox" data-prop="${p.id}" ${state.props.has(p.id) ? 'checked' : ''}> ${esc(p.name)}</label>`).join('')}<div class="dd-foot"><button type="button" class="btn ghost sm" id="lo-all">${state.props.size === allProps.length ? 'Aucun' : 'Tous'}</button></div></div></div>
-          <span class="grow"></span>
+          ${multiPick('lo-props', items, pick, { noun: 'bien' })}
+          ${searchInput('lo-q', state, 'Rechercher un lot, un locataire, un commentaire…')}
           <button class="btn ghost sm" id="lo-bank">Importer un relevé bancaire</button><button class="btn ghost sm" id="lo-export">Export CSV</button><button class="btn ghost sm" id="lo-landlord">Bailleur</button><button class="btn sm" id="lo-newlease">+ Bail</button>
         </div>
+        ${pickChips(items, pick, { q: state.q })}
         <div class="grid c4">
-          <div class="card tight kpi"><div class="lbl">Attendu ce mois</div><div class="val">${eur(tot.due)}</div><div class="sub">${groups.reduce((s, g) => s + g.lines.filter(x => x.l).length, 0)} baux · ${tot.vacant} vacant${tot.vacant > 1 ? 's' : ''}</div></div>
+          <div class="card tight kpi"><div class="lbl">Attendu ce mois</div><div class="val">${eur(tot.due)}</div><div class="sub">${tot.leases} bail${tot.leases > 1 ? 'x' : ''} · ${tot.vacant} vacant${tot.vacant > 1 ? 's' : ''}</div></div>
           <div class="card tight kpi" style="--kpi:#dcfce7;--kpi-c:var(--green)"><div class="lbl">Reçu</div><div class="val">${eur(tot.rec)}</div><div class="sub">APL ${eur(tot.apl)} · locataires ${eur(tot.tenant)} · ${pct(rate)}</div></div>
           <div class="card tight kpi" style="--kpi:#fee2e2;--kpi-c:var(--red)"><div class="lbl">Manquant ce mois</div><div class="val">${eur(tot.missing)}</div><div class="sub">loyers du mois non soldés</div></div>
           <div class="card tight kpi" style="--kpi:#fef3c7;--kpi-c:var(--amber)"><div class="lbl">Reste à récupérer</div><div class="val">${eur(tot.bal)}</div><div class="sub">cumul retards (dont antérieurs ${eur(tot.prev)})</div></div>
         </div>
         <div class="card"><div class="table-wrap"><table class="rent-sheet"><thead><tr><th>Lot</th><th>Locataire</th><th class="num">Loyer HC</th><th class="num">Charges</th><th class="num">Dû</th><th class="num">APL</th><th class="num">Locataire</th><th class="num">Reçu</th><th>Mode</th><th class="num">Manquant</th><th class="num">Retard ant.</th><th class="num">Reste</th><th>Commentaire</th></tr></thead><tbody>
-          ${body || '<tr><td colspan="13" class="empty">Aucun lot. Créez d\'abord les lots dans « Lots » ou importez le suivi Excel.</td></tr>'}
-          ${totalRow(`Total ${props.length === allProps.length ? 'tous immeubles' : props.length + ' immeuble' + (props.length > 1 ? 's' : '')}`, tot)}
-        </tbody></table></div><p class="muted small">Saisie directe dans les cases (dû, APL, locataire, mode, commentaire) : enregistrement automatique. « Manquant » = dû − reçu du mois ; « Reste » = manquant + retards antérieurs.</p></div>`;
+          ${body || `<tr><td colspan="13" class="empty">${pick.sel.size === 0 ? 'Aucun bien sélectionné — ouvrez le sélecteur de biens.' : state.q ? 'Aucun lot ne correspond à « ' + esc(state.q) + ' ».' : 'Aucun lot. Créez d\'abord les lots dans « Lots » ou importez le suivi Excel.'}</td></tr>`}
+          ${body ? totalRow(`Total ${allPicked && !state.q ? 'tous les biens' : props.length + ' bien' + (props.length > 1 ? 's' : '') + (state.q ? ' · résultat filtré' : '')}`, tot) : ''}
+        </tbody></table></div><p class="muted small">Saisie directe dans les cases (dû, APL, locataire, mode, commentaire) : enregistrement automatique. « Manquant » = dû − reçu du mois ; « Reste » = manquant + retards antérieurs.${state.q ? ' Les totaux portent sur les lignes filtrées.' : ''}</p></div>`;
       root.querySelectorAll('[data-m]').forEach(b => b.onclick = () => { state.month = shiftMonth(state.month, Number(b.dataset.m)); draw(); });
-      root.querySelector('#lo-dd-btn').onclick = () => { state.ddOpen = !state.ddOpen; root.querySelector('#lo-dd .dd-panel').hidden = !state.ddOpen; };
-      document.addEventListener('click', e => { if (state.ddOpen && !e.target.closest('#lo-dd')) { state.ddOpen = false; const pn = root.querySelector('#lo-dd .dd-panel'); if (pn) pn.hidden = true; } }, { capture: true });
-      root.querySelectorAll('[data-prop]').forEach(cb => cb.onchange = () => { if (cb.checked) state.props.add(cb.dataset.prop); else state.props.delete(cb.dataset.prop); draw(); });
-      root.querySelector('#lo-all').onclick = () => { state.props = state.props.size === allProps.length ? new Set() : new Set(allProps.map(p => p.id)); draw(); };
+      bindMultiPick(root, 'lo-props', items, pick, draw, state);
+      bindSearch(root, 'lo-q', state, draw);
+      restoreFocus(root, state);
       root.querySelector('#lo-bank').onclick = () => bankImport(k, draw);
       root.querySelector('#lo-landlord').onclick = () => landlordForm();
       root.querySelector('#lo-newlease').onclick = () => leaseForm(null, {}, draw);
@@ -384,21 +392,27 @@ export const leasesPage = {
   title: () => 'Baux et locataires',
   render(root) {
     if (!scope.canRental) return denied(root);
-    const state = { q: '', status: 'active', prop: '' };
+    const state = { q: '', status: 'active', focus: null };
+    const pick = pickState('crm_locatif_props');
     const draw = () => {
-      const q = state.q.toLowerCase();
-      const list = db.t('leases').filter(l => (state.status === 'all' || (state.status === 'active') === (l.active !== false)) && (!state.prop || l.property_id === state.prop) && (!q || [l.tenant, l.tenant_phone, l.tenant_email, lotName(l), propName(l.property_id)].join(' ').toLowerCase().includes(q)))
+      const items = propItems();
+      const props = pickInit(pick, items);
+      const qt = terms(state.q);
+      const list = db.t('leases').filter(l => (state.status === 'all' || (state.status === 'active') === (l.active !== false)) && pick.sel.has(l.property_id)
+        && hit([l.tenant, l.tenant_phone, l.tenant_email, l.guardian_name, l.comments, lotName(l), propName(l.property_id)], qt))
         .sort((a, b) => propName(a.property_id).localeCompare(propName(b.property_id)) || String(lotName(a)).localeCompare(String(lotName(b)), 'fr', { numeric: true }));
       root.innerHTML = `
-        <div class="toolbar"><input type="search" class="grow" id="lz-q" placeholder="Locataire, téléphone, lot…" value="${esc(state.q)}">
-          <select id="lz-prop"><option value="">Tous les immeubles</option>${db.t('properties').map(p => `<option value="${p.id}" ${state.prop === p.id ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select>
+        <div class="toolbar">${searchInput('lz-q', state, 'Locataire, téléphone, lot, consigne…')}
+          ${multiPick('lz-props', items, pick, { noun: 'bien' })}
           <div class="seg">${[['active', 'En cours'], ['ended', 'Terminés'], ['all', 'Tous']].map(([v, t]) => `<button data-s="${v}" class="${state.status === v ? 'active' : ''}">${t}</button>`).join('')}</div>
           <button class="btn ghost sm" id="lz-export">Export CSV</button><button class="btn" id="lz-new">+ Bail</button></div>
+        ${pickChips(items, pick, { q: state.q })}
         <div class="card"><div class="table-wrap"><table><thead><tr><th>Immeuble · lot</th><th>Locataire</th><th>Contact</th><th>Tutelle / garant</th><th>Entrée</th><th class="num">Loyer + ch.</th><th class="num">APL</th><th>Mode</th><th class="num">Dépôt</th><th class="num">Reste dû</th><th>Révision</th></tr></thead><tbody>
-          ${list.map(l => { const bal = round2(balanceOf(l.id)); const rev = l.revision_date ? daysSince(l.revision_date) : null; return `<tr class="click" data-lease="${l.id}"><td><b>${esc(propName(l.property_id))}</b><div class="small muted">lot ${esc(lotName(l))}</div></td><td><b>${esc(l.tenant)}</b>${l.active === false ? `<div class="small muted">sorti le ${fmtDate(l.end_date)}</div>` : ''}</td><td class="small">${esc(l.tenant_phone || '')}<br>${esc(l.tenant_email || '')}</td><td class="small">${esc([l.guardian_name, l.guardian_phone, l.guardian_email].filter(Boolean).join(' · '))}</td><td class="nowrap">${fmtDate(l.start_date)}</td><td class="num">${eur2((Number(l.rent) || 0) + (Number(l.charges) || 0))}</td><td class="num">${Number(l.apl) ? eur2(l.apl) : ''}</td><td class="small">${esc(l.payment_mode || '')}</td><td class="num">${l.deposit ? eur(l.deposit) : ''}</td><td class="num"><b class="${bal > 0.005 ? 'status-lost' : bal < -0.005 ? 'status-won' : ''}">${bal ? eur2(bal) : ''}</b></td><td class="small ${rev !== null && rev >= -30 ? 'status-lost' : ''}">${l.revision_date ? fmtDate(l.revision_date) : ''}</td></tr>`; }).join('') || '<tr><td colspan="11" class="empty">Aucun bail</td></tr>'}
+          ${list.map(l => { const bal = round2(balanceOf(l.id)); const rev = l.revision_date ? daysSince(l.revision_date) : null; return `<tr class="click" data-lease="${l.id}"><td><b>${esc(propName(l.property_id))}</b><div class="small muted">lot ${esc(lotName(l))}</div></td><td><b>${esc(l.tenant)}</b>${l.active === false ? `<div class="small muted">sorti le ${fmtDate(l.end_date)}</div>` : ''}</td><td class="small">${esc(l.tenant_phone || '')}<br>${esc(l.tenant_email || '')}</td><td class="small">${esc([l.guardian_name, l.guardian_phone, l.guardian_email].filter(Boolean).join(' · '))}</td><td class="nowrap">${fmtDate(l.start_date)}</td><td class="num">${eur2((Number(l.rent) || 0) + (Number(l.charges) || 0))}</td><td class="num">${Number(l.apl) ? eur2(l.apl) : ''}</td><td class="small">${esc(l.payment_mode || '')}</td><td class="num">${l.deposit ? eur(l.deposit) : ''}</td><td class="num"><b class="${bal > 0.005 ? 'status-lost' : bal < -0.005 ? 'status-won' : ''}">${bal ? eur2(bal) : ''}</b></td><td class="small ${rev !== null && rev >= -30 ? 'status-lost' : ''}">${l.revision_date ? fmtDate(l.revision_date) : ''}</td></tr>`; }).join('') || `<tr><td colspan="11" class="empty">${state.q || props.length < items.length ? 'Aucun bail ne correspond à la recherche' : 'Aucun bail'}</td></tr>`}
         </tbody></table></div><p class="muted small">${list.length} bail${list.length > 1 ? 'x' : ''} · reste à récupérer ${eur2(list.reduce((s, l) => s + balanceOf(l.id), 0))}</p></div>`;
-      root.querySelector('#lz-q').oninput = e => { state.q = e.target.value; draw(); const i = root.querySelector('#lz-q'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); };
-      root.querySelector('#lz-prop').onchange = e => { state.prop = e.target.value; draw(); };
+      bindSearch(root, 'lz-q', state, draw);
+      bindMultiPick(root, 'lz-props', items, pick, draw, state);
+      restoreFocus(root, state);
       root.querySelectorAll('[data-s]').forEach(b => b.onclick = () => { state.status = b.dataset.s; draw(); });
       root.querySelector('#lz-new').onclick = () => leaseForm(null, {}, (id) => { draw(); if (id) openLease(id, draw); });
       root.querySelectorAll('[data-lease]').forEach(tr => tr.onclick = () => openLease(tr.dataset.lease, draw));
@@ -416,14 +430,29 @@ export const unitsPage = {
   title: () => 'Lots et logements',
   render(root) {
     if (!scope.canRental) return denied(root);
+    const state = { q: '', focus: null };
+    const pick = pickState('crm_locatif_props');
     const draw = () => {
       const k = isoDay().slice(0, 7);
-      const props = db.t('properties').sort((a, b) => a.name.localeCompare(b.name));
-      root.innerHTML = `<div class="toolbar"><span class="muted small">Un lot = un logement ou un local loué séparément. Les immeubles se créent dans Patrimoine › Biens.</span><span class="grow"></span><button class="btn" id="un-new">+ Lot</button></div>
-        ${props.map(p => { const units = db.t('units').filter(u => u.property_id === p.id).sort(unitSort); if (!units.length && !scope.canPatrimony) return ''; return `<div class="card"><div class="card-head"><h2>${esc(p.name)}</h2><span class="muted small">${esc([p.holding_name, p.address, [p.postal_code, p.city].filter(Boolean).join(' ')].filter(Boolean).join(' · '))}</span></div>
+      const items = propItems();
+      pickInit(pick, items);
+      const qt = terms(state.q);
+      const props = db.t('properties').filter(p => pick.sel.has(p.id)).sort((a, b) => a.name.localeCompare(b.name));
+      const rowsOf = (p) => db.t('units').filter(u => u.property_id === p.id).sort(unitSort)
+        .filter(u => { const l = db.t('leases').find(x => x.unit_id === u.id && x.active !== false && activeInMonth(x, k)); return hit([p.name, p.city, u.name, u.unit_type, u.dpe, u.notes, l?.tenant, l ? '' : 'vacant'], qt); });
+      const cards = props.map(p => ({ p, units: rowsOf(p) })).filter(x => x.units.length || (!qt.length && scope.canPatrimony));
+      const nb = cards.reduce((s, x) => s + x.units.length, 0);
+      root.innerHTML = `<div class="toolbar">${searchInput('un-q', state, 'Lot, type, locataire, « vacant »…')}
+          ${multiPick('un-props', items, pick, { noun: 'bien' })}
+          <span class="muted small grow">${nb} lot${nb > 1 ? 's' : ''} affiché${nb > 1 ? 's' : ''}</span><button class="btn" id="un-new">+ Lot</button></div>
+        ${pickChips(items, pick, { q: state.q })}
+        ${cards.map(({ p, units }) => `<div class="card"><div class="card-head"><h2>${esc(p.name)}</h2><span class="muted small">${esc([p.holding_name, p.address, [p.postal_code, p.city].filter(Boolean).join(' ')].filter(Boolean).join(' · '))}</span></div>
           <div class="table-wrap"><table><thead><tr><th>Lot</th><th>Type</th><th class="num">Surface</th><th>DPE</th><th>GES</th><th>Eau</th><th>Locataire actuel</th><th class="num">Loyer + ch.</th><th></th></tr></thead><tbody>
           ${units.map(u => { const l = db.t('leases').find(x => x.unit_id === u.id && x.active !== false && activeInMonth(x, k)); return `<tr class="${u.active === false ? 'muted' : ''}"><td><b>${esc(u.name)}</b>${u.active === false ? ' <span class="pill">hors service</span>' : ''}</td><td>${esc(u.unit_type || '')}</td><td class="num">${u.surface ? num(u.surface) + ' m²' : ''}</td><td>${u.dpe ? `<span class="pill ${'FG'.includes(u.dpe) ? 'bad' : 'ABC'.includes(u.dpe) ? 'ok' : ''}">${esc(u.dpe)}</span>` : ''}</td><td>${esc(u.ges || '')}</td><td class="small">${u.water_flat === true ? 'forfait' : u.water_flat === false ? 'non' : ''}</td><td>${l ? `<a href="#" data-lease="${l.id}">${esc(l.tenant)}</a>` : '<span class="pill warn">Vacant</span>'}</td><td class="num">${l ? eur2((Number(l.rent) || 0) + (Number(l.charges) || 0)) : ''}</td><td class="right"><button class="btn ghost sm" data-unit="${u.id}">✎</button>${l ? '' : ` <button class="btn ghost sm" data-newlease="${u.id}">+ Bail</button>`}</td></tr>`; }).join('') || '<tr><td colspan="9" class="empty">Aucun lot</td></tr>'}
-          </tbody></table></div></div>`; }).join('')}`;
+          </tbody></table></div></div>`).join('') || `<div class="card"><div class="empty">${qt.length ? 'Aucun lot ne correspond à « ' + esc(state.q) + ' »' : 'Aucun lot — les immeubles se créent dans Patrimoine › Biens'}</div></div>`}`;
+      bindSearch(root, 'un-q', state, draw);
+      bindMultiPick(root, 'un-props', items, pick, draw, state);
+      restoreFocus(root, state);
       root.querySelector('#un-new').onclick = () => unitForm(null, {}, draw);
       root.querySelectorAll('[data-unit]').forEach(b => b.onclick = () => unitForm(db.byId('units', b.dataset.unit), {}, draw));
       root.querySelectorAll('[data-newlease]').forEach(b => b.onclick = () => { const u = db.byId('units', b.dataset.newlease); leaseForm(null, { unit_id: u.id, property_id: u.property_id }, draw); });
@@ -441,17 +470,28 @@ export const rentalTodoPage = {
   title: () => 'Gestion locative — à faire ce mois',
   render(root) {
     if (!scope.canRental) return denied(root);
+    const state = { q: '', focus: null };
+    const pick = pickState('crm_locatif_props');
     const draw = () => {
       const k = isoDay().slice(0, 7);
-      const current = db.t('leases').filter(l => l.active !== false && activeInMonth(l, k));
+      const items = propItems();
+      pickInit(pick, items);
+      const qt = terms(state.q);
+      const keepL = (l) => pick.sel.has(l.property_id) && hit([l.tenant, l.tenant_phone, l.tenant_email, l.guardian_name, l.comments, lotName(l), propName(l.property_id)], qt);
+      const keepU = (u) => pick.sel.has(u.property_id) && hit([u.name, u.unit_type, propName(u.property_id), 'vacant'], qt);
+      const current = db.t('leases').filter(l => l.active !== false && activeInMonth(l, k) && keepL(l));
       const withBal = current.map(l => ({ l, bal: round2(balanceOf(l.id, k)) }));
       const arrears = withBal.filter(x => x.bal > 0.005).sort((a, b) => b.bal - a.bal);
       const credit = withBal.filter(x => x.bal < -0.005).sort((a, b) => a.bal - b.bal);
-      const vacants = db.t('units').filter(u => u.active !== false && !current.some(l => l.unit_id === u.id));
+      const inPlace = db.t('leases').filter(l => l.active !== false && activeInMonth(l, k));
+      const vacants = db.t('units').filter(u => u.active !== false && !inPlace.some(l => l.unit_id === u.id) && keepU(u));
       const revisions = current.filter(l => l.revision_date && daysSince(l.revision_date) >= -60).sort((a, b) => a.revision_date.localeCompare(b.revision_date));
-      const oldDebts = db.t('leases').filter(l => !current.includes(l)).map(l => round2(balanceOf(l.id))).filter(b => b > 0.005);
+      const oldDebts = db.t('leases').filter(l => !inPlace.includes(l) && keepL(l)).map(l => round2(balanceOf(l.id))).filter(b => b > 0.005);
       const row = (l, right) => `<div class="act-row" style="cursor:pointer;margin-bottom:6px" data-lease="${l.id}"><div style="flex:1"><b>${esc(l.tenant)}</b> <span class="muted small">${esc(propName(l.property_id))} · lot ${esc(lotName(l))}</span></div>${right}</div>`;
-      root.innerHTML = `<div class="toolbar"><span class="muted small">Situation au mois de <b style="text-transform:capitalize">${monthLabel(k)}</b> — locataires en place et lots du mois.</span></div>
+      root.innerHTML = `<div class="toolbar">${searchInput('rt-q', state, 'Locataire, lot, immeuble…')}
+          ${multiPick('rt-props', items, pick, { noun: 'bien' })}
+          <span class="muted small">Situation au mois de <b style="text-transform:capitalize">${monthLabel(k)}</b></span></div>
+        ${pickChips(items, pick, { q: state.q })}
         <div class="grid c2">
         <div class="card"><h3>Loyers en retard — ${eur2(arrears.reduce((s, x) => s + x.bal, 0))} · ${arrears.length} locataire${arrears.length > 1 ? 's' : ''}</h3>${arrears.map(({ l, bal }) => row(l, `<b class="status-lost">${eur2(bal)}</b> <button class="btn ghost sm" data-relance="${l.id}">Relance</button>`)).join('') || '<div class="empty">Aucun retard</div>'}
           ${oldDebts.length ? `<p class="muted small" style="margin:12px 0 0">+ ${oldDebts.length} ancien${oldDebts.length > 1 ? 's' : ''} locataire${oldDebts.length > 1 ? 's' : ''} parti${oldDebts.length > 1 ? 's' : ''} avec un reste dû (${eur2(oldDebts.reduce((s, b) => s + b, 0))}) — voir Baux › Terminés</p>` : ''}</div>
@@ -460,6 +500,9 @@ export const rentalTodoPage = {
           <div class="card" style="margin-bottom:18px"><h3>Trop-perçus / avances (${credit.length})</h3>${credit.map(({ l, bal }) => row(l, `<b class="status-won">${eur2(-bal)}</b>`)).join('') || '<div class="empty">Aucun</div>'}</div>
           <div class="card"><h3>Révisions de loyer à venir / dépassées</h3>${revisions.map(l => row(l, `<span class="${daysSince(l.revision_date) >= 0 ? 'status-lost' : ''}">${fmtDate(l.revision_date)}</span>`)).join('') || '<div class="empty">Aucune révision planifiée — renseignez la date de révision IRL dans chaque bail</div>'}</div>
         </div></div>`;
+      bindSearch(root, 'rt-q', state, draw);
+      bindMultiPick(root, 'rt-props', items, pick, draw, state);
+      restoreFocus(root, state);
       root.querySelectorAll('[data-lease]').forEach(el => el.onclick = () => openLease(el.dataset.lease, draw));
       root.querySelectorAll('[data-relance]').forEach(b => b.onclick = e => { e.stopPropagation(); generateDocument('relance', db.byId('leases', b.dataset.relance)); });
       root.querySelectorAll('[data-newlease]').forEach(b => b.onclick = () => { const u = db.byId('units', b.dataset.newlease); leaseForm(null, { unit_id: u.id, property_id: u.property_id }, draw); });
@@ -476,25 +519,32 @@ export const tenantContactsPage = {
   title: () => 'Contacts locataires',
   render(root) {
     if (!scope.canRental) return denied(root);
-    const state = { q: '', prop: '', ended: false };
+    const state = { q: '', ended: false, focus: null };
+    const pick = pickState('crm_locatif_props');
     const draw = () => {
-      const k = isoDay().slice(0, 7); const q = state.q.toLowerCase();
-      const list = db.t('leases').filter(l => (state.ended || (l.active !== false && activeInMonth(l, k))) && (!state.prop || l.property_id === state.prop) && (!q || [l.tenant, l.tenant_phone, l.tenant_email, l.guardian_name, l.guardian_phone, l.guardian_email, lotName(l), propName(l.property_id)].join(' ').toLowerCase().includes(q)))
+      const k = isoDay().slice(0, 7);
+      const items = propItems();
+      pickInit(pick, items);
+      const qt = terms(state.q);
+      const list = db.t('leases').filter(l => (state.ended || (l.active !== false && activeInMonth(l, k))) && pick.sel.has(l.property_id)
+        && hit([l.tenant, l.tenant_phone, l.tenant_email, l.guardian_name, l.guardian_phone, l.guardian_email, l.comments, lotName(l), propName(l.property_id)], qt))
         .sort((a, b) => propName(a.property_id).localeCompare(propName(b.property_id)) || String(lotName(a)).localeCompare(String(lotName(b)), 'fr', { numeric: true }));
       const tel = (t) => t ? String(t).split(/\n|\/| ou /i).map(x => x.trim()).filter(Boolean).map(x => `<a href="tel:${esc(x.replace(/[^\d+]/g, ''))}">${esc(x)}</a>`).join('<br>') : '<span class="muted">—</span>';
       const mail = (m) => m ? String(m).split(/\s*\/\s*|\s+/).filter(x => x.includes('@')).map(x => `<a href="mailto:${esc(x)}">${esc(x)}</a>`).join('<br>') : '<span class="muted">—</span>';
       const missing = list.filter(l => !l.tenant_phone && !l.tenant_email && !l.guardian_phone).length;
       root.innerHTML = `
-        <div class="toolbar"><input type="search" class="grow" id="tc-q" placeholder="Nom, téléphone, email, lot…" value="${esc(state.q)}">
-          <select id="tc-prop"><option value="">Tous les immeubles</option>${db.t('properties').map(p => `<option value="${p.id}" ${state.prop === p.id ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select>
+        <div class="toolbar">${searchInput('tc-q', state, 'Nom, téléphone, email, lot…')}
+          ${multiPick('tc-props', items, pick, { noun: 'bien' })}
           <label class="check"><input type="checkbox" id="tc-ended" ${state.ended ? 'checked' : ''}> Inclure les anciens locataires</label>
           <button class="btn ghost sm" id="tc-export">Export CSV</button></div>
+        ${pickChips(items, pick, { q: state.q })}
         ${missing ? `<div class="alert"><b>${missing}</b><div>locataire${missing > 1 ? 's' : ''} sans aucun téléphone ni email — à compléter (ouvrir la fiche, Modifier)</div></div>` : ''}
         <div class="card"><div class="table-wrap"><table><thead><tr><th>Immeuble · lot</th><th>Locataire</th><th>Téléphone</th><th>Email</th><th>Tutelle / curatelle / garant</th><th>Consignes</th></tr></thead><tbody>
-          ${list.map(l => `<tr class="click ${l.active === false ? 'muted' : ''}" data-lease="${l.id}"><td><b>${esc(propName(l.property_id).replace(/^Immeuble /, ''))}</b><div class="small muted">lot ${esc(lotName(l))}</div></td><td><b>${esc(l.tenant)}</b>${l.active === false ? '<div class="small muted">ancien locataire</div>' : ''}</td><td class="nowrap">${tel(l.tenant_phone)}</td><td>${mail(l.tenant_email)}</td><td class="small">${esc(l.guardian_name || '')}${l.guardian_name ? '<br>' : ''}${tel(l.guardian_phone).replace('<span class="muted">—</span>', '')}${l.guardian_phone && l.guardian_email ? '<br>' : ''}${mail(l.guardian_email).replace('<span class="muted">—</span>', '')}</td><td class="small">${esc(l.comments || '')}</td></tr>`).join('') || '<tr><td colspan="6" class="empty">Aucun locataire</td></tr>'}
+          ${list.map(l => `<tr class="click ${l.active === false ? 'muted' : ''}" data-lease="${l.id}"><td><b>${esc(propName(l.property_id).replace(/^Immeuble /, ''))}</b><div class="small muted">lot ${esc(lotName(l))}</div></td><td><b>${esc(l.tenant)}</b>${l.active === false ? '<div class="small muted">ancien locataire</div>' : ''}</td><td class="nowrap">${tel(l.tenant_phone)}</td><td>${mail(l.tenant_email)}</td><td class="small">${esc(l.guardian_name || '')}${l.guardian_name ? '<br>' : ''}${tel(l.guardian_phone).replace('<span class="muted">—</span>', '')}${l.guardian_phone && l.guardian_email ? '<br>' : ''}${mail(l.guardian_email).replace('<span class="muted">—</span>', '')}</td><td class="small">${esc(l.comments || '')}</td></tr>`).join('') || '<tr><td colspan="6" class="empty">Aucun locataire ne correspond</td></tr>'}
         </tbody></table></div><p class="muted small">${list.length} locataire${list.length > 1 ? 's' : ''} · cliquer sur une ligne pour ouvrir le bail et modifier les coordonnées</p></div>`;
-      root.querySelector('#tc-q').oninput = e => { state.q = e.target.value; draw(); const i = root.querySelector('#tc-q'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); };
-      root.querySelector('#tc-prop').onchange = e => { state.prop = e.target.value; draw(); };
+      bindSearch(root, 'tc-q', state, draw);
+      bindMultiPick(root, 'tc-props', items, pick, draw, state);
+      restoreFocus(root, state);
       root.querySelector('#tc-ended').onchange = e => { state.ended = e.target.checked; draw(); };
       root.querySelectorAll('[data-lease]').forEach(tr => tr.onclick = e => { if (e.target.closest('a')) return; openLease(tr.dataset.lease, draw); });
       root.querySelector('#tc-export').onclick = () => csvDownload('contacts-locataires.csv', list.map(l => ({ immeuble: propName(l.property_id), lot: lotName(l), locataire: l.tenant, telephone: l.tenant_phone, email: l.tenant_email, tutelle: l.guardian_name, tutelle_tel: l.guardian_phone, tutelle_email: l.guardian_email, consignes: l.comments, statut: l.active === false ? 'ancien' : 'en place' })));

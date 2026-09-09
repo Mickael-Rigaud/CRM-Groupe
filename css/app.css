@@ -255,3 +255,20 @@ select.cell-in { text-align: left; }
 .dd-foot { border-top: 1px solid var(--line); padding-top: 8px; margin-top: 4px; display: flex; justify-content: flex-end; }
 .rent-sheet tr.subtotal td { font-weight: 700; background: #FFF8EC; border-bottom: 2px solid var(--line-strong); }
 .dd-panel[hidden] { display: none; }
+
+/* Sélecteur multiple recherchable + puces de filtre */
+.dd-btn.on { border-color: var(--orange); color: var(--orange); }
+.dd-panel.wide { min-width: 320px; max-width: min(380px, calc(100vw - 40px)); }
+.dd-search { border: 1px solid var(--line-strong); border-radius: 999px; padding: 8px 13px; font: inherit; font-size: 13px; width: 100%; }
+.dd-search:focus { border-color: var(--orange); outline: 0; }
+.dd-list { max-height: 260px; overflow: auto; display: flex; flex-direction: column; gap: 2px; margin: 2px -4px; padding: 0 4px; }
+.dd-list .check { align-items: flex-start; border-radius: 8px; }
+.dd-list .check:hover { background: var(--card-2); }
+.dd-foot { align-items: center; gap: 8px; justify-content: flex-end; }
+.dd-foot .grow { flex: 1; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 10px 0 0; }
+.chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line-strong); background: #fff; border-radius: 999px; padding: 4px 10px; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.chip span { color: var(--muted); font-weight: 700; }
+.chip:hover { border-color: var(--orange); color: var(--orange); }
+.chip:hover span { color: var(--orange); }
+.chip.q { background: #FFF8EC; }

@@ -4,11 +4,13 @@ import { scope } from '../data/scope.js';
 import { INVEST_TYPES, STRUCTURES, PROPERTY_STATUS, EXPENSE_CATEGORIES, RECURRENCES, schedule, loanStatus, monthlyPayment, monthlyEquivalent, propertyMetrics, totalMonths } from '../data/finance.js';
 import { documentsSection, bindDocuments } from '../documents.js';
 import { leaseForm, openLease } from './locatif.js';
-import { esc, eur, pct, num, openModal, closeModal, renderForm, readForm, toast, fmtDate, confirm, csvDownload, isoDay } from '../ui.js';
+import { esc, eur, pct, num, openModal, closeModal, renderForm, readForm, toast, fmtDate, confirm, csvDownload, isoDay, terms, hit, searchInput, bindSearch, restoreFocus, pickState, pickInit, multiPick, pickChips, bindMultiPick } from '../ui.js';
 
 const eur2 = (n) => eur(n, { maximumFractionDigits: 2 });
 const MONTHS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
 const propName = (id) => db.byId('properties', id)?.name || '—';
+// Tous les biens du patrimoine, pour les sélecteurs des écrans prêts / charges
+const allPropItems = () => db.t('properties').sort((a, b) => a.name.localeCompare(b.name)).map(p => ({ id: p.id, name: p.name, sub: [p.city, p.structure].filter(Boolean).join(' · ') }));
 const denied = (root) => { root.innerHTML = '<div class="card"><div class="empty">Module réservé à la direction (accès patrimoine).</div></div>'; return {}; };
 
 function allMetrics(year) {
@@ -267,11 +269,20 @@ export const loansPage = {
   title: () => 'Prêts immobiliers',
   render(root) {
     if (!scope.canPatrimony) return denied(root);
+    const state = { q: '', focus: null };
+    const pick = pickState('crm_patrimoine_props');
     const draw = () => {
-      const loans = db.t('loans').map(l => ({ l, st: loanStatus(l) })).sort((a, b) => b.st.balance - a.st.balance);
+      const items = allPropItems();
+      pickInit(pick, items);
+      const qt = terms(state.q);
+      const loans = db.t('loans').filter(l => (!l.property_id || pick.sel.has(l.property_id)) && hit([l.label, l.bank, l.notes, propName(l.property_id)], qt))
+        .map(l => ({ l, st: loanStatus(l) })).sort((a, b) => b.st.balance - a.st.balance);
       const tot = loans.reduce((t, { l, st }) => ({ principal: t.principal + (Number(l.principal) || 0), balance: t.balance + st.balance, monthly: t.monthly + st.monthly, interest: t.interest + st.totalInterest }), { principal: 0, balance: 0, monthly: 0, interest: 0 });
       root.innerHTML = `
-        <div class="toolbar"><span class="muted small">${loans.length} prêt${loans.length > 1 ? 's' : ''}</span><span class="grow"></span><button class="btn" id="ln-new">+ Prêt</button></div>
+        <div class="toolbar">${searchInput('ln-q', state, 'Prêt, banque, bien…')}
+          ${multiPick('ln-props', items, pick, { noun: 'bien' })}
+          <span class="muted small">${loans.length} prêt${loans.length > 1 ? 's' : ''}</span><button class="btn" id="ln-new">+ Prêt</button></div>
+        ${pickChips(items, pick, { q: state.q })}
         <div class="grid c4">
           <div class="card tight kpi"><div class="lbl">Emprunté</div><div class="val">${eur(tot.principal)}</div><div class="sub">capital initial cumulé</div></div>
           <div class="card tight kpi" style="--kpi:#fee2e2;--kpi-c:var(--red)"><div class="lbl">Capital restant dû</div><div class="val">${eur(tot.balance)}</div><div class="sub">${tot.principal ? pct(tot.balance / tot.principal * 100) : '—'} du capital initial</div></div>
@@ -279,8 +290,11 @@ export const loansPage = {
           <div class="card tight kpi" style="--kpi:#fef3c7;--kpi-c:var(--amber)"><div class="lbl">Coût des intérêts</div><div class="val">${eur(tot.interest)}</div><div class="sub">sur la durée totale</div></div>
         </div>
         <div class="card"><div class="table-wrap"><table><thead><tr><th>Prêt</th><th>Bien</th><th>Banque</th><th class="num">Capital</th><th class="num">Taux</th><th class="num">Durée</th><th>Début</th><th class="num">Mensualité</th><th class="num">CRD</th><th>Avancement</th><th>Fin</th></tr></thead><tbody>
-          ${loans.map(({ l, st }) => `<tr class="click" data-loan="${l.id}"><td><b>${esc(l.label || 'Prêt')}</b></td><td>${esc(propName(l.property_id))}</td><td class="small">${esc(l.bank || '')}</td><td class="num">${eur(l.principal)}</td><td class="num">${num(l.rate)} %</td><td class="num">${totalMonths(l)} mois</td><td class="nowrap">${fmtDate(l.start_date)}</td><td class="num">${eur2(st.monthly)}</td><td class="num"><b>${eur(st.balance)}</b></td><td><div style="background:#eee;border-radius:99px;height:8px;width:120px;overflow:hidden"><div style="background:var(--green);height:8px;width:${st.total ? Math.round(st.paidCount / st.total * 100) : 0}%"></div></div><span class="small muted">${st.paidCount}/${st.total}</span></td><td class="nowrap">${fmtDate(st.endDate)}</td></tr>`).join('') || '<tr><td colspan="11" class="empty">Aucun prêt</td></tr>'}
+          ${loans.map(({ l, st }) => `<tr class="click" data-loan="${l.id}"><td><b>${esc(l.label || 'Prêt')}</b></td><td>${esc(propName(l.property_id))}</td><td class="small">${esc(l.bank || '')}</td><td class="num">${eur(l.principal)}</td><td class="num">${num(l.rate)} %</td><td class="num">${totalMonths(l)} mois</td><td class="nowrap">${fmtDate(l.start_date)}</td><td class="num">${eur2(st.monthly)}</td><td class="num"><b>${eur(st.balance)}</b></td><td><div style="background:#eee;border-radius:99px;height:8px;width:120px;overflow:hidden"><div style="background:var(--green);height:8px;width:${st.total ? Math.round(st.paidCount / st.total * 100) : 0}%"></div></div><span class="small muted">${st.paidCount}/${st.total}</span></td><td class="nowrap">${fmtDate(st.endDate)}</td></tr>`).join('') || `<tr><td colspan="11" class="empty">${state.q ? 'Aucun prêt ne correspond à « ' + esc(state.q) + ' »' : 'Aucun prêt'}</td></tr>`}
         </tbody></table></div></div>`;
+      bindSearch(root, 'ln-q', state, draw);
+      bindMultiPick(root, 'ln-props', items, pick, draw, state);
+      restoreFocus(root, state);
       root.querySelector('#ln-new').onclick = () => loanForm(null, {}, (id) => { draw(); if (id) openLoanSchedule(id, draw); });
       root.querySelectorAll('[data-loan]').forEach(tr => tr.onclick = () => openLoanSchedule(tr.dataset.loan, draw));
     };
@@ -293,25 +307,34 @@ export const expensesPage = {
   title: () => 'Charges et frais',
   render(root) {
     if (!scope.canPatrimony) return denied(root);
-    const state = { prop: '' };
+    const state = { q: '', focus: null };
+    const pick = pickState('crm_patrimoine_props');
     const draw = () => {
-      const props = db.t('properties');
-      const list = db.t('expenses').filter(x => !state.prop || x.property_id === state.prop).sort((a, b) => propName(a.property_id).localeCompare(propName(b.property_id)) || monthlyEquivalent(b) - monthlyEquivalent(a));
+      const items = allPropItems();
+      pickInit(pick, items);
+      const qt = terms(state.q);
+      const list = db.t('expenses').filter(x => (!x.property_id || pick.sel.has(x.property_id)) && hit([x.label, x.category, propName(x.property_id)], qt))
+        .sort((a, b) => propName(a.property_id).localeCompare(propName(b.property_id)) || monthlyEquivalent(b) - monthlyEquivalent(a));
       const monthly = list.reduce((s, x) => s + monthlyEquivalent(x), 0);
       const year = new Date().getFullYear();
       const once = list.filter(x => x.recurrence === 'once' && (x.date || '').startsWith(String(year))).reduce((s, x) => s + (Number(x.amount) || 0), 0);
       const byCat = {}; for (const x of list) byCat[x.category] = (byCat[x.category] || 0) + (x.recurrence === 'once' ? ((x.date || '').startsWith(String(year)) ? Number(x.amount) || 0 : 0) : monthlyEquivalent(x) * 12);
+      const only = items.filter(i => pick.sel.has(i.id));
       root.innerHTML = `
-        <div class="toolbar"><select id="xp-prop"><option value="">Tous les biens</option>${props.map(p => `<option value="${p.id}" ${state.prop === p.id ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select>
-          <span class="muted small">Récurrent : ${eur(monthly)}/mois (${eur(monthly * 12)}/an) · ponctuel ${year} : ${eur(once)}</span><span class="grow"></span><button class="btn ghost sm" id="xp-export">Export CSV</button><button class="btn" id="xp-new">+ Charge</button></div>
+        <div class="toolbar">${searchInput('xp-q', state, 'Libellé, catégorie, bien…')}
+          ${multiPick('xp-props', items, pick, { noun: 'bien' })}
+          <span class="muted small">Récurrent : ${eur(monthly)}/mois (${eur(monthly * 12)}/an) · ponctuel ${year} : ${eur(once)}</span><button class="btn ghost sm" id="xp-export">Export CSV</button><button class="btn" id="xp-new">+ Charge</button></div>
+        ${pickChips(items, pick, { q: state.q })}
         <div class="grid c2">
           <div class="card"><div class="table-wrap"><table><thead><tr><th>Bien</th><th>Libellé</th><th>Catégorie</th><th class="num">Montant</th><th>Récurrence</th><th class="num">/mois</th><th>Date</th></tr></thead><tbody>
-            ${list.map(x => `<tr class="click" data-exp="${x.id}"><td class="small"><b>${esc(propName(x.property_id))}</b></td><td>${esc(x.label)}</td><td class="small">${esc(x.category)}</td><td class="num">${eur2(x.amount)}</td><td class="small">${esc(RECURRENCES.find(r => r[0] === x.recurrence)?.[1] || '')}</td><td class="num">${x.recurrence === 'once' ? '—' : eur2(monthlyEquivalent(x))}</td><td class="nowrap small">${x.date ? fmtDate(x.date) : ''}</td></tr>`).join('') || '<tr><td colspan="7" class="empty">Aucune charge</td></tr>'}
+            ${list.map(x => `<tr class="click" data-exp="${x.id}"><td class="small"><b>${esc(propName(x.property_id))}</b></td><td>${esc(x.label)}</td><td class="small">${esc(x.category)}</td><td class="num">${eur2(x.amount)}</td><td class="small">${esc(RECURRENCES.find(r => r[0] === x.recurrence)?.[1] || '')}</td><td class="num">${x.recurrence === 'once' ? '—' : eur2(monthlyEquivalent(x))}</td><td class="nowrap small">${x.date ? fmtDate(x.date) : ''}</td></tr>`).join('') || `<tr><td colspan="7" class="empty">${state.q ? 'Aucune charge ne correspond' : 'Aucune charge'}</td></tr>`}
           </tbody></table></div></div>
           <div class="card"><h3>Par catégorie (base annuelle ${year})</h3><div class="table-wrap"><table><tbody>${Object.entries(byCat).sort((a, b) => b[1] - a[1]).map(([c, v]) => `<tr><td>${esc(c)}</td><td class="num"><b>${eur(v)}</b></td></tr>`).join('') || '<tr><td class="empty">—</td></tr>'}</tbody></table></div></div>
         </div>`;
-      root.querySelector('#xp-prop').onchange = e => { state.prop = e.target.value; draw(); };
-      root.querySelector('#xp-new').onclick = () => expenseForm(null, { property_id: state.prop || undefined }, draw);
+      bindSearch(root, 'xp-q', state, draw);
+      bindMultiPick(root, 'xp-props', items, pick, draw, state);
+      restoreFocus(root, state);
+      root.querySelector('#xp-new').onclick = () => expenseForm(null, { property_id: only.length === 1 ? only[0].id : undefined }, draw);
       root.querySelector('#xp-export').onclick = () => csvDownload('charges.csv', list.map(x => ({ bien: propName(x.property_id), libelle: x.label, categorie: x.category, montant: x.amount, recurrence: x.recurrence, date: x.date, equivalent_mensuel: monthlyEquivalent(x).toFixed(2) })));
       root.querySelectorAll('[data-exp]').forEach(tr => tr.onclick = () => expenseForm(db.byId('expenses', tr.dataset.exp), {}, draw));
     };
@@ -324,18 +347,26 @@ export const propertiesPage = {
   title: () => 'Biens immobiliers',
   render(root) {
     if (!scope.canPatrimony) return denied(root);
+    const state = { q: '', status: '', focus: null };
     const draw = () => {
       const year = new Date().getFullYear();
-      const rows = db.t('properties').map(p => ({ p, m: propertyMetrics(p, db.t('loans'), db.t('leases'), db.t('expenses'), db.t('rent_payments'), year) })).sort((a, b) => a.p.name.localeCompare(b.p.name));
+      const qt = terms(state.q);
+      const rows = db.t('properties').filter(p => (!state.status || p.status === state.status) && hit([p.name, p.city, p.address, p.postal_code, p.invest_type, p.structure, p.status, p.holding_name], qt))
+        .map(p => ({ p, m: propertyMetrics(p, db.t('loans'), db.t('leases'), db.t('expenses'), db.t('rent_payments'), year) })).sort((a, b) => a.p.name.localeCompare(b.p.name));
       root.innerHTML = `
-        <div class="toolbar"><span class="muted small">${rows.length} bien${rows.length > 1 ? 's' : ''}</span><span class="grow"></span><button class="btn" id="pb-new">+ Bien</button></div>
+        <div class="toolbar">${searchInput('pb-q', state, 'Nom, ville, type, structure…')}
+          <div class="seg">${[['', 'Tous'], ...PROPERTY_STATUS.map(s => [s, s])].map(([v, t]) => `<button data-st="${esc(v)}" class="${state.status === v ? 'active' : ''}">${esc(t)}</button>`).join('')}</div>
+          <span class="muted small">${rows.length} bien${rows.length > 1 ? 's' : ''}</span><button class="btn" id="pb-new">+ Bien</button></div>
         <div class="grid c3">${rows.map(({ p, m }) => `<div class="card click" data-prop="${p.id}" style="cursor:pointer;border-top:4px solid ${p.status === 'Loué' ? 'var(--green)' : p.status === 'Vacant' ? 'var(--red)' : 'var(--amber)'}">
           <div class="card-head"><h2>${esc(p.name)}</h2><span class="pill ${p.status === 'Loué' ? 'ok' : p.status === 'Vacant' ? 'bad' : p.status === 'Résidence principale' ? 'info' : 'warn'}">${esc(p.status)}</span></div>
           <div class="muted small">${esc([p.address, p.city].filter(Boolean).join(', '))}</div>
           <div class="small" style="margin:6px 0 12px"><span class="pill">${esc(p.invest_type || '')}</span> <span class="pill info">${esc(p.structure || '')}</span>${p.surface ? ` <span class="pill">${num(p.surface)} m²</span>` : ''}</div>
           <div class="hub-kpis"><div><b>${eur(m.value)}</b><span>valeur</span></div><div><b>${eur(m.debt)}</b><span>CRD</span></div><div><b>${eur(m.rentMonthly)}</b><span>loyer / mois</span></div><div><b class="${m.cashflow >= 0 ? 'status-won' : 'status-lost'}">${eur2(m.cashflow)}</b><span>cash-flow</span></div></div>
           <div class="small muted" style="margin-top:8px">Rendement brut ${pct(m.grossYield)} · net ${pct(m.netYield)} · ${m.leases} bail${m.leases > 1 ? 'x' : ''}</div>
-        </div>`).join('') || '<div class="card"><div class="empty">Aucun bien — commencez par « + Bien »</div></div>'}</div>`;
+        </div>`).join('') || `<div class="card"><div class="empty">${state.q || state.status ? 'Aucun bien ne correspond à la recherche' : 'Aucun bien — commencez par « + Bien »'}</div></div>`}</div>`;
+      bindSearch(root, 'pb-q', state, draw);
+      restoreFocus(root, state);
+      root.querySelectorAll('[data-st]').forEach(b => b.onclick = () => { state.status = b.dataset.st; draw(); });
       root.querySelector('#pb-new').onclick = () => propertyForm(null, (id) => { draw(); if (id) openProperty(id, draw); });
       root.querySelectorAll('[data-prop]').forEach(el => el.onclick = () => openProperty(el.dataset.prop, draw));
     };

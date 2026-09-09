@@ -2,7 +2,7 @@
 import { db } from '../data/db.js';
 import { scope } from '../data/scope.js';
 import { ACTIVITIES, weightedAmount } from '../data/schema.js';
-import { esc, eur, toast, daysSince, initials, dealParty, userName, csvDownload, fmtDate } from '../ui.js';
+import { esc, eur, toast, daysSince, initials, dealParty, userName, csvDownload, fmtDate, terms, hit, searchInput, bindSearch, restoreFocus } from '../ui.js';
 import { openDeal, dealForm, moveStage } from './deal.js';
 import { nextActivity } from './activity.js';
 
@@ -12,12 +12,12 @@ export const pipelinePage = {
   title: (k) => `Pipeline ${ACTIVITIES[k]?.label || ''}`,
   render(root, key) {
     const act = ACTIVITIES[key]; if (!act) { root.innerHTML = '<div class="empty">Activité inconnue</div>'; return {}; }
-    const state = { q: '', owner: '', view: 'open', page: null };
+    const state = { q: '', owner: '', view: 'open', page: null, focus: null };
     const users = scope.users();
 
     const draw = () => {
       const all = scope.deals().filter(d => d.activity === key);
-      const filtered = all.filter(d => (!state.owner || d.owner_id === state.owner) && (!state.q || (d.title + ' ' + dealParty(d)).toLowerCase().includes(state.q.toLowerCase())));
+      const filtered = all.filter(d => (!state.owner || d.owner_id === state.owner) && hit([d.title, dealParty(d), d.notes, d.source], terms(state.q)));
       const open = filtered.filter(d => d.status === 'open');
       const won = filtered.filter(d => d.status === 'won');
       const lost = filtered.filter(d => d.status === 'lost');
@@ -27,7 +27,7 @@ export const pipelinePage = {
 
       root.innerHTML = `
         <div class="toolbar">
-          <input type="search" class="grow" placeholder="Rechercher une affaire, un contact…" value="${esc(state.q)}" id="p-q">
+          ${searchInput('p-q', state, 'Rechercher une affaire, un contact…')}
           <select id="p-owner"><option value="">Tous les responsables</option>${users.map(u => `<option value="${u.id}" ${state.owner === u.id ? 'selected' : ''}>${esc(u.full_name)}</option>`).join('')}</select>
           <div class="seg"><button data-view="open" class="${state.view === 'open' ? 'active' : ''}">Kanban</button><button data-view="list" class="${state.view === 'list' ? 'active' : ''}">Liste</button><button data-view="closed" class="${state.view === 'closed' ? 'active' : ''}">Gagnées / perdues</button></div>
           <button class="btn ghost sm" id="p-export">Export CSV</button>
@@ -46,7 +46,7 @@ export const pipelinePage = {
       else if (state.view === 'list') body.innerHTML = listHtml(act, open);
       else body.innerHTML = closedHtml(act, won, lost);
 
-      root.querySelector('#p-q').oninput = e => { state.q = e.target.value; draw(); root.querySelector('#p-q').focus(); };
+      bindSearch(root, 'p-q', state, draw); restoreFocus(root, state);
       root.querySelector('#p-owner').onchange = e => { state.owner = e.target.value; draw(); };
       root.querySelectorAll('[data-view]').forEach(b => b.onclick = () => { state.view = b.dataset.view; draw(); });
       root.querySelector('#p-new').onclick = () => dealForm(key, null, {}, draw);

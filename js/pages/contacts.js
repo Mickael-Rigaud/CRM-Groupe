@@ -2,7 +2,7 @@
 import { db } from '../data/db.js';
 import { scope } from '../data/scope.js';
 import { ACTIVITIES, ACTIVITY_KEYS, CHANNELS, CONTACT_TYPES, ORG_TYPES } from '../data/schema.js';
-import { esc, eur, openModal, closeModal, renderForm, readForm, refField, bindRefFields, toast, fmtDate, fmtDateTime, userName, contactName, actBadge, csvDownload, confirm } from '../ui.js';
+import { esc, eur, openModal, closeModal, renderForm, readForm, refField, bindRefFields, toast, fmtDate, fmtDateTime, userName, contactName, actBadge, csvDownload, confirm, terms, hit, searchInput, bindSearch, restoreFocus } from '../ui.js';
 import { openDeal, dealForm } from './deal.js';
 import { activityForm, activityRowHtml, bindActivityRows } from './activity.js';
 import { orgForm, openOrg } from './organisations.js';
@@ -114,11 +114,11 @@ export function openContact(id, onChange) {
 export const contactsPage = {
   title: () => 'Contacts',
   render(root, param) {
-    const state = { q: '', act: '', type: '', kind: '' };
+    const state = { q: '', act: '', type: '', kind: '', focus: null };
     const draw = () => {
-      const q = state.q.toLowerCase();
-      const persons = state.kind === 'org' ? [] : scope.contacts().filter(c => (!state.act || (c.activities || []).includes(state.act)) && (!state.type || c.type === state.type) && (!q || [c.first_name, c.last_name, c.email, c.phone, c.city, db.byId('organisations', c.organisation_id)?.name].join(' ').toLowerCase().includes(q)));
-      const orgs = state.kind === 'person' ? [] : scope.orgs().filter(o => o.type !== 'Partenaire' && (!state.act || (o.activities || []).includes(state.act)) && (!state.type || o.type === state.type) && (!q || [o.name, o.email, o.phone, o.city, o.siren].join(' ').toLowerCase().includes(q)));
+      const qt = terms(state.q);
+      const persons = state.kind === 'org' ? [] : scope.contacts().filter(c => (!state.act || (c.activities || []).includes(state.act)) && (!state.type || c.type === state.type) && hit([c.first_name, c.last_name, c.email, c.phone, c.city, c.notes, db.byId('organisations', c.organisation_id)?.name], qt));
+      const orgs = state.kind === 'person' ? [] : scope.orgs().filter(o => o.type !== 'Partenaire' && (!state.act || (o.activities || []).includes(state.act)) && (!state.type || o.type === state.type) && hit([o.name, o.email, o.phone, o.city, o.siren], qt));
       const rows = [
         ...persons.map(c => ({ kind: 'person', id: c.id, name: contactName(c), sort: (c.last_name || '') + ' ' + (c.first_name || ''), phone: c.phone, email: c.email, city: c.city, link: db.byId('organisations', c.organisation_id)?.name || '', activities: c.activities, type: c.type, origin: c.channel, deals: db.t('deals').filter(d => d.contact_id === c.id).length, owner: c.owner_id })),
         ...orgs.map(o => ({ kind: 'org', id: o.id, name: o.name, sort: o.name, phone: o.phone, email: o.email, city: o.city, link: `${db.t('contacts').filter(c => c.organisation_id === o.id).length} contact(s)`, activities: o.activities, type: o.type, origin: o.client_status || '', deals: db.t('deals').filter(d => d.organisation_id === o.id).length, owner: o.owner_id })),
@@ -127,7 +127,7 @@ export const contactsPage = {
       const types = [...new Set([...CONTACT_TYPES, ...ORG_TYPES.filter(t => t !== 'Partenaire')])];
       root.innerHTML = `
         <div class="toolbar">
-          <input type="search" class="grow" id="c-q" placeholder="Nom, email, téléphone, ville, entreprise…" value="${esc(state.q)}">
+          ${searchInput('c-q', state, 'Nom, email, téléphone, ville, entreprise…')}
           <select id="c-kind"><option value="">Personnes et entreprises</option><option value="person" ${state.kind === 'person' ? 'selected' : ''}>Personnes</option><option value="org" ${state.kind === 'org' ? 'selected' : ''}>Entreprises / structures</option></select>
           <select id="c-act"><option value="">Toutes les activités</option>${ACTIVITY_KEYS.map(k => `<option value="${k}" ${state.act === k ? 'selected' : ''}>${esc(ACTIVITIES[k].label)}</option>`).join('')}</select>
           <select id="c-type"><option value="">Tous les types</option>${types.map(t => `<option ${state.type === t ? 'selected' : ''}>${t}</option>`).join('')}</select>
@@ -136,9 +136,9 @@ export const contactsPage = {
         </div>
         ${mrr ? `<div class="alert blue"><b>${eur(mrr)}</b><div>de revenu mensuel récurrent Propulsion (clients actifs)</div></div>` : ''}
         <div class="card"><div class="table-wrap"><table><thead><tr><th></th><th>Nom</th><th>Téléphone</th><th>Email</th><th>Ville</th><th>Entreprise / contacts</th><th>Activités</th><th>Type</th><th>Origine / statut</th><th class="num">Affaires</th><th>Responsable</th></tr></thead><tbody>
-          ${rows.map(r => `<tr class="click" data-kind="${r.kind}" data-id="${r.id}"><td title="${r.kind === 'org' ? 'Entreprise / structure' : 'Personne'}">${r.kind === 'org' ? '🏢' : '👤'}</td><td><b>${esc(r.name)}</b></td><td class="nowrap">${esc(r.phone || '')}</td><td>${esc(r.email || '')}</td><td>${esc(r.city || '')}</td><td class="small">${esc(r.link)}</td><td>${(r.activities || []).map(actBadge).join(' ')}</td><td><span class="pill">${esc(r.type || '')}</span></td><td class="small">${esc(r.origin || '')}</td><td class="num">${r.deals}</td><td class="small">${esc(userName(r.owner))}</td></tr>`).join('') || '<tr><td colspan="11" class="empty">Aucun contact</td></tr>'}
+          ${rows.map(r => `<tr class="click" data-kind="${r.kind}" data-id="${r.id}"><td title="${r.kind === 'org' ? 'Entreprise / structure' : 'Personne'}">${r.kind === 'org' ? '🏢' : '👤'}</td><td><b>${esc(r.name)}</b></td><td class="nowrap">${esc(r.phone || '')}</td><td>${esc(r.email || '')}</td><td>${esc(r.city || '')}</td><td class="small">${esc(r.link)}</td><td>${(r.activities || []).map(actBadge).join(' ')}</td><td><span class="pill">${esc(r.type || '')}</span></td><td class="small">${esc(r.origin || '')}</td><td class="num">${r.deals}</td><td class="small">${esc(userName(r.owner))}</td></tr>`).join('') || '<tr><td colspan="11" class="empty">Aucun contact ne correspond</td></tr>'}
         </tbody></table></div><p class="muted small">${persons.length} personne${persons.length > 1 ? 's' : ''} · ${orgs.length} entreprise${orgs.length > 1 ? 's' : ''} — les partenaires et apporteurs sont dans l'onglet Partenaires</p></div>`;
-      root.querySelector('#c-q').oninput = e => { state.q = e.target.value; draw(); const i = root.querySelector('#c-q'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); };
+      bindSearch(root, 'c-q', state, draw); restoreFocus(root, state);
       root.querySelector('#c-kind').onchange = e => { state.kind = e.target.value; draw(); };
       root.querySelector('#c-act').onchange = e => { state.act = e.target.value; draw(); };
       root.querySelector('#c-type').onchange = e => { state.type = e.target.value; draw(); };

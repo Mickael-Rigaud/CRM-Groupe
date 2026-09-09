@@ -1,7 +1,7 @@
 // Module Vivier courtiers : recrutement de mandataires / courtiers pour La Référence Courtage.
 import { db } from '../data/db.js';
 import { scope } from '../data/scope.js';
-import { esc, openModal, closeModal, renderForm, readForm, toast, fmtDate, confirm, csvDownload, userName } from '../ui.js';
+import { esc, openModal, closeModal, renderForm, readForm, toast, fmtDate, confirm, csvDownload, userName, terms, hit, searchInput, bindSearch, restoreFocus, pickState, pickInit, multiPick, bindMultiPick } from '../ui.js';
 
 export const PRIO = { '1': { label: 'Solo', desc: 'mandataire / indépendant (cible directe)', color: '#0A6F86' }, '2a': { label: 'En agence', desc: 'courtier en réseau, statut à qualifier', color: '#C4640F' }, '2b': { label: 'Dirigeant', desc: 'gérant / franchisé (partenariat)', color: '#4A6579' }, '3': { label: 'Solo · à vérifier', desc: 'EI au Sirene, ORIAS à confirmer', color: '#8CA2B3' } };
 export const SUIVI = { new: { label: 'À contacter', cls: '' }, contact: { label: 'Contacté', cls: 'info' }, rdv: { label: 'RDV pris', cls: 'warn' }, ok: { label: 'Recruté', cls: 'ok' }, no: { label: 'Écarté', cls: 'bad' } };
@@ -104,19 +104,23 @@ export const vivierPage = {
   title: () => 'Vivier courtiers — La Référence Courtage',
   render(root) {
     if (!canSee()) return denied(root);
-    const state = { q: '', dep: new Set(), ville: '', reseau: '', prio: new Set(), suivi: '', cert: '', email: false, tel: false, arch: false, sort: 'prio', dir: 1 };
+    const state = { q: '', dep: new Set(), prio: new Set(), suivi: '', cert: '', email: false, tel: false, arch: false, sort: 'prio', dir: 1, focus: null };
+    const pVille = pickState(); const pReseau = pickState();
     const PORD = { '1': 0, '2a': 1, '2b': 2, '3': 3 }, SORD = { ok: 0, rdv: 1, contact: 2, new: 3, no: 4 };
     const draw = () => {
       const all = db.t('broker_profiles');
       const live = all.filter(r => !r.archive);
-      const villes = [...new Set(live.map(r => r.ville_key).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'fr'));
-      const reseaux = [...new Set(live.map(r => r.reseau_key).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'fr'));
-      const q = norm(state.q);
+      const villes = [...new Set(all.map(r => r.ville_key).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'fr'));
+      const reseaux = [...new Set(all.map(r => r.reseau_key).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'fr'));
+      const qt = terms(state.q);
+      const villeItems = villes.map(v => ({ id: v, name: v, sub: live.filter(r => r.ville_key === v).length + ' profils' }));
+      const reseauItems = reseaux.map(v => ({ id: v, name: v, sub: live.filter(r => r.reseau_key === v).length + ' profils' }));
+      pickInit(pVille, villeItems); pickInit(pReseau, reseauItems);
       let rows = all.filter(r => !!r.archive === state.arch
-        && (!state.dep.size || state.dep.has(r.dep)) && (!state.ville || r.ville_key === state.ville) && (!state.reseau || r.reseau_key === state.reseau)
+        && (!state.dep.size || state.dep.has(r.dep)) && (!r.ville_key || pVille.sel.has(r.ville_key)) && (!r.reseau_key || pReseau.sel.has(r.reseau_key))
         && (!state.prio.size || state.prio.has(r.prio)) && (!state.suivi || (r.suivi || 'new') === state.suivi) && (!state.cert || r.cert === state.cert)
         && (!state.email || r.email_ok) && (!state.tel || r.tel_type === 'direct')
-        && (!q || norm([r.prenom, r.nom, r.ville, r.reseau, r.statut, r.poste, r.exp, r.email, r.tel, r.orias].join(' ')).includes(q)));
+        && hit([r.prenom, r.nom, r.ville, r.reseau, r.statut, r.poste, r.exp, r.email, r.tel, r.orias, r.notes], qt));
       const val = r => ({ nom: (r.nom || '') + ' ' + (r.prenom || ''), ville: r.ville || '', dep: r.dep || '', reseau: r.reseau || '', prio: PORD[r.prio] ?? 9, suivi: SORD[r.suivi || 'new'] ?? 9, exp: r.exp_years == null ? 999 : -r.exp_years, orias: r.orias_year == null ? 9999 : r.orias_year, cert: CERT.indexOf(r.cert) })[state.sort];
       rows.sort((a, b) => { const x = val(a), y = val(b); let c = typeof x === 'number' ? x - y : String(x).localeCompare(String(y), 'fr'); if (!c) c = (PORD[a.prio] ?? 9) - (PORD[b.prio] ?? 9) || (a.nom || '').localeCompare(b.nom || '', 'fr'); return c * state.dir; });
       const byP = p => live.filter(r => r.prio === p).length;
@@ -132,9 +136,9 @@ export const vivierPage = {
         </div>
         <div class="card tight">
           <div class="toolbar">
-            <input type="search" class="grow" id="vq" placeholder="Nom, ville, réseau, poste, ORIAS…" value="${esc(state.q)}">
-            <select id="v-ville"><option value="">Toutes les villes</option>${villes.map(v => `<option ${state.ville === v ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select>
-            <select id="v-reseau"><option value="">Tous les réseaux</option>${reseaux.map(v => `<option ${state.reseau === v ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select>
+            ${searchInput('vq', state, 'Nom, ville, réseau, poste, ORIAS…')}
+            ${multiPick('v-ville', villeItems, pVille, { noun: 'ville', nounPlural: 'villes', allLabel: 'Toutes les villes' })}
+            ${multiPick('v-reseau', reseauItems, pReseau, { noun: 'réseau', nounPlural: 'réseaux', allLabel: 'Tous les réseaux' })}
             <select id="v-suivi"><option value="">Tout suivi</option>${Object.entries(SUIVI).map(([k, v]) => `<option value="${k}" ${state.suivi === k ? 'selected' : ''}>${v.label}</option>`).join('')}</select>
             <select id="v-cert"><option value="">Toute certitude</option>${CERT.map(c => `<option ${state.cert === c ? 'selected' : ''}>${c}</option>`).join('')}</select>
           </div>
@@ -152,14 +156,15 @@ export const vivierPage = {
           </tbody></table></div>
           <p class="muted small" style="margin-top:12px">${Object.entries(PRIO).map(([k, v]) => `<span class="badge" style="--c:${v.color}">${v.label}</span> ${esc(v.desc)}`).join(' &nbsp; ')}</p>
         </div>`;
-      root.querySelector('#vq').oninput = e => { state.q = e.target.value; draw(); const i = root.querySelector('#vq'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); };
-      root.querySelector('#v-ville').onchange = e => { state.ville = e.target.value; draw(); };
-      root.querySelector('#v-reseau').onchange = e => { state.reseau = e.target.value; draw(); };
+      bindSearch(root, 'vq', state, draw);
+      bindMultiPick(root, 'v-ville', villeItems, pVille, draw, state);
+      bindMultiPick(root, 'v-reseau', reseauItems, pReseau, draw, state);
+      restoreFocus(root, state);
       root.querySelector('#v-suivi').onchange = e => { state.suivi = e.target.value; draw(); };
       root.querySelector('#v-cert').onchange = e => { state.cert = e.target.value; draw(); };
       root.querySelectorAll('[data-chip]').forEach(b => b.onclick = () => { const f = b.dataset.chip, v = b.dataset.v; if (f === 'dep' || f === 'prio') { state[f].has(v) ? state[f].delete(v) : state[f].add(v); } else state[f] = !state[f]; draw(); });
       root.querySelectorAll('[data-sort]').forEach(t => t.onclick = () => { if (state.sort === t.dataset.sort) state.dir *= -1; else { state.sort = t.dataset.sort; state.dir = 1; } draw(); });
-      root.querySelector('#v-reset').onclick = () => { Object.assign(state, { q: '', dep: new Set(), ville: '', reseau: '', prio: new Set(), suivi: '', cert: '', email: false, tel: false, arch: false }); draw(); };
+      root.querySelector('#v-reset').onclick = () => { Object.assign(state, { q: '', dep: new Set(), prio: new Set(), suivi: '', cert: '', email: false, tel: false, arch: false, focus: null }); pVille.sel = null; pReseau.sel = null; pVille.q = ''; pReseau.q = ''; draw(); };
       root.querySelector('#v-new').onclick = () => brokerForm(null, (id) => { draw(); if (id) openBroker(id, draw); });
       root.querySelector('#v-export').onclick = () => csvDownload('vivier-courtiers.csv', rows.map(r => ({ prenom: r.prenom, nom: r.nom, ville: r.ville, departement: r.dep, reseau: r.reseau, statut_pro: r.statut, poste: r.poste, experience: r.exp, anciennete_ans: r.exp_years, orias: r.orias, orias_annee: r.orias_year, email: r.email, telephone: r.tel, type_tel: r.tel_type, profil: PRIO[r.prio]?.label, certitude: r.cert, suivi: SUIVI[r.suivi || 'new']?.label, notes: r.notes, sources: (r.sources || []).join(' ; ') })));
       root.querySelectorAll('[data-bk]').forEach(tr => tr.onclick = () => openBroker(tr.dataset.bk, draw));
