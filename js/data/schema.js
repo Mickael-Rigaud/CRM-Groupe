@@ -29,6 +29,7 @@ export const ACTIVITIES = {
     rdvStage: 'rdv',
     stages: [
       { key: 'lead', label: 'Nouveau lead', p: 5 },
+      { key: 'rdv1', label: 'RDV 1', p: 10 },
       { key: 'qualifie', label: 'Qualifié', p: 15 },
       { key: 'rdv', label: 'RDV / visite planifié', p: 35 },
       { key: 'proposition', label: 'Proposition envoyée', p: 60 },
