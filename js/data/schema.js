@@ -26,7 +26,7 @@ export const ACTIVITIES = {
   btp: {
     key: 'btp', label: 'BTP Expertise', short: 'BTP Exp.', color: '#1D5B78',
     amountLabel: 'Montant mission HT (€)',
-    rdvStage: 'rdv',
+    rdvStage: 'rdv1',
     stages: [
       { key: 'lead', label: 'Nouveau lead', p: 5 },
       { key: 'rdv1', label: 'RDV 1', p: 10 },
