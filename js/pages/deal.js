@@ -137,6 +137,7 @@ export function openDeal(id, onChange) {
         <div class="toolbar">
           ${d.status === 'open' ? `<button class="btn green sm" id="d-won">✓ Gagnée</button><button class="btn danger sm" id="d-lost">✕ Perdue</button>` : `<button class="btn ghost sm" id="d-reopen">Réouvrir</button>`}
           <button class="btn ghost sm" id="d-edit">✎ Modifier</button>
+                    <button class="btn danger sm" id="d-del">🗑 Supprimer</button>
         </div>
       </div>
       <div class="stage-steps" style="margin-bottom:18px">${act.stages.map((s, i) => `<button data-stage="${s.key}" class="${i === curIdx ? 'cur' : i < curIdx ? 'past' : ''}" title="${s.delivery ? 'Étape de réalisation (affaire gagnée)' : 'Probabilité ' + s.p + ' %'}">${esc(s.label)}</button>`).join('')}</div>
@@ -170,6 +171,16 @@ export function openDeal(id, onChange) {
     m.querySelector('#d-lost')?.addEventListener('click', () => setLost(db.byId('deals', id), refresh, render));
     m.querySelector('#d-reopen')?.addEventListener('click', async () => { await reopen(db.byId('deals', id)); refresh(); });
     m.querySelector('#d-edit').onclick = () => dealForm(d.activity, db.byId('deals', id), {}, (nid) => { if (nid) refresh(); else { onChange?.(); } }, render);
+        m.querySelector('#d-del').onclick = async () => {
+      const dd = db.byId('deals', id);
+      if (!await confirm(`Supprimer définitivement l'affaire « ${dd.title} » ? Ses activités et ses notes seront supprimées avec elle. Le contact, lui, est conservé.`)) return;
+      for (const a of db.t('activities').filter(x => x.deal_id === id)) await db.remove('activities', a.id);
+      for (const e of db.t('events').filter(x => x.deal_id === id)) await db.remove('events', e.id);
+      await db.remove('deals', id);
+      closeModal(true);
+      toast('Affaire supprimée');
+      onChange?.();
+    };
     const addAct = () => activityForm({ deal_id: id, contact_id: d.contact_id || null, organisation_id: d.organisation_id || null }, null, refresh, render);
     m.querySelector('#d-add-act').onclick = addAct;
     m.querySelector('#d-add-act-inline')?.addEventListener('click', e => { e.preventDefault(); addAct(); });
