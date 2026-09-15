@@ -36,8 +36,6 @@ const entete = (actif) => `<nav class="btp-tabs" aria-label="Écrans BTP Experti
   ${ONGLETS.map(o => `<a href="${o.hash}" class="${o.hash === actif ? 'on' : ''}" ${o.hash === actif ? 'aria-current="page"' : ''}>${o.label}</a>`).join('')}
 </nav>`;
 
-// Habillage : sur ces écrans seulement, l'accent prend les couleurs du logo BTP Expertise.
-const skin = (root) => { root.classList.add('btp-skin'); return () => root.classList.remove('btp-skin'); };
 const guard = (root) => {
   if (scope.activityKeys.includes(KEY)) return false;
   root.innerHTML = '<div class="card"><div class="empty">Vous n&rsquo;avez pas accès à l&rsquo;activité BTP Expertise.</div></div>';
@@ -45,77 +43,128 @@ const guard = (root) => {
 };
 
 // ---------------------------------------------------------------- Vue d'ensemble
+// Même présentation que le tableau de bord RGD Renova : bandeau du chiffre d'affaires
+// avec son évolution, rangée de indicateurs, to-do et rendez-vous du jour côte à côte,
+// pipeline en bas avec le lien vers la page complète.
+const MOIS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+
+const kpi = ({ label, valeur, sous, icone, ton = 'accent', href, onClick }) => `
+  <${href ? 'a' : 'button type="button"'} class="btp-kpi" ${href ? `href="${href}"` : ''} ${onClick ? `data-go="${onClick}"` : ''} style="--t:var(--${ton});--ts:var(--${ton}-soft, var(--accent-soft))">
+    <span class="btp-kpi-ico">${icone}</span>
+    <span class="btp-kpi-lbl">${esc(label)}</span>
+    <span class="btp-kpi-val">${valeur}</span>
+    <span class="btp-kpi-sub">${esc(sous)}</span>
+  </${href ? 'a' : 'button'}>`;
+
 export const btpHomePage = {
   title: () => 'BTP Expertise',
   render(root) {
     if (guard(root)) return {};
-    const off = skin(root);
 
     const draw = () => {
       const a = act();
       const all = deals();
       const open = all.filter(d => d.status === 'open');
       const won = all.filter(d => d.status === 'won');
+      const lost = all.filter(d => d.status === 'lost');
       const potential = open.reduce((s, d) => s + weightedAmount(d), 0);
       const noNext = open.filter(d => !nextActivity(d.id));
       const missions = all.filter(d => a.stages.find(s => s.key === d.stage)?.delivery && d.status !== 'lost');
-      const maxCol = Math.max(1, ...a.stages.map(s => open.filter(d => d.stage === s.key).length));
 
-      // Agenda : ce qui est prévu dans les quinze jours, et ce qui traîne
-      const proches = activities().filter(x => !x.done && x.due_date && daysSince(x.due_date) >= -15)
-        .sort((x, y) => x.due_date.localeCompare(y.due_date));
-      const retard = proches.filter(x => daysSince(x.due_date) > 0);
-      const avenir = proches.filter(x => daysSince(x.due_date) <= 0).slice(0, 8);
-      const recentes = open.slice().sort((x, y) => (y.created_at || '').localeCompare(x.created_at || '')).slice(0, 8);
+      // Chiffre d'affaires : les douze derniers mois, mois courant en dernier
+      const fin = new Date(); fin.setDate(1); fin.setHours(0, 0, 0, 0);
+      const mois = Array.from({ length: 12 }, (_, i) => {
+        const d = new Date(fin); d.setMonth(d.getMonth() - (11 - i));
+        const cle = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        const montant = won.filter(x => (x.won_at || '').slice(0, 7) === cle).reduce((s, x) => s + (Number(x.amount) || 0), 0);
+        return { cle, label: MOIS[d.getMonth()], annee: d.getFullYear(), montant, courant: i === 11 };
+      });
+      const plafond = Math.max(1, ...mois.map(m => m.montant));
+      const anneeEnCours = String(new Date().getFullYear());
+      const caAnnee = won.filter(d => (d.won_at || '').slice(0, 4) === anneeEnCours).reduce((s, d) => s + (Number(d.amount) || 0), 0);
+      const gagneesAnnee = won.filter(d => (d.won_at || '').slice(0, 4) === anneeEnCours).length;
+      const panier = gagneesAnnee ? caAnnee / gagneesAnnee : 0;
+      const clos = won.length + lost.length;
+      const transfo = clos ? Math.round((won.length / clos) * 100) : null;
+
+      // Journée : ce qui est prévu aujourd'hui, sinon les prochaines échéances
+      const toutes = activities().filter(x => !x.done);
+      const duJour = toutes.filter(x => daysSince(x.due_date) === 0).sort((x, y) => (x.due_time || '99').localeCompare(y.due_time || '99'));
+      const retard = toutes.filter(x => daysSince(x.due_date) > 0).sort((x, y) => x.due_date.localeCompare(y.due_date));
+      const suite = toutes.filter(x => daysSince(x.due_date) < 0 && daysSince(x.due_date) >= -15).sort((x, y) => x.due_date.localeCompare(y.due_date));
+      const aFaire = retard.concat(duJour).slice(0, 7);
 
       root.innerHTML = `
         ${entete('#/btp')}
-        <div class="grid c4">
-          <div class="card tight kpi" style="--kpi:var(--accent-soft);--kpi-c:var(--accent)"><div class="lbl">Affaires ouvertes</div><div class="val">${open.length}</div><div class="sub">${eur(open.reduce((s, d) => s + (Number(d.amount) || 0), 0))} en cours</div></div>
-          <div class="card tight kpi" style="--kpi:#E1F4FC;--kpi-c:#0094C8"><div class="lbl">CA potentiel pondéré</div><div class="val">${eur(potential)}</div><div class="sub">selon l&rsquo;étape de chaque affaire</div></div>
-          <div class="card tight kpi" style="--kpi:#FFEBD6;--kpi-c:#C4640F"><div class="lbl">Missions en cours</div><div class="val">${missions.length}</div><div class="sub">planifiées, réalisées, à remettre</div></div>
-          <div class="card tight kpi" style="--kpi:var(--red-soft);--kpi-c:var(--red)"><div class="lbl">Sans prochaine action</div><div class="val">${noNext.length}</div><div class="sub">à corriger aujourd&rsquo;hui</div></div>
+
+        <section class="card btp-hero">
+          <div class="btp-hero-head">
+            <div>
+              <div class="btp-hero-lbl">Chiffre d&rsquo;affaires signé · année ${anneeEnCours}</div>
+              <div class="btp-hero-val">${eur(caAnnee)}<span class="btp-hero-tag">HT</span></div>
+              <div class="small muted">${gagneesAnnee} mission${gagneesAnnee > 1 ? 's' : ''} gagnée${gagneesAnnee > 1 ? 's' : ''}${panier ? ` · panier moyen ${eur(panier)}` : ''}${transfo !== null ? ` · ${transfo} % de transformation` : ''}</div>
+            </div>
+            <a class="btn ghost sm" href="#/pipeline/btp">Voir le pipeline complet →</a>
+          </div>
+          <div class="btp-months">${mois.map(m => `
+            <div class="btp-month ${m.courant ? 'now' : ''}" title="${esc(m.label)} ${m.annee} — ${eur(m.montant)}">
+              <div class="btp-month-bar"><i style="height:${m.montant ? Math.max(4, Math.round((m.montant / plafond) * 100)) : 0}%"></i></div>
+              <div class="btp-month-lbl">${esc(m.label)}</div>
+            </div>`).join('')}</div>
+        </section>
+
+        <div class="btp-kpis">
+          ${kpi({ label: 'Affaires ouvertes', valeur: open.length, sous: `${eur(open.reduce((s, d) => s + (Number(d.amount) || 0), 0))} en cours`, icone: '📂', ton: 'accent', href: '#/pipeline/btp' })}
+          ${kpi({ label: 'CA potentiel pondéré', valeur: eur(potential), sous: 'selon l\'étape de chaque affaire', icone: '📈', ton: 'green', href: '#/pipeline/btp' })}
+          ${kpi({ label: 'Missions en cours', valeur: missions.length, sous: 'planifiées, réalisées, à remettre', icone: '🏗', ton: 'amber', href: '#/pipeline/btp' })}
+          ${kpi({ label: 'Sans prochaine action', valeur: noNext.length, sous: 'à corriger aujourd\'hui', icone: '⚠', ton: 'red', onClick: '#/btp/todo' })}
+        </div>
+
+        <div class="btp-split">
+          <div class="card btp-ov-card">
+            <div class="card-head"><h2><span class="btp-ov-ico">☑</span> À faire</h2><span class="btp-ov-cnt">${retard.length + duJour.length}</span></div>
+            ${retard.length ? `<div class="alert"><b>${retard.length}</b><div>en retard — à traiter avant le reste</div></div>` : ''}
+            ${aFaire.length ? aFaire.map(x => activityRowHtml(x, { showContext: true })).join('')
+              : '<div class="empty">Rien en retard ni pour aujourd&rsquo;hui.</div>'}
+            <div class="btp-ov-foot"><a href="#/btp/todo">Ouvrir la to-do list →</a><button class="btn sm" id="b-new-act">+ Tâche</button></div>
+          </div>
+
+          <div class="card btp-ov-card">
+            <div class="card-head"><h2><span class="btp-ov-ico">📅</span> Rendez-vous</h2><span class="btp-ov-cnt">${duJour.length}</span></div>
+            ${duJour.length ? duJour.map(x => activityRowHtml(x, { showContext: true })).join('')
+              : `<div class="empty">Aucun rendez-vous aujourd&rsquo;hui.</div>
+                 ${suite.length ? `<h3 style="margin-top:14px">À venir</h3>${suite.slice(0, 5).map(x => activityRowHtml(x, { showContext: true })).join('')}` : ''}`}
+            <div class="btp-ov-foot"><span class="small muted">Échéances du CRM. Le calendrier Google du cabinet n&rsquo;est pas encore raccordé.</span></div>
+          </div>
         </div>
 
         <div class="card">
-          <div class="card-head"><h2>Pipeline</h2><a class="btn ghost sm" href="#/pipeline/btp">Ouvrir le pipeline complet</a></div>
+          <div class="card-head"><h2>Pipeline missions</h2><a class="btn ghost sm" href="#/pipeline/btp">Voir la page complète →</a></div>
           <div class="btp-pipe">${a.stages.map(s => {
             const col = open.filter(d => d.stage === s.key);
             const sum = col.reduce((t, d) => t + (Number(d.amount) || 0), 0);
+            const haut = Math.max(1, ...a.stages.map(x => open.filter(d => d.stage === x.key).length));
             return `<div class="btp-stage">
               <div class="btp-stage-head"><b>${esc(s.label)}</b><span>${col.length}</span></div>
-              <div class="btp-bar"><i style="width:${Math.round((col.length / maxCol) * 100)}%"></i></div>
+              <div class="btp-bar"><i style="width:${Math.round((col.length / haut) * 100)}%"></i></div>
               <div class="small muted">${sum ? eur(sum) : '—'}</div>
             </div>`;
           }).join('')}</div>
-        </div>
-
-        <div class="grid c2">
-          <div class="card">
-            <div class="card-head"><h2>Agenda</h2><button class="btn sm" id="b-new-act">+ Rendez-vous</button></div>
-            ${retard.length ? `<div class="alert"><b>${retard.length}</b><div>en retard — à traiter avant le reste</div></div>` : ''}
-            ${avenir.length ? avenir.map(x => activityRowHtml(x, { showContext: true })).join('') : '<div class="empty">Rien de prévu dans les quinze jours.</div>'}
-            <p class="small muted" style="margin:12px 0 0">Ces échéances viennent du CRM. Le calendrier Google du cabinet n&rsquo;est pas encore raccordé.</p>
-          </div>
-          <div class="card">
-            <div class="card-head"><h2>Affaires récentes</h2><button class="btn sm" id="b-new-deal">+ Affaire</button></div>
-            ${recentes.map(d => `
-              <div class="btp-line" data-deal="${d.id}">
-                <span class="grow"><b>${esc(d.title)}</b><br><small class="muted">${esc(dealParty(d))} · ${esc(a.stages.find(s => s.key === d.stage)?.label || d.stage)}</small></span>
-                <span class="num">${d.amount ? eur(d.amount) : '—'}</span>
-              </div>`).join('') || '<div class="empty">Aucune affaire ouverte.</div>'}
-            ${won.length ? `<p class="small muted" style="margin:12px 0 0">${won.length} mission${won.length > 1 ? 's' : ''} gagnée${won.length > 1 ? 's' : ''} au total.</p>` : ''}
-          </div>
+          ${open.length ? `<div class="btp-recentes">${open.slice().sort((x, y) => (y.created_at || '').localeCompare(x.created_at || '')).slice(0, 5).map(d => `
+            <div class="btp-line" data-deal="${d.id}">
+              <span class="grow"><b>${esc(d.title)}</b><br><small class="muted">${esc(dealParty(d))} · ${esc(a.stages.find(s => s.key === d.stage)?.label || d.stage)}</small></span>
+              <span class="num">${d.amount ? eur(d.amount) : '—'}</span>
+            </div>`).join('')}</div>` : '<div class="empty">Aucune affaire ouverte.</div>'}
         </div>`;
 
       root.querySelector('#b-new-act').onclick = () => activityForm({}, null, draw);
-      root.querySelector('#b-new-deal').onclick = () => dealForm(KEY, null, {}, draw);
+      root.querySelectorAll('[data-go]').forEach(b => b.onclick = () => { location.hash = b.dataset.go; });
       root.querySelectorAll('[data-deal]').forEach(el => el.onclick = () => openDeal(el.dataset.deal, draw));
       bindActivityRows(root, draw);
     };
 
     draw();
-    return { refresh: draw, destroy: off };
+    return { refresh: draw };
   },
 };
 
@@ -124,7 +173,6 @@ export const btpTodoPage = {
   title: () => 'BTP Expertise — To-do',
   render(root) {
     if (guard(root)) return {};
-    const off = skin(root);
     const state = { who: '', q: '', focus: null };
 
     const draw = () => {
@@ -165,7 +213,7 @@ export const btpTodoPage = {
     };
 
     draw();
-    return { refresh: draw, destroy: off };
+    return { refresh: draw };
   },
 };
 
@@ -182,7 +230,6 @@ export const btpBasePage = {
   title: () => 'BTP Expertise — Base de données',
   render(root) {
     if (guard(root)) return {};
-    const off = skin(root);
     const state = { vue: 'clients', q: '', canal: '', focus: null };
 
     const draw = () => {
@@ -258,7 +305,7 @@ export const btpBasePage = {
     };
 
     draw();
-    return { refresh: draw, destroy: off };
+    return { refresh: draw };
   },
 };
 
@@ -277,7 +324,6 @@ export const btpDtuPage = {
   title: () => 'BTP Expertise — DTU',
   render(root) {
     if (guard(root)) return {};
-    const off = skin(root);
     const state = { q: '', domaine: '', focus: null };
 
     const editer = (f, apres) => {
@@ -342,7 +388,7 @@ export const btpDtuPage = {
     };
 
     draw();
-    return { refresh: draw, destroy: off };
+    return { refresh: draw };
   },
 };
 
@@ -358,7 +404,6 @@ export const btpMailsPage = {
   title: () => 'BTP Expertise — Mails types',
   render(root) {
     if (guard(root)) return {};
-    const off = skin(root);
     const state = { theme: '', q: '', focus: null };
 
     const editer = (m0, apres) => {
@@ -432,6 +477,6 @@ export const btpMailsPage = {
     };
 
     draw();
-    return { refresh: draw, destroy: off };
+    return { refresh: draw };
   },
 };

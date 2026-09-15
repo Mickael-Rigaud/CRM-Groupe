@@ -326,31 +326,59 @@ select.cell-in { text-align: left; }
 .embed-act:hover { background: var(--card-2); color: var(--text); }
 
 /* ---------- Espace BTP Expertise ---------- */
-/* L'accent local reprend les couleurs du logo du cabinet : bleu, orange, navy.
-   Il ne vaut que sur ces écrans — le reste du CRM garde l'identité de groupe. */
-.btp-skin {
-  --accent: #0094C8; --accent-2: #007AA6; --accent-soft: #E1F4FC; --accent-ink: #24243C;
-  --btp-orange: #FC8400; --btp-navy: #24243C;
-}
+/* L'accent de ces écrans vient de applyBrand() : ACTIVITIES.btp est la seule source. */
 .btp-tabs { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; border-bottom: 1px solid var(--line); padding-bottom: 10px; margin-bottom: 4px; }
-.btp-tabs-mark { display: inline-flex; align-items: center; gap: 8px; font-family: var(--font-display); font-weight: 700; color: var(--btp-navy); margin-right: 10px; }
+.btp-tabs-mark { display: inline-flex; align-items: center; gap: 8px; font-family: var(--font-display); font-weight: 700; color: var(--accent-ink); margin-right: 10px; }
 .btp-tabs-mark img { width: 22px; height: 22px; object-fit: contain; }
 .btp-tabs a { padding: 7px 13px; border-radius: 9px; text-decoration: none; font-size: 13px; font-weight: 600; color: var(--muted); }
 .btp-tabs a:hover { background: var(--card-2); color: var(--text); }
 .btp-tabs a.on { background: var(--accent); color: #fff; }
+/* Bandeau du chiffre d'affaires, comme en tête du tableau de bord RGD Renova */
+.btp-hero { padding: 24px 26px; }
+.btp-hero-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; flex-wrap: wrap; margin-bottom: 18px; }
+.btp-hero-lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted-2); font-weight: 700; margin-bottom: 6px; }
+.btp-hero-val { font-family: var(--font-display); font-size: 38px; font-weight: 700; line-height: 1; color: var(--accent); letter-spacing: -.02em; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; font-variant-numeric: lining-nums tabular-nums; }
+.btp-hero-tag { font-family: inherit; font-size: 11px; font-weight: 700; color: #fff; background: var(--accent); padding: 3px 9px; border-radius: 999px; letter-spacing: .04em; }
+.btp-months { display: grid; grid-template-columns: repeat(12, 1fr); gap: 6px; align-items: end; }
+.btp-month-bar { height: 76px; display: flex; align-items: flex-end; background: var(--card-2); border-radius: 7px; overflow: hidden; }
+.btp-month-bar i { display: block; width: 100%; background: var(--accent); border-radius: 7px 7px 0 0; opacity: .55; }
+.btp-month.now .btp-month-bar i { opacity: 1; }
+.btp-month-lbl { text-align: center; font-size: 10.5px; color: var(--muted-2); margin-top: 5px; }
+.btp-month.now .btp-month-lbl { color: var(--accent); font-weight: 700; }
+
+/* Indicateurs cliquables */
+.btp-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
+.btp-kpi { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; text-decoration: none; color: inherit; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; box-shadow: var(--shadow); transition: transform .13s, box-shadow .13s, border-color .13s; }
+.btp-kpi:hover { transform: translateY(-2px); box-shadow: var(--shadow-lift); border-color: var(--t); }
+.btp-kpi-ico { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; background: var(--ts); font-size: 15px; margin-bottom: 8px; }
+.btp-kpi-lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted-2); font-weight: 700; }
+.btp-kpi-val { font-family: var(--font-display); font-size: 30px; font-weight: 700; letter-spacing: -.02em; color: var(--t); font-variant-numeric: lining-nums tabular-nums; }
+.btp-kpi-sub { font-size: 12.5px; color: var(--muted); }
+
+/* To-do et rendez-vous, côte à côte */
+.btp-split { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.btp-ov-card .card-head h2 { display: flex; align-items: center; gap: 9px; }
+.btp-ov-ico { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 8px; background: var(--accent-soft); color: var(--accent); font-size: 13px; }
+.btp-ov-cnt { font-family: var(--font-display); font-size: 19px; font-weight: 700; color: var(--accent); }
+.btp-ov-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 12.5px; }
+.btp-ov-foot a { color: var(--accent); font-weight: 600; text-decoration: none; }
+.btp-recentes { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); }
+@media (max-width: 900px) { .btp-split { grid-template-columns: 1fr; } .btp-months { grid-template-columns: repeat(6, 1fr); } }
+@media (prefers-reduced-motion: reduce) { .btp-kpi { transition: none; } }
+
 .btp-pipe { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 14px; }
 .btp-stage-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: 12.5px; margin-bottom: 6px; }
 .btp-stage-head b { font-weight: 600; }
-.btp-stage-head span { font-family: var(--font-display); font-size: 17px; font-weight: 700; color: var(--btp-navy); }
+.btp-stage-head span { font-family: var(--font-display); font-size: 17px; font-weight: 700; color: var(--accent-ink); }
 .btp-bar { height: 6px; border-radius: 999px; background: var(--card-2); overflow: hidden; margin-bottom: 5px; }
-.btp-bar i { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--accent), var(--btp-orange)); }
+.btp-bar i { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
 .btp-line { display: flex; align-items: center; gap: 12px; padding: 9px 10px; border-radius: 9px; cursor: pointer; }
 .btp-line:hover { background: var(--card-2); }
 .btp-line .grow { flex: 1; min-width: 0; }
 .btp-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
 .btp-card { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; text-align: left; background: var(--card); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: var(--radius); padding: 14px 16px; box-shadow: var(--shadow); }
 .btp-card:hover { border-color: var(--accent); box-shadow: var(--shadow-lift); }
-.btp-code { font-family: var(--font-display); font-weight: 700; color: var(--btp-navy); letter-spacing: -.01em; }
+.btp-code { font-family: var(--font-display); font-weight: 700; color: var(--accent-ink); letter-spacing: -.01em; }
 .btp-title { font-size: 13px; line-height: 1.35; }
 .btp-points { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
 .btp-mail { border-top: 1px solid var(--line); padding: 14px 0 4px; }
