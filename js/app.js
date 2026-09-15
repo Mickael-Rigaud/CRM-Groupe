@@ -44,8 +44,8 @@ function renderLogin(error = '') {
 }
 
 // ---------- Mise en page ----------
-// Navigation en rail : une icône par univers dans la colonne étroite, les écrans de
-// l'univers ouvert dans un volet. Le volet se referme après la navigation, sauf s'il est épinglé.
+// Navigation horizontale : bande 1 = les univers, bande 2 = les écrans de l'univers ouvert.
+// Un univers ou une entrée rattachée à une activité colore l'interface (voir applyBrand).
 const lateRent = () => { const k = isoDay().slice(0, 7); return db.t('leases').filter(l => l.active !== false && (!l.start_date || l.start_date.slice(0, 7) <= k) && (!l.end_date || l.end_date.slice(0, 7) >= k) && db.t('rent_payments').filter(x => x.lease_id === l.id && x.month.slice(0, 7) <= k).reduce((s, x) => s + (Number(x.due) || 0) - ((x.apl != null || x.tenant_paid != null) ? (Number(x.apl) || 0) + (Number(x.tenant_paid) || 0) : Number(x.amount) || 0) + (Number(x.adjustment) || 0), 0) > 0.005).length; };
 
 const NAV = [
@@ -64,7 +64,7 @@ const NAV = [
     ],
   },
   {
-    key: 'btpexp', icon: 'search', label: 'BTP Expertise', show: () => scope.activityKeys.includes('btp'), items: [
+    key: 'btpexp', icon: 'search', label: 'BTP Expertise', activity: 'btp', show: () => scope.activityKeys.includes('btp'), items: [
       { hash: '#/btp', label: "Vue d'ensemble", exact: true },
       { hash: '#/btp/todo', label: 'To-do list', count: () => scope.activities().filter(a => !a.done && a.due_date && daysSince(a.due_date) >= 0 && (() => { const d = db.byId('deals', a.deal_id); return d && d.activity === 'btp'; })()).length },
       { hash: '#/btp/base', label: 'Base de données' },
@@ -129,6 +129,25 @@ function renderLayout() {
 }
 
 function closeMenu() { navState.open = null; renderNav(); }
+
+// ---------- Couleur de la structure ouverte ----------
+// Sur un écran rattaché à une activité, l'interface prend la couleur de la structure ;
+// partout ailleurs elle revient à l'indigo du groupe. Une seule source : ACTIVITIES.
+const VARS = { accent: '--accent', accent2: '--accent-2', soft: '--accent-soft', ink: '--accent-ink' };
+function brandOf(hash) {
+  // La structure se lit dans le menu, pas dans l'URL : un univers entier (BTP Expertise)
+  // comme une simple entrée (un pipeline, l'application RGD) peut porter une activité.
+  const g = groupOf(hash);
+  if (!g) return null;
+  const item = g.items ? itemsOf(g).find(i => isOn(i, hash)) : null;
+  return item?.activity || g.activity || null;
+}
+function applyBrand(hash) {
+  const a = ACTIVITIES[brandOf(hash)];
+  const root = document.documentElement.style;
+  for (const [k, v] of Object.entries(VARS)) a && a[k] ? root.setProperty(v, a[k]) : root.removeProperty(v);
+  document.documentElement.dataset.brand = a ? a.key : '';
+}
 
 function renderNav() {
   const univ = document.getElementById('univ'); if (!univ) return;
@@ -209,6 +228,7 @@ function route() {
   // commandes et la navigation, mais sans la date.
   document.querySelector('.topbar').classList.toggle('bare', !!page.fullBleed);
   content.innerHTML = '';
+  applyBrand(hash);
   renderNav();
   current = page.render(content, param);
   window.scrollTo(0, 0);

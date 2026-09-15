@@ -36,7 +36,7 @@ input, select, textarea { font: inherit; }
 
 /* ---------- Navigation : barre horizontale ---------- */
 .topnav { position: sticky; top: 0; z-index: 20; }
-.univ { background: var(--accent-ink); color: #fff; display: flex; align-items: center; gap: 18px; padding: 0 20px; }
+.univ { background: var(--accent-ink); color: #fff; display: flex; align-items: center; gap: 18px; padding: 0 20px; transition: background .25s ease; }
 .u-mark { font-weight: 800; font-size: 15px; letter-spacing: -.02em; text-decoration: none; color: #fff; padding: 14px 0; white-space: nowrap; }
 .u-set { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; flex: 1; min-width: 0; }
 .u-set::-webkit-scrollbar { display: none; }
@@ -66,7 +66,7 @@ input, select, textarea { font: inherit; }
 .s-set::-webkit-scrollbar { display: none; }
 .s-tab { display: flex; align-items: center; gap: 8px; text-decoration: none; color: var(--muted); font-weight: 600; font-size: 13.5px; padding: 7px 12px; border-radius: 9px; white-space: nowrap; }
 .s-tab:hover { background: var(--card-2); color: var(--text); }
-.s-tab.on { background: var(--accent); color: #fff; }
+.s-tab.on { background: var(--accent); color: #fff; transition: background .2s ease; }
 .s-cnt { font-style: normal; background: var(--card-2); color: var(--muted); border-radius: 999px; padding: 0 7px; font-size: 10.5px; font-weight: 800; }
 .s-tab.on .s-cnt { background: rgba(255,255,255,.24); color: #fff; }
 .s-tab .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
@@ -118,7 +118,7 @@ tr.total td { font-weight: 700; background: var(--card-2); }
 .badge { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; background: color-mix(in srgb, var(--c, var(--accent)) 11%, white); color: var(--c, var(--accent)); white-space: nowrap; }
 .pill { display: inline-block; padding: 3px 9px; border-radius: 6px; font-size: 11.5px; font-weight: 600; background: var(--card-2); color: var(--muted); }
 .pill.ok { background: var(--green-soft); color: var(--green); } .pill.warn { background: var(--amber-soft); color: var(--amber); } .pill.bad { background: var(--red-soft); color: var(--red); } .pill.info { background: var(--blue-soft); color: var(--sea-ink); }
-.btn { display: inline-flex; text-decoration: none; align-items: center; gap: 7px; border: 1px solid transparent; border-radius: 9px; padding: 9px 15px; font-weight: 600; font-size: 13.5px; background: var(--accent); color: #fff; transition: .13s; white-space: nowrap; }
+.btn { display: inline-flex; text-decoration: none; align-items: center; gap: 7px; border: 1px solid transparent; border-radius: 9px; padding: 9px 15px; font-weight: 600; font-size: 13.5px; background: var(--accent); color: #fff; transition: background .2s ease, border-color .13s; white-space: nowrap; }
 .btn:hover { background: var(--accent-2); }
 .btn.sm { padding: 6px 11px; font-size: 12.5px; border-radius: 8px; }
 .btn.ghost { background: var(--card); color: var(--text); border-color: var(--line-strong); }
@@ -354,3 +354,6 @@ select.cell-in { text-align: left; }
 .btp-mail-body { margin: 0; background: var(--card-2); border-radius: 10px; padding: 12px 14px; font: inherit; font-size: 13px; white-space: pre-wrap; word-break: break-word; max-height: 240px; overflow: auto; }
 .seg .cnt { background: var(--card-2); border-radius: 999px; padding: 1px 7px; font-size: 11px; margin-left: 4px; }
 .seg button.active .cnt { background: rgba(255,255,255,.25); }
+
+/* Une bascule de structure ne doit pas clignoter pour qui préfère moins d'animation */
+@media (prefers-reduced-motion: reduce) { .univ, .s-tab.on, .btn { transition: none; } }
