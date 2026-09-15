@@ -10,7 +10,7 @@ Application interne de Mickael Rigaud pour piloter 4 activités (RGD Renova, BTP
 
 ## Arborescence
 - `index.html` — coquille, charge `js/app.js`.
-- `js/app.js` — login, mise en page, `NAV` (navigation en rail : une icône par univers, volet des écrans au clic, épinglable), routeur, formulaires mot de passe. `js/icons.js` — icônes SVG du rail.
+- `js/app.js` — login, mise en page, `NAV` (navigation horizontale : bande 1 = les univers, bande 2 = les écrans de l'univers ouvert ; une page peut demander `fullBleed: true` pour masquer la date et occuper la surface — cas de RGD Renova). `renderNav()` est appelée **avant** `page.render()` : une page qui pose des commandes dans `.topbar` (classe `.embed-actions`) les voit préservées d'un rendu à l'autre. `js/icons.js` — icônes SVG des univers.
 - `js/pages/*.js` — une page par fichier ; `js/pages/index.js` fait la table `pages` nom → fonction.
 - `js/data/db.js` — accès données (Supabase ou local). **Supabase renvoie 1000 lignes max par requête : le chargement est paginé avec `.range()`, ne pas retirer.**
 - `js/data/scope.js` — droits côté client (les mêmes règles sont imposées côté serveur par les policies RLS ; les deux doivent rester cohérentes).
