@@ -65,18 +65,6 @@ const NAV = [
     ],
   },
   {
-<<<<<<< Updated upstream
-    key: 'btpexp', icon: 'search', label: 'BTP Expertise', activity: 'btp', show: () => scope.activityKeys.includes('btp'), items: [
-      { hash: '#/btp', label: "Vue d'ensemble", exact: true },
-      { hash: '#/btp/todo', label: 'To-do list', count: () => scope.activities().filter(a => !a.done && a.due_date && daysSince(a.due_date) >= 0 && (() => { const d = db.byId('deals', a.deal_id); return d && d.activity === 'btp'; })()).length },
-      { hash: '#/btp/base', label: 'Base de données' },
-      { hash: '#/btp/dtu', label: 'DTU' },
-      { hash: '#/btp/mails', label: 'Mails types' },
-    ],
-  },
-  {
-=======
->>>>>>> Stashed changes
     key: 'recrutement', icon: 'target', label: 'Recrutement', show: () => scope.isDirection || scope.activityKeys.includes('courtage'), items: [
       { hash: '#/vivier', label: 'Vivier courtiers', count: () => db.t('broker_profiles').filter(r => !r.archive && ['contact', 'rdv'].includes(r.suivi)).length },
     ],
