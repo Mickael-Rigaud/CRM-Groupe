@@ -8,6 +8,7 @@ import { settingsPage } from './settings.js';
 import { homePage } from './home.js';
 import { patrimoinePage, propertiesPage, loansPage, expensesPage } from './patrimoine.js';
 import { vivierPage } from './vivier.js';
+import { rgdDashboardPage } from './rgd.js';
 
 import { locatifPage, leasesPage, unitsPage, rentalTodoPage, tenantContactsPage } from './locatif.js';
 export const pages = {
@@ -23,6 +24,7 @@ export const pages = {
   locatif_contacts: tenantContactsPage,
   patrimoine_charges: expensesPage,
   vivier: vivierPage,
+  rgd: rgdDashboardPage,
   dashboard: dashboardPage,
   today: todayPage,
   pipeline: pipelinePage,
