@@ -50,43 +50,67 @@ const guard = (root) => {
 // Trois blocs : les chiffres clés, la pipeline des missions, l'agenda Google du cabinet.
 const kpi = kpiEspace;
 
-// L'agenda du cabinet, affiché depuis Google. L'identifiant du calendrier est rangé
-// dans les réglages du CRM, pas dans le code : le dépôt est public.
+// L'agenda du cabinet, tenu dans Google Agenda et affiché ici. L'identifiant du
+// calendrier est rangé dans les réglages du CRM, pas dans le code : le dépôt est public.
+// Vue semaine par défaut, le choix reste d'une visite à l'autre.
 const CLE_AGENDA = 'btp_calendar_id';
+const CLE_VUE = 'crm_btp_agenda_vue';
+const VUES_AGENDA = [['WEEK', 'Semaine'], ['MONTH', 'Mois'], ['AGENDA', 'Planning']];
+const TITRES_VUE = { WEEK: 'Agenda de la semaine', MONTH: 'Agenda du mois', AGENDA: 'Prochains rendez-vous' };
+
+const vueChoisie = () => { try { return localStorage.getItem(CLE_VUE) || 'WEEK'; } catch { return 'WEEK'; } };
+const retenirVue = (v) => { try { localStorage.setItem(CLE_VUE, v); } catch { /* navigation privée */ } };
+
+// Google reprend nos couleurs pour le fond et les évènements : le cadre se fond
+// dans la page et suit la structure ouverte.
+function urlAgenda(id, mode) {
+  const lire = (v, repli) => (getComputedStyle(document.documentElement).getPropertyValue(v).trim() || repli);
+  return 'https://calendar.google.com/calendar/embed?' + new URLSearchParams({
+    src: id, ctz: 'Europe/Paris', mode,
+    wkst: '2',                       // la semaine commence le lundi
+    showTitle: '0', showPrint: '0', showTabs: '0', showCalendars: '0', showTz: '0', showNav: '1',
+    bgcolor: lire('--card', '#FFFFFF'),
+    color: lire('--accent-ink', '#004B62'),
+  });
+}
+
 function agenda() {
   const id = (db.setting(CLE_AGENDA) || '').trim();
   if (!id) {
     return `<div class="card">
-      <div class="card-head"><h2>Agenda</h2></div>
+      <div class="agenda-head"><span class="agenda-ico">📅</span><h2>Agenda</h2></div>
       <div class="btp-setup">
-        <p><b>L'agenda Google du cabinet n'est pas encore raccordé.</b></p>
+        <p><b>L&rsquo;agenda Google du cabinet n&rsquo;est pas encore raccordé.</b></p>
         <ol>
           <li>Ouvrez Google Agenda avec le compte du cabinet.</li>
           <li>Passez la souris sur le calendrier à afficher, <b>⋮</b> → <b>Paramètres et partage</b>.</li>
-          <li>Dans <b>Partager avec des personnes en particulier</b>, ajoutez l'adresse Google de chaque personne du cabinet qui doit le voir, en « Voir tous les détails ».</li>
-          <li>Plus bas, dans <b>Intégrer le calendrier</b>, copiez l'<b>identifiant du calendrier</b> (il ressemble à une adresse e-mail).</li>
+          <li>Dans <b>Partager avec des personnes en particulier</b>, ajoutez l&rsquo;adresse Google de chaque personne du cabinet qui doit le voir, en « Voir tous les détails ».</li>
+          <li>Plus bas, dans <b>Intégrer le calendrier</b>, copiez l&rsquo;<b>identifiant du calendrier</b> (il ressemble à une adresse e-mail).</li>
           <li>Collez-le ci-dessous.</li>
         </ol>
         ${scope.isDirection ? `<div class="form">
           <div class="field"><label>Identifiant du calendrier</label><input id="cal-id" placeholder="contact.exemple@gmail.com"></div>
           <div class="form-actions"><button class="btn" id="cal-save">Enregistrer</button></div>
         </div>` : '<p class="muted small">La direction peut le renseigner depuis cet écran.</p>'}
-        <p class="muted small">Chaque personne verra l'agenda avec son propre compte Google, après avoir été ajoutée au partage. Rien n'est rendu public, et aucun mot de passe n'est demandé.</p>
+        <p class="muted small">Chaque personne verra l&rsquo;agenda avec son propre compte Google, après avoir été ajoutée au partage. Rien n&rsquo;est rendu public, et aucun mot de passe n&rsquo;est demandé.</p>
       </div>
     </div>`;
   }
-  const src = 'https://calendar.google.com/calendar/embed?' + new URLSearchParams({
-    src: id, ctz: 'Europe/Paris', mode: 'AGENDA', showTitle: '0', showPrint: '0',
-    showCalendars: '0', showTz: '0', showTabs: '1', showNav: '1',
-  });
-  return `<div class="card btp-agenda">
-    <div class="card-head"><h2>Agenda</h2>
+
+  const vue = vueChoisie();
+  return `<div class="card agenda-card">
+    <div class="agenda-head">
+      <span class="agenda-ico">📅</span>
+      <h2>${TITRES_VUE[vue] || 'Agenda'}</h2>
+      <div class="seg agenda-vues">${VUES_AGENDA.map(([v, l]) => `<button type="button" data-vue="${v}" class="${v === vue ? 'active' : ''}">${l}</button>`).join('')}</div>
       <span class="grow"></span>
-      ${scope.isDirection ? '<button class="btn ghost sm" id="cal-edit">Changer de calendrier</button>' : ''}
-      <a class="btn ghost sm" href="https://calendar.google.com/calendar/r" target="_blank" rel="noopener">Ouvrir Google Agenda ↗</a>
+      ${scope.isDirection ? '<button type="button" class="btn ghost sm" id="cal-edit">Changer de calendrier</button>' : ''}
+      <a class="btn ghost sm" href="https://calendar.google.com/calendar/r/week" target="_blank" rel="noopener">Ouvrir dans Google Agenda ↗</a>
     </div>
-    <iframe src="${esc(src)}" title="Agenda BTP Expertise" loading="lazy"></iframe>
-    <p class="muted small">Affiché avec votre compte Google. Si le cadre reste vide, c'est que votre adresse n'a pas encore été ajoutée au partage du calendrier, ou que votre navigateur refuse la mémorisation des sites affichés dans un autre site.</p>
+    <div class="agenda-cadre agenda-${vue.toLowerCase()}">
+      <iframe src="${esc(urlAgenda(id, vue))}" title="Agenda BTP Expertise" loading="lazy"></iframe>
+    </div>
+    <p class="muted small">Cet agenda est celui de Google : ce qui est modifié là-bas apparaît ici, et inversement. Si le cadre reste vide, votre adresse n&rsquo;a pas encore été ajoutée au partage du calendrier, ou votre navigateur refuse la mémorisation des sites affichés dans un autre site.</p>
   </div>`;
 }
 
@@ -142,6 +166,7 @@ export const btpHomePage = {
         ${agenda()}`);
 
       root.querySelectorAll('[data-deal]').forEach(el => el.onclick = () => openDeal(el.dataset.deal, draw));
+      root.querySelectorAll('[data-vue]').forEach(b => b.onclick = () => { retenirVue(b.dataset.vue); draw(); });
       root.querySelector('#cal-save')?.addEventListener('click', async () => {
         const v = root.querySelector('#cal-id').value.trim();
         if (!v) return toast('Collez l\'identifiant du calendrier', 'warn');
