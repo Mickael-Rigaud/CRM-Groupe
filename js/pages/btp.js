@@ -22,8 +22,9 @@ const activities = () => {
     || isBtp(db.byId('contacts', a.contact_id)) || isBtp(db.byId('organisations', a.organisation_id)));
 };
 
-// Les cinq écrans du cabinet. « BTP Expertise » étant une ligne du menu Commercial,
-// la navigation entre ses écrans se fait ici, en onglets au-dessus du contenu.
+// Les cinq écrans du cabinet, présentés comme le tableau de bord RGD Renova :
+// un menu vertical à gauche, le contenu à droite. « BTP Expertise » reste une ligne
+// du menu Commercial du CRM ; cette coquille vit à l'intérieur de la page.
 const ONGLETS = [
   { hash: '#/btp', label: "Vue d'ensemble" },
   { hash: '#/btp/todo', label: 'To-do list' },
@@ -31,10 +32,33 @@ const ONGLETS = [
   { hash: '#/btp/dtu', label: 'DTU' },
   { hash: '#/btp/mails', label: 'Mails types' },
 ];
-const entete = (actif) => `<nav class="btp-tabs" aria-label="Écrans BTP Expertise">
-  <span class="btp-tabs-mark"><img src="assets/logos/btp.png" alt="" onerror="this.remove()">BTP Expertise</span>
-  ${ONGLETS.map(o => `<a href="${o.hash}" class="${o.hash === actif ? 'on' : ''}" ${o.hash === actif ? 'aria-current="page"' : ''}>${o.label}</a>`).join('')}
-</nav>`;
+const DATE_DU_JOUR = () => new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
+// Enveloppe un écran dans la coquille : menu à gauche, en-tête et contenu à droite.
+const cadre = (actif, titre, corps) => `
+  <div class="btp-app">
+    <aside class="btp-side">
+      <div class="btp-side-brand"><img src="assets/logos/btp.png" alt="" onerror="this.remove()"><span>BTP Expertise</span></div>
+      <nav class="btp-side-nav" aria-label="Écrans BTP Expertise">
+        ${ONGLETS.map(o => `<a href="${o.hash}" class="${o.hash === actif ? 'on' : ''}" ${o.hash === actif ? 'aria-current="page"' : ''}>${o.label}</a>`).join('')}
+      </nav>
+      <div class="btp-side-foot"><b>BTP Expertise</b><span>Expertise et conseil bâtiment</span></div>
+    </aside>
+    <div class="btp-main">
+      <header class="btp-head">
+        <h1>${esc(titre)}</h1>
+        <div class="datepill"><span>Aujourd&rsquo;hui</span>${DATE_DU_JOUR()}</div>
+      </header>
+      <div class="btp-body">${corps}</div>
+    </div>
+  </div>`;
+
+// La coquille occupe toute la hauteur restante : .content.flush enlève les marges
+// du CRM et s'étire, le menu et le contenu se partagent la surface.
+function poser(root) {
+  root.classList.add('flush');
+  return { retirer() { root.classList.remove('flush'); } };
+}
 
 const guard = (root) => {
   if (scope.activityKeys.includes(KEY)) return false;
@@ -98,6 +122,7 @@ export const btpHomePage = {
   title: () => 'BTP Expertise',
   render(root) {
     if (guard(root)) return {};
+    const coquille = poser(root);
 
     const draw = () => {
       const a = act();
@@ -132,8 +157,7 @@ export const btpHomePage = {
       const suite = ouvertes.filter(x => daysSince(x.due_date) < 0 && daysSince(x.due_date) >= -15).sort((x, y) => x.due_date.localeCompare(y.due_date));
       const aFaire = retard.concat(duJour, suite).slice(0, 6);
 
-      root.innerHTML = `
-        ${entete('#/btp')}
+      root.innerHTML = cadre('#/btp', "Vue d'ensemble", `
 
         <section class="card btp-hero">
           <div class="btp-hero-lbl">Chiffre d&rsquo;affaires signé · ${esc(periode)}</div>
@@ -179,7 +203,7 @@ export const btpHomePage = {
               <span class="grow"><b>${esc(d.title)}</b><br><small class="muted">${esc(dealParty(d))} · ${esc(a.stages.find(s => s.key === d.stage)?.label || d.stage)}</small></span>
               <span class="num">${d.amount ? eur(d.amount) : '—'}</span>
             </div>`).join('')}</div>` : '<div class="empty">Aucune affaire ouverte.</div>'}
-        </div>`;
+        </div>`);
 
       root.querySelector('#b-new-act').onclick = () => activityForm({}, null, draw);
       root.querySelectorAll('[data-deal]').forEach(el => el.onclick = () => openDeal(el.dataset.deal, draw));
@@ -187,7 +211,7 @@ export const btpHomePage = {
     };
 
     draw();
-    return { refresh: draw };
+    return { refresh: draw, destroy: coquille.retirer };
   },
 };
 
@@ -196,6 +220,7 @@ export const btpTodoPage = {
   title: () => 'BTP Expertise — To-do',
   render(root) {
     if (guard(root)) return {};
+    const coquille = poser(root);
     const state = { who: '', q: '', focus: null };
 
     const draw = () => {
@@ -212,8 +237,7 @@ export const btpTodoPage = {
       const faitesCeJour = liste.filter(x => x.done && x.done_at && daysSince(x.done_at) === 0);
       const bloc = (titre, l) => l.length ? `<div class="card today-group"><h3>${titre} <span>${l.length}</span></h3>${l.map(x => activityRowHtml(x, { showContext: true })).join('')}</div>` : '';
 
-      root.innerHTML = `
-        ${entete('#/btp/todo')}
+      root.innerHTML = cadre('#/btp/todo', "To-do list", `
         <div class="toolbar">
           ${searchInput('b-q', state, 'Rechercher une tâche…')}
           <select id="b-who"><option value="">Toute l&rsquo;équipe</option>${users.map(u => `<option value="${u.id}" ${state.who === u.id ? 'selected' : ''}>${esc(u.full_name)}</option>`).join('')}</select>
@@ -227,7 +251,7 @@ export const btpTodoPage = {
         ${bloc('Plus tard', plusTard)}
         ${bloc('Sans échéance', sansDate)}
         ${bloc('Fait aujourd&rsquo;hui', faitesCeJour)}
-        ${!ouvertes.length ? '<div class="card"><div class="empty">Rien à faire — tout est à jour.</div></div>' : ''}`;
+        ${!ouvertes.length ? '<div class="card"><div class="empty">Rien à faire — tout est à jour.</div></div>' : ''}`);
 
       bindSearch(root, 'b-q', state, draw); restoreFocus(root, state);
       root.querySelector('#b-who').onchange = e => { state.who = e.target.value; draw(); };
@@ -236,7 +260,7 @@ export const btpTodoPage = {
     };
 
     draw();
-    return { refresh: draw };
+    return { refresh: draw, destroy: coquille.retirer };
   },
 };
 
@@ -253,6 +277,7 @@ export const btpBasePage = {
   title: () => 'BTP Expertise — Base de données',
   render(root) {
     if (guard(root)) return {};
+    const coquille = poser(root);
     const state = { vue: 'clients', q: '', canal: '', focus: null };
 
     const draw = () => {
@@ -294,8 +319,7 @@ export const btpBasePage = {
         return contacts.filter(c => c.type === (v === 'clients' ? 'Client' : 'Prospect')).length;
       };
 
-      root.innerHTML = `
-        ${entete('#/btp/base')}
+      root.innerHTML = cadre('#/btp/base', "Base de données", `
         <div class="toolbar">
           <div class="seg">${VUES.map(v => `<button data-vue="${v.key}" class="${state.vue === v.key ? 'active' : ''}">${v.label} <span class="cnt">${compte(v.key)}</span></button>`).join('')}</div>
           <span class="grow"></span>
@@ -318,7 +342,7 @@ export const btpBasePage = {
               ${r.org ? `<td class="num">${r.apports}</td>` : `<td>${esc(r.canal)}</td><td>${r.affaire ? esc(r.affaire) : '—'}</td>`}
             </tr>`).join('') || `<tr><td colspan="${colonnes.length}"><div class="empty">Aucune fiche dans cette vue.</div></td></tr>`}</tbody>
           </table></div>
-        </div>`;
+        </div>`);
 
       bindSearch(root, 'b-q', state, draw); restoreFocus(root, state);
       root.querySelectorAll('[data-vue]').forEach(b => b.onclick = () => { state.vue = b.dataset.vue; draw(); });
@@ -328,7 +352,7 @@ export const btpBasePage = {
     };
 
     draw();
-    return { refresh: draw };
+    return { refresh: draw, destroy: coquille.retirer };
   },
 };
 
@@ -347,6 +371,7 @@ export const btpDtuPage = {
   title: () => 'BTP Expertise — DTU',
   render(root) {
     if (guard(root)) return {};
+    const coquille = poser(root);
     const state = { q: '', domaine: '', focus: null };
 
     const editer = (f, apres) => {
@@ -388,8 +413,7 @@ export const btpDtuPage = {
       const liste = toutes.filter(f => !state.domaine || f.domain === state.domaine)
         .filter(f => hit([f.code, f.title, f.domain, f.scope_text, f.checkpoints, f.notes], ts));
 
-      root.innerHTML = `
-        ${entete('#/btp/dtu')}
+      root.innerHTML = cadre('#/btp/dtu', "DTU", `
         <div class="toolbar">
           ${searchInput('b-q', state, 'Rechercher un numéro, un mot du titre, un point de contrôle…')}
           <select id="b-dom"><option value="">Tous les domaines</option>${domaines.map(d => `<option ${state.domaine === d ? 'selected' : ''}>${esc(d)}</option>`).join('')}</select>
@@ -402,7 +426,7 @@ export const btpDtuPage = {
             <span class="btp-code">${esc(f.code)}</span>
             <span class="btp-title">${esc(f.title)}</span>
             <span class="small muted">${esc(f.domain || '—')}${f.checkpoints ? ` · ${f.checkpoints.split('\n').filter(Boolean).length} point(s) de contrôle` : ''}</span>
-          </button>`).join('') || '<div class="card"><div class="empty">Aucune fiche. Lancez <code>supabase/lot5-btp.sql</code> pour charger les DTU courants, ou créez la première.</div></div>'}</div>`;
+          </button>`).join('') || '<div class="card"><div class="empty">Aucune fiche. Lancez <code>supabase/lot5-btp.sql</code> pour charger les DTU courants, ou créez la première.</div></div>'}</div>`);
 
       bindSearch(root, 'b-q', state, draw); restoreFocus(root, state);
       root.querySelector('#b-dom').onchange = e => { state.domaine = e.target.value; draw(); };
@@ -411,7 +435,7 @@ export const btpDtuPage = {
     };
 
     draw();
-    return { refresh: draw };
+    return { refresh: draw, destroy: coquille.retirer };
   },
 };
 
@@ -427,6 +451,7 @@ export const btpMailsPage = {
   title: () => 'BTP Expertise — Mails types',
   render(root) {
     if (guard(root)) return {};
+    const coquille = poser(root);
     const state = { theme: '', q: '', focus: null };
 
     const editer = (m0, apres) => {
@@ -466,8 +491,7 @@ export const btpMailsPage = {
         .map(t => [t, liste.filter(m => m.theme === t).sort((a, b) => (a.position || 0) - (b.position || 0))])
         .filter(([, g]) => g.length);
 
-      root.innerHTML = `
-        ${entete('#/btp/mails')}
+      root.innerHTML = cadre('#/btp/mails', "Mails types", `
         <div class="toolbar">
           ${searchInput('b-q', state, 'Rechercher un modèle…')}
           <select id="b-theme"><option value="">Toutes les thématiques</option>${themes.map(t => `<option ${state.theme === t ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select>
@@ -487,7 +511,7 @@ export const btpMailsPage = {
               <pre class="btp-mail-body">${esc(m.body)}</pre>
             </div>`).join('')}
           </div>`).join('')
-        : '<div class="card"><div class="empty">Aucun modèle pour l&rsquo;instant. Créez le premier avec « + Modèle » : la thématique que vous lui donnez (Prise de contact, Devis, Rapport…) sert de rangement.</div></div>'}`;
+        : '<div class="card"><div class="empty">Aucun modèle pour l&rsquo;instant. Créez le premier avec « + Modèle » : la thématique que vous lui donnez (Prise de contact, Devis, Rapport…) sert de rangement.</div></div>'}`);
 
       bindSearch(root, 'b-q', state, draw); restoreFocus(root, state);
       root.querySelector('#b-theme').onchange = e => { state.theme = e.target.value; draw(); };
@@ -500,6 +524,6 @@ export const btpMailsPage = {
     };
 
     draw();
-    return { refresh: draw };
+    return { refresh: draw, destroy: coquille.retirer };
   },
 };

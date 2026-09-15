@@ -78,8 +78,8 @@ input, select, textarea { font: inherit; }
 .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .content { flex: 1; }
 .topbar { background: rgba(245,245,250,.92); backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); padding: 8px 20px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.topbar .datepill { background: var(--card); border: 1px solid var(--line); border-radius: 9px; padding: 5px 12px 5px 5px; display: flex; align-items: center; gap: 9px; font-weight: 600; font-size: 12.5px; }
-.topbar .datepill span { background: var(--accent); color: var(--on-accent); font-size: 10px; font-weight: 700; padding: 4px 8px; border-radius: 6px; text-transform: uppercase; letter-spacing: .06em; }
+.topbar .datepill, .btp-head .datepill { background: var(--card); border: 1px solid var(--line); border-radius: 9px; padding: 5px 12px 5px 5px; display: flex; align-items: center; gap: 9px; font-weight: 600; font-size: 12.5px; }
+.topbar .datepill span, .btp-head .datepill span { background: var(--accent); color: var(--on-accent); font-size: 10px; font-weight: 700; padding: 4px 8px; border-radius: 6px; text-transform: uppercase; letter-spacing: .06em; }
 .content { padding: 24px 28px 60px; display: flex; flex-direction: column; gap: 18px; }
 .topbar.bare .datepill { display: none; }
 .topbar[hidden] { display: none; }
@@ -329,12 +329,35 @@ select.cell-in { text-align: left; }
 
 /* ---------- Espace BTP Expertise ---------- */
 /* L'accent de ces écrans vient de applyBrand() : ACTIVITIES.btp est la seule source. */
-.btp-tabs { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; border-bottom: 1px solid var(--line); padding-bottom: 10px; margin-bottom: 4px; }
-.btp-tabs-mark { display: inline-flex; align-items: center; gap: 8px; font-family: var(--font-display); font-weight: 700; color: var(--accent-ink); margin-right: 10px; }
-.btp-tabs-mark img { width: 22px; height: 22px; object-fit: contain; }
-.btp-tabs a { padding: 7px 13px; border-radius: 9px; text-decoration: none; font-size: 13px; font-weight: 600; color: var(--muted); }
-.btp-tabs a:hover { background: var(--card-2); color: var(--text); }
-.btp-tabs a.on { background: var(--accent); color: var(--on-accent); }
+/* Coquille d'une structure : menu vertical à gauche, contenu à droite —
+   la présentation du tableau de bord RGD Renova, aux couleurs de la structure. */
+.content.flush { padding: 0; gap: 0; display: flex; }
+.btp-app { flex: 1; display: flex; min-width: 0; background: var(--bg); }
+.btp-side { width: 224px; flex-shrink: 0; background: var(--accent-ink); color: #fff; display: flex; flex-direction: column; }
+.btp-side-brand { display: flex; align-items: center; gap: 10px; padding: 20px 18px; border-bottom: 1px solid rgba(255,255,255,.1); font-family: var(--font-display); font-weight: 700; font-size: 15px; letter-spacing: -.01em; }
+.btp-side-brand img { width: 30px; height: 30px; object-fit: contain; background: #fff; border-radius: 8px; padding: 3px; }
+.btp-side-nav { flex: 1; padding: 14px 12px; display: flex; flex-direction: column; gap: 3px; }
+.btp-side-nav a { display: block; padding: 11px 15px; border-radius: 9px; text-decoration: none; color: rgba(255,255,255,.76); font-size: 13.5px; font-weight: 600; transition: background .13s, color .13s; }
+.btp-side-nav a:hover { background: rgba(255,255,255,.09); color: #fff; }
+.btp-side-nav a.on { background: var(--accent); color: var(--on-accent); }
+.btp-side-foot { padding: 16px 18px 20px; border-top: 1px solid rgba(255,255,255,.1); display: flex; flex-direction: column; gap: 3px; }
+.btp-side-foot b { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--accent); }
+.btp-side-foot span { font-size: 11.5px; color: rgba(255,255,255,.55); }
+.btp-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.btp-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding: 20px 28px; background: var(--card); border-bottom: 1px solid var(--line); }
+.btp-head h1 { font-family: var(--font-display); font-size: 25px; font-weight: 700; margin: 0; letter-spacing: -.02em; }
+.btp-body { flex: 1; padding: 22px 28px 50px; display: flex; flex-direction: column; gap: 18px; }
+/* Une seule pastille de date à l'écran : celle de la structure */
+body:has(.btp-app) .subnav .datepill { display: none; }
+@media (max-width: 820px) {
+  .btp-app { flex-direction: column; }
+  .btp-side { width: 100%; }
+  .btp-side-nav { flex-direction: row; flex-wrap: wrap; }
+  .btp-side-foot { display: none; }
+  .btp-head, .btp-body { padding-left: 16px; padding-right: 16px; }
+}
+@media (prefers-reduced-motion: reduce) { .btp-side-nav a { transition: none; } }
+
 /* Bandeau du chiffre d'affaires, graphique compris : même présentation que le
    tableau de bord RGD Renova, aux couleurs de la structure ouverte (--accent). */
 .btp-hero { padding: 24px 28px 18px; }
