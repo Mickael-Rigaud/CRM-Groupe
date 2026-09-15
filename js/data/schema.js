@@ -29,15 +29,18 @@ export const ACTIVITIES = {
     accent: '#00BBF6', on: '#00455B', accent2: '#00A8DD', soft: '#E6F8FF', ink: '#004B62',
     amountLabel: 'Montant mission HT (€)',
     rdvStage: 'rdv1',
+    // Les clés « lead » et « rdv1 » sont celles qu'écrit la prise de rendez-vous du site
+    // btpexpertise.fr (fonction creer_prospect_btp de Supabase) : ne pas les renommer.
+    // À partir du RDV sur place la mission est engagée : ces étapes comptent en réalisation.
     stages: [
-      { key: 'lead', label: 'Nouveau lead', p: 5 },
+      { key: 'lead', label: 'Nouveau', p: 5 },
       { key: 'rdv1', label: 'RDV 1', p: 10 },
-      { key: 'qualifie', label: 'Qualifié', p: 15 },
-      { key: 'rdv', label: 'RDV / visite planifié', p: 35 },
-      { key: 'proposition', label: 'Proposition envoyée', p: 60 },
-      { key: 'mission_planifiee', label: 'Mission planifiée', p: 100, delivery: true },
-      { key: 'mission_realisee', label: 'Mission réalisée', p: 100, delivery: true },
-      { key: 'rapport_remis', label: 'Rapport remis', p: 100, delivery: true },
+      { key: 'qualifie', label: 'Qualifié', p: 20 },
+      { key: 'proposition', label: 'Lettre de mission', p: 60 },
+      { key: 'rdv', label: 'RDV sur place', p: 100, delivery: true },
+      { key: 'mission_realisee', label: 'Rédaction du rapport', p: 100, delivery: true },
+      { key: 'rdv_complementaire', label: 'RDV complémentaire', p: 100, delivery: true },
+      { key: 'rapport_remis', label: 'Rapport émis', p: 100, delivery: true },
     ],
     fields: [
       { key: 'problematique', label: 'Type de problématique', type: 'select', options: ['Malfaçons', 'Fissures', 'Humidité', 'Plomberie', 'Électricité', 'Non-conformité', 'Litige travaux', 'Réception de travaux', 'AMO / accompagnement', 'Avant achat', 'Autre'] },

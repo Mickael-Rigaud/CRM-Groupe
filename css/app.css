@@ -358,24 +358,8 @@ body:has(.btp-app) .subnav .datepill { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .btp-side-nav a { transition: none; } }
 
-/* Bandeau du chiffre d'affaires, graphique compris : même présentation que le
-   tableau de bord RGD Renova, aux couleurs de la structure ouverte (--accent). */
-.btp-hero { padding: 24px 28px 18px; }
-.btp-hero-lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted-2); font-weight: 700; margin-bottom: 6px; }
-.btp-hero-val { font-family: var(--font-display); font-size: 40px; font-weight: 700; line-height: 1; color: var(--accent-ink); letter-spacing: -.02em; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-variant-numeric: lining-nums tabular-nums; }
-.btp-hero-tag { font-family: inherit; font-size: 11.5px; font-weight: 700; color: var(--on-accent); background: var(--accent); padding: 4px 11px; border-radius: 999px; letter-spacing: .03em; }
-.btp-hero-sub { color: var(--muted); font-size: 13px; margin-top: 8px; }
-.btp-graph { display: block; width: 100%; height: auto; margin-top: 14px; overflow: visible; }
-.btp-graph .g-grid { stroke: var(--line); stroke-width: 1; }
-.btp-graph .g-axe { fill: var(--muted-2); font-size: 15px; font-weight: 600; text-anchor: end; }
-.btp-graph .g-bar { fill: var(--accent); opacity: .16; }
-.btp-graph .g-line { fill: none; stroke: var(--accent); stroke-width: 2.6; stroke-linejoin: round; stroke-linecap: round; }
-.btp-graph .g-pt { fill: var(--accent); }
-.btp-graph .g-lbl { fill: var(--muted-2); font-size: 15px; text-anchor: middle; letter-spacing: .04em; }
-.btp-graph .g-lbl.now { fill: var(--accent-ink); font-weight: 700; }
-
 /* Indicateurs : libellé à gauche, icône en pastille à droite, valeur en gros */
-.btp-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; }
+.btp-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); gap: 14px; }
 .btp-kpi { position: relative; overflow: hidden; display: flex; flex-direction: column; gap: 2px; text-decoration: none; color: inherit; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px 18px; box-shadow: var(--shadow); transition: transform .13s, box-shadow .13s, border-color .13s; }
 .btp-kpi::after { content: ""; position: absolute; inset: auto -40px -40px auto; width: 150px; height: 150px; border-radius: 50%; background: var(--ts); opacity: .5; }
 .btp-kpi:hover { transform: translateY(-2px); box-shadow: var(--shadow-lift); border-color: var(--t); }
@@ -402,6 +386,27 @@ body:has(.btp-app) .subnav .datepill { display: none; }
 .btp-recentes { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); }
 @media (max-width: 900px) { .btp-split { grid-template-columns: 1fr; } }
 @media (prefers-reduced-motion: reduce) { .btp-kpi { transition: none; } }
+
+/* Pipeline en colonnes, dans la vue d'ensemble */
+.btp-kanban { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(168px, 1fr); gap: 12px; overflow-x: auto; padding-bottom: 6px; }
+.btp-col { background: var(--card-2); border-radius: var(--radius); padding: 12px 11px; display: flex; flex-direction: column; min-width: 0; }
+.btp-col-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.btp-col-head b { font-size: 12.5px; font-weight: 700; line-height: 1.25; }
+.btp-col-head span { font-family: var(--font-display); font-size: 16px; font-weight: 700; color: var(--accent-ink); }
+.btp-col-sum { font-size: 11.5px; color: var(--muted); margin: 3px 0 9px; }
+.btp-col-body { display: flex; flex-direction: column; gap: 7px; }
+.btp-card-deal { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; text-align: left; width: 100%; background: var(--card); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 9px; padding: 9px 10px; font-size: 12.5px; }
+.btp-card-deal:hover { border-color: var(--accent); box-shadow: var(--shadow-lift); }
+.btp-card-deal b { font-weight: 600; line-height: 1.3; }
+.btp-card-deal .muted { font-size: 11.5px; }
+.btp-card-amount { font-weight: 700; color: var(--accent-ink); font-variant-numeric: tabular-nums; }
+.btp-col-vide { color: var(--muted-2); font-size: 12px; padding: 4px 2px; }
+
+/* Agenda Google */
+.btp-agenda iframe { width: 100%; height: 460px; border: 1px solid var(--line); border-radius: var(--radius); background: #fff; display: block; }
+.btp-agenda p { margin: 10px 0 0; }
+.btp-setup ol { margin: 8px 0 14px; padding-left: 20px; display: flex; flex-direction: column; gap: 5px; font-size: 13.5px; }
+.btp-setup p { margin: 0 0 6px; }
 
 .btp-pipe { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 14px; }
 .btp-stage-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: 12.5px; margin-bottom: 6px; }
