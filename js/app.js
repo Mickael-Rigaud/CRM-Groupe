@@ -5,6 +5,7 @@ import { scope } from './data/scope.js';
 import { ACTIVITIES, ROLES } from './data/schema.js';
 import { esc, toast, isoDay, daysSince, closeModal, openModal } from './ui.js';
 import { pages } from './pages/index.js';
+import { icon } from './icons.js';
 
 
 const app = document.getElementById('app');
@@ -43,57 +44,142 @@ function renderLogin(error = '') {
 }
 
 // ---------- Mise en page ----------
+// Navigation en rail : une icône par univers dans la colonne étroite, les écrans de
+// l'univers ouvert dans un volet. Le volet se referme après la navigation, sauf s'il est épinglé.
+const lateRent = () => { const k = isoDay().slice(0, 7); return db.t('leases').filter(l => l.active !== false && (!l.start_date || l.start_date.slice(0, 7) <= k) && (!l.end_date || l.end_date.slice(0, 7) >= k) && db.t('rent_payments').filter(x => x.lease_id === l.id && x.month.slice(0, 7) <= k).reduce((s, x) => s + (Number(x.due) || 0) - ((x.apl != null || x.tenant_paid != null) ? (Number(x.apl) || 0) + (Number(x.tenant_paid) || 0) : Number(x.amount) || 0) + (Number(x.adjustment) || 0), 0) > 0.005).length; };
+
 const NAV = [
-  { hash: '#/home', label: 'Tableau de bord', icon: '◫' },
-  { hash: '#/today', label: "À faire aujourd'hui", icon: '☑', count: () => scope.activities().filter(a => !a.done && a.due_date && daysSince(a.due_date) >= 0).length },
-  { sep: 'Commercial' },
-  { hash: '#/dashboard', label: "Vue d'ensemble", icon: '📊', direction: true },
-  ...Object.values(ACTIVITIES).map(a => ({ hash: `#/pipeline/${a.key}`, label: a.label, dot: a.color, sub: true, activity: a.key, count: () => scope.deals().filter(d => d.activity === a.key && d.status === 'open').length })),
-  { hash: '#/contacts', label: 'Contacts', icon: '👤' },
-  { hash: '#/partners', label: 'Partenaires', icon: '🤝' },
-  { hash: '#/acquisition', label: 'Acquisition', icon: '📈', direction: true },
-  { sep: 'Recrutement', show: () => scope.isDirection || scope.activityKeys.includes('courtage') },
-  { hash: '#/vivier', label: 'Vivier courtiers', icon: '🏦', show: () => scope.isDirection || scope.activityKeys.includes('courtage'), count: () => db.t('broker_profiles').filter(r => !r.archive && ['contact', 'rdv'].includes(r.suivi)).length },
-  { sep: 'Patrimoine', show: () => scope.canPatrimony },
-  { hash: '#/patrimoine', label: "Vue d'ensemble", icon: '🏠', show: () => scope.canPatrimony, exact: true },
-  { hash: '#/patrimoine/biens', label: 'Biens', icon: '🏘', sub: true, show: () => scope.canPatrimony },
-  { hash: '#/patrimoine/prets', label: 'Prêts', icon: '🏦', sub: true, show: () => scope.canPatrimony },
-  { hash: '#/patrimoine/charges', label: 'Charges', icon: '🧾', sub: true, show: () => scope.canPatrimony },
-  { sep: 'Gestion locative', show: () => scope.canRental },
-  { hash: '#/locatif', label: 'Suivi des loyers', icon: '💶', show: () => scope.canRental, exact: true },
-  { hash: '#/locatif/baux', label: 'Baux et locataires', icon: '📝', sub: true, show: () => scope.canRental },
-  { hash: '#/locatif/contacts', label: 'Contacts locataires', icon: '☎', sub: true, show: () => scope.canRental },
-  { hash: '#/locatif/lots', label: 'Lots', icon: '🚪', sub: true, show: () => scope.canRental },
-  { hash: '#/locatif/suivi', label: 'À faire locatif', icon: '⚠', sub: true, show: () => scope.canRental, count: () => { const k = isoDay().slice(0, 7); return db.t('leases').filter(l => l.active !== false && (!l.start_date || l.start_date.slice(0, 7) <= k) && (!l.end_date || l.end_date.slice(0, 7) >= k) && db.t('rent_payments').filter(x => x.lease_id === l.id && x.month.slice(0, 7) <= k).reduce((s, x) => s + (Number(x.due) || 0) - ((x.apl != null || x.tenant_paid != null) ? (Number(x.apl) || 0) + (Number(x.tenant_paid) || 0) : Number(x.amount) || 0) + (Number(x.adjustment) || 0), 0) > 0.005).length; } },
-  { sep: 'Réglages' },
-  { hash: '#/settings', label: 'Paramètres', icon: '⚙' },
+  { key: 'home', icon: 'home', label: 'Tableau de bord', hash: '#/home' },
+  { key: 'today', icon: 'check', label: "À faire aujourd'hui", hash: '#/today', count: () => scope.activities().filter(a => !a.done && a.due_date && daysSince(a.due_date) >= 0).length },
+  {
+    key: 'commercial', icon: 'kanban', label: 'Commercial', items: [
+      { hash: '#/dashboard', label: "Vue d'ensemble", direction: true },
+      ...Object.values(ACTIVITIES).map(a => ({ hash: `#/pipeline/${a.key}`, label: a.label, dot: a.color, activity: a.key, count: () => scope.deals().filter(d => d.activity === a.key && d.status === 'open').length })),
+      { hash: '#/contacts', label: 'Contacts' },
+      { hash: '#/partners', label: 'Partenaires' },
+      { hash: '#/acquisition', label: 'Acquisition', direction: true },
+    ],
+  },
+  {
+    key: 'recrutement', icon: 'target', label: 'Recrutement', show: () => scope.isDirection || scope.activityKeys.includes('courtage'), items: [
+      { hash: '#/vivier', label: 'Vivier courtiers', count: () => db.t('broker_profiles').filter(r => !r.archive && ['contact', 'rdv'].includes(r.suivi)).length },
+    ],
+  },
+  {
+    key: 'patrimoine', icon: 'building', label: 'Patrimoine', show: () => scope.canPatrimony, items: [
+      { hash: '#/patrimoine', label: "Vue d'ensemble", exact: true },
+      { hash: '#/patrimoine/biens', label: 'Biens' },
+      { hash: '#/patrimoine/prets', label: 'Prêts' },
+      { hash: '#/patrimoine/charges', label: 'Charges' },
+    ],
+  },
+  {
+    key: 'locatif', icon: 'key', label: 'Gestion locative', show: () => scope.canRental, items: [
+      { hash: '#/locatif', label: 'Suivi des loyers', exact: true },
+      { hash: '#/locatif/baux', label: 'Baux et locataires' },
+      { hash: '#/locatif/contacts', label: 'Contacts locataires' },
+      { hash: '#/locatif/lots', label: 'Lots' },
+      { hash: '#/locatif/suivi', label: 'À faire locatif', count: lateRent },
+    ],
+  },
+  { key: 'settings', icon: 'gear', label: 'Paramètres', hash: '#/settings', bottom: true },
 ];
+
+const PIN_KEY = 'crm_nav_pin';
+let lastHash = null;
+const navState = {
+  open: null,                                   // univers dont le volet est ouvert
+  get pinned() { try { return localStorage.getItem(PIN_KEY) === '1'; } catch { return false; } },
+  set pinned(v) { try { localStorage.setItem(PIN_KEY, v ? '1' : '0'); } catch { /* navigation privée */ } },
+};
+// Entrées visibles d'un univers, selon le rôle et les activités du profil
+const itemsOf = (g) => (g.items || []).filter(i => (!i.direction || scope.isDirection) && (!i.activity || scope.activityKeys.includes(i.activity)));
+const groups = () => NAV.filter(g => !g.show || g.show()).filter(g => !g.items || itemsOf(g).length);
+const isOn = (i, hash) => i.exact ? hash === i.hash : hash.startsWith(i.hash);
+const groupOf = (hash) => groups().find(g => g.hash ? isOn(g, hash) : itemsOf(g).some(i => isOn(i, hash)));
 
 function renderLayout() {
   const u = scope.user;
   app.innerHTML = `
-    <aside class="sidebar">
-      <div class="brand"><div class="logo">${esc(CONFIG.APP_NAME)}</div><small>Pilotage des activités</small></div>
-      <nav class="nav" id="nav"></nav>
-      <div class="userbox"><div class="role">${esc(ROLES[u.role]?.label || u.role)}</div><div class="name">${esc(u.full_name)}</div><div style="display:flex;gap:6px">${db.demo ? '' : '<button class="icon-btn" id="pwd" title="Changer mon mot de passe" style="color:#fff">🔑</button>'}<button class="btn ghost sm" id="logout" style="flex:1;color:#fff;background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.25)">Déconnexion</button></div></div>
-    </aside>
+    <aside class="rail" id="rail" aria-label="Navigation principale"></aside>
+    <div class="flyout" id="flyout" hidden></div>
     <div class="main">
       <header class="topbar"><h1 id="page-title">—</h1><div class="datepill"><span>Aujourd'hui</span>${new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</div></header>
       <main class="content" id="content"></main>
     </div>`;
-  app.querySelector('#pwd')?.addEventListener('click', () => passwordForm(false));
-  app.querySelector('#logout').onclick = async () => { await db.signOut(); location.hash = ''; scope.set(null); renderLogin(); };
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && navState.open && !navState.pinned) closeFlyout(); });
+  // En phase de capture : le rail est réécrit à chaque rendu, la cible d'un clic « bulle »
+  // n'est donc plus rattachée au document quand ce test s'exécute.
+  document.addEventListener('click', e => {
+    if (!navState.open || navState.pinned) return;
+    if (!e.target.closest('#flyout') && !e.target.closest('#rail')) closeFlyout();
+  }, { capture: true });
   renderNav();
 }
+
+function closeFlyout() { navState.open = null; renderNav(); }
+
 function renderNav() {
-  const nav = document.getElementById('nav'); if (!nav) return;
+  const rail = document.getElementById('rail'); if (!rail) return;
   const hash = location.hash || '#/home';
-  nav.innerHTML = NAV.filter(n => !n.direction || scope.isDirection).filter(n => !n.activity || scope.activityKeys.includes(n.activity)).filter(n => !n.show || n.show()).map(n => {
-    if (n.sep) return `<div class="sep">${esc(n.sep)}</div>`;
-    const active = (n.exact ? hash === n.hash : hash.startsWith(n.hash)) ? 'active' : '';
-    const cnt = n.count ? n.count() : 0;
-    return `<a href="${n.hash}" class="${active} ${n.sub ? 'sub' : ''}">${n.dot ? `<span class="dot" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${n.dot};box-shadow:0 0 0 2px rgba(255,255,255,.35)"></span>` : `<span>${n.icon}</span>`}${esc(n.label)}${cnt ? `<span class="cnt">${cnt}</span>` : ''}</a>`;
-  }).join('');
+  const u = scope.user;
+  const here = groupOf(hash);
+  // Volet épinglé : il suit la page ouverte, mais seulement quand on vient de naviguer —
+  // sinon il écraserait l'univers que l'on est en train de parcourir.
+  if (hash !== lastHash) { lastHash = hash; if (navState.pinned) navState.open = here?.items ? here.key : null; }
+  if (navState.open && navState.open !== '__me' && !groups().some(g => g.key === navState.open)) navState.open = null;
+
+  const btn = (g) => {
+    const items = itemsOf(g);
+    const single = g.hash || items.length === 1;
+    const cnt = g.count ? g.count() : items.reduce((s, i) => s + (i.count ? i.count() : 0), 0);
+    const on = here?.key === g.key || navState.open === g.key;
+    return `<button type="button" class="rail-i ${on ? 'on' : ''}" data-nav="${g.key}" aria-label="${esc(g.label)}" ${navState.open === g.key ? 'aria-expanded="true"' : ''} title="${esc(g.label)}">
+      ${icon(g.icon)}<span class="rail-lbl">${esc(g.label)}</span>${cnt ? `<span class="b">${cnt}</span>` : ''}${single ? '' : '<span class="more" aria-hidden="true"></span>'}
+      <span class="tip">${esc(g.label)}</span></button>`;
+  };
+  const gs = groups();
+  rail.innerHTML = `
+    <a class="rail-logo" href="#/home" title="${esc(CONFIG.APP_NAME)}"><span>CG</span></a>
+    <div class="rail-set">${gs.filter(g => !g.bottom).map(btn).join('')}</div>
+    <div class="rail-set bottom">${gs.filter(g => g.bottom).map(btn).join('')}
+      <button type="button" class="rail-i avatar" data-nav="__me" aria-label="Mon compte"><span class="ini">${esc((u.full_name || '?').split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase())}</span><span class="rail-lbl">Mon compte</span><span class="tip">${esc(u.full_name)}</span></button>
+    </div>`;
+
+  const fly = document.getElementById('flyout');
+  const g = navState.open === '__me' ? null : gs.find(x => x.key === navState.open);
+  if (navState.open === '__me') {
+    fly.hidden = false;
+    fly.innerHTML = `<div class="fly-head"><h2>Mon compte</h2></div>
+      <div class="fly-me"><div class="role">${esc(ROLES[u.role]?.label || u.role)}</div><div class="name">${esc(u.full_name)}</div>${u.email ? `<div class="mail">${esc(u.email)}</div>` : ''}</div>
+      <div class="fly-list">${db.demo ? '' : '<button type="button" class="fly-act" id="pwd">Changer mon mot de passe</button>'}<button type="button" class="fly-act danger" id="logout">Déconnexion</button></div>`;
+    fly.querySelector('#pwd')?.addEventListener('click', () => { closeFlyout(); passwordForm(false); });
+    fly.querySelector('#logout').onclick = async () => { await db.signOut(); location.hash = ''; scope.set(null); navState.open = null; renderLogin(); };
+  } else if (g) {
+    fly.hidden = false;
+    fly.innerHTML = `<div class="fly-head"><h2>${esc(g.label)}</h2><button type="button" class="pin ${navState.pinned ? 'on' : ''}" id="nav-pin" aria-pressed="${navState.pinned}" title="${navState.pinned ? 'Détacher le volet' : 'Garder le volet ouvert'}">${navState.pinned ? '◉' : '○'}</button></div>
+      <nav class="fly-list">${itemsOf(g).map(i => {
+        const cnt = i.count ? i.count() : 0;
+        return `<a href="${i.hash}" class="${isOn(i, hash) ? 'on' : ''}" ${isOn(i, hash) ? 'aria-current="page"' : ''}>${i.dot ? `<span class="dot" style="background:${i.dot}"></span>` : ''}${esc(i.label)}${cnt ? `<span class="cnt">${cnt}</span>` : ''}</a>`;
+      }).join('')}</nav>`;
+    fly.querySelector('#nav-pin').onclick = () => { navState.pinned = !navState.pinned; renderNav(); };
+    fly.querySelectorAll('a').forEach(a => a.addEventListener('click', () => { if (!navState.pinned) navState.open = null; }));
+  } else {
+    fly.hidden = true; fly.innerHTML = '';
+  }
+
+  // Barre horizontale (mobile) : garder l'univers en cours sous les yeux
+  if (rail.scrollWidth > rail.clientWidth) rail.querySelector('.rail-i.on')?.scrollIntoView({ block: 'nearest', inline: 'center' });
+
+  rail.querySelectorAll('[data-nav]').forEach(b => b.onclick = () => {
+    const key = b.dataset.nav;
+    if (key === '__me') { navState.open = navState.open === '__me' ? null : '__me'; return renderNav(); }
+    const grp = gs.find(x => x.key === key); const items = itemsOf(grp);
+    if (grp.hash) { navState.open = null; location.hash = grp.hash; return renderNav(); }
+    if (items.length === 1) { navState.open = null; location.hash = items[0].hash; return renderNav(); }
+    navState.open = navState.open === key ? null : key;
+    renderNav();
+  });
 }
 
 // ---------- Routeur ----------
