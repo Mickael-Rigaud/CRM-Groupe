@@ -54,13 +54,22 @@ const NAV = [
   {
     key: 'commercial', icon: 'kanban', label: 'Commercial', items: [
       { hash: '#/dashboard', label: "Vue d'ensemble", direction: true },
-      // RGD Renova se pilote dans son propre outil : la ligne ouvre l'application, pas un pipeline.
-      ...Object.values(ACTIVITIES).map(a => a.key === 'rgd'
-        ? { hash: '#/rgd', label: a.label, dot: a.color, activity: a.key }
-        : { hash: `#/pipeline/${a.key}`, label: a.label, dot: a.color, activity: a.key, count: () => scope.deals().filter(d => d.activity === a.key && d.status === 'open').length }),
+      // Les structures qui ont leur propre espace n'apparaissent pas ici : RGD Renova a son
+      // application, BTP Expertise a son univers dans le rail. Restent les pipelines du CRM.
+      { hash: '#/rgd', label: ACTIVITIES.rgd.label, dot: ACTIVITIES.rgd.color, activity: 'rgd' },
+      ...Object.values(ACTIVITIES).filter(a => !['rgd', 'btp'].includes(a.key)).map(a => ({ hash: `#/pipeline/${a.key}`, label: a.label, dot: a.color, activity: a.key, count: () => scope.deals().filter(d => d.activity === a.key && d.status === 'open').length })),
       { hash: '#/contacts', label: 'Contacts' },
       { hash: '#/partners', label: 'Partenaires' },
       { hash: '#/acquisition', label: 'Acquisition', direction: true },
+    ],
+  },
+  {
+    key: 'btpexp', icon: 'search', label: 'BTP Expertise', show: () => scope.activityKeys.includes('btp'), items: [
+      { hash: '#/btp', label: "Vue d'ensemble", exact: true },
+      { hash: '#/btp/todo', label: 'To-do list', count: () => scope.activities().filter(a => !a.done && a.due_date && daysSince(a.due_date) >= 0 && (() => { const d = db.byId('deals', a.deal_id); return d && d.activity === 'btp'; })()).length },
+      { hash: '#/btp/base', label: 'Base de données' },
+      { hash: '#/btp/dtu', label: 'DTU' },
+      { hash: '#/btp/mails', label: 'Mails types' },
     ],
   },
   {
@@ -189,6 +198,7 @@ function route() {
   let page = pages[name] || pages.home;
   if (name === 'patrimoine') page = pages['patrimoine_' + (param || 'home')] || pages.patrimoine_home;
   if (name === 'locatif') page = pages['locatif_' + (param || 'home')] || pages.locatif_home;
+  if (name === 'btp') page = pages['btp_' + (param || 'home')] || pages.btp_home;
   if (page.directionOnly && !scope.isDirection) page = pages.today;
   if (name === 'pipeline' && !scope.activityKeys.includes(param)) { location.hash = `#/pipeline/${scope.activityKeys[0] || 'rgd'}`; return; }
   closeModal(true);

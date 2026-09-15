@@ -77,6 +77,14 @@ export const SEED = {
     { key: 'intake_token', value: 'demo-token-a-changer' },
   ],
   broker_profiles: SEED_BROKERS,
+  dtu_sheets: [
+    { id: 'dtu-20-1', code: 'NF DTU 20.1', title: 'Ouvrages en maçonnerie de petits éléments — parois et murs', domain: 'Maçonnerie', position: 40, checkpoints: '', scope_text: '' },
+    { id: 'dtu-25-41', code: 'NF DTU 25.41', title: 'Ouvrages en plaques de plâtre', domain: 'Plâtrerie', position: 80, checkpoints: '', scope_text: '' },
+    { id: 'dtu-43-1', code: 'NF DTU 43.1', title: 'Étanchéité des toitures-terrasses — éléments porteurs en maçonnerie', domain: 'Étanchéité', position: 150, checkpoints: '', scope_text: '' },
+    { id: 'dtu-52-2', code: 'NF DTU 52.2', title: 'Pose collée des revêtements céramiques et pierres naturelles', domain: 'Sols', position: 180, checkpoints: '', scope_text: '' },
+    { id: 'dtu-59-1', code: 'NF DTU 59.1', title: 'Travaux de peinture des bâtiments', domain: 'Finitions', position: 190, checkpoints: '', scope_text: '' },
+  ],
+  mail_templates: [],
   // ---------- Patrimoine (démo) ----------
   properties: [
     { id: 'p1', name: 'T2 rue des Halles', address: '8 rue des Halles', city: 'Tours', postal_code: '37000', invest_type: 'Meublé / LMNP', structure: 'Nom propre', status: 'Loué', purchase_date: '2021-03-15', price: 118000, notary_fees: 9200, works: 14000, other_costs: 0, current_value: 150000, surface: 42, notes: 'Meublé étudiant, proche fac', created_at: d(-900) },

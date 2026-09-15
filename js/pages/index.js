@@ -9,6 +9,7 @@ import { homePage } from './home.js';
 import { patrimoinePage, propertiesPage, loansPage, expensesPage } from './patrimoine.js';
 import { vivierPage } from './vivier.js';
 import { rgdDashboardPage } from './rgd.js';
+import { btpHomePage, btpTodoPage, btpBasePage, btpDtuPage, btpMailsPage } from './btp.js';
 
 import { locatifPage, leasesPage, unitsPage, rentalTodoPage, tenantContactsPage } from './locatif.js';
 export const pages = {
@@ -25,6 +26,11 @@ export const pages = {
   patrimoine_charges: expensesPage,
   vivier: vivierPage,
   rgd: rgdDashboardPage,
+  btp_home: btpHomePage,
+  btp_todo: btpTodoPage,
+  btp_base: btpBasePage,
+  btp_dtu: btpDtuPage,
+  btp_mails: btpMailsPage,
   dashboard: dashboardPage,
   today: todayPage,
   pipeline: pipelinePage,

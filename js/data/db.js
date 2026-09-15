@@ -10,7 +10,9 @@ export const TABLES = ['profiles', 'organisations', 'contacts', 'deals', 'activi
   // module Vivier courtiers
   'broker_profiles',
   // documents (pièces jointes)
-  'documents'];
+  'documents',
+  // espace BTP Expertise : référentiels internes
+  'dtu_sheets', 'mail_templates'];
 const LS_FILES = 'crm_local_files';
 const LS_KEY = 'crm_local_v1';
 const LS_USER = 'crm_local_user';
