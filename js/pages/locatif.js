@@ -208,9 +208,9 @@ export function generateDocument(kind, l, k = null) {
   }
   const w = window.open('', '_blank');
   w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>${title} — ${esc(l.tenant)}</title><style>
-    body{font-family:Inter,Arial,sans-serif;color:#15384E;max-width:720px;margin:40px auto;padding:0 24px;line-height:1.5;font-size:14px}h1{font-size:20px;letter-spacing:.04em;margin:28px 0 18px;text-align:center}
-    .parties{display:flex;justify-content:space-between;gap:24px;margin-bottom:24px}.parties div{flex:1}.small{font-size:11px;color:#4A6579}table{border-collapse:collapse;width:100%;margin:12px 0}td,th{padding:6px 8px;border-bottom:1px solid #F2E3CE;text-align:left}.r{text-align:right}
-    .sig{margin-top:40px;display:flex;justify-content:space-between}.print{position:fixed;top:12px;right:12px;padding:8px 14px;border:0;border-radius:999px;background:#F4801C;color:#fff;font-weight:700;cursor:pointer}@media print{.print{display:none}}</style></head><body>
+    body{font-family:Inter,Arial,sans-serif;color:#11151C;max-width:720px;margin:40px auto;padding:0 24px;line-height:1.5;font-size:14px}h1{font-size:20px;letter-spacing:.04em;margin:28px 0 18px;text-align:center}
+    .parties{display:flex;justify-content:space-between;gap:24px;margin-bottom:24px}.parties div{flex:1}.small{font-size:11px;color:#59636F}table{border-collapse:collapse;width:100%;margin:12px 0}td,th{padding:6px 8px;border-bottom:1px solid #E5E8ED;text-align:left}.r{text-align:right}
+    .sig{margin-top:40px;display:flex;justify-content:space-between}.print{position:fixed;top:12px;right:12px;padding:8px 14px;border:0;border-radius:8px;background:#1A1D23;color:#fff;font-weight:600;cursor:pointer}@media print{.print{display:none}}</style></head><body>
     <button class="print" onclick="window.print()">Imprimer / enregistrer en PDF</button>
     <div class="parties"><div>${bailleur}</div><div style="text-align:right">${locataire}</div></div>
     <p>Fait le ${today}</p><h1>${title}</h1><p><b>Logement :</b> ${esc(addr)}${lotName(l) ? ' — lot ' + esc(lotName(l)) : ''}</p>${body}

@@ -87,6 +87,15 @@ const NAV = [
 
 const PIN_KEY = 'crm_nav_pin';
 let lastHash = null;
+// Logos des structures : testés une fois au démarrage, la pastille de couleur sert de repli
+const LOGOS = new Set();
+function probeLogos() {
+  for (const k of Object.keys(ACTIVITIES)) {
+    const im = new Image();
+    im.onload = () => { LOGOS.add(k); renderNav(); };
+    im.src = `assets/logos/${k}.png`;
+  }
+}
 const navState = {
   open: null,                                   // univers dont le volet est ouvert
   get pinned() { try { return localStorage.getItem(PIN_KEY) === '1'; } catch { return false; } },
@@ -160,7 +169,10 @@ function renderNav() {
     fly.innerHTML = `<div class="fly-head"><h2>${esc(g.label)}</h2><button type="button" class="pin ${navState.pinned ? 'on' : ''}" id="nav-pin" aria-pressed="${navState.pinned}" title="${navState.pinned ? 'Détacher le volet' : 'Garder le volet ouvert'}">${navState.pinned ? '◉' : '○'}</button></div>
       <nav class="fly-list">${itemsOf(g).map(i => {
         const cnt = i.count ? i.count() : 0;
-        return `<a href="${i.hash}" class="${isOn(i, hash) ? 'on' : ''}" ${isOn(i, hash) ? 'aria-current="page"' : ''}>${i.dot ? `<span class="dot" style="background:${i.dot}"></span>` : ''}${esc(i.label)}${cnt ? `<span class="cnt">${cnt}</span>` : ''}</a>`;
+        // Logo de la structure s'il a été déposé dans assets/logos/, pastille de couleur sinon
+        const mark = i.activity && LOGOS.has(i.activity) ? `<span class="brandmark" style="--c:${i.dot}"><img src="assets/logos/${i.activity}.png" alt=""></span>`
+          : i.dot ? `<span class="dot" style="background:${i.dot}"></span>` : '';
+        return `<a href="${i.hash}" class="${isOn(i, hash) ? 'on' : ''}" ${isOn(i, hash) ? 'aria-current="page"' : ''}>${mark}${esc(i.label)}${cnt ? `<span class="cnt">${cnt}</span>` : ''}</a>`;
       }).join('')}</nav>`;
     fly.querySelector('#nav-pin').onclick = () => { navState.pinned = !navState.pinned; renderNav(); };
     fly.querySelectorAll('a').forEach(a => a.addEventListener('click', () => { if (!navState.pinned) navState.open = null; }));
@@ -219,6 +231,7 @@ async function start(user) {
   scope.set(user);
   if (!scope.isDirection && location.hash === '#/dashboard') location.hash = '#/home';
   renderLayout();
+  probeLogos();
   unsubscribe?.();
   unsubscribe = db.onChange(() => { renderNav(); current?.refresh?.(); });
   route();

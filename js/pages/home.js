@@ -72,10 +72,10 @@ export const homePage = {
 
       root.innerHTML = `
         ${db.demo ? '<div class="demo-banner"><b>Mode démo</b> — données d\'exemple stockées dans ce navigateur.</div>' : ''}
-        <div class="card" style="display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;background:linear-gradient(120deg,#15384E,#0A6F86);color:#fff;border:0">
-          <div><div style="font-size:12px;text-transform:uppercase;letter-spacing:.1em;opacity:.7">${new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</div><h2 style="font-size:24px;margin-top:4px">${hello}, ${esc((u.full_name || '').split(' ')[0])}.</h2>
-            <div style="opacity:.8;margin-top:4px">${late ? `<b style="color:#fca5a5">${late} action${late > 1 ? 's' : ''} en retard</b> · ` : ''}${today} à faire aujourd'hui · ${noNext ? `<b style="color:#fcd34d">${noNext} affaire${noNext > 1 ? 's' : ''} sans prochaine action</b>` : 'toutes les affaires ont une prochaine action'}</div></div>
-          <a class="btn" href="#/today" style="background:var(--orange)">Ouvrir ma journée →</a>
+        <div class="card" style="display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;background:var(--accent);color:#fff;border:0">
+          <div><div style="font-size:12px;text-transform:uppercase;letter-spacing:.1em;opacity:.7">${new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</div><h2 style="font-size:22px;margin-top:4px;letter-spacing:-.03em">${hello}, ${esc((u.full_name || '').split(' ')[0])}.</h2>
+            <div style="opacity:.8;margin-top:4px">${late ? `<b style="color:#F3A79E">${late} action${late > 1 ? 's' : ''} en retard</b> · ` : ''}${today} à faire aujourd'hui · ${noNext ? `<b style="color:#F0C877">${noNext} affaire${noNext > 1 ? 's' : ''} sans prochaine action</b>` : 'toutes les affaires ont une prochaine action'}</div></div>
+          <a class="btn" href="#/today" style="background:#fff;color:var(--accent)">Ouvrir ma journée →</a>
         </div>
         <div class="hub-grid">${modules.map(m => `<div class="card hub-card" style="--c:${m.color}"><div class="card-head"><h2><span class="hub-icon">${m.icon}</span>${esc(m.title)}</h2><a href="${m.link}" class="btn ghost sm">Ouvrir →</a></div>${m.body}</div>`).join('')}
           <div class="card hub-card soon"><div class="card-head"><h2><span class="hub-icon">🧩</span>Modules à venir</h2></div><div class="hub-lines">${soon.map(s => `<span><span class="muted">○</span>${esc(s)}<span class="grow"></span><span class="pill">bientôt</span></span>`).join('')}</div><p class="muted small" style="margin:10px 0 0">Chaque module s'ajoute ici avec ses propres droits, sur la même base et la même connexion.</p></div>
