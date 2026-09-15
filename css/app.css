@@ -332,6 +332,12 @@ select.cell-in { text-align: left; }
   --accent: #0094C8; --accent-2: #007AA6; --accent-soft: #E1F4FC; --accent-ink: #24243C;
   --btp-orange: #FC8400; --btp-navy: #24243C;
 }
+.btp-tabs { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; border-bottom: 1px solid var(--line); padding-bottom: 10px; margin-bottom: 4px; }
+.btp-tabs-mark { display: inline-flex; align-items: center; gap: 8px; font-family: var(--font-display); font-weight: 700; color: var(--btp-navy); margin-right: 10px; }
+.btp-tabs-mark img { width: 22px; height: 22px; object-fit: contain; }
+.btp-tabs a { padding: 7px 13px; border-radius: 9px; text-decoration: none; font-size: 13px; font-weight: 600; color: var(--muted); }
+.btp-tabs a:hover { background: var(--card-2); color: var(--text); }
+.btp-tabs a.on { background: var(--accent); color: #fff; }
 .btp-pipe { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 14px; }
 .btp-stage-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: 12.5px; margin-bottom: 6px; }
 .btp-stage-head b { font-weight: 600; }

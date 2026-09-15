@@ -22,6 +22,20 @@ const activities = () => {
     || isBtp(db.byId('contacts', a.contact_id)) || isBtp(db.byId('organisations', a.organisation_id)));
 };
 
+// Les cinq écrans du cabinet. « BTP Expertise » étant une ligne du menu Commercial,
+// la navigation entre ses écrans se fait ici, en onglets au-dessus du contenu.
+const ONGLETS = [
+  { hash: '#/btp', label: "Vue d'ensemble" },
+  { hash: '#/btp/todo', label: 'To-do list' },
+  { hash: '#/btp/base', label: 'Base de données' },
+  { hash: '#/btp/dtu', label: 'DTU' },
+  { hash: '#/btp/mails', label: 'Mails types' },
+];
+const entete = (actif) => `<nav class="btp-tabs" aria-label="Écrans BTP Expertise">
+  <span class="btp-tabs-mark"><img src="assets/logos/btp.png" alt="" onerror="this.remove()">BTP Expertise</span>
+  ${ONGLETS.map(o => `<a href="${o.hash}" class="${o.hash === actif ? 'on' : ''}" ${o.hash === actif ? 'aria-current="page"' : ''}>${o.label}</a>`).join('')}
+</nav>`;
+
 // Habillage : sur ces écrans seulement, l'accent prend les couleurs du logo BTP Expertise.
 const skin = (root) => { root.classList.add('btp-skin'); return () => root.classList.remove('btp-skin'); };
 const guard = (root) => {
@@ -55,6 +69,7 @@ export const btpHomePage = {
       const recentes = open.slice().sort((x, y) => (y.created_at || '').localeCompare(x.created_at || '')).slice(0, 8);
 
       root.innerHTML = `
+        ${entete('#/btp')}
         <div class="grid c4">
           <div class="card tight kpi" style="--kpi:var(--accent-soft);--kpi-c:var(--accent)"><div class="lbl">Affaires ouvertes</div><div class="val">${open.length}</div><div class="sub">${eur(open.reduce((s, d) => s + (Number(d.amount) || 0), 0))} en cours</div></div>
           <div class="card tight kpi" style="--kpi:#E1F4FC;--kpi-c:#0094C8"><div class="lbl">CA potentiel pondéré</div><div class="val">${eur(potential)}</div><div class="sub">selon l&rsquo;étape de chaque affaire</div></div>
@@ -127,6 +142,7 @@ export const btpTodoPage = {
       const bloc = (titre, l) => l.length ? `<div class="card today-group"><h3>${titre} <span>${l.length}</span></h3>${l.map(x => activityRowHtml(x, { showContext: true })).join('')}</div>` : '';
 
       root.innerHTML = `
+        ${entete('#/btp/todo')}
         <div class="toolbar">
           ${searchInput('b-q', state, 'Rechercher une tâche…')}
           <select id="b-who"><option value="">Toute l&rsquo;équipe</option>${users.map(u => `<option value="${u.id}" ${state.who === u.id ? 'selected' : ''}>${esc(u.full_name)}</option>`).join('')}</select>
@@ -209,6 +225,7 @@ export const btpBasePage = {
       };
 
       root.innerHTML = `
+        ${entete('#/btp/base')}
         <div class="toolbar">
           <div class="seg">${VUES.map(v => `<button data-vue="${v.key}" class="${state.vue === v.key ? 'active' : ''}">${v.label} <span class="cnt">${compte(v.key)}</span></button>`).join('')}</div>
           <span class="grow"></span>
@@ -303,6 +320,7 @@ export const btpDtuPage = {
         .filter(f => hit([f.code, f.title, f.domain, f.scope_text, f.checkpoints, f.notes], ts));
 
       root.innerHTML = `
+        ${entete('#/btp/dtu')}
         <div class="toolbar">
           ${searchInput('b-q', state, 'Rechercher un numéro, un mot du titre, un point de contrôle…')}
           <select id="b-dom"><option value="">Tous les domaines</option>${domaines.map(d => `<option ${state.domaine === d ? 'selected' : ''}>${esc(d)}</option>`).join('')}</select>
@@ -381,6 +399,7 @@ export const btpMailsPage = {
         .filter(([, g]) => g.length);
 
       root.innerHTML = `
+        ${entete('#/btp/mails')}
         <div class="toolbar">
           ${searchInput('b-q', state, 'Rechercher un modèle…')}
           <select id="b-theme"><option value="">Toutes les thématiques</option>${themes.map(t => `<option ${state.theme === t ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select>

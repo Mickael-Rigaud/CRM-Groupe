@@ -54,9 +54,10 @@ const NAV = [
   {
     key: 'commercial', icon: 'kanban', label: 'Commercial', items: [
       { hash: '#/dashboard', label: "Vue d'ensemble", direction: true },
-      // Les structures qui ont leur propre espace n'apparaissent pas ici : RGD Renova a son
-      // application, BTP Expertise a son univers dans le rail. Restent les pipelines du CRM.
+      // Chaque structure ouvre son espace : RGD Renova son application, BTP Expertise ses
+      // cinq écrans (onglets internes à la page). Les autres gardent leur pipeline.
       { hash: '#/rgd', label: ACTIVITIES.rgd.label, dot: ACTIVITIES.rgd.color, activity: 'rgd' },
+      { hash: '#/btp', label: ACTIVITIES.btp.label, dot: ACTIVITIES.btp.color, activity: 'btp' },
       ...Object.values(ACTIVITIES).filter(a => !['rgd', 'btp'].includes(a.key)).map(a => ({ hash: `#/pipeline/${a.key}`, label: a.label, dot: a.color, activity: a.key, count: () => scope.deals().filter(d => d.activity === a.key && d.status === 'open').length })),
       { hash: '#/contacts', label: 'Contacts' },
       { hash: '#/partners', label: 'Partenaires' },
@@ -64,6 +65,7 @@ const NAV = [
     ],
   },
   {
+<<<<<<< Updated upstream
     key: 'btpexp', icon: 'search', label: 'BTP Expertise', activity: 'btp', show: () => scope.activityKeys.includes('btp'), items: [
       { hash: '#/btp', label: "Vue d'ensemble", exact: true },
       { hash: '#/btp/todo', label: 'To-do list', count: () => scope.activities().filter(a => !a.done && a.due_date && daysSince(a.due_date) >= 0 && (() => { const d = db.byId('deals', a.deal_id); return d && d.activity === 'btp'; })()).length },
@@ -73,6 +75,8 @@ const NAV = [
     ],
   },
   {
+=======
+>>>>>>> Stashed changes
     key: 'recrutement', icon: 'target', label: 'Recrutement', show: () => scope.isDirection || scope.activityKeys.includes('courtage'), items: [
       { hash: '#/vivier', label: 'Vivier courtiers', count: () => db.t('broker_profiles').filter(r => !r.archive && ['contact', 'rdv'].includes(r.suivi)).length },
     ],
