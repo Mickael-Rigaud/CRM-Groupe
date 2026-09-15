@@ -54,8 +54,10 @@ const NAV = [
   {
     key: 'commercial', icon: 'kanban', label: 'Commercial', items: [
       { hash: '#/dashboard', label: "Vue d'ensemble", direction: true },
-      ...Object.values(ACTIVITIES).map(a => ({ hash: `#/pipeline/${a.key}`, label: a.label, dot: a.color, activity: a.key, count: () => scope.deals().filter(d => d.activity === a.key && d.status === 'open').length })),
-      { hash: '#/rgd', label: 'Tableau de bord RGD', activity: 'rgd' },
+      // RGD Renova se pilote dans son propre outil : la ligne ouvre l'application, pas un pipeline.
+      ...Object.values(ACTIVITIES).map(a => a.key === 'rgd'
+        ? { hash: '#/rgd', label: a.label, dot: a.color, activity: a.key }
+        : { hash: `#/pipeline/${a.key}`, label: a.label, dot: a.color, activity: a.key, count: () => scope.deals().filter(d => d.activity === a.key && d.status === 'open').length }),
       { hash: '#/contacts', label: 'Contacts' },
       { hash: '#/partners', label: 'Partenaires' },
       { hash: '#/acquisition', label: 'Acquisition', direction: true },
@@ -209,8 +211,9 @@ function route() {
   current?.destroy?.();
   const content = document.getElementById('content');
   document.getElementById('page-title').textContent = page.title(param);
-  // Une page qui affiche une application entière (RGD Renova) se passe de l'en-tête du CRM
-  document.querySelector('.topbar').hidden = !!page.fullBleed;
+  // Une page qui affiche une application entière (RGD Renova) garde la barre pour ses
+  // commandes, mais sans titre ni date : l'application a déjà les siens.
+  document.querySelector('.topbar').classList.toggle('bare', !!page.fullBleed);
   content.innerHTML = '';
   current = page.render(content, param);
   renderNav();

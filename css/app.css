@@ -79,8 +79,8 @@ input, select, textarea { font: inherit; }
 .topbar .datepill { background: var(--card); border: 1px solid var(--line); border-radius: 9px; padding: 5px 12px 5px 5px; display: flex; align-items: center; gap: 9px; font-weight: 600; font-size: 12.5px; }
 .topbar .datepill span { background: var(--accent); color: #fff; font-size: 10px; font-weight: 700; padding: 4px 8px; border-radius: 6px; text-transform: uppercase; letter-spacing: .06em; }
 .content { padding: 24px 28px 60px; display: flex; flex-direction: column; gap: 18px; }
-.topbar[hidden] { display: none; }
-.topbar[hidden] + .content, .main > .content:first-child { padding-top: 16px; }
+.topbar.bare { padding: 7px 18px; justify-content: flex-end; min-height: 0; }
+.topbar.bare h1, .topbar.bare .datepill { display: none; }
 .demo-banner { background: var(--amber-soft); border: 1px solid var(--amber-soft); color: var(--amber); padding: 9px 14px; border-radius: 10px; font-size: 13px; display: flex; gap: 10px; align-items: center; }
 .demo-banner b { font-weight: 700; }
 
@@ -321,12 +321,11 @@ select.cell-in { text-align: left; }
 .chip.q { background: var(--card-2); }
 
 /* ---------- Application externe intégrée (iframe) ---------- */
-.embed { display: flex; flex-direction: column; gap: 10px; }
-.embed-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 14px; box-shadow: var(--shadow); }
-.embed-bar .grow { flex: 1; }
-.embed-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); flex-shrink: 0; }
-.embed-frame { border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: #fff; box-shadow: var(--shadow); min-height: 460px; }
+/* Page à ras : l'application occupe toute la surface, sans cadre ni carte. */
+.content.flush { padding: 0; gap: 0; }
+.embed-frame { background: #fff; }
 .embed-frame iframe { width: 100%; height: 100%; border: 0; display: block; }
-.embed-help { margin: 0; color: var(--muted-2); font-size: 12px; }
-.embed:fullscreen { background: var(--bg); padding: 10px; }
-.embed:fullscreen .embed-frame { flex: 1; min-height: 0; }
+.embed-frame:fullscreen iframe { height: 100vh; }
+.embed-actions { display: flex; align-items: center; gap: 4px; margin-left: auto; }
+.embed-act { background: none; border: 0; border-radius: 7px; padding: 6px 10px; font-size: 12.5px; font-weight: 600; color: var(--muted); text-decoration: none; white-space: nowrap; }
+.embed-act:hover { background: var(--card-2); color: var(--text); }
