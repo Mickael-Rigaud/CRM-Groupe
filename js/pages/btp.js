@@ -44,17 +44,55 @@ const guard = (root) => {
 
 // ---------------------------------------------------------------- Vue d'ensemble
 // Même présentation que le tableau de bord RGD Renova : bandeau du chiffre d'affaires
-// avec son évolution, rangée de indicateurs, to-do et rendez-vous du jour côte à côte,
-// pipeline en bas avec le lien vers la page complète.
+// avec barres et courbe sur douze mois, rangée d'indicateurs, alerte, puis « à faire »
+// et « rendez-vous du jour » côte à côte, pipeline en bas.
+// Tout passe par --accent : chaque structure garde sa couleur (voir applyBrand dans app.js).
 const MOIS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+const kEur = (n) => n >= 10000 ? Math.round(n / 1000) + 'k€' : Math.round(n).toLocaleString('fr-FR') + '€';
 
-const kpi = ({ label, valeur, sous, icone, ton = 'accent', href, onClick }) => `
-  <${href ? 'a' : 'button type="button"'} class="btp-kpi" ${href ? `href="${href}"` : ''} ${onClick ? `data-go="${onClick}"` : ''} style="--t:var(--${ton});--ts:var(--${ton}-soft, var(--accent-soft))">
-    <span class="btp-kpi-ico">${icone}</span>
-    <span class="btp-kpi-lbl">${esc(label)}</span>
+// Graphique : barres claires + courbe, axe gradué, comme sur le tableau de bord RGD.
+function graphe(mois) {
+  const W = 1000, H = 260, GAUCHE = 66, DROITE = 12, HAUT = 14, BAS = 34;
+  const zoneW = W - GAUCHE - DROITE, zoneH = H - HAUT - BAS;
+  const plafond = Math.max(1, ...mois.map(m => m.montant));
+  const pas = zoneW / mois.length;
+  const x = (i) => GAUCHE + pas * i + pas / 2;
+  const y = (v) => HAUT + zoneH - (v / plafond) * zoneH;
+  const barre = Math.min(58, pas * 0.56);
+
+  const lignes = [0, 0.25, 0.5, 0.75, 1].map(f => {
+    const v = plafond * f, yy = y(v);
+    return `<line x1="${GAUCHE}" y1="${yy}" x2="${W - DROITE}" y2="${yy}" class="g-grid"/>
+      <text x="${GAUCHE - 10}" y="${yy + 4}" class="g-axe">${kEur(v)}</text>`;
+  }).join('');
+
+  const barres = mois.map((m, i) => m.montant
+    ? `<rect x="${x(i) - barre / 2}" y="${y(m.montant)}" width="${barre}" height="${HAUT + zoneH - y(m.montant)}" rx="4" class="g-bar"/>` : '').join('');
+
+  const points = mois.map((m, i) => `${x(i)},${y(m.montant)}`).join(' ');
+  const pastilles = mois.map((m, i) => `<circle cx="${x(i)}" cy="${y(m.montant)}" r="4.5" class="g-pt"/>`).join('');
+  const labels = mois.map((m, i) => `<text x="${x(i)}" y="${H - 10}" class="g-lbl ${m.courant ? 'now' : ''}">${m.label} ${String(m.annee).slice(2)}</text>`).join('');
+
+  return `<svg class="btp-graph" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" role="img"
+    aria-label="Chiffre d'affaires des douze derniers mois">
+    ${lignes}${barres}
+    <polyline points="${points}" class="g-line"/>${pastilles}${labels}
+  </svg>`;
+}
+
+const kpi = ({ label, valeur, sous, icone, ton = 'accent', href }) => `
+  <a class="btp-kpi" href="${href}" style="--t:var(--${ton === 'accent' ? 'accent-ink' : ton});--ts:var(--${ton}-soft, var(--accent-soft))">
+    <span class="btp-kpi-top"><span class="btp-kpi-lbl">${esc(label)}</span><span class="btp-kpi-ico">${icone}</span></span>
     <span class="btp-kpi-val">${valeur}</span>
     <span class="btp-kpi-sub">${esc(sous)}</span>
-  </${href ? 'a' : 'button'}>`;
+  </a>`;
+
+const carte = (icone, titre, compteur, corps, pied = '') => `
+  <div class="card btp-ov-card">
+    <div class="btp-ov-head"><span class="btp-ov-ico">${icone}</span><h2>${esc(titre)}</h2><span class="btp-ov-cnt">${compteur}</span></div>
+    <div class="btp-ov-body">${corps}</div>
+    ${pied ? `<div class="btp-ov-foot">${pied}</div>` : ''}
+  </div>`;
 
 export const btpHomePage = {
   title: () => 'BTP Expertise',
@@ -71,71 +109,57 @@ export const btpHomePage = {
       const noNext = open.filter(d => !nextActivity(d.id));
       const missions = all.filter(d => a.stages.find(s => s.key === d.stage)?.delivery && d.status !== 'lost');
 
-      // Chiffre d'affaires : les douze derniers mois, mois courant en dernier
+      // Douze mois glissants, mois courant en dernier
       const fin = new Date(); fin.setDate(1); fin.setHours(0, 0, 0, 0);
       const mois = Array.from({ length: 12 }, (_, i) => {
         const d = new Date(fin); d.setMonth(d.getMonth() - (11 - i));
         const cle = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-        const montant = won.filter(x => (x.won_at || '').slice(0, 7) === cle).reduce((s, x) => s + (Number(x.amount) || 0), 0);
-        return { cle, label: MOIS[d.getMonth()], annee: d.getFullYear(), montant, courant: i === 11 };
+        return {
+          label: MOIS[d.getMonth()], annee: d.getFullYear(), courant: i === 11,
+          montant: won.filter(x => (x.won_at || '').slice(0, 7) === cle).reduce((s, x) => s + (Number(x.amount) || 0), 0),
+        };
       });
-      const plafond = Math.max(1, ...mois.map(m => m.montant));
-      const anneeEnCours = String(new Date().getFullYear());
-      const caAnnee = won.filter(d => (d.won_at || '').slice(0, 4) === anneeEnCours).reduce((s, d) => s + (Number(d.amount) || 0), 0);
-      const gagneesAnnee = won.filter(d => (d.won_at || '').slice(0, 4) === anneeEnCours).length;
-      const panier = gagneesAnnee ? caAnnee / gagneesAnnee : 0;
+      const total = mois.reduce((s, m) => s + m.montant, 0);
+      const moyenne = total / 12;
+      const periode = `${mois[0].label} ${mois[0].annee} → ${mois[11].label} ${mois[11].annee}`;
       const clos = won.length + lost.length;
       const transfo = clos ? Math.round((won.length / clos) * 100) : null;
 
-      // Journée : ce qui est prévu aujourd'hui, sinon les prochaines échéances
-      const toutes = activities().filter(x => !x.done);
-      const duJour = toutes.filter(x => daysSince(x.due_date) === 0).sort((x, y) => (x.due_time || '99').localeCompare(y.due_time || '99'));
-      const retard = toutes.filter(x => daysSince(x.due_date) > 0).sort((x, y) => x.due_date.localeCompare(y.due_date));
-      const suite = toutes.filter(x => daysSince(x.due_date) < 0 && daysSince(x.due_date) >= -15).sort((x, y) => x.due_date.localeCompare(y.due_date));
-      const aFaire = retard.concat(duJour).slice(0, 7);
+      // La journée
+      const ouvertes = activities().filter(x => !x.done);
+      const duJour = ouvertes.filter(x => daysSince(x.due_date) === 0).sort((x, y) => (x.due_time || '99').localeCompare(y.due_time || '99'));
+      const retard = ouvertes.filter(x => daysSince(x.due_date) > 0).sort((x, y) => x.due_date.localeCompare(y.due_date));
+      const suite = ouvertes.filter(x => daysSince(x.due_date) < 0 && daysSince(x.due_date) >= -15).sort((x, y) => x.due_date.localeCompare(y.due_date));
+      const aFaire = retard.concat(duJour, suite).slice(0, 6);
 
       root.innerHTML = `
         ${entete('#/btp')}
 
         <section class="card btp-hero">
-          <div class="btp-hero-head">
-            <div>
-              <div class="btp-hero-lbl">Chiffre d&rsquo;affaires signé · année ${anneeEnCours}</div>
-              <div class="btp-hero-val">${eur(caAnnee)}<span class="btp-hero-tag">HT</span></div>
-              <div class="small muted">${gagneesAnnee} mission${gagneesAnnee > 1 ? 's' : ''} gagnée${gagneesAnnee > 1 ? 's' : ''}${panier ? ` · panier moyen ${eur(panier)}` : ''}${transfo !== null ? ` · ${transfo} % de transformation` : ''}</div>
-            </div>
-            <a class="btn ghost sm" href="#/pipeline/btp">Voir le pipeline complet →</a>
-          </div>
-          <div class="btp-months">${mois.map(m => `
-            <div class="btp-month ${m.courant ? 'now' : ''}" title="${esc(m.label)} ${m.annee} — ${eur(m.montant)}">
-              <div class="btp-month-bar"><i style="height:${m.montant ? Math.max(4, Math.round((m.montant / plafond) * 100)) : 0}%"></i></div>
-              <div class="btp-month-lbl">${esc(m.label)}</div>
-            </div>`).join('')}</div>
+          <div class="btp-hero-lbl">Chiffre d&rsquo;affaires signé · ${esc(periode)}</div>
+          <div class="btp-hero-val">${eur(total)}<span class="btp-hero-tag">HT</span></div>
+          <div class="btp-hero-sub">Moyenne mensuelle ${eur(moyenne)} · ${won.length} mission${won.length > 1 ? 's' : ''} gagnée${won.length > 1 ? 's' : ''}${transfo !== null ? ` · ${transfo} % de transformation` : ''}</div>
+          ${graphe(mois)}
         </section>
 
         <div class="btp-kpis">
-          ${kpi({ label: 'Affaires ouvertes', valeur: open.length, sous: `${eur(open.reduce((s, d) => s + (Number(d.amount) || 0), 0))} en cours`, icone: '📂', ton: 'accent', href: '#/pipeline/btp' })}
+          ${kpi({ label: 'Affaires ouvertes', valeur: open.length, sous: `${eur(open.reduce((s, d) => s + (Number(d.amount) || 0), 0))} HT`, icone: '📂', ton: 'accent', href: '#/pipeline/btp' })}
           ${kpi({ label: 'CA potentiel pondéré', valeur: eur(potential), sous: 'selon l\'étape de chaque affaire', icone: '📈', ton: 'green', href: '#/pipeline/btp' })}
           ${kpi({ label: 'Missions en cours', valeur: missions.length, sous: 'planifiées, réalisées, à remettre', icone: '🏗', ton: 'amber', href: '#/pipeline/btp' })}
-          ${kpi({ label: 'Sans prochaine action', valeur: noNext.length, sous: 'à corriger aujourd\'hui', icone: '⚠', ton: 'red', onClick: '#/btp/todo' })}
+          ${kpi({ label: 'Sans prochaine action', valeur: noNext.length, sous: 'affaires à relancer', icone: '⚠', ton: 'red', href: '#/btp/todo' })}
         </div>
 
-        <div class="btp-split">
-          <div class="card btp-ov-card">
-            <div class="card-head"><h2><span class="btp-ov-ico">☑</span> À faire</h2><span class="btp-ov-cnt">${retard.length + duJour.length}</span></div>
-            ${retard.length ? `<div class="alert"><b>${retard.length}</b><div>en retard — à traiter avant le reste</div></div>` : ''}
-            ${aFaire.length ? aFaire.map(x => activityRowHtml(x, { showContext: true })).join('')
-              : '<div class="empty">Rien en retard ni pour aujourd&rsquo;hui.</div>'}
-            <div class="btp-ov-foot"><a href="#/btp/todo">Ouvrir la to-do list →</a><button class="btn sm" id="b-new-act">+ Tâche</button></div>
-          </div>
+        ${retard.length ? `<a class="btp-flag" href="#/btp/todo"><b>${retard.length}</b><span>tâche${retard.length > 1 ? 's' : ''} en retard à traiter</span></a>` : ''}
 
-          <div class="card btp-ov-card">
-            <div class="card-head"><h2><span class="btp-ov-ico">📅</span> Rendez-vous</h2><span class="btp-ov-cnt">${duJour.length}</span></div>
-            ${duJour.length ? duJour.map(x => activityRowHtml(x, { showContext: true })).join('')
-              : `<div class="empty">Aucun rendez-vous aujourd&rsquo;hui.</div>
-                 ${suite.length ? `<h3 style="margin-top:14px">À venir</h3>${suite.slice(0, 5).map(x => activityRowHtml(x, { showContext: true })).join('')}` : ''}`}
-            <div class="btp-ov-foot"><span class="small muted">Échéances du CRM. Le calendrier Google du cabinet n&rsquo;est pas encore raccordé.</span></div>
-          </div>
+        <div class="btp-split">
+          ${carte('☑', 'À faire', retard.length + duJour.length,
+            aFaire.length ? aFaire.map(x => activityRowHtml(x, { showContext: true })).join('')
+              : '<div class="empty">Rien à faire — tout est à jour.</div>',
+            '<a href="#/btp/todo">Ouvrir la to-do list →</a><button class="btn sm" id="b-new-act">+ Tâche</button>')}
+          ${carte('📅', 'Rendez-vous du jour', duJour.length,
+            duJour.length ? duJour.map(x => activityRowHtml(x, { showContext: true })).join('')
+              : '<div class="empty">Aucun rendez-vous aujourd&rsquo;hui.</div>',
+            '<span class="small muted">Échéances du CRM. Le calendrier Google du cabinet n&rsquo;est pas encore raccordé.</span>')}
         </div>
 
         <div class="card">
@@ -158,7 +182,6 @@ export const btpHomePage = {
         </div>`;
 
       root.querySelector('#b-new-act').onclick = () => activityForm({}, null, draw);
-      root.querySelectorAll('[data-go]').forEach(b => b.onclick = () => { location.hash = b.dataset.go; });
       root.querySelectorAll('[data-deal]').forEach(el => el.onclick = () => openDeal(el.dataset.deal, draw));
       bindActivityRows(root, draw);
     };
