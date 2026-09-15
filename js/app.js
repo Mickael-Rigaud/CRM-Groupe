@@ -59,6 +59,11 @@ const NAV = [
       { hash: '#/rgd', label: ACTIVITIES.rgd.label, dot: ACTIVITIES.rgd.color, activity: 'rgd' },
       { hash: '#/btp', label: ACTIVITIES.btp.label, dot: ACTIVITIES.btp.color, activity: 'btp' },
       ...Object.values(ACTIVITIES).filter(a => !['rgd', 'btp'].includes(a.key)).map(a => ({ hash: `#/pipeline/${a.key}`, label: a.label, dot: a.color, activity: a.key, count: () => scope.deals().filter(d => d.activity === a.key && d.status === 'open').length })),
+    ],
+  },
+  {
+    // Répertoires et acquisition : sortis de Pilotage, qui ne garde que les structures.
+    key: 'relations', icon: 'users', label: 'Contacts', items: [
       { hash: '#/contacts', label: 'Contacts' },
       { hash: '#/partners', label: 'Partenaires' },
       { hash: '#/acquisition', label: 'Acquisition', direction: true },
