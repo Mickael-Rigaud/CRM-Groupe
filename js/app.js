@@ -179,12 +179,14 @@ function renderNav() {
   // ---- Bande 2 : les écrans de l'univers ouvert
   const sub = document.getElementById('subnav');
   const items = here && here.items ? itemsOf(here) : [];
+  let sep = false;   // un trait sépare les écrans transverses des structures
   const screens = items.map(i => {
     const cnt = i.count ? i.count() : 0;
     // Logo de la structure s'il a été déposé dans assets/logos/, pastille de couleur sinon
-    const mark = i.activity && LOGOS.has(i.activity) ? `<span class="brandmark" style="--c:${i.dot}"><img src="assets/logos/${i.activity}.png" alt=""></span>`
+    const mark = i.activity && LOGOS.has(i.activity) ? `<span class="brandmark"><img src="assets/logos/${i.activity}.png" alt=""></span>`
       : i.dot ? `<span class="dot" style="background:${i.dot}"></span>` : '';
-    return `<a href="${i.hash}" class="s-tab ${isOn(i, hash) ? 'on' : ''}" ${isOn(i, hash) ? 'aria-current="page"' : ''}>${mark}${esc(i.label)}${cnt ? `<i class="s-cnt">${cnt}</i>` : ''}</a>`;
+    const trait = i.dot && !sep ? (sep = true, '<span class="s-sep" aria-hidden="true"></span>') : '';
+    return `${trait}<a href="${i.hash}" class="s-tab ${i.dot ? 'brand' : ''} ${isOn(i, hash) ? 'on' : ''}" ${i.dot ? `style="--c:${i.dot}"` : ''} ${isOn(i, hash) ? 'aria-current="page"' : ''}>${mark}${esc(i.label)}${cnt ? `<i class="s-cnt">${cnt}</i>` : ''}</a>`;
   }).join('');
   const posted = sub.querySelector('.embed-actions');   // commandes posées par la page ouverte
   sub.innerHTML = `<h1 id="page-title" class="sr-only">—</h1>
