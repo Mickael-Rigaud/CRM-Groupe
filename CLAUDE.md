@@ -10,7 +10,7 @@ Application interne de Mickael Rigaud pour piloter 4 activités (RGD Renova, BTP
 
 ## Arborescence
 - `index.html` — coquille, charge `js/app.js`.
-- `js/app.js` — login, mise en page, `NAV` (menu avec règles d'affichage), routeur, formulaires mot de passe.
+- `js/app.js` — login, mise en page, `NAV` (navigation en rail : une icône par univers, volet des écrans au clic, épinglable), routeur, formulaires mot de passe. `js/icons.js` — icônes SVG du rail.
 - `js/pages/*.js` — une page par fichier ; `js/pages/index.js` fait la table `pages` nom → fonction.
 - `js/data/db.js` — accès données (Supabase ou local). **Supabase renvoie 1000 lignes max par requête : le chargement est paginé avec `.range()`, ne pas retirer.**
 - `js/data/scope.js` — droits côté client (les mêmes règles sont imposées côté serveur par les policies RLS ; les deux doivent rester cohérentes).
@@ -18,7 +18,7 @@ Application interne de Mickael Rigaud pour piloter 4 activités (RGD Renova, BTP
 - `js/data/schema.js` — activités, rôles, étapes de pipeline.
 - `js/documents.js` — pièces jointes (Storage) par entité.
 - `js/ui.js` — helpers de rendu (`renderForm` avec `hint`, modales, tableaux, `esc`) et **filtres partagés** : `terms`/`hit` (recherche insensible aux accents, tous les mots exigés), `searchInput`/`bindSearch`/`restoreFocus` (barre de recherche + curseur conservé après redraw), `pickState`/`pickInit`/`multiPick`/`pickChips`/`bindMultiPick` (sélecteur multiple recherchable, mémorisé en localStorage — clé `crm_locatif_props` pour les biens loués, `crm_patrimoine_props` pour le patrimoine). Toute nouvelle liste filtrable doit réutiliser ces helpers plutôt que refaire un `<select>` ou un `toLowerCase().includes()`.
-- `css/app.css` — thème La Référence Courtage (navy / bleu mer / orange). Pas de logo.
+- `css/app.css` — **identité de groupe neutre** : accent indigo propre à l'outil (`--accent`, `--accent-ink`), gris froids, Inter Tight (titres) + Inter (texte). La couleur des quatre marques ne sert qu'au repérage des activités (`ACTIVITIES` dans `js/data/schema.js`) ; vert / rouge / ambre restent réservés aux états. Tout passe par les variables `:root` : changer de teinte = changer `--accent`. Logos des structures dans `assets/logos/<clé>.png` (rgd, btp, courtage, propulsion), affichés dans le menu, pastille de couleur en repli si le fichier manque.
 - `supabase/*.sql` — scripts à exécuter **à la main** dans Supabase > SQL Editor, dans l'ordre : `schema.sql` → `modules-lot2.sql` → `lot3-documents-prets.sql` → `lot4-gestion-locative.sql`. Tout nouveau changement de schéma = nouveau fichier `supabase/lotN-….sql` idempotent (`if not exists`, `drop policy if exists`…), jamais de modification des anciens.
 
 ## Modèle de droits (profiles)
