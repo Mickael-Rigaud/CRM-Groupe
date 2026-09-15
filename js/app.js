@@ -52,7 +52,7 @@ const NAV = [
   { key: 'home', icon: 'home', label: 'Tableau de bord', hash: '#/home' },
   { key: 'today', icon: 'check', label: "À faire aujourd'hui", hash: '#/today', count: () => scope.activities().filter(a => !a.done && a.due_date && daysSince(a.due_date) >= 0).length },
   {
-    key: 'commercial', icon: 'kanban', label: 'Commercial', items: [
+    key: 'commercial', icon: 'kanban', label: 'Pilotage', items: [
       { hash: '#/dashboard', label: "Vue d'ensemble", direction: true },
       // Chaque structure ouvre son espace : RGD Renova son application, BTP Expertise ses
       // cinq écrans (onglets internes à la page). Les autres gardent leur pipeline.
