@@ -1,15 +1,15 @@
 :root {
   /* Identité de groupe : interface neutre. La couleur appartient aux quatre activités,
      pas à l'outil — voir ACTIVITIES dans js/data/schema.js. */
-  --accent: #1F8175; --accent-2: #196B61; --accent-soft: #E6F5F2; --accent-ink: #14544D;
-  --bg: #F4F9F8; --card: #FFFFFF; --card-2: #EAF4F2;
-  --text: #12211F; --muted: #556764; --muted-2: #879996;
-  --line: #DFEDEA; --line-strong: #C8DBD7;
-  --green: #2A8A2F; --red: #C8483C; --amber: #A96C10; --blue: #2F6FED; --violet: #E24C86;
-  --green-soft: #E6F4E4; --red-soft: #FBE9E6; --amber-soft: #FAF0DF; --blue-soft: #E9F0FE;
+  --accent: #4F46C8; --accent-2: #3E37A6; --accent-soft: #EDECFB; --accent-ink: #241F52;
+  --bg: #F5F5FA; --card: #FFFFFF; --card-2: #F1F1F8;
+  --text: #16172B; --muted: #5C5F7A; --muted-2: #8C8FA8;
+  --line: #E6E6F0; --line-strong: #D3D3E2;
+  --green: #12805C; --red: #C8483C; --amber: #A96C10; --blue: #2F6FED; --violet: #E24C86;
+  --green-soft: #E3F3EB; --red-soft: #FBE9E6; --amber-soft: #FAF0DF; --blue-soft: #E9F0FE;
   /* Alias conservés : plusieurs pages les utilisent en style inline */
   --orange: #A96C10; --orange-2: #C4881F; --orange-soft: #FAF0DF;
-  --dark: #12211F; --dark-2: #274541;
+  --dark: #16172B; --dark-2: #2E2F4A;
   --sea: #2F6FED; --sea-soft: #E9F0FE; --sea-ink: #2456B8; --mimosa: #C4881F;
   --font-display: "Inter Tight", "Inter", -apple-system, "Segoe UI", Roboto, sans-serif;
   --radius: 12px;
@@ -79,6 +79,8 @@ input, select, textarea { font: inherit; }
 .topbar .datepill { background: var(--card); border: 1px solid var(--line); border-radius: 9px; padding: 5px 12px 5px 5px; display: flex; align-items: center; gap: 9px; font-weight: 600; font-size: 12.5px; }
 .topbar .datepill span { background: var(--accent); color: #fff; font-size: 10px; font-weight: 700; padding: 4px 8px; border-radius: 6px; text-transform: uppercase; letter-spacing: .06em; }
 .content { padding: 24px 28px 60px; display: flex; flex-direction: column; gap: 18px; }
+.topbar.bare { padding: 7px 18px; justify-content: flex-end; min-height: 0; }
+.topbar.bare h1, .topbar.bare .datepill { display: none; }
 .demo-banner { background: var(--amber-soft); border: 1px solid var(--amber-soft); color: var(--amber); padding: 9px 14px; border-radius: 10px; font-size: 13px; display: flex; gap: 10px; align-items: center; }
 .demo-banner b { font-weight: 700; }
 
@@ -319,12 +321,11 @@ select.cell-in { text-align: left; }
 .chip.q { background: var(--card-2); }
 
 /* ---------- Application externe intégrée (iframe) ---------- */
-.embed { display: flex; flex-direction: column; gap: 10px; }
-.embed-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 14px; box-shadow: var(--shadow); }
-.embed-bar .grow { flex: 1; }
-.embed-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); flex-shrink: 0; }
-.embed-frame { border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: #fff; box-shadow: var(--shadow); min-height: 460px; }
+/* Page à ras : l'application occupe toute la surface, sans cadre ni carte. */
+.content.flush { padding: 0; gap: 0; }
+.embed-frame { background: #fff; }
 .embed-frame iframe { width: 100%; height: 100%; border: 0; display: block; }
-.embed-help { margin: 0; color: var(--muted-2); font-size: 12px; }
-.embed:fullscreen { background: var(--bg); padding: 10px; }
-.embed:fullscreen .embed-frame { flex: 1; min-height: 0; }
+.embed-frame:fullscreen iframe { height: 100vh; }
+.embed-actions { display: flex; align-items: center; gap: 4px; margin-left: auto; }
+.embed-act { background: none; border: 0; border-radius: 7px; padding: 6px 10px; font-size: 12.5px; font-weight: 600; color: var(--muted); text-decoration: none; white-space: nowrap; }
+.embed-act:hover { background: var(--card-2); color: var(--text); }

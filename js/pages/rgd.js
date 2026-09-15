@@ -1,11 +1,12 @@
-// Tableau de bord RGD Renova : l'application métier (hébergée à part) affichée dans le CRM.
+// RGD Renova : l'application métier (hébergée à part) occupe la page entière du CRM.
 // Rien n'est dupliqué — c'est l'outil RGD Renova lui-même, avec ses données et sa propre connexion.
 import { CONFIG } from '../config.js';
 import { scope } from '../data/scope.js';
 import { esc } from '../ui.js';
 
 export const rgdDashboardPage = {
-  title: () => 'RGD Renova — Tableau de bord',
+  title: () => 'RGD Renova',
+  fullBleed: true,   // en-tête du CRM réduit à ses commandes : ni titre ni date par-dessus l'application
   render(root) {
     if (!scope.activityKeys.includes('rgd')) {
       root.innerHTML = '<div class="card"><div class="empty">Vous n\'avez pas accès à l\'activité RGD Renova.</div></div>';
@@ -13,29 +14,25 @@ export const rgdDashboardPage = {
     }
 
     const url = CONFIG.RGD_DASHBOARD_URL;
-    root.innerHTML = `
-      <div class="embed" id="e-wrap">
-        <div class="embed-bar">
-          <span class="embed-dot"></span>
-          <b>Application RGD Renova</b>
-          <span class="muted small">chantiers · devis · paiements · sous-traitants · agenda</span>
-          <span class="grow"></span>
-          <button class="btn ghost sm" id="e-reload">Recharger</button>
-          <button class="btn ghost sm" id="e-full">Plein écran</button>
-          <a class="btn sm" href="${esc(url)}" target="_blank" rel="noopener">Ouvrir dans un onglet ↗</a>
-        </div>
-        <div class="embed-frame" id="e-frame"></div>
-        <p class="embed-help">La connexion au tableau de bord RGD Renova est indépendante de celle du CRM : la première fois, connectez-vous dans le cadre ci-dessus en cochant « Rester connecté ». S'il reste bloqué sur l'écran de connexion, votre navigateur refuse la mémorisation des sites affichés dans un autre site — passez alors par « Ouvrir dans un onglet ».</p>
-      </div>`;
-
-    const wrap = root.querySelector('#e-wrap');
+    // Page à ras : ni carte, ni bordure, ni titre en double — l'application occupe la surface.
+    root.classList.add('flush');
+    root.innerHTML = '<div class="embed-frame" id="e-frame"></div>';
     const host = root.querySelector('#e-frame');
 
-    // Hauteur : tout l'espace restant sous la barre, recalculé au redimensionnement.
+    // Les commandes vivent dans la barre du CRM, pour ne rien ajouter par-dessus l'application.
+    const bar = document.querySelector('.topbar');
+    const actions = document.createElement('div');
+    actions.className = 'embed-actions';
+    actions.innerHTML = `
+      <button type="button" class="embed-act" id="e-reload" title="Recharger l'application">Recharger</button>
+      <button type="button" class="embed-act" id="e-full" title="Afficher en plein écran">Plein écran</button>
+      <a class="embed-act" href="${esc(url)}" target="_blank" rel="noopener"
+         title="La connexion RGD Renova est indépendante de celle du CRM. Si elle ne se mémorise pas dans le cadre, votre navigateur refuse le stockage des sites affichés dans un autre site : passez par un onglet.">Ouvrir dans un onglet ↗</a>`;
+    bar.insertBefore(actions, bar.querySelector('.datepill'));
+
     const fit = () => {
-      if (document.fullscreenElement === wrap) { host.style.height = ''; return; }
-      const top = host.getBoundingClientRect().top;
-      host.style.height = Math.max(460, window.innerHeight - top - 76) + 'px';
+      if (document.fullscreenElement === host) { host.style.height = ''; return; }
+      host.style.height = Math.max(420, window.innerHeight - host.getBoundingClientRect().top) + 'px';
     };
 
     // On recrée l'élément plutôt que de réaffecter src : pas d'entrée parasite dans l'historique.
@@ -43,17 +40,16 @@ export const rgdDashboardPage = {
       host.innerHTML = '';
       const frame = document.createElement('iframe');
       frame.src = url;
-      frame.title = 'Tableau de bord RGD Renova';
+      frame.title = 'Application RGD Renova';
       frame.setAttribute('allow', 'clipboard-read; clipboard-write; fullscreen');
-      frame.loading = 'eager';
       host.appendChild(frame);
       fit();
     };
 
-    root.querySelector('#e-reload').onclick = mount;
-    root.querySelector('#e-full').onclick = () => {
+    actions.querySelector('#e-reload').onclick = mount;
+    actions.querySelector('#e-full').onclick = () => {
       if (document.fullscreenElement) document.exitFullscreen();
-      else wrap.requestFullscreen?.();
+      else host.requestFullscreen?.();
     };
 
     window.addEventListener('resize', fit);
@@ -64,7 +60,9 @@ export const rgdDashboardPage = {
       destroy() {
         window.removeEventListener('resize', fit);
         document.removeEventListener('fullscreenchange', fit);
-        if (document.fullscreenElement === wrap) document.exitFullscreen();
+        if (document.fullscreenElement === host) document.exitFullscreen();
+        actions.remove();
+        root.classList.remove('flush');
       },
     };
   },
