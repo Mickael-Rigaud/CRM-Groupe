@@ -63,9 +63,9 @@ export const homePage = {
       if (scope.isDirection || scope.activityKeys.includes('courtage')) {
         const bk = db.t('broker_profiles').filter(r => !r.archive);
         const cnt = k => bk.filter(r => (r.suivi || 'new') === k).length;
-        modules.push({ key: 'viv', title: 'Vivier courtiers', icon: '🏦', color: '#0A6F86', link: '#/vivier', body: `
+        modules.push({ key: 'viv', title: 'Vivier courtiers', icon: '🏦', color: '#0A6F86', link: '#/courtage/vivier', body: `
           <div class="hub-kpis"><div><b>${bk.length}</b><span>profils</span></div><div><b>${cnt('contact') + cnt('rdv')}</b><span>en cours</span></div><div><b class="status-won">${cnt('ok')}</b><span>recrutés</span></div><div><b>${cnt('new')}</b><span>à contacter</span></div></div>
-          <div class="hub-lines">${Object.entries(SUIVI).map(([k, v]) => `<a href="#/vivier"><span class="pill ${v.cls}" style="font-size:11px">${v.label}</span><span class="grow"></span><b>${cnt(k)}</b></a>`).join('')}</div>` });
+          <div class="hub-lines">${Object.entries(SUIVI).map(([k, v]) => `<a href="#/courtage/vivier"><span class="pill ${v.cls}" style="font-size:11px">${v.label}</span><span class="grow"></span><b>${cnt(k)}</b></a>`).join('')}</div>` });
       }
       // ---- Modules à venir
       const soon = ['Partenaires & réseau', 'Formation', 'Process & procédures', 'Mentoring', 'Agenda'];

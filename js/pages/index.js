@@ -7,9 +7,9 @@ import { acquisitionPage } from './acquisition.js';
 import { settingsPage } from './settings.js';
 import { homePage } from './home.js';
 import { patrimoinePage, propertiesPage, loansPage, expensesPage } from './patrimoine.js';
-import { vivierPage } from './vivier.js';
 import { rgdDashboardPage } from './rgd.js';
 import { btpHomePage, btpTodoPage, btpBasePage, btpDtuPage, btpMailsPage } from './btp.js';
+import { courtageHomePage, courtageVivierPage } from './courtage.js';
 
 import { locatifPage, leasesPage, unitsPage, rentalTodoPage, tenantContactsPage } from './locatif.js';
 export const pages = {
@@ -24,13 +24,14 @@ export const pages = {
   locatif_suivi: rentalTodoPage,
   locatif_contacts: tenantContactsPage,
   patrimoine_charges: expensesPage,
-  vivier: vivierPage,
   rgd: rgdDashboardPage,
   btp_home: btpHomePage,
   btp_todo: btpTodoPage,
   btp_base: btpBasePage,
   btp_dtu: btpDtuPage,
   btp_mails: btpMailsPage,
+  courtage_home: courtageHomePage,
+  courtage_vivier: courtageVivierPage,
   dashboard: dashboardPage,
   today: todayPage,
   pipeline: pipelinePage,

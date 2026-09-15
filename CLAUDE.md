@@ -1,6 +1,6 @@
 # CRM Groupe — consignes pour Claude Code
 
-Application interne de Mickael Rigaud pour piloter 4 activités (RGD Renova, BTP Expertise, La Référence Courtage, Propulsion) + modules transverses (Patrimoine, Gestion locative, Vivier courtiers, Acquisition). Langue de travail : **français** (code, commits, interface).
+Application interne de Mickael Rigaud pour piloter 4 activités (RGD Renova, BTP Expertise, La Référence Courtage, Propulsion) + modules transverses (Patrimoine, Gestion locative, Acquisition). Langue de travail : **français** (code, commits, interface).
 
 ## Stack (gratuite, sans build)
 - SPA vanilla JS en modules ES, routage par hash (`#/page/param`). Aucun bundler, aucun `npm install` : les fichiers sont servis tels quels.
@@ -12,7 +12,9 @@ Application interne de Mickael Rigaud pour piloter 4 activités (RGD Renova, BTP
 - `index.html` — coquille, charge `js/app.js`.
 - `js/app.js` — login, mise en page, `NAV` (navigation horizontale : bande 1 = les univers, bande 2 = les écrans de l'univers ouvert ; une page peut demander `fullBleed: true` pour masquer la date et occuper la surface — cas de RGD Renova). `renderNav()` est appelée **avant** `page.render()` : une page qui pose des commandes dans `.topbar` (classe `.embed-actions`) les voit préservées d'un rendu à l'autre. `js/icons.js` — icônes SVG des univers.
 - `js/pages/*.js` — une page par fichier ; `js/pages/index.js` fait la table `pages` nom → fonction.
-- Espaces par structure : `js/pages/rgd.js` affiche l'application RGD Renova (site à part, iframe plein écran, `CONFIG.RGD_DASHBOARD_URL`) ; `js/pages/btp.js` regroupe les cinq écrans de BTP Expertise (`#/btp`, `/todo`, `/base`, `/dtu`, `/mails`). Ces deux structures restent des lignes du menu Commercial, qui ouvrent leur espace au lieu de leur pipeline ; les pipelines restent joignables à `#/pipeline/<clé>`. Les cinq écrans BTP vivent dans une coquille interne à la page (`cadre()` dans `btp.js`) : menu vertical à gauche sur `--accent-ink`, en-tête et contenu à droite — la présentation du tableau de bord RGD Renova, aux couleurs de la structure. La barre du CRM n'ayant que deux niveaux, c'est cette coquille qui porte la navigation interne ; `.content.flush` lui laisse toute la surface.
+- Espaces par structure : `js/pages/rgd.js` affiche l'application RGD Renova (site à part, iframe plein écran, `CONFIG.RGD_DASHBOARD_URL`) ; `js/pages/btp.js` regroupe les cinq écrans de BTP Expertise (`#/btp`, `/todo`, `/base`, `/dtu`, `/mails`) ; `js/pages/courtage.js` ceux de La Référence Courtage (`#/courtage`, `/vivier`). Ces structures sont les lignes du menu Pilotage listées par `ESPACES` dans `js/app.js` : elles ouvrent leur espace au lieu de leur pipeline ; les pipelines restent joignables à `#/pipeline/<clé>`.
+- Coquille commune à ces espaces : `js/pages/espace.js` — `coquilleEspace()` (menu vertical à gauche sur `--accent-ink`, en-tête et contenu à droite : la présentation du tableau de bord RGD Renova, aux couleurs de la structure), `poserEspace()` et `kpiEspace()`. Classes CSS `.esp-*` ; celles en `.btp-*` qui restent sont les écrans propres au cabinet BTP (agenda, DTU, mails types). La barre du CRM n'ayant que deux niveaux, c'est cette coquille qui porte la navigation interne ; `.content.flush` + `.esp-app { flex: 1 }` lui laisse toute la surface, et `body:has(.esp-app)` masque la date en double du CRM. Le grand chiffre d'un indicateur prend `--accent-ink`, pas `--accent` : certaines couleurs de marque sont trop claires sur blanc.
+- Vivier courtiers (`js/pages/vivier.js`) : c'est le recrutement de La Référence Courtage, donc un écran de son espace (`#/courtage/vivier`) et non un univers du CRM. `vivierPage` est rendu tel quel dans le `.esp-body` de la coquille ; l'ancienne adresse `#/vivier` redirige.
 - `js/data/db.js` — accès données (Supabase ou local). **Supabase renvoie 1000 lignes max par requête : le chargement est paginé avec `.range()`, ne pas retirer.**
 - `js/data/scope.js` — droits côté client (les mêmes règles sont imposées côté serveur par les policies RLS ; les deux doivent rester cohérentes).
 - `js/data/finance.js` — calculs de prêts (échéancier, différé partiel/total, CRD, mensualité imposée), types et statuts de biens.
@@ -26,7 +28,7 @@ Application interne de Mickael Rigaud pour piloter 4 activités (RGD Renova, BTP
 Colonnes : `role` (direction | propulsion | commercial), `activities` (text[] parmi rgd, btp, courtage, propulsion), `patrimony_access`, `rental_access`, `active`.
 - Patrimoine (biens, prix, valeurs, prêts) : `role='direction'` **et** `patrimony_access=true` uniquement (`has_patrimony()`).
 - Gestion locative : `rental_access=true` quel que soit le rôle, ou direction+patrimoine (`has_rental()`). Ne voit les biens qu'à travers la vue allégée `v_properties_rental` (sans prix ni financement).
-- Propulsion : `role='propulsion'` + `'propulsion'` dans `activities` → voit les affaires/contacts/organisations marqués Propulsion + les siens. La ligne « Propulsion » du menu est le pipeline sous « Commercial ».
+- Propulsion : `role='propulsion'` + `'propulsion'` dans `activities` → voit les affaires/contacts/organisations marqués Propulsion + les siens. La ligne « Propulsion » du menu est le pipeline sous « Pilotage ».
 - Vivier courtiers : direction ou `courtage` dans `activities`.
 - Documents : droits de l'entité parente (`can_document(entity_type, id)`).
 

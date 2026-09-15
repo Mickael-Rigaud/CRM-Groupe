@@ -48,17 +48,22 @@ function renderLogin(error = '') {
 // Un univers ou une entrée rattachée à une activité colore l'interface (voir applyBrand).
 const lateRent = () => { const k = isoDay().slice(0, 7); return db.t('leases').filter(l => l.active !== false && (!l.start_date || l.start_date.slice(0, 7) <= k) && (!l.end_date || l.end_date.slice(0, 7) >= k) && db.t('rent_payments').filter(x => x.lease_id === l.id && x.month.slice(0, 7) <= k).reduce((s, x) => s + (Number(x.due) || 0) - ((x.apl != null || x.tenant_paid != null) ? (Number(x.apl) || 0) + (Number(x.tenant_paid) || 0) : Number(x.amount) || 0) + (Number(x.adjustment) || 0), 0) > 0.005).length; };
 
+// Structures dont la ligne du menu ouvre un espace (menu vertical interne) plutôt
+// qu'un pipeline. Le recrutement de La Référence Courtage — le vivier courtiers —
+// est un écran de son espace, pas un univers du CRM.
+const ESPACES = ['rgd', 'btp', 'courtage'];
+
 const NAV = [
   { key: 'home', icon: 'home', label: 'Tableau de bord', hash: '#/home' },
   { key: 'today', icon: 'check', label: "À faire aujourd'hui", hash: '#/today', count: () => scope.activities().filter(a => !a.done && a.due_date && daysSince(a.due_date) >= 0).length },
   {
     key: 'commercial', icon: 'kanban', label: 'Pilotage', items: [
       { hash: '#/dashboard', label: "Vue d'ensemble", direction: true },
-      // Chaque structure ouvre son espace : RGD Renova son application, BTP Expertise ses
-      // cinq écrans (onglets internes à la page). Les autres gardent leur pipeline.
-      { hash: '#/rgd', label: ACTIVITIES.rgd.label, dot: ACTIVITIES.rgd.color, activity: 'rgd' },
-      { hash: '#/btp', label: ACTIVITIES.btp.label, dot: ACTIVITIES.btp.color, activity: 'btp' },
-      ...Object.values(ACTIVITIES).filter(a => !['rgd', 'btp'].includes(a.key)).map(a => ({ hash: `#/pipeline/${a.key}`, label: a.label, dot: a.color, activity: a.key, count: () => scope.deals().filter(d => d.activity === a.key && d.status === 'open').length })),
+      // Une structure qui a son espace l'ouvre ici au lieu de son pipeline : RGD Renova
+      // son application, BTP Expertise et La Référence Courtage leurs écrans internes.
+      // Les pipelines restent joignables à #/pipeline/<clé>.
+      ...ESPACES.map(k => ({ hash: `#/${k}`, label: ACTIVITIES[k].label, dot: ACTIVITIES[k].color, activity: k })),
+      ...Object.values(ACTIVITIES).filter(a => !ESPACES.includes(a.key)).map(a => ({ hash: `#/pipeline/${a.key}`, label: a.label, dot: a.color, activity: a.key, count: () => scope.deals().filter(d => d.activity === a.key && d.status === 'open').length })),
     ],
   },
   {
@@ -67,11 +72,6 @@ const NAV = [
       { hash: '#/contacts', label: 'Contacts' },
       { hash: '#/partners', label: 'Partenaires' },
       { hash: '#/acquisition', label: 'Acquisition', direction: true },
-    ],
-  },
-  {
-    key: 'recrutement', icon: 'target', label: 'Recrutement', show: () => scope.isDirection || scope.activityKeys.includes('courtage'), items: [
-      { hash: '#/vivier', label: 'Vivier courtiers', count: () => db.t('broker_profiles').filter(r => !r.archive && ['contact', 'rdv'].includes(r.suivi)).length },
     ],
   },
   {
@@ -213,10 +213,13 @@ function route() {
   if (!scope.user) return;
   const hash = location.hash || '#/home';
   const [, name, param] = hash.split('/');
+  // Le vivier courtiers a rejoint l'espace La Référence Courtage : l'ancienne adresse y mène.
+  if (name === 'vivier') { location.hash = '#/courtage/vivier'; return; }
   let page = pages[name] || pages.home;
   if (name === 'patrimoine') page = pages['patrimoine_' + (param || 'home')] || pages.patrimoine_home;
   if (name === 'locatif') page = pages['locatif_' + (param || 'home')] || pages.locatif_home;
   if (name === 'btp') page = pages['btp_' + (param || 'home')] || pages.btp_home;
+  if (name === 'courtage') page = pages['courtage_' + (param || 'home')] || pages.courtage_home;
   if (page.directionOnly && !scope.isDirection) page = pages.today;
   if (name === 'pipeline' && !scope.activityKeys.includes(param)) { location.hash = `#/pipeline/${scope.activityKeys[0] || 'rgd'}`; return; }
   closeModal(true);
