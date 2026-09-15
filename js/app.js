@@ -55,6 +55,7 @@ const NAV = [
     key: 'commercial', icon: 'kanban', label: 'Commercial', items: [
       { hash: '#/dashboard', label: "Vue d'ensemble", direction: true },
       ...Object.values(ACTIVITIES).map(a => ({ hash: `#/pipeline/${a.key}`, label: a.label, dot: a.color, activity: a.key, count: () => scope.deals().filter(d => d.activity === a.key && d.status === 'open').length })),
+      { hash: '#/rgd', label: 'Tableau de bord RGD', activity: 'rgd' },
       { hash: '#/contacts', label: 'Contacts' },
       { hash: '#/partners', label: 'Partenaires' },
       { hash: '#/acquisition', label: 'Acquisition', direction: true },

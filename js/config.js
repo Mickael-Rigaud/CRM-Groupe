@@ -5,5 +5,7 @@ export const CONFIG = {
   APP_NAME: 'CRM Groupe',
   SUPABASE_URL: 'https://qnidmkufauzguultdmky.supabase.co',
   SUPABASE_ANON_KEY: 'sb_publishable_WVEzYagxnp1SoSn-AXJUBg_Ar9_iSpP',
+  // Application RGD Renova affichee dans l'onglet « Tableau de bord RGD » (site a part, connexion propre).
+  RGD_DASHBOARD_URL: 'https://rgd-renova-dashboard.surge.sh',
   get DEMO() { return !this.SUPABASE_URL || !this.SUPABASE_ANON_KEY; },
 };
