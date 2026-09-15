@@ -11,6 +11,7 @@ import {
 } from '../ui.js';
 import { openDeal, dealForm } from './deal.js';
 import { activityRowHtml, bindActivityRows, activityForm, nextActivity } from './activity.js';
+import { coquilleEspace, poserEspace, kpiEspace } from './espace.js';
 
 const KEY = 'btp';
 const act = () => ACTIVITIES[KEY];
@@ -24,7 +25,7 @@ const activities = () => {
 
 // Les cinq écrans du cabinet, présentés comme le tableau de bord RGD Renova :
 // un menu vertical à gauche, le contenu à droite. « BTP Expertise » reste une ligne
-// du menu Commercial du CRM ; cette coquille vit à l'intérieur de la page.
+// du menu Pilotage du CRM ; cette coquille vit à l'intérieur de la page.
 const ONGLETS = [
   { hash: '#/btp', label: "Vue d'ensemble" },
   { hash: '#/btp/todo', label: 'To-do list' },
@@ -32,33 +33,12 @@ const ONGLETS = [
   { hash: '#/btp/dtu', label: 'DTU' },
   { hash: '#/btp/mails', label: 'Mails types' },
 ];
-const DATE_DU_JOUR = () => new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-
-// Enveloppe un écran dans la coquille : menu à gauche, en-tête et contenu à droite.
-const cadre = (actif, titre, corps) => `
-  <div class="btp-app">
-    <aside class="btp-side">
-      <div class="btp-side-brand"><img src="assets/logos/btp.png" alt="" onerror="this.remove()"><span>BTP Expertise</span></div>
-      <nav class="btp-side-nav" aria-label="Écrans BTP Expertise">
-        ${ONGLETS.map(o => `<a href="${o.hash}" class="${o.hash === actif ? 'on' : ''}" ${o.hash === actif ? 'aria-current="page"' : ''}>${o.label}</a>`).join('')}
-      </nav>
-      <div class="btp-side-foot"><b>BTP Expertise</b><span>Expertise et conseil bâtiment</span></div>
-    </aside>
-    <div class="btp-main">
-      <header class="btp-head">
-        <h1>${esc(titre)}</h1>
-        <div class="datepill"><span>Aujourd&rsquo;hui</span>${DATE_DU_JOUR()}</div>
-      </header>
-      <div class="btp-body">${corps}</div>
-    </div>
-  </div>`;
-
-// La coquille occupe toute la hauteur restante : .content.flush enlève les marges
-// du CRM et s'étire, le menu et le contenu se partagent la surface.
-function poser(root) {
-  root.classList.add('flush');
-  return { retirer() { root.classList.remove('flush'); } };
-}
+// Enveloppe un écran dans la coquille commune aux espaces de structure.
+const cadre = (actif, titre, corps) => coquilleEspace({
+  actif, titre, corps,
+  cle: KEY, marque: act().label, baseline: 'Expertise et conseil bâtiment', onglets: ONGLETS,
+});
+const poser = poserEspace;
 
 const guard = (root) => {
   if (scope.activityKeys.includes(KEY)) return false;
@@ -68,12 +48,7 @@ const guard = (root) => {
 
 // ---------------------------------------------------------------- Vue d'ensemble
 // Trois blocs : les chiffres clés, la pipeline des missions, l'agenda Google du cabinet.
-const kpi = ({ label, valeur, sous, icone, ton = 'accent', href }) => `
-  <a class="btp-kpi" href="${href}" style="--t:var(--${ton === 'accent' ? 'accent-ink' : ton});--ts:var(--${ton}-soft, var(--accent-soft))">
-    <span class="btp-kpi-top"><span class="btp-kpi-lbl">${esc(label)}</span><span class="btp-kpi-ico">${icone}</span></span>
-    <span class="btp-kpi-val">${valeur}</span>
-    <span class="btp-kpi-sub">${esc(sous)}</span>
-  </a>`;
+const kpi = kpiEspace;
 
 // L'agenda du cabinet, affiché depuis Google. L'identifiant du calendrier est rangé
 // dans les réglages du CRM, pas dans le code : le dépôt est public.
@@ -138,7 +113,7 @@ export const btpHomePage = {
       });
 
       root.innerHTML = cadre('#/btp', "Vue d'ensemble", `
-        <div class="btp-kpis">
+        <div class="esp-kpis">
           ${kpi({ label: 'Nouvelles demandes', valeur: nouveaux.length, sous: 'nouveau et RDV 1', icone: '📨', ton: 'accent', href: '#/pipeline/btp' })}
           ${kpi({ label: 'Affaires ouvertes', valeur: open.length, sous: `${eur(open.reduce((s, d) => s + (Number(d.amount) || 0), 0))} HT`, icone: '📂', ton: 'green', href: '#/pipeline/btp' })}
           ${kpi({ label: 'Missions en cours', valeur: enCours.length, sous: 'du RDV sur place au rapport', icone: '🏗', ton: 'amber', href: '#/pipeline/btp' })}
@@ -151,16 +126,16 @@ export const btpHomePage = {
             <span class="grow"></span>
             <a class="btn ghost sm" href="#/pipeline/btp">Voir la page complète →</a>
           </div>
-          <div class="btp-kanban">${colonnes.map(({ s, cartes, somme }) => `
-            <div class="btp-col">
-              <div class="btp-col-head"><b>${esc(s.label)}</b><span>${cartes.length}</span></div>
-              <div class="btp-col-sum">${somme ? eur(somme) : '—'}</div>
-              <div class="btp-col-body">${cartes.map(d => `
-                <button type="button" class="btp-card-deal" data-deal="${d.id}">
+          <div class="esp-kanban">${colonnes.map(({ s, cartes, somme }) => `
+            <div class="esp-col">
+              <div class="esp-col-head"><b>${esc(s.label)}</b><span>${cartes.length}</span></div>
+              <div class="esp-col-sum">${somme ? eur(somme) : '—'}</div>
+              <div class="esp-col-body">${cartes.map(d => `
+                <button type="button" class="esp-card-deal" data-deal="${d.id}">
                   <b>${esc(d.title)}</b>
                   <span class="muted">${esc(dealParty(d))}</span>
-                  ${d.amount ? `<span class="btp-card-amount">${eur(d.amount)}</span>` : ''}
-                </button>`).join('') || '<div class="btp-col-vide">—</div>'}</div>
+                  ${d.amount ? `<span class="esp-card-amount">${eur(d.amount)}</span>` : ''}
+                </button>`).join('') || '<div class="esp-col-vide">—</div>'}</div>
             </div>`).join('')}</div>
         </div>
 
