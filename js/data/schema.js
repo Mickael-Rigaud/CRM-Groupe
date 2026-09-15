@@ -4,6 +4,7 @@
 export const ACTIVITIES = {
   rgd: {
     key: 'rgd', label: 'RGD Renova', short: 'RGD', color: '#F4801C',
+    accent: '#B45A06', accent2: '#96490B', soft: '#FBEEE0', ink: '#5E2F05',
     amountLabel: 'Montant devis HT (€)',
     rdvStage: 'visite',
     stages: [
@@ -24,7 +25,8 @@ export const ACTIVITIES = {
     ],
   },
   btp: {
-    key: 'btp', label: 'BTP Expertise', short: 'BTP Exp.', color: '#1D5B78',
+    key: 'btp', label: 'BTP Expertise', short: 'BTP Exp.', color: '#29ABE2',
+    accent: '#0D6E9E', accent2: '#0A5A83', soft: '#E4F2FA', ink: '#0A3D59',
     amountLabel: 'Montant mission HT (€)',
     rdvStage: 'rdv1',
     stages: [
@@ -48,7 +50,8 @@ export const ACTIVITIES = {
     ],
   },
   courtage: {
-    key: 'courtage', label: 'La Référence Courtage', short: 'Courtage', color: '#0FA3C4',
+    key: 'courtage', label: 'La Référence Courtage', short: 'Courtage', color: '#1B5E7E',
+    accent: '#1B5E7E', accent2: '#154B65', soft: '#E6F0F5', ink: '#0E3446',
     amountLabel: 'Commission estimée (€)',
     rdvStage: 'rdv',
     stages: [
@@ -74,6 +77,7 @@ export const ACTIVITIES = {
   },
   propulsion: {
     key: 'propulsion', label: 'Propulsion', short: 'Propulsion', color: '#E24C86',
+    accent: '#BC2B66', accent2: '#9E1F53', soft: '#FBE9F1', ink: '#611033',
     amountLabel: 'Valeur du contrat HT (€)',
     rdvStage: 'audit',
     stages: [
