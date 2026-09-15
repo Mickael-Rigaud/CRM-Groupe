@@ -125,7 +125,7 @@ function closeMenu() { navState.open = null; renderNav(); }
 // ---------- Couleur de la structure ouverte ----------
 // Sur un écran rattaché à une activité, l'interface prend la couleur de la structure ;
 // partout ailleurs elle revient à l'indigo du groupe. Une seule source : ACTIVITIES.
-const VARS = { accent: '--accent', accent2: '--accent-2', soft: '--accent-soft', ink: '--accent-ink' };
+const VARS = { accent: '--accent', accent2: '--accent-2', soft: '--accent-soft', ink: '--accent-ink', on: '--on-accent' };
 function brandOf(hash) {
   // La structure se lit dans le menu, pas dans l'URL : un univers entier (BTP Expertise)
   // comme une simple entrée (un pipeline, l'application RGD) peut porter une activité.
