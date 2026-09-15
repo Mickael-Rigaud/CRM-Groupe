@@ -24,8 +24,8 @@ export const homePage = {
       const hour = new Date().getHours(); const hello = hour < 12 ? 'Bonjour' : hour < 18 ? 'Bon après-midi' : 'Bonsoir';
 
       const modules = [];
-      // ---- Commercial
-      modules.push({ key: 'crm', title: 'Commercial', icon: '📈', color: 'var(--orange)', link: scope.isDirection ? '#/dashboard' : '#/today', body: `
+      // ---- Pilotage
+      modules.push({ key: 'crm', title: 'Pilotage', icon: '📈', color: 'var(--orange)', link: scope.isDirection ? '#/dashboard' : '#/today', body: `
         <div class="hub-kpis">
           <div><b>${leadsM}</b><span>leads ce mois</span></div>
           <div><b>${open.length}</b><span>affaires en cours</span></div>
