@@ -36,22 +36,24 @@ input, select, textarea { font: inherit; }
 
 /* ---------- Navigation : barre horizontale ---------- */
 .topnav { position: sticky; top: 0; z-index: 20; }
-.univ { background: var(--accent-ink); color: #fff; display: flex; align-items: center; gap: 18px; padding: 0 20px; transition: background .25s ease; }
-.u-mark { font-weight: 800; font-size: 15px; letter-spacing: -.02em; text-decoration: none; color: #fff; padding: 14px 0; white-space: nowrap; }
+.univ { background: var(--accent); color: var(--on-accent); display: flex; align-items: center; gap: 18px; padding: 0 20px; transition: background .25s ease; }
+.u-mark { font-weight: 800; font-size: 15px; letter-spacing: -.02em; text-decoration: none; color: var(--on-accent); padding: 14px 0; white-space: nowrap; }
 .u-set { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; flex: 1; min-width: 0; }
 .u-set::-webkit-scrollbar { display: none; }
-.u-tab { display: flex; align-items: center; gap: 8px; color: rgba(255,255,255,.7); text-decoration: none; font-weight: 600; font-size: 13.5px; padding: 15px 13px 12px; border-bottom: 3px solid transparent; white-space: nowrap; transition: .13s; }
-.u-tab:hover { color: #fff; }
-.u-tab.on { color: #fff; border-bottom-color: var(--accent); }
-.u-cnt { font-style: normal; background: rgba(255,255,255,.18); border-radius: 999px; padding: 0 7px; font-size: 10.5px; font-weight: 800; }
-.u-tab.on .u-cnt { background: var(--accent); color: var(--on-accent); }
+/* Sur un fond de marque, tout le texte de la bande prend la couleur lisible dessus :
+   la distinction actif / inactif passe par le trait et le fond, pas par l'opacité. */
+.u-tab { display: flex; align-items: center; gap: 8px; color: var(--on-accent); text-decoration: none; font-weight: 600; font-size: 13.5px; padding: 15px 13px 12px; border-bottom: 3px solid transparent; white-space: nowrap; transition: .13s; }
+.u-tab:hover { background: color-mix(in srgb, var(--on-accent) 9%, transparent); }
+.u-tab.on { font-weight: 700; border-bottom-color: var(--on-accent); background: color-mix(in srgb, var(--on-accent) 12%, transparent); }
+.u-cnt { font-style: normal; background: color-mix(in srgb, var(--on-accent) 16%, transparent); color: var(--on-accent); border-radius: 999px; padding: 0 7px; font-size: 10.5px; font-weight: 800; }
+.u-tab.on .u-cnt { background: color-mix(in srgb, var(--on-accent) 22%, transparent); color: var(--on-accent); }
 .u-right { display: flex; align-items: center; gap: 4px; flex-shrink: 0; padding-left: 6px; }
-.u-ico { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 9px; color: rgba(255,255,255,.7); text-decoration: none; }
-.u-ico:hover, .u-ico.on { background: rgba(255,255,255,.12); color: #fff; }
+.u-ico { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 9px; color: var(--on-accent); text-decoration: none; }
+.u-ico:hover, .u-ico.on { background: color-mix(in srgb, var(--on-accent) 14%, transparent); }
 .acct { position: relative; }
-.u-me { display: flex; align-items: center; gap: 8px; border: 0; background: transparent; color: #fff; padding: 5px 8px 5px 5px; border-radius: 999px; font-weight: 600; font-size: 13px; }
-.u-me:hover { background: rgba(255,255,255,.12); }
-.u-me .av { width: 28px; height: 28px; border-radius: 50%; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; font-size: 11px; font-weight: 800; }
+.u-me { display: flex; align-items: center; gap: 8px; border: 0; background: transparent; color: var(--on-accent); padding: 5px 8px 5px 5px; border-radius: 999px; font-weight: 600; font-size: 13px; }
+.u-me:hover { background: color-mix(in srgb, var(--on-accent) 12%, transparent); }
+.u-me .av { width: 28px; height: 28px; border-radius: 50%; background: color-mix(in srgb, var(--on-accent) 18%, transparent); color: var(--on-accent); display: grid; place-items: center; font-size: 11px; font-weight: 800; }
 .acct-menu { position: absolute; right: 0; top: calc(100% + 8px); background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow-lift); min-width: 232px; padding: 8px; display: flex; flex-direction: column; gap: 2px; }
 .acct-head { padding: 8px 10px 12px; border-bottom: 1px solid var(--line); margin-bottom: 6px; }
 .acct-head .role { color: var(--muted-2); font-weight: 800; text-transform: uppercase; letter-spacing: .1em; font-size: 10.5px; }
