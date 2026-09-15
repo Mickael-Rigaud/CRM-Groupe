@@ -319,12 +319,11 @@ select.cell-in { text-align: left; }
 .chip.q { background: var(--card-2); }
 
 /* ---------- Application externe intégrée (iframe) ---------- */
-.embed { display: flex; flex-direction: column; gap: 10px; }
-.embed-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 14px; box-shadow: var(--shadow); }
-.embed-bar .grow { flex: 1; }
-.embed-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); flex-shrink: 0; }
-.embed-frame { border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: #fff; box-shadow: var(--shadow); min-height: 460px; }
+/* Page à ras : l'application occupe toute la surface, sans cadre ni carte. */
+.content.flush { padding: 0; gap: 0; }
+.embed-frame { background: #fff; }
 .embed-frame iframe { width: 100%; height: 100%; border: 0; display: block; }
-.embed-help { margin: 0; color: var(--muted-2); font-size: 12px; }
-.embed:fullscreen { background: var(--bg); padding: 10px; }
-.embed:fullscreen .embed-frame { flex: 1; min-height: 0; }
+.embed-frame:fullscreen iframe { height: 100vh; }
+.embed-actions { display: flex; align-items: center; gap: 4px; margin-left: auto; }
+.embed-act { background: none; border: 0; border-radius: 7px; padding: 6px 10px; font-size: 12.5px; font-weight: 600; color: var(--muted); text-decoration: none; white-space: nowrap; }
+.embed-act:hover { background: var(--card-2); color: var(--text); }

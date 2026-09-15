@@ -54,8 +54,10 @@ const NAV = [
   {
     key: 'commercial', icon: 'kanban', label: 'Commercial', items: [
       { hash: '#/dashboard', label: "Vue d'ensemble", direction: true },
-      ...Object.values(ACTIVITIES).map(a => ({ hash: `#/pipeline/${a.key}`, label: a.label, dot: a.color, activity: a.key, count: () => scope.deals().filter(d => d.activity === a.key && d.status === 'open').length })),
-      { hash: '#/rgd', label: 'Tableau de bord RGD', activity: 'rgd' },
+      // RGD Renova se pilote dans son propre outil : la ligne ouvre l'application, pas un pipeline.
+      ...Object.values(ACTIVITIES).map(a => a.key === 'rgd'
+        ? { hash: '#/rgd', label: a.label, dot: a.color, activity: a.key }
+        : { hash: `#/pipeline/${a.key}`, label: a.label, dot: a.color, activity: a.key, count: () => scope.deals().filter(d => d.activity === a.key && d.status === 'open').length }),
       { hash: '#/contacts', label: 'Contacts' },
       { hash: '#/partners', label: 'Partenaires' },
       { hash: '#/acquisition', label: 'Acquisition', direction: true },
