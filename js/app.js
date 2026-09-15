@@ -88,8 +88,6 @@ const NAV = [
   { key: 'settings', icon: 'gear', label: 'Paramètres', hash: '#/settings', bottom: true },
 ];
 
-const PIN_KEY = 'crm_nav_pin';
-let lastHash = null;
 // Logos des structures : testés une fois au démarrage, la pastille de couleur sert de repli
 const LOGOS = new Set();
 function probeLogos() {
@@ -99,11 +97,7 @@ function probeLogos() {
     im.src = `assets/logos/${k}.png`;
   }
 }
-const navState = {
-  open: null,                                   // univers dont le volet est ouvert
-  get pinned() { try { return localStorage.getItem(PIN_KEY) === '1'; } catch { return false; } },
-  set pinned(v) { try { localStorage.setItem(PIN_KEY, v ? '1' : '0'); } catch { /* navigation privée */ } },
-};
+const navState = { open: null };   // menu « mon compte » ouvert ou non
 // Entrées visibles d'un univers, selon le rôle et les activités du profil
 const itemsOf = (g) => (g.items || []).filter(i => (!i.direction || scope.isDirection) && (!i.activity || scope.activityKeys.includes(i.activity)));
 const groups = () => NAV.filter(g => !g.show || g.show()).filter(g => !g.items || itemsOf(g).length);
@@ -111,90 +105,80 @@ const isOn = (i, hash) => i.exact ? hash === i.hash : hash.startsWith(i.hash);
 const groupOf = (hash) => groups().find(g => g.hash ? isOn(g, hash) : itemsOf(g).some(i => isOn(i, hash)));
 
 function renderLayout() {
-  const u = scope.user;
   app.innerHTML = `
-    <aside class="rail" id="rail" aria-label="Navigation principale"></aside>
-    <div class="flyout" id="flyout" hidden></div>
-    <div class="main">
-      <header class="topbar"><h1 id="page-title">—</h1><div class="datepill"><span>Aujourd'hui</span>${new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</div></header>
-      <main class="content" id="content"></main>
-    </div>`;
-  document.addEventListener('keydown', e => { if (e.key === 'Escape' && navState.open && !navState.pinned) closeFlyout(); });
-  // En phase de capture : le rail est réécrit à chaque rendu, la cible d'un clic « bulle »
-  // n'est donc plus rattachée au document quand ce test s'exécute.
+    <header class="topnav" id="topnav">
+      <div class="univ" id="univ"></div>
+      <div class="topbar subnav" id="subnav"></div>
+    </header>
+    <main class="content" id="content"></main>`;
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && navState.open) closeMenu(); });
+  // Capture : la barre est réécrite à chaque rendu, la cible d'un clic « bulle » n'y est plus rattachée
   document.addEventListener('click', e => {
-    if (!navState.open || navState.pinned) return;
-    if (!e.target.closest('#flyout') && !e.target.closest('#rail')) closeFlyout();
+    if (navState.open && !e.target.closest('#acct')) closeMenu();
   }, { capture: true });
   renderNav();
 }
 
-function closeFlyout() { navState.open = null; renderNav(); }
+function closeMenu() { navState.open = null; renderNav(); }
 
 function renderNav() {
-  const rail = document.getElementById('rail'); if (!rail) return;
+  const univ = document.getElementById('univ'); if (!univ) return;
   const hash = location.hash || '#/home';
   const u = scope.user;
-  const here = groupOf(hash);
-  // Volet épinglé : il suit la page ouverte, mais seulement quand on vient de naviguer —
-  // sinon il écraserait l'univers que l'on est en train de parcourir.
-  if (hash !== lastHash) { lastHash = hash; if (navState.pinned) navState.open = here?.items ? here.key : null; }
-  if (navState.open && navState.open !== '__me' && !groups().some(g => g.key === navState.open)) navState.open = null;
-
-  const btn = (g) => {
-    const items = itemsOf(g);
-    const single = g.hash || items.length === 1;
-    const cnt = g.count ? g.count() : items.reduce((s, i) => s + (i.count ? i.count() : 0), 0);
-    const on = here?.key === g.key || navState.open === g.key;
-    return `<button type="button" class="rail-i ${on ? 'on' : ''}" data-nav="${g.key}" aria-label="${esc(g.label)}" ${navState.open === g.key ? 'aria-expanded="true"' : ''} title="${esc(g.label)}">
-      ${icon(g.icon)}<span class="rail-lbl">${esc(g.label)}</span>${cnt ? `<span class="b">${cnt}</span>` : ''}${single ? '' : '<span class="more" aria-hidden="true"></span>'}
-      <span class="tip">${esc(g.label)}</span></button>`;
-  };
   const gs = groups();
-  rail.innerHTML = `
-    <a class="rail-logo" href="#/home" title="${esc(CONFIG.APP_NAME)}"><span>CG</span></a>
-    <div class="rail-set">${gs.filter(g => !g.bottom).map(btn).join('')}</div>
-    <div class="rail-set bottom">${gs.filter(g => g.bottom).map(btn).join('')}
-      <button type="button" class="rail-i avatar" data-nav="__me" aria-label="Mon compte"><span class="ini">${esc((u.full_name || '?').split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase())}</span><span class="rail-lbl">Mon compte</span><span class="tip">${esc(u.full_name)}</span></button>
+  const here = groupOf(hash);
+
+  // ---- Bande 1 : les univers
+  const tab = (g) => {
+    const items = itemsOf(g);
+    const cnt = g.count ? g.count() : items.reduce((s, i) => s + (i.count ? i.count() : 0), 0);
+    return `<a href="${g.hash || itemsOf(g)[0].hash}" class="u-tab ${here?.key === g.key ? 'on' : ''}" data-univ="${g.key}">
+      ${icon(g.icon, 17)}<span>${esc(g.label)}</span>${cnt ? `<i class="u-cnt">${cnt}</i>` : ''}</a>`;
+  };
+  const ini = (u.full_name || '?').split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
+  univ.innerHTML = `
+    <a class="u-mark" href="#/home">${esc(CONFIG.APP_NAME)}</a>
+    <nav class="u-set" aria-label="Univers">${gs.filter(g => !g.bottom).map(tab).join('')}</nav>
+    <div class="u-right">
+      ${gs.filter(g => g.bottom).map(g => `<a href="${g.hash}" class="u-ico ${here?.key === g.key ? 'on' : ''}" title="${esc(g.label)}" aria-label="${esc(g.label)}">${icon(g.icon, 18)}</a>`).join('')}
+      <div class="acct" id="acct">
+        <button type="button" class="u-me" id="me-btn" aria-expanded="${navState.open === '__me'}"><span class="av">${esc(ini)}</span><span class="nm">${esc((u.full_name || '').split(' ')[0])}</span></button>
+        ${navState.open === '__me' ? `<div class="acct-menu">
+          <div class="acct-head"><div class="role">${esc(ROLES[u.role]?.label || u.role)}</div><div class="name">${esc(u.full_name)}</div>${u.email ? `<div class="mail">${esc(u.email)}</div>` : ''}</div>
+          ${db.demo ? '' : '<button type="button" class="acct-act" id="pwd">Changer mon mot de passe</button>'}
+          <button type="button" class="acct-act danger" id="logout">Déconnexion</button>
+        </div>` : ''}
+      </div>
     </div>`;
 
-  const fly = document.getElementById('flyout');
-  const g = navState.open === '__me' ? null : gs.find(x => x.key === navState.open);
-  if (navState.open === '__me') {
-    fly.hidden = false;
-    fly.innerHTML = `<div class="fly-head"><h2>Mon compte</h2></div>
-      <div class="fly-me"><div class="role">${esc(ROLES[u.role]?.label || u.role)}</div><div class="name">${esc(u.full_name)}</div>${u.email ? `<div class="mail">${esc(u.email)}</div>` : ''}</div>
-      <div class="fly-list">${db.demo ? '' : '<button type="button" class="fly-act" id="pwd">Changer mon mot de passe</button>'}<button type="button" class="fly-act danger" id="logout">Déconnexion</button></div>`;
-    fly.querySelector('#pwd')?.addEventListener('click', () => { closeFlyout(); passwordForm(false); });
-    fly.querySelector('#logout').onclick = async () => { await db.signOut(); location.hash = ''; scope.set(null); navState.open = null; renderLogin(); };
-  } else if (g) {
-    fly.hidden = false;
-    fly.innerHTML = `<div class="fly-head"><h2>${esc(g.label)}</h2><button type="button" class="pin ${navState.pinned ? 'on' : ''}" id="nav-pin" aria-pressed="${navState.pinned}" title="${navState.pinned ? 'Détacher le volet' : 'Garder le volet ouvert'}">${navState.pinned ? '◉' : '○'}</button></div>
-      <nav class="fly-list">${itemsOf(g).map(i => {
-        const cnt = i.count ? i.count() : 0;
-        // Logo de la structure s'il a été déposé dans assets/logos/, pastille de couleur sinon
-        const mark = i.activity && LOGOS.has(i.activity) ? `<span class="brandmark" style="--c:${i.dot}"><img src="assets/logos/${i.activity}.png" alt=""></span>`
-          : i.dot ? `<span class="dot" style="background:${i.dot}"></span>` : '';
-        return `<a href="${i.hash}" class="${isOn(i, hash) ? 'on' : ''}" ${isOn(i, hash) ? 'aria-current="page"' : ''}>${mark}${esc(i.label)}${cnt ? `<span class="cnt">${cnt}</span>` : ''}</a>`;
-      }).join('')}</nav>`;
-    fly.querySelector('#nav-pin').onclick = () => { navState.pinned = !navState.pinned; renderNav(); };
-    fly.querySelectorAll('a').forEach(a => a.addEventListener('click', () => { if (!navState.pinned) navState.open = null; }));
-  } else {
-    fly.hidden = true; fly.innerHTML = '';
+  // ---- Bande 2 : les écrans de l'univers ouvert
+  const sub = document.getElementById('subnav');
+  const items = here && here.items ? itemsOf(here) : [];
+  const screens = items.map(i => {
+    const cnt = i.count ? i.count() : 0;
+    // Logo de la structure s'il a été déposé dans assets/logos/, pastille de couleur sinon
+    const mark = i.activity && LOGOS.has(i.activity) ? `<span class="brandmark" style="--c:${i.dot}"><img src="assets/logos/${i.activity}.png" alt=""></span>`
+      : i.dot ? `<span class="dot" style="background:${i.dot}"></span>` : '';
+    return `<a href="${i.hash}" class="s-tab ${isOn(i, hash) ? 'on' : ''}" ${isOn(i, hash) ? 'aria-current="page"' : ''}>${mark}${esc(i.label)}${cnt ? `<i class="s-cnt">${cnt}</i>` : ''}</a>`;
+  }).join('');
+  const posted = sub.querySelector('.embed-actions');   // commandes posées par la page ouverte
+  sub.innerHTML = `<h1 id="page-title" class="sr-only">—</h1>
+    <nav class="s-set" aria-label="Écrans">${screens}</nav>
+    <div class="datepill"><span>Aujourd'hui</span>${new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</div>`;
+  if (posted) sub.insertBefore(posted, sub.querySelector('.datepill'));
+  sub.hidden = !items.length && !posted;
+
+  // Garder l'onglet courant sous les yeux quand les barres défilent (mobile)
+  for (const el of [univ.querySelector('.u-tab.on'), sub.querySelector('.s-tab.on')]) {
+    const box = el?.parentElement;
+    if (el && box && box.scrollWidth > box.clientWidth) el.scrollIntoView({ block: 'nearest', inline: 'center' });
   }
 
-  // Barre horizontale (mobile) : garder l'univers en cours sous les yeux
-  if (rail.scrollWidth > rail.clientWidth) rail.querySelector('.rail-i.on')?.scrollIntoView({ block: 'nearest', inline: 'center' });
-
-  rail.querySelectorAll('[data-nav]').forEach(b => b.onclick = () => {
-    const key = b.dataset.nav;
-    if (key === '__me') { navState.open = navState.open === '__me' ? null : '__me'; return renderNav(); }
-    const grp = gs.find(x => x.key === key); const items = itemsOf(grp);
-    if (grp.hash) { navState.open = null; location.hash = grp.hash; return renderNav(); }
-    if (items.length === 1) { navState.open = null; location.hash = items[0].hash; return renderNav(); }
-    navState.open = navState.open === key ? null : key;
-    renderNav();
-  });
+  univ.querySelector('#me-btn').onclick = () => { navState.open = navState.open === '__me' ? null : '__me'; renderNav(); };
+  univ.querySelector('#pwd')?.addEventListener('click', () => { closeMenu(); passwordForm(false); });
+  univ.querySelector('#logout')?.addEventListener('click', async () => { await db.signOut(); location.hash = ''; scope.set(null); navState.open = null; renderLogin(); });
+  // Un univers ouvert conduit à son premier écran ; la bande 2 fait le reste
+  univ.querySelectorAll('[data-univ]').forEach(a => a.onclick = () => { navState.open = null; });
 }
 
 // ---------- Routeur ----------
@@ -212,11 +196,11 @@ function route() {
   const content = document.getElementById('content');
   document.getElementById('page-title').textContent = page.title(param);
   // Une page qui affiche une application entière (RGD Renova) garde la barre pour ses
-  // commandes, mais sans titre ni date : l'application a déjà les siens.
+  // commandes et la navigation, mais sans la date.
   document.querySelector('.topbar').classList.toggle('bare', !!page.fullBleed);
   content.innerHTML = '';
-  current = page.render(content, param);
   renderNav();
+  current = page.render(content, param);
   window.scrollTo(0, 0);
 }
 
