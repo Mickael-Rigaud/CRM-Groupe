@@ -1,10 +1,10 @@
 :root {
   /* Identité de groupe : interface neutre. La couleur appartient aux quatre activités,
      pas à l'outil — voir ACTIVITIES dans js/data/schema.js. */
-  --accent: #17796E; --accent-2: #12635A; --accent-soft: #E3F1EE; --accent-ink: #0E3F3A;
-  --bg: #F3F7F6; --card: #FFFFFF; --card-2: #EDF3F2;
+  --accent: #1F8175; --accent-2: #196B61; --accent-soft: #E6F5F2; --accent-ink: #14544D;
+  --bg: #F4F9F8; --card: #FFFFFF; --card-2: #EAF4F2;
   --text: #12211F; --muted: #556764; --muted-2: #879996;
-  --line: #E1EBE9; --line-strong: #CCDAD7;
+  --line: #DFEDEA; --line-strong: #C8DBD7;
   --green: #2A8A2F; --red: #C8483C; --amber: #A96C10; --blue: #2F6FED; --violet: #E24C86;
   --green-soft: #E6F4E4; --red-soft: #FBE9E6; --amber-soft: #FAF0DF; --blue-soft: #E9F0FE;
   /* Alias conservés : plusieurs pages les utilisent en style inline */
