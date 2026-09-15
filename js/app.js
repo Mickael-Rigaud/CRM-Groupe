@@ -209,6 +209,8 @@ function route() {
   current?.destroy?.();
   const content = document.getElementById('content');
   document.getElementById('page-title').textContent = page.title(param);
+  // Une page qui affiche une application entière (RGD Renova) se passe de l'en-tête du CRM
+  document.querySelector('.topbar').hidden = !!page.fullBleed;
   content.innerHTML = '';
   current = page.render(content, param);
   renderNav();

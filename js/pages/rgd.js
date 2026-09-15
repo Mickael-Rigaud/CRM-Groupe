@@ -6,6 +6,7 @@ import { esc } from '../ui.js';
 
 export const rgdDashboardPage = {
   title: () => 'RGD Renova — Tableau de bord',
+  fullBleed: true,   // l'application a son propre en-tête : celui du CRM ferait doublon
   render(root) {
     if (!scope.activityKeys.includes('rgd')) {
       root.innerHTML = '<div class="card"><div class="empty">Vous n\'avez pas accès à l\'activité RGD Renova.</div></div>';
