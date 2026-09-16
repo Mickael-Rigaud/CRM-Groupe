@@ -18,7 +18,9 @@ export function activityForm(link = {}, existing = null, onSaved, onClose = null
   const users = scope.users();
   const spec = [
     { key: 'type', label: 'Type', type: 'select', options: ACTIVITY_TYPES.map(t => [t.key, `${t.icon} ${t.label}`]), required: true, half: true, value: 'appel' },
-    { key: 'assignee_id', label: 'Responsable', type: 'select', options: users.map(u => [u.id, u.full_name]), required: true, half: true, value: scope.user.id },
+    // Comme pour la structure, un contexte qui désigne déjà quelqu'un (la colonne
+    // d'une personne dans la to do list) l'emporte sur le responsable par défaut.
+    { key: 'assignee_id', label: 'Responsable', type: 'select', options: users.map(u => [u.id, u.full_name]), required: true, half: true, value: link.assignee_id || scope.user.id },
     { key: 'title', label: 'Intitulé', type: 'text', required: true, placeholder: 'Ex. Relancer le devis' },
     { key: 'due_date', label: 'Échéance', type: 'date', required: true, half: true, value: isoDay() },
     { key: 'due_time', label: 'Heure (optionnel)', type: 'time', half: true },
