@@ -498,6 +498,11 @@ body:has(.esp-app) .subnav .datepill { display: none; }
 /* Une bascule de structure ne doit pas clignoter pour qui préfère moins d'animation */
 @media (prefers-reduced-motion: reduce) { .univ, .s-tab.on, .btn { transition: none; } }
 
+/* Colonne d'actions d'une ligne de base de données */
+td.acts { display: flex; gap: 6px; justify-content: flex-end; }
+.btn.ghost.danger { color: var(--red); }
+.btn.ghost.danger:hover { background: var(--red-soft); border-color: var(--red); }
+
 /* Mails types — trois dossiers, chacun sa couleur, et la séquence en chronologie.
    La teinte vient de la séquence (--t), posée par le JS. */
 .mail-dossiers { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }

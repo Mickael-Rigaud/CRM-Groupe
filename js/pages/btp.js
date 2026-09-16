@@ -13,7 +13,7 @@ import { openDeal, dealForm } from './deal.js';
 import { contactForm, openContact } from './contacts.js';
 import { orgForm, openOrg } from './organisations.js';
 import { activityRowHtml, bindActivityRows, activityForm, nextActivity } from './activity.js';
-import { coquilleEspace, poserEspace, kpiEspace } from './espace.js';
+import { coquilleEspace, poserEspace, kpiEspace, supprimerFiche } from './espace.js';
 
 const KEY = 'btp';
 const act = () => ACTIVITIES[KEY];
@@ -355,7 +355,7 @@ export const btpBasePage = {
               <td>${r.tel ? `<a href="tel:${esc(r.tel)}">${esc(r.tel)}</a>` : '—'}</td>
               <td>${r.mail ? `<a href="mailto:${esc(r.mail)}">${esc(r.mail)}</a>` : '—'}</td>
               ${r.org ? `<td class="num">${r.apports}</td>` : `<td>${esc(r.canal)}</td><td>${r.affaire ? esc(r.affaire) : '—'}</td>`}
-              <td class="num"><button type="button" class="btn ghost sm" data-modif="${r.id}" title="Modifier ou supprimer">✎</button></td>
+              <td class="num acts"><button type="button" class="btn ghost sm" data-modif="${r.id}" title="Modifier">✎</button><button type="button" class="btn ghost sm danger" data-suppr="${r.id}" title="Supprimer la fiche et ce qui en dépend">🗑</button></td>
             </tr>`).join('') || `<tr><td colspan="${colonnes.length + 1}"><div class="empty">Aucune fiche dans cette vue.</div></td></tr>`}</tbody>
           </table></div>
         </div>`);
@@ -368,12 +368,14 @@ export const btpBasePage = {
       // La ligne ouvre la fiche complète ; le crayon va droit au formulaire, d'où l'on
       // peut aussi supprimer (le CRM refuse la suppression d'un contact qui porte des affaires).
       root.querySelectorAll('[data-fiche]').forEach(tr => tr.onclick = (e) => {
-        if (e.target.closest('[data-modif]')) return;
+        if (e.target.closest('[data-modif], [data-suppr]')) return;
         surOrg ? openOrg(tr.dataset.fiche, draw) : openContact(tr.dataset.fiche, draw);
       });
       root.querySelectorAll('[data-modif]').forEach(b => b.onclick = () => (surOrg
         ? orgForm(db.byId('organisations', b.dataset.modif), draw)
         : contactForm(db.byId('contacts', b.dataset.modif), draw)));
+      root.querySelectorAll('[data-suppr]').forEach(b => b.onclick = () =>
+        supprimerFiche(surOrg ? 'organisations' : 'contacts', b.dataset.suppr, draw));
       root.querySelector('#b-new').onclick = () => nouveau();
       root.querySelector('#b-export').onclick = () => csvDownload(`btp-${state.vue}.csv`, lignes.map(({ id, org, dealId, ...reste }) => reste));
     };

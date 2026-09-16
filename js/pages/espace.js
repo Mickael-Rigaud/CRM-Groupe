@@ -6,7 +6,8 @@
 // posées par applyBrand() (js/app.js) d'après l'activité de l'entrée de menu ouverte.
 // Un espace prend donc sa couleur tout seul, à condition que son entrée du NAV porte
 // `activity: '<clé>'`.
-import { esc } from '../ui.js';
+import { db } from '../data/db.js';
+import { esc, confirm, toast } from '../ui.js';
 
 const DATE_DU_JOUR = () => new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
@@ -50,3 +51,48 @@ export const kpiEspace = ({ label, valeur, sous, icone, ton = 'accent', href }) 
     <span class="esp-kpi-val">${valeur}</span>
     <span class="esp-kpi-sub">${esc(sous)}</span>
   </a>`;
+
+// Supprimer une fiche et tout ce qui ne tient qu'à elle.
+// Le formulaire du CRM refuse de supprimer un contact qui porte des affaires — c'est
+// une sécurité utile sur un client suivi, mais elle bloque le cas courant du lead
+// arrivé d'un formulaire : le contact et son affaire sont la même chose. Ici on
+// annonce tout ce qui va partir, et on l'emporte d'un coup.
+export async function supprimerFiche(table, id, apres) {
+  const fiche = db.byId(table, id);
+  if (!fiche) return;
+  const surOrg = table === 'organisations';
+  const nom = surOrg ? fiche.name : `${fiche.first_name || ''} ${fiche.last_name || ''}`.trim() || fiche.email || 'cette fiche';
+  const champ = surOrg ? 'organisation_id' : 'contact_id';
+
+  const affaires = db.t('deals').filter(d => d[champ] === id);
+  const idsAffaires = new Set(affaires.map(d => d.id));
+  // Tout ce qui pend à la fiche ou à ses affaires. On le supprime nous-mêmes plutôt que
+  // de compter sur la cascade du serveur : en mode démo elle n'existe pas, et une tâche
+  // orpheline continuerait d'apparaître dans la to-do.
+  const taches = db.t('activities').filter(a => a[champ] === id || idsAffaires.has(a.deal_id));
+  const echanges = db.t('events').filter(e => e[champ] === id || idsAffaires.has(e.deal_id));
+
+  const detail = [
+    affaires.length && `${affaires.length} affaire${affaires.length > 1 ? 's' : ''}`,
+    taches.length && `${taches.length} tâche${taches.length > 1 ? 's' : ''}`,
+    echanges.length && `${echanges.length} échange${echanges.length > 1 ? 's' : ''} d'historique`,
+  ].filter(Boolean);
+
+  const message = detail.length
+    ? `Supprimer ${nom} ainsi que ${detail.join(', ')} ? C'est définitif.`
+    : `Supprimer ${nom} ? C'est définitif.`;
+  if (!await confirm(message)) return;
+
+  try {
+    for (const a of taches) await db.remove('activities', a.id);
+    for (const e of echanges) await db.remove('events', e.id);
+    for (const d of affaires) await db.remove('deals', d.id);
+    await db.remove(table, id);
+    toast(`${nom} supprimé${surOrg ? 'e' : ''}`);
+    apres?.();
+  } catch (err) {
+    // Les policies du serveur peuvent refuser : un commercial ne supprime que ce qu'il porte.
+    toast(err.message || 'Suppression refusée', 'err');
+    apres?.();
+  }
+}
