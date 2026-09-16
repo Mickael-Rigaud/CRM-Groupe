@@ -432,6 +432,19 @@ body:has(.esp-app) .subnav .datepill { display: none; }
 .btp-card:hover { border-color: var(--accent); box-shadow: var(--shadow-lift); }
 .btp-code { font-family: var(--font-display); font-weight: 700; color: var(--accent-ink); letter-spacing: -.01em; }
 .btp-title { font-size: 13px; line-height: 1.35; }
+/* Fiche DTU : ce que dit la norme, ce qu'on constate, ce que contrôle le cabinet */
+.btp-card.ess { border-left-color: var(--amber); }
+.dtu-star { color: var(--amber); }
+.dtu-tete { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.dtu-resume { margin: 0 0 6px; font-size: 14.5px; color: var(--text); }
+.dtu-h { margin: 18px 0 8px; }
+.dtu-points { display: flex; flex-direction: column; gap: 10px; }
+.dtu-point { background: var(--card-2); border-radius: 10px; border-left: 3px solid var(--accent); padding: 10px 13px; }
+.dtu-point b { display: block; font-size: 13.5px; margin-bottom: 3px; }
+.dtu-point span { font-size: 13px; color: var(--muted); }
+.dtu-points.err .dtu-point { border-left-color: var(--red); }
+.btn.ghost.on { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+
 .btp-points { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
 .btp-mail { border-top: 1px solid var(--line); padding: 14px 0 4px; }
 .btp-mail:first-of-type { border-top: 0; padding-top: 0; }

@@ -78,12 +78,27 @@ export const SEED = {
   ],
   broker_profiles: SEED_BROKERS,
   dtu_sheets: [
-    { id: 'dtu-20-1', code: 'NF DTU 20.1', title: 'Ouvrages en maçonnerie de petits éléments — parois et murs', domain: 'Maçonnerie', position: 40, checkpoints: '', scope_text: '' },
-    { id: 'dtu-25-41', code: 'NF DTU 25.41', title: 'Ouvrages en plaques de plâtre', domain: 'Plâtrerie', position: 80, checkpoints: '', scope_text: '' },
-    { id: 'dtu-43-1', code: 'NF DTU 43.1', title: 'Étanchéité des toitures-terrasses — éléments porteurs en maçonnerie', domain: 'Étanchéité', position: 150, checkpoints: '', scope_text: '' },
-    { id: 'dtu-52-2', code: 'NF DTU 52.2', title: 'Pose collée des revêtements céramiques et pierres naturelles', domain: 'Sols', position: 180, checkpoints: '', scope_text: '' },
-    { id: 'dtu-59-1', code: 'NF DTU 59.1', title: 'Travaux de peinture des bâtiments', domain: 'Finitions', position: 190, checkpoints: '', scope_text: '' },
+    { id: 'dtu-20-1', code: 'NF DTU 20.1', title: 'Maçonnerie de petits éléments', domain: 'Maçonnerie', essential: true, position: 10,
+      summary: 'Cadre la maçonnerie de petits éléments pour murs porteurs, refends et chaînages.',
+      key_points: [
+        { titre: 'Chaînages horizontaux obligatoires', detail: 'Ceinturage en tête de chaque plancher, section mini 15×15 cm en béton armé. Sans chaînage, les murs travaillent isolément et fissurent au moindre tassement.' },
+        { titre: 'Joints verticaux décalés', detail: 'Décalage d’un tiers de bloc minimum, jamais de joints alignés sur deux rangées consécutives.' },
+      ],
+      common_errors: [
+        { titre: 'Linteaux sans appui suffisant', detail: 'Appui inférieur à 20 cm de chaque côté : la maçonnerie fissure aux angles de la baie, puis le linteau bascule.' },
+      ],
+      link: 'https://www.boutique.afnor.org/fr-fr/recherche/dtu-20-1', checkpoints: '', notes: '' },
+    { id: 'dtu-25-41', code: 'NF DTU 25.41', title: 'Ouvrages en plaques de plâtre', domain: 'Plâtrerie', essential: false, position: 40,
+      summary: 'Cloisons, doublages et plafonds en plaques de plâtre sur ossature métallique.',
+      key_points: [
+        { titre: 'Entraxe des montants', detail: '60 cm en courant, 40 cm sous carrelage mural ou en local humide.' },
+      ],
+      common_errors: [], link: '', checkpoints: '', notes: '' },
+    { id: 'dtu-43-1', code: 'NF DTU 43.1', title: 'Étanchéité des toitures-terrasses', domain: 'Étanchéité', essential: true, position: 60,
+      summary: 'Toitures-terrasses avec éléments porteurs en maçonnerie.',
+      key_points: [], common_errors: [], link: '', checkpoints: '', notes: '' },
   ],
+
   mail_templates: [],
   // ---------- Patrimoine (démo) ----------
   properties: [

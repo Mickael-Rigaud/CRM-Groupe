@@ -384,35 +384,50 @@ export const btpBasePage = {
 };
 
 // ---------------------------------------------------------------- Fiches DTU
+// Le référentiel du cabinet : ce que dit la norme, ce qu'on constate sur le terrain,
+// et les points de contrôle propres au cabinet. Les fiches viennent du tableau de bord
+// RGD Renova (lot7) ; points clés et erreurs fréquentes sont des listes {titre, detail}.
 const DTU_FORM = [
   { key: 'code', label: 'Numéro', required: true, half: true, placeholder: 'NF DTU 20.1' },
   { key: 'domain', label: 'Domaine', half: true, placeholder: 'Maçonnerie' },
   { key: 'title', label: 'Intitulé', required: true },
-  { key: 'scope_text', label: "Domaine d'application", type: 'textarea', rows: 3 },
-  { key: 'checkpoints', label: 'Points de contrôle sur le terrain', type: 'textarea', rows: 8, hint: "Une ligne par point. C'est la pratique du cabinet, pas le texte de la norme." },
-  { key: 'link', label: 'Lien', half: true, placeholder: 'https://…' },
-  { key: 'notes', label: 'Notes', type: 'textarea', rows: 3 },
+  { key: 'summary', label: 'Ce que couvre la norme', type: 'textarea', rows: 3 },
+  { key: 'key_points', label: 'Points clés', type: 'textarea', rows: 8, hint: 'Une ligne par point, sous la forme « Titre :: explication ».' },
+  { key: 'common_errors', label: 'Erreurs fréquentes', type: 'textarea', rows: 6, hint: 'Même forme : « Titre :: ce qu\'on observe ».' },
+  { key: 'checkpoints', label: 'Points de contrôle du cabinet', type: 'textarea', rows: 6, hint: 'Votre pratique sur le terrain, une ligne par point.' },
+  { key: 'link', label: 'Lien vers la norme', half: true, placeholder: 'https://…' },
+  { key: 'essential', label: 'Mettre en avant dans la liste', type: 'checkbox', half: true },
+  { key: 'notes', label: 'Notes internes', type: 'textarea', rows: 3 },
 ];
+
+// Les listes {titre, detail} s'éditent en texte : une ligne, deux points doubles.
+const listeVersTexte = (l) => (Array.isArray(l) ? l : []).map(p => `${p.titre} :: ${p.detail}`).join('\n');
+const texteVersListe = (t) => String(t || '').split('\n').map(l => l.trim()).filter(Boolean).map(l => {
+  const i = l.indexOf('::');
+  return i === -1 ? { titre: l, detail: '' } : { titre: l.slice(0, i).trim(), detail: l.slice(i + 2).trim() };
+});
+const asListe = (v) => Array.isArray(v) ? v : [];
+const enClair = (t) => esc(t).replace(/\n/g, '<br>');
 
 export const btpDtuPage = {
   title: () => 'BTP Expertise — DTU',
   render(root) {
     if (guard(root)) return {};
     const coquille = poser(root);
-    const state = { q: '', domaine: '', focus: null };
+    const state = { q: '', domaine: '', essentiels: false, focus: null };
 
     const editer = (f, apres) => {
-      const m = openModal(f ? `Fiche ${f.code}` : 'Nouvelle fiche DTU',
-        `<form class="form" id="dtu-form">${renderForm(DTU_FORM, f || {})}
-          <div class="form-actions">${f ? '<button type="button" class="btn ghost" id="dtu-del">Supprimer</button>' : ''}
-          <button type="button" class="btn ghost" data-close>Annuler</button><button class="btn" type="submit">Enregistrer</button></div></form>`,
-        { wide: true });
+      const valeurs = f ? { ...f, key_points: listeVersTexte(f.key_points), common_errors: listeVersTexte(f.common_errors) } : {};
+      const m = openModal(f ? `Fiche ${f.code}` : 'Nouvelle fiche', `<form class="form" id="dtu-form">${renderForm(DTU_FORM, valeurs)}
+        <div class="form-actions">${f ? '<button type="button" class="btn ghost" id="dtu-del">Supprimer</button>' : ''}
+        <button type="button" class="btn ghost" data-close>Annuler</button><button class="btn" type="submit">Enregistrer</button></div></form>`, { wide: true });
       m.querySelector('#dtu-form').onsubmit = async (e) => {
         e.preventDefault();
         const v = readForm(e.target, DTU_FORM);
+        v.key_points = texteVersListe(v.key_points);
+        v.common_errors = texteVersListe(v.common_errors);
         try {
-          if (f) await db.update('dtu_sheets', f.id, v);
-          else await db.insert('dtu_sheets', { ...v, position: 999 });
+          if (f) await db.update('dtu_sheets', f.id, v); else await db.insert('dtu_sheets', { ...v, position: 999 });
           closeModal(true); toast('Fiche enregistrée'); apres();
         } catch (err) { toast(err.message, 'err'); }
       };
@@ -422,41 +437,61 @@ export const btpDtuPage = {
       });
     };
 
+    const bloc = (titre, liste, cls) => asListe(liste).length ? `
+      <h3 class="dtu-h">${titre}</h3>
+      <div class="dtu-points ${cls}">${asListe(liste).map(p => `
+        <div class="dtu-point"><b>${esc(p.titre)}</b>${p.detail ? `<span>${enClair(p.detail)}</span>` : ''}</div>`).join('')}</div>` : '';
+
     const consulter = (f) => openModal(`${f.code} — ${f.title}`, `
-      ${f.domain ? `<p class="small muted">${esc(f.domain)}</p>` : ''}
-      ${f.scope_text ? `<h3>Domaine d&rsquo;application</h3><p>${esc(f.scope_text).replace(/\n/g, '<br>')}</p>` : ''}
-      <h3>Points de contrôle</h3>
+      <div class="dtu-tete">
+        ${f.domain ? `<span class="pill">${esc(f.domain)}</span>` : ''}
+        ${f.essential ? '<span class="pill ok">Essentiel</span>' : ''}
+        ${f.link ? `<a class="btn ghost sm" href="${esc(f.link)}" target="_blank" rel="noopener">Voir la norme ↗</a>` : ''}
+      </div>
+      ${f.summary ? `<p class="dtu-resume">${enClair(f.summary)}</p>` : ''}
+      ${bloc('Points clés', f.key_points, '')}
+      ${bloc('Erreurs fréquentes', f.common_errors, 'err')}
+      <h3 class="dtu-h">Points de contrôle du cabinet</h3>
       ${f.checkpoints ? `<ul class="btp-points">${f.checkpoints.split('\n').filter(Boolean).map(l => `<li>${esc(l)}</li>`).join('')}</ul>`
-        : '<div class="empty">Aucun point de contrôle saisi pour l&rsquo;instant.</div>'}
-      ${f.notes ? `<h3>Notes</h3><p>${esc(f.notes).replace(/\n/g, '<br>')}</p>` : ''}
-      ${f.link ? `<p><a href="${esc(f.link)}" target="_blank" rel="noopener">Ouvrir la référence ↗</a></p>` : ''}
+        : '<div class="empty">Rien de saisi. « Modifier » pour y mettre votre pratique de terrain.</div>'}
+      ${f.notes ? `<h3 class="dtu-h">Notes internes</h3><p>${enClair(f.notes)}</p>` : ''}
       <div class="form-actions"><button type="button" class="btn ghost" data-close>Fermer</button><button type="button" class="btn" id="dtu-edit">Modifier</button></div>`,
       { wide: true, onOpen: (m) => { m.querySelector('#dtu-edit').onclick = () => { closeModal(true); editer(f, draw); }; } });
 
     const draw = () => {
       const ts = terms(state.q);
-      const toutes = db.t('dtu_sheets').slice().sort((a, b) => (a.position || 0) - (b.position || 0) || String(a.code).localeCompare(String(b.code)));
+      const toutes = db.t('dtu_sheets').slice()
+        .sort((a, b) => (a.position || 0) - (b.position || 0) || String(a.code).localeCompare(String(b.code)));
       const domaines = [...new Set(toutes.map(f => f.domain).filter(Boolean))].sort();
-      const liste = toutes.filter(f => !state.domaine || f.domain === state.domaine)
-        .filter(f => hit([f.code, f.title, f.domain, f.scope_text, f.checkpoints, f.notes], ts));
+      const liste = toutes
+        .filter(f => !state.domaine || f.domain === state.domaine)
+        .filter(f => !state.essentiels || f.essential)
+        .filter(f => hit([f.code, f.title, f.domain, f.summary, f.checkpoints, f.notes,
+          listeVersTexte(f.key_points), listeVersTexte(f.common_errors)], ts));
+      const documentees = toutes.filter(f => asListe(f.key_points).length).length;
 
-      root.innerHTML = cadre('#/btp/dtu', "DTU", `
+      root.innerHTML = cadre('#/btp/dtu', 'DTU', `
         <div class="toolbar">
           ${searchInput('b-q', state, 'Rechercher un numéro, un mot du titre, un point de contrôle…')}
           <select id="b-dom"><option value="">Tous les domaines</option>${domaines.map(d => `<option ${state.domaine === d ? 'selected' : ''}>${esc(d)}</option>`).join('')}</select>
-          <span class="muted small">${liste.length} fiche${liste.length > 1 ? 's' : ''}</span>
+          <button type="button" class="btn ghost sm ${state.essentiels ? 'on' : ''}" id="b-ess" aria-pressed="${state.essentiels}">★ Essentiels</button>
+          <span class="muted small">${liste.length} fiche${liste.length > 1 ? 's' : ''}${documentees ? ` · ${documentees} documentée${documentees > 1 ? 's' : ''}` : ''}</span>
           <span class="grow"></span>
-          <button class="btn" id="b-new">+ Fiche DTU</button>
+          <button class="btn" id="b-new">+ Fiche</button>
         </div>
-        <div class="btp-cards">${liste.map(f => `
-          <button type="button" class="btp-card" data-f="${f.id}">
-            <span class="btp-code">${esc(f.code)}</span>
+        <div class="btp-cards">${liste.map(f => {
+          const pts = asListe(f.key_points).length, errs = asListe(f.common_errors).length;
+          const perso = (f.checkpoints || '').split('\n').filter(Boolean).length;
+          return `<button type="button" class="btp-card ${f.essential ? 'ess' : ''}" data-f="${f.id}">
+            <span class="btp-code">${esc(f.code)}${f.essential ? ' <span class="dtu-star">★</span>' : ''}</span>
             <span class="btp-title">${esc(f.title)}</span>
-            <span class="small muted">${esc(f.domain || '—')}${f.checkpoints ? ` · ${f.checkpoints.split('\n').filter(Boolean).length} point(s) de contrôle` : ''}</span>
-          </button>`).join('') || '<div class="card"><div class="empty">Aucune fiche. Lancez <code>supabase/lot5-btp.sql</code> pour charger les DTU courants, ou créez la première.</div></div>'}</div>`);
+            <span class="small muted">${esc(f.domain || '—')}${pts ? ` · ${pts} point${pts > 1 ? 's' : ''} clé${pts > 1 ? 's' : ''}` : ''}${errs ? ` · ${errs} erreur${errs > 1 ? 's' : ''}` : ''}${perso ? ` · ${perso} contrôle${perso > 1 ? 's' : ''}` : ''}</span>
+          </button>`;
+        }).join('') || '<div class="card"><div class="empty">Aucune fiche. Lancez <code>supabase/lot7-btp-dtu.sql</code> pour charger le référentiel, ou créez la première.</div></div>'}</div>`);
 
       bindSearch(root, 'b-q', state, draw); restoreFocus(root, state);
       root.querySelector('#b-dom').onchange = e => { state.domaine = e.target.value; draw(); };
+      root.querySelector('#b-ess').onclick = () => { state.essentiels = !state.essentiels; draw(); };
       root.querySelector('#b-new').onclick = () => editer(null, draw);
       root.querySelectorAll('[data-f]').forEach(b => b.onclick = () => consulter(db.byId('dtu_sheets', b.dataset.f)));
     };
