@@ -4,6 +4,24 @@ import { scope } from '../data/scope.js';
 import { ACTIVITIES, ACTIVITY_KEYS, reachedRdv } from '../data/schema.js';
 import { esc, eur, periodRange, inRange, PERIODS } from '../ui.js';
 
+// Les logos des structures n'ont pas du tout le même format : bandeau très allongé
+// pour RGD Renova et La Référence Courtage, presque carré pour BTP Expertise.
+// À hauteur égale, le carré paraît deux fois plus petit que les bandeaux ; à largeur
+// égale, c'est l'inverse. On leur donne donc la même SURFACE — c'est ce qui les fait
+// peser pareil dans le tableau. Calculé sur les dimensions réelles du fichier : un
+// logo remplacé se remet d'aplomb tout seul, sans règle CSS à retoucher.
+const AIRE_LOGO = 1900;
+function proportionner(im) {
+  // Le repli est un pictogramme, pas un logo : il garde la taille fixe que lui donne
+  // le CSS, sinon il se retrouve plus gros que les vrais logos parce qu'il est carré.
+  if (im.classList.contains('picto')) { im.style.height = ''; im.style.width = ''; return; }
+  const forme = im.naturalWidth / im.naturalHeight;
+  if (!forme || !isFinite(forme)) return;
+  const h = Math.round(Math.sqrt(AIRE_LOGO / forme));
+  im.style.height = `${h}px`;
+  im.style.width = `${Math.round(h * forme)}px`;
+}
+
 export const dashboardPage = {
   title: () => "Vue d'ensemble",
   directionOnly: true,
@@ -50,7 +68,7 @@ export const dashboardPage = {
           <span class="muted small">Leads = prospects de la base de chaque structure (tous) · RDV, CA HT et panier moyen sur la période choisie.</span>
         </div>
 
-        <div class="card"><div class="table-wrap"><table>
+        <div class="card"><div class="table-wrap"><table class="tbl-structures">
           <thead><tr><th>Structure</th><th class="num">Leads</th><th class="num">RDV</th><th class="num">CA HT</th><th class="num">Panier moyen</th></tr></thead>
           <tbody>
             ${rows.map(x => `<tr class="click" data-go="${x.k === 'rgd' ? '#/rgd' : x.k === 'btp' ? '#/btp' : '#/pipeline/' + x.k}">
@@ -69,9 +87,12 @@ export const dashboardPage = {
       root.querySelectorAll('[data-period]').forEach(b => b.onclick = () => { state.period = b.dataset.period; draw(); });
       root.querySelectorAll('[data-go]').forEach(tr => tr.onclick = () => location.hash = tr.dataset.go);
       // Logo complet (avec le nom écrit) ; à défaut le pictogramme du menu ; à défaut le nom
-      root.querySelectorAll('.act-logo').forEach(im => im.onerror = () => {
-        if (im.dataset.repli) return im.replaceWith(document.createTextNode(im.dataset.nom));
-        im.dataset.repli = '1'; im.classList.add('picto'); im.src = `assets/logos/${im.dataset.cle}.png`;
+      root.querySelectorAll('.act-logo').forEach(im => {
+        im.onerror = () => {
+          if (im.dataset.repli) return im.replaceWith(document.createTextNode(im.dataset.nom));
+          im.dataset.repli = '1'; im.classList.add('picto'); im.src = `assets/logos/${im.dataset.cle}.png`;
+        };
+        if (im.complete && im.naturalHeight) proportionner(im); else im.onload = () => proportionner(im);
       });
       drawChart(all);
     };
