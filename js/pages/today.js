@@ -1,4 +1,4 @@
-// « À faire aujourd'hui » : les actions en retard, du jour, de la semaine, par responsable.
+// « To do list » : les actions en retard, du jour, de la semaine, par responsable.
 import { db } from '../data/db.js';
 import { scope } from '../data/scope.js';
 import { esc, daysSince, userName } from '../ui.js';
@@ -6,7 +6,7 @@ import { activityRowHtml, bindActivityRows, activityForm, nextActivity } from '.
 import { openDeal } from './deal.js';
 
 export const todayPage = {
-  title: () => "À faire aujourd'hui",
+  title: () => 'To do list',
   render(root) {
     const state = { who: '', showDone: false };
     const draw = () => {

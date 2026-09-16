@@ -55,7 +55,7 @@ const ESPACES = ['rgd', 'btp', 'courtage'];
 
 const NAV = [
   { key: 'home', icon: 'home', label: 'Tableau de bord', hash: '#/home' },
-  { key: 'today', icon: 'check', label: "À faire aujourd'hui", hash: '#/today', count: () => scope.activities().filter(a => !a.done && a.due_date && daysSince(a.due_date) >= 0).length },
+  { key: 'today', icon: 'check', label: 'To do list', hash: '#/today', count: () => scope.activities().filter(a => !a.done && a.due_date && daysSince(a.due_date) >= 0).length },
   {
     key: 'commercial', icon: 'kanban', label: 'Pilotage', items: [
       { hash: '#/dashboard', label: "Vue d'ensemble", direction: true },
@@ -64,12 +64,9 @@ const NAV = [
       // Les pipelines restent joignables à #/pipeline/<clé>.
       ...ESPACES.map(k => ({ hash: `#/${k}`, label: ACTIVITIES[k].label, dot: ACTIVITIES[k].color, activity: k })),
       ...Object.values(ACTIVITIES).filter(a => !ESPACES.includes(a.key)).map(a => ({ hash: `#/pipeline/${a.key}`, label: a.label, dot: a.color, activity: a.key, count: () => scope.deals().filter(d => d.activity === a.key && d.status === 'open').length })),
-    ],
-  },
-  {
-    // Répertoires et acquisition : sortis de Pilotage, qui ne garde que les structures.
-    key: 'relations', icon: 'users', label: 'Contacts', items: [
-      { hash: '#/contacts', label: 'Contacts' },
+      // Le répertoire global des contacts a quitté le menu : chaque structure a sa base
+      // de données. Restent ici les partenaires, qu'aucune structure ne couvre seule,
+      // et l'acquisition, qui regarde les quatre activités à la fois.
       { hash: '#/partners', label: 'Partenaires' },
       { hash: '#/acquisition', label: 'Acquisition', direction: true },
     ],
