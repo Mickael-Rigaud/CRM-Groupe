@@ -661,7 +661,10 @@ body.impression #print-root { display: block; }
   .pdf-footer-text strong { font-weight: 800; color: #fff; }
 }
 
-/* Vue d'ensemble : la structure est identifiée par son logo complet */
-.act-name { display: inline-flex; align-items: center; gap: 9px; font-weight: 600; min-height: 46px; }
-.act-logo { height: 40px; width: auto; max-width: 200px; object-fit: contain; object-position: left center; }
-.act-logo.picto { height: 38px; width: 38px; border-radius: 8px; }   /* repli : le pictogramme du menu */
+/* Vue d'ensemble : la structure est identifiée par son logo complet.
+   Les logos n'ont pas le même format — bandeau très large pour RGD, carré pour BTP.
+   On les fait tenir dans une même boîte au lieu de leur imposer une hauteur commune :
+   à hauteur égale, le carré serait quatre fois plus petit que le bandeau. */
+.act-name { display: inline-flex; align-items: center; gap: 9px; font-weight: 600; min-height: 72px; }
+.act-logo { max-height: 64px; max-width: 200px; height: auto; width: auto; object-fit: contain; object-position: left center; }
+.act-logo.picto { height: 46px; width: 46px; border-radius: 10px; }   /* repli : le pictogramme du menu */
