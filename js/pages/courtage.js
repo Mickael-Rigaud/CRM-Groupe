@@ -150,6 +150,20 @@ const VUES = [
   { key: 'tous', label: 'Tous les contacts' },
 ];
 
+// D'où viennent les demandes : les prospects se regardent par origine, chacune
+// regroupant des canaux du CRM. « Autres » ramasse ce qui n'entre dans aucune, pour
+// qu'aucun prospect ne devienne invisible.
+const ORIGINES = [
+  { key: 'site', label: 'Site', canaux: ['Site internet direct', 'Google organique / SEO'] },
+  { key: 'partenaires', label: 'Partenaires', canaux: ['Partenaire / apporteur', 'Recommandation client'] },
+  { key: 'meta', label: 'Meta Ads', canaux: ['Meta Ads', 'Facebook organique', 'Instagram organique'] },
+  { key: 'direct', label: 'Direct', canaux: ['Prospection directe', 'Téléphone / autre', 'Ancien client', 'Réseau professionnel'] },
+];
+const CANAUX_CLASSES = ORIGINES.flatMap(o => o.canaux);
+const dansOrigine = (c, key) => key === 'autres'
+  ? !CANAUX_CLASSES.includes(c.channel)
+  : (ORIGINES.find(o => o.key === key)?.canaux || []).includes(c.channel);
+
 // Les métiers qui envoient des dossiers au cabinet ; une organisation marquée
 // « Partenaire » compte comme apporteur même sans métier renseigné.
 const METIERS_APPORTEURS = ['Agent immobilier', 'Agence immobilière', 'Chasseur immobilier', 'Notaire', 'Syndic', 'Administrateur de biens', 'Investisseur'];
@@ -170,7 +184,7 @@ export const courtageBasePage = {
   render(root) {
     if (guard(root)) return {};
     const coquille = poserEspace(root);
-    const state = { vue: 'clients', q: '', canal: '', fin: '', focus: null };
+    const state = { vue: 'clients', q: '', canal: '', fin: '', origine: '', focus: null };
 
     // Créer depuis cet écran, c'est créer pour La Référence Courtage : l'activité est
     // cochée d'avance et le type suit la vue ouverte, sinon la fiche n'apparaîtrait pas ici.
@@ -181,7 +195,9 @@ export const courtageBasePage = {
       const f = document.querySelector(surOrg ? '#o-form' : '#c-form');
       if (!f) return;
       const coche = f.querySelector(`input[name="activities"][value="${KEY}"]`);
-      if (coche) coche.checked = true;
+      // L'activité est cochée d'office et le champ retiré de la vue : sur l'espace d'une
+      // structure, la question ne se pose pas. (.field est en display:flex, d'où le style.)
+      if (coche) { coche.checked = true; const champ = coche.closest('.field'); if (champ) champ.style.display = 'none'; }
       if (surOrg && state.vue === 'banques') { const j = f.querySelector('[name="partner_job"]'); if (j) j.value = 'Banque'; }
       if (!surOrg && state.vue !== 'tous') { const t = f.querySelector('[name="type"]'); if (t) t.value = state.vue === 'clients' ? 'Client' : 'Prospect'; }
     };
@@ -235,6 +251,7 @@ export const courtageBasePage = {
         colonnes = ['Nom', 'Type', 'Ville', 'Téléphone', 'Email', 'Canal', 'Financement', 'Dossier', ''];
         lignes = contacts.filter(filtre)
           .filter(c => !state.canal || c.channel === state.canal)
+          .filter(c => state.vue !== 'prospects' || !state.origine || dansOrigine(c, state.origine))
           .map(c => ({ c, d: deals().find(x => x.contact_id === c.id) }))
           .filter(({ d }) => !state.fin || d?.fields?.type_financement === state.fin)
           .filter(({ c, d }) => hit([contactName(c), c.email, c.phone, c.city, c.channel, d?.title, d?.fields?.type_financement], ts))
@@ -261,6 +278,12 @@ export const courtageBasePage = {
         [...new Set(deals().map(d => d.fields?.partenaire_banque).filter(Boolean))]
           .filter(n => !orgs.some(o => estBanque(o) && cle(o.name) === cle(n)));
 
+      // Compteurs du second rang, calculés avant le filtre d'origine
+      const prospects = contacts.filter(c => c.type === 'Prospect');
+      const parOrigine = (k) => prospects.filter(c => dansOrigine(c, k)).length;
+      const origines = [...ORIGINES.map(o => ({ ...o, n: parOrigine(o.key) })),
+        ...(parOrigine('autres') ? [{ key: 'autres', label: 'Autres', canaux: [], n: parOrigine('autres') }] : [])];
+
       root.innerHTML = cadre('#/courtage/base', 'Base de données', `
         <div class="toolbar">
           <div class="seg">${VUES.map(v => `<button data-vue="${v.key}" class="${state.vue === v.key ? 'active' : ''}">${esc(v.label)} <span class="cnt">${compte(v.key)}</span></button>`).join('')}</div>
@@ -268,9 +291,16 @@ export const courtageBasePage = {
           <button class="btn ghost sm" id="c-export">Export CSV</button>
           <button class="btn" id="c-new">+ ${esc(libelleNouveau())}</button>
         </div>
+        ${state.vue === 'prospects' ? `<div class="toolbar">
+          <span class="muted small">Origine</span>
+          <div class="seg">
+            <button data-org="" class="${!state.origine ? 'active' : ''}">Toutes <span class="cnt">${prospects.length}</span></button>
+            ${origines.map(o => `<button data-org="${o.key}" class="${state.origine === o.key ? 'active' : ''}" title="${o.canaux.length ? 'Canaux : ' + esc(o.canaux.join(', ')) : 'Les canaux qui n&rsquo;entrent dans aucune des quatre origines'}">${esc(o.label)} <span class="cnt">${o.n}</span></button>`).join('')}
+          </div>
+        </div>` : ''}
         <div class="toolbar">
           ${searchInput('c-q', state, surOrg ? 'Rechercher un nom, un secteur, un email…' : 'Rechercher un nom, une ville, un email, un dossier…')}
-          ${surOrg ? '' : `<select id="c-canal"><option value="">Tous les canaux</option>${CHANNELS.map(c => `<option ${state.canal === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>`}
+          ${surOrg || state.vue === 'prospects' ? '' : `<select id="c-canal"><option value="">Tous les canaux</option>${CHANNELS.map(c => `<option ${state.canal === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>`}
           ${surOrg ? '' : `<select id="c-fin"><option value="">Tous les financements</option>${FINANCEMENTS().map(f => `<option ${state.fin === f ? 'selected' : ''}>${esc(f)}</option>`).join('')}</select>`}
           <span class="muted small">${lignes.length} ligne${lignes.length > 1 ? 's' : ''}</span>
         </div>
@@ -284,7 +314,8 @@ export const courtageBasePage = {
         </div>`);
 
       bindSearch(root, 'c-q', state, draw); restoreFocus(root, state);
-      root.querySelectorAll('[data-vue]').forEach(b => b.onclick = () => { state.vue = b.dataset.vue; draw(); });
+      root.querySelectorAll('[data-vue]').forEach(b => b.onclick = () => { state.vue = b.dataset.vue; state.origine = ''; state.canal = ''; draw(); });
+      root.querySelectorAll('[data-org]').forEach(b => b.onclick = () => { state.origine = b.dataset.org; draw(); });
       root.querySelector('#c-canal')?.addEventListener('change', e => { state.canal = e.target.value; draw(); });
       root.querySelector('#c-fin')?.addEventListener('change', e => { state.fin = e.target.value; draw(); });
       // La ligne ouvre la fiche complète ; le crayon va droit au formulaire, d'où l'on
