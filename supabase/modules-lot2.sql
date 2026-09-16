@@ -7,8 +7,8 @@
 
 -- ---------- Accès patrimoine : drapeau sur le profil ----------
 alter table public.profiles add column if not exists patrimony_access boolean not null default false;
--- Mickael (direction) : accès patrimoine
-update public.profiles set patrimony_access = true where lower(email) = 'm.rigaud@rgdrenova.fr';
+-- Accès patrimoine pour la direction : remplacer par l'adresse du compte.
+update public.profiles set patrimony_access = true where lower(email) = '<votre-email>';
 
 create or replace function public.has_patrimony() returns boolean language sql stable security definer set search_path = public as
   $$ select coalesce((select role = 'direction' and patrimony_access from public.profiles where id = auth.uid()), false) $$;
