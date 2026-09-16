@@ -32,9 +32,11 @@ create policy stats_write on public.structure_stats for all to authenticated
   using (public.my_role() = 'direction') with check (public.my_role() = 'direction');
 
 -- Jeton dédié : ni celui des leads, ni une clé Supabase. Le régénérer ici le
--- révoque immédiatement côté outil externe.
+-- révoque immédiatement côté outil externe. La valeur générée est déjà
+-- aléatoire et utilisable telle quelle : pas de préfixe « changez-moi », qui
+-- ferait croire à l'outil externe qu'il reste une valeur à remplacer.
 insert into public.settings (key, value)
-  values ('stats_token', 'changez-moi-' || substr(md5(random()::text), 1, 16))
+  values ('stats_token', 'rgd-crm-' || encode(gen_random_bytes(20), 'hex'))
   on conflict (key) do nothing;
 
 -- =====================================================================
