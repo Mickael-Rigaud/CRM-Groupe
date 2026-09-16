@@ -40,7 +40,7 @@ export const dashboardPage = {
           <thead><tr><th>Structure</th><th class="num">Leads</th><th class="num">RDV</th><th class="num">CA HT</th><th class="num">Panier moyen</th></tr></thead>
           <tbody>
             ${rows.map(x => `<tr class="click" data-go="${x.k === 'rgd' ? '#/rgd' : x.k === 'btp' ? '#/btp' : '#/pipeline/' + x.k}">
-              <td><span class="act-name"><img class="act-logo" src="assets/logos/${x.k}.png" alt="${esc(ACTIVITIES[x.k].label)}" title="${esc(ACTIVITIES[x.k].label)}" data-nom="${esc(ACTIVITIES[x.k].label)}"></span></td>
+              <td><span class="act-name"><img class="act-logo" src="assets/logos/${x.k}-complet.png" alt="${esc(ACTIVITIES[x.k].label)}" title="${esc(ACTIVITIES[x.k].label)}" data-cle="${x.k}" data-nom="${esc(ACTIVITIES[x.k].label)}"></span></td>
               <td class="num">${x.leads}</td><td class="num">${x.rdv}</td>
               <td class="num"><b>${eur(x.ca)}</b></td>
               <td class="num">${x.basket === null ? '—' : eur(x.basket)}</td></tr>`).join('')}
@@ -52,8 +52,11 @@ export const dashboardPage = {
 
       root.querySelectorAll('[data-period]').forEach(b => b.onclick = () => { state.period = b.dataset.period; draw(); });
       root.querySelectorAll('[data-go]').forEach(tr => tr.onclick = () => location.hash = tr.dataset.go);
-      // Logo manquant : le nom de la structure reprend sa place
-      root.querySelectorAll('.act-logo').forEach(im => im.onerror = () => im.replaceWith(document.createTextNode(im.dataset.nom)));
+      // Logo complet (avec le nom écrit) ; à défaut le pictogramme du menu ; à défaut le nom
+      root.querySelectorAll('.act-logo').forEach(im => im.onerror = () => {
+        if (im.dataset.repli) return im.replaceWith(document.createTextNode(im.dataset.nom));
+        im.dataset.repli = '1'; im.classList.add('picto'); im.src = `assets/logos/${im.dataset.cle}.png`;
+      });
       drawChart(all);
     };
 
