@@ -538,6 +538,7 @@ export const btpDtuPage = {
     const exporter = (fiches) => {
       const SAUT = String.fromCharCode(10);
       const jour = new Date().toLocaleDateString('fr-FR');
+      // Groupées par domaine pour que les fiches d'un même métier se suivent
       const noms = [...new Set(fiches.map(f => f.domain || 'Sans domaine'))];
       const groupes = noms.map(d => [d, domaineMeta(d), fiches.filter(f => (f.domain || 'Sans domaine') === d)]);
 
@@ -590,27 +591,9 @@ export const btpDtuPage = {
       };
 
       const zone = document.getElementById('print-root') || Object.assign(document.createElement('div'), { id: 'print-root' });
-      zone.innerHTML = `
-        <table class="pdf-doc pdf-garde">
-          <thead><tr><td><div class="pdf-header-spacer"></div></td></tr></thead>
-          <tbody><tr><td>
-            <div class="pdf-content-inner">
-              <div class="pr-bandes">${groupes.map(([, m]) => `<i style="background:${m.tint}"></i>`).join('')}</div>
-              <div class="pr-marque">BTP Expertise</div>
-              <h1 class="pr-titre">Référentiel DTU</h1>
-              <p class="pr-sous">${fiches.length} fiche${fiches.length > 1 ? 's' : ''} · ${groupes.length} domaine${groupes.length > 1 ? 's' : ''} · édition du ${jour}</p>
-              <ol class="pr-somm">${groupes.map(([d, m, l], i) => `
-                <li style="--t:${m.tint}">
-                  <span class="pr-somm-num">${String(i + 1).padStart(2, '0')}</span>
-                  <span class="pr-somm-ico">${m.icon}</span>
-                  <span class="pr-somm-corps"><b>${esc(d)}</b><span>${l.map(f => esc(f.code)).join(' · ')}</span></span>
-                  <span class="pr-somm-cnt">${l.length}</span>
-                </li>`).join('')}</ol>
-              <p class="pr-pied">Document de travail interne. Les valeurs sont données en ordre de grandeur et renvoient au texte officiel de la norme.</p>
-            </div>
-          </td></tr></tbody>
-        </table>
-        ${groupes.map(([, meta, l]) => l.map(f => page(f, meta)).join('')).join('')}`;
+      // Le document commence directement par la première fiche : ni couverture ni
+      // sommaire, ils ne faisaient qu'ajouter des pages à faire défiler.
+      zone.innerHTML = groupes.map(([, meta, l]) => l.map(f => page(f, meta)).join('')).join('');
 
       if (!zone.parentNode) document.body.appendChild(zone);
       document.body.classList.add('impression');
