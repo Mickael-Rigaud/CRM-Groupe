@@ -1,7 +1,8 @@
 -- =====================================================================
 --  Lot 2 — Modules Patrimoine immobilier et Vivier courtiers
 --  À exécuter une seule fois dans Supabase > SQL Editor (après schema.sql).
---  Puis exécuter vivier-import.sql pour charger les 338 profils.
+--  L'import initial des profils du vivier est fourni à part et se lance
+--  à la main, hors dépôt (script de données).
 -- =====================================================================
 
 -- ---------- Accès patrimoine : drapeau sur le profil ----------
