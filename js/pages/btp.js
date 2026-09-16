@@ -10,6 +10,8 @@ import {
   searchInput, bindSearch, restoreFocus, csvDownload,
 } from '../ui.js';
 import { openDeal, dealForm } from './deal.js';
+import { contactForm, openContact } from './contacts.js';
+import { orgForm, openOrg } from './organisations.js';
 import { activityRowHtml, bindActivityRows, activityForm, nextActivity } from './activity.js';
 import { coquilleEspace, poserEspace, kpiEspace } from './espace.js';
 
@@ -257,6 +259,19 @@ export const btpBasePage = {
     const coquille = poser(root);
     const state = { vue: 'clients', q: '', canal: '', focus: null };
 
+    // Créer depuis cet écran, c'est créer pour BTP Expertise : l'activité est cochée
+    // d'avance, et le type suit la vue ouverte. Sans cela la fiche n'apparaîtrait pas ici.
+    const nouveau = () => {
+      const surOrg = ['partenaires', 'courtiers'].includes(state.vue);
+      if (surOrg) orgForm(null, draw, null, 'Partenaire'); else contactForm(null, draw);
+      const f = document.querySelector(surOrg ? '#o-form' : '#c-form');
+      if (!f) return;
+      const coche = f.querySelector(`input[name="activities"][value="${KEY}"]`);
+      if (coche) coche.checked = true;
+      if (surOrg && state.vue === 'courtiers') { const j = f.querySelector('[name="partner_job"]'); if (j) j.value = 'Courtier'; }
+      if (!surOrg && state.vue !== 'tous') { const t = f.querySelector('[name="type"]'); if (t) t.value = state.vue === 'clients' ? 'Client' : 'Prospect'; }
+    };
+
     const draw = () => {
       const ts = terms(state.q);
       const contacts = scope.contacts().filter(isBtp);
@@ -301,6 +316,7 @@ export const btpBasePage = {
           <div class="seg">${VUES.map(v => `<button data-vue="${v.key}" class="${state.vue === v.key ? 'active' : ''}">${v.label} <span class="cnt">${compte(v.key)}</span></button>`).join('')}</div>
           <span class="grow"></span>
           <button class="btn ghost sm" id="b-export">Export CSV</button>
+          <button class="btn" id="b-new">+ ${surOrg ? (state.vue === 'courtiers' ? 'Courtier' : 'Partenaire') : 'Contact'}</button>
         </div>
         <div class="toolbar">
           ${searchInput('b-q', state, 'Rechercher un nom, une ville, un email…')}
@@ -309,22 +325,32 @@ export const btpBasePage = {
         </div>
         <div class="card">
           <div class="table-wrap"><table>
-            <thead><tr>${colonnes.map(c => `<th>${c}</th>`).join('')}</tr></thead>
-            <tbody>${lignes.map(r => `<tr class="${r.dealId ? 'click' : ''}" ${r.dealId ? `data-deal="${r.dealId}"` : ''}>
+            <thead><tr>${colonnes.map(c => `<th>${c}</th>`).join('')}<th></th></tr></thead>
+            <tbody>${lignes.map(r => `<tr class="click" data-fiche="${r.id}">
               <td><b>${esc(r.nom)}</b></td>
               <td>${esc(r.detail || '—')}</td>
               <td>${esc(r.ville || '—')}</td>
               <td>${r.tel ? `<a href="tel:${esc(r.tel)}">${esc(r.tel)}</a>` : '—'}</td>
               <td>${r.mail ? `<a href="mailto:${esc(r.mail)}">${esc(r.mail)}</a>` : '—'}</td>
               ${r.org ? `<td class="num">${r.apports}</td>` : `<td>${esc(r.canal)}</td><td>${r.affaire ? esc(r.affaire) : '—'}</td>`}
-            </tr>`).join('') || `<tr><td colspan="${colonnes.length}"><div class="empty">Aucune fiche dans cette vue.</div></td></tr>`}</tbody>
+              <td class="num"><button type="button" class="btn ghost sm" data-modif="${r.id}" title="Modifier ou supprimer">✎</button></td>
+            </tr>`).join('') || `<tr><td colspan="${colonnes.length + 1}"><div class="empty">Aucune fiche dans cette vue.</div></td></tr>`}</tbody>
           </table></div>
         </div>`);
 
       bindSearch(root, 'b-q', state, draw); restoreFocus(root, state);
       root.querySelectorAll('[data-vue]').forEach(b => b.onclick = () => { state.vue = b.dataset.vue; draw(); });
       root.querySelector('#b-canal')?.addEventListener('change', e => { state.canal = e.target.value; draw(); });
-      root.querySelectorAll('[data-deal]').forEach(tr => tr.onclick = () => openDeal(tr.dataset.deal, draw));
+      // La ligne ouvre la fiche complète ; le crayon va droit au formulaire, d'où l'on
+      // peut aussi supprimer (le CRM refuse la suppression d'un contact qui porte des affaires).
+      root.querySelectorAll('[data-fiche]').forEach(tr => tr.onclick = (e) => {
+        if (e.target.closest('[data-modif]')) return;
+        surOrg ? openOrg(tr.dataset.fiche, draw) : openContact(tr.dataset.fiche, draw);
+      });
+      root.querySelectorAll('[data-modif]').forEach(b => b.onclick = () => (surOrg
+        ? orgForm(db.byId('organisations', b.dataset.modif), draw)
+        : contactForm(db.byId('contacts', b.dataset.modif), draw)));
+      root.querySelector('#b-new').onclick = () => nouveau();
       root.querySelector('#b-export').onclick = () => csvDownload(`btp-${state.vue}.csv`, lignes.map(({ id, org, dealId, ...reste }) => reste));
     };
 
