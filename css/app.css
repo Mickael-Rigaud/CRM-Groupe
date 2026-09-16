@@ -643,6 +643,6 @@ body.impression #print-root { display: block; }
   .pdf-footer-text strong { font-weight: 800; color: #fff; }
 }
 
-/* Vue d'ensemble : nom de structure avec sa pastille */
-.act-name { display: inline-flex; align-items: center; gap: 9px; font-weight: 600; }
-.act-chip { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+/* Vue d'ensemble : la structure est identifiée par son logo */
+.act-name { display: inline-flex; align-items: center; gap: 9px; font-weight: 600; min-height: 38px; }
+.act-logo { width: 38px; height: 38px; object-fit: contain; border-radius: 8px; background: #fff; }
