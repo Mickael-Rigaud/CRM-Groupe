@@ -466,7 +466,7 @@ body:has(.esp-app) .subnav .datepill { display: none; }
 .fiche-hero-eyebrow { font-weight: 700; text-transform: uppercase; letter-spacing: .1em; font-size: 11px; }
 .fiche-hero-badge { background: var(--card); border: 1px solid var(--line-strong); border-radius: 999px; padding: 2px 9px; font-size: 11px; font-weight: 700; }
 .fiche-hero-title { font-family: var(--font-display); font-size: 26px; font-weight: 700; letter-spacing: -.02em; margin: 6px 0 0; }
-.fiche-hero-resume { margin: 8px 0 0; color: var(--muted); font-size: 14px; max-width: 70ch; }
+.fiche-hero-resume { margin: 8px 0 0; color: var(--muted); font-size: 14px; }
 .fiche-content { display: flex; flex-direction: column; gap: 18px; }
 .fiche-section { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px 22px; box-shadow: var(--shadow); }
 .fiche-section-head { display: flex; align-items: center; gap: 13px; margin-bottom: 16px; }
@@ -477,7 +477,7 @@ body:has(.esp-app) .subnav .datepill { display: none; }
 .fiche-point { display: flex; gap: 13px; }
 .fiche-point-num { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 8px; font-size: 12.5px; font-weight: 700; flex-shrink: 0; }
 .fiche-point-title { font-size: 13.5px; font-weight: 600; margin-bottom: 3px; }
-.fiche-point-detail { font-size: 13px; color: var(--muted); line-height: 1.55; max-width: 85ch; }
+.fiche-point-detail { font-size: 13px; color: var(--muted); line-height: 1.55; }
 .fiche-section.err .fiche-point-title { color: var(--red); }
 .btn.ghost.on { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
 @media (prefers-reduced-motion: reduce) { .fiche-card { transition: none; } }
@@ -497,3 +497,44 @@ body:has(.esp-app) .subnav .datepill { display: none; }
 
 /* Une bascule de structure ne doit pas clignoter pour qui préfère moins d'animation */
 @media (prefers-reduced-motion: reduce) { .univ, .s-tab.on, .btn { transition: none; } }
+
+/* ---------- Référentiel DTU à imprimer ---------- */
+/* La vue imprimable est déposée dans #print-root : invisible à l'écran, seule à
+   l'écran quand on imprime. Le navigateur fait le PDF, rien à installer. */
+#print-root { display: none; }
+body.impression #print-root { display: block; }
+
+@media print {
+  body.impression > #app { display: none !important; }
+  body.impression { background: #fff; }
+  #print-root { display: block; color: #16172b; font-size: 10.5pt; line-height: 1.5; }
+  @page { size: A4; margin: 15mm 14mm; }
+
+  .pr-garde { break-after: page; padding-top: 24mm; }
+  .pr-marque { font-size: 11pt; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; color: #0d6e9e; }
+  .pr-garde h1 { font-family: var(--font-display); font-size: 30pt; margin: 6mm 0 3mm; letter-spacing: -.02em; }
+  .pr-sous { color: #5c5f7a; margin: 0 0 12mm; }
+  .pr-somm { list-style: none; padding: 0; margin: 0; border-top: 1px solid #d8dce3; }
+  .pr-somm li { display: flex; gap: 8mm; padding: 3mm 0; border-bottom: 1px solid #eceff3; break-inside: avoid; }
+  .pr-somm b { min-width: 42mm; }
+  .pr-somm span { color: #5c5f7a; }
+  .pr-pied { margin-top: 14mm; font-size: 8.5pt; color: #8c8fa8; }
+
+  .pr-fiche { break-after: page; break-inside: avoid-page; }
+  .pr-fiche:last-child { break-after: auto; }
+  .pr-fiche header { border-bottom: 2px solid #0d6e9e; padding-bottom: 3mm; margin-bottom: 4mm; }
+  .pr-code { font-size: 9.5pt; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #0d6e9e; }
+  .pr-fiche h2 { font-family: var(--font-display); font-size: 17pt; margin: 1mm 0; letter-spacing: -.01em; }
+  .pr-dom { font-size: 9.5pt; color: #5c5f7a; }
+  .pr-resume { margin: 0 0 5mm; }
+  .pr-sec { margin-bottom: 5mm; break-inside: avoid; }
+  .pr-sec h3 { font-size: 10pt; text-transform: uppercase; letter-spacing: .1em; margin: 0 0 2.5mm; padding-left: 2.5mm; border-left: 3px solid #0d6e9e; }
+  .pr-sec.err h3 { border-left-color: #c8483c; }
+  .pr-sec.perso h3 { border-left-color: #a96c10; }
+  .pr-sec ol { margin: 0; padding-left: 6mm; }
+  .pr-sec li { margin-bottom: 2.5mm; break-inside: avoid; }
+  .pr-sec li b { display: block; }
+  .pr-sec li span { color: #41455c; }
+  .pr-lien { font-size: 8.5pt; color: #8c8fa8; word-break: break-all; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}

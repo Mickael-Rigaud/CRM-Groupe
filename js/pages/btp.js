@@ -391,6 +391,7 @@ export const btpBasePage = {
 // l'interface : l'accent du CRM reste celui de la structure ouverte.
 const DOMAINES = {
   'Maçonnerie': { icon: '🧱', tint: '#a26a3c', tagline: 'Murs porteurs, chaînages, dallages et enduits — le squelette du bâtiment' },
+  'Bois': { icon: '🪵', tint: '#8e6c3c', tagline: 'Ossature, charpente, panneaux — la structure qui travaille avec l’humidité' },
   'Charpente': { icon: '🪵', tint: '#8e6c3c', tagline: 'Structures bois, ossatures et façades — la colonne vertébrale' },
   'Couverture': { icon: '🏠', tint: '#d9472b', tagline: 'Tuiles, ardoises, zinc — la première ligne de défense contre les intempéries' },
   'Étanchéité': { icon: '💧', tint: '#3b9eae', tagline: 'Toitures-terrasses, planchers extérieurs — zéro tolérance à l\'infiltration' },
@@ -484,6 +485,7 @@ export const btpDtuPage = {
           <button type="button" class="btn ghost sm" id="f-back">← Toutes les fiches</button>
           <span class="grow"></span>
           ${f.link ? `<a class="btn ghost sm" href="${esc(f.link)}" target="_blank" rel="noopener">Voir la norme ↗</a>` : ''}
+          <button type="button" class="btn ghost sm" id="f-pdf">⬇ PDF</button>
           <button type="button" class="btn sm" id="f-edit">Modifier</button>
         </div>
         <article class="fiche-detail">
@@ -529,6 +531,45 @@ export const btpDtuPage = {
       </button>`;
     };
 
+    // Export : on dépose dans la page une version imprimable de toutes les fiches
+    // affichées, et on laisse le navigateur produire le PDF. Rien à installer,
+    // et la mise en page est tenue par la feuille de style d'impression.
+    const exporter = (fiches) => {
+      const jour = new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+      const parDom = [...new Set(fiches.map(f => f.domain || 'Sans domaine'))];
+      const bloc = (titre, items, cls) => asListe(items).length ? `
+        <section class="pr-sec ${cls}"><h3>${titre}</h3>
+          <ol>${asListe(items).map(p => `<li><b>${esc(p.titre)}</b>${p.detail ? `<span>${enClair(p.detail)}</span>` : ''}</li>`).join('')}</ol>
+        </section>` : '';
+
+      const zone = document.getElementById('print-root') || Object.assign(document.createElement('div'), { id: 'print-root' });
+      zone.innerHTML = `
+        <div class="pr-garde">
+          <div class="pr-marque">BTP Expertise</div>
+          <h1>Référentiel DTU</h1>
+          <p class="pr-sous">${fiches.length} fiche${fiches.length > 1 ? 's' : ''} · ${parDom.length} domaine${parDom.length > 1 ? 's' : ''} · édité le ${jour}</p>
+          <ul class="pr-somm">${parDom.map(d => `<li><b>${esc(d)}</b><span>${fiches.filter(f => (f.domain || 'Sans domaine') === d).map(f => esc(f.code)).join(' · ')}</span></li>`).join('')}</ul>
+          <p class="pr-pied">Document de travail interne — les valeurs renvoient au texte officiel de la norme.</p>
+        </div>
+        ${fiches.map(f => {
+          const perso = (f.checkpoints || '').split(String.fromCharCode(10)).filter(Boolean);
+          return `<article class="pr-fiche">
+            <header><div class="pr-code">${esc(f.code)}${f.essential ? ' · ★ Top 10' : ''}</div>
+              <h2>${esc(f.title)}</h2><div class="pr-dom">${esc(f.domain || '')}</div></header>
+            ${f.summary ? `<p class="pr-resume">${enClair(f.summary)}</p>` : ''}
+            ${bloc('Points clés à maîtriser', f.key_points, 'ok')}
+            ${bloc('Erreurs fréquentes à éviter', f.common_errors, 'err')}
+            ${bloc('Points de contrôle du cabinet', perso.map(l => ({ titre: l, detail: '' })), 'perso')}
+            ${f.link ? `<p class="pr-lien">${esc(f.link)}</p>` : ''}
+          </article>`;
+        }).join('')}`;
+      if (!zone.parentNode) document.body.appendChild(zone);
+      document.body.classList.add('impression');
+      const fini = () => { document.body.classList.remove('impression'); window.removeEventListener('afterprint', fini); };
+      window.addEventListener('afterprint', fini);
+      setTimeout(() => window.print(), 60);
+    };
+
     const draw = () => {
       const toutes = db.t('dtu_sheets').slice()
         .sort((a, b) => (a.position || 0) - (b.position || 0) || String(a.code).localeCompare(String(b.code)));
@@ -539,6 +580,7 @@ export const btpDtuPage = {
         root.innerHTML = cadre('#/btp/dtu', 'DTU', ficheHtml(f));
         root.querySelector('#f-back').onclick = () => { state.fiche = null; draw(); };
         root.querySelector('#f-edit').onclick = () => editer(f, draw);
+        root.querySelector('#f-pdf').onclick = () => exporter([f]);
         return;
       }
 
@@ -561,6 +603,7 @@ export const btpDtuPage = {
           <button type="button" class="btn ghost sm ${state.essentiels ? 'on' : ''}" id="b-ess" aria-pressed="${state.essentiels}">★ Top 10</button>
           <span class="muted small">${liste.length} fiche${liste.length > 1 ? 's' : ''}</span>
           <span class="grow"></span>
+          <button class="btn ghost sm" id="b-pdf">⬇ Exporter en PDF</button>
           <button class="btn" id="b-new">+ Fiche</button>
         </div>
         ${parDomaine.map(([d, l], i) => {
@@ -584,6 +627,7 @@ export const btpDtuPage = {
       root.querySelector('#b-dom').onchange = e => { state.domaine = e.target.value; draw(); };
       root.querySelector('#b-ess').onclick = () => { state.essentiels = !state.essentiels; draw(); };
       root.querySelector('#b-new').onclick = () => editer(null, draw);
+      root.querySelector('#b-pdf').onclick = () => exporter(liste);
       root.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { state.fiche = b.dataset.f; draw(); });
     };
 
