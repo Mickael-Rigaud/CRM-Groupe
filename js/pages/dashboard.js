@@ -89,16 +89,15 @@ export const dashboardPage = {
       };
       // Une courbe par structure, à sa couleur, pour les comparer sur le même axe.
       // Le total de chaque structure est écrit dans la légende : la couleur n'est jamais
-      // seule à porter l'information. Une structure sans aucun CA est masquée par défaut
-      // (sinon trois traits plats se superposent sur le zéro) mais reste dans la légende,
-      // cliquable, et réapparaît d'elle-même dès qu'elle a un chiffre.
+      // seule à porter l'information. Les quatre structures restent affichées, même à zéro :
+      // masquer les vides faisait barrer leur nom dans la légende, ce qui se lit mal.
+      // Le libellé dit « pas encore de chiffres », la ligne plate ne trompe donc personne.
       const datasets = ACTIVITY_KEYS.map(k => {
         const data = months.map(m => caOf(k, m.key));
         const total = data.reduce((s, v) => s + v, 0);
         const c = ACTIVITIES[k].color;
         return {
           label: total ? `${ACTIVITIES[k].label} — ${eur(total)}` : `${ACTIVITIES[k].label} — pas encore de chiffres`,
-          hidden: !total,
           data,
           borderColor: c, backgroundColor: c,
           borderWidth: 2, tension: 0.25, fill: false,
