@@ -87,24 +87,46 @@ export const dashboardPage = {
         if (ext && (ext.revenue || []).length) return 0;   // l'outil externe fait foi, même à zéro
         return deals.filter(d => d.activity === k && d.status === 'won' && (d.won_at || '').slice(0, 7) === m).reduce((s, d) => s + (Number(d.amount) || 0), 0);
       };
-      // Le total de chaque structure est écrit dans la légende : la couleur n'est jamais seule à porter l'information
+      // Une courbe par structure, à sa couleur, pour les comparer sur le même axe.
+      // Le total de chaque structure est écrit dans la légende : la couleur n'est jamais
+      // seule à porter l'information. Une structure sans aucun CA est masquée par défaut
+      // (sinon trois traits plats se superposent sur le zéro) mais reste dans la légende,
+      // cliquable, et réapparaît d'elle-même dès qu'elle a un chiffre.
       const datasets = ACTIVITY_KEYS.map(k => {
         const data = months.map(m => caOf(k, m.key));
-        return { label: `${ACTIVITIES[k].label} — ${eur(data.reduce((s, v) => s + v, 0))}`, backgroundColor: ACTIVITIES[k].color, borderColor: '#fff', borderWidth: 2, borderRadius: 4, borderSkipped: false, data };
+        const total = data.reduce((s, v) => s + v, 0);
+        const c = ACTIVITIES[k].color;
+        return {
+          label: total ? `${ACTIVITIES[k].label} — ${eur(total)}` : `${ACTIVITIES[k].label} — pas encore de chiffres`,
+          hidden: !total,
+          data,
+          borderColor: c, backgroundColor: c,
+          borderWidth: 2, tension: 0.25, fill: false,
+          pointRadius: 4, pointHoverRadius: 6, pointBackgroundColor: c,
+          pointBorderColor: '#fff', pointBorderWidth: 2,
+        };
       });
       chart?.destroy();
       chart = new Chart(canvas, {
-        type: 'bar',
+        type: 'line',
         data: { labels: months.map(m => m.label), datasets },
         options: {
           responsive: true, maintainAspectRatio: false,
+          // Survol au mois : toutes les structures du mois sont comparées d'un coup,
+          // sans avoir à viser un point précis.
+          interaction: { mode: 'index', intersect: false },
           scales: {
-            x: { stacked: true, grid: { display: false }, ticks: { color: '#5C5F7A' } },
-            y: { stacked: true, border: { display: false }, ticks: { callback: v => v ? (v / 1000) + ' k€' : '0', color: '#8C8FA8' }, grid: { color: '#E6E6F0' } },
+            x: { grid: { display: false }, ticks: { color: '#5C5F7A' } },
+            y: { beginAtZero: true, border: { display: false }, ticks: { callback: v => v ? (v / 1000) + ' k€' : '0', color: '#8C8FA8' }, grid: { color: '#E6E6F0' } },
           },
           plugins: {
-            legend: { position: 'bottom', labels: { usePointStyle: true, pointStyle: 'rectRounded', boxWidth: 10, padding: 16, color: '#16172B', font: { size: 12.5, weight: '600' } } },
-            tooltip: { callbacks: { label: c => `${c.dataset.label.split(' — ')[0]} : ${eur(c.raw)}` } },
+            legend: { position: 'bottom', labels: { usePointStyle: true, pointStyle: 'line', boxWidth: 18, padding: 16, color: '#16172B', font: { size: 12.5, weight: '600' } } },
+            tooltip: {
+              callbacks: {
+                label: c => `${c.dataset.label.split(' — ')[0]} : ${eur(c.raw)}`,
+                footer: items => 'Total : ' + eur(items.reduce((s, i) => s + (Number(i.raw) || 0), 0)),
+              },
+            },
           },
         },
       });
