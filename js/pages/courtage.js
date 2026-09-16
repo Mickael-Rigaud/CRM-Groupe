@@ -1,12 +1,18 @@
 // Espace La Référence Courtage : le cabinet de courtage pilote son activité ici.
 // Même présentation que RGD Renova et BTP Expertise — menu vertical à gauche, contenu à
-// droite, aux couleurs de la structure. Deux écrans : la vue d'ensemble et le vivier
-// courtiers, qui est le recrutement de la structure et vit désormais dans son espace.
+// droite, aux couleurs de la structure. Trois écrans : la vue d'ensemble, la base de
+// données du cabinet, et le vivier courtiers — le recrutement de la structure, qui vit
+// désormais dans son espace.
 import { db } from '../data/db.js';
 import { scope } from '../data/scope.js';
-import { ACTIVITIES, weightedAmount } from '../data/schema.js';
-import { esc, eur, daysSince, dealParty } from '../ui.js';
+import { ACTIVITIES, CHANNELS, weightedAmount } from '../data/schema.js';
+import {
+  esc, eur, daysSince, fmtDate, contactName, dealParty,
+  terms, hit, searchInput, bindSearch, restoreFocus, csvDownload,
+} from '../ui.js';
 import { openDeal } from './deal.js';
+import { openContact } from './contacts.js';
+import { openOrg } from './organisations.js';
 import { activityRowHtml, bindActivityRows, nextActivity } from './activity.js';
 import { coquilleEspace, poserEspace, kpiEspace } from './espace.js';
 import { vivierPage } from './vivier.js';
@@ -22,6 +28,7 @@ const brokers = () => db.t('broker_profiles').filter(r => !r.archive);
 
 const ONGLETS = [
   { hash: '#/courtage', label: "Vue d'ensemble" },
+  { hash: '#/courtage/base', label: 'Base de données' },
   { hash: '#/courtage/vivier', label: 'Vivier courtiers' },
 ];
 
@@ -122,6 +129,153 @@ export const courtageHomePage = {
 
       root.querySelectorAll('[data-deal]').forEach(el => el.onclick = () => openDeal(el.dataset.deal, draw));
       bindActivityRows(root, draw);
+    };
+
+    draw();
+    return { refresh: draw, destroy: coquille.retirer };
+  },
+};
+
+// ---------------------------------------------------------------- Base de données
+// Le répertoire du cabinet en trois familles : les particuliers (clients et prospects)
+// avec l'état de leur dossier, ceux qui apportent les dossiers, et les banques qui les
+// financent. Une ligne ouvre sa fiche — la même que dans Contacts.
+const estCourtage = (row) => !!row && (row.activities || []).includes(KEY);
+
+const VUES = [
+  { key: 'clients', label: 'Clients' },
+  { key: 'prospects', label: 'Prospects' },
+  { key: 'apporteurs', label: "Apporteurs d'affaires" },
+  { key: 'banques', label: 'Banques' },
+  { key: 'tous', label: 'Tous les contacts' },
+];
+
+// Les métiers qui envoient des dossiers au cabinet ; une organisation marquée
+// « Partenaire » compte comme apporteur même sans métier renseigné.
+const METIERS_APPORTEURS = ['Agent immobilier', 'Agence immobilière', 'Chasseur immobilier', 'Notaire', 'Syndic', 'Administrateur de biens', 'Investisseur'];
+const estBanque = (o) => o.type === 'Banque' || o.partner_job === 'Banque';
+const estApporteur = (o) => !estBanque(o) && (o.type === 'Partenaire' || METIERS_APPORTEURS.includes(o.partner_job));
+
+// Le partenaire bancaire est saisi au clavier sur le dossier (champ libre) : le
+// rapprochement avec le répertoire se fait sur le nom, accents et casse ignorés.
+const cle = (v) => (v || '').toString().normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+const dossiersDeLaBanque = (nom) => { const k = cle(nom); return k ? deals().filter(d => cle(d.fields?.partenaire_banque) === k) : []; };
+
+const FINANCEMENTS = () => act().fields.find(f => f.key === 'type_financement')?.options || [];
+const etapeDe = (d) => d.status === 'won' ? 'Signé' : d.status === 'lost' ? 'Perdu' : (act().stages.find(s => s.key === d.stage)?.label || '');
+const lien = (href, texte) => texte ? `<a href="${href}${esc(texte)}" onclick="event.stopPropagation()">${esc(texte)}</a>` : '—';
+
+export const courtageBasePage = {
+  title: () => 'La Référence Courtage — Base de données',
+  render(root) {
+    if (guard(root)) return {};
+    const coquille = poserEspace(root);
+    const state = { vue: 'clients', q: '', canal: '', fin: '', focus: null };
+
+    const draw = () => {
+      const ts = terms(state.q);
+      const contacts = scope.contacts().filter(estCourtage);
+      const orgs = scope.orgs().filter(estCourtage);
+      const surOrg = ['apporteurs', 'banques'].includes(state.vue);
+
+      let colonnes = [];
+      let lignes = [];
+
+      if (state.vue === 'apporteurs') {
+        colonnes = ['Nom', 'Métier', 'Secteur', 'Téléphone', 'Email', 'Dossiers apportés', 'Signés'];
+        lignes = orgs.filter(estApporteur)
+          .filter(o => hit([o.name, o.partner_job, o.city, o.zone, o.email, o.phone], ts))
+          .map(o => {
+            const apportes = deals().filter(d => d.referrer_org_id === o.id);
+            const signes = apportes.filter(d => d.status === 'won');
+            const secteur = o.zone || o.city || '';
+            return {
+              id: o.id, kind: 'org',
+              cells: [`<b>${esc(o.name)}</b>`, esc(o.partner_job || o.type || '—'), esc(secteur || '—'),
+                lien('tel:', o.phone), lien('mailto:', o.email),
+                `<span class="num">${apportes.length}</span>`, `<span class="num">${signes.length}</span>`],
+              csv: { nom: o.name, metier: o.partner_job || o.type, secteur, telephone: o.phone, email: o.email, dossiers_apportes: apportes.length, signes: signes.length },
+            };
+          });
+      } else if (state.vue === 'banques') {
+        colonnes = ['Nom', 'Secteur', 'Téléphone', 'Email', 'Dossiers en cours', 'Offres éditées', 'Dernier contact'];
+        lignes = orgs.filter(estBanque)
+          .filter(o => hit([o.name, o.city, o.zone, o.email, o.phone], ts))
+          .map(o => {
+            const tous = dossiersDeLaBanque(o.name);
+            const enCours = tous.filter(d => d.status === 'open');
+            const offres = tous.filter(d => d.stage === 'offre' || d.status === 'won');
+            const secteur = o.zone || o.city || '';
+            const lc = o.last_contact_at ? daysSince(o.last_contact_at) : null;
+            return {
+              id: o.id, kind: 'org',
+              cells: [`<b>${esc(o.name)}</b>`, esc(secteur || '—'), lien('tel:', o.phone), lien('mailto:', o.email),
+                `<span class="num">${enCours.length}</span>`, `<span class="num">${offres.length}</span>`,
+                lc === null ? '<span class="muted">Jamais</span>' : `${fmtDate(o.last_contact_at)} <span class="muted small">(${lc} j)</span>`],
+              csv: { nom: o.name, secteur, telephone: o.phone, email: o.email, dossiers_en_cours: enCours.length, offres_editees: offres.length, dernier_contact: fmtDate(o.last_contact_at) },
+            };
+          });
+      } else {
+        const filtre = { clients: (c) => c.type === 'Client', prospects: (c) => c.type === 'Prospect', tous: () => true }[state.vue];
+        colonnes = ['Nom', 'Type', 'Ville', 'Téléphone', 'Email', 'Canal', 'Financement', 'Dossier'];
+        lignes = contacts.filter(filtre)
+          .filter(c => !state.canal || c.channel === state.canal)
+          .map(c => ({ c, d: deals().find(x => x.contact_id === c.id) }))
+          .filter(({ d }) => !state.fin || d?.fields?.type_financement === state.fin)
+          .filter(({ c, d }) => hit([contactName(c), c.email, c.phone, c.city, c.channel, d?.title, d?.fields?.type_financement], ts))
+          .map(({ c, d }) => ({
+            id: c.id, kind: 'contact',
+            cells: [`<b>${esc(contactName(c))}</b>`, esc(c.type || '—'), esc(c.city || '—'),
+              lien('tel:', c.phone), lien('mailto:', c.email), esc(c.channel || '—'),
+              esc(d?.fields?.type_financement || '—'),
+              d ? `${esc(d.title)}<div class="small muted">${esc(etapeDe(d))}</div>` : '—'],
+            csv: { nom: contactName(c), type: c.type, ville: c.city, telephone: c.phone, email: c.email, canal: c.channel, financement: d?.fields?.type_financement, dossier: d?.title, etape: d ? etapeDe(d) : '' },
+          }));
+      }
+
+      const compte = (v) => {
+        if (v === 'apporteurs') return orgs.filter(estApporteur).length;
+        if (v === 'banques') return orgs.filter(estBanque).length;
+        if (v === 'tous') return contacts.length;
+        return contacts.filter(c => c.type === (v === 'clients' ? 'Client' : 'Prospect')).length;
+      };
+
+      // Banques citées sur un dossier mais absentes du répertoire : sans fiche, leurs
+      // compteurs resteraient à zéro sans qu'on sache pourquoi.
+      const sansFiche = state.vue !== 'banques' ? [] :
+        [...new Set(deals().map(d => d.fields?.partenaire_banque).filter(Boolean))]
+          .filter(n => !orgs.some(o => estBanque(o) && cle(o.name) === cle(n)));
+
+      root.innerHTML = cadre('#/courtage/base', 'Base de données', `
+        <div class="toolbar">
+          <div class="seg">${VUES.map(v => `<button data-vue="${v.key}" class="${state.vue === v.key ? 'active' : ''}">${esc(v.label)} <span class="cnt">${compte(v.key)}</span></button>`).join('')}</div>
+          <span class="grow"></span>
+          <button class="btn ghost sm" id="c-export">Export CSV</button>
+        </div>
+        <div class="toolbar">
+          ${searchInput('c-q', state, surOrg ? 'Rechercher un nom, un secteur, un email…' : 'Rechercher un nom, une ville, un email, un dossier…')}
+          ${surOrg ? '' : `<select id="c-canal"><option value="">Tous les canaux</option>${CHANNELS.map(c => `<option ${state.canal === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>`}
+          ${surOrg ? '' : `<select id="c-fin"><option value="">Tous les financements</option>${FINANCEMENTS().map(f => `<option ${state.fin === f ? 'selected' : ''}>${esc(f)}</option>`).join('')}</select>`}
+          <span class="muted small">${lignes.length} ligne${lignes.length > 1 ? 's' : ''}</span>
+        </div>
+        <div class="card">
+          <div class="table-wrap"><table>
+            <thead><tr>${colonnes.map(c => `<th>${esc(c)}</th>`).join('')}</tr></thead>
+            <tbody>${lignes.map(r => `<tr class="click" data-row="${r.kind}|${r.id}">${r.cells.map(c => `<td>${c}</td>`).join('')}</tr>`).join('')
+              || `<tr><td colspan="${colonnes.length}"><div class="empty">Aucune fiche dans cette vue. Les fiches se créent dans Contacts, en cochant « La Référence Courtage » dans les activités.</div></td></tr>`}</tbody>
+          </table></div>
+          ${sansFiche.length ? `<p class="muted small" style="margin-top:12px">Citées sur un dossier mais sans fiche au répertoire : ${sansFiche.map(n => esc(n)).join(', ')}. Créez-les dans Contacts &rsaquo; Partenaires (type « Banque », activité « La Référence Courtage ») pour suivre leurs dossiers ici.</p>` : ''}
+        </div>`);
+
+      bindSearch(root, 'c-q', state, draw); restoreFocus(root, state);
+      root.querySelectorAll('[data-vue]').forEach(b => b.onclick = () => { state.vue = b.dataset.vue; draw(); });
+      root.querySelector('#c-canal')?.addEventListener('change', e => { state.canal = e.target.value; draw(); });
+      root.querySelector('#c-fin')?.addEventListener('change', e => { state.fin = e.target.value; draw(); });
+      root.querySelectorAll('[data-row]').forEach(tr => tr.onclick = () => {
+        const [kind, id] = tr.dataset.row.split('|');
+        if (kind === 'org') openOrg(id, draw); else openContact(id, draw);
+      });
+      root.querySelector('#c-export').onclick = () => csvDownload(`courtage-${state.vue}.csv`, lignes.map(r => r.csv));
     };
 
     draw();
