@@ -154,15 +154,15 @@ const VUES = [
 // regroupant des canaux du CRM. « Autres » ramasse ce qui n'entre dans aucune, pour
 // qu'aucun prospect ne devienne invisible.
 const ORIGINES = [
-  { key: 'site', label: 'Site', canaux: ['Site internet direct', 'Google organique / SEO'] },
-  { key: 'partenaires', label: 'Partenaires', canaux: ['Partenaire / apporteur', 'Recommandation client'] },
-  { key: 'meta', label: 'Meta Ads', canaux: ['Meta Ads', 'Facebook organique', 'Instagram organique'] },
-  { key: 'direct', label: 'Direct', canaux: ['Prospection directe', 'Téléphone / autre', 'Ancien client', 'Réseau professionnel'] },
+  { key: 'site', label: 'Site', canaux: ['Site internet direct', 'Google organique / SEO', 'Google Ads'] },
+  { key: 'partenaires', label: 'Partenaires', canaux: ['Partenaire / apporteur', 'Recommandation client', 'Réseau professionnel'] },
+  { key: 'meta', label: 'Meta Ads', canaux: ['Meta Ads', 'Instagram organique', 'Facebook organique'] },
+  // Direct ramasse le reste — prospection directe, téléphone, ancien client, LinkedIn —
+  // et les fiches sans canal renseigné. La somme des quatre fait donc le total.
+  { key: 'direct', label: 'Direct', canaux: null },
 ];
-const CANAUX_CLASSES = ORIGINES.flatMap(o => o.canaux);
-const dansOrigine = (c, key) => key === 'autres'
-  ? !CANAUX_CLASSES.includes(c.channel)
-  : (ORIGINES.find(o => o.key === key)?.canaux || []).includes(c.channel);
+const CANAUX_CLASSES = ORIGINES.flatMap(o => o.canaux || []);
+const dansOrigine = (c, o) => (o.canaux ? o.canaux.includes(c.channel) : !CANAUX_CLASSES.includes(c.channel));
 
 // Les métiers qui envoient des dossiers au cabinet ; une organisation marquée
 // « Partenaire » compte comme apporteur même sans métier renseigné.
@@ -208,6 +208,7 @@ export const courtageBasePage = {
       const contacts = scope.contacts().filter(estCourtage);
       const orgs = scope.orgs().filter(estCourtage);
       const surOrg = ['apporteurs', 'banques'].includes(state.vue);
+      const origineOuverte = ORIGINES.find(o => o.key === state.origine);
 
       let colonnes = [];
       let lignes = [];
@@ -251,7 +252,7 @@ export const courtageBasePage = {
         colonnes = ['Nom', 'Type', 'Ville', 'Téléphone', 'Email', 'Canal', 'Financement', 'Dossier', ''];
         lignes = contacts.filter(filtre)
           .filter(c => !state.canal || c.channel === state.canal)
-          .filter(c => state.vue !== 'prospects' || !state.origine || dansOrigine(c, state.origine))
+          .filter(c => state.vue !== 'prospects' || !origineOuverte || dansOrigine(c, origineOuverte))
           .map(c => ({ c, d: deals().find(x => x.contact_id === c.id) }))
           .filter(({ d }) => !state.fin || d?.fields?.type_financement === state.fin)
           .filter(({ c, d }) => hit([contactName(c), c.email, c.phone, c.city, c.channel, d?.title, d?.fields?.type_financement], ts))
@@ -278,11 +279,9 @@ export const courtageBasePage = {
         [...new Set(deals().map(d => d.fields?.partenaire_banque).filter(Boolean))]
           .filter(n => !orgs.some(o => estBanque(o) && cle(o.name) === cle(n)));
 
-      // Compteurs du second rang, calculés avant le filtre d'origine
+      // Compteurs du second rang, comptés avant le filtre d'origine
       const prospects = contacts.filter(c => c.type === 'Prospect');
-      const parOrigine = (k) => prospects.filter(c => dansOrigine(c, k)).length;
-      const origines = [...ORIGINES.map(o => ({ ...o, n: parOrigine(o.key) })),
-        ...(parOrigine('autres') ? [{ key: 'autres', label: 'Autres', canaux: [], n: parOrigine('autres') }] : [])];
+      const parOrigine = (o) => prospects.filter(c => dansOrigine(c, o)).length;
 
       root.innerHTML = cadre('#/courtage/base', 'Base de données', `
         <div class="toolbar">
@@ -291,12 +290,10 @@ export const courtageBasePage = {
           <button class="btn ghost sm" id="c-export">Export CSV</button>
           <button class="btn" id="c-new">+ ${esc(libelleNouveau())}</button>
         </div>
-        ${state.vue === 'prospects' ? `<div class="toolbar">
-          <span class="muted small">Origine</span>
-          <div class="seg">
-            <button data-org="" class="${!state.origine ? 'active' : ''}">Toutes <span class="cnt">${prospects.length}</span></button>
-            ${origines.map(o => `<button data-org="${o.key}" class="${state.origine === o.key ? 'active' : ''}" title="${o.canaux.length ? 'Canaux : ' + esc(o.canaux.join(', ')) : 'Les canaux qui n&rsquo;entrent dans aucune des quatre origines'}">${esc(o.label)} <span class="cnt">${o.n}</span></button>`).join('')}
-          </div>
+        ${state.vue === 'prospects' ? `<div class="pill-tabs">
+          ${ORIGINES.map(o => `<button type="button" data-org="${o.key}" class="${state.origine === o.key ? 'on' : ''}"
+            aria-pressed="${state.origine === o.key}"
+            title="${o.canaux ? 'Canaux : ' + esc(o.canaux.join(', ')) : 'Tout le reste, y compris les fiches sans canal renseigné'}">${esc(o.label)}<span>${parOrigine(o)}</span></button>`).join('')}
         </div>` : ''}
         <div class="toolbar">
           ${searchInput('c-q', state, surOrg ? 'Rechercher un nom, un secteur, un email…' : 'Rechercher un nom, une ville, un email, un dossier…')}
@@ -315,7 +312,7 @@ export const courtageBasePage = {
 
       bindSearch(root, 'c-q', state, draw); restoreFocus(root, state);
       root.querySelectorAll('[data-vue]').forEach(b => b.onclick = () => { state.vue = b.dataset.vue; state.origine = ''; state.canal = ''; draw(); });
-      root.querySelectorAll('[data-org]').forEach(b => b.onclick = () => { state.origine = b.dataset.org; draw(); });
+      root.querySelectorAll('[data-org]').forEach(b => b.onclick = () => { state.origine = state.origine === b.dataset.org ? '' : b.dataset.org; draw(); });
       root.querySelector('#c-canal')?.addEventListener('change', e => { state.canal = e.target.value; draw(); });
       root.querySelector('#c-fin')?.addEventListener('change', e => { state.fin = e.target.value; draw(); });
       // La ligne ouvre la fiche complète ; le crayon va droit au formulaire, d'où l'on
