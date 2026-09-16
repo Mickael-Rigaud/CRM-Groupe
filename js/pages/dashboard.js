@@ -120,7 +120,9 @@ export const dashboardPage = {
             y: { beginAtZero: true, border: { display: false }, ticks: { callback: v => v ? (v / 1000) + ' k€' : '0', color: '#8C8FA8' }, grid: { color: '#E6E6F0' } },
           },
           plugins: {
-            legend: { position: 'bottom', labels: { usePointStyle: true, pointStyle: 'line', boxWidth: 18, padding: 16, color: '#16172B', font: { size: 12.5, weight: '600' } } },
+            // Pastille pleine à la couleur de la structure : le style « line » de Chart.js
+            // donne un trait d'un pixel, illisible à côté du texte.
+            legend: { position: 'bottom', labels: { usePointStyle: true, pointStyle: 'circle', boxWidth: 10, boxHeight: 10, padding: 18, color: '#16172B', font: { size: 12.5, weight: '600' } } },
             tooltip: {
               callbacks: {
                 label: c => `${c.dataset.label.split(' — ')[0]} : ${eur(c.raw)}`,
