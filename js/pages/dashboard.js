@@ -14,9 +14,13 @@ export const dashboardPage = {
     const draw = () => {
       const r = periodRange(state.period);
       const all = scope.deals();
+      // Leads = les prospects de la structure, exactement ce que compte l'onglet « Prospects »
+      // de sa base de données (contacts portant l'activité, type « Prospect »). Ce total
+      // ignore volontairement la période : sinon les deux écrans afficheraient deux nombres.
+      const prospects = (k) => scope.contacts().filter(c => (c.activities || []).includes(k) && c.type === 'Prospect').length;
       const rows = ACTIVITY_KEYS.map(k => {
         const ds = all.filter(d => d.activity === k);
-        const leads = ds.filter(d => inRange(d.created_at, r)).length;
+        const leads = prospects(k);
         // Un RDV compte au moment où l'affaire a atteint l'étape de rendez-vous de son pipeline
         const rdv = ds.filter(d => reachedRdv(d) && inRange((d.stage_history || []).find(h => h.stage === ACTIVITIES[k].rdvStage)?.at || d.won_at || d.created_at, r)).length;
         const won = ds.filter(d => d.status === 'won' && inRange(d.won_at, r));
@@ -29,25 +33,27 @@ export const dashboardPage = {
         ${db.demo ? '<div class="demo-banner"><b>Mode démo</b> — données d\'exemple stockées dans ce navigateur.</div>' : ''}
         <div class="toolbar">
           <div class="seg">${PERIODS.map(([k, l]) => `<button data-period="${k}" class="${state.period === k ? 'active' : ''}">${l}</button>`).join('')}</div>
-          <span class="muted small">Leads créés, RDV obtenus et CA signé sur la période choisie.</span>
+          <span class="muted small">Leads = prospects de la base de chaque structure (tous) · RDV, CA HT et panier moyen sur la période choisie.</span>
         </div>
 
         <div class="card"><div class="table-wrap"><table>
           <thead><tr><th>Structure</th><th class="num">Leads</th><th class="num">RDV</th><th class="num">CA HT</th><th class="num">Panier moyen</th></tr></thead>
           <tbody>
             ${rows.map(x => `<tr class="click" data-go="${x.k === 'rgd' ? '#/rgd' : x.k === 'btp' ? '#/btp' : '#/pipeline/' + x.k}">
-              <td><span class="act-name"><span class="act-chip" style="background:${ACTIVITIES[x.k].color}"></span>${esc(ACTIVITIES[x.k].label)}</span></td>
+              <td><span class="act-name"><img class="act-logo" src="assets/logos/${x.k}.png" alt="${esc(ACTIVITIES[x.k].label)}" title="${esc(ACTIVITIES[x.k].label)}" data-nom="${esc(ACTIVITIES[x.k].label)}"></span></td>
               <td class="num">${x.leads}</td><td class="num">${x.rdv}</td>
               <td class="num"><b>${eur(x.ca)}</b></td>
               <td class="num">${x.basket === null ? '—' : eur(x.basket)}</td></tr>`).join('')}
             <tr class="total"><td>Total</td><td class="num">${tot.leads}</td><td class="num">${tot.rdv}</td><td class="num">${eur(tot.ca)}</td><td class="num">${tot.wonN ? eur(tot.ca / tot.wonN) : '—'}</td></tr>
           </tbody></table></div></div>
 
-        <div class="card"><div class="card-head"><h2>CA signé par structure</h2><span class="muted small">12 derniers mois · une couleur par structure</span></div>
+        <div class="card"><div class="card-head"><h2>CA HT par structure</h2><span class="muted small">12 derniers mois · une couleur par structure</span></div>
           <div class="chart-box" style="height:320px"><canvas id="db-chart"></canvas></div></div>`;
 
       root.querySelectorAll('[data-period]').forEach(b => b.onclick = () => { state.period = b.dataset.period; draw(); });
       root.querySelectorAll('[data-go]').forEach(tr => tr.onclick = () => location.hash = tr.dataset.go);
+      // Logo manquant : le nom de la structure reprend sa place
+      root.querySelectorAll('.act-logo').forEach(im => im.onerror = () => im.replaceWith(document.createTextNode(im.dataset.nom)));
       drawChart(all);
     };
 
