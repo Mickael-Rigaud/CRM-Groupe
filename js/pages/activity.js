@@ -60,10 +60,10 @@ export function activityRowHtml(a, { showContext = false } = {}) {
     const o = a.organisation_id && db.byId('organisations', a.organisation_id);
     ctx = [d && `<a href="#" data-open-deal="${d.id}">${esc(d.title)}</a>`, c && `${esc(c.first_name)} ${esc(c.last_name)}${c.phone ? ' · ' + esc(c.phone) : ''}`, o && esc(o.name)].filter(Boolean).join(' — ');
   }
-  return `<div class="act-row ${a.done ? 'done' : ''}" data-act="${a.id}">
+  return `<div class="act-row ${a.done ? 'done' : ''} ${struct ? 'struct' : ''}" data-act="${a.id}" ${struct ? `style="--c:${ACTIVITIES[struct].color}"` : ''}>
     <input type="checkbox" ${a.done ? 'checked' : ''} data-toggle="${a.id}" title="Marquer comme fait">
     <div style="flex:1">
-      <div>${struct ? `<span class="act-struct" style="--c:${ACTIVITIES[struct].color}">${esc(ACTIVITIES[struct].short)}</span>` : ''}<b>${t.icon} ${esc(a.title)}</b> <span class="muted small">· ${esc(userName(a.assignee_id))}</span></div>
+      <div><b>${t.icon} ${esc(a.title)}</b>${struct ? ` <span class="act-struct">${esc(ACTIVITIES[struct].short)}</span>` : ''} <span class="muted small">· ${esc(userName(a.assignee_id))}</span></div>
       ${ctx ? `<div class="small muted">${ctx}</div>` : ''}
       ${a.notes ? `<div class="small muted">${esc(a.notes)}</div>` : ''}
       <div class="when ${late ? 'late' : ''}">${fmtDate(a.due_date)}${a.due_time ? ' ' + esc(a.due_time) : ''} · ${relDay(a.due_date)}</div>
