@@ -248,11 +248,15 @@ export const btpTodoPage = {
 // correspondent — la prise de rendez-vous du site écrit « Site internet direct ».
 // À ajuster ici si le cabinet range ses canaux autrement.
 const ORIGINES = [
-  { key: 'site', label: 'Site', canaux: ['Site internet direct', 'Google organique / SEO', 'Google Ads'] },
-  { key: 'partenaires', label: 'Partenaires', canaux: ['Partenaire / apporteur', 'Recommandation client', 'Réseau professionnel'] },
-  { key: 'meta', label: 'Meta Ads', canaux: ['Meta Ads', 'Instagram organique', 'Facebook organique'] },
-  { key: 'direct', label: 'Direct', canaux: ['Prospection directe', 'Téléphone / autre', 'Ancien client'] },
+  { key: 'site', label: 'Prospect site', canaux: ['Site internet direct', 'Google organique / SEO', 'Google Ads'] },
+  { key: 'partenaires', label: 'Prospect partenaire', canaux: ['Partenaire / apporteur', 'Recommandation client', 'Réseau professionnel'] },
+  { key: 'meta', label: 'Prospect Meta Ads', canaux: ['Meta Ads', 'Instagram organique', 'Facebook organique'] },
+  // Le reste : prospection directe, téléphone, ancien client… et les fiches dont le canal
+  // n'est pas renseigné. La somme des quatre fait donc bien le total des prospects.
+  { key: 'autre', label: 'Autre prospect', canaux: null },
 ];
+const classees = ORIGINES.flatMap(o => o.canaux || []);
+const estDeLOrigine = (c, o) => (o.canaux ? o.canaux.includes(c.channel) : !classees.includes(c.channel));
 
 const VUES = [
   { key: 'clients', label: 'Clients' },
@@ -306,7 +310,7 @@ export const btpBasePage = {
         const origine = ORIGINES.find(o => o.key === state.origine);
         lignes = contacts.filter(filtre)
           .filter(c => !state.canal || c.channel === state.canal)
-          .filter(c => !origine || origine.canaux.includes(c.channel))
+          .filter(c => !origine || estDeLOrigine(c, origine))
           .filter(c => hit([contactName(c), c.email, c.phone, c.city, c.channel], ts))
           .map(c => {
             const d = deals().find(x => x.contact_id === c.id);
@@ -332,11 +336,9 @@ export const btpBasePage = {
           <button class="btn ghost sm" id="b-export">Export CSV</button>
           <button class="btn" id="b-new">+ ${surOrg ? (state.vue === 'courtiers' ? 'Courtier' : 'Partenaire') : 'Contact'}</button>
         </div>
-        ${state.vue === 'prospects' ? `<div class="toolbar">
-          <div class="seg">
-            <button data-origine="" class="${state.origine ? '' : 'active'}">Toutes <span class="cnt">${contacts.filter(c => c.type === 'Prospect').length}</span></button>
-            ${ORIGINES.map(o => `<button data-origine="${o.key}" class="${state.origine === o.key ? 'active' : ''}">${o.label} <span class="cnt">${contacts.filter(c => c.type === 'Prospect' && o.canaux.includes(c.channel)).length}</span></button>`).join('')}
-          </div>
+        ${state.vue === 'prospects' ? `<div class="pill-tabs">
+          ${ORIGINES.map(o => `<button type="button" data-origine="${o.key}" class="${state.origine === o.key ? 'on' : ''}"
+            aria-pressed="${state.origine === o.key}">${o.label}<span>${contacts.filter(c => c.type === 'Prospect' && estDeLOrigine(c, o)).length}</span></button>`).join('')}
         </div>` : ''}
         <div class="toolbar">
           ${searchInput('b-q', state, 'Rechercher un nom, une ville, un email…')}
@@ -360,7 +362,8 @@ export const btpBasePage = {
 
       bindSearch(root, 'b-q', state, draw); restoreFocus(root, state);
       root.querySelectorAll('[data-vue]').forEach(b => b.onclick = () => { state.vue = b.dataset.vue; state.origine = ''; draw(); });
-      root.querySelectorAll('[data-origine]').forEach(b => b.onclick = () => { state.origine = b.dataset.origine; draw(); });
+      // Recliquer sur l'onglet ouvert le relâche : on retrouve tous les prospects.
+      root.querySelectorAll('[data-origine]').forEach(b => b.onclick = () => { state.origine = state.origine === b.dataset.origine ? '' : b.dataset.origine; draw(); });
       root.querySelector('#b-canal')?.addEventListener('change', e => { state.canal = e.target.value; draw(); });
       // La ligne ouvre la fiche complète ; le crayon va droit au formulaire, d'où l'on
       // peut aussi supprimer (le CRM refuse la suppression d'un contact qui porte des affaires).

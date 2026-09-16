@@ -410,6 +410,15 @@ body:has(.esp-app) .subnav .datepill { display: none; }
   .agenda-week iframe, .agenda-month iframe { height: 460px; }
   .agenda-head h2 { flex-basis: 100%; }
 }
+/* Onglets en pastilles — l'onglet ouvert prend la couleur de la structure */
+.pill-tabs { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pill-tabs button { display: inline-flex; align-items: center; gap: 9px; border: 0; background: none; border-radius: 999px; padding: 8px 15px; font-size: 13.5px; font-weight: 600; color: var(--muted); transition: background .13s, color .13s; }
+.pill-tabs button:hover { background: var(--card-2); color: var(--text); }
+.pill-tabs button span { background: var(--card-2); border-radius: 999px; padding: 2px 9px; font-size: 12px; font-weight: 700; color: var(--muted); }
+.pill-tabs button.on { background: var(--accent); color: var(--on-accent); }
+.pill-tabs button.on span { background: color-mix(in srgb, var(--on-accent) 22%, transparent); color: var(--on-accent); }
+@media (prefers-reduced-motion: reduce) { .pill-tabs button { transition: none; } }
+
 /* Facturation : le bandeau Stripe et les retards de paiement */
 .badge-soft { background: var(--card-2); color: var(--muted); border-radius: 999px; padding: 4px 11px; font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
 .btp-stripe { border-left: 3px solid var(--accent); }
