@@ -154,12 +154,13 @@ const VUES = [
 // regroupant des canaux du CRM. « Autres » ramasse ce qui n'entre dans aucune, pour
 // qu'aucun prospect ne devienne invisible.
 const ORIGINES = [
-  { key: 'site', label: 'Site', canaux: ['Site internet direct', 'Google organique / SEO', 'Google Ads'] },
-  { key: 'partenaires', label: 'Partenaires', canaux: ['Partenaire / apporteur', 'Recommandation client', 'Réseau professionnel'] },
-  { key: 'meta', label: 'Meta Ads', canaux: ['Meta Ads', 'Instagram organique', 'Facebook organique'] },
-  // Direct ramasse le reste — prospection directe, téléphone, ancien client, LinkedIn —
-  // et les fiches sans canal renseigné. La somme des quatre fait donc le total.
-  { key: 'direct', label: 'Direct', canaux: null },
+  { key: 'site', label: 'Prospect site', canaux: ['Site internet direct', 'Google organique / SEO', 'Google Ads'] },
+  { key: 'partenaires', label: 'Prospect partenaire', canaux: ['Partenaire / apporteur', 'Recommandation client', 'Réseau professionnel'] },
+  { key: 'meta', label: 'Prospect Meta Ads', canaux: ['Meta Ads', 'Instagram organique', 'Facebook organique'] },
+  // Le reste : prospection directe, téléphone, ancien client, LinkedIn… et les fiches
+  // sans canal renseigné. La somme des quatre fait donc bien le total des prospects.
+  // Mêmes libellés que l'espace BTP Expertise, pour que les deux écrans se lisent pareil.
+  { key: 'direct', label: 'Autre prospect', canaux: null },
 ];
 const CANAUX_CLASSES = ORIGINES.flatMap(o => o.canaux || []);
 const dansOrigine = (c, o) => (o.canaux ? o.canaux.includes(c.channel) : !CANAUX_CLASSES.includes(c.channel));
