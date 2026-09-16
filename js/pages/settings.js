@@ -63,7 +63,7 @@ export const settingsPage = {
           </div>
         </div>`;
 
-      root.querySelector('#imp-model').onclick = () => csvDownload('modele-contacts.csv', [{ prenom: 'Julie', nom: 'Bernard', telephone: '06 11 22 33 44', email: 'julie@exemple.fr', adresse: '12 rue Nationale', code_postal: '37000', ville: 'Tours', societe: '', type: 'Client', canal: 'Recommandation client', campagne: '', activites: 'rgd', notes: '' }]);
+      root.querySelector('#imp-model').onclick = () => csvDownload('modele-contacts.csv', [{ prenom: 'Julie', nom: 'Bernard', telephone: '06 39 98 00 01', email: 'julie@example.com', adresse: '12 rue Nationale', code_postal: '37000', ville: 'Tours', societe: '', type: 'Client', canal: 'Recommandation client', campagne: '', activites: 'rgd', notes: '' }]);
       root.querySelector('#imp-go').onclick = async () => {
         const f = root.querySelector('#imp-file').files[0]; if (!f) return toast('Choisissez un fichier CSV', 'warn');
         const text = await f.text(); const rows = parseCsv(text);

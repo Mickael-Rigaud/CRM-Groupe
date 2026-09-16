@@ -89,7 +89,7 @@ function agenda() {
           <li>Collez-le ci-dessous.</li>
         </ol>
         ${scope.isDirection ? `<div class="form">
-          <div class="field"><label>Identifiant du calendrier</label><input id="cal-id" placeholder="contact.exemple@gmail.com"></div>
+          <div class="field"><label>Identifiant du calendrier</label><input id="cal-id" placeholder="identifiant@example.com"></div>
           <div class="form-actions"><button class="btn" id="cal-save">Enregistrer</button></div>
         </div>` : '<p class="muted small">La direction peut le renseigner depuis cet écran.</p>'}
         <p class="muted small">Chaque personne verra l&rsquo;agenda avec son propre compte Google, après avoir été ajoutée au partage. Rien n&rsquo;est rendu public, et aucun mot de passe n&rsquo;est demandé.</p>
