@@ -410,6 +410,11 @@ body:has(.esp-app) .subnav .datepill { display: none; }
   .agenda-week iframe, .agenda-month iframe { height: 460px; }
   .agenda-head h2 { flex-basis: 100%; }
 }
+/* Facturation : le bandeau Stripe et les retards de paiement */
+.badge-soft { background: var(--card-2); color: var(--muted); border-radius: 999px; padding: 4px 11px; font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+.btp-stripe { border-left: 3px solid var(--accent); }
+.retard { color: var(--red); font-weight: 600; }
+
 .btp-setup ol { margin: 8px 0 14px; padding-left: 20px; display: flex; flex-direction: column; gap: 5px; font-size: 13.5px; }
 .btp-setup p { margin: 0 0 6px; }
 

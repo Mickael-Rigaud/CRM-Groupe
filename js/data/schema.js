@@ -50,6 +50,10 @@ export const ACTIVITIES = {
       { key: 'urgence', label: 'Urgent', type: 'checkbox' },
       { key: 'date_visite', label: 'Date de visite', type: 'date' },
       { key: 'date_rapport', label: 'Date remise rapport', type: 'date' },
+      // Facturation : suivi à la main en attendant le raccordement à Stripe.
+      { key: 'facture_num', label: 'N° de facture', type: 'text', half: true },
+      { key: 'facture_date', label: 'Facturée le', type: 'date', half: true },
+      { key: 'paiement_date', label: 'Payée le', type: 'date', half: true },
     ],
   },
   courtage: {

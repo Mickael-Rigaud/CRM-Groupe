@@ -5,7 +5,7 @@ import { db } from '../data/db.js';
 import { scope } from '../data/scope.js';
 import { ACTIVITIES, CHANNELS, weightedAmount } from '../data/schema.js';
 import {
-  esc, eur, daysSince, userName, contactName, dealParty, toast,
+  esc, eur, daysSince, fmtDate, userName, contactName, dealParty, toast,
   openModal, closeModal, confirm, renderForm, readForm, terms, hit,
   searchInput, bindSearch, restoreFocus, csvDownload,
 } from '../ui.js';
@@ -31,6 +31,7 @@ const ONGLETS = [
   { hash: '#/btp/todo', label: 'To-do list' },
   { hash: '#/btp/base', label: 'Base de données' },
   { hash: '#/btp/dtu', label: 'DTU' },
+  { hash: '#/btp/facturation', label: 'Facturation' },
   { hash: '#/btp/mails', label: 'Mails types' },
 ];
 // Enveloppe un écran dans la coquille commune aux espaces de structure.
@@ -128,6 +129,11 @@ export const btpHomePage = {
       const noNext = open.filter(d => !nextActivity(d.id));
       const enCours = all.filter(d => a.stages.find(s => s.key === d.stage)?.delivery && d.status !== 'lost');
       const nouveaux = all.filter(d => ['lead', 'rdv1'].includes(d.stage) && d.status === 'open');
+      const anneeEnCours = String(new Date().getFullYear());
+      // CA signé : les missions engagées ou gagnées dans l'année, montant HT de l'affaire
+      const gagnees = all.filter(d => d.status !== 'lost' && a.stages.find(x => x.key === d.stage)?.delivery
+        && (d.won_at || d.stage_changed_at || d.created_at || '').slice(0, 4) === anneeEnCours);
+      const caAnnee = gagnees.reduce((s, d) => s + (Number(d.amount) || 0), 0);
 
       // La pipeline, colonne par colonne, avec les affaires dedans
       const colonnes = a.stages.map(s => {
@@ -139,9 +145,8 @@ export const btpHomePage = {
       root.innerHTML = cadre('#/btp', "Vue d'ensemble", `
         <div class="esp-kpis">
           ${kpi({ label: 'Nouvelles demandes', valeur: nouveaux.length, sous: 'nouveau et RDV 1', icone: '📨', ton: 'accent', href: '#/pipeline/btp' })}
-          ${kpi({ label: 'Affaires ouvertes', valeur: open.length, sous: `${eur(open.reduce((s, d) => s + (Number(d.amount) || 0), 0))} HT`, icone: '📂', ton: 'green', href: '#/pipeline/btp' })}
+          ${kpi({ label: 'CA HT', valeur: eur(caAnnee), sous: `${gagnees.length} mission${gagnees.length > 1 ? 's' : ''} signée${gagnees.length > 1 ? 's' : ''} en ${anneeEnCours}`, icone: '💶', ton: 'green', href: '#/btp/facturation' })}
           ${kpi({ label: 'Missions en cours', valeur: enCours.length, sous: 'du RDV sur place au rapport', icone: '🏗', ton: 'amber', href: '#/pipeline/btp' })}
-          ${kpi({ label: 'Sans prochaine action', valeur: noNext.length, sous: 'affaires à relancer', icone: '⚠', ton: 'red', href: '#/btp/todo' })}
         </div>
 
         <div class="card">
@@ -493,6 +498,125 @@ export const btpMailsPage = {
         const m = db.byId('mail_templates', b.dataset.copy);
         copier(m.subject ? `${m.subject}\n\n${m.body}` : m.body);
       });
+    };
+
+    draw();
+    return { refresh: draw, destroy: coquille.retirer };
+  },
+};
+
+// ---------------------------------------------------------------- Facturation
+// En attendant Stripe, la facturation se suit sur l'affaire elle-même : trois champs
+// (n° de facture, facturée le, payée le) rangés dans `fields`, comme les autres champs
+// métier de l'activité. Le jour où Stripe est raccordé, ces colonnes deviendront le
+// reflet des factures Stripe sans que l'écran change de forme.
+const FACTU_FORM = [
+  { key: 'facture_num', label: 'N° de facture', half: true, placeholder: '2026-014' },
+  { key: 'facture_date', label: 'Facturée le', type: 'date', half: true },
+  { key: 'paiement_date', label: 'Payée le', type: 'date', half: true },
+];
+
+const FACTU_VUES = [
+  { key: 'a_facturer', label: 'À facturer' },
+  { key: 'impayees', label: 'En attente de paiement' },
+  { key: 'payees', label: 'Payées' },
+  { key: 'toutes', label: 'Toutes' },
+];
+
+// Une mission est facturable dès que la prestation est engagée : à partir du RDV sur place.
+const facturables = () => {
+  const a = act();
+  return deals().filter(d => d.status !== 'lost' && a.stages.find(s => s.key === d.stage)?.delivery);
+};
+const champ = (d, k) => ((d.fields || {})[k] || '').toString().trim();
+
+export const btpFacturationPage = {
+  title: () => 'BTP Expertise — Facturation',
+  render(root) {
+    if (guard(root)) return {};
+    const coquille = poser(root);
+    const state = { vue: 'a_facturer', q: '', focus: null };
+
+    const saisir = (d, apres) => {
+      const m = openModal(`Facturation — ${d.title}`,
+        `<form class="form" id="factu-form">${renderForm(FACTU_FORM, d.fields || {})}
+          <p class="small muted" style="flex-basis:100%;margin:0">Montant de la mission : <b>${d.amount ? eur(d.amount) : 'non renseigné'}</b> HT. Il se modifie sur la fiche de l&rsquo;affaire.</p>
+          <div class="form-actions"><button type="button" class="btn ghost" data-close>Annuler</button><button class="btn" type="submit">Enregistrer</button></div>
+        </form>`);
+      m.querySelector('#factu-form').onsubmit = async (e) => {
+        e.preventDefault();
+        try {
+          await db.update('deals', d.id, { fields: { ...(d.fields || {}), ...readForm(e.target, FACTU_FORM) } });
+          closeModal(true); toast('Facturation enregistrée'); apres();
+        } catch (err) { toast(err.message, 'err'); }
+      };
+    };
+
+    const draw = () => {
+      const a = act();
+      const toutes = facturables();
+      const anneeEnCours = String(new Date().getFullYear());
+
+      const aFacturer = toutes.filter(d => !champ(d, 'facture_date'));
+      const impayees = toutes.filter(d => champ(d, 'facture_date') && !champ(d, 'paiement_date'));
+      const payees = toutes.filter(d => champ(d, 'paiement_date'));
+      const somme = (l) => l.reduce((s, d) => s + (Number(d.amount) || 0), 0);
+      const encaisse = somme(payees.filter(d => champ(d, 'paiement_date').slice(0, 4) === anneeEnCours));
+
+      const listes = { a_facturer: aFacturer, impayees, payees, toutes };
+      const lignes = (listes[state.vue] || toutes)
+        .filter(d => hit([d.title, dealParty(d), champ(d, 'facture_num')], terms(state.q)))
+        .sort((x, y) => (champ(y, 'facture_date') || y.stage_changed_at || '').localeCompare(champ(x, 'facture_date') || x.stage_changed_at || ''));
+
+      root.innerHTML = cadre('#/btp/facturation', 'Facturation', `
+        <div class="esp-kpis">
+          ${kpi({ label: 'À facturer', valeur: eur(somme(aFacturer)), sous: `${aFacturer.length} mission${aFacturer.length > 1 ? 's' : ''} livrée${aFacturer.length > 1 ? 's' : ''} sans facture`, icone: '🧾', ton: 'accent', href: '#/btp/facturation' })}
+          ${kpi({ label: 'En attente de paiement', valeur: eur(somme(impayees)), sous: `${impayees.length} facture${impayees.length > 1 ? 's' : ''} émise${impayees.length > 1 ? 's' : ''}`, icone: '⏳', ton: 'amber', href: '#/btp/facturation' })}
+          ${kpi({ label: `Encaissé en ${anneeEnCours}`, valeur: eur(encaisse), sous: `${payees.length} mission${payees.length > 1 ? 's' : ''} payée${payees.length > 1 ? 's' : ''} au total`, icone: '✅', ton: 'green', href: '#/btp/facturation' })}
+        </div>
+
+        <div class="card btp-stripe">
+          <div class="agenda-head"><span class="agenda-ico">💳</span><h2>Stripe</h2><span class="grow"></span><span class="badge-soft">pas encore raccordé</span></div>
+          <p class="small muted" style="margin:0">En attendant, les trois colonnes ci-dessous se remplissent à la main : numéro de facture, date d&rsquo;émission, date de paiement. Une fois Stripe raccordé, elles suivront les factures automatiquement — l&rsquo;écran ne changera pas de forme, il cessera simplement d&rsquo;être tenu à la main.</p>
+        </div>
+
+        <div class="toolbar">
+          <div class="seg">${FACTU_VUES.map(v => `<button data-vue="${v.key}" class="${state.vue === v.key ? 'active' : ''}">${v.label} <span class="cnt">${(listes[v.key] || []).length}</span></button>`).join('')}</div>
+          <span class="grow"></span>
+          <button class="btn ghost sm" id="f-export">Export CSV</button>
+        </div>
+        <div class="toolbar">
+          ${searchInput('f-q', state, 'Rechercher une mission, un client, un n° de facture…')}
+          <span class="muted small">${lignes.length} ligne${lignes.length > 1 ? 's' : ''} · ${eur(somme(lignes))} HT</span>
+        </div>
+
+        <div class="card">
+          <div class="table-wrap"><table>
+            <thead><tr><th>Mission</th><th>Client</th><th>Étape</th><th class="num">Montant HT</th><th>N° facture</th><th>Facturée le</th><th>Payée le</th><th></th></tr></thead>
+            <tbody>${lignes.map(d => {
+              const num = champ(d, 'facture_num'), fait = champ(d, 'facture_date'), paye = champ(d, 'paiement_date');
+              const retard = fait && !paye && daysSince(fait) > 30;
+              return `<tr>
+                <td><b>${esc(d.title)}</b></td>
+                <td>${esc(dealParty(d))}</td>
+                <td>${esc(a.stages.find(s => s.key === d.stage)?.label || d.stage)}</td>
+                <td class="num">${d.amount ? eur(d.amount) : '—'}</td>
+                <td>${num ? esc(num) : '—'}</td>
+                <td>${fait ? fmtDate(fait) : '<span class="muted">à émettre</span>'}</td>
+                <td>${paye ? fmtDate(paye) : (fait ? `<span class="${retard ? 'retard' : 'muted'}">en attente${retard ? ` · ${daysSince(fait)} j` : ''}</span>` : '—')}</td>
+                <td class="num"><button type="button" class="btn ghost sm" data-factu="${d.id}">Saisir</button></td>
+              </tr>`;
+            }).join('') || '<tr><td colspan="8"><div class="empty">Aucune mission dans cette vue.</div></td></tr>'}</tbody>
+          </table></div>
+        </div>`);
+
+      bindSearch(root, 'f-q', state, draw); restoreFocus(root, state);
+      root.querySelectorAll('[data-vue]').forEach(b => b.onclick = () => { state.vue = b.dataset.vue; draw(); });
+      root.querySelectorAll('[data-factu]').forEach(b => b.onclick = () => saisir(db.byId('deals', b.dataset.factu), draw));
+      root.querySelector('#f-export').onclick = () => csvDownload('btp-facturation.csv', lignes.map(d => ({
+        mission: d.title, client: dealParty(d), etape: a.stages.find(s => s.key === d.stage)?.label,
+        montant_ht: d.amount, n_facture: champ(d, 'facture_num'), facturee_le: champ(d, 'facture_date'), payee_le: champ(d, 'paiement_date'),
+      })));
     };
 
     draw();
