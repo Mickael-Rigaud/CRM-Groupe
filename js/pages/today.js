@@ -20,6 +20,14 @@ const GROUPES = [
 ];
 const ecart = (a) => (a.due_date ? daysSince(a.due_date) : null);
 
+// Le logo de la structure sur fond de sa couleur : si le fichier manque, l'image se
+// retire et il reste la pastille de couleur — le repli qu'utilise déjà le menu.
+const logo = (a, cls = 'todo-logo') => `<i class="${cls}" style="background:${a.color}"><img src="assets/logos/${a.key}.png" alt="" onerror="this.remove()"></i>`;
+
+// Une teinte stable par personne, tirée de son identifiant : les avatars se distinguent
+// sans qu'on ait à tenir une liste de couleurs à jour à chaque arrivée dans l'équipe.
+const teinte = (id) => { let h = 7; for (const c of String(id)) h = (h * 31 + c.charCodeAt(0)) % 360; return h; };
+
 // Une tâche en carte : case à cocher, badge de structure, contexte, échéance.
 // Les attributs data-toggle / data-edit-act sont ceux que bindActivityRows attend.
 function carte(a) {
@@ -40,7 +48,7 @@ function carte(a) {
   return `<div class="todo-tache ${a.done ? 'done' : ''}" ${act ? `style="--c:${act.color};--b:${act.accent};--bt:${act.on}"` : ''}>
     <input type="checkbox" ${a.done ? 'checked' : ''} data-toggle="${a.id}" title="Marquer comme fait">
     <div class="todo-tache-corps">
-      ${act ? `<span class="todo-badge">${esc(act.short)}</span>` : ''}
+      ${act ? `<span class="todo-badge">${logo(act, 'todo-badge-logo')}${esc(act.short)}</span>` : ''}
       <b>${t.icon} ${esc(a.title)}</b>
       ${ctx ? `<div class="todo-ctx">${ctx}</div>` : ''}
       <div class="todo-when ${late ? 'late' : ''}">${a.due_date ? `${fmtDate(a.due_date)}${a.due_time ? ' ' + esc(a.due_time) : ''} · ${relDay(a.due_date)}` : 'Sans échéance'}</div>
@@ -97,9 +105,9 @@ export const todayPage = {
         const groupes = GROUPES.map(gr => ({ ...gr, l: g.taches.filter(a => gr.test(ecart(a))) })).filter(gr => gr.l.length);
         const tri = (l) => l.slice().sort((x, y) => (x.due_date || '9999').localeCompare(y.due_date || '9999')
           || (x.due_time || '99').localeCompare(y.due_time || '99'));
-        return `<section class="todo-col">
+        return `<section class="todo-col ${g.id === scope.user.id ? 'moi' : ''}">
           <header class="todo-col-head">
-            <span class="todo-av">${g.id ? esc(initials(g.id)) : '—'}</span>
+            <span class="todo-av" style="--h:${teinte(g.id || 'x')}">${g.id ? esc(initials(g.id)) : '—'}</span>
             <span class="todo-col-nom">${esc(g.nom)}<i>${g.taches.length} tâche${g.taches.length > 1 ? 's' : ''}</i></span>
             ${g.retard ? `<span class="todo-col-retard" title="${g.retard} en retard">${g.retard}</span>` : ''}
             ${g.id ? `<button class="icon-btn" data-new-for="${g.id}" title="Ajouter une tâche à ${esc(g.nom)}">+</button>` : ''}
@@ -118,7 +126,7 @@ export const todayPage = {
       root.innerHTML = `
         <div class="pill-tabs todo-structures">
           <button type="button" data-struct="" class="${state.structure ? '' : 'on'}">Toutes<span>${total}</span></button>
-          ${parStructure.map(a => `<button type="button" data-struct="${a.key}" class="${state.structure === a.key ? 'on' : ''}"><i class="todo-puce" style="background:${a.color}"></i>${esc(a.label)}<span>${a.n}</span></button>`).join('')}
+          ${parStructure.map(a => `<button type="button" data-struct="${a.key}" class="${state.structure === a.key ? 'on' : ''}">${logo(a)}${esc(a.label)}<span>${a.n}</span></button>`).join('')}
           ${sansStructure ? `<button type="button" data-struct="—" class="${state.structure === '—' ? 'on' : ''}">Sans structure<span>${sansStructure}</span></button>` : ''}
         </div>
 
