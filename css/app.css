@@ -498,6 +498,25 @@ body:has(.esp-app) .subnav .datepill { display: none; }
 /* Une bascule de structure ne doit pas clignoter pour qui préfère moins d'animation */
 @media (prefers-reduced-motion: reduce) { .univ, .s-tab.on, .btn { transition: none; } }
 
+/* To do list : une colonne par personne */
+.todo-gens { margin-bottom: 2px; }
+.todo-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; align-items: start; }
+.todo-cols.seule { grid-template-columns: minmax(0, 720px); }
+.todo-col { padding: 16px 16px 14px; }
+.todo-col-tete { display: flex; align-items: center; gap: 10px; padding-bottom: 12px; border-bottom: 1px solid var(--line); margin-bottom: 4px; }
+.todo-col-tete > div { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.todo-col-tete b { font-size: 14px; }
+.todo-bloc { margin-top: 12px; }
+.todo-bloc h4 { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 6px;
+                font-size: 10.5px; text-transform: uppercase; letter-spacing: .1em; color: var(--muted-2); font-weight: 700; }
+.todo-bloc h4 span { background: var(--card-2); border-radius: 999px; padding: 1px 8px; font-size: 11px; letter-spacing: 0; }
+.todo-bloc.retard h4 { color: var(--red); }
+.todo-bloc.retard h4 span { background: var(--red-soft); color: var(--red); }
+.todo-bloc.faites { opacity: .6; }
+/* Pastille de structure sur une tâche */
+.act-struct { display: inline-block; background: color-mix(in srgb, var(--c) 16%, white); color: var(--c);
+              border-radius: 999px; padding: 1px 8px; font-size: 10.5px; font-weight: 700; margin-right: 7px; vertical-align: 1px; }
+
 /* Colonne d'actions d'une ligne de base de données */
 td.acts { display: flex; gap: 6px; justify-content: flex-end; }
 .btn.ghost.danger { color: var(--red); }
