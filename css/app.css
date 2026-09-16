@@ -498,6 +498,23 @@ body:has(.esp-app) .subnav .datepill { display: none; }
 /* Une bascule de structure ne doit pas clignoter pour qui préfère moins d'animation */
 @media (prefers-reduced-motion: reduce) { .univ, .s-tab.on, .btn { transition: none; } }
 
+/* Mails types : la liste des modèles, puis le modèle ouvert */
+.mail-liste { display: flex; flex-direction: column; }
+.mail-ligne { display: flex; align-items: center; gap: 12px; padding: 12px 10px; border-top: 1px solid var(--line); cursor: pointer; }
+.mail-ligne:first-child { border-top: 0; }
+.mail-ligne:hover { background: var(--card-2); }
+.mail-ligne-corps { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.mail-ligne-objet { font-size: 12.5px; color: var(--muted); }
+.mail-mode { flex-shrink: 0; background: var(--card-2); color: var(--muted); border-radius: 999px; padding: 3px 10px; font-size: 11px; font-weight: 700; }
+.mail-mode.auto { background: var(--accent-soft); color: var(--accent-ink); }
+.mail-vue-tete { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 12px; }
+.mail-vue-theme { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; font-weight: 700; color: var(--accent-ink); margin-bottom: 3px; }
+.mail-decl { margin: 0 0 14px; font-size: 13px; color: var(--muted); }
+.mail-decl b { color: var(--text); margin-right: 6px; }
+.mail-objet { background: var(--card-2); border-radius: 10px; padding: 11px 14px; font-weight: 600; margin-bottom: 12px; }
+.mail-objet span { display: block; font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted-2); font-weight: 700; margin-bottom: 3px; }
+.mail-corps { margin: 0; background: var(--card-2); border-radius: 10px; padding: 16px 18px; font: inherit; font-size: 13.5px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
+
 /* ---------- Référentiel DTU à imprimer ---------- */
 /* Mise en page reprise de l'export PDF du tableau de bord RGD Renova. Chaque fiche
    est un tableau : thead et tfoot se répètent sur chaque page — seule méthode fiable

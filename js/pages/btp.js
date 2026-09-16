@@ -669,11 +669,16 @@ export const btpDtuPage = {
 };
 
 // ---------------------------------------------------------------- Mails types
+// Les séquences du cabinet : chaque modèle porte son déclencheur (quand il part)
+// et son mode (automatique ou envoyé à la main). La liste par thématique, puis le
+// modèle en pleine page avec de quoi le copier.
 const MAIL_FORM = [
-  { key: 'theme', label: 'Thématique', required: true, half: true, placeholder: 'Prise de contact' },
-  { key: 'title', label: 'Nom du modèle', required: true, half: true, placeholder: 'Relance après devis' },
+  { key: 'theme', label: 'Thématique', required: true, half: true, placeholder: 'Séquence expertise' },
+  { key: 'title', label: 'Nom du modèle', required: true, half: true, placeholder: 'Relance devis J+3' },
+  { key: 'trigger_text', label: 'Déclencheur', half: true, placeholder: 'Trois jours après l\'envoi du devis, sans réponse' },
+  { key: 'mode', label: 'Mode', type: 'select', options: ['Manuel', 'Automatique'], half: true },
   { key: 'subject', label: 'Objet du mail' },
-  { key: 'body', label: 'Corps du mail', type: 'textarea', rows: 14, required: true },
+  { key: 'body', label: 'Corps du mail', type: 'textarea', rows: 16, required: true },
 ];
 
 export const btpMailsPage = {
@@ -681,7 +686,7 @@ export const btpMailsPage = {
   render(root) {
     if (guard(root)) return {};
     const coquille = poser(root);
-    const state = { theme: '', q: '', focus: null };
+    const state = { theme: '', q: '', modele: null, focus: null };
 
     const editer = (m0, apres) => {
       const m = openModal(m0 ? m0.title : 'Nouveau modèle',
@@ -700,55 +705,93 @@ export const btpMailsPage = {
       };
       m.querySelector('#mail-del')?.addEventListener('click', async () => {
         if (!await confirm(`Supprimer le modèle « ${m0.title} » ?`)) return;
-        await db.remove('mail_templates', m0.id); closeModal(true); toast('Modèle supprimé'); apres();
+        await db.remove('mail_templates', m0.id); closeModal(true); toast('Modèle supprimé');
+        state.modele = null; apres();
       });
     };
 
-    const copier = async (texte) => {
-      try { await navigator.clipboard.writeText(texte); toast('Modèle copié'); }
+    const copier = async (texte, quoi) => {
+      try { await navigator.clipboard.writeText(texte); toast(`${quoi} copié`); }
       catch { toast('Copie refusée par le navigateur', 'warn'); }
     };
 
+    const vueModele = (m) => `
+      <div class="fiche-topbar">
+        <button type="button" class="btn ghost sm" id="m-back">← Tous les modèles</button>
+        <span class="grow"></span>
+        <button type="button" class="btn ghost sm" id="m-copy-obj">Copier l'objet</button>
+        <button type="button" class="btn sm" id="m-copy">Copier le mail</button>
+        <button type="button" class="btn ghost sm" id="m-edit">Modifier</button>
+      </div>
+      <div class="card mail-vue">
+        <div class="mail-vue-tete">
+          <div>
+            <div class="mail-vue-theme">${esc(m.theme)}</div>
+            <h2>${esc(m.title)}</h2>
+          </div>
+          ${m.mode ? `<span class="mail-mode ${m.mode.toLowerCase() === 'automatique' ? 'auto' : ''}">${esc(m.mode)}</span>` : ''}
+        </div>
+        ${m.trigger_text ? `<p class="mail-decl"><b>Quand l'envoyer</b> ${esc(m.trigger_text)}</p>` : ''}
+        ${m.subject ? `<div class="mail-objet"><span>Objet</span>${esc(m.subject)}</div>` : ''}
+        <pre class="mail-corps">${esc(m.body)}</pre>
+      </div>`;
+
     const draw = () => {
+      const tous = db.t('mail_templates').filter(m => m.activity === KEY)
+        .sort((a, b) => (a.theme || '').localeCompare(b.theme || '') || (a.position || 0) - (b.position || 0));
+
+      if (state.modele) {
+        const m = db.byId('mail_templates', state.modele);
+        if (!m) { state.modele = null; return draw(); }
+        root.innerHTML = cadre('#/btp/mails', 'Mails types', vueModele(m));
+        root.querySelector('#m-back').onclick = () => { state.modele = null; draw(); };
+        root.querySelector('#m-edit').onclick = () => editer(m, draw);
+        root.querySelector('#m-copy').onclick = () => copier(m.subject ? `${m.subject}\n\n${m.body}` : m.body, 'Modèle');
+        root.querySelector('#m-copy-obj').onclick = () => copier(m.subject || '', 'Objet');
+        return;
+      }
+
       const ts = terms(state.q);
-      const tous = db.t('mail_templates').filter(m => m.activity === KEY);
-      const themes = [...new Set(tous.map(m => m.theme).filter(Boolean))].sort();
-      const liste = tous.filter(m => !state.theme || m.theme === state.theme)
-        .filter(m => hit([m.title, m.theme, m.subject, m.body], ts));
+      const themes = [...new Set(tous.map(m => m.theme).filter(Boolean))];
+      const liste = tous
+        .filter(m => !state.theme || m.theme === state.theme)
+        .filter(m => hit([m.title, m.theme, m.subject, m.body, m.trigger_text], ts));
 
-      const groupes = themes.filter(t => !state.theme || t === state.theme)
-        .map(t => [t, liste.filter(m => m.theme === t).sort((a, b) => (a.position || 0) - (b.position || 0))])
-        .filter(([, g]) => g.length);
-
-      root.innerHTML = cadre('#/btp/mails', "Mails types", `
+      root.innerHTML = cadre('#/btp/mails', 'Mails types', `
+        ${themes.length ? `<div class="pill-tabs">
+          ${themes.map(t => `<button type="button" data-theme="${esc(t)}" class="${state.theme === t ? 'on' : ''}"
+            aria-pressed="${state.theme === t}">${esc(t)}<span>${tous.filter(m => m.theme === t).length}</span></button>`).join('')}
+        </div>` : ''}
         <div class="toolbar">
-          ${searchInput('b-q', state, 'Rechercher un modèle…')}
-          <select id="b-theme"><option value="">Toutes les thématiques</option>${themes.map(t => `<option ${state.theme === t ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select>
+          ${searchInput('b-q', state, 'Rechercher un modèle, un mot de l\'objet ou du texte…')}
           <span class="muted small">${liste.length} modèle${liste.length > 1 ? 's' : ''}</span>
           <span class="grow"></span>
           <button class="btn" id="b-new">+ Modèle</button>
         </div>
-        ${groupes.length ? groupes.map(([t, g]) => `
-          <div class="card">
-            <div class="card-head"><h2>${esc(t)}</h2><span class="muted small">${g.length}</span></div>
-            ${g.map(m => `<div class="btp-mail">
-              <div class="btp-mail-head">
-                <span class="grow"><b>${esc(m.title)}</b>${m.subject ? `<br><small class="muted">Objet : ${esc(m.subject)}</small>` : ''}</span>
-                <button type="button" class="btn ghost sm" data-copy="${m.id}">Copier</button>
-                <button type="button" class="btn ghost sm" data-edit="${m.id}">Modifier</button>
-              </div>
-              <pre class="btp-mail-body">${esc(m.body)}</pre>
-            </div>`).join('')}
-          </div>`).join('')
-        : '<div class="card"><div class="empty">Aucun modèle pour l&rsquo;instant. Créez le premier avec « + Modèle » : la thématique que vous lui donnez (Prise de contact, Devis, Rapport…) sert de rangement.</div></div>'}`);
+        ${liste.length ? `<div class="card"><div class="mail-liste">${liste.map(m => `
+          <div class="mail-ligne" data-m="${m.id}">
+            <div class="mail-ligne-corps">
+              <b>${esc(m.title)}</b>
+              ${m.subject ? `<span class="mail-ligne-objet">${esc(m.subject)}</span>` : ''}
+              ${m.trigger_text ? `<span class="muted small">${esc(m.trigger_text)}</span>` : ''}
+            </div>
+            ${m.mode ? `<span class="mail-mode ${m.mode.toLowerCase() === 'automatique' ? 'auto' : ''}">${esc(m.mode)}</span>` : ''}
+            <button type="button" class="btn ghost sm" data-copy="${m.id}">Copier</button>
+          </div>`).join('')}</div></div>`
+        : `<div class="card"><div class="empty">Aucun modèle${state.q || state.theme ? ' dans cette vue' : ''}. Lancez le script d&rsquo;import des modèles du cabinet, ou créez le premier avec « + Modèle ».</div></div>`}`);
 
       bindSearch(root, 'b-q', state, draw); restoreFocus(root, state);
-      root.querySelector('#b-theme').onchange = e => { state.theme = e.target.value; draw(); };
+      root.querySelectorAll('[data-theme]').forEach(b => b.onclick = () => {
+        state.theme = state.theme === b.dataset.theme ? '' : b.dataset.theme; draw();
+      });
       root.querySelector('#b-new').onclick = () => editer(null, draw);
-      root.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => editer(db.byId('mail_templates', b.dataset.edit), draw));
+      root.querySelectorAll('[data-m]').forEach(l => l.onclick = (e) => {
+        if (e.target.closest('[data-copy]')) return;
+        state.modele = l.dataset.m; draw();
+      });
       root.querySelectorAll('[data-copy]').forEach(b => b.onclick = () => {
         const m = db.byId('mail_templates', b.dataset.copy);
-        copier(m.subject ? `${m.subject}\n\n${m.body}` : m.body);
+        copier(m.subject ? `${m.subject}\n\n${m.body}` : m.body, 'Modèle');
       });
     };
 

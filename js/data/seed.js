@@ -99,7 +99,20 @@ export const SEED = {
       key_points: [], common_errors: [], link: '', checkpoints: '', notes: '' },
   ],
 
-  mail_templates: [],
+  mail_templates: [
+    { id: 'mt-1', activity: 'btp', theme: 'Avant le rendez-vous téléphonique', title: 'Confirmation du rendez-vous',
+      subject: 'Votre rendez-vous est confirmé', mode: 'Automatique', position: 10,
+      trigger_text: 'Dès la réservation du créneau sur le site',
+      body: 'Bonjour [Prénom],\n\nVotre rendez-vous est confirmé.\n\nDate : [DATE]\nHeure : [HEURE]\n\nÀ très bientôt,' },
+    { id: 'mt-2', activity: 'btp', theme: 'Séquence expertise', title: 'Relance devis',
+      subject: 'Votre devis d\'expertise', mode: 'Manuel', position: 20,
+      trigger_text: 'Trois jours après l\'envoi du devis, sans réponse',
+      body: 'Bonjour [Prénom],\n\nJe reviens vers vous au sujet du devis adressé le [DATE].\n\nBien à vous,' },
+    { id: 'mt-3', activity: 'btp', theme: 'Séquence expertise', title: 'Transmission du rapport',
+      subject: 'Votre rapport d\'expertise', mode: 'Manuel', position: 30,
+      trigger_text: 'À la remise du rapport',
+      body: 'Bonjour [Prénom],\n\nVous trouverez ci-joint le rapport.\n\nBien à vous,' },
+  ],
   // ---------- Patrimoine (démo) ----------
   properties: [
     { id: 'p1', name: 'T2 rue des Halles', address: '8 rue des Halles', city: 'Tours', postal_code: '37000', invest_type: 'Meublé / LMNP', structure: 'Nom propre', status: 'Loué', purchase_date: '2021-03-15', price: 118000, notary_fees: 9200, works: 14000, other_costs: 0, current_value: 150000, surface: 42, notes: 'Meublé étudiant, proche fac', created_at: d(-900) },
