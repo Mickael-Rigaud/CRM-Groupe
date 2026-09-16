@@ -34,20 +34,11 @@ export function activityForm(link = {}, existing = null, onSaved, onClose = null
   form.onsubmit = async (e) => {
     e.preventDefault();
     const v = readForm(form, spec);
-    // Filet le temps que la migration de la colonne « activity » soit appliquée en
-    // production : si la base ne la connaît pas encore, on enregistre sans elle
-    // plutôt que de perdre la saisie. À retirer une fois la migration passée.
-    const enregistrer = async (valeurs) => existing
-      ? db.update('activities', existing.id, valeurs)
-      : db.insert('activities', { ...valeurs, ...link, done: false });
     try {
-      try { await enregistrer(v); }
-      catch (err) {
-        if (!/activity/i.test(err?.message || '')) throw err;
-        const { activity, ...sansStructure } = v;
-        await enregistrer(sansStructure);
-        toast('Tâche enregistrée, mais la structure n'a pas pu être retenue', 'warn');
-      }
+      if (existing) await db.update('activities', existing.id, v);
+      // `link` porte les rattachements (affaire, contact…) ; la saisie prime dessus,
+      // sinon une clé absente de `link` écraserait ce que l'on vient de choisir.
+      else await db.insert('activities', { ...link, ...v, done: false });
       closeModal(true); toast('Activité enregistrée'); onSaved?.();
     } catch (err) { toast(err.message, 'err'); }
   };

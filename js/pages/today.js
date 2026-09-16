@@ -93,9 +93,9 @@ export const todayPage = {
       root.querySelectorAll('[data-qui]').forEach(b => b.onclick = () => { state.qui = b.dataset.qui; draw(); });
       root.querySelector('#t-struct').onchange = e => { state.structure = e.target.value; draw(); };
       root.querySelector('#t-done').onchange = e => { state.showDone = e.target.checked; draw(); };
-      root.querySelector('#t-new').onclick = () => activityForm({ activity: state.structure || undefined }, null, draw);
+      root.querySelector('#t-new').onclick = () => activityForm(state.structure ? { activity: state.structure } : {}, null, draw);
       root.querySelectorAll('[data-new-pour]').forEach(b => b.onclick = () =>
-        activityForm({ assignee_id: b.dataset.newPour, activity: state.structure || undefined }, null, draw));
+        activityForm({ assignee_id: b.dataset.newPour, ...(state.structure ? { activity: state.structure } : {}) }, null, draw));
       root.querySelectorAll('[data-open-deal]').forEach(a => a.onclick = e => { e.preventDefault(); openDeal(a.dataset.openDeal, draw); });
       bindActivityRows(root, draw);
     };
