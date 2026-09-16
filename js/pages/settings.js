@@ -46,12 +46,7 @@ export const settingsPage = {
             <div id="imp-result" class="small muted"></div>
           </div>
         </div>
-        <div class="grid c2">
-          <div class="card"><div class="card-head"><h2>Entrée automatique des leads</h2></div>
-            <p class="small">Les formulaires des sites et les Meta Lead Ads créent les leads via un scénario Make (gratuit) qui appelle la fonction <code>intake_lead</code> de Supabase. Le jeton ci-dessous protège l'accès : à copier dans Make, jamais sur un site.</p>
-            <div class="form"><div class="field"><label>Jeton d'entrée (intake_token)</label><input id="tok" value="${esc(db.setting('intake_token') || '')}" ${scope.isDirection ? '' : 'disabled'}></div>${scope.isDirection ? '<div class="form-actions"><button class="btn ghost sm" id="tok-gen">Générer</button><button class="btn sm" id="tok-save">Enregistrer</button></div>' : ''}</div>
-            <p class="muted small">Mode d'emploi complet dans le fichier <code>README.md</code> (section « Entrée des leads »).${db.demo ? ' En mode démo, ce jeton n\'est pas utilisé.' : ''}</p>
-          </div>
+        <div class="grid">
           <div class="card"><div class="card-head"><h2>Référentiel</h2></div>
             <p class="small"><b>Canaux</b> : ${CHANNELS.map(esc).join(' · ')}</p>
             <p class="small"><b>Motifs de perte</b> : ${LOST_REASONS.map(esc).join(' · ')}</p>
@@ -84,8 +79,6 @@ export const settingsPage = {
         root.querySelector('#imp-result').innerHTML = `<b>${created}</b> contact(s) créé(s), ${skipped} ignoré(s) (doublons ou lignes vides), ${orgsCreated} organisation(s) créée(s).`;
         toast(`${created} contacts importés`);
       };
-      root.querySelector('#tok-gen')?.addEventListener('click', () => { root.querySelector('#tok').value = 'tok_' + [...crypto.getRandomValues(new Uint8Array(18))].map(b => b.toString(16).padStart(2, '0')).join(''); });
-      root.querySelector('#tok-save')?.addEventListener('click', async () => { const v = root.querySelector('#tok').value.trim(); if (v.length < 12) return toast('Jeton trop court', 'warn'); if (db.setting('intake_token') !== undefined) await db.update('settings', 'intake_token', { value: v }); else await db.insert('settings', { key: 'intake_token', value: v }); toast('Jeton enregistré'); });
       root.querySelector('#exp-all').onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(db.cache, null, 2)], { type: 'application/json' })); a.download = `crm-export-${new Date().toISOString().slice(0, 10)}.json`; a.click(); };
       root.querySelector('#reset-demo')?.addEventListener('click', async () => { if (await confirm('Effacer les données de démo de ce navigateur et recharger l\'exemple ?')) { db.resetDemo(); location.reload(); } });
       root.querySelector('#u-new')?.addEventListener('click', () => {

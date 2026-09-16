@@ -1,6 +1,6 @@
 # CRM Groupe — RGD Renova · BTP Expertise · La Référence Courtage · Propulsion
 
-CRM sur-mesure, 100 % gratuit à exploiter : une application web statique (HTML / CSS / JavaScript, sans étape de build) + une base Supabase (offre gratuite) + Make (offre gratuite) pour l'entrée automatique des leads.
+CRM sur-mesure, 100 % gratuit à exploiter : une application web statique (HTML / CSS / JavaScript, sans étape de build) + une base Supabase (offre gratuite).
 
 ## Ce que fait la v1
 
@@ -14,7 +14,7 @@ CRM sur-mesure, 100 % gratuit à exploiter : une application web statique (HTML 
 - **Droits** : direction (tout), Propulsion (Stéphanie, Élodie), chargé d'affaires (ses dossiers).
 - **Import CSV** de contacts, exports CSV et JSON.
 - **Automatisations intégrées** : tâche « Contacter le prospect » à la création, tâche de suite à la signature (Costructor / mission / commission / onboarding), clôture des tâches à la perte, alerte « sans prochaine action », alerte « affaire qui dort », alerte renouvellement.
-- **Entrée automatique des leads** (formulaires des sites, Meta Lead Ads) via la fonction `intake_lead`.
+- **Entrée automatique des leads** — **en cours de refonte**, voir la section 3.
 
 ## 1. Tester tout de suite (mode démo)
 
@@ -32,7 +32,7 @@ puis http://localhost:8080. Le mode démo stocke des données d'exemple dans le 
 ### 2.1 Supabase (base de données + comptes)
 
 1. Créez un projet sur https://supabase.com (offre gratuite), région **Paris (eu-west-3)** ou Francfort.
-2. **SQL Editor → New query** : collez tout le contenu de `supabase/schema.sql`, exécutez. Cela crée les tables, les droits (RLS), la fonction d'entrée des leads et un jeton initial.
+2. **SQL Editor → New query** : collez tout le contenu de `supabase/schema.sql`, exécutez. Cela crée les tables et les droits (RLS).
 3. **Authentication → Providers → Email** : laissez Email activé ; désactivez « Confirm email » si vous créez les comptes vous-même.
 4. **Authentication → Users → Add user** : créez les comptes (Mickael, Stéphanie, Élodie…) avec email + mot de passe. Un profil est créé automatiquement.
 5. **Table Editor → profiles** : pour chaque ligne, renseignez `full_name`, `role` (`direction`, `propulsion` ou `commercial`) et `activities` (ex. `{rgd,btp,courtage,propulsion}` pour la direction, `{propulsion}` pour Stéphanie et Élodie).
@@ -58,30 +58,24 @@ Le dossier est un site statique : déployez-le comme le dashboard RGD Renova.
 
 Rien d'autre à installer : Chart.js est inclus dans `assets/`, la bibliothèque Supabase se charge depuis un CDN.
 
-### 2.4 Sécuriser le jeton d'entrée des leads
+## 3. Entrée automatique des leads — en cours de refonte
 
-Dans l'application, **Paramètres → Entrée automatique des leads → Générer → Enregistrer**. Ce jeton sera copié dans Make (jamais sur un site).
+> ⚠️ **Cette section décrivait un fonctionnement qui n'est plus en place.**
 
-## 3. Entrée automatique des leads (Make gratuit)
+L'entrée automatique des leads reposait sur un jeton (`intake_token`) stocké en base et sur
+un scénario Make appelant la fonction `intake_lead`. Ce montage a été retiré :
 
-Un seul scénario Make suffit pour tous les sites et les Meta Lead Ads (l'offre gratuite permet 2 scénarios actifs, 1 000 opérations/mois).
+- le jeton vivait dans une table lisible par tout utilisateur connecté au CRM ;
+- aucun scénario Make n'existait réellement — la chaîne n'a jamais été branchée ;
+- la fonction `intake_lead` n'est plus appelable que par le serveur.
 
-1. **Déclencheur** : module *Webhooks → Custom webhook* (pour les formulaires des sites : Élodie fait pointer chaque formulaire vers cette URL, ou utilise le module natif du constructeur de site) ; pour les publicités, module *Facebook Lead Ads → Watch leads*.
-2. **Action** : module *HTTP → Make a request*
-   - URL : `https://<projet>.supabase.co/rest/v1/rpc/intake_lead`
-   - Méthode : POST
-   - En-têtes : `apikey: <clé anon>`, `Authorization: Bearer <clé anon>`, `Content-Type: application/json`
-   - Corps (JSON) :
-     ```json
-     { "payload": { "token": "<jeton>", "activity": "rgd",
-       "first_name": "{{prenom}}", "last_name": "{{nom}}", "phone": "{{tel}}", "email": "{{email}}",
-       "city": "{{ville}}", "message": "{{message}}",
-       "channel": "Site internet direct", "campaign": "{{utm_campaign}}" } }
-     ```
-   - `activity` : `rgd`, `btp`, `courtage` ou `propulsion` (un routeur Make peut l'attribuer selon le site ou la campagne). Pour Meta : `"channel": "Meta Ads"` et `"campaign": "{{campaign_name}}"`.
-3. Le CRM crée ou retrouve le contact, crée l'affaire à l'étape « Nouveau lead » et la tâche « Appeler le prospect » à J+1 assignée au responsable (`owner_email` facultatif, sinon la direction).
+L'écran **Paramètres** ne propose donc plus de jeton d'entrée.
 
-Pour capter la campagne d'origine sur les sites : un champ caché `utm_campaign` dans chaque formulaire, rempli par le script standard de lecture des paramètres d'URL.
+**Ce qui fonctionne aujourd'hui** : le formulaire de BTP Expertise, qui passe par un Google
+Apps Script. Les formulaires de RGD Renova et de La Référence Courtage ne sont pas branchés.
+
+**Un remplaçant est en cours de conception** dans le dépôt `CRM-Groupe-Backend`. Cette section
+sera réécrite quand il sera en service. D'ici là, rien à configurer ici.
 
 ## 4. Exploitation
 
@@ -89,7 +83,7 @@ Pour capter la campagne d'origine sur les sites : un champ caché `utm_campaign`
 - **Chaque semaine (direction)** : Vue d'ensemble + affaires qui dorment + activités en retard ; Partenaires sans contact depuis 60 jours.
 - **Chaque mois** : saisir les dépenses Meta / Google dans « Acquisition » (une ligne par mois, canal, campagne — nom de campagne identique à celui des affaires) pour obtenir CPL, CAC et ROAS.
 - **Sauvegarde** : Paramètres → « Exporter toute la base (JSON) » une fois par semaine vers le NAS ou le Drive, ou planifier une exportation automatique depuis Supabase (Database → Backups, quotidien sur l'offre gratuite pendant 7 jours).
-- **Projet Supabase gratuit** : il se met en pause après 7 jours sans requête. Un usage quotidien suffit ; sinon un scénario Make hebdomadaire qui appelle `GET /rest/v1/settings?select=key` maintient le projet actif.
+- **Projet Supabase gratuit** : il se met en pause après 7 jours sans requête. Un usage quotidien suffit ; sinon, une requête hebdomadaire sur l'API suffit à le maintenir actif.
 
 ## 5. Faire évoluer
 
@@ -115,7 +109,7 @@ crm/
 ├── js/data/scope.js        droits côté écran
 ├── js/data/seed.js         données de démonstration
 ├── js/pages/               dashboard, today, pipeline, deal, activity, contacts, organisations, acquisition, settings
-└── supabase/schema.sql     tables, droits RLS, fonction intake_lead, vue v_deals
+└── supabase/schema.sql     tables, droits RLS, vue v_deals
 ```
 
 ## Lot 2 — Tableau de bord central, Patrimoine immobilier, Vivier courtiers (06/09/2026)

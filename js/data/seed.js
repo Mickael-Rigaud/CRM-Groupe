@@ -74,7 +74,6 @@ export const SEED = {
     { id: 's3', activity: 'courtage', channel: 'Meta Ads', campaign: 'RAC-Regroupement-Sept26', month: day(0).slice(0, 7) + '-01', amount: 180 },
   ],
   settings: [
-    { key: 'intake_token', value: 'demo-token-a-changer' },
   ],
   broker_profiles: SEED_BROKERS,
   dtu_sheets: [
