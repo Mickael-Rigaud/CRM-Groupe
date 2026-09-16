@@ -531,73 +531,86 @@ export const btpDtuPage = {
       </button>`;
     };
 
-    // Export : on dépose dans la page une version imprimable des fiches affichées,
-    // et le navigateur produit le PDF. Chaque domaine garde sa couleur, portée par
-    // --t sur le bandeau de chapitre et sur la fiche.
+    // Export : mise en page reprise de l'export PDF du tableau de bord RGD Renova.
+    // Chaque fiche est un tableau : le thead et le tfoot se répètent sur chaque page
+    // (seule méthode fiable en impression), d'où le bandeau de pied sur toutes les
+    // pages. @page sans marge supprime les mentions automatiques du navigateur.
     const exporter = (fiches) => {
       const SAUT = String.fromCharCode(10);
-      const jour = new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+      const jour = new Date().toLocaleDateString('fr-FR');
       const noms = [...new Set(fiches.map(f => f.domain || 'Sans domaine'))];
       const groupes = noms.map(d => [d, domaineMeta(d), fiches.filter(f => (f.domain || 'Sans domaine') === d)]);
 
-      const points = (titre, items, cls) => asListe(items).length ? `
-        <section class="pr-sec ${cls}">
-          <h3>${titre}</h3>
-          <ol>${asListe(items).map(p => `<li><b>${esc(p.titre)}</b>${p.detail ? `<span>${enClair(p.detail)}</span>` : ''}</li>`).join('')}</ol>
+      const section = (kicker, titre, icone, cls, items) => asListe(items).length ? `
+        <section class="pdf-section">
+          <div class="pdf-section-header">
+            <div class="pdf-section-icon ${cls}-icon">${icone}</div>
+            <div>
+              <div class="pdf-section-kicker ${cls}-kicker">${kicker}</div>
+              <h2 class="pdf-section-title">${esc(titre)}</h2>
+            </div>
+          </div>
+          <div class="pdf-points">${asListe(items).map((p, i) => `
+            <div class="pdf-point">
+              <span class="pdf-point-num ${cls}-num">${String(i + 1).padStart(2, '0')}</span>
+              <div class="pdf-point-body">
+                <div class="pdf-point-title">${esc(p.titre)}</div>
+                ${p.detail ? `<div class="pdf-point-detail">${enClair(p.detail)}</div>` : ''}
+              </div>
+            </div>`).join('')}</div>
         </section>` : '';
 
-      const fiche = (f, meta) => {
+      const page = (f, meta) => {
         const perso = (f.checkpoints || '').split(SAUT).filter(Boolean);
-        return `<article class="pr-fiche" style="--t:${meta.tint}">
-          <header class="pr-tete">
-            <span class="pr-ico">${meta.icon}</span>
-            <div class="pr-tete-corps">
-              <div class="pr-code">${esc(f.code)}${f.essential ? '<span class="pr-star">★ Top 10</span>' : ''}</div>
-              <h2>${esc(f.title)}</h2>
-              <div class="pr-dom">${esc(f.domain || '')}</div>
+        return `<table class="pdf-doc" style="--t:${meta.tint}">
+          <thead><tr><td><div class="pdf-header-spacer"></div></td></tr></thead>
+          <tfoot><tr><td>
+            <div class="pdf-footer">
+              <span class="pdf-footer-logo-wrap"><img class="pdf-footer-logo" src="assets/logos/btp.png" alt="BTP Expertise" onerror="this.remove()"></span>
+              <span class="pdf-footer-text"><strong>Document interne</strong><br>${esc(f.code)} · édité le ${jour}</span>
             </div>
-          </header>
-          ${f.summary ? `<p class="pr-resume">${enClair(f.summary)}</p>` : ''}
-          ${points('Points clés à maîtriser', f.key_points, 'ok')}
-          ${points('Erreurs fréquentes à éviter', f.common_errors, 'err')}
-          ${points('Points de contrôle du cabinet', perso.map(l => ({ titre: l, detail: '' })), 'perso')}
-          <footer class="pr-bas">
-            <span>BTP Expertise · ${esc(f.code)}</span>
-            ${f.link ? `<span class="pr-lien">${esc(f.link)}</span>` : ''}
-          </footer>
-        </article>`;
+          </td></tr></tfoot>
+          <tbody><tr><td>
+            <div class="pdf-hero">
+              <div class="pdf-hero-icon">${meta.icon}</div>
+              <div class="pdf-hero-body">
+                <div class="pdf-hero-kicker">NORMES DTU${f.domain ? ` · ${esc(f.domain.toUpperCase())}` : ''}${f.essential ? ' · ★ TOP 10' : ''}</div>
+                <h1 class="pdf-hero-title"><span class="pdf-hero-code">${esc(f.code)}</span> — ${esc(f.title)}</h1>
+                ${f.summary ? `<p class="pdf-hero-resume">${enClair(f.summary)}</p>` : ''}
+              </div>
+            </div>
+            <div class="pdf-content-inner">
+              ${section('À MAÎTRISER', 'Points clés à maîtriser', '✓', 'pdf-check', f.key_points)}
+              ${section('À ÉVITER', 'Erreurs fréquentes à éviter', '⚠', 'pdf-warn', f.common_errors)}
+              ${section('SUR PLACE', 'Points de contrôle du cabinet', '☑', 'pdf-site', perso.map(l => ({ titre: l, detail: '' })))}
+              ${f.link ? `<p class="pdf-lien">Texte officiel : ${esc(f.link)}</p>` : ''}
+            </div>
+          </td></tr></tbody>
+        </table>`;
       };
 
       const zone = document.getElementById('print-root') || Object.assign(document.createElement('div'), { id: 'print-root' });
       zone.innerHTML = `
-        <section class="pr-garde">
-          <div class="pr-bandes">${groupes.map(([, m]) => `<i style="background:${m.tint}"></i>`).join('')}</div>
-          <div class="pr-marque">BTP Expertise</div>
-          <h1>Référentiel<br>DTU</h1>
-          <p class="pr-sous">${fiches.length} fiche${fiches.length > 1 ? 's' : ''} · ${groupes.length} domaine${groupes.length > 1 ? 's' : ''}<br>Édition du ${jour}</p>
-          <ol class="pr-somm">${groupes.map(([d, m, l], i) => `
-            <li style="--t:${m.tint}">
-              <span class="pr-somm-num">${String(i + 1).padStart(2, '0')}</span>
-              <span class="pr-somm-ico">${m.icon}</span>
-              <span class="pr-somm-corps"><b>${esc(d)}</b><span>${l.map(f => esc(f.code)).join(' · ')}</span></span>
-              <span class="pr-somm-cnt">${l.length}</span>
-            </li>`).join('')}</ol>
-          <p class="pr-pied">Document de travail interne. Les valeurs sont données en ordre de grandeur et renvoient au texte officiel de la norme.</p>
-        </section>
-        ${groupes.map(([d, meta, l], i) => `
-          <section class="pr-chap" style="--t:${meta.tint}">
-            <div class="pr-chap-tete">
-              <span class="pr-chap-num">${String(i + 1).padStart(2, '0')}</span>
-              <span class="pr-chap-ico">${meta.icon}</span>
-              <div>
-                <div class="pr-chap-kicker">Chapitre ${String(i + 1).padStart(2, '0')}</div>
-                <h2>${esc(d)}</h2>
-                <p>${esc(meta.tagline)}</p>
-              </div>
-              <span class="pr-chap-cnt">${l.length}</span>
+        <table class="pdf-doc pdf-garde">
+          <thead><tr><td><div class="pdf-header-spacer"></div></td></tr></thead>
+          <tbody><tr><td>
+            <div class="pdf-content-inner">
+              <div class="pr-bandes">${groupes.map(([, m]) => `<i style="background:${m.tint}"></i>`).join('')}</div>
+              <div class="pr-marque">BTP Expertise</div>
+              <h1 class="pr-titre">Référentiel DTU</h1>
+              <p class="pr-sous">${fiches.length} fiche${fiches.length > 1 ? 's' : ''} · ${groupes.length} domaine${groupes.length > 1 ? 's' : ''} · édition du ${jour}</p>
+              <ol class="pr-somm">${groupes.map(([d, m, l], i) => `
+                <li style="--t:${m.tint}">
+                  <span class="pr-somm-num">${String(i + 1).padStart(2, '0')}</span>
+                  <span class="pr-somm-ico">${m.icon}</span>
+                  <span class="pr-somm-corps"><b>${esc(d)}</b><span>${l.map(f => esc(f.code)).join(' · ')}</span></span>
+                  <span class="pr-somm-cnt">${l.length}</span>
+                </li>`).join('')}</ol>
+              <p class="pr-pied">Document de travail interne. Les valeurs sont données en ordre de grandeur et renvoient au texte officiel de la norme.</p>
             </div>
-            ${l.map(f => fiche(f, meta)).join('')}
-          </section>`).join('')}`;
+          </td></tr></tbody>
+        </table>
+        ${groupes.map(([, meta, l]) => l.map(f => page(f, meta)).join('')).join('')}`;
 
       if (!zone.parentNode) document.body.appendChild(zone);
       document.body.classList.add('impression');
