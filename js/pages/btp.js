@@ -384,19 +384,44 @@ export const btpBasePage = {
 };
 
 // ---------------------------------------------------------------- Fiches DTU
-// Le référentiel du cabinet : ce que dit la norme, ce qu'on constate sur le terrain,
-// et les points de contrôle propres au cabinet. Les fiches viennent du tableau de bord
-// RGD Renova (lot7) ; points clés et erreurs fréquentes sont des listes {titre, detail}.
+// Présentation reprise du centre de ressources du tableau de bord RGD Renova :
+// les fiches sont rangées en chapitres par domaine, et une fiche s'ouvre en pleine
+// page — hero, points clés à maîtriser, erreurs fréquentes à éviter.
+// Les teintes ci-dessous appartiennent au contenu (le domaine du bâtiment), pas à
+// l'interface : l'accent du CRM reste celui de la structure ouverte.
+const DOMAINES = {
+  'Maçonnerie': { icon: '🧱', tint: '#a26a3c', tagline: 'Murs porteurs, chaînages, dallages et enduits — le squelette du bâtiment' },
+  'Charpente': { icon: '🪵', tint: '#8e6c3c', tagline: 'Structures bois, ossatures et façades — la colonne vertébrale' },
+  'Couverture': { icon: '🏠', tint: '#d9472b', tagline: 'Tuiles, ardoises, zinc — la première ligne de défense contre les intempéries' },
+  'Étanchéité': { icon: '💧', tint: '#3b9eae', tagline: 'Toitures-terrasses, planchers extérieurs — zéro tolérance à l\'infiltration' },
+  'Façades': { icon: '🏛️', tint: '#a89478', tagline: 'Enduits, revêtements, chapes — la peau visible du bâti' },
+  'Fondations': { icon: '⛰️', tint: '#7a6a55', tagline: 'Semelles, dallages, cuvelage — ce sur quoi tout repose' },
+  'Plâtrerie': { icon: '🧰', tint: '#9a9a9a', tagline: 'Cloisons sèches, doublages, plafonds — le plus utilisé en rénovation' },
+  'Isolation': { icon: '🧥', tint: '#d9a527', tagline: 'ITI, combles, planchers — au cœur de la rénovation énergétique' },
+  'Plomberie': { icon: '🚿', tint: '#3b9eae', tagline: 'Alimentation, évacuation, ANC — hygiène et confort quotidien' },
+  'Chauffage': { icon: '🔥', tint: '#FD7A2C', tagline: 'Chaudières, planchers chauffants — la performance thermique' },
+  'Ventilation': { icon: '🌀', tint: '#5b8def', tagline: 'VMC simple et double flux — évacuation de l\'humidité intérieure' },
+  'Sols': { icon: '🟫', tint: '#8e6c3c', tagline: 'Parquets, PVC, résines — le sol qui vit tous les jours' },
+  'Carrelage': { icon: '◼️', tint: '#4a4a4a', tagline: 'Sols scellés et collés — un des DTU les plus expertisés' },
+  'Parquet': { icon: '🪵', tint: '#8e6c3c', tagline: 'Cloué, collé, flottant — trois familles, trois DTU distincts' },
+  'Peinture': { icon: '🎨', tint: '#FD7A2C', tagline: 'Peintures, papiers peints, revêtements muraux — la finition visible' },
+  'Finitions': { icon: '🎨', tint: '#FD7A2C', tagline: 'Peintures et revêtements muraux — la finition visible' },
+  'Menuiseries': { icon: '🪟', tint: '#5b8def', tagline: 'Fenêtres et portes — étanchéité à l\'air et à l\'eau critique' },
+  'Électricité': { icon: '⚡', tint: '#d9a527', tagline: 'NF C 15-100 — la sécurité des personnes' },
+  'Fumisterie': { icon: '🔥', tint: '#b0553a', tagline: 'Conduits de fumée et raccordements — risque incendie et monoxyde' },
+};
+const domaineMeta = (d) => DOMAINES[d] || { icon: '📐', tint: '#7a8794', tagline: 'Normes techniques du domaine' };
+
 const DTU_FORM = [
   { key: 'code', label: 'Numéro', required: true, half: true, placeholder: 'NF DTU 20.1' },
   { key: 'domain', label: 'Domaine', half: true, placeholder: 'Maçonnerie' },
   { key: 'title', label: 'Intitulé', required: true },
   { key: 'summary', label: 'Ce que couvre la norme', type: 'textarea', rows: 3 },
-  { key: 'key_points', label: 'Points clés', type: 'textarea', rows: 8, hint: 'Une ligne par point, sous la forme « Titre :: explication ».' },
-  { key: 'common_errors', label: 'Erreurs fréquentes', type: 'textarea', rows: 6, hint: 'Même forme : « Titre :: ce qu\'on observe ».' },
-  { key: 'checkpoints', label: 'Points de contrôle du cabinet', type: 'textarea', rows: 6, hint: 'Votre pratique sur le terrain, une ligne par point.' },
+  { key: 'key_points', label: 'Points clés à maîtriser', type: 'textarea', rows: 8, hint: 'Une ligne par point, sous la forme « Titre :: explication ».' },
+  { key: 'common_errors', label: 'Erreurs fréquentes à éviter', type: 'textarea', rows: 6, hint: 'Même forme : « Titre :: ce qu\'on observe ».' },
+  { key: 'checkpoints', label: 'Points de contrôle du cabinet', type: 'textarea', rows: 6, hint: 'Votre pratique de terrain, une ligne par point.' },
   { key: 'link', label: 'Lien vers la norme', half: true, placeholder: 'https://…' },
-  { key: 'essential', label: 'Mettre en avant dans la liste', type: 'checkbox', half: true },
+  { key: 'essential', label: 'Marquer « Top 10 »', type: 'checkbox', half: true },
   { key: 'notes', label: 'Notes internes', type: 'textarea', rows: 3 },
 ];
 
@@ -414,7 +439,7 @@ export const btpDtuPage = {
   render(root) {
     if (guard(root)) return {};
     const coquille = poser(root);
-    const state = { q: '', domaine: '', essentiels: false, focus: null };
+    const state = { q: '', domaine: '', essentiels: false, fiche: null, focus: null };
 
     const editer = (f, apres) => {
       const valeurs = f ? { ...f, key_points: listeVersTexte(f.key_points), common_errors: listeVersTexte(f.common_errors) } : {};
@@ -433,67 +458,133 @@ export const btpDtuPage = {
       };
       m.querySelector('#dtu-del')?.addEventListener('click', async () => {
         if (!await confirm(`Supprimer la fiche ${f.code} ?`)) return;
-        await db.remove('dtu_sheets', f.id); closeModal(true); toast('Fiche supprimée'); apres();
+        await db.remove('dtu_sheets', f.id); closeModal(true); toast('Fiche supprimée'); state.fiche = null; apres();
       });
     };
 
-    const bloc = (titre, liste, cls) => asListe(liste).length ? `
-      <h3 class="dtu-h">${titre}</h3>
-      <div class="dtu-points ${cls}">${asListe(liste).map(p => `
-        <div class="dtu-point"><b>${esc(p.titre)}</b>${p.detail ? `<span>${enClair(p.detail)}</span>` : ''}</div>`).join('')}</div>` : '';
+    // ---- Une fiche, en pleine page
+    const section = (titre, kicker, icone, items, type, tint) => asListe(items).length ? `
+      <section class="fiche-section ${type}">
+        <div class="fiche-section-head">
+          <span class="fiche-section-icon" style="background:${tint}1e;color:${tint}">${icone}</span>
+          <div><div class="fiche-section-kicker">${kicker}</div><h2>${esc(titre)}</h2></div>
+        </div>
+        <div class="fiche-points">${asListe(items).map((p, i) => `
+          <div class="fiche-point">
+            <span class="fiche-point-num" style="background:${tint}1e;color:${tint}">${i + 1}</span>
+            <div><div class="fiche-point-title">${esc(p.titre)}</div>${p.detail ? `<div class="fiche-point-detail">${enClair(p.detail)}</div>` : ''}</div>
+          </div>`).join('')}</div>
+      </section>` : '';
 
-    const consulter = (f) => openModal(`${f.code} — ${f.title}`, `
-      <div class="dtu-tete">
-        ${f.domain ? `<span class="pill">${esc(f.domain)}</span>` : ''}
-        ${f.essential ? '<span class="pill ok">Essentiel</span>' : ''}
-        ${f.link ? `<a class="btn ghost sm" href="${esc(f.link)}" target="_blank" rel="noopener">Voir la norme ↗</a>` : ''}
-      </div>
-      ${f.summary ? `<p class="dtu-resume">${enClair(f.summary)}</p>` : ''}
-      ${bloc('Points clés', f.key_points, '')}
-      ${bloc('Erreurs fréquentes', f.common_errors, 'err')}
-      <h3 class="dtu-h">Points de contrôle du cabinet</h3>
-      ${f.checkpoints ? `<ul class="btp-points">${f.checkpoints.split('\n').filter(Boolean).map(l => `<li>${esc(l)}</li>`).join('')}</ul>`
-        : '<div class="empty">Rien de saisi. « Modifier » pour y mettre votre pratique de terrain.</div>'}
-      ${f.notes ? `<h3 class="dtu-h">Notes internes</h3><p>${enClair(f.notes)}</p>` : ''}
-      <div class="form-actions"><button type="button" class="btn ghost" data-close>Fermer</button><button type="button" class="btn" id="dtu-edit">Modifier</button></div>`,
-      { wide: true, onOpen: (m) => { m.querySelector('#dtu-edit').onclick = () => { closeModal(true); editer(f, draw); }; } });
+    const ficheHtml = (f) => {
+      const meta = domaineMeta(f.domain);
+      const perso = (f.checkpoints || '').split('\n').filter(Boolean);
+      return `
+        <div class="fiche-topbar">
+          <button type="button" class="btn ghost sm" id="f-back">← Toutes les fiches</button>
+          <span class="grow"></span>
+          ${f.link ? `<a class="btn ghost sm" href="${esc(f.link)}" target="_blank" rel="noopener">Voir la norme ↗</a>` : ''}
+          <button type="button" class="btn sm" id="f-edit">Modifier</button>
+        </div>
+        <article class="fiche-detail">
+          <header class="fiche-hero" style="background:linear-gradient(135deg,${meta.tint}18 0%,${meta.tint}08 100%)">
+            <div class="fiche-hero-icon" style="background:${meta.tint}25;color:${meta.tint}">${meta.icon}</div>
+            <div>
+              <div class="fiche-hero-meta">
+                <span class="fiche-hero-eyebrow" style="color:${meta.tint}">Normes DTU</span>
+                ${f.domain ? `<span class="fiche-hero-sep">·</span><span>${esc(f.domain)}</span>` : ''}
+                ${f.essential ? '<span class="fiche-hero-badge">★ Top 10</span>' : ''}
+              </div>
+              <h1 class="fiche-hero-title"><span style="color:${meta.tint}">${esc(f.code)}</span> — ${esc(f.title)}</h1>
+              ${f.summary ? `<p class="fiche-hero-resume">${enClair(f.summary)}</p>` : ''}
+            </div>
+          </header>
+          <div class="fiche-content">
+            ${section('Points clés à maîtriser', 'À MAÎTRISER', '✓', f.key_points, 'ok', meta.tint)}
+            ${section('Erreurs fréquentes à éviter', 'À ÉVITER', '⚠', f.common_errors, 'err', 'var(--red)')}
+            ${section('Points de contrôle du cabinet', 'SUR PLACE', '☑', perso.map(l => ({ titre: l, detail: '' })), 'perso', 'var(--accent)')}
+            ${!perso.length ? '<div class="card"><div class="empty">Aucun point de contrôle du cabinet. « Modifier » pour y mettre votre pratique de terrain.</div></div>' : ''}
+            ${f.notes ? `<section class="fiche-section"><div class="fiche-section-head"><div><div class="fiche-section-kicker">INTERNE</div><h2>Notes</h2></div></div><p>${enClair(f.notes)}</p></section>` : ''}
+          </div>
+        </article>`;
+    };
+
+    // ---- La liste, en chapitres par domaine
+    const carte = (f) => {
+      const meta = domaineMeta(f.domain);
+      const pts = asListe(f.key_points).length, errs = asListe(f.common_errors).length;
+      const perso = (f.checkpoints || '').split('\n').filter(Boolean).length;
+      return `<button type="button" class="fiche-card" data-f="${f.id}" style="--tint:${meta.tint}">
+        <span class="fiche-card-accent"></span>
+        <div class="fiche-card-head">
+          <span class="fiche-card-code">${esc(f.code)}</span>
+          ${f.essential ? '<span class="fiche-card-badge">★ Top 10</span>' : ''}
+        </div>
+        <div class="fiche-card-title">${esc(f.title)}</div>
+        ${f.summary ? `<div class="fiche-card-resume">${esc(f.summary)}</div>` : ''}
+        <div class="fiche-card-foot">
+          <span class="muted small">${pts ? `${pts} point${pts > 1 ? 's' : ''} clé${pts > 1 ? 's' : ''}` : 'à documenter'}${errs ? ` · ${errs} erreur${errs > 1 ? 's' : ''}` : ''}${perso ? ` · ${perso} contrôle${perso > 1 ? 's' : ''}` : ''}</span>
+          <span class="fiche-card-arrow">Lire la fiche →</span>
+        </div>
+      </button>`;
+    };
 
     const draw = () => {
-      const ts = terms(state.q);
       const toutes = db.t('dtu_sheets').slice()
         .sort((a, b) => (a.position || 0) - (b.position || 0) || String(a.code).localeCompare(String(b.code)));
-      const domaines = [...new Set(toutes.map(f => f.domain).filter(Boolean))].sort();
+
+      if (state.fiche) {
+        const f = db.byId('dtu_sheets', state.fiche);
+        if (!f) { state.fiche = null; return draw(); }
+        root.innerHTML = cadre('#/btp/dtu', 'DTU', ficheHtml(f));
+        root.querySelector('#f-back').onclick = () => { state.fiche = null; draw(); };
+        root.querySelector('#f-edit').onclick = () => editer(f, draw);
+        return;
+      }
+
+      const ts = terms(state.q);
+      const domaines = [...new Set(toutes.map(f => f.domain).filter(Boolean))];
       const liste = toutes
         .filter(f => !state.domaine || f.domain === state.domaine)
         .filter(f => !state.essentiels || f.essential)
         .filter(f => hit([f.code, f.title, f.domain, f.summary, f.checkpoints, f.notes,
           listeVersTexte(f.key_points), listeVersTexte(f.common_errors)], ts));
-      const documentees = toutes.filter(f => asListe(f.key_points).length).length;
+      const parDomaine = domaines
+        .map(d => [d, liste.filter(f => f.domain === d)])
+        .concat([['Sans domaine', liste.filter(f => !f.domain)]])
+        .filter(([, l]) => l.length);
 
       root.innerHTML = cadre('#/btp/dtu', 'DTU', `
         <div class="toolbar">
           ${searchInput('b-q', state, 'Rechercher un numéro, un mot du titre, un point de contrôle…')}
-          <select id="b-dom"><option value="">Tous les domaines</option>${domaines.map(d => `<option ${state.domaine === d ? 'selected' : ''}>${esc(d)}</option>`).join('')}</select>
-          <button type="button" class="btn ghost sm ${state.essentiels ? 'on' : ''}" id="b-ess" aria-pressed="${state.essentiels}">★ Essentiels</button>
-          <span class="muted small">${liste.length} fiche${liste.length > 1 ? 's' : ''}${documentees ? ` · ${documentees} documentée${documentees > 1 ? 's' : ''}` : ''}</span>
+          <select id="b-dom"><option value="">Tous les domaines</option>${domaines.slice().sort().map(d => `<option ${state.domaine === d ? 'selected' : ''}>${esc(d)}</option>`).join('')}</select>
+          <button type="button" class="btn ghost sm ${state.essentiels ? 'on' : ''}" id="b-ess" aria-pressed="${state.essentiels}">★ Top 10</button>
+          <span class="muted small">${liste.length} fiche${liste.length > 1 ? 's' : ''}</span>
           <span class="grow"></span>
           <button class="btn" id="b-new">+ Fiche</button>
         </div>
-        <div class="btp-cards">${liste.map(f => {
-          const pts = asListe(f.key_points).length, errs = asListe(f.common_errors).length;
-          const perso = (f.checkpoints || '').split('\n').filter(Boolean).length;
-          return `<button type="button" class="btp-card ${f.essential ? 'ess' : ''}" data-f="${f.id}">
-            <span class="btp-code">${esc(f.code)}${f.essential ? ' <span class="dtu-star">★</span>' : ''}</span>
-            <span class="btp-title">${esc(f.title)}</span>
-            <span class="small muted">${esc(f.domain || '—')}${pts ? ` · ${pts} point${pts > 1 ? 's' : ''} clé${pts > 1 ? 's' : ''}` : ''}${errs ? ` · ${errs} erreur${errs > 1 ? 's' : ''}` : ''}${perso ? ` · ${perso} contrôle${perso > 1 ? 's' : ''}` : ''}</span>
-          </button>`;
-        }).join('') || '<div class="card"><div class="empty">Aucune fiche. Lancez <code>supabase/lot7-btp-dtu.sql</code> pour charger le référentiel, ou créez la première.</div></div>'}</div>`);
+        ${parDomaine.map(([d, l], i) => {
+          const meta = domaineMeta(d);
+          return `<section class="domaine-section">
+            <div class="domaine-chapter" style="background:linear-gradient(135deg,${meta.tint}12 0%,${meta.tint}03 100%)">
+              <div class="domaine-chapter-num" style="color:${meta.tint}">${String(i + 1).padStart(2, '0')}</div>
+              <div class="domaine-chapter-icon" style="background:${meta.tint}22;color:${meta.tint}">${meta.icon}</div>
+              <div class="domaine-chapter-body">
+                <div class="domaine-chapter-kicker" style="color:${meta.tint}">CHAPITRE ${String(i + 1).padStart(2, '0')}</div>
+                <h2>${esc(d)}</h2>
+                <p>${esc(meta.tagline)}</p>
+              </div>
+              <div class="domaine-chapter-count" style="background:${meta.tint}">${l.length}</div>
+            </div>
+            <div class="fiches-grid">${l.map(carte).join('')}</div>
+          </section>`;
+        }).join('') || '<div class="card"><div class="empty">Aucune fiche. Lancez <code>supabase/lot7-btp-dtu.sql</code> pour charger le référentiel, ou créez la première.</div></div>'}`);
 
       bindSearch(root, 'b-q', state, draw); restoreFocus(root, state);
       root.querySelector('#b-dom').onchange = e => { state.domaine = e.target.value; draw(); };
       root.querySelector('#b-ess').onclick = () => { state.essentiels = !state.essentiels; draw(); };
       root.querySelector('#b-new').onclick = () => editer(null, draw);
-      root.querySelectorAll('[data-f]').forEach(b => b.onclick = () => consulter(db.byId('dtu_sheets', b.dataset.f)));
+      root.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { state.fiche = b.dataset.f; draw(); });
     };
 
     draw();

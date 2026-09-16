@@ -432,18 +432,59 @@ body:has(.esp-app) .subnav .datepill { display: none; }
 .btp-card:hover { border-color: var(--accent); box-shadow: var(--shadow-lift); }
 .btp-code { font-family: var(--font-display); font-weight: 700; color: var(--accent-ink); letter-spacing: -.01em; }
 .btp-title { font-size: 13px; line-height: 1.35; }
-/* Fiche DTU : ce que dit la norme, ce qu'on constate, ce que contrôle le cabinet */
-.btp-card.ess { border-left-color: var(--amber); }
-.dtu-star { color: var(--amber); }
-.dtu-tete { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
-.dtu-resume { margin: 0 0 6px; font-size: 14.5px; color: var(--text); }
-.dtu-h { margin: 18px 0 8px; }
-.dtu-points { display: flex; flex-direction: column; gap: 10px; }
-.dtu-point { background: var(--card-2); border-radius: 10px; border-left: 3px solid var(--accent); padding: 10px 13px; }
-.dtu-point b { display: block; font-size: 13.5px; margin-bottom: 3px; }
-.dtu-point span { font-size: 13px; color: var(--muted); }
-.dtu-points.err .dtu-point { border-left-color: var(--red); }
+/* Fiches DTU — présentation du centre de ressources RGD Renova :
+   chapitres par domaine, cartes, puis la fiche en pleine page. Les teintes
+   viennent du contenu (--tint posé par le JS), l'interface garde son accent. */
+.domaine-section { display: flex; flex-direction: column; gap: 14px; }
+.domaine-chapter { display: flex; align-items: center; gap: 16px; border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 20px; }
+.domaine-chapter-num { font-family: var(--font-display); font-size: 30px; font-weight: 700; line-height: 1; letter-spacing: -.03em; opacity: .55; }
+.domaine-chapter-icon { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 12px; font-size: 21px; flex-shrink: 0; }
+.domaine-chapter-body { flex: 1; min-width: 0; }
+.domaine-chapter-kicker { font-size: 10.5px; font-weight: 700; letter-spacing: .12em; }
+.domaine-chapter-body h2 { margin: 2px 0 3px; }
+.domaine-chapter-body p { margin: 0; font-size: 12.5px; color: var(--muted); }
+.domaine-chapter-count { display: grid; place-items: center; min-width: 30px; height: 30px; padding: 0 9px; border-radius: 999px; color: #fff; font-weight: 700; font-size: 13px; flex-shrink: 0; }
+
+.fiches-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 14px; }
+.fiche-card { position: relative; overflow: hidden; display: flex; flex-direction: column; gap: 7px; align-items: stretch; text-align: left; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px 14px; box-shadow: var(--shadow); transition: transform .13s, box-shadow .13s, border-color .13s; }
+.fiche-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-lift); border-color: var(--tint); }
+.fiche-card-accent { position: absolute; inset: 0 0 auto 0; height: 3px; background: var(--tint); opacity: 0; transition: opacity .13s; }
+.fiche-card:hover .fiche-card-accent { opacity: 1; }
+.fiche-card-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.fiche-card-code { font-family: var(--font-display); font-weight: 700; color: var(--tint); letter-spacing: -.01em; }
+.fiche-card-badge { background: color-mix(in srgb, var(--tint) 14%, transparent); color: var(--tint); border-radius: 999px; padding: 2px 9px; font-size: 11px; font-weight: 700; }
+.fiche-card-title { font-size: 13.5px; font-weight: 600; line-height: 1.35; }
+.fiche-card-resume { font-size: 12.5px; color: var(--muted); line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.fiche-card-foot { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-top: 4px; padding-top: 9px; border-top: 1px solid var(--line); }
+.fiche-card-arrow { color: var(--tint); font-size: 12px; font-weight: 700; white-space: nowrap; }
+
+.fiche-topbar { display: flex; align-items: center; gap: 8px; }
+.fiche-detail { display: flex; flex-direction: column; gap: 18px; }
+.fiche-hero { display: flex; align-items: flex-start; gap: 18px; border: 1px solid var(--line); border-radius: var(--radius); padding: 22px 24px; }
+.fiche-hero-icon { display: grid; place-items: center; width: 54px; height: 54px; border-radius: 14px; font-size: 26px; flex-shrink: 0; }
+.fiche-hero-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+.fiche-hero-eyebrow { font-weight: 700; text-transform: uppercase; letter-spacing: .1em; font-size: 11px; }
+.fiche-hero-badge { background: var(--card); border: 1px solid var(--line-strong); border-radius: 999px; padding: 2px 9px; font-size: 11px; font-weight: 700; }
+.fiche-hero-title { font-family: var(--font-display); font-size: 26px; font-weight: 700; letter-spacing: -.02em; margin: 6px 0 0; }
+.fiche-hero-resume { margin: 8px 0 0; color: var(--muted); font-size: 14px; max-width: 70ch; }
+.fiche-content { display: flex; flex-direction: column; gap: 18px; }
+.fiche-section { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px 22px; box-shadow: var(--shadow); }
+.fiche-section-head { display: flex; align-items: center; gap: 13px; margin-bottom: 16px; }
+.fiche-section-icon { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; font-size: 16px; flex-shrink: 0; }
+.fiche-section-kicker { font-size: 10.5px; font-weight: 700; letter-spacing: .12em; color: var(--muted-2); }
+.fiche-section-head h2 { margin: 1px 0 0; }
+.fiche-points { display: flex; flex-direction: column; gap: 12px; }
+.fiche-point { display: flex; gap: 13px; }
+.fiche-point-num { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 8px; font-size: 12.5px; font-weight: 700; flex-shrink: 0; }
+.fiche-point-title { font-size: 13.5px; font-weight: 600; margin-bottom: 3px; }
+.fiche-point-detail { font-size: 13px; color: var(--muted); line-height: 1.55; max-width: 85ch; }
+.fiche-section.err .fiche-point-title { color: var(--red); }
 .btn.ghost.on { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+@media (prefers-reduced-motion: reduce) { .fiche-card { transition: none; } }
+@media (max-width: 720px) {
+  .domaine-chapter { flex-wrap: wrap; }
+  .fiche-hero { flex-direction: column; }
+}
 
 .btp-points { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
 .btp-mail { border-top: 1px solid var(--line); padding: 14px 0 4px; }
