@@ -244,6 +244,16 @@ export const btpTodoPage = {
 };
 
 // ---------------------------------------------------------------- Base de données
+// D'où viennent les prospects. Chaque origine regroupe les canaux du CRM qui lui
+// correspondent — la prise de rendez-vous du site écrit « Site internet direct ».
+// À ajuster ici si le cabinet range ses canaux autrement.
+const ORIGINES = [
+  { key: 'site', label: 'Site', canaux: ['Site internet direct', 'Google organique / SEO', 'Google Ads'] },
+  { key: 'partenaires', label: 'Partenaires', canaux: ['Partenaire / apporteur', 'Recommandation client', 'Réseau professionnel'] },
+  { key: 'meta', label: 'Meta Ads', canaux: ['Meta Ads', 'Instagram organique', 'Facebook organique'] },
+  { key: 'direct', label: 'Direct', canaux: ['Prospection directe', 'Téléphone / autre', 'Ancien client'] },
+];
+
 const VUES = [
   { key: 'clients', label: 'Clients' },
   { key: 'prospects', label: 'Prospects' },
@@ -257,7 +267,7 @@ export const btpBasePage = {
   render(root) {
     if (guard(root)) return {};
     const coquille = poser(root);
-    const state = { vue: 'clients', q: '', canal: '', focus: null };
+    const state = { vue: 'clients', q: '', canal: '', origine: '', focus: null };
 
     // Créer depuis cet écran, c'est créer pour BTP Expertise : l'activité est cochée
     // d'avance, et le type suit la vue ouverte. Sans cela la fiche n'apparaîtrait pas ici.
@@ -268,6 +278,8 @@ export const btpBasePage = {
       if (!f) return;
       const coche = f.querySelector(`input[name="activities"][value="${KEY}"]`);
       if (coche) coche.checked = true;
+      // On est dans l'espace du cabinet : l'activité est décidée, inutile de la demander.
+      coche?.closest('.field')?.setAttribute('hidden', '');
       if (surOrg && state.vue === 'courtiers') { const j = f.querySelector('[name="partner_job"]'); if (j) j.value = 'Courtier'; }
       if (!surOrg && state.vue !== 'tous') { const t = f.querySelector('[name="type"]'); if (t) t.value = state.vue === 'clients' ? 'Client' : 'Prospect'; }
     };
@@ -291,8 +303,10 @@ export const btpBasePage = {
         colonnes = ['Nom', 'Métier', 'Ville', 'Téléphone', 'Email', 'Affaires apportées'];
       } else {
         const filtre = { clients: (c) => c.type === 'Client', prospects: (c) => c.type === 'Prospect', tous: () => true }[state.vue];
+        const origine = ORIGINES.find(o => o.key === state.origine);
         lignes = contacts.filter(filtre)
           .filter(c => !state.canal || c.channel === state.canal)
+          .filter(c => !origine || origine.canaux.includes(c.channel))
           .filter(c => hit([contactName(c), c.email, c.phone, c.city, c.channel], ts))
           .map(c => {
             const d = deals().find(x => x.contact_id === c.id);
@@ -318,9 +332,15 @@ export const btpBasePage = {
           <button class="btn ghost sm" id="b-export">Export CSV</button>
           <button class="btn" id="b-new">+ ${surOrg ? (state.vue === 'courtiers' ? 'Courtier' : 'Partenaire') : 'Contact'}</button>
         </div>
+        ${state.vue === 'prospects' ? `<div class="toolbar">
+          <div class="seg">
+            <button data-origine="" class="${state.origine ? '' : 'active'}">Toutes <span class="cnt">${contacts.filter(c => c.type === 'Prospect').length}</span></button>
+            ${ORIGINES.map(o => `<button data-origine="${o.key}" class="${state.origine === o.key ? 'active' : ''}">${o.label} <span class="cnt">${contacts.filter(c => c.type === 'Prospect' && o.canaux.includes(c.channel)).length}</span></button>`).join('')}
+          </div>
+        </div>` : ''}
         <div class="toolbar">
           ${searchInput('b-q', state, 'Rechercher un nom, une ville, un email…')}
-          ${surOrg ? '' : `<select id="b-canal"><option value="">Tous les canaux</option>${CHANNELS.map(c => `<option ${state.canal === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>`}
+          ${surOrg || state.vue === 'prospects' ? '' : `<select id="b-canal"><option value="">Tous les canaux</option>${CHANNELS.map(c => `<option ${state.canal === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>`}
           <span class="muted small">${lignes.length} ligne${lignes.length > 1 ? 's' : ''}</span>
         </div>
         <div class="card">
@@ -339,7 +359,8 @@ export const btpBasePage = {
         </div>`);
 
       bindSearch(root, 'b-q', state, draw); restoreFocus(root, state);
-      root.querySelectorAll('[data-vue]').forEach(b => b.onclick = () => { state.vue = b.dataset.vue; draw(); });
+      root.querySelectorAll('[data-vue]').forEach(b => b.onclick = () => { state.vue = b.dataset.vue; state.origine = ''; draw(); });
+      root.querySelectorAll('[data-origine]').forEach(b => b.onclick = () => { state.origine = b.dataset.origine; draw(); });
       root.querySelector('#b-canal')?.addEventListener('change', e => { state.canal = e.target.value; draw(); });
       // La ligne ouvre la fiche complète ; le crayon va droit au formulaire, d'où l'on
       // peut aussi supprimer (le CRM refuse la suppression d'un contact qui porte des affaires).
