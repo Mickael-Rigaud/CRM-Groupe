@@ -12,7 +12,9 @@ export const TABLES = ['profiles', 'organisations', 'contacts', 'deals', 'activi
   // documents (pièces jointes)
   'documents',
   // espace BTP Expertise : référentiels internes
-  'dtu_sheets', 'mail_templates'];
+  'dtu_sheets', 'mail_templates',
+  // chiffres poussés par les outils externes (tableau de bord RGD Renova)
+  'structure_stats'];
 const LS_FILES = 'crm_local_files';
 const LS_KEY = 'crm_local_v1';
 const LS_USER = 'crm_local_user';

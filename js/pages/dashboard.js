@@ -14,20 +14,34 @@ export const dashboardPage = {
     const draw = () => {
       const r = periodRange(state.period);
       const all = scope.deals();
+      // Chiffres deposes par un outil externe (tableau de bord RGD Renova) : ils priment
+      // sur le calcul interne, puisque la structure se pilote ailleurs.
+      const pousse = (k) => db.t('structure_stats').find(x => x.activity === k);
       // Leads = les prospects de la structure, exactement ce que compte l'onglet « Prospects »
       // de sa base de données (contacts portant l'activité, type « Prospect »). Ce total
       // ignore volontairement la période : sinon les deux écrans afficheraient deux nombres.
       const prospects = (k) => scope.contacts().filter(c => (c.activities || []).includes(k) && c.type === 'Prospect').length;
       const rows = ACTIVITY_KEYS.map(k => {
         const ds = all.filter(d => d.activity === k);
-        const leads = prospects(k);
+        const ext = pousse(k);
+        const leads = ext && ext.prospects != null ? ext.prospects : prospects(k);
         // Un RDV compte au moment où l'affaire a atteint l'étape de rendez-vous de son pipeline
         const rdv = ds.filter(d => reachedRdv(d) && inRange((d.stage_history || []).find(h => h.stage === ACTIVITIES[k].rdvStage)?.at || d.won_at || d.created_at, r)).length;
         const won = ds.filter(d => d.status === 'won' && inRange(d.won_at, r));
-        const ca = won.reduce((s, d) => s + (Number(d.amount) || 0), 0);
-        return { k, leads, rdv, wonN: won.length, ca, basket: won.length ? ca / won.length : null };
+        // Mois déposés par l'outil externe qui tombent dans la période choisie
+        const mois = ext ? (ext.revenue || []).filter(m => inRange(m.month + '-01', r)) : [];
+        const dehors = ext && (ext.revenue || []).length > 0;   // l'outil externe fait foi pour cette structure
+        const ca = dehors ? mois.reduce((s, m) => s + (Number(m.amount) || 0), 0) : won.reduce((s, d) => s + (Number(d.amount) || 0), 0);
+        // Panier moyen = CA ÷ affaires signées : les deux nombres doivent venir de la même
+        // source, sinon on divise un CA externe par un compte interne. L'outil externe peut
+        // envoyer « deals » avec chaque mois ; sans lui, le panier reste inconnu.
+        const signees = dehors
+          ? (mois.some(m => m.deals != null) ? mois.reduce((s, m) => s + (Number(m.deals) || 0), 0) : null)
+          : won.length;
+        return { k, leads, rdv, wonN: signees, ca, basket: signees ? ca / signees : null, ext };
       });
-      const tot = rows.reduce((t, x) => ({ leads: t.leads + x.leads, rdv: t.rdv + x.rdv, wonN: t.wonN + x.wonN, ca: t.ca + x.ca }), { leads: 0, rdv: 0, wonN: 0, ca: 0 });
+      const tot = rows.reduce((t, x) => ({ leads: t.leads + x.leads, rdv: t.rdv + x.rdv, wonN: t.wonN + (x.wonN || 0), ca: t.ca + x.ca }), { leads: 0, rdv: 0, wonN: 0, ca: 0 });
+      const totFiable = rows.every(x => x.wonN !== null || !x.ca);   // un CA sans compte d'affaires fausserait le panier global
 
       root.innerHTML = `
         ${db.demo ? '<div class="demo-banner"><b>Mode démo</b> — données d\'exemple stockées dans ce navigateur.</div>' : ''}
@@ -44,8 +58,10 @@ export const dashboardPage = {
               <td class="num">${x.leads}</td><td class="num">${x.rdv}</td>
               <td class="num"><b>${eur(x.ca)}</b></td>
               <td class="num">${x.basket === null ? '—' : eur(x.basket)}</td></tr>`).join('')}
-            <tr class="total"><td>Total</td><td class="num">${tot.leads}</td><td class="num">${tot.rdv}</td><td class="num">${eur(tot.ca)}</td><td class="num">${tot.wonN ? eur(tot.ca / tot.wonN) : '—'}</td></tr>
-          </tbody></table></div></div>
+            <tr class="total"><td>Total</td><td class="num">${tot.leads}</td><td class="num">${tot.rdv}</td><td class="num">${eur(tot.ca)}</td><td class="num">${totFiable && tot.wonN ? eur(tot.ca / tot.wonN) : '—'}</td></tr>
+          </tbody></table></div>
+          ${rows.filter(x => x.ext).length ? `<p class="muted small" style="margin:12px 0 0">${rows.filter(x => x.ext).map(x => `${esc(ACTIVITIES[x.k].label)} : chiffres déposés par ${esc(x.ext.source || 'son outil')}, mis à jour le ${new Date(x.ext.updated_at).toLocaleDateString('fr-FR')}`).join(' · ')}</p>` : ''}
+        </div>
 
         <div class="card"><div class="card-head"><h2>CA HT par structure</h2><span class="muted small">12 derniers mois · une couleur par structure</span></div>
           <div class="chart-box" style="height:320px"><canvas id="db-chart"></canvas></div></div>`;
@@ -64,7 +80,13 @@ export const dashboardPage = {
       const canvas = root.querySelector('#db-chart'); if (!canvas || !window.Chart) return;
       const months = []; const now = new Date();
       for (let i = 11; i >= 0; i--) { const d = new Date(now.getFullYear(), now.getMonth() - i, 1); months.push({ key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`, label: d.toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' }) }); }
-      const caOf = (k, m) => deals.filter(d => d.activity === k && d.status === 'won' && (d.won_at || '').slice(0, 7) === m).reduce((s, d) => s + (Number(d.amount) || 0), 0);
+      const caOf = (k, m) => {
+        const ext = db.t('structure_stats').find(x => x.activity === k);
+        const ligne = ext && (ext.revenue || []).find(v => v.month === m);
+        if (ligne) return Number(ligne.amount) || 0;
+        if (ext && (ext.revenue || []).length) return 0;   // l'outil externe fait foi, même à zéro
+        return deals.filter(d => d.activity === k && d.status === 'won' && (d.won_at || '').slice(0, 7) === m).reduce((s, d) => s + (Number(d.amount) || 0), 0);
+      };
       // Le total de chaque structure est écrit dans la légende : la couleur n'est jamais seule à porter l'information
       const datasets = ACTIVITY_KEYS.map(k => {
         const data = months.map(m => caOf(k, m.key));
