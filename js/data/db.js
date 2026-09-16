@@ -4,7 +4,7 @@
 import { CONFIG } from '../config.js';
 import { SEED, SEED_USERS } from './seed.js';
 
-export const TABLES = ['profiles', 'organisations', 'contacts', 'deals', 'activities', 'events', 'ad_spend', 'settings',
+export const TABLES = ['profiles', 'organisations', 'contacts', 'deals', 'activities', 'events', 'settings',
   // module Patrimoine
   'properties', 'units', 'loans', 'leases', 'rent_payments', 'expenses',
   // module Vivier courtiers

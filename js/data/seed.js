@@ -68,11 +68,6 @@ export const SEED = {
     { id: 'e3', deal_id: 'd9', contact_id: 'c7', kind: 'note', body: 'RDV réalisé, projet cohérent. Manque avis d\'imposition et bulletins.', author_id: 'u-mickael', created_at: d(-12) },
     { id: 'e4', deal_id: 'd12', contact_id: 'c6', kind: 'note', body: 'Audit réalisé : page Instagram inactive depuis 8 mois. Proposition 350 €/mois sur 12 mois.', author_id: 'u-stephanie', created_at: d(-4) },
   ],
-  ad_spend: [
-    { id: 's1', activity: 'rgd', channel: 'Meta Ads', campaign: 'RGD-Renov-Sept26', month: day(0).slice(0, 7) + '-01', amount: 420 },
-    { id: 's2', activity: 'rgd', channel: 'Google Ads', campaign: 'RGD-SdB-2026', month: day(-75).slice(0, 7) + '-01', amount: 300 },
-    { id: 's3', activity: 'courtage', channel: 'Meta Ads', campaign: 'RAC-Regroupement-Sept26', month: day(0).slice(0, 7) + '-01', amount: 180 },
-  ],
   settings: [
     { key: 'intake_token', value: 'demo-token-a-changer' },
   ],
