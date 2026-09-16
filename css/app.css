@@ -637,3 +637,7 @@ body.impression #print-root { display: block; }
   .pdf-footer-text { text-align: right; }
   .pdf-footer-text strong { font-weight: 800; color: #fff; }
 }
+
+/* Vue d'ensemble : nom de structure avec sa pastille */
+.act-name { display: inline-flex; align-items: center; gap: 9px; font-weight: 600; }
+.act-chip { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
