@@ -64,11 +64,9 @@ const NAV = [
       // Les pipelines restent joignables à #/pipeline/<clé>.
       ...ESPACES.map(k => ({ hash: `#/${k}`, label: ACTIVITIES[k].label, dot: ACTIVITIES[k].color, activity: k })),
       ...Object.values(ACTIVITIES).filter(a => !ESPACES.includes(a.key)).map(a => ({ hash: `#/pipeline/${a.key}`, label: a.label, dot: a.color, activity: a.key, count: () => scope.deals().filter(d => d.activity === a.key && d.status === 'open').length })),
-      // Le répertoire global des contacts a quitté le menu : chaque structure a sa base
-      // de données. Restent ici les partenaires, qu'aucune structure ne couvre seule,
-      // et l'acquisition, qui regarde les quatre activités à la fois.
-      { hash: '#/partners', label: 'Partenaires' },
-      { hash: '#/acquisition', label: 'Acquisition', direction: true },
+      // Pilotage ne montre que la vue d'ensemble et les quatre structures. Le répertoire
+      // global des contacts, les partenaires et l'acquisition ont quitté le menu :
+      // leurs écrans restent joignables par leur adresse (#/partners, #/acquisition).
     ],
   },
   {
