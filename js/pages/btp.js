@@ -669,13 +669,25 @@ export const btpDtuPage = {
 };
 
 // ---------------------------------------------------------------- Mails types
-// Les séquences du cabinet : chaque modèle porte son déclencheur (quand il part)
-// et son mode (automatique ou envoyé à la main). La liste par thématique, puis le
-// modèle en pleine page avec de quoi le copier.
+// Les séquences du cabinet, rangées comme dans le dossier d'origine : trois
+// dossiers, chacun sa couleur, et à l'intérieur la chronologie des envois avec
+// la référence de chaque mail (C1…C5, E1…E14, B1…B14).
+const SEQUENCES = [
+  { theme: 'Avant le rendez-vous téléphonique', court: 'Avant le RDV', icon: '☎', tint: '#D97B1E',
+    sous: 'De la prise de rendez-vous au premier échange' },
+  { theme: 'Séquence expertise', court: 'Expertise', icon: '🔍', tint: '#0D6E9E',
+    sous: 'Du devis à la remise du rapport' },
+  { theme: 'Séquence AMO', court: 'AMO', icon: '🏗', tint: '#7B4FAE',
+    sous: "De la proposition d'accompagnement au suivi post-mission" },
+];
+const sequenceDe = (theme) => SEQUENCES.find(s => s.theme === theme)
+  || { theme, court: theme, icon: '✉', tint: '#7a8794', sous: '' };
+
 const MAIL_FORM = [
-  { key: 'theme', label: 'Thématique', required: true, half: true, placeholder: 'Séquence expertise' },
-  { key: 'title', label: 'Nom du modèle', required: true, half: true, placeholder: 'Relance devis J+3' },
-  { key: 'trigger_text', label: 'Déclencheur', half: true, placeholder: 'Trois jours après l\'envoi du devis, sans réponse' },
+  { key: 'theme', label: 'Séquence', type: 'select', options: SEQUENCES.map(s => s.theme), required: true, half: true },
+  { key: 'ref', label: 'Référence', half: true, placeholder: 'E7' },
+  { key: 'title', label: 'Nom du modèle', required: true },
+  { key: 'trigger_text', label: 'Quand l\'envoyer', half: true, placeholder: 'Trois jours après le devis, sans réponse' },
   { key: 'mode', label: 'Mode', type: 'select', options: ['Manuel', 'Automatique'], half: true },
   { key: 'subject', label: 'Objet du mail' },
   { key: 'body', label: 'Corps du mail', type: 'textarea', rows: 16, required: true },
@@ -686,11 +698,11 @@ export const btpMailsPage = {
   render(root) {
     if (guard(root)) return {};
     const coquille = poser(root);
-    const state = { theme: '', q: '', modele: null, focus: null };
+    const state = { seq: SEQUENCES[0].theme, q: '', modele: null, focus: null };
 
     const editer = (m0, apres) => {
-      const m = openModal(m0 ? m0.title : 'Nouveau modèle',
-        `<form class="form" id="mail-form">${renderForm(MAIL_FORM, m0 || {})}
+      const m = openModal(m0 ? `${m0.ref ? m0.ref + ' — ' : ''}${m0.title}` : 'Nouveau modèle',
+        `<form class="form" id="mail-form">${renderForm(MAIL_FORM, m0 || { theme: state.seq })}
           <div class="form-actions">${m0 ? '<button type="button" class="btn ghost" id="mail-del">Supprimer</button>' : ''}
           <button type="button" class="btn ghost" data-close>Annuler</button><button class="btn" type="submit">Enregistrer</button></div></form>`,
         { wide: true });
@@ -715,81 +727,112 @@ export const btpMailsPage = {
       catch { toast('Copie refusée par le navigateur', 'warn'); }
     };
 
-    const vueModele = (m) => `
+    const auto = (m) => (m.mode || '').toLowerCase() === 'automatique';
+
+    // ---- Un modèle, en pleine page
+    const vueModele = (m) => {
+      const s = sequenceDe(m.theme);
+      return `
       <div class="fiche-topbar">
-        <button type="button" class="btn ghost sm" id="m-back">← Tous les modèles</button>
+        <button type="button" class="btn ghost sm" id="m-back">← ${esc(s.court)}</button>
         <span class="grow"></span>
         <button type="button" class="btn ghost sm" id="m-copy-obj">Copier l'objet</button>
         <button type="button" class="btn sm" id="m-copy">Copier le mail</button>
         <button type="button" class="btn ghost sm" id="m-edit">Modifier</button>
       </div>
-      <div class="card mail-vue">
-        <div class="mail-vue-tete">
-          <div>
-            <div class="mail-vue-theme">${esc(m.theme)}</div>
+      <article class="mail-vue" style="--t:${s.tint}">
+        <header class="mail-vue-tete">
+          <span class="mail-vue-ref">${esc(m.ref || '—')}</span>
+          <div class="mail-vue-corps">
+            <div class="mail-vue-seq">${esc(s.icon)} ${esc(m.theme)}</div>
             <h2>${esc(m.title)}</h2>
+            ${m.trigger_text ? `<p class="mail-vue-quand"><b>Quand&nbsp;:</b> ${esc(m.trigger_text)}</p>` : ''}
           </div>
-          ${m.mode ? `<span class="mail-mode ${m.mode.toLowerCase() === 'automatique' ? 'auto' : ''}">${esc(m.mode)}</span>` : ''}
+          <span class="mail-mode ${auto(m) ? 'auto' : ''}">${esc(m.mode || 'Manuel')}</span>
+        </header>
+        <div class="mail-vue-bloc">
+          ${m.subject ? `<div class="mail-objet"><span>Objet</span>${esc(m.subject)}</div>` : ''}
+          <pre class="mail-corps">${esc(m.body)}</pre>
         </div>
-        ${m.trigger_text ? `<p class="mail-decl"><b>Quand l'envoyer</b> ${esc(m.trigger_text)}</p>` : ''}
-        ${m.subject ? `<div class="mail-objet"><span>Objet</span>${esc(m.subject)}</div>` : ''}
-        <pre class="mail-corps">${esc(m.body)}</pre>
-      </div>`;
+      </article>`;
+    };
 
     const draw = () => {
-      const tous = db.t('mail_templates').filter(m => m.activity === KEY)
-        .sort((a, b) => (a.theme || '').localeCompare(b.theme || '') || (a.position || 0) - (b.position || 0));
+      const tous = db.t('mail_templates').filter(m => m.activity === KEY);
+      const ordre = (a, b) => (a.position || 0) - (b.position || 0) || String(a.ref || '').localeCompare(String(b.ref || ''));
 
       if (state.modele) {
         const m = db.byId('mail_templates', state.modele);
         if (!m) { state.modele = null; return draw(); }
         root.innerHTML = cadre('#/btp/mails', 'Mails types', vueModele(m));
-        root.querySelector('#m-back').onclick = () => { state.modele = null; draw(); };
+        root.querySelector('#m-back').onclick = () => { state.seq = m.theme; state.modele = null; draw(); };
         root.querySelector('#m-edit').onclick = () => editer(m, draw);
         root.querySelector('#m-copy').onclick = () => copier(m.subject ? `${m.subject}\n\n${m.body}` : m.body, 'Modèle');
         root.querySelector('#m-copy-obj').onclick = () => copier(m.subject || '', 'Objet');
         return;
       }
 
+      // Les séquences connues d'abord, puis celles qu'on aurait ajoutées à la main
+      const autres = [...new Set(tous.map(m => m.theme))].filter(t => !SEQUENCES.some(s => s.theme === t));
+      const dossiers = [...SEQUENCES, ...autres.map(sequenceDe)]
+        .map(s => ({ ...s, mails: tous.filter(m => m.theme === s.theme).sort(ordre) }))
+        .filter(d => d.mails.length);
+
       const ts = terms(state.q);
-      const themes = [...new Set(tous.map(m => m.theme).filter(Boolean))];
-      const liste = tous
-        .filter(m => !state.theme || m.theme === state.theme)
-        .filter(m => hit([m.title, m.theme, m.subject, m.body, m.trigger_text], ts));
+      const recherche = state.q.trim().length > 0;
+      const trouves = tous.filter(m => hit([m.ref, m.title, m.theme, m.subject, m.body, m.trigger_text], ts)).sort(ordre);
+      const courant = dossiers.find(d => d.theme === state.seq) || dossiers[0];
+
+      const ligne = (m, s) => `
+        <button type="button" class="mail-etape" data-m="${m.id}" style="--t:${s.tint}">
+          <span class="mail-etape-ref">${esc(m.ref || '·')}</span>
+          <span class="mail-etape-corps">
+            <b>${esc(m.title)}</b>
+            ${m.subject ? `<span class="mail-etape-objet">${esc(m.subject)}</span>` : ''}
+            ${m.trigger_text ? `<span class="mail-etape-quand">${esc(m.trigger_text)}</span>` : ''}
+          </span>
+          <span class="mail-mode ${auto(m) ? 'auto' : ''}">${auto(m) ? 'Auto' : 'Manuel'}</span>
+          <span class="mail-etape-copy" data-copy="${m.id}" role="button" tabindex="0">Copier</span>
+        </button>`;
 
       root.innerHTML = cadre('#/btp/mails', 'Mails types', `
-        ${themes.length ? `<div class="pill-tabs">
-          ${themes.map(t => `<button type="button" data-theme="${esc(t)}" class="${state.theme === t ? 'on' : ''}"
-            aria-pressed="${state.theme === t}">${esc(t)}<span>${tous.filter(m => m.theme === t).length}</span></button>`).join('')}
-        </div>` : ''}
+        <div class="mail-dossiers">${dossiers.map(d => `
+          <button type="button" class="mail-dossier ${d.theme === courant?.theme && !recherche ? 'on' : ''}" data-seq="${esc(d.theme)}" style="--t:${d.tint}">
+            <span class="mail-dossier-ico">${esc(d.icon)}</span>
+            <span class="mail-dossier-corps">
+              <b>${esc(d.court)}</b>
+              <span>${esc(d.sous)}</span>
+            </span>
+            <span class="mail-dossier-cnt">${d.mails.length}</span>
+          </button>`).join('')}</div>
+
         <div class="toolbar">
-          ${searchInput('b-q', state, 'Rechercher un modèle, un mot de l\'objet ou du texte…')}
-          <span class="muted small">${liste.length} modèle${liste.length > 1 ? 's' : ''}</span>
+          ${searchInput('b-q', state, 'Rechercher dans tous les mails…')}
+          <span class="muted small">${recherche ? `${trouves.length} résultat${trouves.length > 1 ? 's' : ''} sur ${tous.length}` : `${courant ? courant.mails.length : 0} mail${courant && courant.mails.length > 1 ? 's' : ''} dans cette séquence`}</span>
           <span class="grow"></span>
           <button class="btn" id="b-new">+ Modèle</button>
         </div>
-        ${liste.length ? `<div class="card"><div class="mail-liste">${liste.map(m => `
-          <div class="mail-ligne" data-m="${m.id}">
-            <div class="mail-ligne-corps">
-              <b>${esc(m.title)}</b>
-              ${m.subject ? `<span class="mail-ligne-objet">${esc(m.subject)}</span>` : ''}
-              ${m.trigger_text ? `<span class="muted small">${esc(m.trigger_text)}</span>` : ''}
-            </div>
-            ${m.mode ? `<span class="mail-mode ${m.mode.toLowerCase() === 'automatique' ? 'auto' : ''}">${esc(m.mode)}</span>` : ''}
-            <button type="button" class="btn ghost sm" data-copy="${m.id}">Copier</button>
-          </div>`).join('')}</div></div>`
-        : `<div class="card"><div class="empty">Aucun modèle${state.q || state.theme ? ' dans cette vue' : ''}. Lancez le script d&rsquo;import des modèles du cabinet, ou créez le premier avec « + Modèle ».</div></div>`}`);
+
+        ${recherche
+          ? `<div class="card"><div class="mail-suite">${trouves.map(m => ligne(m, sequenceDe(m.theme))).join('') || '<div class="empty">Aucun modèle ne correspond.</div>'}</div></div>`
+          : courant ? `<div class="card mail-seq" style="--t:${courant.tint}">
+              <div class="mail-seq-tete">
+                <span class="mail-seq-ico">${esc(courant.icon)}</span>
+                <div><h2>${esc(courant.theme)}</h2><p>${esc(courant.sous)}</p></div>
+              </div>
+              <div class="mail-suite">${courant.mails.map(m => ligne(m, courant)).join('')}</div>
+            </div>`
+          : '<div class="card"><div class="empty">Aucun modèle. Lancez le script d&rsquo;import des séquences du cabinet, ou créez le premier.</div></div>'}`);
 
       bindSearch(root, 'b-q', state, draw); restoreFocus(root, state);
-      root.querySelectorAll('[data-theme]').forEach(b => b.onclick = () => {
-        state.theme = state.theme === b.dataset.theme ? '' : b.dataset.theme; draw();
-      });
+      root.querySelectorAll('[data-seq]').forEach(b => b.onclick = () => { state.seq = b.dataset.seq; state.q = ''; draw(); });
       root.querySelector('#b-new').onclick = () => editer(null, draw);
       root.querySelectorAll('[data-m]').forEach(l => l.onclick = (e) => {
         if (e.target.closest('[data-copy]')) return;
         state.modele = l.dataset.m; draw();
       });
-      root.querySelectorAll('[data-copy]').forEach(b => b.onclick = () => {
+      root.querySelectorAll('[data-copy]').forEach(b => b.onclick = (e) => {
+        e.stopPropagation();
         const m = db.byId('mail_templates', b.dataset.copy);
         copier(m.subject ? `${m.subject}\n\n${m.body}` : m.body, 'Modèle');
       });

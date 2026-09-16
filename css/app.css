@@ -498,22 +498,67 @@ body:has(.esp-app) .subnav .datepill { display: none; }
 /* Une bascule de structure ne doit pas clignoter pour qui préfère moins d'animation */
 @media (prefers-reduced-motion: reduce) { .univ, .s-tab.on, .btn { transition: none; } }
 
-/* Mails types : la liste des modèles, puis le modèle ouvert */
-.mail-liste { display: flex; flex-direction: column; }
-.mail-ligne { display: flex; align-items: center; gap: 12px; padding: 12px 10px; border-top: 1px solid var(--line); cursor: pointer; }
-.mail-ligne:first-child { border-top: 0; }
-.mail-ligne:hover { background: var(--card-2); }
-.mail-ligne-corps { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.mail-ligne-objet { font-size: 12.5px; color: var(--muted); }
-.mail-mode { flex-shrink: 0; background: var(--card-2); color: var(--muted); border-radius: 999px; padding: 3px 10px; font-size: 11px; font-weight: 700; }
-.mail-mode.auto { background: var(--accent-soft); color: var(--accent-ink); }
-.mail-vue-tete { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 12px; }
-.mail-vue-theme { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; font-weight: 700; color: var(--accent-ink); margin-bottom: 3px; }
-.mail-decl { margin: 0 0 14px; font-size: 13px; color: var(--muted); }
-.mail-decl b { color: var(--text); margin-right: 6px; }
+/* Mails types — trois dossiers, chacun sa couleur, et la séquence en chronologie.
+   La teinte vient de la séquence (--t), posée par le JS. */
+.mail-dossiers { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
+.mail-dossier { display: flex; align-items: center; gap: 12px; text-align: left; background: var(--card);
+                border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; box-shadow: var(--shadow);
+                transition: transform .13s, box-shadow .13s, border-color .13s; }
+.mail-dossier:hover { transform: translateY(-2px); box-shadow: var(--shadow-lift); border-color: var(--t); }
+.mail-dossier.on { border-color: var(--t); box-shadow: inset 0 0 0 1px var(--t), var(--shadow);
+                   background: linear-gradient(135deg, color-mix(in srgb, var(--t) 8%, white), var(--card) 70%); }
+.mail-dossier-ico { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; font-size: 18px;
+                    background: color-mix(in srgb, var(--t) 14%, white); flex-shrink: 0; }
+.mail-dossier-corps { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.mail-dossier-corps b { font-size: 14px; }
+.mail-dossier-corps span { font-size: 11.5px; color: var(--muted); line-height: 1.35; }
+.mail-dossier-cnt { flex-shrink: 0; background: var(--t); color: #fff; border-radius: 999px; padding: 3px 11px; font-size: 12px; font-weight: 700; }
+
+.mail-seq { border-top: 3px solid var(--t); }
+.mail-seq-tete { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; }
+.mail-seq-ico { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; font-size: 16px;
+                background: color-mix(in srgb, var(--t) 14%, white); }
+.mail-seq-tete h2 { margin: 0; }
+.mail-seq-tete p { margin: 2px 0 0; font-size: 12.5px; color: var(--muted); }
+
+/* La chronologie : un fil vertical, une pastille par mail */
+.mail-suite { display: flex; flex-direction: column; margin-top: 14px; }
+.mail-etape { position: relative; display: flex; align-items: flex-start; gap: 14px; text-align: left; width: 100%;
+              background: none; border: 0; padding: 12px 10px 12px 0; border-radius: 10px; }
+.mail-etape::before { content: ""; position: absolute; left: 17px; top: 0; bottom: 0; width: 2px;
+                      background: color-mix(in srgb, var(--t) 22%, white); }
+.mail-etape:first-child::before { top: 24px; }
+.mail-etape:last-child::before { bottom: calc(100% - 24px); }
+.mail-etape:hover { background: var(--card-2); }
+.mail-etape-ref { position: relative; z-index: 1; flex-shrink: 0; display: grid; place-items: center; min-width: 36px; height: 24px;
+                  padding: 0 7px; border-radius: 7px; background: var(--t); color: #fff; font-size: 11.5px; font-weight: 800; letter-spacing: .02em; }
+.mail-etape-corps { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.mail-etape-corps b { font-size: 13.5px; }
+.mail-etape-objet { font-size: 12.5px; color: var(--muted); }
+.mail-etape-quand { font-size: 11.5px; color: var(--muted-2); }
+.mail-etape-copy { flex-shrink: 0; align-self: center; font-size: 12px; font-weight: 600; color: var(--muted);
+                   border: 1px solid var(--line-strong); border-radius: 8px; padding: 5px 11px; }
+.mail-etape-copy:hover { border-color: var(--t); color: var(--t); }
+.mail-mode { flex-shrink: 0; align-self: center; background: var(--card-2); color: var(--muted); border-radius: 999px;
+             padding: 3px 10px; font-size: 11px; font-weight: 700; }
+.mail-mode.auto { background: color-mix(in srgb, var(--t) 14%, white); color: var(--t); }
+
+/* Un modèle ouvert */
+.mail-vue { background: var(--card); border: 1px solid var(--line); border-top: 3px solid var(--t);
+            border-radius: var(--radius); padding: 20px 22px; box-shadow: var(--shadow); }
+.mail-vue-tete { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 16px; }
+.mail-vue-ref { flex-shrink: 0; display: grid; place-items: center; min-width: 46px; height: 32px; padding: 0 10px;
+                border-radius: 9px; background: var(--t); color: #fff; font-weight: 800; }
+.mail-vue-corps { flex: 1; min-width: 0; }
+.mail-vue-seq { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; font-weight: 700; color: var(--t); }
+.mail-vue-corps h2 { margin: 3px 0 0; }
+.mail-vue-quand { margin: 6px 0 0; font-size: 13px; color: var(--muted); }
+.mail-vue-quand b { color: var(--text); }
 .mail-objet { background: var(--card-2); border-radius: 10px; padding: 11px 14px; font-weight: 600; margin-bottom: 12px; }
 .mail-objet span { display: block; font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted-2); font-weight: 700; margin-bottom: 3px; }
-.mail-corps { margin: 0; background: var(--card-2); border-radius: 10px; padding: 16px 18px; font: inherit; font-size: 13.5px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
+.mail-corps { margin: 0; background: var(--card-2); border-radius: 10px; padding: 16px 18px; font: inherit; font-size: 13.5px;
+              line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
+@media (prefers-reduced-motion: reduce) { .mail-dossier { transition: none; } }
 
 /* ---------- Référentiel DTU à imprimer ---------- */
 /* Mise en page reprise de l'export PDF du tableau de bord RGD Renova. Chaque fiche

@@ -100,15 +100,15 @@ export const SEED = {
   ],
 
   mail_templates: [
-    { id: 'mt-1', activity: 'btp', theme: 'Avant le rendez-vous téléphonique', title: 'Confirmation du rendez-vous',
+    { id: 'mt-1', activity: 'btp', ref: 'C1', theme: 'Avant le rendez-vous téléphonique', title: 'Confirmation du rendez-vous',
       subject: 'Votre rendez-vous est confirmé', mode: 'Automatique', position: 10,
       trigger_text: 'Dès la réservation du créneau sur le site',
       body: 'Bonjour [Prénom],\n\nVotre rendez-vous est confirmé.\n\nDate : [DATE]\nHeure : [HEURE]\n\nÀ très bientôt,' },
-    { id: 'mt-2', activity: 'btp', theme: 'Séquence expertise', title: 'Relance devis',
+    { id: 'mt-2', activity: 'btp', ref: 'E2', theme: 'Séquence expertise', title: 'Relance devis',
       subject: 'Votre devis d\'expertise', mode: 'Manuel', position: 20,
       trigger_text: 'Trois jours après l\'envoi du devis, sans réponse',
       body: 'Bonjour [Prénom],\n\nJe reviens vers vous au sujet du devis adressé le [DATE].\n\nBien à vous,' },
-    { id: 'mt-3', activity: 'btp', theme: 'Séquence expertise', title: 'Transmission du rapport',
+    { id: 'mt-3', activity: 'btp', ref: 'E10', theme: 'Séquence expertise', title: 'Transmission du rapport',
       subject: 'Votre rapport d\'expertise', mode: 'Manuel', position: 30,
       trigger_text: 'À la remise du rapport',
       body: 'Bonjour [Prénom],\n\nVous trouverez ci-joint le rapport.\n\nBien à vous,' },
