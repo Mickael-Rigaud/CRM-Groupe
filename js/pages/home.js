@@ -34,7 +34,7 @@ export const homePage = {
         </div>
         <div class="hub-lines">${ACTIVITY_KEYS.filter(k => scope.activityKeys.includes(k)).map(k => { const o = open.filter(d => d.activity === k); return `<a href="#/pipeline/${k}"><span class="dot" style="background:${ACTIVITIES[k].color}"></span>${esc(ACTIVITIES[k].label)}<span class="grow"></span><b>${o.length}</b><span class="muted small">· ${eur(o.reduce((s, d) => s + (Number(d.amount) || 0), 0))}</span></a>`; }).join('')}</div>` });
       // ---- Aujourd'hui
-      modules.push({ key: 'today', title: "À faire aujourd'hui", icon: '☑', color: late ? 'var(--red)' : 'var(--green)', link: '#/today', body: `
+      modules.push({ key: 'today', title: 'To do list', icon: '☑', color: late ? 'var(--red)' : 'var(--green)', link: '#/today', body: `
         <div class="hub-kpis"><div><b class="${late ? 'status-lost' : ''}">${late}</b><span>en retard</span></div><div><b>${today}</b><span>aujourd'hui</span></div><div><b class="${noNext ? 'status-lost' : ''}">${noNext}</b><span>affaires sans action</span></div></div>
         <div class="hub-lines">${acts.filter(a => daysSince(a.due_date) >= 0).sort((x, y) => (x.due_date || '').localeCompare(y.due_date || '')).slice(0, 5).map(a => `<a href="#/today"><span>${daysSince(a.due_date) > 0 ? '⚠' : '•'}</span>${esc(a.title)}<span class="grow"></span><span class="muted small">${esc(userName(a.assignee_id))}</span></a>`).join('') || '<div class="empty" style="padding:8px">Rien à faire — tout est à jour.</div>'}</div>` });
       // ---- Patrimoine

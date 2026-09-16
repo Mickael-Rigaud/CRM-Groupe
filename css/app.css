@@ -498,7 +498,25 @@ body:has(.esp-app) .subnav .datepill { display: none; }
 /* Une bascule de structure ne doit pas clignoter pour qui préfère moins d'animation */
 @media (prefers-reduced-motion: reduce) { .univ, .s-tab.on, .btn { transition: none; } }
 
-/* Colonne d'actions d'une ligne de base de données */
+/* To do list : la répartition en un trait, puis les tâches rangées par échéance.
+   Chaque tâche porte un filet à la couleur de sa structure (--c). */
+.todo-repartition { display: flex; gap: 2px; height: 8px; border-radius: 999px; overflow: hidden; background: var(--card-2); }
+.todo-repartition i { display: block; height: 100%; }
+.todo-structures { margin: 2px 0 0; }
+.todo-structures .todo-puce { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 7px; }
+.todo-structures button.on .todo-puce { background: var(--on-accent) !important; }
+.todo-bloc { padding: 16px 18px 14px; }
+.todo-bloc h3 { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 8px; }
+.todo-bloc h3 span { background: var(--card-2); border-radius: 999px; padding: 1px 9px; font-size: 11px; letter-spacing: 0; color: var(--muted); }
+.todo-bloc.retard h3 { color: var(--red); }
+.todo-bloc.retard h3 span { background: var(--red-soft); color: var(--red); }
+.todo-bloc.faites { opacity: .65; }
+/* Le filet de structure, à gauche de la ligne */
+.act-row.struct { border-left: 3px solid var(--c); padding-left: 11px; border-radius: 3px 9px 9px 3px; }
+.act-struct { display: inline-block; background: color-mix(in srgb, var(--c) 15%, white); color: var(--c);
+              border-radius: 999px; padding: 1px 8px; font-size: 10.5px; font-weight: 700; margin-left: 7px; vertical-align: 1px; }
+
+/* Colonne d'actions d'une ligne de base de données *//* Colonne d'actions d'une ligne de base de données */
 td.acts { display: flex; gap: 6px; justify-content: flex-end; }
 .btn.ghost.danger { color: var(--red); }
 .btn.ghost.danger:hover { background: var(--red-soft); border-color: var(--red); }

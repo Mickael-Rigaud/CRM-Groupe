@@ -1,10 +1,18 @@
 // Activités (tâches / RDV) : formulaire, liste, clôture.
 import { db } from '../data/db.js';
 import { scope } from '../data/scope.js';
-import { ACTIVITY_TYPES } from '../data/schema.js';
+import { ACTIVITY_TYPES, ACTIVITIES } from '../data/schema.js';
 import { esc, openModal, closeModal, renderForm, readForm, toast, isoDay, daysSince, relDay, userName, fmtDate } from '../ui.js';
 
 export const actType = (k) => ACTIVITY_TYPES.find(t => t.key === k) || { label: k, icon: '•' };
+
+// À quelle structure se rattache une tâche : celle choisie sur la tâche, sinon celle
+// de l'affaire liée. Une tâche isolée peut donc porter une structure sans affaire.
+export function structureDe(a) {
+  if (a?.activity && ACTIVITIES[a.activity]) return a.activity;
+  const d = a?.deal_id && db.byId('deals', a.deal_id);
+  return d?.activity && ACTIVITIES[d.activity] ? d.activity : null;
+}
 
 export function activityForm(link = {}, existing = null, onSaved, onClose = null) {
   const users = scope.users();
@@ -14,6 +22,10 @@ export function activityForm(link = {}, existing = null, onSaved, onClose = null
     { key: 'title', label: 'Intitulé', type: 'text', required: true, placeholder: 'Ex. Relancer le devis' },
     { key: 'due_date', label: 'Échéance', type: 'date', required: true, half: true, value: isoDay() },
     { key: 'due_time', label: 'Heure (optionnel)', type: 'time', half: true },
+    { key: 'activity', label: 'Structure', type: 'select', half: true,
+      options: Object.values(ACTIVITIES).filter(a => scope.activityKeys.includes(a.key)).map(a => [a.key, a.label]),
+      value: existing?.activity || structureDe({ ...link, ...(existing || {}) }) || '',
+      hint: 'À quelle activité du groupe cette tâche appartient.' },
     { key: 'notes', label: 'Notes', type: 'textarea', rows: 2 },
   ];
   const m = openModal(existing ? "Modifier l'activité" : 'Nouvelle activité', `<form class="form" id="act-form">${renderForm(spec, existing || {})}
@@ -24,7 +36,9 @@ export function activityForm(link = {}, existing = null, onSaved, onClose = null
     const v = readForm(form, spec);
     try {
       if (existing) await db.update('activities', existing.id, v);
-      else await db.insert('activities', { ...v, ...link, done: false });
+      // `link` porte les rattachements (affaire, contact…) ; la saisie prime dessus,
+      // sinon une clé absente de `link` écraserait ce que l'on vient de choisir.
+      else await db.insert('activities', { ...link, ...v, done: false });
       closeModal(true); toast('Activité enregistrée'); onSaved?.();
     } catch (err) { toast(err.message, 'err'); }
   };
@@ -38,6 +52,7 @@ export async function toggleActivity(id, done) {
 export function activityRowHtml(a, { showContext = false } = {}) {
   const late = !a.done && a.due_date && daysSince(a.due_date) > 0;
   const t = actType(a.type);
+  const struct = structureDe(a);
   let ctx = '';
   if (showContext) {
     const d = a.deal_id && db.byId('deals', a.deal_id);
@@ -45,10 +60,10 @@ export function activityRowHtml(a, { showContext = false } = {}) {
     const o = a.organisation_id && db.byId('organisations', a.organisation_id);
     ctx = [d && `<a href="#" data-open-deal="${d.id}">${esc(d.title)}</a>`, c && `${esc(c.first_name)} ${esc(c.last_name)}${c.phone ? ' · ' + esc(c.phone) : ''}`, o && esc(o.name)].filter(Boolean).join(' — ');
   }
-  return `<div class="act-row ${a.done ? 'done' : ''}" data-act="${a.id}">
+  return `<div class="act-row ${a.done ? 'done' : ''} ${struct ? 'struct' : ''}" data-act="${a.id}" ${struct ? `style="--c:${ACTIVITIES[struct].color}"` : ''}>
     <input type="checkbox" ${a.done ? 'checked' : ''} data-toggle="${a.id}" title="Marquer comme fait">
     <div style="flex:1">
-      <div><b>${t.icon} ${esc(a.title)}</b> <span class="muted small">· ${esc(userName(a.assignee_id))}</span></div>
+      <div><b>${t.icon} ${esc(a.title)}</b>${struct ? ` <span class="act-struct">${esc(ACTIVITIES[struct].short)}</span>` : ''} <span class="muted small">· ${esc(userName(a.assignee_id))}</span></div>
       ${ctx ? `<div class="small muted">${ctx}</div>` : ''}
       ${a.notes ? `<div class="small muted">${esc(a.notes)}</div>` : ''}
       <div class="when ${late ? 'late' : ''}">${fmtDate(a.due_date)}${a.due_time ? ' ' + esc(a.due_time) : ''} · ${relDay(a.due_date)}</div>
