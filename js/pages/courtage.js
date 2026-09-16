@@ -11,8 +11,8 @@ import {
   terms, hit, searchInput, bindSearch, restoreFocus, csvDownload,
 } from '../ui.js';
 import { openDeal } from './deal.js';
-import { openContact } from './contacts.js';
-import { openOrg } from './organisations.js';
+import { contactForm, openContact } from './contacts.js';
+import { orgForm, openOrg } from './organisations.js';
 import { activityRowHtml, bindActivityRows, nextActivity } from './activity.js';
 import { coquilleEspace, poserEspace, kpiEspace } from './espace.js';
 import { vivierPage } from './vivier.js';
@@ -172,6 +172,21 @@ export const courtageBasePage = {
     const coquille = poserEspace(root);
     const state = { vue: 'clients', q: '', canal: '', fin: '', focus: null };
 
+    // Créer depuis cet écran, c'est créer pour La Référence Courtage : l'activité est
+    // cochée d'avance et le type suit la vue ouverte, sinon la fiche n'apparaîtrait pas ici.
+    const nouveau = () => {
+      const surOrg = ['apporteurs', 'banques'].includes(state.vue);
+      if (surOrg) orgForm(null, draw, null, state.vue === 'banques' ? 'Banque' : 'Partenaire');
+      else contactForm(null, draw);
+      const f = document.querySelector(surOrg ? '#o-form' : '#c-form');
+      if (!f) return;
+      const coche = f.querySelector(`input[name="activities"][value="${KEY}"]`);
+      if (coche) coche.checked = true;
+      if (surOrg && state.vue === 'banques') { const j = f.querySelector('[name="partner_job"]'); if (j) j.value = 'Banque'; }
+      if (!surOrg && state.vue !== 'tous') { const t = f.querySelector('[name="type"]'); if (t) t.value = state.vue === 'clients' ? 'Client' : 'Prospect'; }
+    };
+    const libelleNouveau = () => ({ apporteurs: 'Apporteur', banques: 'Banque', clients: 'Client', prospects: 'Prospect' }[state.vue] || 'Contact');
+
     const draw = () => {
       const ts = terms(state.q);
       const contacts = scope.contacts().filter(estCourtage);
@@ -182,7 +197,7 @@ export const courtageBasePage = {
       let lignes = [];
 
       if (state.vue === 'apporteurs') {
-        colonnes = ['Nom', 'Métier', 'Secteur', 'Téléphone', 'Email', 'Dossiers apportés', 'Signés'];
+        colonnes = ['Nom', 'Métier', 'Secteur', 'Téléphone', 'Email', 'Dossiers apportés', 'Signés', ''];
         lignes = orgs.filter(estApporteur)
           .filter(o => hit([o.name, o.partner_job, o.city, o.zone, o.email, o.phone], ts))
           .map(o => {
@@ -198,7 +213,7 @@ export const courtageBasePage = {
             };
           });
       } else if (state.vue === 'banques') {
-        colonnes = ['Nom', 'Secteur', 'Téléphone', 'Email', 'Dossiers en cours', 'Offres éditées', 'Dernier contact'];
+        colonnes = ['Nom', 'Secteur', 'Téléphone', 'Email', 'Dossiers en cours', 'Offres éditées', 'Dernier contact', ''];
         lignes = orgs.filter(estBanque)
           .filter(o => hit([o.name, o.city, o.zone, o.email, o.phone], ts))
           .map(o => {
@@ -217,7 +232,7 @@ export const courtageBasePage = {
           });
       } else {
         const filtre = { clients: (c) => c.type === 'Client', prospects: (c) => c.type === 'Prospect', tous: () => true }[state.vue];
-        colonnes = ['Nom', 'Type', 'Ville', 'Téléphone', 'Email', 'Canal', 'Financement', 'Dossier'];
+        colonnes = ['Nom', 'Type', 'Ville', 'Téléphone', 'Email', 'Canal', 'Financement', 'Dossier', ''];
         lignes = contacts.filter(filtre)
           .filter(c => !state.canal || c.channel === state.canal)
           .map(c => ({ c, d: deals().find(x => x.contact_id === c.id) }))
@@ -251,6 +266,7 @@ export const courtageBasePage = {
           <div class="seg">${VUES.map(v => `<button data-vue="${v.key}" class="${state.vue === v.key ? 'active' : ''}">${esc(v.label)} <span class="cnt">${compte(v.key)}</span></button>`).join('')}</div>
           <span class="grow"></span>
           <button class="btn ghost sm" id="c-export">Export CSV</button>
+          <button class="btn" id="c-new">+ ${esc(libelleNouveau())}</button>
         </div>
         <div class="toolbar">
           ${searchInput('c-q', state, surOrg ? 'Rechercher un nom, un secteur, un email…' : 'Rechercher un nom, une ville, un email, un dossier…')}
@@ -261,20 +277,28 @@ export const courtageBasePage = {
         <div class="card">
           <div class="table-wrap"><table>
             <thead><tr>${colonnes.map(c => `<th>${esc(c)}</th>`).join('')}</tr></thead>
-            <tbody>${lignes.map(r => `<tr class="click" data-row="${r.kind}|${r.id}">${r.cells.map(c => `<td>${c}</td>`).join('')}</tr>`).join('')
-              || `<tr><td colspan="${colonnes.length}"><div class="empty">Aucune fiche dans cette vue. Les fiches se créent dans Contacts, en cochant « La Référence Courtage » dans les activités.</div></td></tr>`}</tbody>
+            <tbody>${lignes.map(r => `<tr class="click" data-row="${r.kind}|${r.id}">${r.cells.map(c => `<td>${c}</td>`).join('')}<td class="num"><button type="button" class="btn ghost sm" data-modif="${r.kind}|${r.id}" title="Modifier ou supprimer">&#10000;</button></td></tr>`).join('')
+              || `<tr><td colspan="${colonnes.length}"><div class="empty">Aucune fiche dans cette vue. Le bouton « + ${esc(libelleNouveau())} » en crée une, déjà rattachée à La Référence Courtage.</div></td></tr>`}</tbody>
           </table></div>
-          ${sansFiche.length ? `<p class="muted small" style="margin-top:12px">Citées sur un dossier mais sans fiche au répertoire : ${sansFiche.map(n => esc(n)).join(', ')}. Créez-les dans Contacts &rsaquo; Partenaires (type « Banque », activité « La Référence Courtage ») pour suivre leurs dossiers ici.</p>` : ''}
+          ${sansFiche.length ? `<p class="muted small" style="margin-top:12px">Citées sur un dossier mais sans fiche au répertoire : ${sansFiche.map(n => esc(n)).join(', ')}. Créez leur fiche avec « + Banque » pour suivre leurs dossiers ici.</p>` : ''}
         </div>`);
 
       bindSearch(root, 'c-q', state, draw); restoreFocus(root, state);
       root.querySelectorAll('[data-vue]').forEach(b => b.onclick = () => { state.vue = b.dataset.vue; draw(); });
       root.querySelector('#c-canal')?.addEventListener('change', e => { state.canal = e.target.value; draw(); });
       root.querySelector('#c-fin')?.addEventListener('change', e => { state.fin = e.target.value; draw(); });
-      root.querySelectorAll('[data-row]').forEach(tr => tr.onclick = () => {
+      // La ligne ouvre la fiche complète ; le crayon va droit au formulaire, d'où l'on
+      // peut aussi supprimer (le CRM refuse la suppression d'un contact qui porte des affaires).
+      root.querySelectorAll('[data-row]').forEach(tr => tr.onclick = (e) => {
+        if (e.target.closest('[data-modif]')) return;
         const [kind, id] = tr.dataset.row.split('|');
         if (kind === 'org') openOrg(id, draw); else openContact(id, draw);
       });
+      root.querySelectorAll('[data-modif]').forEach(b => b.onclick = () => {
+        const [kind, id] = b.dataset.modif.split('|');
+        if (kind === 'org') orgForm(db.byId('organisations', id), draw); else contactForm(db.byId('contacts', id), draw);
+      });
+      root.querySelector('#c-new').onclick = () => nouveau();
       root.querySelector('#c-export').onclick = () => csvDownload(`courtage-${state.vue}.csv`, lignes.map(r => r.csv));
     };
 
