@@ -119,15 +119,33 @@ export const PAID_CHANNELS = ['Google Ads', 'Meta Ads'];
 
 export const LOST_REASONS = ['Prix', 'Délai', 'Concurrent', 'Sans réponse', 'Hors cible', 'Projet abandonné', 'Autre'];
 
+// Ce qu'une tâche peut être. Le groupe ne sert qu'à ranger la liste déroulante : la
+// colonne `activities.type` est un texte libre, sans contrainte en base, et `actType`
+// sait afficher une valeur qu'il ne connaît pas. Ajouter une ligne ici suffit donc,
+// et rien ne casse sur les tâches déjà enregistrées.
 export const ACTIVITY_TYPES = [
-  { key: 'appel', label: 'Appel', icon: '📞' },
-  { key: 'rdv', label: 'RDV', icon: '📅' },
-  { key: 'visite', label: 'Visite', icon: '🏠' },
-  { key: 'envoi', label: 'Envoi devis / proposition', icon: '📄' },
-  { key: 'relance', label: 'Relance', icon: '🔁' },
-  { key: 'pieces', label: 'Récupération pièces', icon: '📎' },
-  { key: 'avis', label: "Demande d'avis", icon: '⭐' },
-  { key: 'partenaire', label: 'Contact partenaire', icon: '🤝' },
+  // Commercial : la relation avec un client ou un prospect
+  { key: 'appel', label: 'Appel', icon: '📞', groupe: 'Commercial' },
+  { key: 'rdv', label: 'RDV', icon: '📅', groupe: 'Commercial' },
+  { key: 'visite', label: 'Visite', icon: '🏠', groupe: 'Commercial' },
+  { key: 'envoi', label: 'Envoi devis / proposition', icon: '📄', groupe: 'Commercial' },
+  { key: 'relance', label: 'Relance', icon: '🔁', groupe: 'Commercial' },
+  { key: 'pieces', label: 'Récupération pièces', icon: '📎', groupe: 'Commercial' },
+  { key: 'signature', label: 'Signature / closing', icon: '✍️', groupe: 'Commercial' },
+  { key: 'avis', label: "Demande d'avis", icon: '⭐', groupe: 'Commercial' },
+  { key: 'partenaire', label: 'Contact partenaire', icon: '🤝', groupe: 'Commercial' },
+  // Communication et marketing : ce qui se fait sans interlocuteur en face
+  { key: 'contenu', label: 'Création de contenu', icon: '🎬', groupe: 'Communication & marketing' },
+  { key: 'publication', label: 'Publication réseaux sociaux', icon: '📣', groupe: 'Communication & marketing' },
+  { key: 'campagne', label: 'Campagne publicitaire', icon: '🎯', groupe: 'Communication & marketing' },
+  { key: 'emailing', label: 'Emailing / newsletter', icon: '✉️', groupe: 'Communication & marketing' },
+  { key: 'site', label: 'Site internet', icon: '🌐', groupe: 'Communication & marketing' },
+  // Interne : ce qui fait tourner la structure
+  { key: 'reunion', label: 'Réunion interne', icon: '👥', groupe: 'Interne' },
+  { key: 'recrutement', label: 'Recrutement', icon: '🧑‍💼', groupe: 'Interne' },
+  { key: 'admin', label: 'Administratif', icon: '🗂', groupe: 'Interne' },
+  { key: 'compta', label: 'Comptabilité / facturation', icon: '💶', groupe: 'Interne' },
+  { key: 'autre', label: 'Autre', icon: '•', groupe: 'Interne' },
 ];
 
 export const CONTACT_TYPES = ['Prospect', 'Client', 'Partenaire', 'Apporteur', 'Fournisseur'];

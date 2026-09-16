@@ -55,7 +55,7 @@ export const settingsPage = {
           <div class="card"><div class="card-head"><h2>Référentiel</h2></div>
             <p class="small"><b>Canaux</b> : ${CHANNELS.map(esc).join(' · ')}</p>
             <p class="small"><b>Motifs de perte</b> : ${LOST_REASONS.map(esc).join(' · ')}</p>
-            <p class="small"><b>Types d'activités</b> : ${ACTIVITY_TYPES.map(t => t.icon + ' ' + esc(t.label)).join(' · ')}</p>
+            ${[...new Set(ACTIVITY_TYPES.map(t => t.groupe))].map(g => `<p class="small"><b>Types d'activités — ${esc(g)}</b> : ${ACTIVITY_TYPES.filter(t => t.groupe === g).map(t => t.icon + ' ' + esc(t.label)).join(' · ')}</p>`).join('')}
             <p class="muted small">Les pipelines, étapes, probabilités et champs par activité sont définis dans <code>js/data/schema.js</code> — un seul fichier à modifier pour faire évoluer le CRM.</p>
             <div class="card-head" style="margin-top:12px"><h2>Données</h2></div>
             <div class="toolbar"><button class="btn ghost sm" id="exp-all">Exporter toute la base (JSON)</button>${db.demo ? '<button class="btn danger sm" id="reset-demo">Réinitialiser la démo</button>' : ''}</div>

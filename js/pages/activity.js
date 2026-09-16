@@ -17,7 +17,10 @@ export function structureDe(a) {
 export function activityForm(link = {}, existing = null, onSaved, onClose = null) {
   const users = scope.users();
   const spec = [
-    { key: 'type', label: 'Type', type: 'select', options: ACTIVITY_TYPES.map(t => [t.key, `${t.icon} ${t.label}`]), required: true, half: true, value: 'appel' },
+    { key: 'type', label: 'Type', type: 'select', required: true, half: true, value: 'appel',
+      options: [...new Set(ACTIVITY_TYPES.map(t => t.groupe))].map(g => ({
+        groupe: g, options: ACTIVITY_TYPES.filter(t => t.groupe === g).map(t => [t.key, `${t.icon} ${t.label}`]),
+      })) },
     // Comme pour la structure, un contexte qui désigne déjà quelqu'un (la colonne
     // d'une personne dans la to do list) l'emporte sur le responsable par défaut.
     { key: 'assignee_id', label: 'Responsable', type: 'select', options: users.map(u => [u.id, u.full_name]), required: true, half: true, value: link.assignee_id || scope.user.id },
