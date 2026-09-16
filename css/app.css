@@ -500,41 +500,73 @@ body:has(.esp-app) .subnav .datepill { display: none; }
 
 /* ---------- Référentiel DTU à imprimer ---------- */
 /* La vue imprimable est déposée dans #print-root : invisible à l'écran, seule à
-   l'écran quand on imprime. Le navigateur fait le PDF, rien à installer. */
+   l'écran quand on imprime. Chaque domaine porte sa couleur par --t. */
 #print-root { display: none; }
 body.impression #print-root { display: block; }
 
 @media print {
   body.impression > #app { display: none !important; }
   body.impression { background: #fff; }
-  #print-root { display: block; color: #16172b; font-size: 10.5pt; line-height: 1.5; }
-  @page { size: A4; margin: 15mm 14mm; }
-
-  .pr-garde { break-after: page; padding-top: 24mm; }
-  .pr-marque { font-size: 11pt; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; color: #0d6e9e; }
-  .pr-garde h1 { font-family: var(--font-display); font-size: 30pt; margin: 6mm 0 3mm; letter-spacing: -.02em; }
-  .pr-sous { color: #5c5f7a; margin: 0 0 12mm; }
-  .pr-somm { list-style: none; padding: 0; margin: 0; border-top: 1px solid #d8dce3; }
-  .pr-somm li { display: flex; gap: 8mm; padding: 3mm 0; border-bottom: 1px solid #eceff3; break-inside: avoid; }
-  .pr-somm b { min-width: 42mm; }
-  .pr-somm span { color: #5c5f7a; }
-  .pr-pied { margin-top: 14mm; font-size: 8.5pt; color: #8c8fa8; }
-
-  .pr-fiche { break-after: page; break-inside: avoid-page; }
-  .pr-fiche:last-child { break-after: auto; }
-  .pr-fiche header { border-bottom: 2px solid #0d6e9e; padding-bottom: 3mm; margin-bottom: 4mm; }
-  .pr-code { font-size: 9.5pt; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #0d6e9e; }
-  .pr-fiche h2 { font-family: var(--font-display); font-size: 17pt; margin: 1mm 0; letter-spacing: -.01em; }
-  .pr-dom { font-size: 9.5pt; color: #5c5f7a; }
-  .pr-resume { margin: 0 0 5mm; }
-  .pr-sec { margin-bottom: 5mm; break-inside: avoid; }
-  .pr-sec h3 { font-size: 10pt; text-transform: uppercase; letter-spacing: .1em; margin: 0 0 2.5mm; padding-left: 2.5mm; border-left: 3px solid #0d6e9e; }
-  .pr-sec.err h3 { border-left-color: #c8483c; }
-  .pr-sec.perso h3 { border-left-color: #a96c10; }
-  .pr-sec ol { margin: 0; padding-left: 6mm; }
-  .pr-sec li { margin-bottom: 2.5mm; break-inside: avoid; }
-  .pr-sec li b { display: block; }
-  .pr-sec li span { color: #41455c; }
-  .pr-lien { font-size: 8.5pt; color: #8c8fa8; word-break: break-all; }
+  #print-root { display: block; color: #1a1d24; font-size: 10pt; line-height: 1.5; }
+  @page { size: A4; margin: 14mm 13mm; }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+  /* ---- Couverture ---- */
+  .pr-garde { break-after: page; position: relative; padding-top: 18mm; }
+  .pr-bandes { display: flex; gap: 2mm; margin-bottom: 14mm; }
+  .pr-bandes i { flex: 1; height: 6mm; border-radius: 1mm; }
+  .pr-marque { font-size: 10pt; font-weight: 700; letter-spacing: .22em; text-transform: uppercase; color: #0d6e9e; }
+  .pr-garde h1 { font-family: var(--font-display); font-size: 42pt; line-height: 1.02; margin: 5mm 0 4mm; letter-spacing: -.03em; }
+  .pr-sous { color: #5c5f7a; margin: 0 0 12mm; font-size: 10.5pt; }
+  .pr-somm { list-style: none; padding: 0; margin: 0; }
+  .pr-somm li { display: flex; align-items: center; gap: 4mm; padding: 2.6mm 0 2.6mm 3mm; border-left: 1.2mm solid var(--t); margin-bottom: 1.6mm; background: linear-gradient(90deg, color-mix(in srgb, var(--t) 8%, transparent), transparent 60%); break-inside: avoid; }
+  .pr-somm-num { font-family: var(--font-display); font-weight: 700; color: var(--t); font-size: 12pt; min-width: 8mm; }
+  .pr-somm-ico { font-size: 13pt; }
+  .pr-somm-corps { flex: 1; min-width: 0; }
+  .pr-somm-corps b { display: block; font-size: 10.5pt; }
+  .pr-somm-corps span { font-size: 8.5pt; color: #6b6f85; }
+  .pr-somm-cnt { font-weight: 700; color: #fff; background: var(--t); border-radius: 4mm; padding: 0.6mm 2.6mm; font-size: 9pt; }
+  .pr-pied { margin-top: 12mm; padding-top: 4mm; border-top: 1px solid #e3e6ec; font-size: 8pt; color: #8c8fa8; }
+
+  /* ---- Ouverture de chapitre ---- */
+  .pr-chap { break-before: page; }
+  .pr-chap-tete { display: flex; align-items: center; gap: 5mm; padding: 6mm 6mm; border-radius: 2.5mm; margin-bottom: 7mm;
+                  background: linear-gradient(120deg, color-mix(in srgb, var(--t) 16%, white), color-mix(in srgb, var(--t) 4%, white)); }
+  .pr-chap-num { font-family: var(--font-display); font-size: 26pt; font-weight: 700; color: var(--t); opacity: .5; line-height: 1; }
+  .pr-chap-ico { font-size: 22pt; line-height: 1; }
+  .pr-chap-kicker { font-size: 8pt; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--t); }
+  .pr-chap-tete h2 { font-family: var(--font-display); font-size: 19pt; margin: 1mm 0; letter-spacing: -.02em; }
+  .pr-chap-tete p { margin: 0; font-size: 9pt; color: #5c5f7a; }
+  .pr-chap-cnt { margin-left: auto; font-weight: 700; color: #fff; background: var(--t); border-radius: 5mm; padding: 1mm 3.4mm; font-size: 10pt; }
+
+  /* ---- Une fiche par page ---- */
+  .pr-fiche { break-inside: avoid-page; break-after: page; padding-bottom: 4mm; }
+  .pr-fiche:last-child { break-after: auto; }
+  .pr-tete { display: flex; align-items: flex-start; gap: 4mm; padding: 4.5mm 5mm; border-radius: 2mm; margin-bottom: 5mm;
+             background: color-mix(in srgb, var(--t) 10%, white); border-left: 1.6mm solid var(--t); }
+  .pr-ico { font-size: 17pt; line-height: 1; }
+  .pr-code { font-size: 9pt; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--t); white-space: nowrap; }
+  .pr-star { display: inline-block; margin-left: 3mm; background: var(--t); color: #fff; border-radius: 3mm; padding: 0.4mm 2.2mm; font-size: 7.5pt; letter-spacing: .04em; white-space: nowrap; }
+  .pr-tete h2 { font-family: var(--font-display); font-size: 17pt; margin: 1mm 0 0.6mm; letter-spacing: -.015em; }
+  .pr-dom { font-size: 8.5pt; color: #5c5f7a; }
+  .pr-resume { margin: 0 0 5mm; font-size: 10pt; color: #2c3040; }
+
+  .pr-sec { margin-bottom: 5mm; break-inside: avoid; }
+  .pr-sec h3 { font-size: 9pt; text-transform: uppercase; letter-spacing: .12em; margin: 0 0 2.5mm; padding-left: 2.6mm;
+               border-left: 1mm solid var(--t); color: var(--t); }
+  .pr-sec.err h3 { border-left-color: #c8483c; color: #c8483c; }
+  .pr-sec.perso h3 { border-left-color: #a96c10; color: #a96c10; }
+  .pr-sec ol { margin: 0; padding: 0; list-style: none; counter-reset: pt; }
+  .pr-sec li { counter-increment: pt; position: relative; padding-left: 8mm; margin-bottom: 2.8mm; break-inside: avoid; }
+  .pr-sec li::before { content: counter(pt); position: absolute; left: 0; top: 0.2mm; width: 5.4mm; height: 5.4mm; border-radius: 1.4mm;
+                       background: color-mix(in srgb, var(--t) 15%, white); color: var(--t); font-size: 8pt; font-weight: 700;
+                       display: flex; align-items: center; justify-content: center; }
+  .pr-sec.err li::before { background: #fbe9e6; color: #c8483c; }
+  .pr-sec.perso li::before { background: #faf0df; color: #a96c10; }
+  .pr-sec li b { display: block; font-size: 9.8pt; margin-bottom: 0.6mm; }
+  .pr-sec li span { color: #43485c; font-size: 9.3pt; }
+
+  .pr-bas { display: flex; justify-content: space-between; gap: 6mm; margin-top: 6mm; padding-top: 2.4mm;
+            border-top: 1px solid #e3e6ec; font-size: 7.5pt; color: #9599ad; }
+  .pr-lien { word-break: break-all; }
 }

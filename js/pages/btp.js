@@ -531,38 +531,74 @@ export const btpDtuPage = {
       </button>`;
     };
 
-    // Export : on dépose dans la page une version imprimable de toutes les fiches
-    // affichées, et on laisse le navigateur produire le PDF. Rien à installer,
-    // et la mise en page est tenue par la feuille de style d'impression.
+    // Export : on dépose dans la page une version imprimable des fiches affichées,
+    // et le navigateur produit le PDF. Chaque domaine garde sa couleur, portée par
+    // --t sur le bandeau de chapitre et sur la fiche.
     const exporter = (fiches) => {
+      const SAUT = String.fromCharCode(10);
       const jour = new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
-      const parDom = [...new Set(fiches.map(f => f.domain || 'Sans domaine'))];
-      const bloc = (titre, items, cls) => asListe(items).length ? `
-        <section class="pr-sec ${cls}"><h3>${titre}</h3>
+      const noms = [...new Set(fiches.map(f => f.domain || 'Sans domaine'))];
+      const groupes = noms.map(d => [d, domaineMeta(d), fiches.filter(f => (f.domain || 'Sans domaine') === d)]);
+
+      const points = (titre, items, cls) => asListe(items).length ? `
+        <section class="pr-sec ${cls}">
+          <h3>${titre}</h3>
           <ol>${asListe(items).map(p => `<li><b>${esc(p.titre)}</b>${p.detail ? `<span>${enClair(p.detail)}</span>` : ''}</li>`).join('')}</ol>
         </section>` : '';
 
+      const fiche = (f, meta) => {
+        const perso = (f.checkpoints || '').split(SAUT).filter(Boolean);
+        return `<article class="pr-fiche" style="--t:${meta.tint}">
+          <header class="pr-tete">
+            <span class="pr-ico">${meta.icon}</span>
+            <div class="pr-tete-corps">
+              <div class="pr-code">${esc(f.code)}${f.essential ? '<span class="pr-star">★ Top 10</span>' : ''}</div>
+              <h2>${esc(f.title)}</h2>
+              <div class="pr-dom">${esc(f.domain || '')}</div>
+            </div>
+          </header>
+          ${f.summary ? `<p class="pr-resume">${enClair(f.summary)}</p>` : ''}
+          ${points('Points clés à maîtriser', f.key_points, 'ok')}
+          ${points('Erreurs fréquentes à éviter', f.common_errors, 'err')}
+          ${points('Points de contrôle du cabinet', perso.map(l => ({ titre: l, detail: '' })), 'perso')}
+          <footer class="pr-bas">
+            <span>BTP Expertise · ${esc(f.code)}</span>
+            ${f.link ? `<span class="pr-lien">${esc(f.link)}</span>` : ''}
+          </footer>
+        </article>`;
+      };
+
       const zone = document.getElementById('print-root') || Object.assign(document.createElement('div'), { id: 'print-root' });
       zone.innerHTML = `
-        <div class="pr-garde">
+        <section class="pr-garde">
+          <div class="pr-bandes">${groupes.map(([, m]) => `<i style="background:${m.tint}"></i>`).join('')}</div>
           <div class="pr-marque">BTP Expertise</div>
-          <h1>Référentiel DTU</h1>
-          <p class="pr-sous">${fiches.length} fiche${fiches.length > 1 ? 's' : ''} · ${parDom.length} domaine${parDom.length > 1 ? 's' : ''} · édité le ${jour}</p>
-          <ul class="pr-somm">${parDom.map(d => `<li><b>${esc(d)}</b><span>${fiches.filter(f => (f.domain || 'Sans domaine') === d).map(f => esc(f.code)).join(' · ')}</span></li>`).join('')}</ul>
-          <p class="pr-pied">Document de travail interne — les valeurs renvoient au texte officiel de la norme.</p>
-        </div>
-        ${fiches.map(f => {
-          const perso = (f.checkpoints || '').split(String.fromCharCode(10)).filter(Boolean);
-          return `<article class="pr-fiche">
-            <header><div class="pr-code">${esc(f.code)}${f.essential ? ' · ★ Top 10' : ''}</div>
-              <h2>${esc(f.title)}</h2><div class="pr-dom">${esc(f.domain || '')}</div></header>
-            ${f.summary ? `<p class="pr-resume">${enClair(f.summary)}</p>` : ''}
-            ${bloc('Points clés à maîtriser', f.key_points, 'ok')}
-            ${bloc('Erreurs fréquentes à éviter', f.common_errors, 'err')}
-            ${bloc('Points de contrôle du cabinet', perso.map(l => ({ titre: l, detail: '' })), 'perso')}
-            ${f.link ? `<p class="pr-lien">${esc(f.link)}</p>` : ''}
-          </article>`;
-        }).join('')}`;
+          <h1>Référentiel<br>DTU</h1>
+          <p class="pr-sous">${fiches.length} fiche${fiches.length > 1 ? 's' : ''} · ${groupes.length} domaine${groupes.length > 1 ? 's' : ''}<br>Édition du ${jour}</p>
+          <ol class="pr-somm">${groupes.map(([d, m, l], i) => `
+            <li style="--t:${m.tint}">
+              <span class="pr-somm-num">${String(i + 1).padStart(2, '0')}</span>
+              <span class="pr-somm-ico">${m.icon}</span>
+              <span class="pr-somm-corps"><b>${esc(d)}</b><span>${l.map(f => esc(f.code)).join(' · ')}</span></span>
+              <span class="pr-somm-cnt">${l.length}</span>
+            </li>`).join('')}</ol>
+          <p class="pr-pied">Document de travail interne. Les valeurs sont données en ordre de grandeur et renvoient au texte officiel de la norme.</p>
+        </section>
+        ${groupes.map(([d, meta, l], i) => `
+          <section class="pr-chap" style="--t:${meta.tint}">
+            <div class="pr-chap-tete">
+              <span class="pr-chap-num">${String(i + 1).padStart(2, '0')}</span>
+              <span class="pr-chap-ico">${meta.icon}</span>
+              <div>
+                <div class="pr-chap-kicker">Chapitre ${String(i + 1).padStart(2, '0')}</div>
+                <h2>${esc(d)}</h2>
+                <p>${esc(meta.tagline)}</p>
+              </div>
+              <span class="pr-chap-cnt">${l.length}</span>
+            </div>
+            ${l.map(f => fiche(f, meta)).join('')}
+          </section>`).join('')}`;
+
       if (!zone.parentNode) document.body.appendChild(zone);
       document.body.classList.add('impression');
       const fini = () => { document.body.classList.remove('impression'); window.removeEventListener('afterprint', fini); };
