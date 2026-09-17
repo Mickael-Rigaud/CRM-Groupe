@@ -15,9 +15,13 @@ import {
 } from '../ui.js';
 import { activeInMonth, rowOf, dueOf, receivedOf, balanceOf } from './locatif.js';
 import {
-  idsDeTous, structuresRaccordees, cadreJour, noteAgenda, modeEmploi,
+  idsDe, idsDeTous, structuresRaccordees, cadreJour, noteAgenda, modeEmploi,
   champsAgendas, enregistrerAgendas, peutRaccorder,
 } from '../agenda.js';
+import {
+  configure as googleConfigure, evenementsDuJour, connecte as googleConnecte,
+  modeEmploiClient, CLE_CLIENT, clientId,
+} from '../google-agenda.js';
 
 const LS_FILTRE = 'crm_home_filtre';
 const pct = (v) => Math.round((v || 0) * 100);
@@ -197,6 +201,7 @@ export const homePage = {
       });
       root.querySelector('#tb-obj')?.addEventListener('click', () => formObjectifs(draw));
       root.querySelector('#tb-ag')?.addEventListener('click', () => formAgendas(visibles, draw));
+      remplirJournee(root, visibles, draw);
 
       dessineCourbe(cles, moisSerie, deals);
     };
@@ -346,73 +351,192 @@ const libellePeriode = (p) => ({
 }[p] || '');
 
 // ---------- journée ----------
-// Les agendas Google des structures, superposés dans un seul cadre : c'est Google
-// qui colore par agenda. Le CRM ne peut pas lire leur contenu, il ne les mélange
-// donc pas à ses propres tâches — celles du jour sont listées juste en dessous.
+// Une seule journée, dessinée par le CRM : les rendez-vous lus dans les agendas
+// Google des structures et les tâches horodatées du CRM, mélangés et triés, chacun
+// à la couleur de sa structure. Le cadre intégré de Google ne sert plus que de
+// repli, tant qu'aucun identifiant client n'est renseigné.
 function carteJournee(cles) {
   const ids = idsDeTous(cles);
-  const raccordees = structuresRaccordees(cles);
-  // Vue « jour » seulement : le tableau de bord montre la journée en cours. La
-  // semaine et le mois se consultent dans Google Agenda, lien à droite.
   const entete = `<div class="card-head"><h2>Ma journée</h2>
     <span class="muted small">${new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
-    ${ids.length ? '<a class="btn ghost sm" href="https://calendar.google.com/calendar/r/day" target="_blank" rel="noopener">Ouvrir Google Agenda ↗</a>' : ''}
     ${peutRaccorder() ? `<button class="btn ghost sm" id="tb-ag">${ids.length ? 'Agendas' : 'Raccorder les agendas'}</button>` : ''}</div>`;
 
   if (!ids.length) {
     return `<section class="card">${entete}
       <div class="tb-ag-vide">
         <p><b>Aucun agenda n'est encore raccordé.</b> Une fois les calendriers Google des structures renseignés,
-        ils s'afficheront ici superposés, chacun avec sa couleur.</p>
+        leurs rendez-vous du jour s'afficheront ici, chacun à la couleur de sa structure.</p>
         ${peutRaccorder() ? modeEmploi() + '<p class="muted small">Puis « Raccorder les agendas » ci-dessus.</p>'
           : '<p class="muted small">La direction peut les renseigner depuis cet écran.</p>'}
       </div>
-      ${listeDuJour(true)}
+      <div id="tb-jour">${dessinerJournee([], cles)}</div>
     </section>`;
   }
-  const manquantes = cles.filter(k => !raccordees.includes(k));
+  // Sans identifiant client Google, on ne peut pas lire les événements : on garde
+  // l'ancien cadre intégré pour ne pas laisser l'écran vide.
+  if (!googleConfigure()) {
+    return `<section class="card">${entete}
+      ${cadreJour(ids, 'Agendas du groupe')}
+      <p class="muted small tb-ag-src">${sourcesHtml(cles)}</p>
+      ${peutRaccorder() ? `<p class="muted small">Pour une vraie journée — uniquement aujourd'hui, aux couleurs des structures —
+        <button class="lien" id="tb-gcli">activer la lecture des agendas</button>.</p>` : ''}
+      ${noteAgenda()}
+    </section>`;
+  }
   return `<section class="card">${entete}
-    ${cadreJour(ids, 'Agendas du groupe')}
-    <p class="muted small tb-ag-src">${raccordees.map(k => `<span class="ag-src"><span class="dot" style="background:${ACTIVITIES[k].color}"></span>${esc(ACTIVITIES[k].label)}</span>`).join('')}
-      ${manquantes.length ? `<span class="ag-abs">sans agenda : ${manquantes.map(k => esc(ACTIVITIES[k].label)).join(', ')}</span>` : ''}</p>
-    ${listeDuJour(false)}
-    ${noteAgenda()}
+    <div id="tb-jour"><div class="tb-jour-attente">Lecture des agendas…</div></div>
+    <p class="muted small tb-ag-src">${sourcesHtml(cles)}</p>
   </section>`;
 }
-// Les rendez-vous notés dans le CRM lui-même : ils ne sont pas dans Google, donc
-// ils seraient invisibles si on ne les affichait pas à part.
-function listeDuJour(seul) {
+const sourcesHtml = (cles) => {
+  const raccordees = structuresRaccordees(cles);
+  const manquantes = cles.filter(k => !raccordees.includes(k));
+  return raccordees.map(k => `<span class="ag-src"><span class="dot" style="background:${ACTIVITIES[k].color}"></span>${esc(ACTIVITIES[k].label)}</span>`).join('')
+    + (manquantes.length ? `<span class="ag-abs">sans agenda : ${manquantes.map(k => esc(ACTIVITIES[k].label)).join(', ')}</span>` : '');
+};
+
+// Les tâches du CRM qui ont une heure : elles rejoignent les rendez-vous Google
+// dans la même journée, c'est tout l'intérêt de dessiner nous-mêmes.
+function tachesDuJour() {
   const jour = isoDay();
-  const rdv = scope.activities()
+  return scope.activities()
     .filter(a => !a.done && a.due_date === jour && a.due_time)
-    .sort((a, b) => a.due_time.localeCompare(b.due_time));
-  if (!rdv.length) return seul ? '<div class="empty" style="padding:14px 0">Aucun rendez-vous noté dans le CRM aujourd\'hui.</div>' : '';
-  const maintenant = new Date().toTimeString().slice(0, 5);
-  let corps = '';
-  rdv.forEach((a, i) => {
-    if (rdv[i - 1] && rdv[i - 1].due_time < maintenant && a.due_time > maintenant)
-      corps += `<div class="tb-now"><span class="h">${maintenant}</span><span class="line"></span></div>`;
-    const act = ACTIVITIES[db.byId('deals', a.deal_id)?.activity];
-    corps += `<div class="tb-slot click" data-go="#/today">
-      <span class="h">${esc(a.due_time)}</span>
-      <span class="tb-rail"><i style="background:${act ? act.color : 'var(--muted-2)'}"></i></span>
-      <span><span class="t">${esc(a.title)}</span><span class="m">${esc(a.type || 'Tâche')}${act ? ' · ' + esc(act.label) : ''}</span></span>
-    </div>`;
-  });
-  return `${seul ? '' : '<h3 class="tb-ag-titre">Noté dans le CRM aujourd\'hui</h3>'}<div class="tb-day">${corps}</div>`;
+    .map(a => {
+      const [h, m] = a.due_time.split(':').map(Number);
+      const d = new Date(); d.setHours(h || 0, m || 0, 0, 0);
+      const f = new Date(d.getTime() + 30 * 60000);
+      return {
+        id: 'crm-' + a.id, titre: a.title, lieu: '', debut: d, fin: f, journee: false,
+        structure: db.byId('deals', a.deal_id)?.activity || null,
+        crm: true, type: a.type || 'Tâche', qui: userName(a.assignee_id),
+      };
+    });
 }
+
+async function remplirJournee(root, cles, redraw) {
+  root.querySelector('#tb-gcli')?.addEventListener('click', () => formClientGoogle(redraw));
+  const cible = root.querySelector('#tb-jour');
+  if (!cible) return;
+  const agendas = cles.flatMap(k => idsDe(k).map(c => ({ structure: k, calendrier: c })));
+  if (!agendas.length || !googleConfigure()) { cible.innerHTML = dessinerJournee(tachesDuJour(), cles); return; }
+
+  const afficher = (evenements, echecs, aConnecter) => {
+    cible.innerHTML = dessinerJournee([...evenements, ...tachesDuJour()], cles, echecs, aConnecter);
+    cible.querySelector('#tb-gconnect')?.addEventListener('click', async (e) => {
+      e.target.disabled = true; e.target.textContent = 'Connexion…';
+      try {
+        const r = await evenementsDuJour(agendas, new Date(), { interactif: true });
+        afficher(r.evenements, r.echecs, false);
+      } catch (err) { toast(err.message, 'err'); e.target.disabled = false; e.target.textContent = 'Se connecter à Google'; }
+    });
+  };
+  try {
+    const r = await evenementsDuJour(agendas, new Date(), { interactif: false });
+    afficher(r.evenements, r.echecs, false);
+  } catch {
+    // Pas encore autorisé : on montre la journée du CRM et un bouton. Ouvrir la
+    // fenêtre Google sans geste de la personne, le navigateur la bloquerait.
+    afficher([], [], true);
+  }
+}
+
+// La journée dessinée : une ligne par rendez-vous, l'heure à gauche, un filet à la
+// couleur de la structure, et le trait rouge de l'heure courante à sa place.
+function dessinerJournee(elements, cles, echecs = [], aConnecter = false) {
+  const maintenant = new Date();
+  const hhmm = (d) => d.toTimeString().slice(0, 5);
+  const journee = elements.filter(e => e.journee);
+  const horaires = elements.filter(e => !e.journee).sort((a, b) => a.debut - b.debut);
+  const duree = (e) => Math.max(0, Math.round((e.fin - e.debut) / 60000));
+
+  const ligne = (e) => {
+    const c = e.structure ? ACTIVITIES[e.structure]?.color : 'var(--muted-2)';
+    const passe = e.fin < maintenant;
+    const encours = e.debut <= maintenant && e.fin > maintenant;
+    const min = duree(e);
+    return `<div class="tb-rdv${passe ? ' passe' : ''}${encours ? ' encours' : ''}" style="--c:${c}">
+      <span class="tb-h">${hhmm(e.debut)}<small>${hhmm(e.fin)}</small></span>
+      <span class="tb-filet"></span>
+      <span class="tb-corps">
+        <span class="tb-titre">${esc(e.titre)}</span>
+        <span class="tb-det">${[
+          e.crm ? esc(e.type) : (min >= 60 ? Math.floor(min / 60) + ' h' + (min % 60 ? String(min % 60).padStart(2, '0') : '') : min + ' min'),
+          e.structure ? esc(ACTIVITIES[e.structure].label) : 'Groupe',
+          e.lieu ? esc(e.lieu) : '',
+          e.crm ? esc(e.qui) : (e.invites > 1 ? e.invites + ' participants' : ''),
+        ].filter(Boolean).join(' · ')}</span>
+      </span>
+      ${e.crm ? '<span class="tb-tag">CRM</span>' : ''}
+    </div>`;
+  };
+
+  let corps = '';
+  if (journee.length) corps += `<div class="tb-alljour">${journee.map(e =>
+    `<span class="tb-puce" style="--c:${e.structure ? ACTIVITIES[e.structure]?.color : 'var(--muted-2)'}">${esc(e.titre)}</span>`).join('')}</div>`;
+  if (horaires.length) {
+    corps += '<div class="tb-jour">';
+    horaires.forEach((e, i) => {
+      const prec = horaires[i - 1];
+      if (prec && prec.debut <= maintenant && e.debut > maintenant)
+        corps += `<div class="tb-now"><span class="h">${hhmm(maintenant)}</span><span class="line"></span></div>`;
+      corps += ligne(e);
+    });
+    corps += '</div>';
+  }
+  if (!journee.length && !horaires.length && !aConnecter)
+    corps = '<div class="empty" style="padding:20px 0">Aucun rendez-vous aujourd\'hui.</div>';
+
+  const alerte = aConnecter
+    ? `<div class="tb-jour-connect"><span>Connectez-vous à Google pour voir les rendez-vous des agendas.</span>
+       <button class="btn sm" id="tb-gconnect">Se connecter à Google</button></div>`
+    : echecs.length
+      ? `<div class="tb-jour-alerte">${echecs.length} agenda${echecs.length > 1 ? 's' : ''} illisible${echecs.length > 1 ? 's' : ''} :
+         ${echecs.map(x => `${esc(ACTIVITIES[x.structure]?.label || x.structure)} (${esc(x.motif)})`).join(', ')}.
+         Vérifiez que le calendrier est partagé avec votre compte Google.</div>`
+      : '';
+  return alerte + corps;
+}
+
 function formAgendas(cles, onSaved) {
   openModal('Agendas des structures',
     `<div id="f-ag">${champsAgendas(cles)}
-     <details class="ag-aide"><summary>Où trouver l'identifiant d'un calendrier ?</summary>${modeEmploi()}</details></div>
+     <details class="ag-aide"><summary>Où trouver l'identifiant d'un calendrier ?</summary>${modeEmploi()}</details>
+     <details class="ag-aide"><summary>Lecture des agendas (identifiant client Google)</summary>
+       <div class="field" style="margin-top:8px"><label>ID client OAuth</label>
+         <input id="ag-client" value="${esc(clientId())}" placeholder="…apps.googleusercontent.com"></div>
+       ${modeEmploiClient()}</details></div>
      <div class="form-actions"><button class="btn ghost" id="ag-x">Annuler</button><button class="btn" id="ag-ok">Enregistrer</button></div>`,
     { wide: true, onOpen: (m) => {
       m.querySelector('#ag-x').onclick = () => closeModal();
       m.querySelector('#ag-ok').onclick = async () => {
-        try { await enregistrerAgendas(m.querySelector('#f-ag'), cles); closeModal(true); onSaved(); }
+        try {
+          await enregistrerAgendas(m.querySelector('#f-ag'), cles);
+          await enregistrerReglage(CLE_CLIENT, m.querySelector('#ag-client').value.trim());
+          closeModal(true); onSaved();
+        } catch (e) { toast(e.message, 'err'); }
+      };
+    } });
+}
+function formClientGoogle(onSaved) {
+  openModal('Lire les agendas dans le CRM',
+    `<div id="f-cli"><p class="muted small" style="margin-top:0">Avec un identifiant client Google, le CRM lit les rendez-vous
+       et dessine la journée lui-même : uniquement aujourd'hui, aux couleurs des structures, avec les tâches du CRM au milieu.</p>
+     <div class="field"><label>ID client OAuth</label><input id="cli-id" value="${esc(clientId())}" placeholder="…apps.googleusercontent.com"></div>
+     ${modeEmploiClient()}</div>
+     <div class="form-actions"><button class="btn ghost" id="cli-x">Annuler</button><button class="btn" id="cli-ok">Enregistrer</button></div>`,
+    { wide: true, onOpen: (m) => {
+      m.querySelector('#cli-x').onclick = () => closeModal();
+      m.querySelector('#cli-ok').onclick = async () => {
+        try { await enregistrerReglage(CLE_CLIENT, m.querySelector('#cli-id').value.trim()); closeModal(true); toast('Enregistré'); onSaved(); }
         catch (e) { toast(e.message, 'err'); }
       };
     } });
+}
+async function enregistrerReglage(cle, valeur) {
+  const existe = db.t('settings').some(s => s.key === cle);
+  if (!existe && !valeur) return;
+  if (existe) await db.update('settings', cle, { value: valeur });
+  else await db.insert('settings', { key: cle, value: valeur });
 }
 
 // ---------- tâches ----------
