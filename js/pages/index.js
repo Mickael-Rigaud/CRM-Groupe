@@ -6,7 +6,7 @@ import { settingsPage } from './settings.js';
 import { homePage } from './home.js';
 import { patrimoinePage, propertiesPage, loansPage, expensesPage } from './patrimoine.js';
 import { rgdDashboardPage } from './rgd.js';
-import { btpHomePage, btpTodoPage, btpBasePage, btpDtuPage, btpMailsPage, btpFacturationPage } from './btp.js';
+import { btpHomePage, btpBasePage, btpDtuPage, btpMailsPage, btpFacturationPage } from './btp.js';
 import { courtageHomePage, courtageBasePage, courtageVivierPage } from './courtage.js';
 import { messageriePage } from './messagerie.js';
 
@@ -25,7 +25,6 @@ export const pages = {
   patrimoine_charges: expensesPage,
   rgd: rgdDashboardPage,
   btp_home: btpHomePage,
-  btp_todo: btpTodoPage,
   btp_base: btpBasePage,
   btp_dtu: btpDtuPage,
   btp_mails: btpMailsPage,
