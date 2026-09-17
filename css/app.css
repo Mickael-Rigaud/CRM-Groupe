@@ -732,139 +732,184 @@ body.impression #print-root { display: block; }
 .tbl-structures th:first-child, .tbl-structures td:first-child { width: 30%; }
 
 /* =====================================================================
-   Messagerie interne — deux colonnes dans la coquille pleine hauteur des
-   espaces (.esp-app) : la liste des conversations à gauche, le fil à droite.
-   `--t` porte la couleur de la structure quand la conversation en a une ;
-   les conversations privées et le canal Groupe n'en ont pas et restent
-   sur l'indigo du groupe.
+   Messagerie interne
+   Deux endroits, une seule feuille : l'écran plein (#/messagerie) et la bulle
+   posée en bas à droite de toutes les pages. Ce qui dépend de la place tient
+   dans les quelques règles préfixées `.msg-panneau`.
+
+   `--t` porte la couleur de la structure quand la conversation en a une. Les
+   messages directs et le canal Groupe n'en ont pas et prennent l'indigo de
+   l'outil : la couleur dit à quelle structure on parle, pas à qui.
    ===================================================================== */
 .msg-app { --t: var(--accent); background: var(--card); }
 
-.msg-cote { width: 280px; flex: none; border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; background: var(--card-2); }
-.msg-cote-tete { display: flex; gap: 8px; padding: 12px; border-bottom: 1px solid var(--line); }
-.msg-cote-tete input { flex: 1; min-width: 0; padding: 7px 10px; border: 1px solid var(--line-strong); border-radius: 9px; background: var(--card); }
-.msg-liste { flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 2px; }
+/* ---------- La liste des conversations ---------- */
+.msg-cote { width: 300px; flex: none; border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; background: var(--card-2); }
+.msg-cote-tete { padding: 12px; border-bottom: 1px solid var(--line); }
+.msg-cote-tete input { width: 100%; padding: 8px 11px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--card); }
+.msg-cote-tete input:focus { outline: none; border-color: var(--t, var(--accent)); }
+.msg-liste { flex: 1; overflow-y: auto; padding: 8px; }
 
-.msg-item { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 10px; text-decoration: none; color: inherit; }
-.msg-item:hover { background: var(--card); }
-.msg-item.on { background: var(--card); box-shadow: inset 3px 0 0 var(--t), var(--shadow); }
-.msg-item-ico { flex: none; display: grid; place-items: center; width: 26px; }
+/* Les deux familles sous leur intitulé : c'est ce qui sépare à l'œil un canal
+   d'équipe d'un échange à deux, avant même de lire les noms. */
+.msg-famille + .msg-famille { margin-top: 14px; }
+.msg-famille-tete { display: flex; align-items: center; gap: 7px; padding: 4px 10px 7px; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted-2); }
+.msg-famille-tete span { background: var(--line); color: var(--muted); border-radius: 9px; padding: 0 6px; font-size: 10px; letter-spacing: 0; }
+
+.msg-item { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 11px; text-decoration: none; color: inherit; position: relative; transition: background .12s, transform .12s; }
+.msg-item:hover { background: var(--card); transform: translateX(1px); }
+.msg-item.on { background: var(--card); box-shadow: var(--shadow); }
+/* Le filet de couleur ne s'allume que sur un canal : un message direct n'appartient à aucune structure */
+.msg-item.canal.on::before { content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px; border-radius: 0 3px 3px 0; background: var(--t, var(--accent)); }
 .msg-item-corps { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.msg-item-corps b { font-size: 13.5px; font-weight: 650; }
+.msg-item-corps b { font-size: 13.5px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .msg-item-corps small { font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.msg-item.a-lire .msg-item-corps b { font-weight: 800; }
+.msg-item.a-lire .msg-item-corps small { color: var(--text); }
 .msg-item time { font-size: 10.5px; flex: none; }
-.msg-cnt { flex: none; min-width: 19px; height: 19px; padding: 0 5px; border-radius: 10px; background: var(--t); color: #fff; font-size: 10.5px; font-weight: 800; font-style: normal; display: grid; place-items: center; }
-.msg-puce { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
-.msg-puce-groupe { background: var(--muted-2); }
-.avatar.sm { width: 22px; height: 22px; font-size: 9px; }
 
+/* La pastille : `display` doit céder devant [hidden], sinon un compteur à zéro reste affiché */
+.msg-cnt { min-width: 19px; height: 19px; padding: 0 5px; border-radius: 10px; background: var(--t, var(--accent)); color: #fff; font-size: 10.5px; font-weight: 800; font-style: normal; display: grid; place-items: center; flex: none; }
+.msg-cnt[hidden] { display: none; }
+
+/* ---------- Vignettes : un canal porte son logo, une personne ses initiales ---------- */
+.msg-ecu { width: 30px; height: 30px; flex: none; border-radius: 9px; display: grid; place-items: center; background: color-mix(in srgb, var(--t) 14%, #fff); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--t) 28%, transparent); overflow: hidden; }
+.msg-ecu img { width: 20px; height: 20px; object-fit: contain; }
+.msg-ecu b { color: var(--t); font-size: 15px; }
+.msg-ecu.groupe { --t: var(--muted-2); background: var(--line); }
+.msg-ecu.sm { width: 26px; height: 26px; border-radius: 8px; }
+.msg-ecu.sm img { width: 17px; height: 17px; }
+.msg-ecu.lg { width: 40px; height: 40px; border-radius: 12px; }
+.msg-ecu.lg img { width: 26px; height: 26px; }
+.msg-ecu.xl { width: 56px; height: 56px; border-radius: 16px; }
+.msg-ecu.xl img { width: 34px; height: 34px; }
+.avatar.sm { width: 22px; height: 22px; font-size: 9px; }
+.avatar.xs { width: 22px; height: 22px; font-size: 8.5px; box-shadow: 0 0 0 2px var(--card); }
+.avatar.xs.plus { background: var(--line-strong); color: var(--muted); }
+.avatar.lg { width: 40px; height: 40px; font-size: 14px; }
+.avatar.xl { width: 56px; height: 56px; font-size: 19px; }
+
+/* ---------- L'en-tête d'une conversation ---------- */
 .msg-vue { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.msg-hote { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.msg-hote.depot { outline: 2px dashed var(--t); outline-offset: -8px; }
-.msg-tete { display: flex; align-items: center; gap: 12px; padding: 14px 20px; border-bottom: 1px solid var(--line); }
+.msg-tete { display: flex; align-items: center; gap: 12px; padding: 13px 20px; border-bottom: 1px solid var(--line); }
+.msg-tete.canal { background: linear-gradient(180deg, color-mix(in srgb, var(--t) 9%, var(--card)) 0%, var(--card) 100%); }
 .msg-tete > div { flex: 1; min-width: 0; }
 .msg-tete h2 { display: flex; align-items: center; gap: 8px; }
+.msg-gens-ligne { display: inline-flex; align-items: center; }
+.msg-gens-ligne .avatar { margin-left: -6px; }
+.msg-gens-ligne .avatar:first-child { margin-left: 0; }
+.msg-gens-ligne em { margin-left: 9px; font-style: normal; font-size: 11.5px; color: var(--muted); white-space: nowrap; }
 
-/* Le fil défile seul : c'est lui qu'on recolle en bas à l'arrivée d'un message. */
-.msg-fil { flex: 1; overflow-y: auto; padding: 16px 20px 10px; display: flex; flex-direction: column; gap: 2px; }
+/* ---------- Le fil ---------- */
+.msg-hote { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.msg-hote.depot { outline: 2px dashed var(--t, var(--accent)); outline-offset: -8px; }
+.msg-fil { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 16px 20px 10px; display: flex; flex-direction: column; gap: 2px; }
 .msg-jour { display: flex; align-items: center; gap: 12px; margin: 16px 0 10px; color: var(--muted-2); font-size: 11px; font-weight: 700; }
 .msg-jour::before, .msg-jour::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.msg-vide { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center; padding: 20px; }
+.msg-vide b { font-size: 16px; }
 
-.msg-ligne { display: flex; align-items: flex-start; gap: 10px; padding: 2px 0; }
+.msg-ligne { display: flex; align-items: flex-start; gap: 10px; padding: 2px 0; min-width: 0; animation: msg-entre .18s ease both; }
+@keyframes msg-entre { from { opacity: 0; transform: translateY(4px); } }
 .msg-ligne.suite { margin-top: -2px; }
 .msg-gouttiere { width: 22px; flex: none; }
-.msg-bulle { max-width: min(640px, 80%); background: var(--card-2); border-radius: 12px; padding: 8px 12px; }
-.msg-ligne.moi .msg-bulle { background: var(--accent-soft); }
+.msg-bulle { min-width: 0; max-width: min(640px, 78%); background: var(--card-2); border-radius: 13px; padding: 8px 12px; }
+.msg-ligne.moi .msg-bulle { background: color-mix(in srgb, var(--t, var(--accent)) 12%, var(--card)); }
 .msg-qui { display: flex; align-items: baseline; gap: 8px; margin-bottom: 2px; }
 .msg-qui b { font-size: 12.5px; font-weight: 700; }
 .msg-qui time, .msg-qui em { font-size: 10.5px; color: var(--muted-2); font-style: normal; }
 .msg-corps { white-space: pre-wrap; overflow-wrap: anywhere; }
 .msg-corps a { color: var(--accent); }
-.msg-edition { width: 100%; min-height: 60px; border: 1px solid var(--t); border-radius: 8px; padding: 6px 8px; resize: vertical; }
+.msg-modifie { margin-left: 6px; font-size: 10.5px; font-style: normal; color: var(--muted-2); }
+.msg-edition { width: 100%; min-height: 60px; border: 1px solid var(--t, var(--accent)); border-radius: 8px; padding: 6px 8px; resize: vertical; }
 
 /* Les actions n'apparaissent qu'au survol : une corbeille en permanence à côté
    de chaque message rend le fil anxiogène. */
-.msg-actions { display: flex; gap: 2px; opacity: 0; transition: opacity .12s; }
+.msg-actions { display: flex; gap: 2px; flex: none; opacity: 0; transition: opacity .12s; }
 .msg-ligne:hover .msg-actions { opacity: 1; }
 
-.msg-pieces { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
-.msg-photo { display: block; max-width: 240px; border-radius: 9px; overflow: hidden; text-decoration: none; background: var(--card); border: 1px solid var(--line); }
+/* ---------- Pièces jointes ---------- */
+.msg-pieces { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; min-width: 0; }
+.msg-photo { display: block; max-width: 240px; border-radius: 10px; overflow: hidden; text-decoration: none; background: var(--card); border: 1px solid var(--line); }
 .msg-photo img { display: block; width: 100%; height: auto; max-height: 260px; object-fit: cover; }
 .msg-photo span { display: block; padding: 4px 8px; font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .msg-photo.absente img { display: none; }
-.msg-fichier { display: flex; align-items: center; gap: 9px; padding: 7px 11px; border: 1px solid var(--line-strong); border-radius: 9px; background: var(--card); text-decoration: none; color: inherit; }
-.msg-fichier:hover { border-color: var(--t); }
-.msg-fichier-ico { font-size: 17px; }
-.msg-fichier b { display: block; font-size: 12.5px; }
-.msg-fichier small { font-size: 10.5px; }
+/* Un nom de fichier long ne doit pas pousser la largeur du panneau : il se coupe. */
+.msg-fichier { display: flex; align-items: center; gap: 9px; max-width: 100%; min-width: 0; padding: 7px 11px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--card); text-decoration: none; color: inherit; transition: border-color .12s; }
+.msg-fichier:hover { border-color: var(--t, var(--accent)); }
+.msg-fichier-ico { font-size: 17px; flex: none; }
+.msg-fichier-nom { min-width: 0; }
+.msg-fichier-nom b { display: block; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.msg-fichier-nom small { display: block; font-size: 10.5px; }
 
+/* ---------- La zone de saisie ---------- */
 .msg-ecrire { border-top: 1px solid var(--line); padding: 10px 20px 14px; background: var(--card); }
 .msg-saisie { display: flex; align-items: flex-end; gap: 8px; }
-.msg-saisie textarea { flex: 1; min-width: 0; resize: none; padding: 9px 12px; border: 1px solid var(--line-strong); border-radius: 11px; line-height: 1.4; max-height: 160px; }
-.msg-saisie textarea:focus { outline: none; border-color: var(--t); }
-.msg-trombone { flex: none; width: 36px; height: 36px; display: grid; place-items: center; border-radius: 9px; cursor: pointer; font-size: 17px; }
+.msg-saisie textarea { flex: 1; min-width: 0; resize: none; padding: 9px 13px; border: 1px solid var(--line-strong); border-radius: 12px; line-height: 1.4; max-height: 160px; transition: border-color .12s; }
+.msg-saisie textarea:focus { outline: none; border-color: var(--t, var(--accent)); }
+.msg-envoi { display: inline-flex; align-items: center; gap: 7px; background: var(--t, var(--accent)); border-color: transparent; }
+.msg-trombone { flex: none; width: 36px; height: 36px; display: grid; place-items: center; border-radius: 10px; cursor: pointer; font-size: 17px; transition: background .12s; }
 .msg-trombone:hover { background: var(--card-2); }
 .msg-jointes { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
-.msg-jointe { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 8px; background: var(--card-2); font-size: 12px; }
-.msg-jointe button { border: 0; background: none; color: var(--muted-2); font-size: 15px; line-height: 1; padding: 0 2px; }
+.msg-jointe { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 4px 8px; border-radius: 9px; background: var(--card-2); font-size: 12px; }
+.msg-jointe > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.msg-jointe button { border: 0; background: none; color: var(--muted-2); font-size: 15px; line-height: 1; padding: 0 2px; flex: none; }
 .msg-jointe button:hover { color: var(--red); }
 
-/* Choix du destinataire d'une nouvelle conversation privée */
-.msg-gens { display: flex; flex-direction: column; gap: 6px; }
-.msg-gens button { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); text-align: left; }
-.msg-gens button:hover { border-color: var(--accent); background: var(--accent-soft); }
-.msg-gens small { display: block; font-size: 11px; }
-
-@media (max-width: 860px) {
-  /* En colonne, la liste passe au-dessus et se limite à quelques lignes :
-     sur un téléphone, c'est le fil qu'on vient lire. */
-  .msg-cote { width: auto; border-right: 0; border-bottom: 1px solid var(--line); max-height: 40vh; }
-  .msg-bulle { max-width: 100%; }
-}
-.msg-modifie { margin-left: 6px; font-size: 10.5px; font-style: normal; color: var(--muted-2); }
-
-/* ---------------------------------------------------------------------
-   La bulle de messagerie — présente sur toutes les pages, en bas à droite.
-   Le panneau reprend le fil et la saisie de l'écran plein, dans 380 px de
-   large : tout ce qui est commun est déjà défini plus haut, on ne règle
-   ici que ce qui change avec la place disponible.
-   --------------------------------------------------------------------- */
-.msg-bulle-zone { position: fixed; right: 20px; bottom: 20px; z-index: 60; display: flex; flex-direction: column; align-items: flex-end; gap: 12px; }
-.msg-bulle-zone[hidden] { display: none; }
-
-.msg-declencheur { width: 52px; height: 52px; border: 0; border-radius: 50%; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; box-shadow: var(--shadow-lift); position: relative; transition: transform .12s, background .12s; }
-.msg-declencheur:hover { background: var(--accent-2); transform: translateY(-1px); }
-.msg-declencheur .msg-cnt { position: absolute; top: -2px; right: -2px; background: var(--red); box-shadow: 0 0 0 2px var(--bg); }
-/* Des messages non lus : l'appel discret, une fois, pas une animation perpétuelle */
-@keyframes msg-appel { 0%, 100% { transform: none; } 30% { transform: translateY(-3px); } 60% { transform: none; } }
-.msg-declencheur.a-lire { animation: msg-appel .5s ease 1; }
-
-.msg-panneau { width: 380px; max-width: calc(100vw - 32px); height: 540px; max-height: calc(100vh - 120px); display: flex; flex-direction: column; background: var(--card); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow-lift); overflow: hidden; }
-.msg-panneau[hidden] { display: none; }
-.msg-panneau-tete { display: flex; align-items: center; gap: 6px; padding: 9px 10px 9px 12px; border-bottom: 1px solid var(--line); background: var(--card-2); }
-.msg-choix { flex: 1; min-width: 0; border: 1px solid var(--line-strong); border-radius: 8px; padding: 5px 8px; background: var(--card); font-weight: 600; }
-.msg-choix:focus { outline: none; border-color: var(--t, var(--accent)); }
-
-/* Dans 380 px, on resserre : moins de marges, bulles plus larges, actions
-   toujours visibles faute de survol fiable au doigt. */
-.msg-panneau .msg-fil { padding: 12px 12px 8px; }
-.msg-panneau .msg-bulle { max-width: 88%; }
-.msg-panneau .msg-ecrire { padding: 8px 12px 12px; }
-.msg-panneau .msg-actions { opacity: 1; }
-.msg-panneau .msg-photo { max-width: 180px; }
-
-/* Le renvoi vers l'écran d'où part le message */
-.msg-apropos { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 4px 8px; border-radius: 8px; background: var(--accent-soft); color: var(--accent-ink); font-size: 12px; }
+/* ---------- Le renvoi vers l'écran d'où part le message ---------- */
+.msg-contexte { margin-bottom: 8px; }
+.msg-apropos { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 5px 9px; border-radius: 9px; background: color-mix(in srgb, var(--t, var(--accent)) 12%, var(--card)); color: var(--accent-ink); font-size: 12px; }
 .msg-apropos b { font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .msg-apropos button { border: 0; background: none; color: inherit; font-size: 15px; line-height: 1; padding: 0 2px; opacity: .7; }
 .msg-apropos button:hover { opacity: 1; }
-.msg-contexte { margin-bottom: 8px; }
-.msg-renvoi { display: inline-block; margin-top: 4px; padding: 3px 8px; border-radius: 7px; background: var(--card); border: 1px solid var(--line-strong); font-size: 12.5px; font-weight: 600; text-decoration: none; }
-.msg-renvoi:hover { border-color: var(--accent); color: var(--accent-ink); }
+.msg-renvoi { display: inline-block; max-width: 100%; margin-top: 4px; padding: 3px 9px; border-radius: 8px; background: var(--card); border: 1px solid var(--line-strong); font-size: 12.5px; font-weight: 600; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+.msg-renvoi:hover { border-color: var(--t, var(--accent)); color: var(--accent-ink); }
 
-@media (max-width: 560px) {
-  /* Sur un téléphone, le panneau prend l'écran : 380 px fixes n'ont pas de sens */
+/* =====================================================================
+   La bulle — le même contenu, dans un panneau flottant
+   ===================================================================== */
+.msg-bulle-zone { position: fixed; right: 20px; bottom: 20px; z-index: 60; display: flex; flex-direction: column; align-items: flex-end; gap: 12px; }
+.msg-bulle-zone[hidden] { display: none; }
+
+.msg-declencheur { width: 54px; height: 54px; border: 0; border-radius: 50%; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; box-shadow: var(--shadow-lift); position: relative; transition: transform .14s, background .14s; }
+.msg-declencheur:hover { background: var(--accent-2); transform: translateY(-2px); }
+.msg-bulle-zone.ouverte .msg-declencheur { transform: scale(.92); }
+.msg-declencheur .msg-cnt { position: absolute; top: -2px; right: -2px; background: var(--red); box-shadow: 0 0 0 2px var(--bg); }
+
+.msg-panneau { --t: var(--accent); width: 440px; max-width: calc(100vw - 32px); height: 640px; max-height: calc(100vh - 128px); display: flex; flex-direction: column; background: var(--card); border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 18px 50px -12px rgba(17,21,28,.3); overflow: hidden; transform-origin: bottom right; animation: msg-ouvre .16s cubic-bezier(.2,.8,.3,1) both; }
+@keyframes msg-ouvre { from { opacity: 0; transform: translateY(10px) scale(.97); } }
+.msg-panneau[hidden] { display: none; }
+.msg-panneau-tete { display: flex; align-items: center; gap: 8px; padding: 10px 10px 10px 14px; border-bottom: 1px solid var(--line); background: linear-gradient(180deg, color-mix(in srgb, var(--t) 10%, var(--card)) 0%, var(--card) 100%); }
+.msg-panneau-titre { flex: 1; min-width: 0; display: flex; align-items: center; gap: 9px; }
+.msg-panneau-titre > span { min-width: 0; display: flex; flex-direction: column; }
+.msg-panneau-titre b { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.msg-panneau-titre small { font-size: 11px; }
+.msg-retour[hidden] { display: none; }
+.msg-panneau-corps { flex: 1; min-height: 0; display: flex; }
+.msg-panneau-liste { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.msg-panneau-liste[hidden] { display: none; }
+.msg-panneau .msg-hote[hidden] { display: none; }
+.msg-panneau .msg-cote-tete { background: var(--card-2); }
+.msg-panneau .msg-liste { background: var(--card-2); }
+
+/* Dans 440 px, on resserre : moins de marges, bulles plus larges, actions
+   toujours visibles faute de survol fiable au doigt. */
+.msg-panneau .msg-fil { padding: 12px 14px 8px; }
+.msg-panneau .msg-bulle { max-width: calc(100% - 34px); }
+.msg-panneau .msg-ecrire { padding: 9px 14px 13px; }
+.msg-panneau .msg-actions { opacity: 1; }
+.msg-panneau .msg-photo { max-width: 190px; }
+.msg-panneau .msg-envoi span { display: none; }
+.msg-panneau .msg-envoi { padding: 9px 11px; }
+
+@media (max-width: 900px) {
+  .msg-cote { width: 260px; }
+}
+@media (max-width: 720px) {
+  /* Sur un téléphone, le panneau prend l'écran : 440 px fixes n'ont pas de sens */
   .msg-bulle-zone { right: 12px; bottom: 12px; left: 12px; align-items: stretch; }
-  .msg-panneau { width: auto; height: calc(100vh - 140px); }
+  .msg-panneau { width: auto; height: calc(100vh - 150px); }
   .msg-declencheur { align-self: flex-end; }
+  .msg-tete-gens { display: none; }
+  .msg-bulle { max-width: 100%; }
 }
