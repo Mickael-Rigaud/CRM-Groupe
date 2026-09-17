@@ -18,10 +18,8 @@ import {
   idsDe, idsDeTous, structuresRaccordees, cadreJour, noteAgenda, modeEmploi,
   champsAgendas, enregistrerAgendas, peutRaccorder,
 } from '../agenda.js';
-import {
-  configure as googleConfigure, evenementsDuJour, connecte as googleConnecte,
-  modeEmploiClient, CLE_CLIENT, clientId,
-} from '../google-agenda.js';
+import { configure as googleConfigure, modeEmploiClient, CLE_CLIENT, clientId } from '../google-agenda.js';
+import { evenementsEnregistres, derniereSync, peutSynchroniser, synchroniser, agendasDe } from '../agenda-sync.js';
 
 const LS_FILTRE = 'crm_home_filtre';
 const pct = (v) => Math.round((v || 0) * 100);
@@ -365,29 +363,29 @@ function carteJournee(cles) {
     return `<section class="card">${entete}
       <div class="tb-ag-vide">
         <p><b>Aucun agenda n'est encore raccordé.</b> Une fois les calendriers Google des structures renseignés,
-        leurs rendez-vous du jour s'afficheront ici, chacun à la couleur de sa structure.</p>
+        leurs rendez-vous du jour seront recopiés dans le CRM et visibles par tout le monde, sans connexion Google.</p>
         ${peutRaccorder() ? modeEmploi() + '<p class="muted small">Puis « Raccorder les agendas » ci-dessus.</p>'
           : '<p class="muted small">La direction peut les renseigner depuis cet écran.</p>'}
       </div>
-      <div id="tb-jour">${dessinerJournee([], cles)}</div>
+      <div id="tb-jour">${dessinerJournee(tachesDuJour(), cles)}</div>
     </section>`;
   }
-  // Sans identifiant client Google, on ne peut pas lire les événements : on garde
-  // l'ancien cadre intégré pour ne pas laisser l'écran vide.
-  if (!googleConfigure()) {
-    return `<section class="card">${entete}
-      ${cadreJour(ids, 'Agendas du groupe')}
-      <p class="muted small tb-ag-src">${sourcesHtml(cles)}</p>
-      ${peutRaccorder() ? `<p class="muted small">Pour une vraie journée — uniquement aujourd'hui, aux couleurs des structures —
-        <button class="lien" id="tb-gcli">activer la lecture des agendas</button>.</p>` : ''}
-      ${noteAgenda()}
-    </section>`;
-  }
+  // La journée est lue dans le CRM, pas chez Google : elle s'affiche aussitôt,
+  // pour tout le monde. La recopie, elle, se fait en fond et n'appartient qu'à
+  // la direction — c'est elle qui a accès aux calendriers.
   return `<section class="card">${entete}
-    <div id="tb-jour"><div class="tb-jour-attente">Lecture des agendas…</div></div>
-    <p class="muted small tb-ag-src">${sourcesHtml(cles)}</p>
+    <div id="tb-jour">${dessinerJournee([...evenementsEnregistres(cles), ...tachesDuJour()], cles)}</div>
+    <p class="muted small tb-ag-src">${sourcesHtml(cles)}<span id="tb-maj">${etatSync(cles)}</span></p>
   </section>`;
 }
+const etatSync = (cles) => {
+  const d = derniereSync(cles);
+  if (!d) return peutSynchroniser(cles) ? '<span class="ag-abs">jamais synchronisé</span>' : '';
+  const min = Math.round((Date.now() - d.getTime()) / 60000);
+  const quand = min < 1 ? 'à l\'instant' : min < 60 ? `il y a ${min} min`
+    : d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  return `<span class="ag-abs">agendas relevés ${quand}</span>`;
+};
 const sourcesHtml = (cles) => {
   const raccordees = structuresRaccordees(cles);
   const manquantes = cles.filter(k => !raccordees.includes(k));
@@ -416,27 +414,32 @@ function tachesDuJour() {
 async function remplirJournee(root, cles, redraw) {
   root.querySelector('#tb-gcli')?.addEventListener('click', () => formClientGoogle(redraw));
   const cible = root.querySelector('#tb-jour');
-  if (!cible) return;
-  const agendas = cles.flatMap(k => idsDe(k).map(c => ({ structure: k, calendrier: c })));
-  if (!agendas.length || !googleConfigure()) { cible.innerHTML = dessinerJournee(tachesDuJour(), cles); return; }
+  if (!cible || !peutSynchroniser(cles)) return;
 
-  const afficher = (evenements, echecs, aConnecter) => {
+  const rendre = (evenements, echecs, aConnecter) => {
     cible.innerHTML = dessinerJournee([...evenements, ...tachesDuJour()], cles, echecs, aConnecter);
+    const maj = root.querySelector('#tb-maj'); if (maj) maj.outerHTML = `<span id="tb-maj">${etatSync(cles)}</span>`;
     cible.querySelector('#tb-gconnect')?.addEventListener('click', async (e) => {
       e.target.disabled = true; e.target.textContent = 'Connexion…';
       try {
-        const r = await evenementsDuJour(agendas, new Date(), { interactif: true });
-        afficher(r.evenements, r.echecs, false);
-      } catch (err) { toast(err.message, 'err'); e.target.disabled = false; e.target.textContent = 'Se connecter à Google'; }
+        const r = await synchroniser(cles, { interactif: true });
+        rendre(r.evenements, r.echecs, false);
+        toast(`${r.copies} rendez-vous relevés`);
+      } catch (err) {
+        toast(err.message, 'err');
+        e.target.disabled = false; e.target.textContent = 'Relever les agendas';
+      }
     });
   };
   try {
-    const r = await evenementsDuJour(agendas, new Date(), { interactif: false });
-    afficher(r.evenements, r.echecs, false);
+    // Renouvellement silencieux : si la personne a déjà accepté, la journée se
+    // met à jour sans rien lui demander.
+    const r = await synchroniser(cles, { interactif: false });
+    rendre(r.evenements, r.echecs, false);
   } catch {
-    // Pas encore autorisé : on montre la journée du CRM et un bouton. Ouvrir la
-    // fenêtre Google sans geste de la personne, le navigateur la bloquerait.
-    afficher([], [], true);
+    // Pas encore autorisé. On laisse la journée déjà enregistrée à l'écran et on
+    // propose le bouton : ouvrir la fenêtre Google sans geste serait bloqué.
+    rendre(evenementsEnregistres(cles), [], true);
   }
 }
 
@@ -460,7 +463,7 @@ function dessinerJournee(elements, cles, echecs = [], aConnecter = false) {
       <span class="tb-corps">
         <span class="tb-titre">${esc(e.titre)}</span>
         <span class="tb-det">${[
-          e.crm ? esc(e.type) : (min >= 60 ? Math.floor(min / 60) + ' h' + (min % 60 ? String(min % 60).padStart(2, '0') : '') : min + ' min'),
+          e.crm ? esc(e.type) : (min >= 60 ? Math.floor(min / 60) + ' h' + (min % 60 ? ' ' + String(min % 60).padStart(2, '0') : '') : min + ' min'),
           e.structure ? esc(ACTIVITIES[e.structure].label) : 'Groupe',
           e.lieu ? esc(e.lieu) : '',
           e.crm ? esc(e.qui) : (e.invites > 1 ? e.invites + ' participants' : ''),
@@ -487,8 +490,9 @@ function dessinerJournee(elements, cles, echecs = [], aConnecter = false) {
     corps = '<div class="empty" style="padding:20px 0">Aucun rendez-vous aujourd\'hui.</div>';
 
   const alerte = aConnecter
-    ? `<div class="tb-jour-connect"><span>Connectez-vous à Google pour voir les rendez-vous des agendas.</span>
-       <button class="btn sm" id="tb-gconnect">Se connecter à Google</button></div>`
+    ? `<div class="tb-jour-connect"><span>Connectez-vous à Google pour relever les agendas : les rendez-vous seront
+       ensuite visibles par toute l'équipe, sans connexion de sa part.</span>
+       <button class="btn sm" id="tb-gconnect">Relever les agendas</button></div>`
     : echecs.length
       ? `<div class="tb-jour-alerte">${echecs.length} agenda${echecs.length > 1 ? 's' : ''} illisible${echecs.length > 1 ? 's' : ''} :
          ${echecs.map(x => `${esc(ACTIVITIES[x.structure]?.label || x.structure)} (${esc(x.motif)})`).join(', ')}.

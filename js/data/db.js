@@ -56,6 +56,15 @@ const localAdapter = {
     this.data[table] = this.data[table].filter(r => (r.id ?? r.key) !== id); this.save();
   },
   reset() { localStorage.removeItem(LS_KEY); localStorage.removeItem(LS_USER); localStorage.removeItem(LS_FILES); },
+  // Mode démo : on rejoue à la main ce que fait la fonction SQL correspondante.
+  async rpc(nom, args) {
+    if (nom !== 'remplacer_agenda') throw new Error('Fonction inconnue en mode démo : ' + nom);
+    const { p_jour, p_calendriers, p_evenements } = args;
+    this.data.agenda_events = (this.data.agenda_events || [])
+      .filter(e => !(e.day === p_jour && p_calendriers.includes(e.calendar_id)));
+    for (const e of (p_evenements || [])) this.data.agenda_events.push({ ...e, day: p_jour, synced_at: new Date().toISOString() });
+    this.save(); return (p_evenements || []).length;
+  },
   // fichiers (démo) : conservés dans le navigateur en base64, petits fichiers uniquement
   files() { try { return JSON.parse(localStorage.getItem(LS_FILES)) || {}; } catch { return {}; } },
   async uploadFile(path, file) {
@@ -116,6 +125,10 @@ const supabaseAdapter = {
   async remove(table, id) {
     const { error } = await this.client.from(table).delete().eq('id', id);
     if (error) throw new Error(error.message);
+  },
+  async rpc(nom, args) {
+    const { data, error } = await this.client.rpc(nom, args);
+    if (error) throw new Error(error.message); return data;
   },
   async currentUser() {
     const { data: { session } } = await this.client.auth.getSession();
@@ -200,6 +213,14 @@ export const db = {
   async remove(table, id) {
     await this.adapter.remove(table, id);
     this.cache[table] = this.cache[table].filter(x => x.id !== id); this.emit();
+  },
+  // Appel d'une fonction côté base (ou son équivalent en mode démo). Le cache
+  // n'est pas mis à jour tout seul : la table touchée est rechargée après coup.
+  async rpc(nom, args) { return this.adapter.rpc(nom, args); },
+  async recharger(table) {
+    if (CONFIG.DEMO) { this.cache[table] = structuredClone(localAdapter.data[table] || []); this.emit(); return; }
+    const { data } = await this.adapter.client.from(table).select('*');
+    this.cache[table] = data || []; this.emit();
   },
   onChange(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); },
   emit() { for (const fn of this.listeners) { try { fn(); } catch (e) { console.error(e); } } },

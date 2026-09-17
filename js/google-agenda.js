@@ -107,7 +107,7 @@ export async function evenementsDuJour(agendas, date = new Date(), { interactif 
   const resultats = await Promise.all(agendas.map(async (a) => {
     try {
       const items = await evenementsDe(a.calendrier, debut, fin, token);
-      return { ok: true, structure: a.structure, items };
+      return { ok: true, structure: a.structure, calendrier: a.calendrier, items };
     } catch (e) { return { ok: false, structure: a.structure, calendrier: a.calendrier, motif: e.message }; }
   }));
   const evenements = [];
@@ -120,7 +120,7 @@ export async function evenementsDuJour(agendas, date = new Date(), { interactif 
       const f = journee ? new Date(e.end.date + 'T00:00:00') : new Date(e.end.dateTime);
       evenements.push({
         id: e.id, titre: e.summary || '(sans titre)', lieu: e.location || '',
-        debut: d, fin: f, journee, structure: r.structure,
+        debut: d, fin: f, journee, structure: r.structure, calendrier: r.calendrier,
         lien: e.htmlLink || '', invites: (e.attendees || []).length,
       });
     }
