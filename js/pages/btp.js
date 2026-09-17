@@ -3,7 +3,7 @@
 // l'activité « btp », et deux référentiels qui lui appartiennent : fiches DTU et mails types.
 import { db } from '../data/db.js';
 import { scope } from '../data/scope.js';
-import { ACTIVITIES, CHANNELS, weightedAmount } from '../data/schema.js';
+import { ACTIVITIES, CHANNELS, weightedAmount, stagesDe, missionDe } from '../data/schema.js';
 import {
   esc, eur, daysSince, fmtDate, userName, contactName, dealParty, toast,
   openModal, closeModal, confirm, renderForm, readForm, terms, hit,
@@ -29,7 +29,7 @@ const activities = () => {
 // un menu vertical à gauche, le contenu à droite. « BTP Expertise » reste une ligne
 // du menu Pilotage du CRM ; cette coquille vit à l'intérieur de la page.
 const ONGLETS = [
-  { hash: '#/btp', label: "Vue d'ensemble" },
+  { hash: '#/btp', label: 'Tableau de bord' },
   { hash: '#/btp/todo', label: 'To-do list' },
   { hash: '#/btp/base', label: 'Base de données' },
   { hash: '#/btp/dtu', label: 'DTU' },
@@ -49,7 +49,7 @@ const guard = (root) => {
   return true;
 };
 
-// ---------------------------------------------------------------- Vue d'ensemble
+// ---------------------------------------------------------------- Tableau de bord
 // Trois blocs : les chiffres clés, la pipeline des missions, l'agenda Google du cabinet.
 const kpi = kpiEspace;
 
@@ -64,8 +64,11 @@ const TITRES_VUE = { WEEK: 'Agenda de la semaine', MONTH: 'Agenda du mois', AGEN
 const vueChoisie = () => { try { return localStorage.getItem(CLE_VUE) || 'WEEK'; } catch { return 'WEEK'; } };
 const retenirVue = (v) => { try { localStorage.setItem(CLE_VUE, v); } catch { /* navigation privée */ } };
 
-// Google reprend nos couleurs pour le fond et les évènements : le cadre se fond
-// dans la page et suit la structure ouverte.
+// Google reprend notre couleur de fond, pour que le cadre se fonde dans la page.
+// On ne lui impose PAS de couleur d'évènement : le paramètre `color` de l'URL
+// d'intégration repeint tout le calendrier d'une seule teinte et efface la
+// couleur que chaque rendez-vous porte dans Google Agenda — celle qui distingue
+// une mission AMO d'une expertise. Le cadre doit montrer l'agenda tel qu'il est.
 function urlAgenda(id, mode) {
   const lire = (v, repli) => (getComputedStyle(document.documentElement).getPropertyValue(v).trim() || repli);
   return 'https://calendar.google.com/calendar/embed?' + new URLSearchParams({
@@ -73,7 +76,6 @@ function urlAgenda(id, mode) {
     wkst: '2',                       // la semaine commence le lundi
     showTitle: '0', showPrint: '0', showTabs: '0', showCalendars: '0', showTz: '0', showNav: '1',
     bgcolor: lire('--card', '#FFFFFF'),
-    color: lire('--accent-ink', '#004B62'),
   });
 }
 
@@ -127,8 +129,6 @@ export const btpHomePage = {
       const a = act();
       const all = deals();
       const open = all.filter(d => d.status === 'open');
-      const potential = open.reduce((s, d) => s + weightedAmount(d), 0);
-      const noNext = open.filter(d => !nextActivity(d.id));
       const enCours = all.filter(d => a.stages.find(s => s.key === d.stage)?.delivery && d.status !== 'lost');
       const nouveaux = all.filter(d => ['lead', 'rdv1'].includes(d.stage) && d.status === 'open');
       const anneeEnCours = String(new Date().getFullYear());
@@ -137,29 +137,31 @@ export const btpHomePage = {
         && (d.won_at || d.stage_changed_at || d.created_at || '').slice(0, 4) === anneeEnCours);
       const caAnnee = gagnees.reduce((s, d) => s + (Number(d.amount) || 0), 0);
 
-      // La pipeline, colonne par colonne, avec les affaires dedans
-      const colonnes = a.stages.map(s => {
-        const cartes = open.concat(all.filter(d => d.status === 'won' && a.stages.find(x => x.key === d.stage)?.delivery))
-          .filter((d, i, t) => d.stage === s.key && t.indexOf(d) === i);
-        return { s, cartes, somme: cartes.reduce((t, d) => t + (Number(d.amount) || 0), 0) };
-      });
+      // Les affaires vivantes : ouvertes, plus les gagnees encore en realisation.
+      const vivantes = open.concat(all.filter(d => d.status === 'won' && a.stages.find(x => x.key === d.stage)?.delivery))
+        .filter((d, i, t) => t.indexOf(d) === i);
 
-      root.innerHTML = cadre('#/btp', "Vue d'ensemble", `
-        <div class="esp-kpis">
-          ${kpi({ label: 'Nouvelles demandes', valeur: nouveaux.length, sous: 'nouveau et RDV 1', icone: '📨', ton: 'accent', href: '#/pipeline/btp' })}
-          ${kpi({ label: 'CA HT', valeur: eur(caAnnee), sous: `${gagnees.length} mission${gagnees.length > 1 ? 's' : ''} signée${gagnees.length > 1 ? 's' : ''} en ${anneeEnCours}`, icone: '💶', ton: 'green', href: '#/btp/facturation' })}
-          ${kpi({ label: 'Missions en cours', valeur: enCours.length, sous: 'du RDV sur place au rapport', icone: '🏗', ton: 'amber', href: '#/pipeline/btp' })}
-        </div>
-
-        <div class="card">
-          <div class="card-head"><h2>Pipeline missions</h2>
-            <span class="muted small">${eur(potential)} de CA potentiel pondéré</span>
+      // Une pipeline par metier : l'expertise et l'AMO n'ont pas le meme deroule, les
+      // melanger dans un seul kanban donnerait des colonnes vides une fois sur deux.
+      const pipeline = (mission) => {
+        const siennes = vivantes.filter(d => missionDe(d) === mission);
+        const colonnes = stagesDe(KEY, mission).map(st => {
+          const cartes = siennes.filter(d => d.stage === st.key);
+          return { s: st, cartes, somme: cartes.reduce((t, d) => t + (Number(d.amount) || 0), 0) };
+        });
+        return { siennes, colonnes, pondere: siennes.filter(d => d.status === 'open').reduce((t, d) => t + weightedAmount(d), 0) };
+      };
+      const bloc = (titre, mission) => {
+        const { siennes, colonnes, pondere } = pipeline(mission);
+        return `<div class="card">
+          <div class="card-head"><h2>${esc(titre)}</h2>
+            <span class="muted small">${siennes.length} affaire${siennes.length > 1 ? 's' : ''} · ${eur(pondere)} de CA potentiel pondéré</span>
             <span class="grow"></span>
             <a class="btn ghost sm" href="#/pipeline/btp">Voir la page complète →</a>
           </div>
-          <div class="esp-kanban">${colonnes.map(({ s, cartes, somme }) => `
+          <div class="esp-kanban">${colonnes.map(({ s: st, cartes, somme }) => `
             <div class="esp-col">
-              <div class="esp-col-head"><b>${esc(s.label)}</b><span>${cartes.length}</span></div>
+              <div class="esp-col-head"><b>${esc(st.label)}</b><span>${cartes.length}</span></div>
               <div class="esp-col-sum">${somme ? eur(somme) : '—'}</div>
               <div class="esp-col-body">${cartes.map(d => `
                 <button type="button" class="esp-card-deal" data-deal="${d.id}">
@@ -168,7 +170,18 @@ export const btpHomePage = {
                   ${d.amount ? `<span class="esp-card-amount">${eur(d.amount)}</span>` : ''}
                 </button>`).join('') || '<div class="esp-col-vide">—</div>'}</div>
             </div>`).join('')}</div>
+        </div>`;
+      };
+
+      root.innerHTML = cadre('#/btp', 'Tableau de bord', `
+        <div class="esp-kpis">
+          ${kpi({ label: 'Nouvelles demandes', valeur: nouveaux.length, sous: 'nouveau et RDV 1', icone: '📨', ton: 'accent', href: '#/pipeline/btp' })}
+          ${kpi({ label: 'CA HT', valeur: eur(caAnnee), sous: `${gagnees.length} mission${gagnees.length > 1 ? 's' : ''} signée${gagnees.length > 1 ? 's' : ''} en ${anneeEnCours}`, icone: '💶', ton: 'green', href: '#/btp/facturation' })}
+          ${kpi({ label: 'Missions en cours', valeur: enCours.length, sous: 'du RDV sur place au rapport', icone: '🏗', ton: 'amber', href: '#/pipeline/btp' })}
         </div>
+
+        ${bloc('Pipeline expertise', 'expertise')}
+        ${bloc('Pipeline AMO', 'amo')}
 
         ${agenda()}`);
 

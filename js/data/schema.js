@@ -29,20 +29,49 @@ export const ACTIVITIES = {
     accent: '#00BBF6', on: '#00455B', accent2: '#00A8DD', soft: '#E6F8FF', ink: '#004B62',
     amountLabel: 'Montant mission HT (€)',
     rdvStage: 'rdv1',
+    // Le cabinet mène deux métiers au déroulé différent : l'expertise, qui va du
+    // constat au rapport, et l'AMO, qui accompagne un chantier de la définition du
+    // besoin à la réception. D'où deux pipelines — `mission` dit à laquelle une étape
+    // appartient, une étape sans `mission` étant commune aux deux.
+    //
+    // Une seule liste, et non deux tableaux séparés : les clés y restent uniques, donc
+    // stageOf(), stageIndex() et weightedAmount() continuent de retrouver une étape à
+    // partir de la seule affaire, sans qu'on ait à leur passer son type de mission.
+    //
     // Les clés « lead » et « rdv1 » sont celles qu'écrit la prise de rendez-vous du site
-    // btpexpertise.fr (fonction creer_prospect_btp de Supabase) : ne pas les renommer.
-    // À partir du RDV sur place la mission est engagée : ces étapes comptent en réalisation.
+    // btpexpertise.fr (fonction creer_prospect_btp de Supabase) : ne pas les renommer,
+    // et les garder communes — un lead arrive avant qu'on sache de quoi il s'agit.
+    //
+    // ⚠ Ces deux-là doivent rester les DEUX PREMIÈRES de la liste, toutes missions
+    // confondues. reachedRdv() compare des rangs dans cette liste fusionnée pour dire
+    // si le rendez-vous a eu lieu : toute étape propre à une mission se trouvant après
+    // rdv1, l'atteindre prouve que le RDV est passé. Glisser une étape de mission avant
+    // rdv1 ferait mentir la colonne « RDV » de la vue d'ensemble, sans rien casser
+    // d'autre — le genre de défaut qu'on ne voit qu'en relisant les chiffres.
+    // À partir du RDV sur place (expertise) ou du contrat signé (AMO), la mission est
+    // engagée : ces étapes comptent en réalisation (`delivery`).
     stages: [
       { key: 'lead', label: 'Nouveau', p: 5 },
       { key: 'rdv1', label: 'RDV 1', p: 10 },
-      { key: 'qualifie', label: 'Qualifié', p: 20 },
-      { key: 'proposition', label: 'Lettre de mission', p: 60 },
-      { key: 'rdv', label: 'RDV sur place', p: 100, delivery: true },
-      { key: 'mission_realisee', label: 'Rédaction du rapport', p: 100, delivery: true },
-      { key: 'rdv_complementaire', label: 'RDV complémentaire', p: 100, delivery: true },
-      { key: 'rapport_remis', label: 'Rapport émis', p: 100, delivery: true },
+      // Expertise : du constat au rapport
+      { key: 'qualifie', label: 'Qualifié', p: 20, mission: 'expertise' },
+      { key: 'proposition', label: 'Lettre de mission', p: 60, mission: 'expertise' },
+      { key: 'rdv', label: 'RDV sur place', p: 100, delivery: true, mission: 'expertise' },
+      { key: 'mission_realisee', label: 'Rédaction du rapport', p: 100, delivery: true, mission: 'expertise' },
+      { key: 'rdv_complementaire', label: 'RDV complémentaire', p: 100, delivery: true, mission: 'expertise' },
+      { key: 'rapport_remis', label: 'Rapport émis', p: 100, delivery: true, mission: 'expertise' },
+      // AMO : de la définition du besoin à la réception des travaux
+      { key: 'amo_cadrage', label: 'Besoin cadré', p: 20, mission: 'amo' },
+      { key: 'amo_contrat', label: 'Contrat AMO', p: 60, mission: 'amo' },
+      { key: 'amo_programme', label: 'Programme et budget', p: 100, delivery: true, mission: 'amo' },
+      { key: 'amo_consultation', label: 'Consultation entreprises', p: 100, delivery: true, mission: 'amo' },
+      { key: 'amo_chantier', label: 'Suivi de chantier', p: 100, delivery: true, mission: 'amo' },
+      { key: 'amo_reception', label: 'Réception des travaux', p: 100, delivery: true, mission: 'amo' },
     ],
     fields: [
+      // Vit dans deals.fields (jsonb) : pas de colonne, donc pas de migration.
+      // Vide = expertise, le métier historique et le cas du lead venu du site.
+      { key: 'type_mission', label: 'Type de mission', type: 'select', options: [['expertise', 'Expertise'], ['amo', 'AMO / accompagnement']], value: 'expertise', half: true },
       { key: 'problematique', label: 'Type de problématique', type: 'select', options: ['Malfaçons', 'Fissures', 'Humidité', 'Plomberie', 'Électricité', 'Non-conformité', 'Litige travaux', 'Réception de travaux', 'AMO / accompagnement', 'Avant achat', 'Autre'] },
       { key: 'type_bien', label: 'Type de bien', type: 'select', options: ['Maison', 'Appartement', 'Immeuble', 'Local pro', 'Autre'] },
       { key: 'contexte', label: 'Contexte', type: 'select', options: ['Particulier', 'Entreprise', 'Litige', 'Achat immobilier', 'Travaux en cours'] },
@@ -166,6 +195,16 @@ export const ROLES = {
   propulsion: { label: 'Propulsion', description: 'Pipeline Propulsion, contacts et organisations liés' },
   commercial: { label: "Chargé d'affaires", description: 'Uniquement les affaires et contacts dont il est responsable' },
 };
+
+// À quelle mission une affaire appartient : 'amo' ou 'expertise'. Une affaire sans
+// type_mission est une expertise — c'est le métier historique, et c'est ce qu'est un
+// lead arrivé du formulaire du site tant que personne ne l'a qualifié.
+export const missionDe = (deal) => (deal?.fields?.type_mission === 'amo' ? 'amo' : 'expertise');
+
+// Les étapes d'une mission : les siennes, plus les communes. L'ordre de la liste est
+// conservé, c'est celui du déroulé.
+export const stagesDe = (activity, mission) =>
+  (ACTIVITIES[activity]?.stages || []).filter(s => !s.mission || s.mission === mission);
 
 export function stageOf(activity, key) {
   return ACTIVITIES[activity]?.stages.find(s => s.key === key);
