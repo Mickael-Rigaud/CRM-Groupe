@@ -218,6 +218,9 @@ function route() {
   const [, name, param] = hash.split('/');
   // Le vivier courtiers a rejoint l'espace La Référence Courtage : l'ancienne adresse y mène.
   if (name === 'vivier') { location.hash = '#/courtage/vivier'; return; }
+  // La to do list de BTP Expertise a disparu au profit de celle du CRM, commune
+  // aux quatre structures : un signet sur l'ancienne adresse y mene.
+  if (name === 'btp' && param === 'todo') { location.hash = '#/today'; return; }
   let page = pages[name] || pages.home;
   if (name === 'patrimoine') page = pages['patrimoine_' + (param || 'home')] || pages.patrimoine_home;
   if (name === 'locatif') page = pages['locatif_' + (param || 'home')] || pages.locatif_home;

@@ -6,14 +6,13 @@ import { idsDe, urlAgenda, VUES as VUES_CALENDRIER, CLES_AGENDA, modeEmploi } fr
 import { scope } from '../data/scope.js';
 import { ACTIVITIES, CHANNELS, weightedAmount, stagesDe, missionDe } from '../data/schema.js';
 import {
-  esc, eur, daysSince, fmtDate, userName, contactName, dealParty, toast,
+  esc, eur, daysSince, fmtDate, contactName, dealParty, toast,
   openModal, closeModal, confirm, renderForm, readForm, terms, hit,
   searchInput, bindSearch, restoreFocus, csvDownload,
 } from '../ui.js';
 import { openDeal, dealForm } from './deal.js';
 import { contactForm, openContact } from './contacts.js';
 import { orgForm, openOrg } from './organisations.js';
-import { activityRowHtml, bindActivityRows, activityForm, nextActivity } from './activity.js';
 import { coquilleEspace, poserEspace, kpiEspace, supprimerFiche } from './espace.js';
 
 const KEY = 'btp';
@@ -31,7 +30,6 @@ const activities = () => {
 // du menu Pilotage du CRM ; cette coquille vit à l'intérieur de la page.
 const ONGLETS = [
   { hash: '#/btp', label: 'Tableau de bord' },
-  { hash: '#/btp/todo', label: 'To-do list' },
   { hash: '#/btp/base', label: 'Base de données' },
   { hash: '#/btp/dtu', label: 'DTU' },
   { hash: '#/btp/facturation', label: 'Facturation' },
@@ -191,54 +189,6 @@ export const btpHomePage = {
 };
 
 // ---------------------------------------------------------------- To-do list
-export const btpTodoPage = {
-  title: () => 'BTP Expertise — To-do',
-  render(root) {
-    if (guard(root)) return {};
-    const coquille = poser(root);
-    const state = { who: '', q: '', focus: null };
-
-    const draw = () => {
-      const users = scope.users();
-      const liste = activities()
-        .filter(x => !state.who || x.assignee_id === state.who)
-        .filter(x => hit([x.title, x.notes, userName(x.assignee_id)], terms(state.q)));
-      const ouvertes = liste.filter(x => !x.done);
-      const retard = ouvertes.filter(x => daysSince(x.due_date) > 0).sort((x, y) => x.due_date.localeCompare(y.due_date));
-      const jour = ouvertes.filter(x => daysSince(x.due_date) === 0);
-      const semaine = ouvertes.filter(x => daysSince(x.due_date) < 0 && daysSince(x.due_date) >= -7).sort((x, y) => x.due_date.localeCompare(y.due_date));
-      const plusTard = ouvertes.filter(x => daysSince(x.due_date) < -7).sort((x, y) => x.due_date.localeCompare(y.due_date));
-      const sansDate = ouvertes.filter(x => !x.due_date);
-      const faitesCeJour = liste.filter(x => x.done && x.done_at && daysSince(x.done_at) === 0);
-      const bloc = (titre, l) => l.length ? `<div class="card today-group"><h3>${titre} <span>${l.length}</span></h3>${l.map(x => activityRowHtml(x, { showContext: true })).join('')}</div>` : '';
-
-      root.innerHTML = cadre('#/btp/todo', "To-do list", `
-        <div class="toolbar">
-          ${searchInput('b-q', state, 'Rechercher une tâche…')}
-          <select id="b-who"><option value="">Toute l&rsquo;équipe</option>${users.map(u => `<option value="${u.id}" ${state.who === u.id ? 'selected' : ''}>${esc(u.full_name)}</option>`).join('')}</select>
-          <span class="muted small">${retard.length} en retard · ${jour.length} aujourd&rsquo;hui</span>
-          <span class="grow"></span>
-          <button class="btn" id="b-new">+ Tâche</button>
-        </div>
-        ${bloc('⚠ En retard', retard)}
-        ${bloc('Aujourd&rsquo;hui', jour)}
-        ${bloc('Cette semaine', semaine)}
-        ${bloc('Plus tard', plusTard)}
-        ${bloc('Sans échéance', sansDate)}
-        ${bloc('Fait aujourd&rsquo;hui', faitesCeJour)}
-        ${!ouvertes.length ? '<div class="card"><div class="empty">Rien à faire — tout est à jour.</div></div>' : ''}`);
-
-      bindSearch(root, 'b-q', state, draw); restoreFocus(root, state);
-      root.querySelector('#b-who').onchange = e => { state.who = e.target.value; draw(); };
-      root.querySelector('#b-new').onclick = () => activityForm({}, null, draw);
-      bindActivityRows(root, draw);
-    };
-
-    draw();
-    return { refresh: draw, destroy: coquille.retirer };
-  },
-};
-
 // ---------------------------------------------------------------- Base de données
 // D'où viennent les prospects. Chaque origine regroupe les canaux du CRM qui lui
 // correspondent — la prise de rendez-vous du site écrit « Site internet direct ».
