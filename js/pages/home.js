@@ -15,7 +15,7 @@ import {
 } from '../ui.js';
 import { activeInMonth, rowOf, dueOf, receivedOf, balanceOf } from './locatif.js';
 import {
-  idsDeTous, structuresRaccordees, cadreAgenda, noteAgenda, modeEmploi,
+  idsDeTous, structuresRaccordees, cadreJour, noteAgenda, modeEmploi,
   champsAgendas, enregistrerAgendas, peutRaccorder,
 } from '../agenda.js';
 
@@ -372,7 +372,7 @@ function carteJournee(cles) {
   }
   const manquantes = cles.filter(k => !raccordees.includes(k));
   return `<section class="card">${entete}
-    ${cadreAgenda(ids, 'DAY', 'Agendas du groupe')}
+    ${cadreJour(ids, 'Agendas du groupe')}
     <p class="muted small tb-ag-src">${raccordees.map(k => `<span class="ag-src"><span class="dot" style="background:${ACTIVITIES[k].color}"></span>${esc(ACTIVITIES[k].label)}</span>`).join('')}
       ${manquantes.length ? `<span class="ag-abs">sans agenda : ${manquantes.map(k => esc(ACTIVITIES[k].label)).join(', ')}</span>` : ''}</p>
     ${listeDuJour(false)}

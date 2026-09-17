@@ -31,26 +31,41 @@ export const idsDe = (cle) => decouper(db.setting(CLES_AGENDA[cle]));
 export const idsDeTous = (cles = ACTIVITY_KEYS) => [...new Set(cles.flatMap(idsDe))];
 export const structuresRaccordees = (cles = ACTIVITY_KEYS) => cles.filter(k => idsDe(k).length);
 
-export const VUES = [['DAY', 'Jour'], ['WEEK', 'Semaine'], ['MONTH', 'Mois'], ['AGENDA', 'Planning']];
+// Les modes acceptés par le cadre Google : WEEK, MONTH, AGENDA. Il n'y a PAS de
+// mode « DAY » — passer une valeur inconnue fait silencieusement retomber Google
+// sur la vue mois. Une journée s'obtient avec AGENDA borné à la date du jour.
+export const VUES = [['WEEK', 'Semaine'], ['MONTH', 'Mois'], ['AGENDA', 'Planning']];
 
 // Google reprend notre couleur de fond pour que le cadre se fonde dans la page.
 // On ne lui impose PAS de couleur : le paramètre `color` repeint tout d'une seule
 // teinte et efface la couleur propre de chaque agenda.
-export function urlAgenda(ids, mode) {
+export function urlAgenda(ids, mode, { jour = null } = {}) {
   const lire = (v, repli) => (getComputedStyle(document.documentElement).getPropertyValue(v).trim() || repli);
   const p = new URLSearchParams({
     ctz: 'Europe/Paris', mode,
     wkst: '2',                       // la semaine commence le lundi
-    showTitle: '0', showPrint: '0', showTabs: '0', showCalendars: '0', showTz: '0', showNav: '1',
+    showTitle: '0', showPrint: '0', showTabs: '0', showCalendars: '0', showTz: '0',
+    showNav: jour ? '0' : '1',       // borné à un jour, la navigation n'a plus de sens
     bgcolor: lire('--card', '#FFFFFF'),
   });
+  if (jour) p.set('dates', `${jour}/${jour}`);
   for (const id of ids) p.append('src', id);
   return 'https://calendar.google.com/calendar/embed?' + p;
 }
+// La journée en cours : la liste des rendez-vous, bornée à aujourd'hui.
+export const urlJour = (ids) => {
+  const d = new Date();
+  const aujourdhui = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+  return urlAgenda(ids, 'AGENDA', { jour: aujourdhui });
+};
 
 export const cadreAgenda = (ids, vue, titre) =>
   `<div class="agenda-cadre agenda-${vue.toLowerCase()}">
      <iframe src="${esc(urlAgenda(ids, vue))}" title="${esc(titre)}" loading="lazy"></iframe>
+   </div>`;
+export const cadreJour = (ids, titre) =>
+  `<div class="agenda-cadre agenda-jour">
+     <iframe src="${esc(urlJour(ids))}" title="${esc(titre)}" loading="lazy"></iframe>
    </div>`;
 
 export const noteAgenda = () =>
