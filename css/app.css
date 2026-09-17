@@ -402,12 +402,13 @@ body:has(.esp-app) .subnav .datepill { display: none; }
 .agenda-card { background: linear-gradient(180deg, var(--accent-soft) 0%, var(--card) 120px); }
 .agenda-cadre { border: 1px solid var(--line); border-top: 3px solid var(--accent); border-radius: var(--radius); overflow: hidden; background: var(--card); box-shadow: var(--shadow); }
 .agenda-cadre iframe { width: 100%; border: 0; display: block; background: var(--card); }
+.agenda-day iframe { height: 540px; }
 .agenda-week iframe { height: 620px; }
 .agenda-month iframe { height: 600px; }
 .agenda-agenda iframe { height: 430px; }
 .agenda-card > p { margin: 12px 0 0; }
 @media (max-width: 820px) {
-  .agenda-week iframe, .agenda-month iframe { height: 460px; }
+  .agenda-day iframe, .agenda-week iframe, .agenda-month iframe { height: 460px; }
   .agenda-head h2 { flex-basis: 100%; }
 }
 /* Onglets en pastilles — l'onglet ouvert prend la couleur de la structure */
@@ -1053,3 +1054,16 @@ body.impression #print-root { display: block; }
 .tb-an { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; }
 .tb-an b { color: var(--text); font-family: var(--font-display); }
 .tb-an .tb-track { flex: none; }
+
+/* ---- Agendas Google superposés (js/agenda.js) ---- */
+.ag-vues { margin-left: auto; }
+.ag-form .field label { display: flex; align-items: center; gap: 8px; }
+.ag-aide { margin-top: 10px; font-size: 13px; color: var(--muted); }
+.ag-aide summary { cursor: pointer; font-weight: 600; color: var(--text); }
+.tb-ag-vide { padding: 4px 0 8px; font-size: 13.5px; }
+.tb-ag-vide ol { margin: 10px 0 0; padding-left: 20px; color: var(--muted); }
+.tb-ag-vide li { margin-bottom: 5px; }
+.tb-ag-src { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin: 10px 0 0; }
+.ag-src { display: inline-flex; align-items: center; gap: 7px; }
+.ag-abs { color: var(--muted-2); font-style: italic; }
+.tb-ag-titre { margin: 16px 0 4px; }

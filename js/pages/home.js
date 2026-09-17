@@ -14,8 +14,13 @@ import {
   openModal, closeModal, renderForm, readForm, toast,
 } from '../ui.js';
 import { activeInMonth, rowOf, dueOf, receivedOf, balanceOf } from './locatif.js';
+import {
+  idsDeTous, structuresRaccordees, cadreAgenda, noteAgenda, modeEmploi,
+  champsAgendas, enregistrerAgendas, peutRaccorder, VUES,
+} from '../agenda.js';
 
 const LS_FILTRE = 'crm_home_filtre';
+const LS_VUE = 'crm_home_agenda_vue';
 const pct = (v) => Math.round((v || 0) * 100);
 const eur2 = (n) => eur(n, { maximumFractionDigits: 2 });
 
@@ -50,6 +55,7 @@ export const homePage = {
     let chart = null;
     const state = {
       periode: 'month',
+      vue: (() => { try { return localStorage.getItem(LS_VUE) || 'DAY'; } catch { return 'DAY'; } })(),
       filtre: (() => { try { return localStorage.getItem(LS_FILTRE) || 'groupe'; } catch { return 'groupe'; } })(),
     };
 
@@ -163,7 +169,7 @@ export const homePage = {
           </div>
 
           <div class="tb-col">
-            ${carteJournee()}
+            ${carteJournee(visibles, state)}
             ${carteTaches()}
             ${cartePatrimoine()}
           </div>
@@ -192,6 +198,12 @@ export const homePage = {
         im.replaceWith(p);
       });
       root.querySelector('#tb-obj')?.addEventListener('click', () => formObjectifs(draw));
+      root.querySelector('#tb-ag')?.addEventListener('click', () => formAgendas(visibles, draw));
+      root.querySelectorAll('[data-vue]').forEach(b => b.onclick = () => {
+        state.vue = b.dataset.vue;
+        try { localStorage.setItem(LS_VUE, state.vue); } catch { /* navigation privée */ }
+        draw();
+      });
       dessineCourbe(cles, moisSerie, deals);
     };
 
@@ -340,11 +352,45 @@ const libellePeriode = (p) => ({
 }[p] || '');
 
 // ---------- journée ----------
-function carteJournee() {
+// Les agendas Google des structures, superposés dans un seul cadre : c'est Google
+// qui colore par agenda. Le CRM ne peut pas lire leur contenu, il ne les mélange
+// donc pas à ses propres tâches — celles du jour sont listées juste en dessous.
+function carteJournee(cles, state) {
+  const ids = idsDeTous(cles);
+  const raccordees = structuresRaccordees(cles);
+  const titre = { DAY: 'Ma journée', WEEK: 'Ma semaine', MONTH: 'Mon mois', AGENDA: 'Mes prochains rendez-vous' }[state.vue] || 'Ma journée';
+  const entete = `<div class="card-head"><h2>${titre}</h2>
+    ${ids.length ? `<div class="seg ag-vues">${VUES.map(([v, l]) => `<button type="button" data-vue="${v}" class="${v === state.vue ? 'active' : ''}">${l}</button>`).join('')}</div>` : ''}
+    ${peutRaccorder() ? `<button class="btn ghost sm" id="tb-ag">${ids.length ? 'Agendas' : 'Raccorder les agendas'}</button>` : ''}</div>`;
+
+  if (!ids.length) {
+    return `<section class="card">${entete}
+      <div class="tb-ag-vide">
+        <p><b>Aucun agenda n'est encore raccordé.</b> Une fois les calendriers Google des structures renseignés,
+        ils s'afficheront ici superposés, chacun avec sa couleur.</p>
+        ${peutRaccorder() ? modeEmploi() + '<p class="muted small">Puis « Raccorder les agendas » ci-dessus.</p>'
+          : '<p class="muted small">La direction peut les renseigner depuis cet écran.</p>'}
+      </div>
+      ${listeDuJour(true)}
+    </section>`;
+  }
+  const manquantes = cles.filter(k => !raccordees.includes(k));
+  return `<section class="card">${entete}
+    ${cadreAgenda(ids, state.vue, 'Agendas du groupe')}
+    <p class="muted small tb-ag-src">${raccordees.map(k => `<span class="ag-src"><span class="dot" style="background:${ACTIVITIES[k].color}"></span>${esc(ACTIVITIES[k].label)}</span>`).join('')}
+      ${manquantes.length ? `<span class="ag-abs">sans agenda : ${manquantes.map(k => esc(ACTIVITIES[k].label)).join(', ')}</span>` : ''}</p>
+    ${listeDuJour(false)}
+    ${noteAgenda()}
+  </section>`;
+}
+// Les rendez-vous notés dans le CRM lui-même : ils ne sont pas dans Google, donc
+// ils seraient invisibles si on ne les affichait pas à part.
+function listeDuJour(seul) {
   const jour = isoDay();
   const rdv = scope.activities()
     .filter(a => !a.done && a.due_date === jour && a.due_time)
     .sort((a, b) => a.due_time.localeCompare(b.due_time));
+  if (!rdv.length) return seul ? '<div class="empty" style="padding:14px 0">Aucun rendez-vous noté dans le CRM aujourd\'hui.</div>' : '';
   const maintenant = new Date().toTimeString().slice(0, 5);
   let corps = '';
   rdv.forEach((a, i) => {
@@ -357,10 +403,20 @@ function carteJournee() {
       <span><span class="t">${esc(a.title)}</span><span class="m">${esc(a.type || 'Tâche')}${act ? ' · ' + esc(act.label) : ''}</span></span>
     </div>`;
   });
-  return `<section class="card">
-    <div class="card-head"><h2>Ma journée</h2><span class="muted small">${new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</span></div>
-    <div class="tb-day">${corps || '<div class="empty" style="padding:18px 0">Aucun rendez-vous avec une heure aujourd\'hui.</div>'}</div>
-  </section>`;
+  return `${seul ? '' : '<h3 class="tb-ag-titre">Noté dans le CRM aujourd\'hui</h3>'}<div class="tb-day">${corps}</div>`;
+}
+function formAgendas(cles, onSaved) {
+  openModal('Agendas des structures',
+    `<div id="f-ag">${champsAgendas(cles)}
+     <details class="ag-aide"><summary>Où trouver l'identifiant d'un calendrier ?</summary>${modeEmploi()}</details></div>
+     <div class="form-actions"><button class="btn ghost" id="ag-x">Annuler</button><button class="btn" id="ag-ok">Enregistrer</button></div>`,
+    { wide: true, onOpen: (m) => {
+      m.querySelector('#ag-x').onclick = () => closeModal();
+      m.querySelector('#ag-ok').onclick = async () => {
+        try { await enregistrerAgendas(m.querySelector('#f-ag'), cles); closeModal(true); onSaved(); }
+        catch (e) { toast(e.message, 'err'); }
+      };
+    } });
 }
 
 // ---------- tâches ----------

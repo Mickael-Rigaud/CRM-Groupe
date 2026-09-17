@@ -2,6 +2,7 @@
 // Les écrans lisent les données communes (affaires, contacts, activités) filtrées sur
 // l'activité « btp », et deux référentiels qui lui appartiennent : fiches DTU et mails types.
 import { db } from '../data/db.js';
+import { idsDe, urlAgenda, VUES as VUES_CALENDRIER, CLES_AGENDA, modeEmploi } from '../agenda.js';
 import { scope } from '../data/scope.js';
 import { ACTIVITIES, CHANNELS, weightedAmount, stagesDe, missionDe } from '../data/schema.js';
 import {
@@ -56,34 +57,15 @@ const kpi = kpiEspace;
 // L'agenda du cabinet, tenu dans Google Agenda et affiché ici. L'identifiant du
 // calendrier est rangé dans les réglages du CRM, pas dans le code : le dépôt est public.
 // Vue semaine par défaut, le choix reste d'une visite à l'autre.
-const CLE_AGENDA = 'btp_calendar_id';
 const CLE_VUE = 'crm_btp_agenda_vue';
-const VUES_AGENDA = [['WEEK', 'Semaine'], ['MONTH', 'Mois'], ['AGENDA', 'Planning']];
+// Les vues de l'espace BTP : le cabinet raisonne à la semaine, pas à la journée.
+const VUES_AGENDA = VUES_CALENDRIER.filter(([v]) => v !== 'DAY');
 const TITRES_VUE = { WEEK: 'Agenda de la semaine', MONTH: 'Agenda du mois', AGENDA: 'Prochains rendez-vous' };
 
 const vueChoisie = () => { try { return localStorage.getItem(CLE_VUE) || 'WEEK'; } catch { return 'WEEK'; } };
 const retenirVue = (v) => { try { localStorage.setItem(CLE_VUE, v); } catch { /* navigation privée */ } };
 
-// Plusieurs identifiants possibles, séparés par une virgule, un point-virgule ou un
-// retour à la ligne : le cadre affiche alors les agendas superposés, chacun avec SA
-// couleur. C'est le seul moyen d'obtenir deux couleurs dans un cadre intégré — celui-ci
-// colore par agenda, pas par rendez-vous.
-const idsAgenda = () => (db.setting(CLE_AGENDA) || '').split(/[\s,;]+/).map(v => v.trim()).filter(Boolean);
-
-// Google reprend notre couleur de fond, pour que le cadre se fonde dans la page.
-// On ne lui impose PAS de couleur : le paramètre `color` de l'URL repeint tout d'une
-// seule teinte et efface la couleur propre de chaque agenda.
-function urlAgenda(ids, mode) {
-  const lire = (v, repli) => (getComputedStyle(document.documentElement).getPropertyValue(v).trim() || repli);
-  const p = new URLSearchParams({
-    ctz: 'Europe/Paris', mode,
-    wkst: '2',                       // la semaine commence le lundi
-    showTitle: '0', showPrint: '0', showTabs: '0', showCalendars: '0', showTz: '0', showNav: '1',
-    bgcolor: lire('--card', '#FFFFFF'),
-  });
-  for (const id of ids) p.append('src', id);
-  return 'https://calendar.google.com/calendar/embed?' + p;
-}
+const idsAgenda = () => idsDe('btp');
 
 function agenda() {
   const ids = idsAgenda();
@@ -92,13 +74,7 @@ function agenda() {
       <div class="agenda-head"><span class="agenda-ico">📅</span><h2>Agenda</h2></div>
       <div class="btp-setup">
         <p><b>L&rsquo;agenda Google du cabinet n&rsquo;est pas encore raccordé.</b></p>
-        <ol>
-          <li>Ouvrez Google Agenda avec le compte du cabinet.</li>
-          <li>Passez la souris sur le calendrier à afficher, <b>⋮</b> → <b>Paramètres et partage</b>.</li>
-          <li>Dans <b>Partager avec des personnes en particulier</b>, ajoutez l&rsquo;adresse Google de chaque personne du cabinet qui doit le voir, en « Voir tous les détails ».</li>
-          <li>Plus bas, dans <b>Intégrer le calendrier</b>, copiez l&rsquo;<b>identifiant du calendrier</b> (il ressemble à une adresse e-mail).</li>
-          <li>Collez-le ci-dessous.</li>
-        </ol>
+        ${modeEmploi()}
         ${scope.isDirection ? `<div class="form">
           <div class="field"><label>Identifiant du calendrier</label><input id="cal-id" placeholder="identifiant@example.com">
             <div class="small muted" style="margin-top:4px">Plusieurs agendas ? Collez leurs identifiants séparés par une virgule — chacun gardera sa couleur.</div></div>
@@ -198,13 +174,13 @@ export const btpHomePage = {
         const v = root.querySelector('#cal-id').value.trim();
         if (!v) return toast('Collez l\'identifiant du calendrier', 'warn');
         try {
-          if (db.setting(CLE_AGENDA) !== undefined) await db.update('settings', CLE_AGENDA, { value: v });
-          else await db.insert('settings', { key: CLE_AGENDA, value: v });
+          if (db.setting(CLES_AGENDA.btp) !== undefined) await db.update('settings', CLES_AGENDA.btp, { value: v });
+          else await db.insert('settings', { key: CLES_AGENDA.btp, value: v });
           toast('Agenda raccordé'); draw();
         } catch (err) { toast(err.message, 'err'); }
       });
       root.querySelector('#cal-edit')?.addEventListener('click', async () => {
-        try { await db.update('settings', CLE_AGENDA, { value: '' }); toast('Calendrier détaché'); draw(); }
+        try { await db.update('settings', CLES_AGENDA.btp, { value: '' }); toast('Calendrier détaché'); draw(); }
         catch (err) { toast(err.message, 'err'); }
       });
     };

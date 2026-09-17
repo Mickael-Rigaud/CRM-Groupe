@@ -1,0 +1,91 @@
+// Agendas Google des structures — mécanisme partagé par l'espace BTP Expertise
+// et par « Ma journée » du tableau de bord.
+//
+// Ce que le CRM fait, et ce qu'il ne fait pas : un agenda Google s'affiche ici
+// dans un cadre intégré, mais son contenu reste chez Google. Le CRM ne peut pas
+// lire les rendez-vous, donc pas les mélanger à ses propres tâches dans une même
+// liste. En revanche Google sait superposer plusieurs agendas dans un seul cadre,
+// chacun gardant SA couleur : c'est ainsi qu'on obtient « tous les agendas ».
+//
+// Les identifiants vivent dans les réglages, jamais dans le code : dépôt public.
+import { db } from './data/db.js';
+import { scope } from './data/scope.js';
+import { ACTIVITIES, ACTIVITY_KEYS } from './data/schema.js';
+import { esc, toast } from './ui.js';
+
+// Une clé de réglage par structure. « btp_calendar_id » existait avant ce module :
+// on garde son nom pour ne pas perdre l'agenda déjà raccordé du cabinet.
+export const CLES_AGENDA = {
+  rgd: 'rgd_calendar_id',
+  btp: 'btp_calendar_id',
+  courtage: 'courtage_calendar_id',
+  propulsion: 'propulsion_calendar_id',
+};
+
+// Plusieurs identifiants possibles par structure, séparés par une virgule, un
+// point-virgule ou un retour à la ligne.
+const decouper = (v) => String(v || '').split(/[\s,;]+/).map(x => x.trim()).filter(Boolean);
+export const idsDe = (cle) => decouper(db.setting(CLES_AGENDA[cle]));
+// Tous les agendas des structures demandées, sans doublon : deux structures qui
+// partagent un calendrier ne doivent pas le superposer à lui-même.
+export const idsDeTous = (cles = ACTIVITY_KEYS) => [...new Set(cles.flatMap(idsDe))];
+export const structuresRaccordees = (cles = ACTIVITY_KEYS) => cles.filter(k => idsDe(k).length);
+
+export const VUES = [['DAY', 'Jour'], ['WEEK', 'Semaine'], ['MONTH', 'Mois'], ['AGENDA', 'Planning']];
+
+// Google reprend notre couleur de fond pour que le cadre se fonde dans la page.
+// On ne lui impose PAS de couleur : le paramètre `color` repeint tout d'une seule
+// teinte et efface la couleur propre de chaque agenda.
+export function urlAgenda(ids, mode) {
+  const lire = (v, repli) => (getComputedStyle(document.documentElement).getPropertyValue(v).trim() || repli);
+  const p = new URLSearchParams({
+    ctz: 'Europe/Paris', mode,
+    wkst: '2',                       // la semaine commence le lundi
+    showTitle: '0', showPrint: '0', showTabs: '0', showCalendars: '0', showTz: '0', showNav: '1',
+    bgcolor: lire('--card', '#FFFFFF'),
+  });
+  for (const id of ids) p.append('src', id);
+  return 'https://calendar.google.com/calendar/embed?' + p;
+}
+
+export const cadreAgenda = (ids, vue, titre) =>
+  `<div class="agenda-cadre agenda-${vue.toLowerCase()}">
+     <iframe src="${esc(urlAgenda(ids, vue))}" title="${esc(titre)}" loading="lazy"></iframe>
+   </div>`;
+
+export const noteAgenda = () =>
+  `<p class="muted small">Cet agenda est celui de Google : ce qui est modifié là-bas apparaît ici, et inversement.
+   Si le cadre reste vide, votre adresse n&rsquo;a pas encore été ajoutée au partage du calendrier, ou votre
+   navigateur refuse la mémorisation des sites affichés dans un autre site.</p>`;
+
+// ---------- Raccordement ----------
+export const modeEmploi = () => `<ol>
+  <li>Ouvrez Google Agenda avec le compte qui tient le calendrier.</li>
+  <li>Passez la souris sur le calendrier, <b>⋮</b> → <b>Paramètres et partage</b>.</li>
+  <li>Dans <b>Partager avec des personnes en particulier</b>, ajoutez l&rsquo;adresse Google de chaque personne qui doit le voir, en « Voir tous les détails ».</li>
+  <li>Plus bas, dans <b>Intégrer le calendrier</b>, copiez l&rsquo;<b>identifiant du calendrier</b> (il ressemble à une adresse e-mail).</li>
+</ol>`;
+
+// Formulaire de raccordement, une ligne par structure. Réservé à la direction :
+// la policy d'écriture sur « settings » l'impose déjà côté serveur.
+export function champsAgendas(cles = ACTIVITY_KEYS) {
+  return `<div class="form ag-form">${cles.map(k => `<div class="field">
+    <label><span class="dot" style="background:${ACTIVITIES[k].color}"></span> ${esc(ACTIVITIES[k].label)}</label>
+    <input id="ag-${k}" value="${esc(db.setting(CLES_AGENDA[k]) || '')}" placeholder="identifiant@group.calendar.google.com">
+  </div>`).join('')}
+  <p class="muted small">Plusieurs agendas pour une même structure ? Séparez les identifiants par une virgule : chacun gardera sa couleur.</p></div>`;
+}
+export async function enregistrerAgendas(racine, cles = ACTIVITY_KEYS) {
+  for (const k of cles) {
+    const champ = racine.querySelector(`#ag-${k}`);
+    if (!champ) continue;
+    const valeur = decouper(champ.value).join(',');
+    const cleReglage = CLES_AGENDA[k];
+    const existe = db.t('settings').some(s => s.key === cleReglage);
+    if (!existe && !valeur) continue;                       // rien à écrire
+    if (existe) await db.update('settings', cleReglage, { value: valeur });
+    else await db.insert('settings', { key: cleReglage, value: valeur });
+  }
+  toast('Agendas enregistrés');
+}
+export const peutRaccorder = () => scope.isDirection;
