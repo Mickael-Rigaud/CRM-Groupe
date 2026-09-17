@@ -1,6 +1,17 @@
 // Référentiel métier du CRM — la seule source de vérité pour les pipelines,
 // les champs par activité, les canaux et les listes de valeurs.
 
+// Les deux metiers de BTP Expertise et leurs couleurs. Ce sont celles des deux agendas
+// Google du cabinet — violet « Grape » pour l'expertise, orange « Tangerine » pour
+// l'AMO —, pour qu'un rendez-vous ait la meme couleur dans l'agenda et dans le CRM.
+// Une exception assumee a la regle « la couleur ne sert qu'au reperage des activites » :
+// ici elle distingue deux metiers a l'interieur d'une meme structure.
+export const MISSIONS_BTP = {
+  expertise: { label: 'Expertise', couleur: '#8E24AA', clair: '#F6EAF9', encre: '#6A1B7D' },
+  amo: { label: 'AMO', couleur: '#F09300', clair: '#FEF2DF', encre: '#9A5E00' },
+};
+export const couleurMission = (m) => (MISSIONS_BTP[m] || MISSIONS_BTP.expertise);
+
 // Le systeme a points de BTP Expertise, repris du manuel operationnel V5.
 // Une mission pese un nombre de points ; un charge d'affaires en porte 15 au plus, et
 // trois AMO actives au plus. Les points d'une expertise se liberent a sa cloture, ceux

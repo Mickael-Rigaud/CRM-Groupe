@@ -434,13 +434,32 @@ body:has(.esp-app) .subnav .datepill { display: none; }
 .btp-puce { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; background: var(--accent); }
 .btp-puce.amo { background: var(--green); }
 
-/* Expertise ou AMO : la meme couleur partout ou les deux se cotoient */
-.btp-m-expertise { --m: var(--accent); }
-.btp-m-amo { --m: var(--green); }
-.esp-card-deal.btp-m-expertise, .esp-card-deal.btp-m-amo { border-left-color: var(--m); }
-tr.btp-m-expertise .btp-pts, tr.btp-m-amo .btp-pts { color: var(--m); }
-.btp-chip.btp-m-amo i { background: var(--green); }
+/* Expertise ou AMO : les couleurs des deux agendas Google du cabinet, portees par
+   --m / --m-clair / --m-encre que le JS pose sur chaque element concerne. */
+.esp-card-deal.btp-mission { border-left-color: var(--m); }
+tr.btp-mission .btp-pts { color: var(--m-encre); }
+.btp-chip i { background: var(--m, var(--accent)); }
+.btp-chip:hover { border-color: var(--m); background: var(--m-clair); }
 .btp-niveau { font-size: 11px; color: var(--muted); }
+
+/* Les deux compteurs metier du tableau du reseau */
+.btp-compteur { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 1px; padding: 5px 11px; border-radius: 10px; background: var(--m-clair); color: var(--m-encre); font-weight: 800; font-size: 14px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.btp-compteur em { font-style: normal; font-weight: 600; font-size: 10.5px; opacity: .75; }
+.btp-compteur.plein { box-shadow: inset 0 0 0 1.5px var(--m); }
+.btp-col-charge { min-width: 190px; }
+
+/* La jauge se lit en deux segments : ce que pesent les expertises, puis les AMO */
+.btp-jauge-duo { display: flex; gap: 2px; }
+.btp-jauge-duo i { transition: width .2s; }
+.pill.sm { padding: 1px 7px; font-size: 10px; }
+
+/* Une page de metier porte sa couleur, sans la crier */
+.btp-page-mission { display: flex; flex-direction: column; gap: 18px; }
+.btp-bandeau { display: flex; align-items: center; gap: 10px; padding: 11px 16px; border-radius: var(--radius); background: var(--m-clair); border-left: 4px solid var(--m); font-size: 13px; }
+.btp-bandeau b { color: var(--m-encre); font-size: 14px; }
+.btp-bandeau span { color: var(--muted); }
+.btp-page-mission .esp-kpi { border-top: 3px solid var(--m); }
+.btp-page-mission .esp-col-head span, .btp-page-mission .btp-pts { color: var(--m-encre); }
 .btp-large { grid-column: 1 / -1; }
 .btp-sommeil { opacity: .55; }
 .btp-sommeil b { font-weight: 600; }

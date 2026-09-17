@@ -4,7 +4,7 @@
 import { db } from '../data/db.js';
 import { idsDe, urlAgenda, VUES as VUES_CALENDRIER, CLES_AGENDA, modeEmploi } from '../agenda.js';
 import { scope } from '../data/scope.js';
-import { ACTIVITIES, CHANNELS, weightedAmount, stagesDe, missionDe, NIVEAUX_BTP, CAPACITE_BTP, HONORAIRES_AMO, niveauDe, pointsDe } from '../data/schema.js';
+import { ACTIVITIES, CHANNELS, weightedAmount, stagesDe, missionDe, NIVEAUX_BTP, CAPACITE_BTP, HONORAIRES_AMO, MISSIONS_BTP, couleurMission, niveauDe, pointsDe } from '../data/schema.js';
 import {
   esc, eur, daysSince, fmtDate, contactName, dealParty, userName, toast,
   openModal, closeModal, confirm, renderForm, readForm, terms, hit,
@@ -158,7 +158,7 @@ const pipelineDe = (mission) => {
 // listes, les pastilles et la repartition du CA.
 const carteAffaire = (d) => {
   const n = niveauDe(d);
-  return `<button type="button" class="esp-card-deal btp-m-${missionDe(d)}" data-deal="${d.id}">
+  return `<button type="button" class="esp-card-deal btp-mission" style="${teinteMission(missionDe(d))}" data-deal="${d.id}">
     <b>${esc(d.title)}</b>
     <span class="muted">${esc(dealParty(d))}</span>
     ${n ? `<span class="btp-niveau">${esc(n.label)} · ${n.points} pt${n.points > 1 ? 's' : ''}</span>` : ''}
@@ -167,7 +167,9 @@ const carteAffaire = (d) => {
 };
 
 // La pastille d'un metier, a poser devant un intitule.
-const marqueMission = (m) => `<i class="btp-puce ${m === 'amo' ? 'amo' : 'exp'}" title="${m === 'amo' ? 'AMO' : 'Expertise'}"></i>`;
+const marqueMission = (m) => `<i class="btp-puce" style="background:${couleurMission(m).couleur}" title="${esc(couleurMission(m).label)}"></i>`;
+// Les couleurs d'un metier, posees en variables pour que le CSS s'en serve.
+const teinteMission = (m) => { const c = couleurMission(m); return `--m:${c.couleur};--m-clair:${c.clair};--m-encre:${c.encre}`; };
 
 const kanbanHtml = (colonnes) => `<div class="esp-kanban">${colonnes.map(({ st, cartes, somme }) => `
   <div class="esp-col">
@@ -197,9 +199,13 @@ function chargeDe(userId) {
   // Sans niveau renseigné, une mission ne pèse aucun point : on le signale plutôt que
   // d'afficher une charge faussement basse.
   const sansNiveau = siennes.filter(d => !niveauDe(d)).length;
+  const expertises = siennes.filter(d => missionDe(d) === 'expertise');
+  const pointsDeLot = (lot) => lot.reduce((t, d) => t + pointsDe(d), 0);
   return {
     siennes, points, amo, ca, sature, sansNiveau,
-    expertises: siennes.filter(d => missionDe(d) === 'expertise').length,
+    expertises: expertises.length,
+    ptsExpertise: pointsDeLot(expertises),
+    ptsAmo: pointsDeLot(amo),
   };
 }
 
@@ -330,6 +336,8 @@ const pageMission = (mission) => ({
       const points = siennes.reduce((t, d) => t + pointsDe(d), 0);
 
       root.innerHTML = cadre(MISSIONS[mission].hash, `Missions — ${MISSIONS[mission].titre}`, `
+        <div class="btp-page-mission" style="${teinteMission(mission)}">
+        <div class="btp-bandeau">${marqueMission(mission)}<b>${esc(couleurMission(mission).label)}</b><span>${esc(mission === 'amo' ? HONORAIRES_AMO.taux + ', minimum ' + eur(HONORAIRES_AMO.minimum) + ' HT' : 'Constat, analyse et rapport')}</span></div>
         <div class="esp-kpis">
           ${kpi({ label: 'Missions en cours', valeur: siennes.length, sous: `${points} point${points > 1 ? 's' : ''} de charge`, icone: '🏗', ton: 'accent', href: MISSIONS[mission].hash })}
           ${kpi({ label: 'CA potentiel pondéré', valeur: eur(pondere), sous: 'sur les missions ouvertes', icone: '📈', ton: 'green', href: MISSIONS[mission].hash })}
@@ -364,6 +372,7 @@ const pageMission = (mission) => ({
               </tr>`;
             }).join('') || `<tr><td colspan="7"><div class="empty">Aucune mission ${esc(MISSIONS[mission].titre)} en cours.</div></td></tr>`}</tbody>
           </table></div>
+        </div>
         </div>`);
 
       bindSearch(root, 'm-q', state, draw); restoreFocus(root, state);
@@ -473,7 +482,13 @@ export const btpChargesPage = {
             <button class="btn" id="ca-new">+ Chargé d'affaires</button>
           </div>
           <div class="table-wrap"><table>
-            <thead><tr><th>Chargé d'affaires</th><th>Charge structurelle</th><th class="num">AMO actives</th><th class="num">Expertises</th><th class="num">CA produit</th><th>Statut</th><th></th></tr></thead>
+            <thead><tr>
+              <th>Chargé d'affaires</th>
+              <th>Charge structurelle</th>
+              <th class="num" style="color:${couleurMission('expertise').encre}">${marqueMission('expertise')}Expertise</th>
+              <th class="num" style="color:${couleurMission('amo').encre}">${marqueMission('amo')}AMO</th>
+              <th class="num">CA produit</th><th>Statut</th><th></th>
+            </tr></thead>
             <tbody>${lignes.map(l => ligneReseau(l)).join('')
               || `<tr><td colspan="7"><div class="empty">Aucun chargé d'affaires déclaré. « + Chargé d'affaires » crée la première fiche — une personne peut y figurer avant d'avoir un compte CRM.</div></td></tr>`}</tbody>
           </table></div>
@@ -486,8 +501,8 @@ export const btpChargesPage = {
           </div>
           <div class="table-wrap"><table>
             <thead><tr><th>Service</th><th>Niveau</th><th>Ce qu'il comprend</th><th>Tarif de travail</th><th class="num">Points</th></tr></thead>
-            <tbody>${NIVEAUX_BTP.map(n => `<tr class="btp-m-${n.mission}">
-              <td>${marqueMission(n.mission)}<b>${n.mission === 'amo' ? 'AMO' : 'Expertise'}</b></td>
+            <tbody>${NIVEAUX_BTP.map(n => `<tr class="btp-mission" style="${teinteMission(n.mission)}">
+              <td>${marqueMission(n.mission)}<b style="color:var(--m-encre)">${esc(couleurMission(n.mission).label)}</b></td>
               <td>${esc(n.label.replace(/^(Expertise|AMO) ?/, '')) || esc(n.label)}</td>
               <td class="small">${esc(n.contenu)}</td>
               <td class="small">${esc(n.tarif)}</td>
@@ -524,21 +539,28 @@ export const btpChargesPage = {
 
 // Une ligne du réseau : la jauge, les compteurs, et le détail des missions portées.
 function ligneReseau({ f, charge, max, amoMax, points, sature }) {
-  const pct = max ? Math.min(100, Math.round((points / max) * 100)) : 0;
-  const ton = sature ? 'red' : pct >= 80 ? 'amber' : 'green';
+  const pct = (v) => (max ? Math.min(100, (v / max) * 100) : 0);
   const objectif = Number(f.objectif_ca) || 0;
+  const cExp = couleurMission('expertise');
+  const cAmo = couleurMission('amo');
+  // Deux segments dans la meme jauge : ce que pesent les expertises, ce que pesent les
+  // AMO. On lit d'un coup la charge ET sa composition, ce qu'un total seul cachait.
+  const jauge = `<div class="btp-jauge btp-jauge-duo">
+    <i style="width:${pct(charge ? charge.ptsExpertise : 0)}%;background:${cExp.couleur}" title="Expertise : ${charge ? charge.ptsExpertise : 0} pts"></i>
+    <i style="width:${pct(charge ? charge.ptsAmo : 0)}%;background:${cAmo.couleur}" title="AMO : ${charge ? charge.ptsAmo : 0} pts"></i>
+  </div>`;
   return `<tr class="${f.actif === false ? 'btp-sommeil' : ''}">
     <td>
       <b>${esc(f.nom)}</b>
       <div class="small muted">${esc(f.statut || '—')}${f.email ? ' · ' + esc(f.email) : ''}</div>
       ${!f.profile_id ? '<div class="small muted">Pas de compte CRM : charge non calculée</div>' : ''}
     </td>
-    <td>
-      <div class="btp-jauge-val">${points} / ${max} pts${charge && charge.sansNiveau ? ` <span class="muted" title="${charge.sansNiveau} mission(s) sans niveau : elles ne pèsent aucun point">· ${charge.sansNiveau} sans niveau</span>` : ''}</div>
-      <div class="btp-jauge"><i style="width:${pct}%;background:var(--${ton})"></i></div>
+    <td class="btp-col-charge">
+      <div class="btp-jauge-val">${points} / ${max} pts${sature ? ' <span class="pill bad sm">saturé</span>' : ''}${charge && charge.sansNiveau ? ` <span class="muted" title="${charge.sansNiveau} mission(s) sans niveau : elles ne pèsent aucun point">· ${charge.sansNiveau} sans niveau</span>` : ''}</div>
+      ${jauge}
     </td>
-    <td class="num">${charge ? charge.amo.length : 0} / ${amoMax}</td>
-    <td class="num">${charge ? charge.expertises : 0}</td>
+    <td class="num"><span class="btp-compteur" style="${teinteMission('expertise')}">${charge ? charge.expertises : 0}<em>${charge ? charge.ptsExpertise : 0} pts</em></span></td>
+    <td class="num"><span class="btp-compteur ${charge && charge.amo.length >= amoMax ? 'plein' : ''}" style="${teinteMission('amo')}">${charge ? charge.amo.length : 0} / ${amoMax}<em>${charge ? charge.ptsAmo : 0} pts</em></span></td>
     <td class="num">${charge && charge.ca ? eur(charge.ca) : '—'}${objectif ? `<div class="small muted">sur ${eur(objectif)}</div>` : ''}</td>
     <td>${f.actif === false ? '<span class="pill">En sommeil</span>'
       : sature ? '<span class="pill bad">Saturé</span>' : '<span class="pill ok">Disponible</span>'}</td>
@@ -547,8 +569,8 @@ function ligneReseau({ f, charge, max, amoMax, points, sature }) {
   ${charge && charge.siennes.length ? `<tr class="btp-detail"><td colspan="7">
     ${charge.siennes.map(d => {
       const n = niveauDe(d);
-      return `<button type="button" class="btp-chip btp-m-${missionDe(d)}" data-deal="${d.id}" title="${esc(d.title)}">
-        <i class="${missionDe(d) === 'amo' ? 'amo' : 'exp'}"></i>${esc(d.title)}<span>${n ? n.points + ' pt' + (n.points > 1 ? 's' : '') : 'sans niveau'}</span>
+      return `<button type="button" class="btp-chip" style="${teinteMission(missionDe(d))}" data-deal="${d.id}" title="${esc(d.title)}">
+        <i></i>${esc(d.title)}<span>${n ? n.points + ' pt' + (n.points > 1 ? 's' : '') : 'sans niveau'}</span>
       </button>`;
     }).join('')}
   </td></tr>` : ''}`;
