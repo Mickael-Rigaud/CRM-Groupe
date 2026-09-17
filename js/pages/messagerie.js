@@ -213,7 +213,9 @@ function vueConversation(hote, fil, { contexte = null, apresEnvoi = null, surRen
       <div class="msg-contexte" hidden></div>
       <div class="msg-jointes" hidden></div>
       <div class="msg-saisie">
-        <label class="msg-trombone" title="Joindre un document ou une photo">📎<input type="file" multiple hidden></label>
+        <label class="msg-trombone" title="Joindre un document ou une photo">
+          <svg viewBox="0 0 20 20" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.2 9.3 9.6 14.9a3.2 3.2 0 0 1-4.5-4.5l6.6-6.6a2.1 2.1 0 0 1 3 3l-6.6 6.6a1 1 0 0 1-1.4-1.4l5.6-5.6"/></svg>
+          <input type="file" multiple hidden></label>
         <textarea rows="1" placeholder="Écrire à ${esc(nomDe(fil.conv, fil.user))}…"></textarea>
         <button class="btn msg-envoi" type="submit" title="Envoyer (Entrée)">
           <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 10 14-6-5.5 14L9 11.5z"/></svg>
