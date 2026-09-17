@@ -77,11 +77,18 @@ export function renderForm(spec, values = {}) {
     const cls = `field ${f.half ? 'half' : ''}`;
     let input = '';
     switch (f.type) {
-      case 'select':
-        input = `<select name="${f.key}" ${req}><option value="">—</option>${(f.options || []).map(o => {
+      case 'select': {
+        const opt = (o) => {
           const [val, lab] = Array.isArray(o) ? o : [o, o];
           return `<option value="${esc(val)}" ${String(v) === String(val) ? 'selected' : ''}>${esc(lab)}</option>`;
-        }).join('')}</select>`; break;
+        };
+        // Une entrée d'options peut être un groupe — { groupe, options } — pour ranger
+        // une longue liste en familles. Les options simples continuent de fonctionner.
+        const corps = (f.options || []).map(o => (o && o.groupe)
+          ? `<optgroup label="${esc(o.groupe)}">${(o.options || []).map(opt).join('')}</optgroup>`
+          : opt(o)).join('');
+        input = `<select name="${f.key}" ${req}><option value="">—</option>${corps}</select>`; break;
+      }
       case 'multiselect':
         input = `<div class="checks">${(f.options || []).map(o => {
           const [val, lab] = Array.isArray(o) ? o : [o, o];

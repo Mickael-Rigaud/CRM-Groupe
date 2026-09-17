@@ -1,7 +1,7 @@
 // Pipeline kanban d'une activité, avec glisser-déposer entre étapes.
 import { db } from '../data/db.js';
 import { scope } from '../data/scope.js';
-import { ACTIVITIES, weightedAmount } from '../data/schema.js';
+import { ACTIVITIES, weightedAmount, stagesDe, missionDe } from '../data/schema.js';
 import { esc, eur, toast, daysSince, initials, dealParty, userName, csvDownload, fmtDate, terms, hit, searchInput, bindSearch, restoreFocus } from '../ui.js';
 import { openDeal, dealForm, moveStage } from './deal.js';
 import { nextActivity } from './activity.js';
@@ -12,12 +12,19 @@ export const pipelinePage = {
   title: (k) => `Pipeline ${ACTIVITIES[k]?.label || ''}`,
   render(root, key) {
     const act = ACTIVITIES[key]; if (!act) { root.innerHTML = '<div class="empty">Activité inconnue</div>'; return {}; }
-    const state = { q: '', owner: '', view: 'open', page: null, focus: null };
+    // Une activité peut mener deux métiers au déroulé différent (BTP Expertise :
+    // expertise et AMO). Le kanban dessine ses colonnes une fois pour toutes les
+    // affaires : il faut donc choisir la mission affichée, sinon la page montre les
+    // colonnes des deux et chaque affaire n'en remplit que la moitié.
+    const MISSIONS = [...new Set(act.stages.map(s => s.mission).filter(Boolean))];
+    const state = { q: '', owner: '', view: 'open', page: null, focus: null, mission: MISSIONS[0] || null };
     const users = scope.users();
 
     const draw = () => {
       const all = scope.deals().filter(d => d.activity === key);
-      const filtered = all.filter(d => (!state.owner || d.owner_id === state.owner) && hit([d.title, dealParty(d), d.notes, d.source], terms(state.q)));
+      const filtered = all
+        .filter(d => !state.mission || missionDe(d) === state.mission)
+        .filter(d => (!state.owner || d.owner_id === state.owner) && hit([d.title, dealParty(d), d.notes, d.source], terms(state.q)));
       const open = filtered.filter(d => d.status === 'open');
       const won = filtered.filter(d => d.status === 'won');
       const lost = filtered.filter(d => d.status === 'lost');
@@ -25,7 +32,14 @@ export const pipelinePage = {
       const noNext = open.filter(d => !nextActivity(d.id));
       const rotting = open.filter(d => daysSince(d.stage_changed_at) > ROTTING_DAYS);
 
+      // Compté sur toutes les affaires de l'activité, pour que le rang reste stable
+      const parMission = (m) => all.filter(d => missionDe(d) === m && d.status === 'open').length;
+      const LIBELLE = { expertise: 'Expertise', amo: 'AMO / accompagnement' };
+
       root.innerHTML = `
+        ${MISSIONS.length > 1 ? `<div class="pill-tabs">
+          ${MISSIONS.map(m => `<button type="button" data-mission="${m}" class="${state.mission === m ? 'on' : ''}" aria-pressed="${state.mission === m}">${esc(LIBELLE[m] || m)}<span>${parMission(m)}</span></button>`).join('')}
+        </div>` : ''}
         <div class="toolbar">
           ${searchInput('p-q', state, 'Rechercher une affaire, un contact…')}
           <select id="p-owner"><option value="">Tous les responsables</option>${users.map(u => `<option value="${u.id}" ${state.owner === u.id ? 'selected' : ''}>${esc(u.full_name)}</option>`).join('')}</select>
@@ -49,13 +63,15 @@ export const pipelinePage = {
       bindSearch(root, 'p-q', state, draw); restoreFocus(root, state);
       root.querySelector('#p-owner').onchange = e => { state.owner = e.target.value; draw(); };
       root.querySelectorAll('[data-view]').forEach(b => b.onclick = () => { state.view = b.dataset.view; draw(); });
-      root.querySelector('#p-new').onclick = () => dealForm(key, null, {}, draw);
+      root.querySelectorAll('[data-mission]').forEach(b => b.onclick = () => { state.mission = b.dataset.mission; draw(); });
+      root.querySelector('#p-new').onclick = () => dealForm(key, null,
+        state.mission && state.mission !== 'expertise' ? { fields: { type_mission: state.mission } } : {}, draw);
       root.querySelector('#p-export').onclick = () => csvDownload(`affaires-${key}.csv`, filtered.map(d => ({ titre: d.title, statut: d.status, etape: act.stages.find(s => s.key === d.stage)?.label, montant: d.amount, contact: dealParty(d), responsable: userName(d.owner_id), canal: d.channel, campagne: d.campaign, cree_le: fmtDate(d.created_at), gagne_le: fmtDate(d.won_at), motif_perte: d.lost_reason, ...(d.fields || {}) })));
       root.querySelectorAll('[data-deal]').forEach(el => el.onclick = () => openDeal(el.dataset.deal, draw));
       bindDragDrop(root, draw);
     };
 
-    const kanbanHtml = (act, deals) => `<div class="kanban">${act.stages.map(s => {
+    const kanbanHtml = (act, deals) => `<div class="kanban">${stagesDe(key, state.mission).map(s => {
       const col = deals.filter(d => d.stage === s.key);
       const sum = col.reduce((t, d) => t + (Number(d.amount) || 0), 0);
       return `<div class="col" data-col="${s.key}"><div class="col-head"><div><b>${esc(s.label)}</b><span class="sum">${eur(sum)}${s.delivery ? ' · gagné' : ' · ' + s.p + ' %'}</span></div><span>${col.length}</span></div>

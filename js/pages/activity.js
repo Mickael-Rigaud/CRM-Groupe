@@ -1,7 +1,7 @@
 // Activités (tâches / RDV) : formulaire, liste, clôture.
 import { db } from '../data/db.js';
 import { scope } from '../data/scope.js';
-import { ACTIVITY_TYPES, ACTIVITIES } from '../data/schema.js';
+import { ACTIVITY_TYPES, ACTIVITIES, PRIORITES } from '../data/schema.js';
 import { esc, openModal, closeModal, renderForm, readForm, toast, isoDay, daysSince, relDay, userName, fmtDate } from '../ui.js';
 
 export const actType = (k) => ACTIVITY_TYPES.find(t => t.key === k) || { label: k, icon: '•' };
@@ -17,11 +17,18 @@ export function structureDe(a) {
 export function activityForm(link = {}, existing = null, onSaved, onClose = null) {
   const users = scope.users();
   const spec = [
-    { key: 'type', label: 'Type', type: 'select', options: ACTIVITY_TYPES.map(t => [t.key, `${t.icon} ${t.label}`]), required: true, half: true, value: 'appel' },
+    { key: 'type', label: 'Type', type: 'select', required: true, half: true, value: 'appel',
+      options: [...new Set(ACTIVITY_TYPES.map(t => t.groupe))].map(g => ({
+        groupe: g, options: ACTIVITY_TYPES.filter(t => t.groupe === g).map(t => [t.key, `${t.icon} ${t.label}`]),
+      })) },
     // Comme pour la structure, un contexte qui désigne déjà quelqu'un (la colonne
     // d'une personne dans la to do list) l'emporte sur le responsable par défaut.
     { key: 'assignee_id', label: 'Responsable', type: 'select', options: users.map(u => [u.id, u.full_name]), required: true, half: true, value: link.assignee_id || scope.user.id },
     { key: 'title', label: 'Intitulé', type: 'text', required: true, placeholder: 'Ex. Relancer le devis' },
+    // Le degré de traitement ; vide = tâche ordinaire, rangée à son échéance.
+    { key: 'priority', label: 'Degré de traitement', type: 'select', half: true,
+      options: PRIORITES.map(p => [p.key, `${p.icon} ${p.label}`]),
+      hint: 'À laisser vide pour une tâche ordinaire : elle se range alors à son échéance.' },
     { key: 'due_date', label: 'Échéance', type: 'date', required: true, half: true, value: isoDay() },
     { key: 'due_time', label: 'Heure (optionnel)', type: 'time', half: true },
     { key: 'activity', label: 'Structure', type: 'select', half: true,

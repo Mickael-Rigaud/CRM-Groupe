@@ -1,7 +1,7 @@
 // Affaires : fiche détaillée (modale), création / édition, changement d'étape, gagné / perdu.
 import { db } from '../data/db.js';
 import { scope } from '../data/scope.js';
-import { ACTIVITIES, CHANNELS, LOST_REASONS, stageOf, stageIndex } from '../data/schema.js';
+import { ACTIVITIES, CHANNELS, LOST_REASONS, stageOf, stageIndex, stagesDe, missionDe } from '../data/schema.js';
 import { esc, eur, openModal, closeModal, renderForm, readForm, refField, bindRefFields, toast, fmtDate, fmtDateTime, userName, contactName, dealParty, actBadge, daysSince, confirm } from '../ui.js';
 import { activityForm, activityRowHtml, bindActivityRows, nextActivity } from './activity.js';
 import { documentsSection, bindDocuments } from '../documents.js';
@@ -26,7 +26,8 @@ export async function moveStage(deal, stageKey, { silent = false } = {}) {
 
 export async function setWon(deal) {
   const act = ACTIVITIES[deal.activity];
-  const firstDelivery = act.stages.find(s => s.delivery);
+  // Une AMO et une expertise n'entrent pas en realisation a la meme etape.
+  const firstDelivery = stagesDe(deal.activity, missionDe(deal)).find(s => s.delivery);
   const patch = { status: 'won', won_at: new Date().toISOString(), closed_at: new Date().toISOString(), lost_reason: null };
   if (firstDelivery && stageIndex(deal.activity, deal.stage) < stageIndex(deal.activity, firstDelivery.key)) {
     Object.assign(patch, { stage: firstDelivery.key, stage_changed_at: new Date().toISOString(), stage_history: [...(deal.stage_history || []), { stage: firstDelivery.key, at: new Date().toISOString() }] });
@@ -128,7 +129,10 @@ export function openDeal(id, onChange) {
     const org = d.organisation_id && db.byId('organisations', d.organisation_id);
     const refOrg = d.referrer_org_id && db.byId('organisations', d.referrer_org_id);
     const refC = d.referrer_contact_id && db.byId('contacts', d.referrer_contact_id);
-    const curIdx = stageIndex(d.activity, d.stage);
+    // Le fil des etapes, et la position dedans : tous deux sur la liste du metier
+    // de l'affaire, sinon l'etape courante serait reperee au mauvais rang.
+    const etapes = stagesDe(d.activity, missionDe(d));
+    const curIdx = etapes.findIndex(s => s.key === d.stage);
     const status = d.status === 'won' ? `<span class="status-won">GAGNÉE ${fmtDate(d.won_at)}</span>` : d.status === 'lost' ? `<span class="status-lost">PERDUE — ${esc(d.lost_reason || '')}</span>` : `<span class="pill info">En cours · ${daysSince(d.stage_changed_at) ?? 0} j dans l'étape</span>`;
     const next = nextActivity(id);
     const html = `
@@ -140,7 +144,7 @@ export function openDeal(id, onChange) {
                     <button class="btn danger sm" id="d-del">🗑 Supprimer</button>
         </div>
       </div>
-      <div class="stage-steps" style="margin-bottom:18px">${act.stages.map((s, i) => `<button data-stage="${s.key}" class="${i === curIdx ? 'cur' : i < curIdx ? 'past' : ''}" title="${s.delivery ? 'Étape de réalisation (affaire gagnée)' : 'Probabilité ' + s.p + ' %'}">${esc(s.label)}</button>`).join('')}</div>
+      <div class="stage-steps" style="margin-bottom:18px">${etapes.map((s, i) => `<button data-stage="${s.key}" class="${i === curIdx ? 'cur' : i < curIdx ? 'past' : ''}" title="${s.delivery ? 'Étape de réalisation (affaire gagnée)' : 'Probabilité ' + s.p + ' %'}">${esc(s.label)}</button>`).join('')}</div>
       ${d.status === 'open' && !next ? `<div class="alert" style="margin-bottom:16px"><b>!</b><div>Aucune prochaine action planifiée — <a href="#" id="d-add-act-inline">en ajouter une maintenant</a>.</div></div>` : ''}
       <div class="detail">
         <div>

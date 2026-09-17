@@ -38,7 +38,17 @@ export const scope = {
     return false;
   },
 
+  // Messagerie. Un canal de structure se voit comme le reste de la structure
+  // (miroir de has_activity côté serveur) ; le canal Groupe est ouvert à tous ;
+  // une conversation privée se voit si on y est nommément.
+  canSeeConversation(c) {
+    if (!c) return false;
+    if (c.kind === 'canal') return c.activity ? this.activityKeys.includes(c.activity) : true;
+    return db.t('conversation_members').some(m => m.conversation_id === c.id && m.user_id === this.user.id);
+  },
+
   deals() { return db.t('deals').filter(d => this.canSeeDeal(d)); },
+  conversations() { return db.t('conversations').filter(c => this.canSeeConversation(c)); },
   contacts() { return db.t('contacts').filter(c => this.canSeeContact(c)); },
   orgs() { return db.t('organisations').filter(o => this.canSeeOrg(o)); },
   activities() { return db.t('activities').filter(a => this.canSeeActivity(a)); },

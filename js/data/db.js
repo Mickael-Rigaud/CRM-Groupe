@@ -14,7 +14,9 @@ export const TABLES = ['profiles', 'organisations', 'contacts', 'deals', 'activi
   // espace BTP Expertise : référentiels internes
   'dtu_sheets', 'mail_templates',
   // chiffres poussés par les outils externes (tableau de bord RGD Renova)
-  'structure_stats'];
+  'structure_stats',
+  // messagerie interne (canaux par structure + conversations privées)
+  'conversations', 'conversation_members', 'messages', 'message_reads'];
 const LS_FILES = 'crm_local_files';
 const LS_KEY = 'crm_local_v1';
 const LS_USER = 'crm_local_user';
@@ -81,10 +83,13 @@ const supabaseAdapter = {
     const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
     this.client = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
   },
-  async load() {
+  // `tables` sert à ne recharger qu'une partie du cache : la messagerie se
+  // rafraîchit toutes les quelques secondes, il serait absurde de retélécharger
+  // les loyers et le patrimoine à chaque fois.
+  async load(tables = TABLES) {
     const out = {};
     const PAGE = 1000; // Supabase limite chaque requête à 1 000 lignes : on pagine
-    for (const t of TABLES) {
+    for (const t of tables) {
       const rows = []; let from = 0; let failed = false;
       while (true) {
         const { data, error } = await this.client.from(t).select('*').range(from, from + PAGE - 1);
@@ -96,7 +101,7 @@ const supabaseAdapter = {
       out[t] = failed ? [] : rows;
     }
     // Gestion locative sans accès patrimoine : les biens viennent d'une vue allégée (sans prix ni financement)
-    if (!out.properties.length) { const { data } = await this.client.from('v_properties_rental').select('*'); if (data?.length) out.properties = data; }
+    if (out.properties && !out.properties.length) { const { data } = await this.client.from('v_properties_rental').select('*'); if (data?.length) out.properties = data; }
     return out;
   },
   async insert(table, row) {
@@ -164,6 +169,19 @@ export const db = {
     this.cache = await this.adapter.load();
     for (const t of TABLES) this.cache[t] ||= [];
     this.emit();
+  },
+  // Recharge quelques tables seulement, sans toucher au reste du cache.
+  // N'émet que si quelque chose a bougé : autrement un rafraîchissement
+  // périodique redessinerait la page sous les doigts de l'utilisateur.
+  async refresh(tables) {
+    const out = await this.adapter.load(tables);
+    let change = false;
+    for (const t of tables) {
+      const rows = out[t] || [];
+      if (JSON.stringify(rows) !== JSON.stringify(this.cache[t] || [])) { this.cache[t] = rows; change = true; }
+    }
+    if (change) this.emit();
+    return change;
   },
   t(table) { return this.cache[table] || []; },
   byId(table, id) { return this.t(table).find(r => r.id === id); },
