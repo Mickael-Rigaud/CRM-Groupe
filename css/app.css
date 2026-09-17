@@ -1050,3 +1050,6 @@ body.impression #print-root { display: block; }
   .msg-tete-gens { display: none; }
   .msg-bulle { max-width: 100%; }
 }
+.tb-an { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; }
+.tb-an b { color: var(--text); font-family: var(--font-display); }
+.tb-an .tb-track { flex: none; }

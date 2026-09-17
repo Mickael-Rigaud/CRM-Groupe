@@ -131,34 +131,63 @@ export function entonnoir(cles, r, deals = scope.deals()) {
 // ---------- Objectifs de chiffre d'affaires ----------
 // Stockés dans « settings » (clé objectifs_ca), lisible par tous, modifiable par la
 // direction — les policies existent déjà, aucune table à créer. Format :
-// { "rgd": 40000, …, "mois": { "2026-09": { "rgd": 45000 } } }
-// Le montant par structure est l'objectif mensuel courant ; « mois » permet de
-// surcharger un mois précis sans réécrire l'historique.
+// { "periode": "annuel", "rgd": 480000, …, "mois": { "2026-09": { "rgd": 52000 } } }
+// Le montant par structure est l'objectif de CA HT sur l'année ; toute période plus
+// courte en prend sa part. « mois » permet de forcer un mois précis, en euros, sans
+// toucher à l'objectif annuel — utile pour un mois creux ou une grosse affaire.
 export const OBJECTIFS_CLE = 'objectifs_ca';
 export function objectifs() {
   const v = db.setting(OBJECTIFS_CLE);
-  if (!v) return { base: {}, mois: {} };
-  try { const o = typeof v === 'string' ? JSON.parse(v) : v; return { base: o || {}, mois: o?.mois || {} }; }
-  catch { return { base: {}, mois: {} }; }
+  if (!v) return { base: {}, mois: {}, annuel: true };
+  try {
+    const o = (typeof v === 'string' ? JSON.parse(v) : v) || {};
+    // Les objectifs ont d'abord été saisis au mois, sans marqueur. Un enregistrement
+    // n'est annuel que s'il le dit : sans quoi un objectif mensuel saisi avant ce
+    // changement serait relu comme annuel, donc divisé par douze.
+    const annuel = o.periode === 'annuel';
+    return { base: o, mois: o.mois || {}, annuel };
+  } catch { return { base: {}, mois: {}, annuel: true }; }
 }
-// Objectif d'une structure sur une période : l'objectif mensuel multiplié par le
-// nombre de mois que la période couvre. Un trimestre vaut trois mois d'objectif.
+// Objectif annuel d'une structure, quelle que soit la façon dont il a été saisi.
+export function objectifAnnuel(k) {
+  const { base, annuel } = objectifs();
+  const v = Number(base[k]) || 0;
+  return annuel ? v : v * 12;
+}
+const AN = 365 * 24 * 3600 * 1000;
+// Objectif d'une période : l'objectif annuel au prorata de sa durée. Un mois vaut
+// un douzième, un trimestre un quart. Au-delà de dix-huit mois (la période « Tout »),
+// un objectif n'a plus de sens : on n'en affiche pas plutôt que d'en inventer un.
 export function objectif(k, r) {
-  const { base, mois } = objectifs();
-  const socle = Number(base[k]) || 0;
-  let n = 0, cumul = 0;
-  const d = new Date(r.start);
-  while (d < r.end) {
-    const cle = moisCle(d);
-    cumul += Number(mois?.[cle]?.[k] ?? socle) || 0;
-    n++; d.setMonth(d.getMonth() + 1);
-    if (n > 240) break;  // garde-fou sur la période « Tout »
+  const duree = r.end - r.start;
+  if (duree > 1.5 * AN) return 0;
+  const { mois } = objectifs();
+  const socle = objectifAnnuel(k);
+  // Mois, trimestre, année : la période couvre des mois entiers, chacun vaut un
+  // douzième de l'année. Pas de prorata par jours — un objectif annuel de 480 000 €
+  // vaut 40 000 € en février comme en juillet.
+  if (r.start.getDate() === 1 && r.end.getDate() === 1) {
+    let cumul = 0, n = 0;
+    const d = new Date(r.start);
+    while (d < r.end && n < 24) {
+      const sur = mois?.[moisCle(d)]?.[k];       // un mois forcé à la main garde la priorité
+      cumul += sur != null ? Number(sur) || 0 : socle / 12;
+      n++; d.setMonth(d.getMonth() + 1);
+    }
+    return cumul;
   }
-  return cumul;
+  // Journée ou semaine : là, le prorata sur l'année est le seul repère honnête.
+  return socle * (duree / AN);
 }
+
+// L'année civile en cours, pour rappeler l'avancement annuel sur tous les écrans
+export const anneeEnCours = () => {
+  const a = new Date().getFullYear();
+  return { start: new Date(a, 0, 1), end: new Date(a + 1, 0, 1), annee: a };
+};
 export async function enregistrerObjectifs(valeurs) {
-  const { base, mois } = objectifs();
-  const o = { ...base, ...valeurs, mois };
+  const { mois } = objectifs();
+  const o = { ...valeurs, periode: 'annuel', mois };
   const existe = db.t('settings').some(s => s.key === OBJECTIFS_CLE);
   const payload = JSON.stringify(o);
   if (existe) await db.update('settings', OBJECTIFS_CLE, { value: payload });

@@ -7,7 +7,7 @@ import { ACTIVITIES, ACTIVITY_KEYS } from '../data/schema.js';
 import { propertyMetrics, loanStatus } from '../data/finance.js';
 import {
   chiffres, total, entonnoir, caMois, derniersMois, moisCle, moisPrecedent,
-  objectifs, objectif, enregistrerObjectifs, ecoule, CLES_VISIBLES,
+  objectifs, objectif, objectifAnnuel, enregistrerObjectifs, ecoule, anneeEnCours, CLES_VISIBLES,
 } from '../data/chiffres.js';
 import {
   esc, eur, daysSince, periodRange, inRange, isoDay, userName, PERIODS,
@@ -78,6 +78,11 @@ export const homePage = {
       const entAvant = comparaisonEntonnoir(cles, state.periode, deals);
       const part = ecoule(r);
       const obj = cles.reduce((s, k) => s + objectif(k, r), 0);
+      // L'objectif se fixe à l'année : on rappelle toujours où en est l'année,
+      // même quand l'écran est filtré sur le mois ou le trimestre.
+      const an = anneeEnCours();
+      const objAn = cles.reduce((s, k) => s + objectifAnnuel(k), 0);
+      const caAn = cles.reduce((s, k) => s + chiffres(k, an, deals).ca, 0);
       const sources = cles.map(k => chiffres(k, r, deals)).filter(x => x.source);
 
       root.innerHTML = `
@@ -129,15 +134,17 @@ export const homePage = {
 
             <section class="card">
               <div class="card-head"><h2>Objectifs &amp; performance</h2>
+                ${objAn ? `<span class="muted small tb-an">Année ${an.annee} : <b>${eur(caAn)}</b> sur ${eur(objAn)} · ${pct(caAn / objAn)} %
+                  <span class="tb-track" style="width:70px"><span class="tb-fill" style="width:${Math.min(100, pct(caAn / objAn))}%;background:var(--accent)"></span><span class="tb-today" style="left:${Math.min(100, pct(ecoule(an)))}%"></span></span></span>` : ''}
                 ${scope.isDirection ? '<button class="btn ghost sm" id="tb-obj">Fixer les objectifs</button>' : ''}</div>
               ${obj ? `<div class="table-wrap"><table class="tb-goals">
-                <thead><tr><th>Structure</th><th class="num">Objectif</th><th class="num">Signé</th><th class="num">Reste</th><th class="num">Avancement</th></tr></thead>
+                <thead><tr><th>Structure</th><th class="num">Objectif ${esc(libellePeriode(state.periode))}</th><th class="num">Signé</th><th class="num">Reste</th><th class="num">Avancement</th></tr></thead>
                 <tbody>
                   ${cles.map(k => ligneObjectif(k, r, deals, part)).join('')}
                   ${cles.length > 1 ? ligneTotal(t.ca, obj, part) : ''}
                 </tbody></table></div>
-                <p class="muted small tb-legend"><i></i> Le repère marque ${pct(part)} % de la période écoulée. À droite du repère, la structure est en avance.</p>`
-              : `<p class="empty" style="padding:22px">Aucun objectif fixé.${scope.isDirection ? ' Utilisez « Fixer les objectifs » pour définir un objectif de CA mensuel par structure.' : ''}</p>`}
+                <p class="muted small tb-legend"><i></i> Objectif annuel ramené ${esc(libellePeriode(state.periode))} ; le repère marque ${pct(part)} % de la période écoulée. À droite du repère, la structure est en avance.</p>`
+              : `<p class="empty" style="padding:22px">${objAn ? 'Pas d\'objectif calculable sur cette période.' : 'Aucun objectif fixé.'}${scope.isDirection && !objAn ? ' Utilisez « Fixer les objectifs » pour définir un objectif de CA annuel par structure.' : ''}</p>`}
             </section>
 
             <section class="card">
@@ -308,13 +315,13 @@ function jauge(avance, part, couleur, objectifFixe) {
     <b class="${avance >= part ? 'status-won' : ''}">${p} %</b></span>`;
 }
 function formObjectifs(onSaved) {
-  const { base } = objectifs();
+  const valeurs = Object.fromEntries(ACTIVITY_KEYS.map(k => [k, objectifAnnuel(k) || '']));
   const spec = ACTIVITY_KEYS.map(k => ({
     key: k, label: ACTIVITIES[k].label, type: 'number',
-    hint: k === ACTIVITY_KEYS[0] ? 'Objectif de CA HT signé, par mois. Le trimestre et l\'année sont calculés à partir de ce montant.' : '',
+    hint: k === ACTIVITY_KEYS[0] ? 'Objectif de CA HT signé sur l\'année. Le mois et le trimestre en prennent leur part : un objectif de 480 000 € vaut 40 000 € par mois.' : '',
   }));
-  openModal('Objectifs de chiffre d\'affaires',
-    `<form id="f-obj" class="form">${renderForm(spec, base)}</form>
+  openModal('Objectifs annuels de chiffre d\'affaires',
+    `<form id="f-obj" class="form">${renderForm(spec, valeurs)}</form>
      <div class="form-actions"><button class="btn ghost" id="obj-x">Annuler</button><button class="btn" id="obj-ok">Enregistrer</button></div>`,
     { onOpen: (m) => {
       m.querySelector('#obj-x').onclick = () => closeModal();
@@ -326,6 +333,11 @@ function formObjectifs(onSaved) {
       };
     } });
 }
+
+const libellePeriode = (p) => ({
+  today: 'à la journée', week: 'à la semaine', month: 'au mois',
+  quarter: 'au trimestre', year: "sur l'année", all: '',
+}[p] || '');
 
 // ---------- journée ----------
 function carteJournee() {
