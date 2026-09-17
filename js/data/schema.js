@@ -196,10 +196,18 @@ export const ROLES = {
   commercial: { label: "Chargé d'affaires", description: 'Uniquement les affaires et contacts dont il est responsable' },
 };
 
-// À quelle mission une affaire appartient : 'amo' ou 'expertise'. Une affaire sans
-// type_mission est une expertise — c'est le métier historique, et c'est ce qu'est un
-// lead arrivé du formulaire du site tant que personne ne l'a qualifié.
-export const missionDe = (deal) => (deal?.fields?.type_mission === 'amo' ? 'amo' : 'expertise');
+// À quelle mission une affaire appartient : 'amo' ou 'expertise'.
+//
+// Le type saisi fait foi. À défaut, on lit la problématique : le formulaire du site y
+// range le besoin choisi en tête (« AMO / accompagnement ») quand il n'envoie pas de
+// champ dédié, et les affaires créées avant l'ajout de type_mission n'ont que ça.
+// Sans l'un ni l'autre, c'est une expertise — le métier historique du cabinet.
+const DIT_AMO = /(^|[^a-zà-ÿ])amo([^a-zà-ÿ]|$)|ouvrage/i;
+export const missionDe = (deal) => {
+  const t = deal?.fields?.type_mission;
+  if (t === 'amo' || t === 'expertise') return t;
+  return DIT_AMO.test(deal?.fields?.besoin || deal?.fields?.problematique || '') ? 'amo' : 'expertise';
+};
 
 // Les étapes d'une mission : les siennes, plus les communes. L'ordre de la liste est
 // conservé, c'est celui du déroulé.
