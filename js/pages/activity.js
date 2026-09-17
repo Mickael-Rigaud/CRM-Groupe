@@ -1,7 +1,7 @@
 // Activités (tâches / RDV) : formulaire, liste, clôture.
 import { db } from '../data/db.js';
 import { scope } from '../data/scope.js';
-import { ACTIVITY_TYPES, ACTIVITIES } from '../data/schema.js';
+import { ACTIVITY_TYPES, ACTIVITIES, PRIORITES } from '../data/schema.js';
 import { esc, openModal, closeModal, renderForm, readForm, toast, isoDay, daysSince, relDay, userName, fmtDate } from '../ui.js';
 
 export const actType = (k) => ACTIVITY_TYPES.find(t => t.key === k) || { label: k, icon: '•' };
@@ -25,6 +25,10 @@ export function activityForm(link = {}, existing = null, onSaved, onClose = null
     // d'une personne dans la to do list) l'emporte sur le responsable par défaut.
     { key: 'assignee_id', label: 'Responsable', type: 'select', options: users.map(u => [u.id, u.full_name]), required: true, half: true, value: link.assignee_id || scope.user.id },
     { key: 'title', label: 'Intitulé', type: 'text', required: true, placeholder: 'Ex. Relancer le devis' },
+    // Le degré de traitement ; vide = tâche ordinaire, rangée à son échéance.
+    { key: 'priority', label: 'Degré de traitement', type: 'select', half: true,
+      options: PRIORITES.map(p => [p.key, `${p.icon} ${p.label}`]),
+      hint: 'À laisser vide pour une tâche ordinaire : elle se range alors à son échéance.' },
     { key: 'due_date', label: 'Échéance', type: 'date', required: true, half: true, value: isoDay() },
     { key: 'due_time', label: 'Heure (optionnel)', type: 'time', half: true },
     { key: 'activity', label: 'Structure', type: 'select', half: true,

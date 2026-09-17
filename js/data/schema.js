@@ -148,6 +148,14 @@ export const ACTIVITY_TYPES = [
   { key: 'autre', label: 'Autre', icon: '•', groupe: 'Interne' },
 ];
 
+// Le degré de traitement qu'on pose à la main sur une tâche. « En retard » et
+// « aujourd'hui » n'y figurent pas : ils se calculent depuis l'échéance, ils ne se
+// saisissent pas. Stocké dans activities.priority — texte libre, donc une valeur
+// intermédiaire s'ajoute ici sans migration.
+export const PRIORITES = [
+  { key: 'urgent', label: 'Urgent', icon: '🔥' },
+];
+
 export const CONTACT_TYPES = ['Prospect', 'Client', 'Partenaire', 'Apporteur', 'Fournisseur'];
 export const ORG_TYPES = ['Client', 'Prospect', 'Partenaire', 'Banque', 'Fournisseur'];
 export const PARTNER_JOBS = ['Agent immobilier', 'Agence immobilière', 'Notaire', 'Avocat', 'Syndic', 'Administrateur de biens', 'Courtier', 'Expert-comptable', 'Banque', 'Artisan', 'Architecte', 'Investisseur', 'Chasseur immobilier', 'Autre'];

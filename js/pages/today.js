@@ -9,16 +9,21 @@ import { esc, daysSince, fmtDate, relDay, initials, userName, searchInput, bindS
 import { actType, bindActivityRows, activityForm, nextActivity, structureDe, toggleActivity } from './activity.js';
 import { openDeal } from './deal.js';
 
-// Les groupes d'échéance, dans l'ordre où ils se lisent. `test` reçoit l'écart en jours :
-// positif = en retard, 0 = aujourd'hui, négatif = à venir.
+// Les degrés de traitement, dans l'ordre où ils se lisent. « Urgent » se pose à la
+// main sur la tâche ; les autres se déduisent de l'échéance — `test` reçoit la tâche
+// et l'écart en jours : positif = en retard, 0 = aujourd'hui, négatif = à venir.
 const GROUPES = [
-  { key: 'retard', titre: '⚠ En retard', test: (j) => j !== null && j > 0 },
-  { key: 'jour', titre: "Aujourd'hui", test: (j) => j === 0 },
-  { key: 'semaine', titre: 'Cette semaine', test: (j) => j !== null && j < 0 && j >= -7 },
-  { key: 'plus', titre: 'Plus tard', test: (j) => j !== null && j < -7 },
-  { key: 'sans', titre: 'Sans échéance', test: (j) => j === null },
+  { key: 'urgent', titre: '🔥 Urgent', test: (a) => a.priority === 'urgent' },
+  { key: 'retard', titre: '⚠ En retard', test: (a, j) => j !== null && j > 0 },
+  { key: 'jour', titre: "Aujourd'hui", test: (a, j) => j === 0 },
+  { key: 'semaine', titre: 'Cette semaine', test: (a, j) => j !== null && j < 0 && j >= -7 },
+  { key: 'plus', titre: 'Plus tard', test: (a, j) => j !== null && j < -7 },
+  { key: 'sans', titre: 'Sans échéance', test: () => true },
 ];
 const ecart = (a) => (a.due_date ? daysSince(a.due_date) : null);
+// Une tâche ne figure que dans le premier rang qui la prend : urgente et en retard,
+// elle est urgente — et sa date reste affichée en rouge.
+const rangDe = (a) => GROUPES.find(gr => gr.test(a, ecart(a)));
 
 // Une tâche qu'on vient de cocher ne s'efface pas sous les doigts : elle reste en
 // place, barrée, le temps de la relire et de se raviser. Passé ce délai elle rejoint
@@ -51,7 +56,7 @@ function carte(a) {
     !d && !c && o && esc(o.name),
   ].filter(Boolean)[0] || '';
 
-  return `<div class="todo-tache ${a.done ? 'done' : ''} ${recentes.has(a.id) ? 'recente' : ''}" ${act ? `style="--c:${act.color};--b:${act.accent};--bt:${act.on}"` : ''}>
+  return `<div class="todo-tache ${a.done ? 'done' : ''} ${recentes.has(a.id) ? 'recente' : ''} ${a.priority === 'urgent' && !a.done ? 'urgent' : ''}" ${act ? `style="--c:${act.color};--b:${act.accent};--bt:${act.on}"` : ''}>
     <input type="checkbox" ${a.done ? 'checked' : ''} data-toggle="${a.id}" title="Marquer comme fait">
     <div class="todo-tache-corps">
       ${act ? `<span class="todo-badge">${logo(act, 'todo-badge-logo')}${esc(act.short)}</span>` : ''}
@@ -113,7 +118,7 @@ export const todayPage = {
       }
 
       const colonne = (g) => {
-        const groupes = GROUPES.map(gr => ({ ...gr, l: g.taches.filter(a => gr.test(ecart(a))) })).filter(gr => gr.l.length);
+        const groupes = GROUPES.map(gr => ({ ...gr, l: g.taches.filter(a => rangDe(a) === gr) })).filter(gr => gr.l.length);
         const tri = (l) => l.slice().sort((x, y) => (x.due_date || '9999').localeCompare(y.due_date || '9999')
           || (x.due_time || '99').localeCompare(y.due_time || '99'));
         return `<section class="todo-col ${g.id === scope.user.id ? 'moi' : ''}">
