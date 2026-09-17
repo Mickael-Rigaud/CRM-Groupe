@@ -36,9 +36,20 @@ export const structuresRaccordees = (cles = ACTIVITY_KEYS) => cles.filter(k => i
 // sur la vue mois. Une journée s'obtient avec AGENDA borné à la date du jour.
 export const VUES = [['WEEK', 'Semaine'], ['MONTH', 'Mois'], ['AGENDA', 'Planning']];
 
+// Teintes du cadre intégré, une par agenda, dans l'ordre des identifiants.
+//
+// Le cadre de Google n'hérite PAS des couleurs réglées dans le compte : sans
+// consigne il peint tous les agendas pareil, et deux calendriers distincts
+// deviennent impossibles à séparer à l'œil. Le paramètre `color` se place
+// juste après le `src` qu'il concerne — il ne repeint donc pas tout, contrairement
+// à ce qu'on pourrait croire : il y en a un par agenda.
+//
+// Ce sont les teintes de la palette de Google, pour que le cadre montre les
+// mêmes couleurs que Google Agenda ouvert à côté. L'ORDRE DES IDENTIFIANTS dans
+// le réglage décide donc de la couleur de chaque agenda.
+const TEINTES = ['#3F51B5', '#AD1457', '#EF6C00', '#0B8043', '#8E24AA', '#039BE5'];
+
 // Google reprend notre couleur de fond pour que le cadre se fonde dans la page.
-// On ne lui impose PAS de couleur : le paramètre `color` repeint tout d'une seule
-// teinte et efface la couleur propre de chaque agenda.
 export function urlAgenda(ids, mode, { jour = null } = {}) {
   const lire = (v, repli) => (getComputedStyle(document.documentElement).getPropertyValue(v).trim() || repli);
   const p = new URLSearchParams({
@@ -49,7 +60,12 @@ export function urlAgenda(ids, mode, { jour = null } = {}) {
     bgcolor: lire('--card', '#FFFFFF'),
   });
   if (jour) p.set('dates', `${jour}/${jour}`);
-  for (const id of ids) p.append('src', id);
+  // src puis color, agenda par agenda : l'ordre compte, Google rattache chaque
+  // couleur au src qui la précède.
+  ids.forEach((id, i) => {
+    p.append('src', id);
+    p.append('color', TEINTES[i % TEINTES.length]);
+  });
   return 'https://calendar.google.com/calendar/embed?' + p;
 }
 // La journée en cours : la liste des rendez-vous, bornée à aujourd'hui.
