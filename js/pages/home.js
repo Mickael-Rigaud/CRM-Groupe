@@ -16,11 +16,10 @@ import {
 import { activeInMonth, rowOf, dueOf, receivedOf, balanceOf } from './locatif.js';
 import {
   idsDeTous, structuresRaccordees, cadreAgenda, noteAgenda, modeEmploi,
-  champsAgendas, enregistrerAgendas, peutRaccorder, VUES,
+  champsAgendas, enregistrerAgendas, peutRaccorder,
 } from '../agenda.js';
 
 const LS_FILTRE = 'crm_home_filtre';
-const LS_VUE = 'crm_home_agenda_vue';
 const pct = (v) => Math.round((v || 0) * 100);
 const eur2 = (n) => eur(n, { maximumFractionDigits: 2 });
 
@@ -55,7 +54,6 @@ export const homePage = {
     let chart = null;
     const state = {
       periode: 'month',
-      vue: (() => { try { return localStorage.getItem(LS_VUE) || 'DAY'; } catch { return 'DAY'; } })(),
       filtre: (() => { try { return localStorage.getItem(LS_FILTRE) || 'groupe'; } catch { return 'groupe'; } })(),
     };
 
@@ -169,7 +167,7 @@ export const homePage = {
           </div>
 
           <div class="tb-col">
-            ${carteJournee(visibles, state)}
+            ${carteJournee(visibles)}
             ${carteTaches()}
             ${cartePatrimoine()}
           </div>
@@ -199,11 +197,7 @@ export const homePage = {
       });
       root.querySelector('#tb-obj')?.addEventListener('click', () => formObjectifs(draw));
       root.querySelector('#tb-ag')?.addEventListener('click', () => formAgendas(visibles, draw));
-      root.querySelectorAll('[data-vue]').forEach(b => b.onclick = () => {
-        state.vue = b.dataset.vue;
-        try { localStorage.setItem(LS_VUE, state.vue); } catch { /* navigation privée */ }
-        draw();
-      });
+
       dessineCourbe(cles, moisSerie, deals);
     };
 
@@ -355,12 +349,14 @@ const libellePeriode = (p) => ({
 // Les agendas Google des structures, superposés dans un seul cadre : c'est Google
 // qui colore par agenda. Le CRM ne peut pas lire leur contenu, il ne les mélange
 // donc pas à ses propres tâches — celles du jour sont listées juste en dessous.
-function carteJournee(cles, state) {
+function carteJournee(cles) {
   const ids = idsDeTous(cles);
   const raccordees = structuresRaccordees(cles);
-  const titre = { DAY: 'Ma journée', WEEK: 'Ma semaine', MONTH: 'Mon mois', AGENDA: 'Mes prochains rendez-vous' }[state.vue] || 'Ma journée';
-  const entete = `<div class="card-head"><h2>${titre}</h2>
-    ${ids.length ? `<div class="seg ag-vues">${VUES.map(([v, l]) => `<button type="button" data-vue="${v}" class="${v === state.vue ? 'active' : ''}">${l}</button>`).join('')}</div>` : ''}
+  // Vue « jour » seulement : le tableau de bord montre la journée en cours. La
+  // semaine et le mois se consultent dans Google Agenda, lien à droite.
+  const entete = `<div class="card-head"><h2>Ma journée</h2>
+    <span class="muted small">${new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
+    ${ids.length ? '<a class="btn ghost sm" href="https://calendar.google.com/calendar/r/day" target="_blank" rel="noopener">Ouvrir Google Agenda ↗</a>' : ''}
     ${peutRaccorder() ? `<button class="btn ghost sm" id="tb-ag">${ids.length ? 'Agendas' : 'Raccorder les agendas'}</button>` : ''}</div>`;
 
   if (!ids.length) {
@@ -376,7 +372,7 @@ function carteJournee(cles, state) {
   }
   const manquantes = cles.filter(k => !raccordees.includes(k));
   return `<section class="card">${entete}
-    ${cadreAgenda(ids, state.vue, 'Agendas du groupe')}
+    ${cadreAgenda(ids, 'DAY', 'Agendas du groupe')}
     <p class="muted small tb-ag-src">${raccordees.map(k => `<span class="ag-src"><span class="dot" style="background:${ACTIVITIES[k].color}"></span>${esc(ACTIVITIES[k].label)}</span>`).join('')}
       ${manquantes.length ? `<span class="ag-abs">sans agenda : ${manquantes.map(k => esc(ACTIVITIES[k].label)).join(', ')}</span>` : ''}</p>
     ${listeDuJour(false)}
