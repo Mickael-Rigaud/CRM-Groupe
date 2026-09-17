@@ -701,6 +701,22 @@ td.acts { display: flex; gap: 6px; justify-content: flex-end; }
 .mail-etape-act { flex-shrink: 0; align-self: center; font-size: 12px; font-weight: 600; color: var(--muted);
                    border: 1px solid var(--line-strong); border-radius: 8px; padding: 5px 11px; }
 .mail-etape-act:hover { border-color: var(--t); color: var(--t); }
+
+/* Composer un mail : les champs que le dossier ne donne pas, puis l'apercu tel qu'il partira */
+.mail-envoi { padding: 18px 20px 16px; }
+.mail-envoi .mail-vue-tete { margin-bottom: 16px; }
+.mail-envoi-champs { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px 14px; }
+.mail-champ { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.mail-champ > span { font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted-2); }
+.mail-champ input, .mail-champ select { width: 100%; padding: 8px 10px; font: inherit; font-size: 13.5px;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--text); }
+.mail-champ input:focus, .mail-champ select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+/* Un champ que le CRM n'a pas pu remplir se voit : c'est ce qui reste entre crochets dans l'apercu. */
+.mail-champ.trou input { background: var(--amber-soft); border-color: color-mix(in srgb, var(--amber) 35%, var(--line)); }
+.mail-champ.trou input:focus { background: var(--card); }
+.mail-envoi-note { margin: 14px 0 0; }
+.mail-apercu { margin-top: 16px; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: #F4F6F8; }
+.mail-apercu iframe { display: block; width: 100%; height: 520px; border: 0; }
 .mail-mode { flex-shrink: 0; align-self: center; background: var(--card-2); color: var(--muted); border-radius: 999px;
              padding: 3px 10px; font-size: 11px; font-weight: 700; }
 .mail-mode.auto { background: color-mix(in srgb, var(--t) 14%, white); color: var(--t); }
