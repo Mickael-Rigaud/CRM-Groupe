@@ -72,6 +72,14 @@ export const ACTIVITIES = {
       // Vit dans deals.fields (jsonb) : pas de colonne, donc pas de migration.
       // Vide = expertise, le métier historique et le cas du lead venu du site.
       { key: 'type_mission', label: 'Type de mission', type: 'select', options: [['expertise', 'Expertise'], ['amo', 'AMO / accompagnement']], value: 'expertise', half: true },
+      // Le niveau commande les points de charge du chargé d'affaires. Les six valeurs
+      // sont rangées par métier dans la liste déroulante.
+      { key: 'niveau', label: 'Niveau de mission', type: 'select', half: true,
+        options: [
+          { groupe: 'Expertise', options: [['exp_simple', 'Expertise simple — 1 pt'], ['exp_rapport', 'Expertise avec rapport — 2 pts'], ['exp_complexe', 'Expertise complexe — 3 pts']] },
+          { groupe: 'AMO', options: [['amo_ciblee', 'AMO ciblée — 3 pts'], ['amo_etendue', 'AMO étendue — 5 pts'], ['amo_importante', 'AMO importante — 7 pts']] },
+        ],
+        hint: "Sert au calcul de la charge du chargé d'affaires (15 points maximum)." },
       { key: 'problematique', label: 'Type de problématique', type: 'select', options: ['Malfaçons', 'Fissures', 'Humidité', 'Plomberie', 'Électricité', 'Non-conformité', 'Litige travaux', 'Réception de travaux', 'AMO / accompagnement', 'Avant achat', 'Autre'] },
       { key: 'type_bien', label: 'Type de bien', type: 'select', options: ['Maison', 'Appartement', 'Immeuble', 'Local pro', 'Autre'] },
       { key: 'contexte', label: 'Contexte', type: 'select', options: ['Particulier', 'Entreprise', 'Litige', 'Achat immobilier', 'Travaux en cours'] },
@@ -184,6 +192,24 @@ export const ACTIVITY_TYPES = [
 export const PRIORITES = [
   { key: 'urgent', label: 'Urgent', icon: '🔥' },
 ];
+
+// Le systeme a points de BTP Expertise, repris du manuel operationnel V5.
+// Une mission pese un nombre de points ; un charge d'affaires en porte 15 au plus, et
+// trois AMO actives au plus. Les points d'une expertise se liberent a sa cloture, ceux
+// d'une AMO occupent la capacite longtemps — d'ou le plafond separe sur les AMO.
+export const NIVEAUX_BTP = [
+  { key: 'exp_simple', label: 'Expertise simple', mission: 'expertise', points: 1 },
+  { key: 'exp_rapport', label: 'Expertise avec rapport', mission: 'expertise', points: 2 },
+  { key: 'exp_complexe', label: 'Expertise complexe', mission: 'expertise', points: 3 },
+  { key: 'amo_ciblee', label: 'AMO ciblée', mission: 'amo', points: 3 },
+  { key: 'amo_etendue', label: 'AMO étendue', mission: 'amo', points: 5 },
+  { key: 'amo_importante', label: 'AMO importante', mission: 'amo', points: 7 },
+];
+// Plafonds au lancement. Le manuel les dit « à recalibrer sur données réelles » : ils
+// sont ici pour qu'une seule ligne suffise à les changer.
+export const CAPACITE_BTP = { points: 15, amoActives: 3 };
+export const niveauDe = (deal) => NIVEAUX_BTP.find(n => n.key === deal?.fields?.niveau) || null;
+export const pointsDe = (deal) => niveauDe(deal)?.points || 0;
 
 export const CONTACT_TYPES = ['Prospect', 'Client', 'Partenaire', 'Apporteur', 'Fournisseur'];
 export const ORG_TYPES = ['Client', 'Prospect', 'Partenaire', 'Banque', 'Fournisseur'];

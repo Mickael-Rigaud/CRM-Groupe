@@ -345,6 +345,10 @@ select.cell-in { text-align: left; }
 .esp-side-nav a { display: block; padding: 11px 15px; border-radius: 9px; text-decoration: none; color: rgba(255,255,255,.76); font-size: 13.5px; font-weight: 600; transition: background .13s, color .13s; }
 .esp-side-nav a:hover { background: rgba(255,255,255,.09); color: #fff; }
 .esp-side-nav a.on { background: var(--accent); color: var(--on-accent); }
+/* Un groupe du menu : son intitule, puis ses ecrans en retrait dessous. */
+.esp-side-groupe { display: flex; flex-direction: column; gap: 3px; margin-top: 4px; }
+.esp-side-titre { padding: 9px 15px 3px; font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; color: rgba(255,255,255,.45); }
+.esp-side-groupe a { padding-left: 27px; font-size: 13px; }
 .esp-side-foot { padding: 16px 18px 20px; border-top: 1px solid rgba(255,255,255,.1); display: flex; flex-direction: column; gap: 3px; }
 .esp-side-foot b { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--accent); }
 .esp-side-foot span { font-size: 11.5px; color: rgba(255,255,255,.55); }
@@ -390,6 +394,48 @@ body:has(.esp-app) .subnav .datepill { display: none; }
 .esp-card-deal .muted { font-size: 11.5px; }
 .esp-card-amount { font-weight: 700; color: var(--accent-ink); font-variant-numeric: tabular-nums; }
 .esp-col-vide { color: var(--muted-2); font-size: 12px; padding: 4px 2px; }
+
+/* ---------- Tableau de bord BTP : deux colonnes, récapitulatifs, charge du réseau ---------- */
+/* Deux cartes côte à côte, empilées dès que la place manque. */
+.btp-duo { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; align-items: start; }
+@media (max-width: 1100px) { .btp-duo { grid-template-columns: 1fr; } }
+
+/* Le récapitulatif d'une pipeline : ses étapes en une bande, sans les affaires */
+.btp-recap-etapes { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(84px, 1fr); gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+.btp-recap-etape { display: flex; flex-direction: column; gap: 3px; padding: 10px 11px; border-radius: 10px; background: var(--card-2); text-decoration: none; color: inherit; border: 1px solid transparent; transition: border-color .13s, background .13s; }
+.btp-recap-etape:hover { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); }
+.btp-recap-etape span { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted-2); line-height: 1.25; }
+.btp-recap-etape b { font-family: var(--font-display); font-size: 21px; font-weight: 700; color: var(--accent-ink); }
+.btp-recap-pied { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 12.5px; color: var(--muted); }
+
+/* La jauge de charge d'un chargé d'affaires */
+.btp-jauge { height: 6px; border-radius: 999px; background: var(--card-2); overflow: hidden; min-width: 90px; }
+.btp-jauge i { display: block; height: 100%; border-radius: 999px; }
+.btp-jauge-val { font-size: 12px; font-weight: 600; margin-bottom: 4px; font-variant-numeric: tabular-nums; }
+
+/* Répartition du CA : le total, puis une part par métier */
+.btp-ca-total { font-family: var(--font-display); font-size: 30px; font-weight: 700; letter-spacing: -.02em; color: var(--accent-ink); margin: 4px 0 16px; }
+.btp-ca-total span { display: block; font-family: "Inter", sans-serif; font-size: 12.5px; font-weight: 500; color: var(--muted); letter-spacing: 0; margin-top: 2px; }
+.btp-ca-part { margin-bottom: 14px; }
+.btp-ca-lbl { display: flex; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 5px; }
+.btp-ca-lbl i { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; }
+.btp-ca-lbl b { font-variant-numeric: tabular-nums; }
+.btp-ca-lbl em { font-style: normal; color: var(--muted); font-size: 12px; min-width: 42px; text-align: right; }
+.btp-ca-bar { height: 8px; border-radius: 999px; background: var(--card-2); overflow: hidden; }
+.btp-ca-bar i { display: block; height: 100%; border-radius: 999px; }
+
+/* Le détail des missions d'une personne, sous sa ligne */
+.btp-detail td { padding-top: 0; border-top: 0; }
+.btp-chip { display: inline-flex; align-items: center; gap: 7px; max-width: 260px; margin: 0 6px 6px 0; padding: 5px 10px; border-radius: 999px; background: var(--card-2); border: 1px solid var(--line); font-size: 12px; text-align: left; }
+.btp-chip:hover { border-color: var(--accent); background: var(--accent-soft); }
+.btp-chip i { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--accent); }
+.btp-chip i.amo { background: var(--green); }
+.btp-chip span { color: var(--muted); white-space: nowrap; }
+.btp-puce { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; background: var(--accent); }
+.btp-puce.amo { background: var(--green); }
+
+/* Les règles de capacité, en clair sous le barème */
+.btp-regles { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; font-size: 13px; line-height: 1.45; }
 
 /* ---------- Écrans propres à BTP Expertise (.btp-*) ---------- */
 
