@@ -698,9 +698,9 @@ td.acts { display: flex; gap: 6px; justify-content: flex-end; }
 .mail-etape-corps b { font-size: 13.5px; }
 .mail-etape-objet { font-size: 12.5px; color: var(--muted); }
 .mail-etape-quand { font-size: 11.5px; color: var(--muted-2); }
-.mail-etape-copy { flex-shrink: 0; align-self: center; font-size: 12px; font-weight: 600; color: var(--muted);
+.mail-etape-act { flex-shrink: 0; align-self: center; font-size: 12px; font-weight: 600; color: var(--muted);
                    border: 1px solid var(--line-strong); border-radius: 8px; padding: 5px 11px; }
-.mail-etape-copy:hover { border-color: var(--t); color: var(--t); }
+.mail-etape-act:hover { border-color: var(--t); color: var(--t); }
 .mail-mode { flex-shrink: 0; align-self: center; background: var(--card-2); color: var(--muted); border-radius: 999px;
              padding: 3px 10px; font-size: 11px; font-weight: 700; }
 .mail-mode.auto { background: color-mix(in srgb, var(--t) 14%, white); color: var(--t); }

@@ -1109,6 +1109,98 @@ export const btpMailsPage = {
       catch { toast('Copie refusée par le navigateur', 'warn'); }
     };
 
+    // ---- Ouvrir le modèle dans la messagerie, crochets remplis
+    // Les modèles du cabinet portent des [crochets] de deux sortes : ceux dont la
+    // valeur ne change jamais — le site, le téléphone — et ceux qui dépendent du
+    // dossier. Les premiers sont remplis d'office, les seconds sont demandés. C'est
+    // le seul moyen qu'il n'en survive aucun : les effacer en aveugle produirait
+    // « Bonjour , » et des phrases amputées.
+    const CABINET = {
+      'site internet': 'https://btpexpertise.fr',
+      'site': 'https://btpexpertise.fr',
+      'telephone': '06 81 65 15 91',
+      'tel': '06 81 65 15 91',
+      'email': 'contact@btpexpertise.fr',
+      'e-mail': 'contact@btpexpertise.fr',
+      'mail': 'contact@btpexpertise.fr',
+    };
+    const CROCHETS = /\[([^\]\n]{1,80})\]/g;
+    const cleDe = (t) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+
+    // Les crochets à demander, dans l'ordre du texte, une seule fois chacun même
+    // quand le modèle les répète : on saisit « Prénom » une fois, il se pose partout.
+    const champsDe = (texte) => {
+      const vus = new Map();
+      for (const [, dedans] of texte.matchAll(CROCHETS)) {
+        const cle = cleDe(dedans);
+        if (CABINET[cle] !== undefined || vus.has(cle)) continue;
+        vus.set(cle, { cle, label: dedans });
+      }
+      return [...vus.values()];
+    };
+
+    // Un crochet laissé vide disparaît ; on resserre alors les espaces doubles et la
+    // ponctuation devenue orpheline, pour ne pas livrer un texte troué.
+    const remplir = (texte, valeurs) => texte
+      .replace(CROCHETS, (brut, dedans) => {
+        const cle = cleDe(dedans);
+        const v = valeurs[cle] ?? CABINET[cle];
+        return v === undefined ? brut : v;
+      })
+      .replace(/[ \t]{2,}/g, ' ')
+      .replace(/ +([,.])/g, '$1')   // pas ; : ! ? — en français ils gardent leur espace
+      .replace(/\n[ \t]+/g, '\n');
+
+    // Outlook s'ouvre par un lien mailto:. Windows coupe ce lien au-delà d'environ
+    // deux mille signes, et le corps serait alors tronqué sans le moindre message.
+    // Les modèles du cabinet montent à 1 500 signes, qui en font davantage une fois
+    // encodés : au-delà de cette limite on ne passe que l'objet, le corps suivant par
+    // le presse-papiers. Dans les deux cas le texte arrive entier.
+    const LIMITE_MAILTO = 1900;
+    const ouvrirMessagerie = async (m, valeurs, dest) => {
+      const sujet = remplir(m.subject || '', valeurs);
+      const corps = remplir(m.body || '', valeurs);
+      const tete = `mailto:${encodeURIComponent(dest || '')}?subject=${encodeURIComponent(sujet)}`;
+      const entier = `${tete}&body=${encodeURIComponent(corps)}`;
+      const tient = entier.length <= LIMITE_MAILTO;
+      try { await navigator.clipboard.writeText(corps); } catch { /* le presse-papiers n'est qu'un filet */ }
+      const a = document.createElement('a');
+      a.href = tient ? entier : tete;
+      a.rel = 'noopener';
+      document.body.appendChild(a); a.click(); a.remove();
+      toast(tient
+        ? 'Mail ouvert dans votre messagerie'
+        : 'Mail trop long pour le lien Outlook : objet rempli, corps dans le presse-papiers (Ctrl+V)', 'warn');
+    };
+
+    // Le formulaire des valeurs manquantes. Un modèle sans crochet s'ouvre directement.
+    const envoyer = (m) => {
+      const champs = champsDe(`${m.subject || ''}\n${m.body || ''}`);
+      const form = [
+        { key: 'dest', label: 'Destinataire', type: 'email', placeholder: 'client@exemple.fr',
+          hint: "Laissez vide pour choisir le destinataire dans Outlook." },
+        ...champs.map((c, i) => ({ key: `c${i}`, label: c.label })),
+      ];
+      if (!champs.length) return ouvrirMessagerie(m, {}, '');
+      const mo = openModal(`Ouvrir « ${m.title} » dans Outlook`, `
+        <form class="form" id="mail-envoi">
+          <p class="muted small">Ces valeurs remplacent les crochets du modèle. Le site et le téléphone du cabinet sont déjà posés ; un champ laissé vide efface simplement son crochet.</p>
+          ${renderForm(form, {})}
+          <div class="form-actions">
+            <button type="button" class="btn ghost" data-close>Annuler</button>
+            <button class="btn" type="submit">Ouvrir dans Outlook</button>
+          </div>
+        </form>`, { wide: true });
+      mo.querySelector('#mail-envoi').onsubmit = (e) => {
+        e.preventDefault();
+        const v = readForm(e.target, form);
+        const valeurs = {};
+        champs.forEach((c, i) => { valeurs[c.cle] = String(v[`c${i}`] || '').trim(); });
+        closeModal(true);
+        ouvrirMessagerie(m, valeurs, String(v.dest || '').trim());
+      };
+    };
+
     const auto = (m) => (m.mode || '').toLowerCase() === 'automatique';
 
     // ---- Un modèle, en pleine page
@@ -1119,7 +1211,8 @@ export const btpMailsPage = {
         <button type="button" class="btn ghost sm" id="m-back">← ${esc(s.court)}</button>
         <span class="grow"></span>
         <button type="button" class="btn ghost sm" id="m-copy-obj">Copier l'objet</button>
-        <button type="button" class="btn sm" id="m-copy">Copier le mail</button>
+        <button type="button" class="btn ghost sm" id="m-copy">Copier le texte</button>
+        <button type="button" class="btn sm" id="m-open">Ouvrir dans Outlook</button>
         <button type="button" class="btn ghost sm" id="m-edit">Modifier</button>
       </div>
       <article class="mail-vue" style="--t:${s.tint}">
@@ -1151,6 +1244,7 @@ export const btpMailsPage = {
         root.querySelector('#m-edit').onclick = () => editer(m, draw);
         root.querySelector('#m-copy').onclick = () => copier(m.subject ? `${m.subject}\n\n${m.body}` : m.body, 'Modèle');
         root.querySelector('#m-copy-obj').onclick = () => copier(m.subject || '', 'Objet');
+      root.querySelector('#m-open').onclick = () => envoyer(m);
         return;
       }
 
@@ -1174,7 +1268,7 @@ export const btpMailsPage = {
             ${m.trigger_text ? `<span class="mail-etape-quand">${esc(m.trigger_text)}</span>` : ''}
           </span>
           <span class="mail-mode ${auto(m) ? 'auto' : ''}">${auto(m) ? 'Auto' : 'Manuel'}</span>
-          <span class="mail-etape-copy" data-copy="${m.id}" role="button" tabindex="0">Copier</span>
+          <span class="mail-etape-act" data-envoi="${m.id}" role="button" tabindex="0" title="Ouvrir dans Outlook">Ouvrir</span>
         </button>`;
 
       root.innerHTML = cadre('#/btp/mails', 'Mails & modèles', `
@@ -1210,13 +1304,13 @@ export const btpMailsPage = {
       root.querySelectorAll('[data-seq]').forEach(b => b.onclick = () => { state.seq = b.dataset.seq; state.q = ''; draw(); });
       root.querySelector('#b-new').onclick = () => editer(null, draw);
       root.querySelectorAll('[data-m]').forEach(l => l.onclick = (e) => {
-        if (e.target.closest('[data-copy]')) return;
+        if (e.target.closest('[data-envoi]')) return;
         state.modele = l.dataset.m; draw();
       });
-      root.querySelectorAll('[data-copy]').forEach(b => b.onclick = (e) => {
+      root.querySelectorAll('[data-envoi]').forEach(b => b.onclick = (e) => {
         e.stopPropagation();
-        const m = db.byId('mail_templates', b.dataset.copy);
-        copier(m.subject ? `${m.subject}\n\n${m.body}` : m.body, 'Modèle');
+        const m = db.byId('mail_templates', b.dataset.envoi);
+        if (m) envoyer(m);
       });
     };
 
