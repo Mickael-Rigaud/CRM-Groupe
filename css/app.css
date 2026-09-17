@@ -434,6 +434,17 @@ body:has(.esp-app) .subnav .datepill { display: none; }
 .btp-puce { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; background: var(--accent); }
 .btp-puce.amo { background: var(--green); }
 
+/* Expertise ou AMO : la meme couleur partout ou les deux se cotoient */
+.btp-m-expertise { --m: var(--accent); }
+.btp-m-amo { --m: var(--green); }
+.esp-card-deal.btp-m-expertise, .esp-card-deal.btp-m-amo { border-left-color: var(--m); }
+tr.btp-m-expertise .btp-pts, tr.btp-m-amo .btp-pts { color: var(--m); }
+.btp-chip.btp-m-amo i { background: var(--green); }
+.btp-niveau { font-size: 11px; color: var(--muted); }
+.btp-large { grid-column: 1 / -1; }
+.btp-sommeil { opacity: .55; }
+.btp-sommeil b { font-weight: 600; }
+
 /* Les règles de capacité, en clair sous le barème */
 .btp-regles { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; font-size: 13px; line-height: 1.45; }
 

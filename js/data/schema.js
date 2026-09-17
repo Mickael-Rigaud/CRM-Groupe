@@ -1,6 +1,35 @@
 // Référentiel métier du CRM — la seule source de vérité pour les pipelines,
 // les champs par activité, les canaux et les listes de valeurs.
 
+// Le systeme a points de BTP Expertise, repris du manuel operationnel V5.
+// Une mission pese un nombre de points ; un charge d'affaires en porte 15 au plus, et
+// trois AMO actives au plus. Les points d'une expertise se liberent a sa cloture, ceux
+// d'une AMO occupent la capacite longtemps — d'ou le plafond separe sur les AMO.
+// `contenu` et `tarif` viennent des catalogues du manuel (sections 2 et 3) : ils
+// s'affichent au moment de classer une mission, pour deviser sans rouvrir le PDF.
+export const NIVEAUX_BTP = [
+  { key: 'exp_simple', label: 'Expertise simple', mission: 'expertise', points: 1,
+    contenu: 'Visite, constat, avis technique, restitution.', tarif: '750 à 900 € HT' },
+  { key: 'exp_rapport', label: 'Expertise avec rapport', mission: 'expertise', points: 2,
+    contenu: 'Visite, analyse, photos, recherches utiles, rapport structuré.', tarif: '1 200 à 1 500 € HT' },
+  { key: 'exp_complexe', label: 'Expertise complexe', mission: 'expertise', points: 3,
+    contenu: 'Désordres multiples, litige, investigations et technicité renforcée.', tarif: 'à partir de 2 000 € HT' },
+  { key: 'amo_ciblee', label: 'AMO ciblée', mission: 'amo', points: 3,
+    contenu: 'Périmètre limité, peu de lots, durée courte, accompagnement contenu.', tarif: '5 à 8 % des travaux HT' },
+  { key: 'amo_etendue', label: 'AMO étendue', mission: 'amo', points: 5,
+    contenu: 'Plusieurs lots, accompagnement régulier, durée intermédiaire.', tarif: '5 à 8 % des travaux HT' },
+  { key: 'amo_importante', label: 'AMO importante', mission: 'amo', points: 7,
+    contenu: 'Nombreux lots, longue durée et/ou complexité élevée.', tarif: '5 à 8 % des travaux HT' },
+];
+// Les honoraires d'AMO ne se lisent pas en euros mais en pourcentage des travaux,
+// avec un plancher. La formulation est celle que le manuel recommande au client.
+export const HONORAIRES_AMO = { taux: '5 à 8 % du montant HT des travaux', minimum: 3500 };
+// Plafonds au lancement. Le manuel les dit « à recalibrer sur données réelles » : ils
+// sont ici pour qu'une seule ligne suffise à les changer.
+export const CAPACITE_BTP = { points: 18, amoActives: 3 };
+export const niveauDe = (deal) => NIVEAUX_BTP.find(n => n.key === deal?.fields?.niveau) || null;
+export const pointsDe = (deal) => niveauDe(deal)?.points || 0;
+
 export const ACTIVITIES = {
   rgd: {
     key: 'rgd', label: 'RGD Renova', short: 'RGD', color: '#FD7A2D',
@@ -75,10 +104,10 @@ export const ACTIVITIES = {
       // Le niveau commande les points de charge du chargé d'affaires. Les six valeurs
       // sont rangées par métier dans la liste déroulante.
       { key: 'niveau', label: 'Niveau de mission', type: 'select', half: true,
-        options: [
-          { groupe: 'Expertise', options: [['exp_simple', 'Expertise simple — 1 pt'], ['exp_rapport', 'Expertise avec rapport — 2 pts'], ['exp_complexe', 'Expertise complexe — 3 pts']] },
-          { groupe: 'AMO', options: [['amo_ciblee', 'AMO ciblée — 3 pts'], ['amo_etendue', 'AMO étendue — 5 pts'], ['amo_importante', 'AMO importante — 7 pts']] },
-        ],
+        options: ['expertise', 'amo'].map(m => ({
+          groupe: m === 'amo' ? 'AMO' : 'Expertise',
+          options: NIVEAUX_BTP.filter(n => n.mission === m).map(n => [n.key, `${n.label} — ${n.points} pt${n.points > 1 ? 's' : ''} · ${n.tarif}`]),
+        })),
         hint: "Sert au calcul de la charge du chargé d'affaires (15 points maximum)." },
       { key: 'problematique', label: 'Type de problématique', type: 'select', options: ['Malfaçons', 'Fissures', 'Humidité', 'Plomberie', 'Électricité', 'Non-conformité', 'Litige travaux', 'Réception de travaux', 'AMO / accompagnement', 'Avant achat', 'Autre'] },
       { key: 'type_bien', label: 'Type de bien', type: 'select', options: ['Maison', 'Appartement', 'Immeuble', 'Local pro', 'Autre'] },
@@ -192,24 +221,6 @@ export const ACTIVITY_TYPES = [
 export const PRIORITES = [
   { key: 'urgent', label: 'Urgent', icon: '🔥' },
 ];
-
-// Le systeme a points de BTP Expertise, repris du manuel operationnel V5.
-// Une mission pese un nombre de points ; un charge d'affaires en porte 15 au plus, et
-// trois AMO actives au plus. Les points d'une expertise se liberent a sa cloture, ceux
-// d'une AMO occupent la capacite longtemps — d'ou le plafond separe sur les AMO.
-export const NIVEAUX_BTP = [
-  { key: 'exp_simple', label: 'Expertise simple', mission: 'expertise', points: 1 },
-  { key: 'exp_rapport', label: 'Expertise avec rapport', mission: 'expertise', points: 2 },
-  { key: 'exp_complexe', label: 'Expertise complexe', mission: 'expertise', points: 3 },
-  { key: 'amo_ciblee', label: 'AMO ciblée', mission: 'amo', points: 3 },
-  { key: 'amo_etendue', label: 'AMO étendue', mission: 'amo', points: 5 },
-  { key: 'amo_importante', label: 'AMO importante', mission: 'amo', points: 7 },
-];
-// Plafonds au lancement. Le manuel les dit « à recalibrer sur données réelles » : ils
-// sont ici pour qu'une seule ligne suffise à les changer.
-export const CAPACITE_BTP = { points: 15, amoActives: 3 };
-export const niveauDe = (deal) => NIVEAUX_BTP.find(n => n.key === deal?.fields?.niveau) || null;
-export const pointsDe = (deal) => niveauDe(deal)?.points || 0;
 
 export const CONTACT_TYPES = ['Prospect', 'Client', 'Partenaire', 'Apporteur', 'Fournisseur'];
 export const ORG_TYPES = ['Client', 'Prospect', 'Partenaire', 'Banque', 'Fournisseur'];

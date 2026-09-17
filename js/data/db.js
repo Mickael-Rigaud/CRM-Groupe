@@ -15,6 +15,8 @@ export const TABLES = ['profiles', 'organisations', 'contacts', 'deals', 'activi
   'dtu_sheets', 'mail_templates',
   // chiffres poussés par les outils externes (tableau de bord RGD Renova)
   'structure_stats',
+  // réseau de chargés d'affaires de BTP Expertise
+  'btp_charges_affaires',
   // messagerie interne (canaux par structure + conversations privées)
   'conversations', 'conversation_members', 'messages', 'message_reads',
   // agenda du groupe : le reflet des rendez-vous Google, recopié par la direction

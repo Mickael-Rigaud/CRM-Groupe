@@ -4,7 +4,7 @@
 import { db } from '../data/db.js';
 import { idsDe, urlAgenda, VUES as VUES_CALENDRIER, CLES_AGENDA, modeEmploi } from '../agenda.js';
 import { scope } from '../data/scope.js';
-import { ACTIVITIES, CHANNELS, weightedAmount, stagesDe, missionDe, NIVEAUX_BTP, CAPACITE_BTP, niveauDe, pointsDe } from '../data/schema.js';
+import { ACTIVITIES, CHANNELS, weightedAmount, stagesDe, missionDe, NIVEAUX_BTP, CAPACITE_BTP, HONORAIRES_AMO, niveauDe, pointsDe } from '../data/schema.js';
 import {
   esc, eur, daysSince, fmtDate, contactName, dealParty, userName, toast,
   openModal, closeModal, confirm, renderForm, readForm, terms, hit,
@@ -153,12 +153,21 @@ const pipelineDe = (mission) => {
   };
 };
 
-const carteAffaire = (d) => `
-  <button type="button" class="esp-card-deal" data-deal="${d.id}">
+// Expertise et AMO se distinguent a l'oeil partout ou elles se cotoient : le bleu de
+// la structure pour l'expertise, le vert pour l'AMO. Meme code sur les cartes, les
+// listes, les pastilles et la repartition du CA.
+const carteAffaire = (d) => {
+  const n = niveauDe(d);
+  return `<button type="button" class="esp-card-deal btp-m-${missionDe(d)}" data-deal="${d.id}">
     <b>${esc(d.title)}</b>
     <span class="muted">${esc(dealParty(d))}</span>
+    ${n ? `<span class="btp-niveau">${esc(n.label)} · ${n.points} pt${n.points > 1 ? 's' : ''}</span>` : ''}
     ${d.amount ? `<span class="esp-card-amount">${eur(d.amount)}</span>` : ''}
   </button>`;
+};
+
+// La pastille d'un metier, a poser devant un intitule.
+const marqueMission = (m) => `<i class="btp-puce ${m === 'amo' ? 'amo' : 'exp'}" title="${m === 'amo' ? 'AMO' : 'Expertise'}"></i>`;
 
 const kanbanHtml = (colonnes) => `<div class="esp-kanban">${colonnes.map(({ st, cartes, somme }) => `
   <div class="esp-col">
@@ -345,7 +354,7 @@ const pageMission = (mission) => ({
             <tbody>${liste.map(d => {
               const n = niveauDe(d);
               return `<tr class="click" data-deal="${d.id}">
-                <td><b>${esc(d.title)}</b></td>
+                <td>${marqueMission(missionDe(d))}<b>${esc(d.title)}</b></td>
                 <td>${esc(dealParty(d))}</td>
                 <td>${esc(act().stages.find(s => s.key === d.stage)?.label || d.stage)}</td>
                 <td>${n ? esc(n.label) : '<span class="muted">à renseigner</span>'}</td>
@@ -370,6 +379,57 @@ export const btpExpertisePage = pageMission('expertise');
 export const btpAmoPage = pageMission('amo');
 
 // ---------------------------------------------------------------- Chargés d'affaires
+// Le réseau se déclare à la main : une fiche peut exister avant que la personne ait un
+// compte CRM. `profile_id` fait le lien quand elle en a un — et c'est ce lien qui
+// permet de calculer sa charge, puisque les missions portent un owner_id.
+const TABLE_CHARGES = 'btp_charges_affaires';
+const fichesReseau = () => db.t(TABLE_CHARGES).slice()
+  .sort((a, b) => (b.actif !== false) - (a.actif !== false) || String(a.nom).localeCompare(String(b.nom), 'fr'));
+
+const CHAMPS_CHARGE = () => [
+  { key: 'nom', label: 'Nom', type: 'text', required: true, half: true },
+  { key: 'statut', label: 'Statut', type: 'select', half: true,
+    options: ['Indépendant', 'Salarié', 'En cours de recrutement', 'Autre'] },
+  { key: 'email', label: 'Email', type: 'email', half: true },
+  { key: 'telephone', label: 'Téléphone', type: 'tel', half: true },
+  { key: 'objectif_ca', label: 'Objectif de CA annuel (€ HT)', type: 'number', half: true,
+    hint: 'Sert à situer le CA produit en face de ce qui était visé.' },
+  { key: 'profile_id', label: 'Compte CRM', type: 'select', half: true,
+    options: scope.users().map(u => [u.id, u.full_name]),
+    hint: 'À relier pour que ses missions comptent dans sa charge. Laisser vide si la personne n\'a pas encore de compte.' },
+  { key: 'points_max', label: 'Capacité (points)', type: 'number', half: true, value: CAPACITE_BTP.points },
+  { key: 'amo_max', label: 'AMO actives au maximum', type: 'number', half: true, value: CAPACITE_BTP.amoActives },
+  { key: 'actif', label: 'Fiche active', type: 'checkbox', hint: 'Décocher plutôt que supprimer : le réseau garde sa mémoire.' },
+  { key: 'notes', label: 'Notes', type: 'textarea', rows: 2 },
+];
+
+function ficheCharge(existante, apres) {
+  const spec = CHAMPS_CHARGE();
+  const vals = existante || { actif: true };
+  const m = openModal(existante ? esc(existante.nom) : "Nouveau chargé d'affaires",
+    `<form class="form" id="ca-form">${renderForm(spec, vals)}
+      <div class="form-actions">${existante ? '<button type="button" class="btn ghost left" id="ca-del">Supprimer</button>' : ''}
+      <button type="button" class="btn ghost" data-close>Annuler</button>
+      <button class="btn" type="submit">Enregistrer</button></div></form>`, { wide: true });
+  m.querySelector('#ca-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const v = readForm(e.target, spec);
+    // Un select vide renvoie une chaîne : la colonne attend un uuid ou rien.
+    v.profile_id = v.profile_id || null;
+    v.objectif_ca = v.objectif_ca === '' ? null : v.objectif_ca;
+    try {
+      if (existante) await db.update(TABLE_CHARGES, existante.id, { ...v, updated_at: new Date().toISOString() });
+      else await db.insert(TABLE_CHARGES, v);
+      closeModal(true); toast('Chargé d\'affaires enregistré'); apres();
+    } catch (err) { toast(err.message, 'err'); }
+  };
+  m.querySelector('#ca-del')?.addEventListener('click', async () => {
+    if (!await confirm(`Supprimer la fiche de ${existante.nom} ? Ses missions ne sont pas touchées.`)) return;
+    try { await db.remove(TABLE_CHARGES, existante.id); closeModal(true); toast('Fiche supprimée'); apres(); }
+    catch (err) { toast(err.message, 'err'); }
+  });
+}
+
 export const btpChargesPage = {
   title: () => "BTP Expertise — Chargés d'affaires",
   render(root) {
@@ -377,77 +437,122 @@ export const btpChargesPage = {
     const coquille = poser(root);
 
     const draw = () => {
-      const gens = chargesDAffaires().map(u => ({ u, ...chargeDe(u.id) }))
-        .sort((x, y) => y.points - x.points || x.u.full_name.localeCompare(y.u.full_name, 'fr'));
-      const totalPts = gens.reduce((t, g) => t + g.points, 0);
-      const capacite = gens.length * CAPACITE_BTP.points;
+      // Une ligne par fiche du réseau, sa charge lue sur le compte CRM quand il existe.
+      const lignes = fichesReseau().map(f => {
+        const charge = f.profile_id ? chargeDe(f.profile_id) : null;
+        const max = f.points_max || CAPACITE_BTP.points;
+        const amoMax = f.amo_max || CAPACITE_BTP.amoActives;
+        return {
+          f, charge, max, amoMax,
+          points: charge ? charge.points : 0,
+          sature: charge ? (charge.points >= max || charge.amo.length >= amoMax) : false,
+        };
+      });
+      // Les utilisateurs du CRM rattachés à BTP qui n'ont pas encore de fiche : on les
+      // montre plutôt que de les oublier, avec de quoi créer leur fiche d'un clic.
+      const sansFiche = chargesDAffaires().filter(u => !fichesReseau().some(f => f.profile_id === u.id));
+
+      const actifs = lignes.filter(l => l.f.actif !== false);
+      const totalPts = actifs.reduce((t, l) => t + l.points, 0);
+      const capacite = actifs.reduce((t, l) => t + l.max, 0);
+      const objectif = actifs.reduce((t, l) => t + (Number(l.f.objectif_ca) || 0), 0);
+      const caProduit = actifs.reduce((t, l) => t + (l.charge ? l.charge.ca : 0), 0);
 
       root.innerHTML = cadre('#/btp/charges', "Chargés d'affaires", `
         <div class="esp-kpis">
-          ${kpi({ label: 'Chargés d\'affaires', valeur: gens.length, sous: 'sur BTP Expertise', icone: '👷', ton: 'accent', href: '#/btp/charges' })}
-          ${kpi({ label: 'Charge du réseau', valeur: `${totalPts} / ${capacite}`, sous: capacite ? `${Math.round((totalPts / capacite) * 100)} % de la capacité` : 'aucune capacité déclarée', icone: '🎯', ton: 'amber', href: '#/btp/charges' })}
-          ${kpi({ label: 'Saturés', valeur: gens.filter(g => g.sature).length, sous: `${CAPACITE_BTP.points} points ou ${CAPACITE_BTP.amoActives} AMO atteints`, icone: '⚠', ton: 'red', href: '#/btp/charges' })}
+          ${kpi({ label: 'Réseau actif', valeur: actifs.length, sous: `${lignes.length - actifs.length} fiche${lignes.length - actifs.length > 1 ? 's' : ''} en sommeil`, icone: '👷', ton: 'accent', href: '#/btp/charges' })}
+          ${kpi({ label: 'Charge du réseau', valeur: capacite ? `${totalPts} / ${capacite}` : '—', sous: capacite ? `${Math.round((totalPts / capacite) * 100)} % de la capacité` : 'aucune fiche déclarée', icone: '🎯', ton: 'amber', href: '#/btp/charges' })}
+          ${kpi({ label: 'Saturés', valeur: actifs.filter(l => l.sature).length, sous: 'capacité ou AMO au maximum', icone: '⚠', ton: 'red', href: '#/btp/charges' })}
+          ${kpi({ label: 'CA produit', valeur: eur(caProduit), sous: objectif ? `sur ${eur(objectif)} visés` : 'aucun objectif renseigné', icone: '📈', ton: 'green', href: '#/btp/charges' })}
         </div>
 
         <div class="card">
-          <div class="card-head"><h2>Charge et capacité</h2>
-            <span class="muted small">${CAPACITE_BTP.points} points et ${CAPACITE_BTP.amoActives} AMO actives au maximum par personne</span>
+          <div class="card-head"><h2>Le réseau</h2>
+            <span class="muted small">Capacité et objectif se règlent fiche par fiche</span>
+            <span class="grow"></span>
+            <button class="btn" id="ca-new">+ Chargé d'affaires</button>
           </div>
           <div class="table-wrap"><table>
-            <thead><tr><th>Chargé d'affaires</th><th>Charge structurelle</th><th class="num">AMO actives</th><th class="num">Expertises</th><th class="num">CA produit</th><th>Statut</th></tr></thead>
-            <tbody>${gens.map(g => `<tr>
-              <td><b>${esc(g.u.full_name)}</b><div class="small muted">${esc(g.u.email || '')}</div></td>
-              <td>
-                <div class="btp-jauge-val">${g.points} / ${CAPACITE_BTP.points} pts</div>
-                <div class="btp-jauge"><i style="width:${Math.min(100, Math.round((g.points / CAPACITE_BTP.points) * 100))}%;background:var(--${g.sature ? 'red' : g.points >= CAPACITE_BTP.points * 0.8 ? 'amber' : 'green'})"></i></div>
-              </td>
-              <td class="num">${g.amo.length} / ${CAPACITE_BTP.amoActives}</td>
-              <td class="num">${g.expertises}</td>
-              <td class="num">${g.ca ? eur(g.ca) : '—'}</td>
-              <td>${g.sature ? '<span class="pill bad">Saturé</span>' : '<span class="pill ok">Disponible</span>'}</td>
-            </tr>
-            ${g.siennes.length ? `<tr class="btp-detail"><td colspan="6">
-              ${g.siennes.map(d => {
-                const n = niveauDe(d);
-                return `<button type="button" class="btp-chip" data-deal="${d.id}" title="${esc(d.title)}">
-                  <i class="${missionDe(d) === 'amo' ? 'amo' : 'exp'}"></i>${esc(d.title)}<span>${n ? n.points + ' pt' + (n.points > 1 ? 's' : '') : 'sans niveau'}</span>
-                </button>`;
-              }).join('')}
-            </td></tr>` : ''}`).join('')
-              || `<tr><td colspan="6"><div class="empty">Aucun chargé d'affaires rattaché à BTP Expertise. L'activité se coche sur le profil, dans Paramètres.</div></td></tr>`}</tbody>
+            <thead><tr><th>Chargé d'affaires</th><th>Charge structurelle</th><th class="num">AMO actives</th><th class="num">Expertises</th><th class="num">CA produit</th><th>Statut</th><th></th></tr></thead>
+            <tbody>${lignes.map(l => ligneReseau(l)).join('')
+              || `<tr><td colspan="7"><div class="empty">Aucun chargé d'affaires déclaré. « + Chargé d'affaires » crée la première fiche — une personne peut y figurer avant d'avoir un compte CRM.</div></td></tr>`}</tbody>
           </table></div>
+          ${sansFiche.length ? `<p class="muted small" style="margin-top:12px">Sur le CRM sans fiche de réseau : ${sansFiche.map(u => `<button type="button" class="btn ghost sm" data-creer="${u.id}">+ ${esc(u.full_name)}</button>`).join(' ')}</p>` : ''}
         </div>
 
-        <div class="btp-duo">
-          <div class="card">
-            <div class="card-head"><h2>Système à points</h2></div>
-            <div class="table-wrap"><table>
-              <thead><tr><th>Mission</th><th class="num">Points</th></tr></thead>
-              <tbody>${NIVEAUX_BTP.map(n => `<tr>
-                <td><i class="btp-puce ${n.mission === 'amo' ? 'amo' : 'exp'}"></i>${esc(n.label)}</td>
-                <td class="num"><b>${n.points}</b></td>
-              </tr>`).join('')}</tbody>
-            </table></div>
+        <div class="card btp-large">
+          <div class="card-head"><h2>Système à points</h2>
+            <span class="muted small">Ce que pèse chaque service dans la charge d'un chargé d'affaires</span>
           </div>
-          <div class="card">
-            <div class="card-head"><h2>Règles de capacité</h2></div>
-            <ul class="btp-regles">
-              <li><b>${CAPACITE_BTP.points} points</b> structurels au maximum par chargé d'affaires.</li>
-              <li><b>${CAPACITE_BTP.amoActives} AMO actives</b> au maximum en même temps.</li>
-              <li>La <b>charge structurelle</b> est la responsabilité totale du portefeuille ; la charge du moment peut être moindre.</li>
-              <li>Les points d'une <b>expertise se libèrent à sa clôture</b> ; ceux d'une <b>AMO occupent la capacité longtemps</b>.</li>
-              <li>Ces plafonds sont ceux du lancement, à recalibrer sur les données réelles.</li>
-            </ul>
-          </div>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Service</th><th>Niveau</th><th>Ce qu'il comprend</th><th>Tarif de travail</th><th class="num">Points</th></tr></thead>
+            <tbody>${NIVEAUX_BTP.map(n => `<tr class="btp-m-${n.mission}">
+              <td>${marqueMission(n.mission)}<b>${n.mission === 'amo' ? 'AMO' : 'Expertise'}</b></td>
+              <td>${esc(n.label.replace(/^(Expertise|AMO) ?/, '')) || esc(n.label)}</td>
+              <td class="small">${esc(n.contenu)}</td>
+              <td class="small">${esc(n.tarif)}</td>
+              <td class="num"><b class="btp-pts">${n.points}</b></td>
+            </tr>`).join('')}</tbody>
+          </table></div>
+          <p class="muted small" style="margin-top:10px">Honoraires AMO : ${esc(HONORAIRES_AMO.taux)}, minimum ${eur(HONORAIRES_AMO.minimum)} HT.</p>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h2>Règles de capacité</h2></div>
+          <ul class="btp-regles">
+            <li><b>${CAPACITE_BTP.points} points</b> structurels par défaut, ajustables sur chaque fiche.</li>
+            <li><b>${CAPACITE_BTP.amoActives} AMO actives</b> au maximum en même temps.</li>
+            <li>La <b>charge structurelle</b> est la responsabilité totale du portefeuille ; la charge du moment peut être moindre.</li>
+            <li>Les points d'une <b>expertise se libèrent à sa clôture</b> ; ceux d'une <b>AMO occupent la capacité longtemps</b>.</li>
+            <li>Une fiche <b>sans compte CRM</b> n'a pas de charge calculée : ses missions ne peuvent pas lui être rattachées.</li>
+          </ul>
         </div>`);
 
       lierAffaires(root, draw);
+      root.querySelector('#ca-new').onclick = () => ficheCharge(null, draw);
+      root.querySelectorAll('[data-fiche-ca]').forEach(b => b.onclick = () => ficheCharge(db.byId(TABLE_CHARGES, b.dataset.ficheCa), draw));
+      root.querySelectorAll('[data-creer]').forEach(b => b.onclick = () => {
+        const u = db.byId('profiles', b.dataset.creer);
+        ficheCharge({ nom: u.full_name, email: u.email, profile_id: u.id, actif: true, points_max: CAPACITE_BTP.points, amo_max: CAPACITE_BTP.amoActives }, draw);
+      });
     };
 
     draw();
     return { refresh: draw, destroy: coquille.retirer };
   },
 };
+
+// Une ligne du réseau : la jauge, les compteurs, et le détail des missions portées.
+function ligneReseau({ f, charge, max, amoMax, points, sature }) {
+  const pct = max ? Math.min(100, Math.round((points / max) * 100)) : 0;
+  const ton = sature ? 'red' : pct >= 80 ? 'amber' : 'green';
+  const objectif = Number(f.objectif_ca) || 0;
+  return `<tr class="${f.actif === false ? 'btp-sommeil' : ''}">
+    <td>
+      <b>${esc(f.nom)}</b>
+      <div class="small muted">${esc(f.statut || '—')}${f.email ? ' · ' + esc(f.email) : ''}</div>
+      ${!f.profile_id ? '<div class="small muted">Pas de compte CRM : charge non calculée</div>' : ''}
+    </td>
+    <td>
+      <div class="btp-jauge-val">${points} / ${max} pts${charge && charge.sansNiveau ? ` <span class="muted" title="${charge.sansNiveau} mission(s) sans niveau : elles ne pèsent aucun point">· ${charge.sansNiveau} sans niveau</span>` : ''}</div>
+      <div class="btp-jauge"><i style="width:${pct}%;background:var(--${ton})"></i></div>
+    </td>
+    <td class="num">${charge ? charge.amo.length : 0} / ${amoMax}</td>
+    <td class="num">${charge ? charge.expertises : 0}</td>
+    <td class="num">${charge && charge.ca ? eur(charge.ca) : '—'}${objectif ? `<div class="small muted">sur ${eur(objectif)}</div>` : ''}</td>
+    <td>${f.actif === false ? '<span class="pill">En sommeil</span>'
+      : sature ? '<span class="pill bad">Saturé</span>' : '<span class="pill ok">Disponible</span>'}</td>
+    <td class="num"><button type="button" class="icon-btn" data-fiche-ca="${f.id}" title="Modifier la fiche">✎</button></td>
+  </tr>
+  ${charge && charge.siennes.length ? `<tr class="btp-detail"><td colspan="7">
+    ${charge.siennes.map(d => {
+      const n = niveauDe(d);
+      return `<button type="button" class="btp-chip btp-m-${missionDe(d)}" data-deal="${d.id}" title="${esc(d.title)}">
+        <i class="${missionDe(d) === 'amo' ? 'amo' : 'exp'}"></i>${esc(d.title)}<span>${n ? n.points + ' pt' + (n.points > 1 ? 's' : '') : 'sans niveau'}</span>
+      </button>`;
+    }).join('')}
+  </td></tr>` : ''}`;
+}
 
 // ---------------------------------------------------------------- Base de données
 // D'où viennent les prospects. Chaque origine regroupe les canaux du CRM qui lui
