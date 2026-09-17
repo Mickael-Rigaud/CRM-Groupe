@@ -5,7 +5,7 @@ import { scope } from './data/scope.js';
 import { ACTIVITIES, ROLES } from './data/schema.js';
 import { esc, toast, isoDay, daysSince, closeModal, openModal } from './ui.js';
 import { pages } from './pages/index.js';
-import { messagesNonLus } from './pages/messagerie.js';
+import { messagesNonLus, monterBulle } from './pages/messagerie.js';
 import { icon } from './icons.js';
 
 
@@ -188,7 +188,11 @@ function renderNav() {
     return `${trait}<a href="${i.hash}" class="s-tab ${i.dot ? 'brand' : ''} ${isOn(i, hash) ? 'on' : ''}" ${i.dot ? `style="--c:${i.dot}"` : ''} ${isOn(i, hash) ? 'aria-current="page"' : ''}>${mark}${esc(i.label)}${cnt ? `<i class="s-cnt">${cnt}</i>` : ''}</a>`;
   }).join('');
   const posted = sub.querySelector('.embed-actions');   // commandes posées par la page ouverte
-  sub.innerHTML = `<h1 id="page-title" class="sr-only">—</h1>
+  // La barre est réécrite à chaque changement de données, pas seulement au
+  // changement d'écran : le titre doit survivre à ces redessins, sinon il
+  // retombe sur le tiret du gabarit dès la première écriture en base.
+  const titre = sub.querySelector('#page-title')?.textContent || '—';
+  sub.innerHTML = `<h1 id="page-title" class="sr-only">${esc(titre)}</h1>
     <nav class="s-set" aria-label="Écrans">${screens}</nav>
     <div class="datepill"><span>Aujourd'hui</span>${new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</div>`;
   if (posted) sub.insertBefore(posted, sub.querySelector('.datepill'));
@@ -202,7 +206,7 @@ function renderNav() {
 
   univ.querySelector('#me-btn').onclick = () => { navState.open = navState.open === '__me' ? null : '__me'; renderNav(); };
   univ.querySelector('#pwd')?.addEventListener('click', () => { closeMenu(); passwordForm(false); });
-  univ.querySelector('#logout')?.addEventListener('click', async () => { await db.signOut(); location.hash = ''; scope.set(null); navState.open = null; renderLogin(); });
+  univ.querySelector('#logout')?.addEventListener('click', async () => { await db.signOut(); location.hash = ''; scope.set(null); navState.open = null; document.getElementById('msg-bulle')?.remove(); renderLogin(); });
   // Un univers ouvert conduit à son premier écran ; la bande 2 fait le reste
   univ.querySelectorAll('[data-univ]').forEach(a => a.onclick = () => { navState.open = null; });
 }
@@ -224,13 +228,17 @@ function route() {
   closeModal(true);
   current?.destroy?.();
   const content = document.getElementById('content');
-  document.getElementById('page-title').textContent = page.title(param);
   // Une page qui affiche une application entière (RGD Renova) garde la barre pour ses
   // commandes et la navigation, mais sans la date.
   document.querySelector('.topbar').classList.toggle('bare', !!page.fullBleed);
   content.innerHTML = '';
   applyBrand(hash);
   renderNav();
+  // Après renderNav() et pas avant : c'est elle qui réécrit la barre, donc le
+  // titre posé plus tôt était systématiquement remplacé par le tiret du gabarit.
+  // Ce titre est lu par les lecteurs d'écran, et la bulle de messagerie s'en
+  // sert pour nommer l'écran d'où part un message.
+  document.getElementById('page-title').textContent = page.title(param);
   current = page.render(content, param);
   window.scrollTo(0, 0);
 }
@@ -252,6 +260,10 @@ async function start(user) {
   scope.set(user);
   if (!scope.isDirection && location.hash === '#/dashboard') location.hash = '#/home';
   renderLayout();
+  // La bulle de messagerie vit sur <body>, hors de #content : elle reste en place
+  // d'un écran à l'autre, donc un message en cours de frappe survit à une
+  // vérification dans une fiche.
+  monterBulle(document.body);
   probeLogos();
   unsubscribe?.();
   unsubscribe = db.onChange(() => { renderNav(); current?.refresh?.(); });

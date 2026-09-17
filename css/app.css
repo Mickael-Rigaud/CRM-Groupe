@@ -759,7 +759,8 @@ body.impression #print-root { display: block; }
 .avatar.sm { width: 22px; height: 22px; font-size: 9px; }
 
 .msg-vue { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.msg-vue.depot { outline: 2px dashed var(--t); outline-offset: -8px; }
+.msg-hote { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.msg-hote.depot { outline: 2px dashed var(--t); outline-offset: -8px; }
 .msg-tete { display: flex; align-items: center; gap: 12px; padding: 14px 20px; border-bottom: 1px solid var(--line); }
 .msg-tete > div { flex: 1; min-width: 0; }
 .msg-tete h2 { display: flex; align-items: center; gap: 8px; }
@@ -821,3 +822,49 @@ body.impression #print-root { display: block; }
   .msg-bulle { max-width: 100%; }
 }
 .msg-modifie { margin-left: 6px; font-size: 10.5px; font-style: normal; color: var(--muted-2); }
+
+/* ---------------------------------------------------------------------
+   La bulle de messagerie — présente sur toutes les pages, en bas à droite.
+   Le panneau reprend le fil et la saisie de l'écran plein, dans 380 px de
+   large : tout ce qui est commun est déjà défini plus haut, on ne règle
+   ici que ce qui change avec la place disponible.
+   --------------------------------------------------------------------- */
+.msg-bulle-zone { position: fixed; right: 20px; bottom: 20px; z-index: 60; display: flex; flex-direction: column; align-items: flex-end; gap: 12px; }
+.msg-bulle-zone[hidden] { display: none; }
+
+.msg-declencheur { width: 52px; height: 52px; border: 0; border-radius: 50%; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; box-shadow: var(--shadow-lift); position: relative; transition: transform .12s, background .12s; }
+.msg-declencheur:hover { background: var(--accent-2); transform: translateY(-1px); }
+.msg-declencheur .msg-cnt { position: absolute; top: -2px; right: -2px; background: var(--red); box-shadow: 0 0 0 2px var(--bg); }
+/* Des messages non lus : l'appel discret, une fois, pas une animation perpétuelle */
+@keyframes msg-appel { 0%, 100% { transform: none; } 30% { transform: translateY(-3px); } 60% { transform: none; } }
+.msg-declencheur.a-lire { animation: msg-appel .5s ease 1; }
+
+.msg-panneau { width: 380px; max-width: calc(100vw - 32px); height: 540px; max-height: calc(100vh - 120px); display: flex; flex-direction: column; background: var(--card); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow-lift); overflow: hidden; }
+.msg-panneau[hidden] { display: none; }
+.msg-panneau-tete { display: flex; align-items: center; gap: 6px; padding: 9px 10px 9px 12px; border-bottom: 1px solid var(--line); background: var(--card-2); }
+.msg-choix { flex: 1; min-width: 0; border: 1px solid var(--line-strong); border-radius: 8px; padding: 5px 8px; background: var(--card); font-weight: 600; }
+.msg-choix:focus { outline: none; border-color: var(--t, var(--accent)); }
+
+/* Dans 380 px, on resserre : moins de marges, bulles plus larges, actions
+   toujours visibles faute de survol fiable au doigt. */
+.msg-panneau .msg-fil { padding: 12px 12px 8px; }
+.msg-panneau .msg-bulle { max-width: 88%; }
+.msg-panneau .msg-ecrire { padding: 8px 12px 12px; }
+.msg-panneau .msg-actions { opacity: 1; }
+.msg-panneau .msg-photo { max-width: 180px; }
+
+/* Le renvoi vers l'écran d'où part le message */
+.msg-apropos { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 4px 8px; border-radius: 8px; background: var(--accent-soft); color: var(--accent-ink); font-size: 12px; }
+.msg-apropos b { font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.msg-apropos button { border: 0; background: none; color: inherit; font-size: 15px; line-height: 1; padding: 0 2px; opacity: .7; }
+.msg-apropos button:hover { opacity: 1; }
+.msg-contexte { margin-bottom: 8px; }
+.msg-renvoi { display: inline-block; margin-top: 4px; padding: 3px 8px; border-radius: 7px; background: var(--card); border: 1px solid var(--line-strong); font-size: 12.5px; font-weight: 600; text-decoration: none; }
+.msg-renvoi:hover { border-color: var(--accent); color: var(--accent-ink); }
+
+@media (max-width: 560px) {
+  /* Sur un téléphone, le panneau prend l'écran : 380 px fixes n'ont pas de sens */
+  .msg-bulle-zone { right: 12px; bottom: 12px; left: 12px; align-items: stretch; }
+  .msg-panneau { width: auto; height: calc(100vh - 140px); }
+  .msg-declencheur { align-self: flex-end; }
+}
