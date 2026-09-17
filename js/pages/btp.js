@@ -64,24 +64,30 @@ const TITRES_VUE = { WEEK: 'Agenda de la semaine', MONTH: 'Agenda du mois', AGEN
 const vueChoisie = () => { try { return localStorage.getItem(CLE_VUE) || 'WEEK'; } catch { return 'WEEK'; } };
 const retenirVue = (v) => { try { localStorage.setItem(CLE_VUE, v); } catch { /* navigation privée */ } };
 
+// Plusieurs identifiants possibles, séparés par une virgule, un point-virgule ou un
+// retour à la ligne : le cadre affiche alors les agendas superposés, chacun avec SA
+// couleur. C'est le seul moyen d'obtenir deux couleurs dans un cadre intégré — celui-ci
+// colore par agenda, pas par rendez-vous.
+const idsAgenda = () => (db.setting(CLE_AGENDA) || '').split(/[\s,;]+/).map(v => v.trim()).filter(Boolean);
+
 // Google reprend notre couleur de fond, pour que le cadre se fonde dans la page.
-// On ne lui impose PAS de couleur d'évènement : le paramètre `color` de l'URL
-// d'intégration repeint tout le calendrier d'une seule teinte et efface la
-// couleur que chaque rendez-vous porte dans Google Agenda — celle qui distingue
-// une mission AMO d'une expertise. Le cadre doit montrer l'agenda tel qu'il est.
-function urlAgenda(id, mode) {
+// On ne lui impose PAS de couleur : le paramètre `color` de l'URL repeint tout d'une
+// seule teinte et efface la couleur propre de chaque agenda.
+function urlAgenda(ids, mode) {
   const lire = (v, repli) => (getComputedStyle(document.documentElement).getPropertyValue(v).trim() || repli);
-  return 'https://calendar.google.com/calendar/embed?' + new URLSearchParams({
-    src: id, ctz: 'Europe/Paris', mode,
+  const p = new URLSearchParams({
+    ctz: 'Europe/Paris', mode,
     wkst: '2',                       // la semaine commence le lundi
     showTitle: '0', showPrint: '0', showTabs: '0', showCalendars: '0', showTz: '0', showNav: '1',
     bgcolor: lire('--card', '#FFFFFF'),
   });
+  for (const id of ids) p.append('src', id);
+  return 'https://calendar.google.com/calendar/embed?' + p;
 }
 
 function agenda() {
-  const id = (db.setting(CLE_AGENDA) || '').trim();
-  if (!id) {
+  const ids = idsAgenda();
+  if (!ids.length) {
     return `<div class="card">
       <div class="agenda-head"><span class="agenda-ico">📅</span><h2>Agenda</h2></div>
       <div class="btp-setup">
@@ -94,7 +100,8 @@ function agenda() {
           <li>Collez-le ci-dessous.</li>
         </ol>
         ${scope.isDirection ? `<div class="form">
-          <div class="field"><label>Identifiant du calendrier</label><input id="cal-id" placeholder="identifiant@example.com"></div>
+          <div class="field"><label>Identifiant du calendrier</label><input id="cal-id" placeholder="identifiant@example.com">
+            <div class="small muted" style="margin-top:4px">Plusieurs agendas ? Collez leurs identifiants séparés par une virgule — chacun gardera sa couleur.</div></div>
           <div class="form-actions"><button class="btn" id="cal-save">Enregistrer</button></div>
         </div>` : '<p class="muted small">La direction peut le renseigner depuis cet écran.</p>'}
         <p class="muted small">Chaque personne verra l&rsquo;agenda avec son propre compte Google, après avoir été ajoutée au partage. Rien n&rsquo;est rendu public, et aucun mot de passe n&rsquo;est demandé.</p>
@@ -113,7 +120,7 @@ function agenda() {
       <a class="btn ghost sm" href="https://calendar.google.com/calendar/r/week" target="_blank" rel="noopener">Ouvrir dans Google Agenda ↗</a>
     </div>
     <div class="agenda-cadre agenda-${vue.toLowerCase()}">
-      <iframe src="${esc(urlAgenda(id, vue))}" title="Agenda BTP Expertise" loading="lazy"></iframe>
+      <iframe src="${esc(urlAgenda(ids, vue))}" title="Agenda BTP Expertise" loading="lazy"></iframe>
     </div>
     <p class="muted small">Cet agenda est celui de Google : ce qui est modifié là-bas apparaît ici, et inversement. Si le cadre reste vide, votre adresse n&rsquo;a pas encore été ajoutée au partage du calendrier, ou votre navigateur refuse la mémorisation des sites affichés dans un autre site.</p>
   </div>`;
