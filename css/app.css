@@ -772,17 +772,20 @@ body.impression #print-root { display: block; }
 .msg-cnt { min-width: 19px; height: 19px; padding: 0 5px; border-radius: 10px; background: var(--t, var(--accent)); color: #fff; font-size: 10.5px; font-weight: 800; font-style: normal; display: grid; place-items: center; flex: none; }
 .msg-cnt[hidden] { display: none; }
 
-/* ---------- Vignettes : un canal porte son logo, une personne ses initiales ---------- */
+/* ---------- Vignettes : un canal porte son logo, une personne ses initiales ----------
+   Les fichiers ne contiennent plus que le dessin, sans marge : c'est ici, et ici
+   seulement, que se decide la respiration. Le dessin occupe environ 75 % de la
+   pastille — en dessous il y flotte, au-dessus il l'etouffe. */
 .msg-ecu { width: 30px; height: 30px; flex: none; border-radius: 9px; display: grid; place-items: center; background: color-mix(in srgb, var(--t) 14%, #fff); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--t) 28%, transparent); overflow: hidden; }
-.msg-ecu img { width: 20px; height: 20px; object-fit: contain; }
+.msg-ecu img { width: 23px; height: 23px; object-fit: contain; }
 .msg-ecu b { color: var(--t); font-size: 15px; }
 .msg-ecu.groupe { --t: var(--muted-2); background: var(--line); }
 .msg-ecu.sm { width: 26px; height: 26px; border-radius: 8px; }
-.msg-ecu.sm img { width: 17px; height: 17px; }
+.msg-ecu.sm img { width: 20px; height: 20px; }
 .msg-ecu.lg { width: 40px; height: 40px; border-radius: 12px; }
-.msg-ecu.lg img { width: 26px; height: 26px; }
+.msg-ecu.lg img { width: 30px; height: 30px; }
 .msg-ecu.xl { width: 56px; height: 56px; border-radius: 16px; }
-.msg-ecu.xl img { width: 34px; height: 34px; }
+.msg-ecu.xl img { width: 42px; height: 42px; }
 .avatar.sm { width: 22px; height: 22px; font-size: 9px; }
 .avatar.xs { width: 22px; height: 22px; font-size: 8.5px; box-shadow: 0 0 0 2px var(--card); }
 .avatar.xs.plus { background: var(--line-strong); color: var(--muted); }
