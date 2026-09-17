@@ -71,6 +71,30 @@ export const SEED = {
   settings: [
     { key: 'intake_token', value: 'demo-token-a-changer' },
   ],
+  // Messagerie : les canaux existent d'office, un par structure plus le canal Groupe.
+  // En production ils sont créés par supabase/lot12-messagerie.sql.
+  conversations: [
+    { id: 'cv-groupe', kind: 'canal', slug: 'groupe', activity: null, title: 'Groupe', created_at: d(-400) },
+    { id: 'cv-rgd', kind: 'canal', slug: 'rgd', activity: 'rgd', title: 'RGD Renova', created_at: d(-400) },
+    { id: 'cv-btp', kind: 'canal', slug: 'btp', activity: 'btp', title: 'BTP Expertise', created_at: d(-400) },
+    { id: 'cv-courtage', kind: 'canal', slug: 'courtage', activity: 'courtage', title: 'La Référence Courtage', created_at: d(-400) },
+    { id: 'cv-propulsion', kind: 'canal', slug: 'propulsion', activity: 'propulsion', title: 'Propulsion', created_at: d(-400) },
+    { id: 'cv-p1', kind: 'prive', slug: null, activity: null, title: null, created_by: 'u-mickael', created_at: d(-9) },
+  ],
+  conversation_members: [
+    { id: 'cm1', conversation_id: 'cv-p1', user_id: 'u-mickael', created_at: d(-9) },
+    { id: 'cm2', conversation_id: 'cv-p1', user_id: 'u-elodie', created_at: d(-9) },
+  ],
+  messages: [
+    { id: 'm1', conversation_id: 'cv-groupe', author_id: 'u-mickael', body: 'Point d’équipe lundi 9 h, en visio. Ordre du jour : chiffres du mois et répartition des rendez-vous.', created_at: d(-5, 8) },
+    { id: 'm2', conversation_id: 'cv-groupe', author_id: 'u-stephanie', body: 'Noté. Je prépare les chiffres Propulsion.', created_at: d(-5, 9) },
+    { id: 'm3', conversation_id: 'cv-rgd', author_id: 'u-charge', body: 'Visite faite chez Mme Bernard. Appartement en bon état général, la salle de bain est à reprendre entièrement. Je monte le devis cette semaine.', created_at: d(-3, 17) },
+    { id: 'm4', conversation_id: 'cv-rgd', author_id: 'u-mickael', body: 'Parfait. Pense à chiffrer le remplacement de la VMC, elle datait de l’origine.', created_at: d(-3, 18) },
+    { id: 'm5', conversation_id: 'cv-btp', author_id: 'u-mickael', body: 'Rapport Marchand envoyé ce matin. Dossier clos, on peut facturer.', created_at: d(-2, 11) },
+    { id: 'm6', conversation_id: 'cv-p1', author_id: 'u-mickael', body: 'Tu peux relancer le notaire pour le dossier Haddad ?', created_at: d(-1, 15) },
+    { id: 'm7', conversation_id: 'cv-p1', author_id: 'u-elodie', body: 'C’est fait, il rappelle demain matin.', created_at: d(-1, 16) },
+  ],
+  message_reads: [],
   broker_profiles: SEED_BROKERS,
   dtu_sheets: [
     { id: 'dtu-20-1', code: 'NF DTU 20.1', title: 'Maçonnerie de petits éléments', domain: 'Maçonnerie', essential: true, position: 10,

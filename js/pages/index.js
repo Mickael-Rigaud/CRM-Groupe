@@ -8,6 +8,7 @@ import { patrimoinePage, propertiesPage, loansPage, expensesPage } from './patri
 import { rgdDashboardPage } from './rgd.js';
 import { btpHomePage, btpTodoPage, btpBasePage, btpDtuPage, btpMailsPage, btpFacturationPage } from './btp.js';
 import { courtageHomePage, courtageBasePage, courtageVivierPage } from './courtage.js';
+import { messageriePage } from './messagerie.js';
 
 import { locatifPage, leasesPage, unitsPage, rentalTodoPage, tenantContactsPage } from './locatif.js';
 export const pages = {
@@ -33,6 +34,7 @@ export const pages = {
   courtage_base: courtageBasePage,
   courtage_vivier: courtageVivierPage,
   dashboard: dashboardPage,
+  messagerie: messageriePage,
   today: todayPage,
   pipeline: pipelinePage,
   contacts: contactsPage,

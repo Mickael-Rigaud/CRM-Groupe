@@ -5,6 +5,7 @@ import { scope } from './data/scope.js';
 import { ACTIVITIES, ROLES } from './data/schema.js';
 import { esc, toast, isoDay, daysSince, closeModal, openModal } from './ui.js';
 import { pages } from './pages/index.js';
+import { messagesNonLus } from './pages/messagerie.js';
 import { icon } from './icons.js';
 
 
@@ -86,6 +87,9 @@ const NAV = [
       { hash: '#/locatif/suivi', label: 'À faire locatif', count: lateRent },
     ],
   },
+  // La messagerie porte ses conversations dans sa propre colonne : une seule entrée
+  // ici, avec le nombre de messages non lus.
+  { key: 'messagerie', icon: 'chat', label: 'Messagerie', hash: '#/messagerie', count: () => messagesNonLus() },
   { key: 'settings', icon: 'gear', label: 'Paramètres', hash: '#/settings', bottom: true },
 ];
 

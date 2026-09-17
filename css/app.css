@@ -724,3 +724,94 @@ body.impression #print-root { display: block; }
    Lignes resserrées, et la colonne des logos ne prend que ce qu'il lui faut. */
 .tbl-structures td { padding-top: 7px; padding-bottom: 7px; }
 .tbl-structures th:first-child, .tbl-structures td:first-child { width: 30%; }
+
+/* =====================================================================
+   Messagerie interne — deux colonnes dans la coquille pleine hauteur des
+   espaces (.esp-app) : la liste des conversations à gauche, le fil à droite.
+   `--t` porte la couleur de la structure quand la conversation en a une ;
+   les conversations privées et le canal Groupe n'en ont pas et restent
+   sur l'indigo du groupe.
+   ===================================================================== */
+.msg-app { --t: var(--accent); background: var(--card); }
+
+.msg-cote { width: 280px; flex: none; border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; background: var(--card-2); }
+.msg-cote-tete { display: flex; gap: 8px; padding: 12px; border-bottom: 1px solid var(--line); }
+.msg-cote-tete input { flex: 1; min-width: 0; padding: 7px 10px; border: 1px solid var(--line-strong); border-radius: 9px; background: var(--card); }
+.msg-liste { flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 2px; }
+
+.msg-item { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 10px; text-decoration: none; color: inherit; }
+.msg-item:hover { background: var(--card); }
+.msg-item.on { background: var(--card); box-shadow: inset 3px 0 0 var(--t), var(--shadow); }
+.msg-item-ico { flex: none; display: grid; place-items: center; width: 26px; }
+.msg-item-corps { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.msg-item-corps b { font-size: 13.5px; font-weight: 650; }
+.msg-item-corps small { font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.msg-item time { font-size: 10.5px; flex: none; }
+.msg-cnt { flex: none; min-width: 19px; height: 19px; padding: 0 5px; border-radius: 10px; background: var(--t); color: #fff; font-size: 10.5px; font-weight: 800; font-style: normal; display: grid; place-items: center; }
+.msg-puce { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+.msg-puce-groupe { background: var(--muted-2); }
+.avatar.sm { width: 22px; height: 22px; font-size: 9px; }
+
+.msg-vue { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.msg-vue.depot { outline: 2px dashed var(--t); outline-offset: -8px; }
+.msg-tete { display: flex; align-items: center; gap: 12px; padding: 14px 20px; border-bottom: 1px solid var(--line); }
+.msg-tete > div { flex: 1; min-width: 0; }
+.msg-tete h2 { display: flex; align-items: center; gap: 8px; }
+
+/* Le fil défile seul : c'est lui qu'on recolle en bas à l'arrivée d'un message. */
+.msg-fil { flex: 1; overflow-y: auto; padding: 16px 20px 10px; display: flex; flex-direction: column; gap: 2px; }
+.msg-jour { display: flex; align-items: center; gap: 12px; margin: 16px 0 10px; color: var(--muted-2); font-size: 11px; font-weight: 700; }
+.msg-jour::before, .msg-jour::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+
+.msg-ligne { display: flex; align-items: flex-start; gap: 10px; padding: 2px 0; }
+.msg-ligne.suite { margin-top: -2px; }
+.msg-gouttiere { width: 22px; flex: none; }
+.msg-bulle { max-width: min(640px, 80%); background: var(--card-2); border-radius: 12px; padding: 8px 12px; }
+.msg-ligne.moi .msg-bulle { background: var(--accent-soft); }
+.msg-qui { display: flex; align-items: baseline; gap: 8px; margin-bottom: 2px; }
+.msg-qui b { font-size: 12.5px; font-weight: 700; }
+.msg-qui time, .msg-qui em { font-size: 10.5px; color: var(--muted-2); font-style: normal; }
+.msg-corps { white-space: pre-wrap; overflow-wrap: anywhere; }
+.msg-corps a { color: var(--accent); }
+.msg-edition { width: 100%; min-height: 60px; border: 1px solid var(--t); border-radius: 8px; padding: 6px 8px; resize: vertical; }
+
+/* Les actions n'apparaissent qu'au survol : une corbeille en permanence à côté
+   de chaque message rend le fil anxiogène. */
+.msg-actions { display: flex; gap: 2px; opacity: 0; transition: opacity .12s; }
+.msg-ligne:hover .msg-actions { opacity: 1; }
+
+.msg-pieces { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.msg-photo { display: block; max-width: 240px; border-radius: 9px; overflow: hidden; text-decoration: none; background: var(--card); border: 1px solid var(--line); }
+.msg-photo img { display: block; width: 100%; height: auto; max-height: 260px; object-fit: cover; }
+.msg-photo span { display: block; padding: 4px 8px; font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.msg-photo.absente img { display: none; }
+.msg-fichier { display: flex; align-items: center; gap: 9px; padding: 7px 11px; border: 1px solid var(--line-strong); border-radius: 9px; background: var(--card); text-decoration: none; color: inherit; }
+.msg-fichier:hover { border-color: var(--t); }
+.msg-fichier-ico { font-size: 17px; }
+.msg-fichier b { display: block; font-size: 12.5px; }
+.msg-fichier small { font-size: 10.5px; }
+
+.msg-ecrire { border-top: 1px solid var(--line); padding: 10px 20px 14px; background: var(--card); }
+.msg-saisie { display: flex; align-items: flex-end; gap: 8px; }
+.msg-saisie textarea { flex: 1; min-width: 0; resize: none; padding: 9px 12px; border: 1px solid var(--line-strong); border-radius: 11px; line-height: 1.4; max-height: 160px; }
+.msg-saisie textarea:focus { outline: none; border-color: var(--t); }
+.msg-trombone { flex: none; width: 36px; height: 36px; display: grid; place-items: center; border-radius: 9px; cursor: pointer; font-size: 17px; }
+.msg-trombone:hover { background: var(--card-2); }
+.msg-jointes { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.msg-jointe { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 8px; background: var(--card-2); font-size: 12px; }
+.msg-jointe button { border: 0; background: none; color: var(--muted-2); font-size: 15px; line-height: 1; padding: 0 2px; }
+.msg-jointe button:hover { color: var(--red); }
+
+/* Choix du destinataire d'une nouvelle conversation privée */
+.msg-gens { display: flex; flex-direction: column; gap: 6px; }
+.msg-gens button { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); text-align: left; }
+.msg-gens button:hover { border-color: var(--accent); background: var(--accent-soft); }
+.msg-gens small { display: block; font-size: 11px; }
+
+@media (max-width: 860px) {
+  /* En colonne, la liste passe au-dessus et se limite à quelques lignes :
+     sur un téléphone, c'est le fil qu'on vient lire. */
+  .msg-cote { width: auto; border-right: 0; border-bottom: 1px solid var(--line); max-height: 40vh; }
+  .msg-bulle { max-width: 100%; }
+}
+.msg-modifie { margin-left: 6px; font-size: 10.5px; font-style: normal; color: var(--muted-2); }
