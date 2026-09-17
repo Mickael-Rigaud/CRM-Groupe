@@ -39,7 +39,7 @@ const ONGLETS = [
   { hash: '#/btp/base', label: 'Base de données' },
   { hash: '#/btp/dtu', label: 'DTU' },
   { hash: '#/btp/facturation', label: 'Facturation' },
-  { hash: '#/btp/mails', label: 'Mails types' },
+  { hash: '#/btp/mails', label: 'Mails & modèles' },
 ];
 // Enveloppe un écran dans la coquille commune aux espaces de structure.
 const cadre = (actif, titre, corps) => coquilleEspace({
@@ -274,7 +274,12 @@ export const btpHomePage = {
               <a class="btn ghost sm" href="#/btp/charges">Voir l'équipe →</a>
             </div>
             <div class="table-wrap"><table>
-              <thead><tr><th>Chargé d'affaires</th><th>Charge</th><th class="num">AMO</th><th class="num">Expertises</th><th class="num">CA ${esc(anneeEnCours)}</th></tr></thead>
+              <thead><tr>
+                <th>Chargé d'affaires</th><th>Charge</th>
+                <th class="num" style="color:${couleurMission('expertise').encre}">${marqueMission('expertise')}Expertise</th>
+                <th class="num" style="color:${couleurMission('amo').encre}">${marqueMission('amo')}AMO</th>
+                <th class="num">CA ${esc(anneeEnCours)}</th>
+              </tr></thead>
               <tbody>${gens.map(g => ligneCharge(g)).join('')
                 || `<tr><td colspan="5"><div class="empty">Aucun chargé d'affaires sur BTP Expertise. Cochez l'activité sur leur profil, dans Paramètres.</div></td></tr>`}</tbody>
             </table></div>
@@ -282,12 +287,16 @@ export const btpHomePage = {
 
           <div class="card">
             <div class="card-head"><h2>Répartition du CA ${esc(anneeEnCours)}</h2></div>
-            <div class="btp-ca-total">${eur(caAnnee)}<span>signé cette année</span></div>
-            ${[['Expertise', caExp, 'var(--accent)'], ['AMO', caAmo, 'var(--green)']].map(([nom, v, c]) => `
-              <div class="btp-ca-part">
-                <div class="btp-ca-lbl"><i style="background:${c}"></i>${nom}<span class="grow"></span><b>${eur(v)}</b><em>${part(v)} %</em></div>
-                <div class="btp-ca-bar"><i style="width:${part(v)}%;background:${c}"></i></div>
-              </div>`).join('')}
+            <div class="btp-ca">
+              ${anneau(caExp, caAmo, caAnnee)}
+              <div class="btp-ca-parts">
+                ${[['expertise', caExp], ['amo', caAmo]].map(([m, v]) => `
+                  <div class="btp-ca-part" style="${teinteMission(m)}">
+                    <div class="btp-ca-lbl">${marqueMission(m)}${esc(couleurMission(m).label)}<span class="grow"></span><b>${eur(v)}</b><em>${part(v)} %</em></div>
+                    <div class="btp-ca-bar"><i style="width:${part(v)}%;background:var(--m)"></i></div>
+                  </div>`).join('')}
+              </div>
+            </div>
             ${!caAnnee ? '<p class="muted small">Aucune mission engagée cette année : la répartition apparaîtra dès la première.</p>' : ''}
           </div>
         </div>
@@ -303,18 +312,41 @@ export const btpHomePage = {
   },
 };
 
+// L'anneau de repartition, en SVG : deux arcs dont la longueur suit la part de chaque
+// metier. Pas de bibliotheque — c'est un cercle et deux traits, et ca evite de charger
+// Chart.js pour deux valeurs.
+function anneau(caExp, caAmo, total) {
+  const R = 52, C = 2 * Math.PI * R;
+  const pExp = total ? caExp / total : 0;
+  const cE = couleurMission('expertise').couleur;
+  const cA = couleurMission('amo').couleur;
+  return `<svg class="btp-anneau" viewBox="0 0 130 130" role="img" aria-label="Répartition du chiffre d'affaires entre expertise et AMO">
+    <circle cx="65" cy="65" r="${R}" fill="none" stroke="var(--card-2)" stroke-width="16"></circle>
+    ${total ? `
+      <circle cx="65" cy="65" r="${R}" fill="none" stroke="${cA}" stroke-width="16"
+              stroke-dasharray="${C}" stroke-dashoffset="0" transform="rotate(-90 65 65)"></circle>
+      <circle cx="65" cy="65" r="${R}" fill="none" stroke="${cE}" stroke-width="16"
+              stroke-dasharray="${C * pExp} ${C}" stroke-dashoffset="0" transform="rotate(-90 65 65)"
+              stroke-linecap="${pExp > 0 && pExp < 1 ? 'butt' : 'round'}"></circle>` : ''}
+    <text x="65" y="61" text-anchor="middle" class="btp-anneau-val">${total ? eur(total) : '—'}</text>
+    <text x="65" y="78" text-anchor="middle" class="btp-anneau-lbl">signé</text>
+  </svg>`;
+}
+
 // Une ligne du tableau de charge : la jauge dit d'un coup d'œil qui peut encore prendre.
 function ligneCharge(g) {
-  const pct = Math.min(100, Math.round((g.points / CAPACITE_BTP.points) * 100));
-  const ton = g.sature ? 'red' : pct >= 80 ? 'amber' : 'green';
+  const pct = (v) => Math.min(100, (v / CAPACITE_BTP.points) * 100);
   return `<tr>
     <td><b>${esc(g.u.full_name)}</b></td>
-    <td>
+    <td class="btp-col-charge">
       <div class="btp-jauge-val">${g.points} / ${CAPACITE_BTP.points} pts${g.sansNiveau ? ` <span class="muted small" title="${g.sansNiveau} mission(s) sans niveau renseigné : elles ne pèsent aucun point">· ${g.sansNiveau} sans niveau</span>` : ''}</div>
-      <div class="btp-jauge"><i style="width:${pct}%;background:var(--${ton})"></i></div>
+      <div class="btp-jauge btp-jauge-duo">
+        <i style="width:${pct(g.ptsExpertise)}%;background:${couleurMission('expertise').couleur}" title="Expertise : ${g.ptsExpertise} pts"></i>
+        <i style="width:${pct(g.ptsAmo)}%;background:${couleurMission('amo').couleur}" title="AMO : ${g.ptsAmo} pts"></i>
+      </div>
     </td>
-    <td class="num">${g.amo.length} / ${CAPACITE_BTP.amoActives}</td>
-    <td class="num">${g.expertises}</td>
+    <td class="num"><span class="btp-compteur" style="${teinteMission('expertise')}">${g.expertises}<em>${g.ptsExpertise} pts</em></span></td>
+    <td class="num"><span class="btp-compteur ${g.amo.length >= CAPACITE_BTP.amoActives ? 'plein' : ''}" style="${teinteMission('amo')}">${g.amo.length} / ${CAPACITE_BTP.amoActives}<em>${g.ptsAmo} pts</em></span></td>
     <td class="num">${g.ca ? eur(g.ca) : '—'}</td>
   </tr>`;
 }
@@ -348,6 +380,7 @@ const pageMission = (mission) => ({
           <div class="card-head"><h2>Pipeline ${esc(MISSIONS[mission].titre)}</h2>
             <span class="grow"></span>
             <a class="btn ghost sm" href="#/pipeline/btp">Ouvrir le kanban complet →</a>
+            <button class="btn" id="m-new">+ Mission ${esc(couleurMission(mission).label)}</button>
           </div>
           ${kanbanHtml(colonnes)}
         </div>
@@ -377,6 +410,9 @@ const pageMission = (mission) => ({
 
       bindSearch(root, 'm-q', state, draw); restoreFocus(root, state);
       lierAffaires(root, draw);
+      // Une mission saisie ici naît dans son métier : le formulaire ouvre avec le type
+      // déjà choisi, le reste (contact, montant) se remplit comme partout ailleurs.
+      root.querySelector('#m-new').onclick = () => dealForm(KEY, null, { fields: { type_mission: mission } }, draw);
     };
 
     draw();
@@ -495,22 +531,7 @@ export const btpChargesPage = {
           ${sansFiche.length ? `<p class="muted small" style="margin-top:12px">Sur le CRM sans fiche de réseau : ${sansFiche.map(u => `<button type="button" class="btn ghost sm" data-creer="${u.id}">+ ${esc(u.full_name)}</button>`).join(' ')}</p>` : ''}
         </div>
 
-        <div class="card btp-large">
-          <div class="card-head"><h2>Système à points</h2>
-            <span class="muted small">Ce que pèse chaque service dans la charge d'un chargé d'affaires</span>
-          </div>
-          <div class="table-wrap"><table>
-            <thead><tr><th>Service</th><th>Niveau</th><th>Ce qu'il comprend</th><th>Tarif de travail</th><th class="num">Points</th></tr></thead>
-            <tbody>${NIVEAUX_BTP.map(n => `<tr class="btp-mission" style="${teinteMission(n.mission)}">
-              <td>${marqueMission(n.mission)}<b style="color:var(--m-encre)">${esc(couleurMission(n.mission).label)}</b></td>
-              <td>${esc(n.label.replace(/^(Expertise|AMO) ?/, '')) || esc(n.label)}</td>
-              <td class="small">${esc(n.contenu)}</td>
-              <td class="small">${esc(n.tarif)}</td>
-              <td class="num"><b class="btp-pts">${n.points}</b></td>
-            </tr>`).join('')}</tbody>
-          </table></div>
-          <p class="muted small" style="margin-top:10px">Honoraires AMO : ${esc(HONORAIRES_AMO.taux)}, minimum ${eur(HONORAIRES_AMO.minimum)} HT.</p>
-        </div>
+        <div class="btp-duo">${['expertise', 'amo'].map(m => tableauPoints(m)).join('')}</div>
 
         <div class="card">
           <div class="card-head"><h2>Règles de capacité</h2></div>
@@ -536,6 +557,32 @@ export const btpChargesPage = {
     return { refresh: draw, destroy: coquille.retirer };
   },
 };
+
+// Un tableau par métier plutôt qu'un seul melange : on cherche « combien pese une AMO
+// etendue », pas « quel est le bareme general ».
+function tableauPoints(mission) {
+  const c = couleurMission(mission);
+  const lignes = NIVEAUX_BTP.filter(n => n.mission === mission);
+  return `<div class="card btp-bareme" style="${teinteMission(mission)}">
+    <div class="card-head">
+      <h2>${marqueMission(mission)}${esc(c.label)}</h2>
+      <span class="grow"></span>
+      <a class="btn ghost sm" href="${MISSIONS[mission].hash}">Voir les missions →</a>
+    </div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Niveau</th><th>Ce qu'il comprend</th><th>Tarif de travail</th><th class="num">Points</th></tr></thead>
+      <tbody>${lignes.map(n => `<tr>
+        <td><b>${esc(n.label.replace(/^(Expertise|AMO) ?/, '')) || esc(n.label)}</b></td>
+        <td class="small">${esc(n.contenu)}</td>
+        <td class="small">${esc(n.tarif)}</td>
+        <td class="num"><b class="btp-pts">${n.points}</b></td>
+      </tr>`).join('')}</tbody>
+    </table></div>
+    ${mission === 'amo'
+      ? `<p class="muted small" style="margin-top:10px">Honoraires : ${esc(HONORAIRES_AMO.taux)}, minimum ${eur(HONORAIRES_AMO.minimum)} HT.</p>`
+      : '<p class="muted small" style="margin-top:10px">Les points se libèrent à la clôture de la mission.</p>'}
+  </div>`;
+}
 
 // Une ligne du réseau : la jauge, les compteurs, et le détail des missions portées.
 function ligneReseau({ f, charge, max, amoMax, points, sature }) {
@@ -1003,7 +1050,7 @@ export const btpDtuPage = {
   },
 };
 
-// ---------------------------------------------------------------- Mails types
+// ---------------------------------------------------------------- Mails & modèles
 // Les séquences du cabinet, rangées comme dans le dossier d'origine : trois
 // dossiers, chacun sa couleur, et à l'intérieur la chronologie des envois avec
 // la référence de chaque mail (C1…C5, E1…E14, B1…B14).
@@ -1029,7 +1076,7 @@ const MAIL_FORM = [
 ];
 
 export const btpMailsPage = {
-  title: () => 'BTP Expertise — Mails types',
+  title: () => 'BTP Expertise — Mails & modèles',
   render(root) {
     if (guard(root)) return {};
     const coquille = poser(root);
@@ -1099,7 +1146,7 @@ export const btpMailsPage = {
       if (state.modele) {
         const m = db.byId('mail_templates', state.modele);
         if (!m) { state.modele = null; return draw(); }
-        root.innerHTML = cadre('#/btp/mails', 'Mails types', vueModele(m));
+        root.innerHTML = cadre('#/btp/mails', 'Mails & modèles', vueModele(m));
         root.querySelector('#m-back').onclick = () => { state.seq = m.theme; state.modele = null; draw(); };
         root.querySelector('#m-edit').onclick = () => editer(m, draw);
         root.querySelector('#m-copy').onclick = () => copier(m.subject ? `${m.subject}\n\n${m.body}` : m.body, 'Modèle');
@@ -1130,7 +1177,7 @@ export const btpMailsPage = {
           <span class="mail-etape-copy" data-copy="${m.id}" role="button" tabindex="0">Copier</span>
         </button>`;
 
-      root.innerHTML = cadre('#/btp/mails', 'Mails types', `
+      root.innerHTML = cadre('#/btp/mails', 'Mails & modèles', `
         <div class="mail-dossiers">${dossiers.map(d => `
           <button type="button" class="mail-dossier ${d.theme === courant?.theme && !recherche ? 'on' : ''}" data-seq="${esc(d.theme)}" style="--t:${d.tint}">
             <span class="mail-dossier-ico">${esc(d.icon)}</span>
