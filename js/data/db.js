@@ -16,7 +16,9 @@ export const TABLES = ['profiles', 'organisations', 'contacts', 'deals', 'activi
   // chiffres poussés par les outils externes (tableau de bord RGD Renova)
   'structure_stats',
   // messagerie interne (canaux par structure + conversations privées)
-  'conversations', 'conversation_members', 'messages', 'message_reads'];
+  'conversations', 'conversation_members', 'messages', 'message_reads',
+  // agenda du groupe : le reflet des rendez-vous Google, recopié par la direction
+  'agenda_events'];
 const LS_FILES = 'crm_local_files';
 const LS_KEY = 'crm_local_v1';
 const LS_USER = 'crm_local_user';
@@ -217,11 +219,9 @@ export const db = {
   // Appel d'une fonction côté base (ou son équivalent en mode démo). Le cache
   // n'est pas mis à jour tout seul : la table touchée est rechargée après coup.
   async rpc(nom, args) { return this.adapter.rpc(nom, args); },
-  async recharger(table) {
-    if (CONFIG.DEMO) { this.cache[table] = structuredClone(localAdapter.data[table] || []); this.emit(); return; }
-    const { data } = await this.adapter.client.from(table).select('*');
-    this.cache[table] = data || []; this.emit();
-  },
+  // Recharge une table après un appel de fonction. Passe par `refresh`, qui
+  // pagine : un `select('*')` direct serait tronqué à 1 000 lignes sans le dire.
+  async recharger(table) { return this.refresh([table]); },
   onChange(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); },
   emit() { for (const fn of this.listeners) { try { fn(); } catch (e) { console.error(e); } } },
 
