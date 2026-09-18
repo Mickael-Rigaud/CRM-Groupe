@@ -411,6 +411,13 @@ export const ACTIVITIES = {
     // de `stages`). Passer au-dela fait sortir le lead de la pile de l'espace BTP
     // et promeut son contact en client.
     avantEntretien: ['lead', 'rdv1'],
+    // A partir de cette etape, la mission est ENGAGEE : le client a accepte, meme si
+    // rien n'est encore realise ni facture. C'est le seuil du CA previsionnel du
+    // tableau de bord. Une etape par metier, parce que l'engagement ne porte pas le
+    // meme nom des deux cotes — « Lettre de mission » en expertise, « Contrat AMO »
+    // en AMO — mais dit la meme chose. Tout ce qui suit dans le deroule du metier
+    // compte aussi : on n'enleve pas du previsionnel une mission qui avance.
+    engagement: { expertise: 'proposition', amo: 'amo_contrat' },
     // Le cabinet mène deux métiers au déroulé différent : l'expertise, qui va du
     // constat au rapport, et l'AMO, qui accompagne un chantier de la définition du
     // besoin à la réception. D'où deux pipelines — `mission` dit à laquelle une étape
@@ -434,7 +441,7 @@ export const ACTIVITIES = {
     // engagée : ces étapes comptent en réalisation (`delivery`).
     stages: [
       { key: 'lead', label: 'Nouveau', p: 5 },
-      { key: 'rdv1', label: 'RDV 1', p: 10 },
+      { key: 'rdv1', label: 'RDV tel', p: 10 },
       // Expertise : du constat au rapport
       { key: 'qualifie', label: 'Qualifié', p: 20, mission: 'expertise' },
       { key: 'proposition', label: 'Lettre de mission', p: 60, mission: 'expertise' },
@@ -534,6 +541,22 @@ export const ACTIVITY_KEYS = Object.keys(ACTIVITIES);
 // ne change pour elle — c'est voulu, seul BTP Expertise sépare sa base en deux.
 export const estNouveauLead = (deal) =>
   deal?.status === 'open' && !!ACTIVITIES[deal.activity]?.avantEntretien?.includes(deal.stage);
+
+// Une affaire dont le client s'est engage : elle a atteint l'etape declaree par
+// `engagement` pour son metier, ou une etape posterieure du meme deroule. Le rang
+// se lit dans la liste du metier, jamais dans la liste complete : les
+// etapes d'AMO suivent celles de l'expertise dans le tableau, comparer les deux
+// n'aurait pas de sens. Une affaire perdue ne compte plus ; une affaire encore aux
+// etapes communes (avant l'entretien) n'a pas de metier, donc pas d'engagement.
+export const estEngagee = (deal) => {
+  const a = ACTIVITIES[deal?.activity];
+  if (!a?.engagement || deal.status === 'lost') return false;
+  const mission = missionDe(deal);
+  const etapes = a.stages.filter(st => st.mission === mission);
+  const seuil = etapes.findIndex(st => st.key === a.engagement[mission]);
+  const rang = etapes.findIndex(st => st.key === deal.stage);
+  return seuil >= 0 && rang >= seuil;
+};
 
 export const CHANNELS = [
   'Google organique / SEO', 'Google Ads', 'Meta Ads', 'Instagram organique', 'Facebook organique', 'LinkedIn',

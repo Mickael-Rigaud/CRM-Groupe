@@ -5,7 +5,7 @@ import { db } from '../data/db.js';
 import { idsDe, urlAgenda, VUES as VUES_CALENDRIER, CLES_AGENDA, modeEmploi } from '../agenda.js';
 import { scope } from '../data/scope.js';
 import {
-  ACTIVITIES, CHANNELS, weightedAmount, stagesDe, missionDe, estNouveauLead, ORIGINE_PAR_CANAL, ORIGINE_DEFAUT, NIVEAUX_BTP, CAPACITE_BTP,
+  ACTIVITIES, CHANNELS, weightedAmount, stagesDe, missionDe, estNouveauLead, estEngagee, ORIGINE_PAR_CANAL, ORIGINE_DEFAUT, NIVEAUX_BTP, CAPACITE_BTP,
   HONORAIRES_AMO, MISSIONS_BTP, couleurMission, niveauDe, pointsDe,
   MATRICE_AMO, tauxSuggere, honorairesAmo, PHASES_AMO, FRONTIERE_AMO, FICHE_CHARGE_BTP,
   REMUNERATION_BTP, partRemuneration,
@@ -317,13 +317,20 @@ export const btpHomePage = {
       const enCours = all.filter(d => a.stages.find(s => s.key === d.stage)?.delivery && d.status !== 'lost');
       const nouveaux = all.filter(d => ['lead', 'rdv1'].includes(d.stage) && d.status === 'open');
       const anneeEnCours = String(new Date().getFullYear());
-      const gagnees = all.filter(d => d.status !== 'lost' && a.stages.find(x => x.key === d.stage)?.delivery
+      // Le CA prévisionnel démarre à l'engagement du client — « Lettre de mission »
+      // en expertise, « Contrat AMO » en AMO — et s'y cumule : les étapes suivantes
+      // du métier en font toujours partie. Le seuil est déclaré sur l'activité
+      // (`engagement`) et lu par `estEngagee` : le tableau de bord ne connaît aucune
+      // clé d'étape en dur. Prévisionnel n'est pas facturé : une mission peut être
+      // engagée sans qu'un euro soit encore encaissé, c'est justement ce qu'on veut
+      // voir arriver.
+      const engagees = all.filter(d => estEngagee(d)
         && (d.won_at || d.stage_changed_at || d.created_at || '').slice(0, 4) === anneeEnCours);
-      const caAnnee = gagnees.reduce((s, d) => s + (Number(d.amount) || 0), 0);
+      const caAnnee = engagees.reduce((s, d) => s + (Number(d.amount) || 0), 0);
 
-      // Le CA signé par métier : c'est la question que pose le manuel — ce que pèse
-      // l'AMO à côté de l'expertise, maintenant que le cabinet mène les deux.
-      const caDe = (m) => gagnees.filter(d => missionDe(d) === m).reduce((s, d) => s + (Number(d.amount) || 0), 0);
+      // Le CA prévisionnel par métier : c'est la question que pose le manuel — ce que
+      // pèse l'AMO à côté de l'expertise, maintenant que le cabinet mène les deux.
+      const caDe = (m) => engagees.filter(d => missionDe(d) === m).reduce((s, d) => s + (Number(d.amount) || 0), 0);
       const caExp = caDe('expertise');
       const caAmo = caDe('amo');
       const part = (v) => (caAnnee ? Math.round((v / caAnnee) * 100) : 0);
@@ -351,9 +358,9 @@ export const btpHomePage = {
 
       root.innerHTML = cadre('#/btp', 'Tableau de bord', `
         <div class="esp-kpis">
-          ${kpi({ label: 'Nouvelles demandes', valeur: nouveaux.length, sous: 'nouveau et RDV 1', icone: '📨', ton: 'accent', href: '#/pipeline/btp' })}
-          ${kpi({ label: `CA signé ${anneeEnCours}`, valeur: eur(caAnnee), sous: `${gagnees.length} mission${gagnees.length > 1 ? 's' : ''} engagée${gagnees.length > 1 ? 's' : ''}`, icone: '📈', ton: 'green', href: '#/btp/facturation' })}
+          ${kpi({ label: 'Nouvelles demandes', valeur: nouveaux.length, sous: 'nouveau et RDV tel', icone: '📨', ton: 'accent', href: '#/pipeline/btp' })}
           ${kpi({ label: 'Missions en cours', valeur: enCours.length, sous: 'expertise et AMO confondues', icone: '🏗', ton: 'amber', href: '#/btp/expertise' })}
+          ${kpi({ label: 'CA prévisionnel', valeur: eur(caAnnee), sous: `${engagees.length} mission${engagees.length > 1 ? 's' : ''} engagée${engagees.length > 1 ? 's' : ''} en ${anneeEnCours}`, icone: '📈', ton: 'green', href: '#/btp/facturation' })}
           ${kpi({ label: 'Charge du réseau', valeur: `${gens.reduce((t, g) => t + g.points, 0)} / ${gens.length * CAPACITE_BTP.points}`, sous: `${gens.length} chargé${gens.length > 1 ? 's' : ''} d'affaires`, icone: '🎯', ton: 'accent', href: '#/btp/charges' })}
         </div>
 
@@ -378,7 +385,7 @@ export const btpHomePage = {
           </div>
 
           <div class="card">
-            <div class="card-head"><h2>Répartition du CA ${esc(anneeEnCours)}</h2></div>
+            <div class="card-head"><h2>Répartition du CA prévisionnel ${esc(anneeEnCours)}</h2></div>
             <div class="btp-ca">
               ${anneau(caExp, caAmo, caAnnee)}
               <div class="btp-ca-parts">
@@ -421,7 +428,7 @@ function anneau(caExp, caAmo, total) {
               stroke-dasharray="${C * pExp} ${C}" stroke-dashoffset="0" transform="rotate(-90 65 65)"
               stroke-linecap="${pExp > 0 && pExp < 1 ? 'butt' : 'round'}"></circle>` : ''}
     <text x="65" y="61" text-anchor="middle" class="btp-anneau-val">${total ? eur(total) : '—'}</text>
-    <text x="65" y="78" text-anchor="middle" class="btp-anneau-lbl">signé</text>
+    <text x="65" y="78" text-anchor="middle" class="btp-anneau-lbl">prévisionnel</text>
   </svg>`;
 }
 
@@ -1279,7 +1286,7 @@ function ligneReseau({ f, charge, max, amoMax, points, sature }) {
 // la base definitive et ne reparait plus dans la pile.
 //
 // D'ou le critere : les deux premieres etapes du pipeline BTP — « Nouveau » et
-// « RDV 1 » — sont l'avant-entretien. Elles sont communes aux deux metiers du
+// « RDV tel » — sont l'avant-entretien. Elles sont communes aux deux metiers du
 // cabinet et garanties en tete de liste (voir ACTIVITIES.btp dans schema.js), ce
 // qui rend la regle valable pour une expertise comme pour une AMO.
 //

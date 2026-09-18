@@ -503,7 +503,7 @@ tr.btp-mission .btp-pts { color: var(--m-encre); }
 .btp-ca { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
 .btp-anneau { width: 130px; height: 130px; flex-shrink: 0; }
 .btp-anneau-val { font-family: var(--font-display); font-size: 17px; font-weight: 700; fill: var(--text); }
-.btp-anneau-lbl { font-size: 10px; fill: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+.btp-anneau-lbl { font-size: 9px; fill: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
 .btp-ca-parts { flex: 1; min-width: 190px; }
 .btp-bareme .card-head h2 { display: flex; align-items: center; gap: 8px; color: var(--m-encre); }
 
