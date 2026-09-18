@@ -22,7 +22,9 @@ import {
   CROCHETS, champsDe, remplir, donneesDossier, emailDu,
   mailHtml, URL_LOGO, URL_LOGO_PUBLIC, ouvrirCompose, telechargerEml, copierMiseEnPage,
 } from './btp-mail.js';
-import { ficheDecouverteAmo, imprimerFiche } from './btp-amo.js';
+import { ficheDecouverteAmo } from './btp-amo.js';
+import { ficheDecouverteExpertise } from './btp-expertise.js';
+import { imprimerFicheDeal } from './btp-fiche.js';
 
 const KEY = 'btp';
 const act = () => ACTIVITIES[KEY];
@@ -621,295 +623,6 @@ const ficheMetier = () => `<div class="card btp-ref">
   </div>
 </div>`;
 
-// ---------------------------------------------------------------- Créer une mission
-// Le formulaire d'affaire générique demande dix-sept champs, dont la moitié ne veut
-// rien dire pour une mission du cabinet — campagne Meta, apporteur, organisation. On
-// ne crée pas une mission d'expertise comme on crée un contrat Propulsion.
-//
-// Celui-ci ne demande que l'indispensable, en deux temps : qui est le client, puis
-// quelle est la mission. Le titre de l'affaire n'est pas saisi — il se compose comme
-// le fait déjà la prise de rendez-vous du site (problématique — nom (ville)), ce qui
-// garde les intitulés cohérents entre les leads du formulaire et les missions saisies
-// à la main.
-const CANAUX_COURANTS = ['Recommandation client', 'Ancien client', 'Téléphone / autre', 'Site internet direct', 'Prospection directe'];
-
-// Ce qu'on demande selon le métier. Le reste des champs de l'activité (facturation,
-// date de rapport, urgence…) se remplit plus tard, sur la fiche.
-const CHAMPS_MISSION = {
-  expertise: [
-    { key: 'problematique', label: 'Problématique', type: 'select', required: true,
-      options: ACTIVITIES.btp.fields.find(f => f.key === 'problematique').options },
-    { key: 'type_bien', label: 'Type de bien', type: 'select', half: true,
-      options: ACTIVITIES.btp.fields.find(f => f.key === 'type_bien').options },
-    { key: 'contexte', label: 'Contexte', type: 'select', half: true,
-      options: ACTIVITIES.btp.fields.find(f => f.key === 'contexte').options },
-    { key: 'date_visite', label: 'Date de visite', type: 'date', half: true },
-  ],
-  amo: [
-    { key: 'problematique', label: 'Nature du projet', type: 'text', required: true,
-      placeholder: 'Ex. rénovation complète d’un appartement' },
-    { key: 'type_bien', label: 'Type de bien', type: 'select', half: true,
-      options: ACTIVITIES.btp.fields.find(f => f.key === 'type_bien').options },
-    { key: 'date_visite', label: 'Rendez-vous de cadrage', type: 'date', half: true },
-  ],
-};
-
-// La première action à mener dépend du métier : on ne « contacte pas le prospect »
-// quand on saisit une mission dont le client est déjà en face de soi.
-const PREMIERE_ACTION = {
-  expertise: { titre: 'Organiser la visite d’expertise', type: 'appel' },
-  amo: { titre: 'Cadrer le besoin avec le maître d’ouvrage', type: 'rdv' },
-};
-
-export function missionForm(mission, apres) {
-  const c = couleurMission(mission);
-  const niveaux = NIVEAUX_BTP.filter(n => n.mission === mission);
-  const etapes = stagesDe(KEY, mission);
-  const users = scope.users();
-  const contacts = scope.contacts();
-  const champs = CHAMPS_MISSION[mission];
-
-  // Tout l'état du formulaire tient ici : les deux écrans se redessinent à partir de
-  // lui, donc rien ne se perd en passant de l'un à l'autre.
-  const v = {
-    pas: 1,
-    nouveau: true,
-    contact_id: '',
-    prenom: '', nom: '', email: '', telephone: '', adresse: '',
-    canal: 'Recommandation client',
-    niveau: niveaux[1].key,          // le niveau intermédiaire, le plus fréquent
-    stage: etapes[0].key,
-    owner_id: scope.user.id,
-    amount: '',
-    travaux: '', taux: '6',
-    fields: {},
-  };
-
-  const m = openModal(`Nouvelle mission ${c.label}`, '<div id="mf-corps"></div>', { wide: true });
-  const corps = m.querySelector('#mf-corps');
-  m.querySelector('.modal-head')?.setAttribute('style', `${teinteMission(mission)};border-bottom:3px solid var(--m)`);
-
-  const nomClient = () => (v.nouveau
-    ? `${v.prenom} ${v.nom}`.trim()
-    : contactName(db.byId('contacts', v.contact_id)));
-
-  // Le titre se compose comme celui d'un lead du site : sujet — client (ville).
-  const titreDe = () => {
-    const sujet = String(v.fields.problematique || '').trim() || (mission === 'amo' ? 'AMO' : 'Expertise');
-    const qui = nomClient() || 'sans nom';
-    const ou = String(v.adresse || '').trim();
-    return `${sujet} — ${qui}${ou ? ` (${ou})` : ''}`;
-  };
-
-  const honoraires = () => honorairesAmo(Number(v.travaux) || 0, Number(v.taux) || 0);
-
-  const enTete = () => `
-    <div class="mf-pas" style="${teinteMission(mission)}">
-      ${[['Le client', 1], ['La mission', 2]].map(([lbl, n]) => `
-        <div class="mf-pas-item ${v.pas === n ? 'on' : ''} ${v.pas > n ? 'fait' : ''}" data-pas="${n}">
-          <span class="mf-pas-num">${v.pas > n ? '✓' : n}</span>${esc(lbl)}
-        </div>`).join('<i class="mf-pas-lien"></i>')}
-    </div>`;
-
-  const ecranClient = () => `
-    <div class="mf-seg" role="tablist">
-      <button type="button" class="${v.nouveau ? 'on' : ''}" data-mode="1" role="tab">Nouveau client</button>
-      <button type="button" class="${v.nouveau ? '' : 'on'}" data-mode="0" role="tab">Déjà dans le CRM</button>
-    </div>
-    ${v.nouveau ? `
-      <div class="mf-grille">
-        <label class="mail-champ"><span>Prénom</span><input id="f-prenom" value="${esc(v.prenom)}" placeholder="Marc"></label>
-        <label class="mail-champ"><span>Nom *</span><input id="f-nom" value="${esc(v.nom)}" placeholder="Dupont"></label>
-        <label class="mail-champ"><span>E-mail</span><input id="f-email" type="email" value="${esc(v.email)}" placeholder="marc.dupont@exemple.fr"></label>
-        <label class="mail-champ"><span>Téléphone</span><input id="f-tel" value="${esc(v.telephone)}" placeholder="06 12 34 56 78"></label>
-      </div>`
-    : `<label class="mail-champ" style="margin-bottom:14px"><span>Client *</span>
-        <select id="f-contact">
-          <option value="">— choisir —</option>
-          ${contacts.map(x => `<option value="${x.id}" ${x.id === v.contact_id ? 'selected' : ''}>${esc(contactName(x))}${x.city ? ` · ${esc(x.city)}` : ''}</option>`).join('')}
-        </select></label>`}
-
-    <div class="mf-grille">
-      <label class="mail-champ"><span>Adresse du bien</span><input id="f-adresse" value="${esc(v.adresse)}" placeholder="14 avenue des Platanes, Nice"></label>
-      <label class="mail-champ"><span>D'où vient ce client ?</span>
-        <select id="f-canal">
-          ${CANAUX_COURANTS.map(x => `<option ${x === v.canal ? 'selected' : ''}>${esc(x)}</option>`).join('')}
-          <optgroup label="Autres canaux">
-            ${CHANNELS.filter(x => !CANAUX_COURANTS.includes(x)).map(x => `<option ${x === v.canal ? 'selected' : ''}>${esc(x)}</option>`).join('')}
-          </optgroup>
-        </select></label>
-    </div>
-
-    <div class="form-actions">
-      <button type="button" class="btn ghost" data-close>Annuler</button>
-      <button type="button" class="btn" id="f-suite">Continuer →</button>
-    </div>`;
-
-  const ecranMission = () => `
-    <div class="mf-bloc-titre">Niveau de mission</div>
-    <div class="mf-niveaux" style="${teinteMission(mission)}">
-      ${niveaux.map(n => `
-        <button type="button" class="mf-niveau ${n.key === v.niveau ? 'on' : ''}" data-niveau="${n.key}">
-          <span class="mf-niveau-pts">${n.points} pt${n.points > 1 ? 's' : ''}</span>
-          <b>${esc(n.label)}</b>
-          <span class="mf-niveau-txt">${esc(n.contenu)}</span>
-        </button>`).join('')}
-    </div>
-
-    <div class="mf-grille">
-      ${champs.map(f => `
-        <label class="mail-champ ${f.half ? '' : 'plein'}"><span>${esc(f.label)}${f.required ? ' *' : ''}</span>
-          ${f.type === 'select'
-            ? `<select data-champ="${f.key}"><option value="">—</option>${f.options.map(o => `<option ${o === v.fields[f.key] ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`
-            : `<input type="${f.type}" data-champ="${f.key}" value="${esc(v.fields[f.key] || '')}" ${f.placeholder ? `placeholder="${esc(f.placeholder)}"` : ''}>`}
-        </label>`).join('')}
-    </div>
-
-    ${mission === 'amo' ? `
-      <div class="mf-bloc-titre">Honoraires</div>
-      <div class="mf-hono" style="${teinteMission(mission)}">
-        <label class="mail-champ"><span>Montant des travaux HT</span>
-          <input type="number" id="f-travaux" min="0" step="1000" value="${esc(v.travaux)}" placeholder="200000"></label>
-        <label class="mail-champ"><span>Taux</span>
-          <select id="f-taux">${[5, 6, 7, 8].map(t => `<option value="${t}" ${String(t) === String(v.taux) ? 'selected' : ''}>${t} %</option>`).join('')}</select></label>
-        <div class="mf-hono-res" id="f-hono">${renduHonoraires()}</div>
-      </div>`
-    : `<div class="mf-grille">
-        <label class="mail-champ"><span>Montant de la mission HT</span>
-          <input type="number" id="f-amount" min="0" step="50" value="${esc(v.amount)}" placeholder="1200"></label>
-      </div>`}
-
-    <div class="mf-grille">
-      <label class="mail-champ"><span>Où en est la mission ?</span>
-        <select id="f-stage">${etapes.map(e => `<option value="${e.key}" ${e.key === v.stage ? 'selected' : ''}>${esc(e.label)}</option>`).join('')}</select></label>
-      <label class="mail-champ"><span>Chargé d'affaires</span>
-        <select id="f-owner">${users.map(u => `<option value="${u.id}" ${u.id === v.owner_id ? 'selected' : ''}>${esc(u.full_name)}</option>`).join('')}</select></label>
-    </div>
-
-    <p class="mf-recap">Intitulé de l'affaire : <b>${esc(titreDe())}</b></p>
-
-    <div class="form-actions">
-      <button type="button" class="btn ghost left" id="f-retour">← Le client</button>
-      <button type="button" class="btn ghost" data-close>Annuler</button>
-      <button type="button" class="btn" id="f-creer">Créer la mission</button>
-    </div>`;
-
-  function renduHonoraires() {
-    const h = honoraires();
-    if (!Number(v.travaux)) return '<span class="muted small">Saisissez le montant des travaux.</span>';
-    return `<span>Honoraires HT</span><b>${eur(h.retenu)}</b>${h.plancher
-      ? `<em>Minimum appliqué : le taux seul donnerait ${eur(h.brut)}.</em>` : ''}`;
-  }
-
-  const dessine = () => {
-    corps.innerHTML = enTete() + (v.pas === 1 ? ecranClient() : ecranMission());
-    lier();
-  };
-
-  const lier = () => {
-    // Revenir en arrière par l'en-tête, comme sur un formulaire de commande.
-    corps.querySelectorAll('[data-pas]').forEach(b => b.onclick = () => {
-      const n = Number(b.dataset.pas);
-      if (n < v.pas) { v.pas = n; dessine(); }
-    });
-
-    if (v.pas === 1) {
-      corps.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => { v.nouveau = b.dataset.mode === '1'; dessine(); });
-      const poser = (sel, cle) => { const el = corps.querySelector(sel); if (el) el.oninput = () => { v[cle] = el.value; }; };
-      poser('#f-prenom', 'prenom'); poser('#f-nom', 'nom'); poser('#f-email', 'email');
-      poser('#f-tel', 'telephone'); poser('#f-adresse', 'adresse');
-      const ct = corps.querySelector('#f-contact'); if (ct) ct.onchange = () => { v.contact_id = ct.value; };
-      const cn = corps.querySelector('#f-canal'); if (cn) cn.onchange = () => { v.canal = cn.value; };
-      corps.querySelector('#f-suite').onclick = () => {
-        if (v.nouveau && !v.nom.trim()) return toast('Le nom du client est nécessaire', 'warn');
-        if (!v.nouveau && !v.contact_id) return toast('Choisissez le client', 'warn');
-        v.pas = 2; dessine();
-      };
-      return;
-    }
-
-    corps.querySelectorAll('[data-niveau]').forEach(b => b.onclick = () => { v.niveau = b.dataset.niveau; dessine(); });
-    corps.querySelectorAll('[data-champ]').forEach(el => {
-      const maj = () => {
-        v.fields[el.dataset.champ] = el.value;
-        const r = corps.querySelector('.mf-recap b');
-        if (r) r.textContent = titreDe();
-      };
-      el.oninput = maj; el.onchange = maj;
-    });
-    const majHono = () => { const z = corps.querySelector('#f-hono'); if (z) z.innerHTML = renduHonoraires(); };
-    const tv = corps.querySelector('#f-travaux'); if (tv) tv.oninput = () => { v.travaux = tv.value; majHono(); };
-    const tx = corps.querySelector('#f-taux'); if (tx) tx.onchange = () => { v.taux = tx.value; majHono(); };
-    const am = corps.querySelector('#f-amount'); if (am) am.oninput = () => { v.amount = am.value; };
-    const st = corps.querySelector('#f-stage'); if (st) st.onchange = () => { v.stage = st.value; };
-    const ow = corps.querySelector('#f-owner'); if (ow) ow.onchange = () => { v.owner_id = ow.value; };
-    corps.querySelector('#f-retour').onclick = () => { v.pas = 1; dessine(); };
-    corps.querySelector('#f-creer').onclick = creer;
-  };
-
-  async function creer() {
-    const obligatoire = champs.find(f => f.required && !String(v.fields[f.key] || '').trim());
-    if (obligatoire) return toast(`${obligatoire.label} : à renseigner`, 'warn');
-    const bouton = corps.querySelector('#f-creer');
-    bouton.disabled = true;
-    try {
-      // Le client d'abord : une mission sans contact ne se rattache à rien.
-      let contactId = v.contact_id;
-      if (v.nouveau) {
-        const neuf = await db.insert('contacts', {
-          first_name: v.prenom.trim() || null,
-          last_name: v.nom.trim(),
-          email: v.email.trim() || null,
-          phone: v.telephone.trim() || null,
-          city: v.adresse.trim() || null,
-          activities: [KEY], type: 'Prospect', channel: v.canal,
-        });
-        contactId = neuf.id;
-      } else {
-        const x = db.byId('contacts', contactId);
-        if (x && !(x.activities || []).includes(KEY)) {
-          await db.update('contacts', contactId, { activities: [...(x.activities || []), KEY] });
-        }
-      }
-
-      const montant = mission === 'amo' ? (Number(v.travaux) ? honoraires().retenu : null) : (Number(v.amount) || null);
-      const maintenant = new Date().toISOString();
-      const deal = await db.insert('deals', {
-        title: titreDe(),
-        activity: KEY, stage: v.stage, status: 'open',
-        contact_id: contactId, owner_id: v.owner_id,
-        channel: v.canal, amount: montant,
-        fields: {
-          ...v.fields,
-          type_mission: mission,
-          niveau: v.niveau,
-          adresse: v.adresse.trim() || null,
-          ...(mission === 'amo' && Number(v.travaux)
-            ? { montant_travaux: Number(v.travaux), taux_amo: Number(v.taux) } : {}),
-        },
-        stage_history: [{ stage: v.stage, at: maintenant }],
-        stage_changed_at: maintenant,
-      });
-
-      const act1 = PREMIERE_ACTION[mission];
-      await db.insert('activities', {
-        deal_id: deal.id, contact_id: contactId, type: act1.type, title: act1.titre,
-        due_date: new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10),
-        assignee_id: v.owner_id, done: false,
-      });
-
-      closeModal(true);
-      toast(`Mission créée, avec une première action « ${act1.titre} »`);
-      apres?.(deal.id);
-    } catch (err) {
-      bouton.disabled = false;
-      toast(err.message, 'err');
-    }
-  }
-
-  dessine();
-}
-
 // ---------------------------------------------------------------- Missions, par métier
 // Un écran par métier : la pipeline entière, et la liste de ce qui la remplit.
 const pageMission = (mission) => ({
@@ -940,7 +653,7 @@ const pageMission = (mission) => ({
         <div class="card">
           <div class="card-head"><h2>Pipeline ${esc(MISSIONS[mission].titre)}</h2>
             <span class="grow"></span>
-            <button class="btn" id="m-new">${mission === 'amo' ? '+ Fiche découverte AMO' : '+ Mission Expertise'}</button>
+            <button class="btn" id="m-new">+ Fiche découverte ${esc(couleurMission(mission).label)}</button>
           </div>
           ${kanbanHtml(colonnes)}
         </div>
@@ -983,13 +696,13 @@ const pageMission = (mission) => ({
       root.querySelectorAll('[data-fiche]').forEach(b => b.onclick = (e) => {
         e.stopPropagation();
         const d = db.byId('deals', b.dataset.fiche);
-        if (d?.fields?.decouverte) imprimerFiche(d.fields.decouverte);
+        if (d?.fields?.decouverte) imprimerFicheDeal(d.fields.decouverte);
       });
       // Une mission saisie ici naît dans son métier : le formulaire ouvre avec le type
       // déjà choisi, le reste (contact, montant) se remplit comme partout ailleurs.
       root.querySelector('#m-new').onclick = () => (mission === 'amo'
         ? ficheDecouverteAmo(draw)
-        : missionForm(mission, draw));
+        : ficheDecouverteExpertise(draw));
 
       // Une case cliquée cote son critère ; la recliquer l'annule, pour repartir d'un
       // devis sans avoir à tout effacer.

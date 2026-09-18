@@ -23,6 +23,7 @@ import {
   CHANNELS, NIVEAUX_BTP, HONORAIRES_AMO, honorairesAmo, couleurMission, stagesDe, tauxSuggere,
   FICHE_AMO, CRITERES_V5, coteBudget, coteDuree, coteLots, niveauSuggere, controleTaux,
 } from '../data/schema.js';
+import { enteteFiche, piedFiche, signatures, cases, ligne, pageFiche, imprimerPage } from './btp-fiche.js';
 
 const KEY = 'btp';
 const C = couleurMission('amo');
@@ -312,7 +313,7 @@ export function ficheDecouverteAmo(apres) {
     corps.querySelectorAll('[data-niveau]').forEach(b => b.onclick = () => { v.niveau = b.dataset.niveau; dessine(); });
     poser('#fa-motif', 'motif');
     choisir('#fa-stage', 'stage'); choisir('#fa-owner', 'owner_id');
-    corps.querySelector('#fa-pdf').onclick = () => imprimerFiche(pourImpression());
+    corps.querySelector('#fa-pdf').onclick = () => imprimerPage(ficheHtml(pourImpression()));
     corps.querySelector('#fa-creer').onclick = creer;
   };
 
@@ -335,6 +336,7 @@ export function ficheDecouverteAmo(apres) {
     charge: scope.users().find(u => u.id === v.owner_id)?.full_name || '—',
     etape: etapes.find(e => e.key === v.stage)?.label || v.stage,
     etablie_le: new Date().toISOString().slice(0, 10),
+    metier: 'amo',
   });
 
   async function creer() {
@@ -401,13 +403,8 @@ export function ficheDecouverteAmo(apres) {
 }
 
 // ------------------------------------------------------------------ L'impression
-const LOGO = new URL('../../assets/logos/btp-complet.png', import.meta.url).href;
-
-const coches = (liste, retenus) => liste.map(x =>
-  `<span class="c ${retenus.includes(x) ? 'on' : ''}">${retenus.includes(x) ? '☒' : '☐'} ${esc(x)}</span>`).join('');
-
-const ligne = (lbl, val) => `<tr><th>${esc(lbl)}</th><td>${val ? esc(val) : '<i>—</i>'}</td></tr>`;
-
+// La feuille tient en deux pages : les rubriques du manuel d'abord, la qualification
+// et les signatures ensuite. La coupure est posée, pas subie — voir btp-fiche.js.
 export function ficheHtml(f) {
   const sections = [
     ['B. Travaux envisagés', FICHE_AMO.travaux, f.travaux],
@@ -415,51 +412,12 @@ export function ficheHtml(f) {
     ["D. Besoin d'accompagnement", FICHE_AMO.besoins, f.besoins],
     ['E. Risques et contraintes', FICHE_AMO.risques, f.risques],
   ];
-  return `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>Fiche de mission AMO — ${esc(f.client)}</title>
-<style>
-  @page { size: A4; margin: 14mm 13mm; }
-  * { box-sizing: border-box; }
-  body { margin: 0; font: 10.5pt/1.45 Arial, Helvetica, sans-serif; color: #1F2A37; }
-  header { display: flex; align-items: center; gap: 14px; padding-bottom: 10px; border-bottom: 2.5px solid ${C.couleur}; }
-  header img { width: 120px; height: auto; }
-  header .t { flex: 1; }
-  header h1 { margin: 0; font-size: 15pt; color: #004B62; }
-  header p { margin: 2px 0 0; font-size: 9pt; color: #5B6B7A; }
-  header .ref { text-align: right; font-size: 9pt; color: #5B6B7A; }
-  h2 { margin: 14px 0 6px; font-size: 10.5pt; color: ${C.encre}; text-transform: uppercase; letter-spacing: .04em; }
-  table.i { width: 100%; border-collapse: collapse; }
-  table.i th { width: 38%; text-align: left; font-weight: 600; color: #5B6B7A; padding: 3px 8px 3px 0; vertical-align: top; }
-  table.i td { padding: 3px 0; vertical-align: top; }
-  table.i i { color: #9AA6B2; }
-  .cases { display: flex; flex-wrap: wrap; gap: 3px 14px; }
-  .cases .c { font-size: 9.5pt; color: #7B8794; white-space: nowrap; }
-  .cases .c.on { color: #1F2A37; font-weight: 700; }
-  .desc { margin: 4px 0 0; padding: 7px 10px; background: #F4F6F8; border-left: 2.5px solid ${C.couleur}; white-space: pre-wrap; }
-  table.s { width: 100%; border-collapse: collapse; margin-top: 4px; font-size: 9.5pt; }
-  table.s th, table.s td { border: 1px solid #D8DEE5; padding: 4px 7px; text-align: left; }
-  table.s thead th { background: #F4F6F8; font-size: 8.5pt; text-transform: uppercase; letter-spacing: .04em; color: #5B6B7A; }
-  table.s td.on { background: ${C.clair}; font-weight: 700; color: ${C.encre}; }
-  .bilan { display: flex; gap: 10px; margin-top: 10px; }
-  .bilan div { flex: 1; padding: 9px 11px; border: 1px solid #D8DEE5; border-radius: 4px; }
-  .bilan span { display: block; font-size: 8pt; text-transform: uppercase; letter-spacing: .05em; color: #5B6B7A; }
-  .bilan b { font-size: 14pt; color: ${C.encre}; }
-  .bilan.fort div { background: ${C.clair}; border-color: ${C.couleur}; }
-  .note { margin: 7px 0 0; font-size: 9pt; color: #8A6D3B; }
-  footer { margin-top: 16px; padding-top: 8px; border-top: 1px solid #D8DEE5; font-size: 8.5pt; color: #5B6B7A;
-    display: flex; justify-content: space-between; gap: 12px; }
-  .sign { margin-top: 14px; display: flex; gap: 30px; font-size: 9pt; color: #5B6B7A; }
-  .sign div { flex: 1; }
-  .sign u { display: block; margin-top: 26px; border-top: 1px solid #9AA6B2; text-decoration: none; }
-  @media print { .cases, .bilan, table.s, header { break-inside: avoid; } h2 { break-after: avoid; } }
-</style></head><body>
-<header>
-  <img src="${LOGO}" alt="BTP Expertise">
-  <div class="t">
-    <h1>Fiche de mission — Assistance à Maîtrise d'Ouvrage</h1>
-    <p>Fiche découverte client, manuel opérationnel V5</p>
-  </div>
-  <div class="ref">Établie le ${esc(fmtDate(f.etablie_le))}<br>Étape : ${esc(f.etape)}<br>Chargé d'affaires : ${esc(f.charge)}</div>
-</header>
+  const corps = `
+${enteteFiche({
+    titre: "Fiche de mission — Assistance à Maîtrise d'Ouvrage",
+    sous: 'Fiche découverte client, manuel opérationnel V5 (§40)',
+    droite: `Établie le ${esc(fmtDate(f.etablie_le))}<br>Étape : ${esc(f.etape)}<br>Chargé d'affaires : ${esc(f.charge)}`,
+  })}
 
 <h2>A. Client et projet</h2>
 <table class="i">
@@ -475,7 +433,7 @@ export function ficheHtml(f) {
 
 ${sections.map(([titre, liste, retenus]) => `
   <h2>${esc(titre)}</h2>
-  <div class="cases">${coches(liste, retenus || [])}</div>`).join('')}
+  <div class="cases">${cases(liste, retenus || [])}</div>`).join('')}
 
 ${f.description ? `<h2>Description du projet</h2><div class="desc">${esc(f.description)}</div>` : ''}
 
@@ -487,7 +445,8 @@ ${f.description ? `<h2>Description du projet</h2><div class="desc">${esc(f.descr
   ${ligne('Fin souhaitée', f.date_fin ? fmtDate(f.date_fin) : '')}
 </table>
 
-<h2>Score de complexité — règle V5</h2>
+<div class="p2">
+<h2>Score de complexité — règle V5 (§41)</h2>
 <table class="s">
   <thead><tr><th>Critère</th><th>0 point</th><th>1 point</th><th>2 points</th></tr></thead>
   <tbody>${(f.cotes || []).map(c => `<tr><th>${esc(c.label)}</th>${c.valeurs.map((lbl, n) =>
@@ -508,34 +467,8 @@ ${f.plancher ? `<p class="note">Minimum d'honoraires de ${eur(HONORAIRES_AMO.min
 ${f.motif ? `<p class="note">Dérogation au taux suggéré — motif : ${esc(f.motif)}</p>` : ''}
 ${f.taux_final < 5 ? '<p class="note">Taux inférieur à 5 % : validation de la direction obligatoire.</p>' : ''}
 
-<div class="sign">
-  <div>Le chargé d'affaires<u></u></div>
-  <div>Le maître d'ouvrage<u></u></div>
-</div>
-
-<footer>
-  <span>BTP Expertise — Expertise technique du bâtiment &amp; Assistance à Maîtrise d'Ouvrage</span>
-  <span>18 rue Masséna, Nice · 06 81 65 15 91 · btpexpertise.fr</span>
-</footer>
-</body></html>`;
-}
-
-// Un cadre invisible plutôt qu'une fenêtre : une fenêtre dépend du bloqueur de
-// publicités, un cadre non. On attend le chargement — sans quoi le logo manque à
-// l'impression — puis on rend la main au navigateur, « Enregistrer au format PDF »
-// étant une destination d'impression comme une autre.
-export function imprimerFiche(fiche) {
-  const cadre = document.createElement('iframe');
-  cadre.setAttribute('aria-hidden', 'true');
-  cadre.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden';
-  document.body.appendChild(cadre);
-  const retirer = () => setTimeout(() => cadre.remove(), 1000);
-  cadre.onload = () => {
-    const f = cadre.contentWindow;
-    const lancer = () => { try { f.focus(); f.print(); } finally { retirer(); } };
-    // Les images doivent être là : une fiche sans en-tête fait mauvais effet.
-    if (f.document.readyState === 'complete') lancer();
-    else f.addEventListener('load', lancer, { once: true });
-  };
-  cadre.srcdoc = ficheHtml(fiche);
+${signatures("Le chargé d'affaires", "Le maître d'ouvrage")}
+${piedFiche()}
+</div>`;
+  return pageFiche({ titre: `Fiche de mission AMO — ${f.client}`, couleurs: C, corps });
 }

@@ -116,6 +116,55 @@ export const FRONTIERE_AMO = {
 // totaux écrits : le total et le verdict se recalculent sur la capacité en vigueur.
 // Le manuel les présentait sur 15 points, la capacité retenue au lancement est dans
 // CAPACITE_BTP — les deux ne peuvent pas diverger si on ne les écrit qu'une fois.
+// ---- La fiche découverte Expertise du manuel V5 (§36) ----------------------
+// Même esprit que la fiche AMO, mais l'expertise se qualifie autrement : pas un score
+// de 0 à 10, une grille où chaque critère désigne directement un niveau. Le manuel ne
+// donne pas de formule — voir `niveauExpertise` pour ce que le CRM en fait.
+
+export const FICHE_EXPERTISE = {
+  profils: ['Propriétaire occupant', 'Propriétaire bailleur', 'Acquéreur / vendeur',
+    'Entreprise / artisan', 'Syndic / copropriété', 'Avocat / assureur / autre professionnel', 'Autre'],
+  motifs: ['Fissures', 'Humidité / remontées capillaires', 'Infiltration', 'Condensation / moisissures',
+    'Toiture / étanchéité', 'Façade', 'Structure / maçonnerie', 'Plomberie / évacuation', 'Électricité',
+    'Isolation / thermique', 'Menuiseries', 'Sol / parquet / carrelage', 'Réception de travaux',
+    'Malfaçons / non-conformités', 'Litige client / artisan', 'Avis avant achat', 'Autre'],
+  documents: ['Photos / vidéos', 'Devis', 'Factures', 'Plans', 'Contrats / marchés', 'PV de réception',
+    'Courriers / emails', 'Constat commissaire de justice', 'Rapport expert / assureur',
+    "Attestations d'assurance", 'Autres'],
+  controles: ['RC Pro du chargé valide', 'Habilitation suffisante', 'Zone compatible',
+    'Capacité disponible', 'Lettre de mission à envoyer'],
+  occupation: ['Occupé par le propriétaire', 'Loué', 'Vacant', 'Non déterminé'],
+};
+
+// §36 G — la grille de qualification. Chaque critère désigne un niveau, il n'y a pas
+// d'addition : « Livrable : rapport structuré » dit à lui seul « expertise avec
+// rapport ». Les trois colonnes sont les trois niveaux d'expertise, dans l'ordre.
+export const QUALIF_EXPERTISE = [
+  { key: 'etendue', label: 'Étendue', valeurs: ['Point isolé', 'Plusieurs constats liés', 'Multiples désordres / enjeux'] },
+  { key: 'livrable', label: 'Livrable', valeurs: ['Avis / restitution', 'Rapport structuré', 'Rapport approfondi / litige'] },
+  { key: 'documents', label: 'Documents', valeurs: ['Faibles', 'Normaux', 'Volumineux / contradictoires'] },
+  { key: 'enjeu', label: 'Enjeu', valeurs: ['Faible', 'Moyen', 'Fort / contentieux'] },
+  { key: 'temps', label: 'Temps', valeurs: ['Court', 'Intermédiaire', 'Important'] },
+];
+
+// Le manuel donne la grille mais aucune règle d'arbitrage : il écrit « Niveau retenu »
+// et laisse juger. Le CRM propose donc le niveau le plus souvent désigné par les cinq
+// critères, et tranche vers le HAUT en cas d'égalité — sous-estimer une expertise
+// coûte plus cher que la sur-estimer, on s'engage sur un tarif. Ce n'est qu'une
+// proposition : le niveau reste choisi à la main.
+export const niveauExpertise = (cotes) => {
+  const niveaux = NIVEAUX_BTP.filter(n => n.mission === 'expertise');   // simple, rapport, complexe
+  const comptes = [0, 0, 0];
+  for (const c of QUALIF_EXPERTISE) {
+    const v = cotes?.[c.key];
+    if (v === 0 || v === 1 || v === 2) comptes[v] += 1;
+  }
+  if (!comptes.some(Boolean)) return null;
+  let meilleur = 0;
+  comptes.forEach((n, i) => { if (n >= comptes[meilleur]) meilleur = i; });   // >= : l'égalité monte
+  return { niveau: niveaux[meilleur], comptes };
+};
+
 // ---- La fiche découverte AMO du manuel V5 (§40 à §42) ----------------------
 // Le §40 donne les rubriques à remplir en rendez-vous, le §41 la règle de calcul du
 // taux, le §42 celle du niveau. Les trois vont ensemble : on coche, et le taux, les

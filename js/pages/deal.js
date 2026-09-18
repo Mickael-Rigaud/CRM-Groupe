@@ -177,8 +177,8 @@ export function openDeal(id, onChange) {
     m.querySelector('#d-reopen')?.addEventListener('click', async () => { await reopen(db.byId('deals', id)); refresh(); });
     m.querySelector('#d-fiche')?.addEventListener('click', async () => {
       try {
-        const { imprimerFiche } = await import('./btp-amo.js');
-        imprimerFiche(db.byId('deals', id).fields.decouverte);
+        const { imprimerFicheDeal } = await import('./btp-fiche.js');
+        await imprimerFicheDeal(db.byId('deals', id).fields.decouverte);
       } catch (err) { toast(err.message, 'err'); }
     });
     m.querySelector('#d-edit').onclick = () => dealForm(d.activity, db.byId('deals', id), {}, (nid) => { if (nid) refresh(); else { onChange?.(); } }, render);
