@@ -579,6 +579,24 @@ tr.btp-mission .btp-pts { color: var(--m-encre); }
   font-size: 13px; color: var(--muted); }
 .mf-recap b { color: var(--text); }
 
+/* Un choix a quatre branches ne tient pas sur une pastille : il s'enroule. */
+.mf-seg-large { display: flex; flex-wrap: wrap; }
+/* La grille est un enfant de .form, qui est en flex : elle doit prendre la ligne. */
+.form > .mf-grille { flex: 1 1 100%; margin-bottom: 0; }
+.mail-champ > .mf-seg { align-self: flex-start; margin: 0; }
+/* L'aide d'un champ, sous le champ lui-meme. */
+.mf-champ-aide { font-style: normal; margin-top: 1px; font-size: 11.5px; line-height: 1.45; color: var(--muted-2); }
+
+/* La phrase qui explique la consequence d'un choix, juste sous le choix. */
+.mf-aide { margin: 0 0 16px; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+.mf-aide.attention { color: var(--amber); font-weight: 600; }
+.mf-aide.ok { color: var(--green); font-weight: 600; }
+
+/* Les zones de texte des formulaires en deux temps suivent leurs champs. */
+.mail-champ textarea { width: 100%; padding: 8px 10px; font: inherit; font-size: 13.5px; resize: vertical;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--text); }
+.mail-champ textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+
 
 .btp-ref-titre { margin: 0 0 10px; font-family: var(--font-display); font-size: 15px; font-weight: 700; }
 .btp-garde { border-left: 3px solid var(--m, var(--accent)); }
