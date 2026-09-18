@@ -68,11 +68,15 @@ export function poserEspace(root) {
 // Indicateur : libellé à gauche, icône en pastille à droite, valeur en gros.
 // Le grand chiffre prend --accent-ink et non --accent : certaines couleurs de marque
 // sont trop claires pour être lues sur blanc.
-export const kpiEspace = ({ label, valeur, sous, icone, ton = 'accent', href }) => `
+// `note` est une seconde ligne, facultative : ce que le chiffre veut dire POUR CELUI
+// QUI REGARDE, quand ce n'est pas la même chose pour tout le monde. Absente par
+// défaut, donc aucun indicateur existant ne change.
+export const kpiEspace = ({ label, valeur, sous, note, icone, ton = 'accent', href }) => `
   <a class="esp-kpi" href="${href}" style="--t:var(--${ton === 'accent' ? 'accent-ink' : ton});--ts:var(--${ton}-soft, var(--accent-soft))">
     <span class="esp-kpi-top"><span class="esp-kpi-lbl">${esc(label)}</span><span class="esp-kpi-ico">${icone}</span></span>
     <span class="esp-kpi-val">${valeur}</span>
     <span class="esp-kpi-sub">${esc(sous)}</span>
+    ${note ? `<span class="esp-kpi-note">${esc(note)}</span>` : ''}
   </a>`;
 
 // Supprimer une fiche et tout ce qui ne tient qu'à elle.

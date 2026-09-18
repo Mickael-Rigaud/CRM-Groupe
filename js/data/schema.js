@@ -339,8 +339,15 @@ export const EXEMPLES_CHARGE = [
 // lignes du document.
 export const REMUNERATION_BTP = {
   origines: [
-    { label: 'Client BTP Expertise', court: 'Client cabinet', independant: 60, cabinet: 40 },
-    { label: "Client apporté par le chargé d'affaires", court: 'Client apporté', independant: 70, cabinet: 30 },
+    { cle: 'cabinet', label: 'Client BTP Expertise', court: 'Client cabinet', independant: 60, cabinet: 40 },
+    // Ce qui fait d'un dossier un CLIENT APPORTE, ce n'est pas une case a cocher : c'est
+    // l'origine du lead choisie sur la fiche decouverte, expertise comme AMO. Deux
+    // canaux disent que le chargé d'affaires est alle chercher le client lui-meme —
+    // une recommandation obtenue de sa clientele, ou sa propre prospection. Tous les
+    // autres canaux decrivent un lead venu au cabinet (site, publicite, partenaire,
+    // telephone), donc un client du cabinet. Arbitre le 18/09/2026.
+    { cle: 'apporte', label: "Client apporté par le chargé d'affaires", court: 'Client apporté',
+      independant: 70, cabinet: 30, canaux: ['Recommandation client', 'Prospection directe'] },
   ],
   // Les honoraires servant d'exemples sont ceux du barème AMO du §3.
   exemples: [3500, 6000, 9000, 14000, 21000, 24000],
@@ -348,6 +355,24 @@ export const REMUNERATION_BTP = {
 };
 export const partRemuneration = (honoraires, pourcentage) =>
   Math.round((Number(honoraires) || 0) * (Number(pourcentage) || 0)) / 100;
+
+// Quelle clé de partage s'applique à une affaire. La source est `deals.channel`,
+// c'est-à-dire l'« Origine du lead » saisie au moment de la fiche découverte : elle
+// est déjà écrite sur l'affaire, il n'y a donc aucun champ à ajouter ni à ressaisir.
+// Un canal non déclaré retombe sur la clé du cabinet — le cas de loin le plus
+// fréquent, et le moins généreux : on n'attribue jamais un apport par défaut.
+export const cleRemuneration = (deal) => {
+  const canal = deal?.channel || '';
+  return REMUNERATION_BTP.origines.find(o => o.canaux?.includes(canal))
+    || REMUNERATION_BTP.origines.find(o => !o.canaux);
+};
+
+// Ce que pèse une affaire pour le chargé d'affaires qui la porte.
+// ⚠ Sur du prévisionnel c'est une PROJECTION : la règle du manuel (§13) dit que la
+// part se calcule et se paie sur les sommes effectivement encaissées, pas sur les
+// montants facturés. À l'écran, le libellé doit le dire.
+export const partChargeAffaires = (deal) =>
+  partRemuneration(deal?.amount, cleRemuneration(deal).independant);
 
 // La fiche métier du réseau. Sert à recruter, à cadrer l'entretien et à rappeler ce
 // qui est attendu une fois la personne habilitée.

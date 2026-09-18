@@ -8,7 +8,7 @@ import {
   ACTIVITIES, CHANNELS, weightedAmount, stagesDe, missionDe, estNouveauLead, estEngagee, ORIGINE_PAR_CANAL, ORIGINE_DEFAUT, NIVEAUX_BTP, CAPACITE_BTP,
   HONORAIRES_AMO, MISSIONS_BTP, couleurMission, niveauDe, pointsDe,
   MATRICE_AMO, tauxSuggere, honorairesAmo, PHASES_AMO, FRONTIERE_AMO, FICHE_CHARGE_BTP,
-  REMUNERATION_BTP, partRemuneration,
+  REMUNERATION_BTP, partRemuneration, partChargeAffaires,
   POSITIONNEMENT_EXPERTISE, TYPOLOGIE_EXPERTISE, OFFRE_EXPERTISE_NOTE, QUALIF_EXPERTISE_V6,
   QUALIF_EXPERTISE_REGLE, niveauExpertise, GRAVITE_EXPERTISE, GRAVITE_REGLE, SPECIALISTES_EXPERTISE,
 } from '../data/schema.js';
@@ -378,6 +378,17 @@ export const btpHomePage = {
       const payees = encaissees(anneeEnCours);
       const caEncaisse = sommeMontants(payees);
 
+      // Ce que ces chiffres valent POUR CELUI QUI REGARDE. Un chargé d'affaires voit
+      // déjà ses seuls dossiers (la RLS filtre par owner_id), mais le montant affiché
+      // est celui de la MISSION, pas sa rémunération — d'où la seconde ligne, qui
+      // applique la clé de partage dossier par dossier (`partChargeAffaires`, lue sur
+      // l'origine du lead de chaque affaire, jamais sur une moyenne).
+      // Le prévisionnel reste une PROJECTION : le manuel (§13) paie la part sur les
+      // sommes encaissées, pas sur les montants facturés — le libellé le dit.
+      const sommePart = (lot) => lot.reduce((t, d) => t + partChargeAffaires(d), 0);
+      const maPartPrev = scope.isDirection ? null : sommePart(engagees);
+      const maPartEnc = scope.isDirection ? null : sommePart(payees);
+
       // La charge du réseau ne regarde que la direction : elle sert à répartir les
       // leads, pas à travailler un dossier. Un chargé d'affaires ne voit ni la tuile
       // (remplacée par le CA encaissé) ni le tableau des charges.
@@ -390,8 +401,10 @@ export const btpHomePage = {
         <div class="esp-kpis">
           ${kpi({ label: 'Nouvelles demandes', valeur: nouveaux.length, sous: 'nouveau et RDV tel', icone: '📨', ton: 'accent', href: '#/pipeline/btp' })}
           ${kpi({ label: 'Missions en cours', valeur: enCours.length, sous: 'expertise et AMO confondues', icone: '🏗', ton: 'amber', href: '#/btp/expertise' })}
-          ${kpi({ label: 'CA prévisionnel', valeur: eur(caAnnee), sous: `${engagees.length} mission${engagees.length > 1 ? 's' : ''} engagée${engagees.length > 1 ? 's' : ''} en ${anneeEnCours}`, icone: '📈', ton: 'green', href: '#/btp/facturation' })}
-          ${kpi({ label: 'CA encaissé', valeur: eur(caEncaisse), sous: `${payees.length} mission${payees.length > 1 ? 's' : ''} payée${payees.length > 1 ? 's' : ''} en ${anneeEnCours}`, icone: '✅', ton: 'green', href: '#/btp/facturation' })}
+          ${kpi({ label: 'CA prévisionnel', valeur: eur(caAnnee), sous: `${engagees.length} mission${engagees.length > 1 ? 's' : ''} engagée${engagees.length > 1 ? 's' : ''} en ${anneeEnCours}`,
+            note: maPartPrev ? `≈ ${eur(maPartPrev)} pour vous, une fois encaissé` : null, icone: '📈', ton: 'green', href: '#/btp/facturation' })}
+          ${kpi({ label: 'CA encaissé', valeur: eur(caEncaisse), sous: `${payees.length} mission${payees.length > 1 ? 's' : ''} payée${payees.length > 1 ? 's' : ''} en ${anneeEnCours}`,
+            note: maPartEnc ? `dont ${eur(maPartEnc)} pour vous` : null, icone: '✅', ton: 'green', href: '#/btp/facturation' })}
         </div>
 
         <div class="btp-duo">${recap('expertise')}${recap('amo')}</div>
@@ -651,8 +664,12 @@ const modeleRemuneration = () => {
         <span>${esc(x.label)}</span>
         <b>${x.independant} %</b><em>indépendant</em>
         <b class="cab">${x.cabinet} %</b><em>cabinet</em>
+        <p class="btp-remu-quand">${x.canaux
+          ? `Origine du lead : ${x.canaux.map(c => esc(c)).join(' ou ')}.`
+          : 'Toutes les autres origines : site, publicité, partenaire, appel entrant, ancien client.'}</p>
       </div>`).join('')}
     </div>
+    <p class="btp-ref-sous">La clé se lit sur l'<b>origine du lead</b> choisie au moment de la fiche découverte, expertise comme AMO — rien d'autre à cocher, rien à ressaisir. Une origine non listée ci-dessous relève du cabinet.</p>
 
     <div class="table-wrap"><table class="btp-remu">
       <thead>
