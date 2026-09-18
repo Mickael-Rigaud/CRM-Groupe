@@ -536,6 +536,27 @@ export const CHANNELS = [
 ];
 export const PAID_CHANNELS = ['Google Ads', 'Meta Ads'];
 
+// D'ou vient une demande, en cinq mots. Les treize canaux ci-dessus servent a la
+// SAISIE, au detail pres ; cette table sert a la LECTURE : ce qu'on veut savoir
+// d'un coup d'oeil, c'est par quelle porte l'affaire est entree, pas le canal
+// exact. Un canal absent de la table tombe dans « En direct » — le cas de la
+// prospection, du telephone et de tout ce qui arrive sans intermediaire.
+//
+// « Partenaire » ne figure pas ici : il se lit sur l'apporteur de l'affaire
+// (`referrer_org_id` / `referrer_contact_id`), qui porte un nom, et un nom vaut
+// mieux qu'une categorie. Voir `origineDe` dans btp.js.
+export const ORIGINE_PAR_CANAL = {
+  'Site internet direct': 'Site internet',
+  'Google organique / SEO': 'Site internet',
+  'Google Ads': 'Site internet',
+  'Meta Ads': 'Meta Ads',
+  'Instagram organique': 'Meta Ads',
+  'Facebook organique': 'Meta Ads',
+  'Recommandation client': 'Recommandation client',
+  'Ancien client': 'Recommandation client',
+};
+export const ORIGINE_DEFAUT = 'En direct';
+
 export const LOST_REASONS = ['Prix', 'Délai', 'Concurrent', 'Sans réponse', 'Hors cible', 'Projet abandonné', 'Autre'];
 
 // Ce qu'une tâche peut être. Le groupe ne sert qu'à ranger la liste déroulante : la

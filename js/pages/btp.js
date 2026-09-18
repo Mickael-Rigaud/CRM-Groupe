@@ -5,7 +5,7 @@ import { db } from '../data/db.js';
 import { idsDe, urlAgenda, VUES as VUES_CALENDRIER, CLES_AGENDA, modeEmploi } from '../agenda.js';
 import { scope } from '../data/scope.js';
 import {
-  ACTIVITIES, CHANNELS, weightedAmount, stagesDe, missionDe, estNouveauLead, NIVEAUX_BTP, CAPACITE_BTP,
+  ACTIVITIES, CHANNELS, weightedAmount, stagesDe, missionDe, estNouveauLead, ORIGINE_PAR_CANAL, ORIGINE_DEFAUT, NIVEAUX_BTP, CAPACITE_BTP,
   HONORAIRES_AMO, MISSIONS_BTP, couleurMission, niveauDe, pointsDe,
   MATRICE_AMO, tauxSuggere, honorairesAmo, PHASES_AMO, FRONTIERE_AMO, FICHE_CHARGE_BTP,
   REMUNERATION_BTP, partRemuneration,
@@ -1298,8 +1298,43 @@ const origineDe = (d) => {
   const org = d.referrer_org_id && db.byId('organisations', d.referrer_org_id);
   if (org) return `${org.partner_job === 'Courtier' ? 'Courtier' : 'Partenaire'} · ${org.name}`;
   const c = d.referrer_contact_id && db.byId('contacts', d.referrer_contact_id);
-  if (c) return `Apporteur · ${contactName(c)}`;
-  return d.fields?.origine || d.channel || '';
+  if (c) return `Partenaire · ${contactName(c)}`;
+  // Canal « apporteur » sans apporteur nomme : on le dit quand meme, sans inventer
+  // un nom que personne n'a saisi.
+  if (d.channel === 'Partenaire / apporteur') return 'Partenaire';
+  return ORIGINE_PAR_CANAL[d.channel] || ORIGINE_DEFAUT;
+};
+
+// Transmettre le rendez-vous au charge d'affaires.
+//
+// LE CRM N'A PAS RECU LE MAIL D'ORIGINE : la confirmation part du site vers le
+// client, elle ne passe pas par ici, il n'y a donc rien a « faire suivre » au sens
+// strict. Ce que le CRM peut faire — et qui revient au meme pour le destinataire —
+// c'est preparer le message avec les memes informations, deja adresse a la bonne
+// personne. `mailto:` ouvre la messagerie du poste ; rien n'est envoye sans que
+// la personne clique sur Envoyer, et le CRM n'a besoin d'aucun serveur de mail.
+const mailTransfert = (d) => {
+  const p = d.owner_id && db.byId('profiles', d.owner_id);
+  if (!p?.email) return null;
+  const c = d.contact_id && db.byId('contacts', d.contact_id);
+  const r = rdvTelephonique(d);
+  const lignes = [
+    `Bonjour ${p.full_name.split(/\s+/)[0]},`, '',
+    'Je te transmets ce rendez-vous, tu en es le chargé d\'affaires.', '',
+    `Rendez-vous téléphonique : ${r.texte || 'à planifier'}`,
+    `Demande : ${d.title}`,
+    `Origine : ${origineDe(d)}`,
+    c ? `Client : ${contactName(c)}` : null,
+    c?.phone ? `Téléphone : ${c.phone}` : null,
+    c?.email ? `E-mail : ${c.email}` : null,
+    d.fields?.problematique ? `Problématique : ${d.fields.problematique}` : null,
+    d.fields?.type_bien ? `Type de bien : ${d.fields.type_bien}` : null,
+    d.fields?.adresse ? `Ville / adresse : ${d.fields.adresse}` : null,
+    '', `L'affaire dans le CRM : ${location.origin}${location.pathname}#/pipeline/${d.activity}`,
+  ].filter(x => x !== null);
+  return `mailto:${encodeURIComponent(p.email)}`
+    + `?subject=${encodeURIComponent(`RDV — ${d.title}`)}`
+    + `&body=${encodeURIComponent(lignes.join('\n'))}`;
 };
 
 // Le rendez-vous telephonique : quand l'appel est prevu.
@@ -1374,12 +1409,13 @@ export const btpBasePage = {
             return { id: d.id, lead: true, recu: d.created_at, origine: origineDe(d), nom: d.title,
                      client: dealParty(d), rdv: r.texte, rdvPasse: r.passe,
                      responsable: userName(d.owner_id), mission: missionDe(d), activity: d.activity,
-                     ownerId: d.owner_id };
+                     ownerId: d.owner_id, detailOrigine: d.fields?.origine || d.channel || '',
+                     mail: mailTransfert(d) };
           });
         // Les coordonnées ne sont plus ici : elles vivent dans la fiche du contact,
         // qu'un clic sur la ligne ouvre. Ce que la pile doit montrer, c'est quand
         // l'appel est prévu — c'est lui qui fait sortir le lead de la pile.
-        colonnes = ['Reçu', 'Origine', 'Demande', 'Client', 'RDV téléphonique', "Chargé d'affaires"];
+        colonnes = ['Reçu', 'Origine', 'Demande', 'Client', 'RDV téléphonique', "Chargé d'affaires", ''];
       } else if (surOrg) {
         const filtre = state.vue === 'courtiers' ? (o) => o.partner_job === 'Courtier' : (o) => o.type === 'Partenaire';
         lignes = orgs.filter(filtre)
@@ -1445,12 +1481,15 @@ export const btpBasePage = {
             <thead><tr>${colonnes.map(c => `<th>${c}</th>`).join('')}${surLeads ? '' : '<th></th>'}</tr></thead>
             <tbody>${surLeads ? lignes.map(r => `<tr class="click" data-lead="${r.id}">
               <td class="small">${esc(fmtDate(r.recu))}</td>
-              <td class="small">${r.origine ? esc(r.origine) : '<span class="muted">—</span>'}</td>
+              <td class="small"${r.detailOrigine ? ` title="${esc(r.detailOrigine)}"` : ''}>${r.origine ? esc(r.origine) : '<span class="muted">—</span>'}</td>
               <td>${marqueMission(r.mission)}<b>${esc(r.nom)}</b></td>
               <td>${esc(r.client || '—')}</td>
               <td class="${r.rdvPasse ? 'status-lost' : ''}">${r.rdv ? esc(r.rdv) : '<span class="pill warn">À planifier</span>'}</td>
               <td>${choixResponsable(r.id, r.ownerId, r.activity)}</td>
-            </tr>`).join('') || `<tr><td colspan="6"><div class="empty">Aucun lead en attente. Tout est distribué.</div></td></tr>` : lignes.map(r => `<tr class="click" data-fiche="${r.id}">
+              <td class="num acts">${r.mail
+                ? `<a class="btn ghost sm" href="${esc(r.mail)}" title="Préparer le message de transmission au chargé d'affaires">✉</a>`
+                : `<span class="muted small" title="${r.ownerId ? "Ce chargé d'affaires n'a pas d'adresse e-mail dans son profil" : 'Attribuez le lead pour pouvoir le transmettre'}">—</span>`}</td>
+            </tr>`).join('') || `<tr><td colspan="7"><div class="empty">Aucun lead en attente. Tout est distribué.</div></td></tr>` : lignes.map(r => `<tr class="click" data-fiche="${r.id}">
               <td><b>${esc(r.nom)}</b></td>
               ${r.org ? '' : `<td>${choixResponsable(r.dealId, r.ownerId)}</td>`}
               <td>${esc(r.detail || '—')}</td>
@@ -1481,7 +1520,9 @@ export const btpBasePage = {
       });
       // La ligne ouvre l'affaire, sauf si l'on vise le selecteur.
       root.querySelectorAll('[data-lead]').forEach(tr => tr.onclick = (e) => {
-        if (e.target.closest('select')) return;
+        // Le sélecteur et le lien de transmission vivent leur vie : ouvrir la
+        // fiche par-dessus les avalerait.
+        if (e.target.closest('select, a')) return;
         openDeal(tr.dataset.lead, draw);
       });
       root.querySelectorAll('[data-fiche]').forEach(tr => tr.onclick = (e) => {
@@ -1497,7 +1538,7 @@ export const btpBasePage = {
       // Une affaire neuve nait a la premiere etape du pipeline : elle atterrit
       // donc dans cette pile, exactement comme un lead venu du site.
       root.querySelector('#b-lead')?.addEventListener('click', () => dealForm(KEY, null, {}, draw));
-      root.querySelector('#b-export').onclick = () => csvDownload(`btp-${state.vue}.csv`, lignes.map(({ id, org, dealId, lead, activity, ownerId, ...reste }) => reste));
+      root.querySelector('#b-export').onclick = () => csvDownload(`btp-${state.vue}.csv`, lignes.map(({ id, org, dealId, lead, activity, ownerId, mail, rdvPasse, ...reste }) => reste));
     };
 
     draw();
