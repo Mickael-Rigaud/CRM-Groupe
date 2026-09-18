@@ -528,6 +528,57 @@ tr.btp-mission .btp-pts { color: var(--m-encre); }
 .btp-calc-total b { font-family: var(--font-display); font-size: 26px; font-weight: 700;
   color: var(--m-encre, var(--accent-ink)); font-variant-numeric: tabular-nums; }
 .btp-calc-note { margin: 9px 0 0; font-size: 12px; font-weight: 600; line-height: 1.45; color: var(--amber); }
+/* ---------- Le formulaire de mission : deux temps, des choix qui se voient ---------- */
+.mf-pas { display: flex; align-items: center; gap: 10px; margin: 0 0 20px; }
+.mf-pas-item { display: flex; align-items: center; gap: 9px; font-size: 13.5px; font-weight: 600; color: var(--muted-2); cursor: default; }
+.mf-pas-item.fait { color: var(--m-encre); cursor: pointer; }
+.mf-pas-item.on { color: var(--m-encre); }
+.mf-pas-num { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%;
+  font-size: 12px; font-weight: 700; background: var(--card-2); color: var(--muted-2); }
+.mf-pas-item.on .mf-pas-num { background: var(--m); color: #fff; }
+.mf-pas-item.fait .mf-pas-num { background: var(--m-clair); color: var(--m-encre); }
+.mf-pas-lien { flex: 1; height: 2px; border-radius: 2px; background: var(--line); }
+
+/* Nouveau client ou client connu : un choix, pas une case a cocher perdue */
+.mf-seg { display: inline-flex; padding: 3px; margin: 0 0 16px; border-radius: 10px; background: var(--card-2); }
+.mf-seg button { border: 0; background: none; padding: 7px 15px; border-radius: 8px; font: inherit;
+  font-size: 13px; font-weight: 600; color: var(--muted); cursor: pointer; }
+.mf-seg button.on { background: var(--card); color: var(--text); box-shadow: 0 1px 3px rgba(17,21,28,.12); }
+
+.mf-grille { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 13px 14px; margin-bottom: 16px; }
+.mf-grille .mail-champ.plein { grid-column: 1 / -1; }
+
+.mf-bloc-titre { margin: 4px 0 10px; font-size: 10.5px; font-weight: 700; letter-spacing: .07em;
+  text-transform: uppercase; color: var(--muted-2); }
+
+/* Le niveau se choisit sur des cartes : on lit ce qu'il contient et ce qu'il pese */
+.mf-niveaux { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 11px; margin-bottom: 20px; }
+.mf-niveau { display: flex; flex-direction: column; gap: 5px; text-align: left; padding: 13px 15px 14px;
+  border: 1px solid var(--line-strong); border-radius: 12px; background: var(--card); cursor: pointer;
+  transition: border-color .13s, background .13s, box-shadow .13s; }
+.mf-niveau:hover { border-color: var(--m); }
+.mf-niveau.on { border-color: var(--m); background: var(--m-clair); box-shadow: inset 0 0 0 1px var(--m); }
+.mf-niveau b { font-size: 14px; color: var(--text); }
+.mf-niveau.on b { color: var(--m-encre); }
+.mf-niveau-pts { align-self: flex-start; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 700;
+  background: var(--card-2); color: var(--muted); }
+.mf-niveau.on .mf-niveau-pts { background: var(--m); color: #fff; }
+.mf-niveau-txt { font-size: 12px; line-height: 1.45; color: var(--muted); }
+
+/* Les honoraires d'une AMO se calculent sous les yeux, pas apres coup */
+.mf-hono { display: grid; grid-template-columns: 1fr 110px auto; gap: 13px; align-items: end; margin-bottom: 18px;
+  padding: 14px 16px; border-radius: 12px; background: var(--m-clair);
+  border: 1px solid color-mix(in srgb, var(--m) 22%, transparent); }
+@media (max-width: 620px) { .mf-hono { grid-template-columns: 1fr; align-items: stretch; } }
+.mf-hono-res { display: flex; flex-direction: column; justify-content: flex-end; min-width: 140px; padding-bottom: 2px; }
+.mf-hono-res span { font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--m-encre); }
+.mf-hono-res b { font-family: var(--font-display); font-size: 23px; font-weight: 700; line-height: 1.1; color: var(--m-encre); font-variant-numeric: tabular-nums; }
+.mf-hono-res em { font-style: normal; font-size: 11.5px; font-weight: 600; color: var(--amber); margin-top: 2px; }
+
+.mf-recap { margin: 2px 0 16px; padding: 10px 14px; border-radius: 9px; background: var(--card-2);
+  font-size: 13px; color: var(--muted); }
+.mf-recap b { color: var(--text); }
+
 
 .btp-ref-titre { margin: 0 0 10px; font-family: var(--font-display); font-size: 15px; font-weight: 700; }
 .btp-garde { border-left: 3px solid var(--m, var(--accent)); }
