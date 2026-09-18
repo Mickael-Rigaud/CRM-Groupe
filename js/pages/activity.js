@@ -15,7 +15,13 @@ export function structureDe(a) {
 }
 
 export function activityForm(link = {}, existing = null, onSaved, onClose = null) {
-  const users = scope.users();
+  // On ne confie une tâche qu'à quelqu'un de ses structures — même règle que la
+  // messagerie, imposée côté serveur par le déclencheur `tache_destinataire`
+  // (migration 20260918160000). La liste ne propose donc que les collègues
+  // joignables ; la direction les porte toutes et reste proposée à tout le
+  // monde. `scope.users()` sert ailleurs, là où le cloisonnement ne s'applique
+  // pas — nommer le responsable d'une affaire, par exemple.
+  const users = scope.collegues();
   const spec = [
     { key: 'type', label: 'Type', type: 'select', required: true, half: true, value: 'appel',
       options: [...new Set(ACTIVITY_TYPES.map(t => t.groupe))].map(g => ({
