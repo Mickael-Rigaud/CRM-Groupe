@@ -6,7 +6,7 @@ import { scope } from '../data/scope.js';
 import { ACTIVITIES, ACTIVITY_KEYS } from '../data/schema.js';
 import { propertyMetrics, loanStatus } from '../data/finance.js';
 import {
-  chiffres, total, entonnoir, caMois, derniersMois, moisCle, moisPrecedent,
+  chiffres, total, entonnoir, caMois, leadsMois, derniersMois, moisCle, moisPrecedent,
   objectifs, objectif, objectifAnnuel, enregistrerObjectifs, ecoule, anneeEnCours, CLES_VISIBLES,
 } from '../data/chiffres.js';
 import {
@@ -106,7 +106,14 @@ export const homePage = {
         </div>
 
         <section class="tb-kpis">
-          ${kpi('Leads du mois', t.leadsPeriode, evolution(avant?.leadsPeriode, t.leadsPeriode), serieDe(cle => nbLeadsMois(cles, cle, deals)), `${t.leads} prospects en base`)}
+          ${kpi('Leads', t.leads,
+            // Sans date d'arrivée, aucune évolution n'est calculable : mieux vaut
+            // ne rien afficher qu'un pourcentage qui ne compare pas ce qu'il dit.
+            t.leadsNonDates ? null : evolution(avant?.leadsPeriode, t.leadsPeriode),
+            serieDe(cle => cles.reduce((s, k) => s + leadsMois(k, cle, deals), 0)),
+            t.leadsNonDates
+              ? 'prospects en base · arrivée non datée'
+              : `${t.leadsPeriode} nouveau${t.leadsPeriode > 1 ? 'x' : ''} sur la période`)}
           ${kpi('RDV', t.rdv, evolution(avant?.rdv, t.rdv), serieDe(cle => nbRdvMois(cles, cle, deals)), 'atteints sur la période')}
           ${kpi('Affaires signées', t.signees ?? '—', evolution(avant?.signees, t.signees), serieDe(cle => nbSigneesMois(cles, cle, deals)), t.panier ? `panier ${eur(t.panier)}` : 'panier moyen indisponible')}
           ${kpi('CA HT signé', eur(t.ca), evolution(avant?.ca, t.ca), serieDe(caDu), obj ? `objectif ${eur(obj)}` : 'aucun objectif fixé')}
@@ -289,7 +296,6 @@ const montantCohorte = (cles, r, deals) => deals
 
 // ---------- séries mensuelles ----------
 const enMois = (d, cle) => (d || '').slice(0, 7) === cle;
-const nbLeadsMois = (cles, cle, deals) => deals.filter(d => cles.includes(d.activity) && enMois(d.created_at, cle)).length;
 const nbSigneesMois = (cles, cle, deals) => deals.filter(d => cles.includes(d.activity) && d.status === 'won' && enMois(d.won_at, cle)).length;
 const nbRdvMois = (cles, cle, deals) => deals.filter(d => {
   if (!cles.includes(d.activity)) return false;

@@ -41,9 +41,37 @@ export function leads(k) {
   if (e && e.prospects != null) return e.prospects;
   return scope.contacts().filter(c => (c.activities || []).includes(k) && c.type === 'Prospect').length;
 }
-// Les leads entrés sur une période, eux, se comptent sur les affaires créées :
-// c'est le seul repère daté dont on dispose pour tout le monde.
-export const leadsPeriode = (k, r, deals) => deals.filter(d => d.activity === k && inRange(d.created_at, r)).length;
+// Les leads d'un mois donné. L'outil externe peut les fournir mois par mois, en
+// posant « leads » à côté du montant dans revenue ; sinon on compte les affaires
+// créées dans le CRM, seul repère daté dont on dispose pour tout le monde.
+export function leadsMois(k, cle, deals) {
+  const e = externe(k);
+  const ligne = e && (e.revenue || []).find(v => v.month === cle);
+  if (ligne && ligne.leads != null) return Number(ligne.leads) || 0;
+  if (aDesLeadsExternes(k)) return 0;
+  return deals.filter(d => d.activity === k && (d.created_at || '').slice(0, 7) === cle).length;
+}
+const aDesLeadsExternes = (k) => {
+  const e = externe(k);
+  return !!(e && (e.revenue || []).some(m => m.leads != null));
+};
+// Les leads entrés sur une période. Même règle : l'outil externe fait foi dès
+// qu'il ventile ses leads par mois.
+export function leadsPeriode(k, r, deals) {
+  const e = externe(k);
+  if (aDesLeadsExternes(k)) {
+    return (e.revenue || []).filter(m => inRange(m.month + '-01', r))
+      .reduce((s, m) => s + (Number(m.leads) || 0), 0);
+  }
+  return deals.filter(d => d.activity === k && inRange(d.created_at, r)).length;
+}
+// Une structure pilotée ailleurs qui n'envoie qu'un total de prospects : on sait
+// combien elle en a, pas quand ils sont arrivés. À signaler plutôt qu'à ventiler
+// au hasard — ou à afficher comme un zéro, ce qui serait faux.
+export const leadsNonDates = (k) => {
+  const e = externe(k);
+  return !!(e && e.prospects != null && !aDesLeadsExternes(k));
+};
 
 // ---------- RDV et signatures ----------
 export const rdvPeriode = (k, r, deals) => deals.filter(d =>
@@ -88,6 +116,7 @@ export function chiffres(k, r, deals = scope.deals()) {
     panier: c.nb ? c.montant / c.nb : null,
     tauxRdv: nbLeads ? nbRdv / nbLeads : null,
     tauxVente: nbRdv && c.nb !== null ? c.nb / nbRdv : null,
+    leadsNonDates: leadsNonDates(k),
     source: c.source, maj: c.maj,
   };
 }
@@ -99,6 +128,9 @@ export function total(cles, r, deals = scope.deals()) {
   const leadsP = somme(x => x.leadsPeriode), rdv = somme(x => x.rdv), montant = somme(x => x.ca);
   return {
     lignes: l, leads: somme(x => x.leads), leadsPeriode: leadsP, rdv, signees: nb, ca: montant,
+    // Vrai dès qu'une structure ne sait donner qu'un total de prospects : le
+    // compte « sur la période » est alors incomplet, il faut le dire.
+    leadsNonDates: l.some(x => x.leadsNonDates),
     panier: nb ? montant / nb : null,
     tauxRdv: leadsP ? rdv / leadsP : null,
     tauxVente: rdv && nb !== null ? nb / rdv : null,
