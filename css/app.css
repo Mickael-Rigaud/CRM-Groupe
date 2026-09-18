@@ -1400,3 +1400,7 @@ button.lien { border: 0; background: none; padding: 0; color: var(--accent); fon
 .todo-liste > .todo-groupe { grid-column: 1 / -1; }
 .todo-liste > .empty { grid-column: 1 / -1; }
 .todo-tache + .todo-tache { margin-top: 0; }   /* l'écart vient de la grille */
+.tb-kpi.click { cursor: pointer; transition: border-color .14s, box-shadow .14s; }
+.tb-kpi.click:hover { border-color: var(--line-strong); box-shadow: var(--shadow-lift); }
+button.tb-pp { border: 0; background: none; padding: 2px 0; cursor: pointer; border-radius: 6px; }
+button.tb-pp:hover { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }

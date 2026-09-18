@@ -21,6 +21,12 @@ import {
 import { evenementsEnregistres, derniereSync, agendasDe } from '../agenda-sync.js';
 
 const LS_FILTRE = 'crm_home_filtre';
+const BASE_PROSPECTS = {
+  rgd: '#/rgd',                 // répertoire tenu dans l'application RGD Renova
+  btp: '#/btp/base',
+  courtage: '#/courtage/base',
+  propulsion: '#/pipeline/propulsion',
+};
 const pct = (v) => Math.round((v || 0) * 100);
 const eur2 = (n) => eur(n, { maximumFractionDigits: 2 });
 
@@ -114,7 +120,9 @@ export const homePage = {
             t.leadsNonDates ? null : evolution(avant?.leadsPeriode, t.leadsPeriode),
             serieDe(cle => cles.reduce((s, k) => s + leadsMois(k, cle, deals), 0)),
             repartitionLeads(t, cles),
-            false, t.leadsNonDates ? 'Total en base : ces outils ne datent pas l\'arrivée des prospects.' : '')}
+            false,
+            t.leadsNonDates ? 'Total en base : ces outils ne datent pas l\'arrivée des prospects.' : '',
+            cles.length === 1 ? BASE_PROSPECTS[cles[0]] : '')}
           ${kpi('RDV', t.rdv, evolution(avant?.rdv, t.rdv), serieDe(cle => nbRdvMois(cles, cle, deals)),
             'rendez-vous tenus sur la période')}
           ${kpi('Affaires signées', t.signees ?? '—', evolution(avant?.signees, t.signees), serieDe(cle => nbSigneesMois(cles, cle, deals)), t.panier ? `panier ${eur(t.panier)}` : 'panier moyen indisponible')}
@@ -208,7 +216,10 @@ export const homePage = {
         draw();
       });
       root.querySelectorAll('[data-p]').forEach(b => b.onclick = () => { state.periode = b.dataset.p; draw(); });
-      root.querySelectorAll('[data-go]').forEach(el => el.onclick = () => { location.hash = el.dataset.go; });
+      root.querySelectorAll('[data-go]').forEach(el => el.onclick = (e) => {
+        e.stopPropagation();          // une pastille est posée dans une tuile cliquable
+        location.hash = el.dataset.go;
+      });
       // Pictogramme manquant : on retombe sur une pastille de couleur plutôt qu'une image cassée
       root.querySelectorAll('.tb-struct img').forEach(im => im.onerror = () => {
         if (im.dataset.repli) return im.replaceWith(document.createTextNode(im.dataset.nom));
@@ -229,8 +240,8 @@ export const homePage = {
     // ---------- indicateurs ----------
     // `sous` peut contenir du balisage (les pastilles de structure) : il est
     // composé ici, jamais saisi par quelqu'un.
-    const kpi = (libelle, valeur, d, serie, sous, points = false, titre = '') => `
-      <article class="tb-kpi"${titre ? ` title="${esc(titre)}"` : ''}>
+    const kpi = (libelle, valeur, d, serie, sous, points = false, titre = '', vers = '') => `
+      <article class="tb-kpi${vers ? ' click' : ''}"${vers ? ` data-go="${vers}"` : ''}${titre ? ` title="${esc(titre)}"` : ''}>
         <span class="tb-lbl">${libelle}</span>
         <span class="tb-val">${valeur}</span>
         <span class="tb-sub">${delta(d, points)}<span class="muted">${comparaisonLabel(state.periode)}</span></span>
@@ -293,10 +304,12 @@ function repartitionLeads(t, cles) {
   }
   // Le nom court plutôt qu'une pastille seule : à cette taille, une couleur ne
   // suffit pas à reconnaître une structure.
+  // Chaque pastille ouvre la base de sa structure : en vue Groupe, c'est le seul
+  // moyen de passer d'un nombre à la liste qui est derrière.
   return `<span class="tb-part">${avec.map(x =>
-    `<span class="tb-pp" style="--c:${ACTIVITIES[x.cle].color}"
-       title="${esc(ACTIVITIES[x.cle].label)} : ${x.leads} prospect${x.leads > 1 ? 's' : ''}">
-       <i></i>${esc(ACTIVITIES[x.cle].short)} <b>${x.leads}</b></span>`).join('')}</span>`;
+    `<button type="button" class="tb-pp" style="--c:${ACTIVITIES[x.cle].color}" data-go="${BASE_PROSPECTS[x.cle]}"
+       title="Ouvrir les prospects — ${esc(ACTIVITIES[x.cle].label)} (${x.leads})">
+       <i></i>${esc(ACTIVITIES[x.cle].short)} <b>${x.leads}</b></button>`).join('')}</span>`;
 }
 
 // ---------- comparaison avec la période précédente ----------
