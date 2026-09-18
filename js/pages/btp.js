@@ -11,7 +11,7 @@ import {
 } from '../data/schema.js';
 import {
   esc, eur, daysSince, fmtDate, contactName, dealParty, userName, toast,
-  openModal, closeModal, confirm, renderForm, readForm, terms, hit,
+  openModal, closeModal, confirm, terms, hit,
   searchInput, bindSearch, restoreFocus, csvDownload,
 } from '../ui.js';
 import { openDeal } from './deal.js';
@@ -134,6 +134,80 @@ function agenda() {
     </div>
     <p class="muted small">Cet agenda est celui de Google : ce qui est modifié là-bas apparaît ici, et inversement. Si le cadre reste vide, votre adresse n&rsquo;a pas encore été ajoutée au partage du calendrier, ou votre navigateur refuse la mémorisation des sites affichés dans un autre site.</p>
   </div>`;
+}
+
+// ---------------------------------------------------------------- Champs de l'espace
+// Tous les formulaires du cabinet ont la même allure : des champs en grille, un
+// intitulé court en capitales au-dessus, et les petits choix posés sur un segment
+// plutôt que cachés dans une liste déroulante — un « Manuel / Automatique » se lit
+// et se change d'un geste, pas en deux clics et un déroulé.
+//
+// La grille reste dans un <form> : la validation du navigateur continue de jouer sur
+// les champs requis, et les gestionnaires d'envoi existants n'ont pas à changer.
+// `lireGrille` rend le même objet que readForm, aux segments près.
+
+// Un choix tient sur un segment s'il est court et peu nombreux ; au-delà, une liste
+// déroulante reste plus lisible qu'une rangée de boutons qui s'enroule.
+const tientSurUnSegment = (f) => f.type === 'select'
+  && (f.options || []).length <= 3
+  && f.options.every(o => String(Array.isArray(o) ? o[1] : o).length <= 16);
+
+function champBtp(f, vals) {
+  const v = vals[f.key] ?? f.value ?? '';
+  const classe = `mail-champ ${f.half ? '' : 'plein'}`;
+  const titre = `<span>${esc(f.label)}${f.required ? ' *' : ''}</span>`;
+  const aide = f.hint ? `<em class="mf-champ-aide">${esc(f.hint)}</em>` : '';
+  const seg = (options, actif) => `<div class="mf-seg" data-seg="${esc(f.key)}">${options.map(([val, lbl]) =>
+    `<button type="button" data-val="${esc(val)}" class="${String(val) === String(actif) ? 'on' : ''}">${esc(lbl)}</button>`).join('')}</div>`;
+
+  if (f.type === 'checkbox') return `<div class="${classe}">${titre}${seg([['1', 'Oui'], ['', 'Non']], v ? '1' : '')}${aide}</div>`;
+  if (tientSurUnSegment(f)) {
+    return `<div class="${classe}">${titre}${seg(f.options.map(o => (Array.isArray(o) ? o : [o, o])), v)}${aide}</div>`;
+  }
+  if (f.type === 'select') {
+    return `<label class="${classe}">${titre}
+      <select name="${esc(f.key)}" ${f.required ? 'required' : ''}>
+        <option value="">—</option>
+        ${(f.options || []).map(o => { const [val, lbl] = Array.isArray(o) ? o : [o, o];
+          return `<option value="${esc(val)}" ${String(val) === String(v) ? 'selected' : ''}>${esc(lbl)}</option>`; }).join('')}
+      </select>${aide}</label>`;
+  }
+  if (f.type === 'textarea') {
+    return `<label class="${classe}">${titre}
+      <textarea name="${esc(f.key)}" rows="${f.rows || 3}" ${f.required ? 'required' : ''}
+        ${f.placeholder ? `placeholder="${esc(f.placeholder)}"` : ''}>${esc(v)}</textarea>${aide}</label>`;
+  }
+  return `<label class="${classe}">${titre}
+    <input type="${f.type || 'text'}" name="${esc(f.key)}" value="${esc(v)}" ${f.required ? 'required' : ''}
+      ${f.step ? `step="${f.step}"` : ''} ${f.placeholder ? `placeholder="${esc(f.placeholder)}"` : ''}>${aide}</label>`;
+}
+
+const grilleBtp = (spec, vals = {}) => `<div class="mf-grille">${spec.map(f => champBtp(f, vals)).join('')}</div>`;
+
+// Les segments ne sont pas des champs de formulaire : il faut les rendre cliquables,
+// et les relire à part.
+function lierSegments(racine) {
+  racine.querySelectorAll('[data-seg]').forEach(groupe => {
+    groupe.querySelectorAll('button').forEach(b => b.onclick = () => {
+      groupe.querySelectorAll('button').forEach(x => x.classList.remove('on'));
+      b.classList.add('on');
+    });
+  });
+}
+
+function lireGrille(racine, spec) {
+  const out = {};
+  for (const f of spec) {
+    const choisi = racine.querySelector(`[data-seg="${f.key}"] button.on`);
+    if (choisi) {
+      out[f.key] = f.type === 'checkbox' ? choisi.dataset.val === '1' : choisi.dataset.val;
+      continue;
+    }
+    const el = racine.querySelector(`[name="${f.key}"]`);
+    if (!el) continue;
+    out[f.key] = f.type === 'number' ? (el.value === '' ? null : Number(el.value)) : el.value;
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------- Le réseau et ses missions
@@ -947,49 +1021,201 @@ const TABLE_CHARGES = 'btp_charges_affaires';
 const fichesReseau = () => db.t(TABLE_CHARGES).slice()
   .sort((a, b) => (b.actif !== false) - (a.actif !== false) || String(a.nom).localeCompare(String(b.nom), 'fr'));
 
-const CHAMPS_CHARGE = () => [
-  { key: 'nom', label: 'Nom', type: 'text', required: true, half: true },
-  { key: 'statut', label: 'Statut', type: 'select', half: true,
-    options: ['Indépendant', 'Salarié', 'En cours de recrutement', 'Autre'] },
-  { key: 'email', label: 'Email', type: 'email', half: true },
-  { key: 'telephone', label: 'Téléphone', type: 'tel', half: true },
-  { key: 'objectif_ca', label: 'Objectif de CA annuel (€ HT)', type: 'number', half: true,
-    hint: 'Sert à situer le CA produit en face de ce qui était visé.' },
-  { key: 'profile_id', label: 'Compte CRM', type: 'select', half: true,
-    options: scope.users().map(u => [u.id, u.full_name]),
-    hint: 'À relier pour que ses missions comptent dans sa charge. Laisser vide si la personne n\'a pas encore de compte.' },
-  { key: 'points_max', label: 'Capacité (points)', type: 'number', half: true, value: CAPACITE_BTP.points },
-  { key: 'amo_max', label: 'AMO actives au maximum', type: 'number', half: true, value: CAPACITE_BTP.amoActives },
-  { key: 'actif', label: 'Fiche active', type: 'checkbox', hint: 'Décocher plutôt que supprimer : le réseau garde sa mémoire.' },
-  { key: 'notes', label: 'Notes', type: 'textarea', rows: 2 },
-];
+// La fiche d'un chargé d'affaires, sur le même principe que le formulaire de mission :
+// qui est la personne, puis ce qu'elle peut porter. Les deux écrans se redessinent
+// depuis un seul état, donc rien ne se perd en passant de l'un à l'autre.
+//
+// ⚠ `existante` peut arriver SANS id : c'est le cas quand on crée la fiche d'un
+// utilisateur du CRM déjà connu, avec ses coordonnées pré-remplies. Seule la présence
+// d'un id distingue une modification d'une création — s'en remettre à la seule
+// existence de l'objet ferait passer une création pour une mise à jour.
+const STATUTS_CHARGE = ['Indépendant', 'Salarié', 'En cours de recrutement', 'Autre'];
 
 function ficheCharge(existante, apres) {
-  const spec = CHAMPS_CHARGE();
-  const vals = existante || { actif: true };
-  const m = openModal(existante ? esc(existante.nom) : "Nouveau chargé d'affaires",
-    `<form class="form" id="ca-form">${renderForm(spec, vals)}
-      <div class="form-actions">${existante ? '<button type="button" class="btn ghost left" id="ca-del">Supprimer</button>' : ''}
-      <button type="button" class="btn ghost" data-close>Annuler</button>
-      <button class="btn" type="submit">Enregistrer</button></div></form>`, { wide: true });
-  m.querySelector('#ca-form').onsubmit = async (e) => {
-    e.preventDefault();
-    const v = readForm(e.target, spec);
-    // Un select vide renvoie une chaîne : la colonne attend un uuid ou rien.
-    v.profile_id = v.profile_id || null;
-    v.objectif_ca = v.objectif_ca === '' ? null : v.objectif_ca;
-    try {
-      if (existante) await db.update(TABLE_CHARGES, existante.id, { ...v, updated_at: new Date().toISOString() });
-      else await db.insert(TABLE_CHARGES, v);
-      closeModal(true); toast('Chargé d\'affaires enregistré'); apres();
-    } catch (err) { toast(err.message, 'err'); }
+  const edition = !!existante?.id;
+  const users = scope.users();
+  const v = {
+    pas: 1,
+    nom: existante?.nom || '',
+    statut: existante?.statut || STATUTS_CHARGE[0],
+    email: existante?.email || '',
+    telephone: existante?.telephone || '',
+    profile_id: existante?.profile_id || '',
+    points_max: existante?.points_max ?? CAPACITE_BTP.points,
+    amo_max: existante?.amo_max ?? CAPACITE_BTP.amoActives,
+    objectif_ca: existante?.objectif_ca ?? '',
+    actif: existante?.actif !== false,
+    notes: existante?.notes || '',
   };
-  m.querySelector('#ca-del')?.addEventListener('click', async () => {
+
+  const m = openModal(edition ? esc(existante.nom) : "Nouveau chargé d'affaires",
+    '<div id="ca-corps"></div>', { wide: true });
+  const corps = m.querySelector('#ca-corps');
+  m.querySelector('.modal-head')?.setAttribute('style', `${teinteMission('expertise')};border-bottom:3px solid var(--m)`);
+
+  const enTete = () => `
+    <div class="mf-pas" style="${teinteMission('expertise')}">
+      ${[['La personne', 1], ['Sa capacité', 2]].map(([lbl, n]) => `
+        <div class="mf-pas-item ${v.pas === n ? 'on' : ''} ${v.pas > n ? 'fait' : ''}" data-pas="${n}">
+          <span class="mf-pas-num">${v.pas > n ? '✓' : n}</span>${esc(lbl)}
+        </div>`).join('<i class="mf-pas-lien"></i>')}
+    </div>`;
+
+  const ecranPersonne = () => `
+    <div class="mf-bloc-titre">Statut</div>
+    <div class="mf-seg mf-seg-large">
+      ${STATUTS_CHARGE.map(st => `<button type="button" class="${st === v.statut ? 'on' : ''}" data-statut="${esc(st)}">${esc(st)}</button>`).join('')}
+    </div>
+
+    <div class="mf-grille">
+      <label class="mail-champ plein"><span>Nom et prénom *</span>
+        <input id="c-nom" value="${esc(v.nom)}" placeholder="Camille Ferrand"></label>
+      <label class="mail-champ"><span>E-mail</span>
+        <input id="c-email" type="email" value="${esc(v.email)}" placeholder="camille@exemple.fr"></label>
+      <label class="mail-champ"><span>Téléphone</span>
+        <input id="c-tel" value="${esc(v.telephone)}" placeholder="06 12 34 56 78"></label>
+    </div>
+
+    <div class="mf-bloc-titre">Compte CRM</div>
+    <label class="mail-champ" style="margin-bottom:8px"><span>Utilisateur relié</span>
+      <select id="c-profil">
+        <option value="">— aucun pour l'instant —</option>
+        ${users.map(u => `<option value="${u.id}" ${u.id === v.profile_id ? 'selected' : ''}>${esc(u.full_name)}</option>`).join('')}
+      </select></label>
+    <p class="mf-aide ${v.profile_id ? 'ok' : 'attention'}">${v.profile_id
+      ? 'Ses missions seront comptées dans sa charge.'
+      : "Sans compte relié, sa charge restera à zéro : les missions portent l'identifiant d'un utilisateur du CRM. Une fiche peut tout de même exister avant l'ouverture du compte."}</p>
+
+    <div class="form-actions">
+      ${edition ? '<button type="button" class="btn ghost left" id="ca-del">Supprimer la fiche</button>' : ''}
+      <button type="button" class="btn ghost" data-close>Annuler</button>
+      <button type="button" class="btn" id="c-suite">Continuer →</button>
+    </div>`;
+
+  const ecranCapacite = () => `
+    <div class="mf-bloc-titre">Ce qu'il ou elle peut porter</div>
+    <div class="mf-grille">
+      <label class="mail-champ"><span>Capacité en points</span>
+        <input type="number" id="c-points" min="1" step="1" value="${esc(v.points_max)}"></label>
+      <label class="mail-champ"><span>AMO actives au maximum</span>
+        <input type="number" id="c-amo" min="0" step="1" value="${esc(v.amo_max)}"></label>
+      <label class="mail-champ"><span>Objectif de CA annuel (€ HT)</span>
+        <input type="number" id="c-objectif" min="0" step="1000" value="${esc(v.objectif_ca)}" placeholder="120000"></label>
+    </div>
+    <p class="mf-aide">${esc(portee(v.points_max))}</p>
+
+    <div class="mf-bloc-titre">État de la fiche</div>
+    <div class="mf-seg">
+      <button type="button" class="${v.actif ? 'on' : ''}" data-actif="1">Active</button>
+      <button type="button" class="${v.actif ? '' : 'on'}" data-actif="0">En sommeil</button>
+    </div>
+    <p class="mf-aide">Mettre en sommeil plutôt que supprimer : le réseau garde sa mémoire et les missions passées restent lisibles.</p>
+
+    <div class="mf-grille" style="margin-top:16px">
+      <label class="mail-champ plein"><span>Notes</span>
+        <textarea id="c-notes" rows="2" placeholder="Zone d'intervention, spécialités, points d'attention…">${esc(v.notes)}</textarea></label>
+    </div>
+
+    <div class="form-actions">
+      <button type="button" class="btn ghost left" id="c-retour">← La personne</button>
+      <button type="button" class="btn ghost" data-close>Annuler</button>
+      <button type="button" class="btn" id="c-ok">${edition ? 'Enregistrer' : 'Créer la fiche'}</button>
+    </div>`;
+
+  // Ce que vaut une capacité, dit en missions plutôt qu'en points : « 18 » ne parle
+  // qu'à celui qui connaît le barème par cœur.
+  function portee(points) {
+    const n = Number(points) || 0;
+    // La plus grosse AMO qui tient dans la capacité : annoncer « 0 AMO importante »
+    // ne renseigne personne.
+    const gros = NIVEAUX_BTP.filter(x => x.mission === 'amo' && x.points <= n).sort((a, b) => b.points - a.points)[0];
+    const petit = NIVEAUX_BTP.filter(x => x.mission === 'expertise').sort((a, b) => a.points - b.points)[0];
+    if (n <= 0) return 'Capacité nulle : aucune mission ne pourra lui être attribuée sans dépassement.';
+    // « AMO » est un sigle : il ne prend ni minuscule ni accord. Les autres mots, si.
+    const dit = (niveau, combien) => niveau.label.split(' ')
+      .map(mot => (mot === mot.toUpperCase() ? mot : (combien > 1 ? mot + 's' : mot).toLowerCase()))
+      .join(' ');
+    const b = Math.floor(n / petit.points);
+    if (!gros) {
+      const plancher = NIVEAUX_BTP.filter(x => x.mission === 'amo').sort((x, y) => x.points - y.points)[0];
+      return `${n} points : de quoi porter ${b} ${dit(petit, b)}, mais aucune AMO — la plus légère en vaut ${plancher.points}.`;
+    }
+    const a = Math.floor(n / gros.points);
+    return `${n} points, c'est par exemple ${a} ${dit(gros, a)}, ou ${b} ${dit(petit, b)}.`;
+  }
+
+  const dessine = () => { corps.innerHTML = enTete() + (v.pas === 1 ? ecranPersonne() : ecranCapacite()); lier(); };
+
+  const lier = () => {
+    corps.querySelectorAll('[data-pas]').forEach(b => b.onclick = () => {
+      const n = Number(b.dataset.pas);
+      if (n < v.pas) { v.pas = n; dessine(); }
+    });
+
+    if (v.pas === 1) {
+      corps.querySelectorAll('[data-statut]').forEach(b => b.onclick = () => { v.statut = b.dataset.statut; dessine(); });
+      const poser = (sel, cle) => { const el = corps.querySelector(sel); if (el) el.oninput = () => { v[cle] = el.value; }; };
+      poser('#c-nom', 'nom'); poser('#c-email', 'email'); poser('#c-tel', 'telephone');
+      const pr = corps.querySelector('#c-profil');
+      if (pr) pr.onchange = () => { v.profile_id = pr.value; dessine(); };
+      corps.querySelector('#c-suite').onclick = () => {
+        if (!v.nom.trim()) return toast('Le nom est nécessaire', 'warn');
+        v.pas = 2; dessine();
+      };
+      corps.querySelector('#ca-del')?.addEventListener('click', supprimer);
+      return;
+    }
+
+    const pt = corps.querySelector('#c-points');
+    if (pt) pt.oninput = () => {
+      v.points_max = pt.value;
+      const aide = corps.querySelector('.mf-aide');
+      if (aide) aide.textContent = portee(v.points_max);
+    };
+    const am = corps.querySelector('#c-amo'); if (am) am.oninput = () => { v.amo_max = am.value; };
+    const ob = corps.querySelector('#c-objectif'); if (ob) ob.oninput = () => { v.objectif_ca = ob.value; };
+    const nt = corps.querySelector('#c-notes'); if (nt) nt.oninput = () => { v.notes = nt.value; };
+    corps.querySelectorAll('[data-actif]').forEach(b => b.onclick = () => { v.actif = b.dataset.actif === '1'; dessine(); });
+    corps.querySelector('#c-retour').onclick = () => { v.pas = 1; dessine(); };
+    corps.querySelector('#c-ok').onclick = enregistrer;
+  };
+
+  async function enregistrer() {
+    const bouton = corps.querySelector('#c-ok');
+    bouton.disabled = true;
+    const ligne = {
+      nom: v.nom.trim(),
+      statut: v.statut,
+      email: v.email.trim() || null,
+      telephone: v.telephone.trim() || null,
+      profile_id: v.profile_id || null,
+      points_max: Number(v.points_max) || CAPACITE_BTP.points,
+      amo_max: Number(v.amo_max) || 0,
+      objectif_ca: v.objectif_ca === '' ? null : Number(v.objectif_ca),
+      actif: v.actif,
+      notes: v.notes.trim() || null,
+    };
+    try {
+      if (edition) await db.update(TABLE_CHARGES, existante.id, { ...ligne, updated_at: new Date().toISOString() });
+      else await db.insert(TABLE_CHARGES, ligne);
+      closeModal(true);
+      toast(edition ? 'Fiche mise à jour' : `${ligne.nom} rejoint le réseau`);
+      apres();
+    } catch (err) {
+      bouton.disabled = false;
+      toast(err.message, 'err');
+    }
+  }
+
+  async function supprimer() {
     if (!await confirm(`Supprimer la fiche de ${existante.nom} ? Ses missions ne sont pas touchées.`)) return;
     try { await db.remove(TABLE_CHARGES, existante.id); closeModal(true); toast('Fiche supprimée'); apres(); }
     catch (err) { toast(err.message, 'err'); }
-  });
+  }
+
+  dessine();
 }
+
 
 export const btpChargesPage = {
   title: () => "BTP Expertise — Chargés d'affaires",
@@ -1052,9 +1278,10 @@ export const btpChargesPage = {
       lierAffaires(root, draw);
       root.querySelector('#ca-new').onclick = () => ficheCharge(null, draw);
       root.querySelectorAll('[data-fiche-ca]').forEach(b => b.onclick = () => ficheCharge(db.byId(TABLE_CHARGES, b.dataset.ficheCa), draw));
+      // Fiche pré-remplie depuis un compte du CRM : pas d'id, donc une création.
       root.querySelectorAll('[data-creer]').forEach(b => b.onclick = () => {
         const u = db.byId('profiles', b.dataset.creer);
-        ficheCharge({ nom: u.full_name, email: u.email, profile_id: u.id, actif: true, points_max: CAPACITE_BTP.points, amo_max: CAPACITE_BTP.amoActives }, draw);
+        ficheCharge({ nom: u.full_name, email: u.email, profile_id: u.id, actif: true }, draw);
       });
     };
 
@@ -1331,12 +1558,13 @@ export const btpDtuPage = {
 
     const editer = (f, apres) => {
       const valeurs = f ? { ...f, key_points: listeVersTexte(f.key_points), common_errors: listeVersTexte(f.common_errors) } : {};
-      const m = openModal(f ? `Fiche ${f.code}` : 'Nouvelle fiche', `<form class="form" id="dtu-form">${renderForm(DTU_FORM, valeurs)}
+      const m = openModal(f ? `Fiche ${f.code}` : 'Nouvelle fiche', `<form class="form" id="dtu-form">${grilleBtp(DTU_FORM, valeurs)}
         <div class="form-actions">${f ? '<button type="button" class="btn ghost" id="dtu-del">Supprimer</button>' : ''}
         <button type="button" class="btn ghost" data-close>Annuler</button><button class="btn" type="submit">Enregistrer</button></div></form>`, { wide: true });
+      lierSegments(m);
       m.querySelector('#dtu-form').onsubmit = async (e) => {
         e.preventDefault();
-        const v = readForm(e.target, DTU_FORM);
+        const v = lireGrille(e.target, DTU_FORM);
         v.key_points = texteVersListe(v.key_points);
         v.common_errors = texteVersListe(v.common_errors);
         try {
@@ -1589,13 +1817,14 @@ export const btpMailsPage = {
 
     const editer = (m0, apres) => {
       const m = openModal(m0 ? `${m0.ref ? m0.ref + ' — ' : ''}${m0.title}` : 'Nouveau modèle',
-        `<form class="form" id="mail-form">${renderForm(MAIL_FORM, m0 || { theme: state.seq })}
+        `<form class="form" id="mail-form">${grilleBtp(MAIL_FORM, m0 || { theme: state.seq })}
           <div class="form-actions">${m0 ? '<button type="button" class="btn ghost" id="mail-del">Supprimer</button>' : ''}
           <button type="button" class="btn ghost" data-close>Annuler</button><button class="btn" type="submit">Enregistrer</button></div></form>`,
         { wide: true });
+      lierSegments(m);
       m.querySelector('#mail-form').onsubmit = async (e) => {
         e.preventDefault();
-        const v = readForm(e.target, MAIL_FORM);
+        const v = lireGrille(e.target, MAIL_FORM);
         try {
           if (m0) await db.update('mail_templates', m0.id, v);
           else await db.insert('mail_templates', { ...v, activity: KEY, position: 999 });
@@ -1864,14 +2093,15 @@ export const btpFacturationPage = {
 
     const saisir = (d, apres) => {
       const m = openModal(`Facturation — ${d.title}`,
-        `<form class="form" id="factu-form">${renderForm(FACTU_FORM, d.fields || {})}
+        `<form class="form" id="factu-form">${grilleBtp(FACTU_FORM, d.fields || {})}
           <p class="small muted" style="flex-basis:100%;margin:0">Montant de la mission : <b>${d.amount ? eur(d.amount) : 'non renseigné'}</b> HT. Il se modifie sur la fiche de l&rsquo;affaire.</p>
           <div class="form-actions"><button type="button" class="btn ghost" data-close>Annuler</button><button class="btn" type="submit">Enregistrer</button></div>
         </form>`);
+      lierSegments(m);
       m.querySelector('#factu-form').onsubmit = async (e) => {
         e.preventDefault();
         try {
-          await db.update('deals', d.id, { fields: { ...(d.fields || {}), ...readForm(e.target, FACTU_FORM) } });
+          await db.update('deals', d.id, { fields: { ...(d.fields || {}), ...lireGrille(e.target, FACTU_FORM) } });
           closeModal(true); toast('Facturation enregistrée'); apres();
         } catch (err) { toast(err.message, 'err'); }
       };

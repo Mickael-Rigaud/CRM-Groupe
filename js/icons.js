@@ -12,6 +12,8 @@ const P = {
   book: '<path d="M4 4.5A1.5 1.5 0 0 1 5.5 3H16v14H5.5A1.5 1.5 0 0 0 4 18.5z"/><path d="M7 7h6M7 10h6"/>',
   mail: '<rect x="2.5" y="4.5" width="15" height="11" rx="2"/><path d="m3.5 6 6.5 4.8L16.5 6"/>',
   chat: '<path d="M3 5.5A1.5 1.5 0 0 1 4.5 4h11A1.5 1.5 0 0 1 17 5.5v7a1.5 1.5 0 0 1-1.5 1.5H8l-4 3v-3H4.5A1.5 1.5 0 0 1 3 12.5z"/><path d="M6.5 7.6h7M6.5 10.4h4.5"/>',
+  menu: '<path d="M3.5 5.5h13M3.5 10h13M3.5 14.5h13"/>',
+  x: '<path d="m5.5 5.5 9 9M14.5 5.5l-9 9"/>',
   users: '<circle cx="7.5" cy="7" r="2.8"/><path d="M2.8 16c.4-2.6 2.4-4 4.7-4s4.3 1.4 4.7 4"/><path d="M13.6 5.1a2.6 2.6 0 0 1 0 4.8M14.4 12.4c1.5.5 2.5 1.8 2.8 3.6"/>',
 };
 export const icon = (name, size = 20) => `<svg viewBox="0 0 20 20" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[name] || P.kanban}</svg>`;

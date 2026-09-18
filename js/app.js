@@ -102,7 +102,7 @@ function probeLogos() {
     im.src = `assets/logos/${k}.png`;
   }
 }
-const navState = { open: null };   // menu « mon compte » ouvert ou non
+const navState = { open: null, tiroir: false };   // menu « mon compte », tiroir de navigation
 // Entrées visibles d'un univers, selon le rôle et les activités du profil
 const itemsOf = (g) => (g.items || []).filter(i => (!i.direction || scope.isDirection) && (!i.activity || scope.activityKeys.includes(i.activity)));
 const groups = () => NAV.filter(g => !g.show || g.show()).filter(g => !g.items || itemsOf(g).length);
@@ -115,8 +115,12 @@ function renderLayout() {
       <div class="univ" id="univ"></div>
       <div class="topbar subnav" id="subnav"></div>
     </header>
-    <main class="content" id="content"></main>`;
-  document.addEventListener('keydown', e => { if (e.key === 'Escape' && navState.open) closeMenu(); });
+    <main class="content" id="content"></main>
+    <div id="tiroir" hidden></div>`;
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    if (navState.tiroir) fermerTiroir(); else if (navState.open) closeMenu();
+  });
   // Capture : la barre est réécrite à chaque rendu, la cible d'un clic « bulle » n'y est plus rattachée
   document.addEventListener('click', e => {
     if (navState.open && !e.target.closest('#acct')) closeMenu();
@@ -125,6 +129,64 @@ function renderLayout() {
 }
 
 function closeMenu() { navState.open = null; renderNav(); }
+function fermerTiroir() { navState.tiroir = false; renderNav(); }
+
+// ---------- Tiroir de navigation (écrans étroits) ----------
+// Il ne remplace pas la barre : il la remplace *sur téléphone*, là où elle ne
+// savait plus rien montrer. Les univers portent leur nom et leur compteur, et
+// celui qui est ouvert déplie ses écrans — la même information que les deux
+// bandes du grand écran, mais lisible d'un coup d'oeil au lieu de deux barres
+// qui défilent.
+function renderTiroir(gs, here, hash, u, ini) {
+  const hote = document.getElementById('tiroir'); if (!hote) return;
+  document.body.classList.toggle('tiroir-ouvert', navState.tiroir);
+  if (!navState.tiroir) { hote.innerHTML = ''; hote.hidden = true; return; }
+  hote.hidden = false;
+
+  const ligne = (g) => {
+    const items = itemsOf(g);
+    const cnt = g.count ? g.count() : items.reduce((s, i) => s + (i.count ? i.count() : 0), 0);
+    const ouvert = here?.key === g.key;
+    // Seul l'univers ouvert déplie ses écrans : tout déplier ferait une liste de
+    // vingt lignes où l'on ne retrouverait plus la sienne.
+    const ecrans = ouvert && items.length ? `<div class="tir-ecrans">${items.map(i => {
+      const c = i.count ? i.count() : 0;
+      const mark = i.activity && LOGOS.has(i.activity) ? `<span class="brandmark"><img src="assets/logos/${i.activity}.png" alt=""></span>`
+        : `<span class="dot" style="background:${i.dot || 'var(--line-strong)'}"></span>`;
+      return `<a href="${i.hash}" class="tir-ecran ${isOn(i, hash) ? 'on' : ''}">${mark}<span>${esc(i.label)}</span>${c ? `<i>${c}</i>` : ''}</a>`;
+    }).join('')}</div>` : '';
+    return `<a href="${g.hash || items[0].hash}" class="tir-univ ${ouvert ? 'on' : ''}">${icon(g.icon, 19)}<span>${esc(g.label)}</span>${cnt ? `<i>${cnt}</i>` : ''}</a>${ecrans}`;
+  };
+
+  hote.innerHTML = `
+    <div class="tir-fond" id="tir-fond"></div>
+    <aside class="tir" role="dialog" aria-modal="true" aria-label="Navigation">
+      <div class="tir-tete">
+        <span class="tir-av">${esc(ini)}</span>
+        <div class="tir-qui"><b>${esc(u.full_name)}</b><span>${esc(ROLES[u.role]?.label || u.role)}</span></div>
+        <button type="button" class="tir-x" id="tir-x" aria-label="Fermer le menu">${icon('x', 18)}</button>
+      </div>
+      <nav class="tir-nav" aria-label="Univers">${gs.filter(g => !g.bottom).map(ligne).join('')}</nav>
+      <div class="tir-pied">
+        ${gs.filter(g => g.bottom).map(g => `<a href="${g.hash}" class="tir-univ ${here?.key === g.key ? 'on' : ''}">${icon(g.icon, 19)}<span>${esc(g.label)}</span></a>`).join('')}
+        ${db.demo ? '' : '<button type="button" class="tir-act" id="tir-pwd">Changer mon mot de passe</button>'}
+        <button type="button" class="tir-act danger" id="tir-out">Déconnexion</button>
+      </div>
+    </aside>`;
+
+  hote.querySelector('#tir-fond').onclick = fermerTiroir;
+  hote.querySelector('#tir-x').onclick = fermerTiroir;
+  // Toucher une entrée ferme le tiroir, y compris quand l'adresse ne change pas
+  // (on retouche l'écran où l'on est déjà) : sinon il resterait ouvert sur place.
+  hote.querySelectorAll('a').forEach(a => a.addEventListener('click', fermerTiroir));
+  hote.querySelector('#tir-pwd')?.addEventListener('click', () => { fermerTiroir(); passwordForm(false); });
+  hote.querySelector('#tir-out')?.addEventListener('click', async () => {
+    await db.signOut(); location.hash = ''; scope.set(null);
+    navState.open = null; navState.tiroir = false;
+    document.body.classList.remove('tiroir-ouvert');
+    document.getElementById('msg-bulle')?.remove(); renderLogin();
+  });
+}
 
 // ---------- Couleur de la structure ouverte ----------
 // Sur un écran rattaché à une activité, l'interface prend la couleur de la structure ;
@@ -161,7 +223,9 @@ function renderNav() {
   };
   const ini = (u.full_name || '?').split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
   univ.innerHTML = `
+    <button type="button" class="u-burger" id="burger" aria-label="Ouvrir le menu" aria-expanded="${navState.tiroir}">${icon('menu', 21)}</button>
     <a class="u-mark" href="#/home">${esc(CONFIG.APP_NAME)}</a>
+    <span class="u-ici">${esc(here?.label || CONFIG.APP_NAME)}</span>
     <nav class="u-set" aria-label="Univers">${gs.filter(g => !g.bottom).map(tab).join('')}</nav>
     <div class="u-right">
       ${gs.filter(g => g.bottom).map(g => `<a href="${g.hash}" class="u-ico ${here?.key === g.key ? 'on' : ''}" title="${esc(g.label)}" aria-label="${esc(g.label)}">${icon(g.icon, 18)}</a>`).join('')}
@@ -198,12 +262,15 @@ function renderNav() {
   if (posted) sub.insertBefore(posted, sub.querySelector('.datepill'));
   sub.hidden = !items.length && !posted;
 
+  renderTiroir(gs, here, hash, u, ini);
+
   // Garder l'onglet courant sous les yeux quand les barres défilent (mobile)
   for (const el of [univ.querySelector('.u-tab.on'), sub.querySelector('.s-tab.on')]) {
     const box = el?.parentElement;
     if (el && box && box.scrollWidth > box.clientWidth) el.scrollIntoView({ block: 'nearest', inline: 'center' });
   }
 
+  univ.querySelector('#burger').onclick = () => { navState.tiroir = !navState.tiroir; navState.open = null; renderNav(); };
   univ.querySelector('#me-btn').onclick = () => { navState.open = navState.open === '__me' ? null : '__me'; renderNav(); };
   univ.querySelector('#pwd')?.addEventListener('click', () => { closeMenu(); passwordForm(false); });
   univ.querySelector('#logout')?.addEventListener('click', async () => { await db.signOut(); location.hash = ''; scope.set(null); navState.open = null; document.getElementById('msg-bulle')?.remove(); renderLogin(); });

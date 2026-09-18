@@ -107,7 +107,14 @@ input, select, textarea { font: inherit; }
 .big { font-family: var(--font-display); font-size: 34px; font-weight: 700; color: var(--text); letter-spacing: -.035em; }
 
 /* ---------- Tables ---------- */
-.table-wrap { overflow-x: auto; }
+/* `overflow-x: auto` ne suffit pas : sans `min-width: 0`, le conteneur garde sa
+   largeur minimale intrinseque — celle du tableau — et pousse la carte qui le
+   contient hors de l'ecran au lieu de defiler a l'interieur. */
+.table-wrap { overflow-x: auto; min-width: 0; }
+/* Sur un ecran etroit, un liseré dit que le tableau continue a droite. */
+@media (max-width: 820px) {
+  .table-wrap { background: linear-gradient(90deg, transparent calc(100% - 26px), color-mix(in srgb, var(--line) 55%, transparent)); }
+}
 table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted-2); font-weight: 700; padding: 9px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
 td { padding: 11px 12px; border-bottom: 1px solid var(--line); vertical-align: middle; }
@@ -142,7 +149,10 @@ tr.total td { font-weight: 700; background: var(--card-2); }
 .tabs button { border: 0; background: transparent; padding: 8px 14px; border-radius: 7px; font-weight: 600; font-size: 13.5px; color: var(--muted); }
 .tabs button.active { background: var(--accent); color: var(--on-accent); }
 .tabs button .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; background: var(--c); }
-.seg { display: inline-flex; background: var(--card-2); border: 1px solid var(--line); border-radius: 9px; padding: 3px; }
+.seg { display: inline-flex; background: var(--card-2); border: 1px solid var(--line); border-radius: 9px; padding: 3px; max-width: 100%; }
+/* Cinq periodes ne tiennent pas sur 358 px : elles passent a la ligne plutot
+   que de sortir de l'ecran. Deux rangees se lisent, une barre qui deborde non. */
+@media (max-width: 820px) { .seg { flex-wrap: wrap; } .seg button { flex: 1 0 auto; } }
 .seg button { border: 0; background: transparent; padding: 6px 12px; border-radius: 6px; font-weight: 600; color: var(--muted); font-size: 12.5px; }
 .seg button.active { background: #fff; color: var(--text); box-shadow: 0 1px 2px rgba(17,21,28,.1); }
 .empty { color: var(--muted-2); padding: 24px; text-align: center; font-size: 13px; }
@@ -235,7 +245,7 @@ form.form, .form { display: flex; flex-wrap: wrap; gap: 14px 16px; }
 .chart-box { position: relative; height: 260px; }
 
 /* ---------- Responsive ---------- */
-@media (max-width: 1100px) { .grid.c4 { grid-template-columns: repeat(2, 1fr); } .grid.c3 { grid-template-columns: repeat(2, 1fr); } .detail { grid-template-columns: 1fr; } }
+@media (max-width: 1100px) { .grid.c4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .grid.c3 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .detail { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 820px) {
   .univ { padding: 0 12px; gap: 10px; }
   .u-mark { font-size: 14px; }
@@ -243,9 +253,9 @@ form.form, .form { display: flex; flex-wrap: wrap; gap: 14px 16px; }
   .u-tab { padding: 13px 11px 10px; }
   .u-me .nm { display: none; }
   .topbar { padding: 7px 12px; }
-  .datepill { display: none; }              /* la date mange une ligne entière sur un téléphone */
+  .topbar .datepill, .esp-head .datepill { display: none; }   /* la date mange une ligne entière sur un téléphone — sélecteur aussi précis que celui qu'il annule */
   .content { padding-left: 16px; padding-right: 16px; }
-  .grid.c4, .grid.c3, .grid.c2 { grid-template-columns: 1fr; }
+  .grid.c4, .grid.c3, .grid.c2 { grid-template-columns: minmax(0, 1fr); }
   .field.half { flex-basis: 100%; }
 }
 
@@ -264,7 +274,7 @@ form.form, .form { display: flex; flex-wrap: wrap; gap: 14px 16px; }
 .hub-lines a:hover { background: var(--card-2); }
 .hub-lines .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
 .hub-lines .grow { flex: 1; }
-@media (max-width: 900px) { .hub-grid { grid-template-columns: 1fr; } }
+@media (max-width: 900px) { .hub-grid { grid-template-columns: minmax(0, 1fr); } }
 
 .kind-switch { display: flex; gap: 4px; background: var(--card-2); border: 1px solid var(--line); padding: 4px; border-radius: 10px; margin-bottom: 16px; }
 .kind-switch button { flex: 1; border: 0; background: transparent; padding: 8px 12px; border-radius: 7px; font-weight: 600; color: var(--muted); }
@@ -359,11 +369,36 @@ select.cell-in { text-align: left; }
 /* Une seule pastille de date à l'écran : celle de la structure */
 body:has(.esp-app) .subnav .datepill { display: none; }
 @media (max-width: 820px) {
+  /* Le rail vertical de l'espace devient une bande qui defile. En le laissant
+     s'enrouler (`flex-wrap: wrap`) il fabriquait un pave sombre de 600 px de
+     haut ou l'ecran ouvert prenait un carre entier : illisible, et le contenu
+     commencait sous la ligne de flottaison. */
   .esp-app { flex-direction: column; }
-  .esp-side { width: 100%; }
-  .esp-side-nav { flex-direction: row; flex-wrap: wrap; }
+  .esp-side { width: 100%; position: relative; }
+  .esp-side-brand { display: none; }   /* la structure est deja dite par la bande du dessus */
+  .esp-side-nav { flex-direction: row; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none;
+                  gap: 4px; padding: 8px 12px; }
+  .esp-side-nav::-webkit-scrollbar { display: none; }
+  .esp-side-nav a { flex: none; white-space: nowrap; padding: 8px 13px; font-size: 13px; }
+  .esp-side-groupe { flex-direction: row; align-items: center; gap: 4px; margin-top: 0; flex: none; }
+  .esp-side-titre { padding: 0 2px 0 8px; align-self: center; white-space: nowrap; }
+  .esp-side-groupe a { padding-left: 13px; font-size: 13px; }
+  /* Un lisere dit que la bande continue a droite. */
+  .esp-side::after { content: ""; position: absolute; inset: 0 0 0 auto; width: 24px; pointer-events: none;
+                     background: linear-gradient(90deg, transparent, var(--accent-ink)); }
   .esp-side-foot { display: none; }
   .esp-head, .esp-body { padding-left: 16px; padding-right: 16px; }
+  .esp-body > * { min-width: 0; }
+  .esp-head h1 { font-size: 21px; }
+}
+/* Deux indicateurs par rangee sur un telephone, mais serres : a 32 px la valeur
+   sortait de sa carte de 172 px. */
+@media (max-width: 560px) {
+  .esp-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .esp-kpi { padding: 12px 13px 14px; }
+  .esp-kpi-val { font-size: 25px; margin: 7px 0 2px; }
+  .esp-kpi-ico { width: 25px; height: 25px; font-size: 12px; }
+  .esp-kpi-sub { font-size: 11.5px; }
 }
 @media (prefers-reduced-motion: reduce) { .esp-side-nav a { transition: none; } }
 
@@ -398,10 +433,10 @@ body:has(.esp-app) .subnav .datepill { display: none; }
 /* ---------- Tableau de bord BTP : deux colonnes, récapitulatifs, charge du réseau ---------- */
 /* Deux cartes côte à côte, empilées dès que la place manque. */
 .btp-duo { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; align-items: start; }
-@media (max-width: 1100px) { .btp-duo { grid-template-columns: 1fr; } }
+@media (max-width: 1100px) { .btp-duo { grid-template-columns: minmax(0, 1fr); } }
 
 /* Le récapitulatif d'une pipeline : ses étapes en une bande, sans les affaires */
-.btp-recap-etapes { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(84px, 1fr); gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+.btp-recap-etapes { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(84px, 1fr); gap: 8px; overflow-x: auto; min-width: 0; padding-bottom: 4px; }
 .btp-recap-etape { display: flex; flex-direction: column; gap: 3px; padding: 10px 11px; border-radius: 10px; background: var(--card-2); text-decoration: none; color: inherit; border: 1px solid transparent; transition: border-color .13s, background .13s; }
 .btp-recap-etape:hover { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); }
 .btp-recap-etape span { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted-2); line-height: 1.25; }
@@ -504,10 +539,14 @@ tr.btp-mission .btp-pts { color: var(--m-encre); }
 /* Le catalogue et les phases cote a cote : le tableau des niveaux est court, celui
    des phases est long, d'ou la colonne de gauche un peu plus etroite. */
 .btp-duo-cat { grid-template-columns: minmax(0, .92fr) minmax(0, 1.08fr); }
+/* Defini APRES la regle responsive de .btp-duo, et de meme specificite : sans cette
+   ligne, il la gagnerait par l'ordre du fichier et garderait deux colonnes sur
+   telephone. Une surcharge de grille doit toujours emporter sa propre bascule. */
+@media (max-width: 1100px) { .btp-duo-cat { grid-template-columns: minmax(0, 1fr); } }
 .btp-duo-cat > .card { margin: 0; }
 .btp-score-duo { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(250px, .95fr); gap: 18px;
   align-items: start; margin-top: 14px; }
-@media (max-width: 960px) { .btp-score-duo { grid-template-columns: 1fr; } }
+@media (max-width: 960px) { .btp-score-duo { grid-template-columns: minmax(0, 1fr); } }
 
 .btp-calc { padding: 16px 18px; border-radius: 12px; background: var(--m-clair, var(--card-2));
   border: 1px solid color-mix(in srgb, var(--m, var(--accent)) 22%, transparent); }
@@ -520,8 +559,6 @@ tr.btp-mission .btp-pts { color: var(--m-encre); }
 .btp-calc-champ input:focus { outline: none; border-color: var(--m, var(--accent));
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--m, var(--accent)) 18%, transparent); }
 .btp-calc-vide { margin: 0; font-size: 13px; line-height: 1.5; color: var(--muted); }
-  padding-bottom: 9px; font-size: 13px; color: var(--muted);
-  border-bottom: 1px solid color-mix(in srgb, var(--m, var(--accent)) 25%, transparent); }
 .btp-calc-total { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-top: 10px; }
 .btp-calc-total span { font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
   color: var(--m-encre, var(--muted)); }
@@ -569,7 +606,7 @@ tr.btp-mission .btp-pts { color: var(--m-encre); }
 .mf-hono { display: grid; grid-template-columns: 1fr 110px auto; gap: 13px; align-items: end; margin-bottom: 18px;
   padding: 14px 16px; border-radius: 12px; background: var(--m-clair);
   border: 1px solid color-mix(in srgb, var(--m) 22%, transparent); }
-@media (max-width: 620px) { .mf-hono { grid-template-columns: 1fr; align-items: stretch; } }
+@media (max-width: 620px) { .mf-hono { grid-template-columns: minmax(0, 1fr); align-items: stretch; } }
 .mf-hono-res { display: flex; flex-direction: column; justify-content: flex-end; min-width: 140px; padding-bottom: 2px; }
 .mf-hono-res span { font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--m-encre); }
 .mf-hono-res b { font-family: var(--font-display); font-size: 23px; font-weight: 700; line-height: 1.1; color: var(--m-encre); font-variant-numeric: tabular-nums; }
@@ -578,6 +615,24 @@ tr.btp-mission .btp-pts { color: var(--m-encre); }
 .mf-recap { margin: 2px 0 16px; padding: 10px 14px; border-radius: 9px; background: var(--card-2);
   font-size: 13px; color: var(--muted); }
 .mf-recap b { color: var(--text); }
+
+/* Un choix a quatre branches ne tient pas sur une pastille : il s'enroule. */
+.mf-seg-large { display: flex; flex-wrap: wrap; }
+/* La grille est un enfant de .form, qui est en flex : elle doit prendre la ligne. */
+.form > .mf-grille { flex: 1 1 100%; margin-bottom: 0; }
+.mail-champ > .mf-seg { align-self: flex-start; margin: 0; }
+/* L'aide d'un champ, sous le champ lui-meme. */
+.mf-champ-aide { font-style: normal; margin-top: 1px; font-size: 11.5px; line-height: 1.45; color: var(--muted-2); }
+
+/* La phrase qui explique la consequence d'un choix, juste sous le choix. */
+.mf-aide { margin: 0 0 16px; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+.mf-aide.attention { color: var(--amber); font-weight: 600; }
+.mf-aide.ok { color: var(--green); font-weight: 600; }
+
+/* Les zones de texte des formulaires en deux temps suivent leurs champs. */
+.mail-champ textarea { width: 100%; padding: 8px 10px; font: inherit; font-size: 13.5px; resize: vertical;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--text); }
+.mail-champ textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 
 
 .btp-ref-titre { margin: 0 0 10px; font-family: var(--font-display); font-size: 15px; font-weight: 700; }
@@ -766,54 +821,92 @@ tr.btp-mission .btp-pts { color: var(--m-encre); }
 .todo-groupe.afaire { color: var(--accent-ink); }
 .todo-groupe.afaire::before { background: var(--accent); }
 
-/* La carte : deux lignes, un filet de couleur, et tout le reste en pastilles.
-   Elle se souleve au survol et s'annonce a l'arrivee — c'est ce qui donne a la
-   liste sa vivacite, sans bouger d'un pixel au repos. */
-.todo-tache { display: flex; gap: 11px; align-items: flex-start; background: var(--card); border: 1px solid var(--line); border-left: 3px solid var(--c, var(--line-strong)); border-radius: 5px 14px 14px 5px; padding: 11px 12px; box-shadow: 0 1px 2px rgba(17,21,28,.04); transition: transform .14s cubic-bezier(.2,.8,.3,1), box-shadow .14s, border-color .14s; animation: todo-entre .2s ease both; }
-@keyframes todo-entre { from { opacity: 0; transform: translateY(5px); } }
-.todo-tache + .todo-tache { margin-top: 7px; }
-.todo-tache:hover { transform: translateY(-2px); box-shadow: var(--shadow-lift); border-color: color-mix(in srgb, var(--c, var(--accent)) 45%, var(--line)); border-left-color: var(--c, var(--accent)); }
-.todo-tache.urgent { border-color: color-mix(in srgb, var(--red) 40%, var(--line)); box-shadow: 0 0 0 1px color-mix(in srgb, var(--red) 18%, transparent), 0 1px 2px rgba(17,21,28,.04); }
-.todo-tache.done { opacity: .55; box-shadow: none; }
-.todo-tache.done:hover { transform: none; }
-.todo-tache.done b { text-decoration: line-through; }
-.todo-tache.recente { opacity: 1; background: var(--green-soft); border-color: color-mix(in srgb, var(--green) 30%, var(--line)); }
+/* La ligne. Elle n'a ni contour ni fond propre : un filet de couleur a gauche,
+   un trait de separation en bas, et c'est tout. Ce qui prenait une carte de
+   70 px tient en 34 px, et la largeur sert enfin a quelque chose — les colonnes
+   de droite — au lieu d'etre du vide. */
+.todo-tache { display: flex; align-items: center; gap: 12px; padding: 7px 14px 7px 11px;
+              border-left: 3px solid var(--c, transparent); border-bottom: 1px solid var(--line);
+              background: var(--card); transition: background .12s; }
+/* Pas d'animation d'arrivee sur la ligne : draw() reecrit toute la liste a chaque
+   frappe dans la recherche et a chaque case cochee, l'animation repartirait a zero
+   sur toutes les lignes a la fois — la liste clignoterait. Le mouvement vit dans le
+   survol et dans la case a cocher, pas dans l'apparition. */
+.todo-tache:last-child { border-bottom: 0; }
+.todo-tache:hover { background: var(--card-2); }
+/* Urgent : un voile rouge, pas un cadre. Le rang le dit deja en toutes lettres. */
+.todo-tache.urgent { background: color-mix(in srgb, var(--red) 4%, var(--card)); }
+.todo-tache.urgent:hover { background: color-mix(in srgb, var(--red) 8%, var(--card)); }
+.todo-tache.done { opacity: .5; }
+.todo-tache.done .todo-t { text-decoration: line-through; }
+.todo-tache.recente { opacity: 1; background: var(--green-soft); }
 
 /* Case a cocher dessinee : la case native est petite et differente sur chaque
    systeme. Celle-ci se remplit de vert et pose sa coche d'un trait. */
-.todo-case { position: relative; flex: none; width: 21px; height: 21px; margin-top: 1px; cursor: pointer; }
+.todo-case { position: relative; flex: none; width: 19px; height: 19px; cursor: pointer; }
 .todo-case input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
-.todo-case span { position: absolute; inset: 0; border: 2px solid var(--line-strong); border-radius: 7px; background: var(--card); transition: background .14s, border-color .14s, transform .14s; }
-.todo-case span::after { content: ""; position: absolute; left: 6px; top: 2px; width: 4px; height: 9px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg) scale(0); transition: transform .16s cubic-bezier(.2,1.5,.4,1); }
+.todo-case span { position: absolute; inset: 0; border: 2px solid var(--line-strong); border-radius: 6px; background: var(--card); transition: background .14s, border-color .14s; }
+.todo-case span::after { content: ""; position: absolute; left: 5px; top: 1px; width: 4px; height: 9px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg) scale(0); transition: transform .16s cubic-bezier(.2,1.5,.4,1); }
 .todo-case:hover span { border-color: var(--green); }
 .todo-case input:checked + span { background: var(--green); border-color: var(--green); }
 .todo-case input:checked + span::after { transform: rotate(45deg) scale(1); }
 .todo-case input:focus-visible + span { box-shadow: 0 0 0 3px color-mix(in srgb, var(--green) 30%, transparent); }
 
-.todo-tache-corps { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
-.todo-tache-corps b { font-size: 13.5px; font-weight: 600; line-height: 1.35; }
+/* Le titre prend toute la place restante et se coupe plutot que de passer a la
+   ligne : une to do list se parcourt du regard, une ligne = une tache. */
+.todo-t { flex: 1 1 auto; min-width: 0; font-size: 13.5px; font-weight: 600; line-height: 1.4;
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-/* La ligne de pastilles : structure, echeance, contexte, destinataire. */
-.todo-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
-.todo-chip { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; background: var(--card-2); color: var(--muted); border-radius: 999px; padding: 3px 10px; font-size: 11.5px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.todo-chip.ctx { max-width: 260px; }
-.todo-chip.ctx a { color: var(--muted); text-decoration: none; }
-.todo-chip.ctx:hover a { color: var(--accent); text-decoration: underline; }
-.todo-chip.quand.late { background: var(--red-soft); color: var(--red); font-weight: 700; }
-.todo-chip.quand.today { background: var(--amber-soft); color: var(--amber); font-weight: 700; }
-.todo-chip.pour { background: var(--accent-soft); color: var(--accent-ink); font-weight: 600; }
-.todo-chip.pour i { font-style: normal; opacity: .6; }
-.todo-tache.recente .todo-chip.quand { background: color-mix(in srgb, var(--green) 18%, #fff); color: var(--green); font-weight: 700; }
+/* Les colonnes de droite. Sur grand ecran .todo-meta s'efface et ses enfants
+   deviennent des colonnes de la ligne, a largeur fixe pour tomber au meme
+   endroit d'une ligne a l'autre. */
+.todo-meta { display: contents; }
+.todo-struct { flex: 0 0 112px; min-width: 0; }
+.todo-ctx { flex: 0 0 210px; min-width: 0; font-size: 12px; color: var(--muted);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.todo-ctx a { color: var(--muted); text-decoration: none; }
+.todo-ctx a:hover { color: var(--accent); text-decoration: underline; }
+.todo-pour { flex: 0 0 132px; min-width: 0; font-size: 12px; font-weight: 600; color: var(--accent-ink);
+             white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.todo-pour i { font-style: normal; opacity: .55; margin-right: 4px; }
+.todo-quand { flex: 0 0 124px; text-align: right; font-size: 12px; color: var(--muted);
+              font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.todo-quand.late { color: var(--red); font-weight: 700; }
+.todo-quand.today { color: var(--amber); font-weight: 700; }
+.todo-quand.vide { color: var(--muted-2); }
+.todo-tache.recente .todo-quand { color: var(--green); font-weight: 700; }
 
-.todo-badge { display: inline-flex; align-items: center; gap: 5px; background: var(--b); color: var(--bt); border-radius: 999px; padding: 3px 10px 3px 4px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; }
-.todo-badge-logo { display: inline-grid; place-items: center; width: 15px; height: 15px; border-radius: 50%; overflow: hidden; background: #fff; flex-shrink: 0; }
+.todo-badge { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; background: var(--b); color: var(--bt); border-radius: 999px; padding: 2px 9px 2px 3px; font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; overflow: hidden; }
+.todo-badge-logo { display: inline-grid; place-items: center; width: 14px; height: 14px; border-radius: 50%; overflow: hidden; background: #fff; flex-shrink: 0; }
 .todo-badge-logo img { width: 100%; height: 100%; object-fit: contain; }
 
 /* Le crayon ne s'invite qu'au survol : une icone par ligne en permanence
    encombre une liste qu'on vient lire, pas editer. */
-.todo-editer { flex: none; opacity: 0; transition: opacity .13s; }
+.todo-editer { flex: none; width: 24px; height: 24px; padding: 0; font-size: 12px; opacity: 0; transition: opacity .13s; }
 .todo-tache:hover .todo-editer, .todo-editer:focus-visible { opacity: 1; }
 @media (hover: none) { .todo-editer { opacity: 1; } }
+
+/* En dessous, les colonnes n'ont plus la place de s'aligner : elles passent
+   ensemble a la ligne, sous le titre, et reprennent leur largeur naturelle. */
+@media (max-width: 1080px) { .todo-ctx { flex-basis: 150px; } .todo-struct { flex-basis: 96px; } }
+@media (max-width: 860px) {
+  .todo-tache { flex-wrap: wrap; row-gap: 4px; padding-top: 8px; padding-bottom: 8px; }
+  /* Les colonnes passent sous le titre, toutes sur une seule ligne : elles se
+     serrent et se coupent plutot que de s'empiler, sinon une tache reprendrait
+     la hauteur d'une carte — ce qu'on vient justement de supprimer. */
+  /* Sur une ligne qui s'enroule, une base `auto` fait passer le titre entier a la
+     ligne des qu'il depasse. Base 0 : il se serre et se coupe, et il reste a cote
+     de sa case. Le crayon le suit ; les colonnes seules passent en dessous. */
+  .todo-t { flex: 1 1 0; }
+  .todo-editer { order: 1; }
+  .todo-meta { order: 2; display: flex; flex: 1 1 100%; flex-wrap: nowrap; align-items: center;
+               gap: 9px; padding-left: 31px; min-width: 0; }
+  .todo-struct { flex: 0 0 auto; }
+  .todo-ctx { flex: 1 1 auto; min-width: 0; }
+  .todo-pour { flex: 0 1 auto; max-width: 42%; }
+  .todo-quand { flex: 0 0 auto; text-align: left; }
+  .todo-struct:empty { display: none; }
+}
 
 .todo-vide { color: var(--muted-2); font-size: 12.5px; text-align: center; padding: 18px 4px 20px; }
 /* En dessous, les colonnes s'empilent plutôt que de défiler latéralement */
@@ -1032,7 +1125,7 @@ body.impression #print-root { display: block; }
 .tb-val { font-family: var(--font-display); font-size: 27px; font-weight: 700; letter-spacing: -.03em;
   font-variant-numeric: tabular-nums; line-height: 1.15; }
 .tb-sub { display: flex; align-items: center; gap: 6px; font-size: 12px; margin-top: 2px; min-height: 17px; }
-.tb-d { display: inline-flex; align-items: center; gap: 3px; font-weight: 700; font-size: 11.5px;
+.tb-d { display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; font-weight: 700; font-size: 11.5px;
   padding: 1px 7px; border-radius: 999px; font-variant-numeric: tabular-nums; }
 .tb-d.up { background: var(--green-soft); color: var(--green); }
 .tb-d.down { background: var(--red-soft); color: var(--red); }
@@ -1121,14 +1214,14 @@ body.impression #print-root { display: block; }
 .tb-pcell .v.pos { color: var(--green); } .tb-pcell .v.neg { color: var(--red); }
 .tb-pcell .s { font-size: 11.5px; color: var(--muted); }
 
-@media (max-width: 1200px) { .tb-kpis { grid-template-columns: repeat(3, 1fr); } .tb-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 1200px) { .tb-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } .tb-grid { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 720px) {
-  .tb-kpis { grid-template-columns: repeat(2, 1fr); }
+  .tb-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .tb-periode { margin-left: 0; }
   .tb-step { grid-template-columns: 104px minmax(0, 1fr); }
   .tb-rate { grid-column: 2; text-align: left; }
   .tb-totals { flex: 1 1 100%; }
-  .tb-pat { grid-template-columns: 1fr; }
+  .tb-pat { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* =====================================================================
@@ -1383,23 +1476,153 @@ button.lien { border: 0; background: none; padding: 0; color: var(--accent); fon
    au-dessus, inertes, plutot que d'etre effacees d'un fichier partage.
    --------------------------------------------------------------------- */
 .todo-onglets { margin-bottom: 4px; }
-.todo-liste { padding: 6px 14px 14px; }
-.todo-liste .todo-groupe:first-child { margin-top: 6px; }
-/* Dans « Envoyees », la carte dit pour qui — sinon la liste est illisible. */
-.todo-pour { font-size: 12px; color: var(--muted); margin-top: 2px; }
-.todo-pour b { font-weight: 650; color: var(--text); }
-.todo-ok { color: var(--green); font-weight: 650; }
 
-/* L'écran prend toute la largeur ; ce sont les TÂCHES qui ne doivent pas faire
-   un bloc chacune. Elles se posent donc en grille : autant de cartes par ligne
-   que la place le permet, une colonne sur téléphone. Les en-têtes de rang
-   traversent toute la grille pour rester lisibles comme des séparateurs. */
+/* L'ecran prend toute la largeur, et les taches aussi — mais chacune sur une
+   seule ligne. La carte qui les contient ne met plus de remplissage : les lignes
+   vont d'un bord a l'autre, separees par un trait, et l'en-tete de rang est une
+   bande qui les coupe. */
 .todo-page { display: flex; flex-direction: column; gap: 14px; }
 .todo-page .toolbar { margin: 0; }
-.todo-liste { display: grid; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); gap: 9px; align-items: start; }
-.todo-liste > .todo-groupe { grid-column: 1 / -1; }
-.todo-liste > .empty { grid-column: 1 / -1; }
-.todo-tache + .todo-tache { margin-top: 0; }   /* l'écart vient de la grille */
+.todo-liste { padding: 0; overflow: hidden; }
+.todo-liste .empty { padding: 26px 14px 28px; }
+
+/* L'en-tete de rang : une bande discrete, pas une ligne de liste. */
+.todo-liste .todo-groupe { margin: 0; padding: 7px 14px; background: var(--card-2);
+                           border-bottom: 1px solid var(--line); }
+
+/* =====================================================================
+   Navigation sur ecran etroit
+   Le bouton menu et le nom de l'univers ouvert remplacent la rangee d'icones
+   anonymes ; le tiroir montre le reste. Rien de tout cela n'existe au-dessus
+   de 820 px, ou les deux bandes de la barre suffisent.
+   ===================================================================== */
+.u-burger, .u-ici { display: none; }
+.u-burger { border: 0; background: transparent; color: var(--on-accent); width: 40px; height: 40px;
+            border-radius: 11px; place-items: center; cursor: pointer; flex: none; margin-left: -8px; }
+.u-burger:hover { background: color-mix(in srgb, var(--on-accent) 12%, transparent); }
+.u-burger:focus-visible { outline: 2px solid var(--on-accent); outline-offset: -3px; }
+/* Ou l'on est, ecrit en toutes lettres — c'est ce que la rangee d'icones ne
+   disait pas. Il prend la place laissee par les onglets. */
+.u-ici { flex: 1; min-width: 0; font-family: var(--font-display); font-weight: 700; font-size: 16px;
+         letter-spacing: -.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.tir-fond { position: fixed; inset: 0; background: rgba(10, 13, 20, .5); z-index: 70;
+            animation: tir-fondu .16s ease both; }
+@keyframes tir-fondu { from { opacity: 0; } }
+.tir { position: fixed; inset: 0 auto 0 0; z-index: 71; width: min(310px, 86vw);
+       display: flex; flex-direction: column; background: var(--accent-ink); color: #fff;
+       box-shadow: 0 0 40px rgba(10, 13, 20, .45); animation: tir-entre .2s cubic-bezier(.2,.8,.3,1) both; }
+@keyframes tir-entre { from { transform: translateX(-100%); } }
+/* Le fond de page ne defile plus derriere le tiroir ouvert. */
+body.tiroir-ouvert { overflow: hidden; }
+
+.tir-tete { display: flex; align-items: center; gap: 11px; padding: 16px 14px 16px 16px;
+            border-bottom: 1px solid rgba(255,255,255,.12); }
+.tir-av { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; flex: none;
+          background: rgba(255,255,255,.16); font-size: 13px; font-weight: 800; }
+.tir-qui { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.tir-qui b { font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tir-qui span { font-size: 11.5px; color: rgba(255,255,255,.6); }
+.tir-x { border: 0; background: transparent; color: rgba(255,255,255,.75); width: 34px; height: 34px;
+         border-radius: 10px; display: grid; place-items: center; flex: none; cursor: pointer; }
+.tir-x:hover { background: rgba(255,255,255,.12); color: #fff; }
+
+.tir-nav { flex: 1; overflow-y: auto; padding: 10px 10px 14px; }
+.tir-univ { display: flex; align-items: center; gap: 12px; padding: 12px 13px; border-radius: 11px;
+            text-decoration: none; color: rgba(255,255,255,.82); font-size: 14.5px; font-weight: 600; }
+.tir-univ span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tir-univ svg { flex: none; }
+.tir-univ i { font-style: normal; background: rgba(255,255,255,.16); border-radius: 999px;
+              padding: 2px 9px; font-size: 11.5px; font-weight: 700; }
+.tir-univ:hover { background: rgba(255,255,255,.09); color: #fff; }
+.tir-univ.on { background: var(--accent); color: var(--on-accent); font-weight: 700; }
+.tir-univ.on i { background: color-mix(in srgb, var(--on-accent) 22%, transparent); color: var(--on-accent); }
+
+/* Les ecrans de l'univers ouvert, en retrait sous lui. */
+.tir-ecrans { display: flex; flex-direction: column; gap: 1px; margin: 3px 0 8px 13px;
+              padding-left: 13px; border-left: 1px solid rgba(255,255,255,.16); }
+.tir-ecran { display: flex; align-items: center; gap: 10px; padding: 10px 11px; border-radius: 9px;
+             text-decoration: none; color: rgba(255,255,255,.7); font-size: 13.5px; font-weight: 600; }
+.tir-ecran span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tir-ecran i { font-style: normal; background: rgba(255,255,255,.14); border-radius: 999px;
+               padding: 1px 8px; font-size: 11px; font-weight: 700; }
+.tir-ecran:hover { background: rgba(255,255,255,.09); color: #fff; }
+.tir-ecran.on { background: rgba(255,255,255,.15); color: #fff; }
+.tir-ecran .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.tir-ecran .brandmark { width: 22px; height: 22px; border-radius: 6px; overflow: hidden; background: #fff;
+                        display: grid; place-items: center; flex: none; }
+.tir-ecran .brandmark img { width: 100%; height: 100%; object-fit: contain; }
+
+.tir-pied { padding: 10px; border-top: 1px solid rgba(255,255,255,.12); display: flex; flex-direction: column; gap: 2px; }
+.tir-act { border: 0; background: transparent; color: rgba(255,255,255,.78); text-align: left;
+           padding: 12px 13px; border-radius: 11px; font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; }
+.tir-act:hover { background: rgba(255,255,255,.09); color: #fff; }
+.tir-act.danger { color: #ffb4ab; }
+.tir-act.danger:hover { background: rgba(255,120,110,.16); }
+
+@media (prefers-reduced-motion: reduce) { .tir, .tir-fond { animation: none; } }
+
+@media (max-width: 820px) {
+  .u-burger { display: grid; }
+  .u-ici { display: block; }
+  .u-mark, .u-set { display: none; }   /* le nom de l'outil et les onglets vivent dans le tiroir */
+  .u-right .u-ico { display: none; }   /* Parametres aussi : il est au pied du tiroir */
+  .univ { gap: 8px; }
+  /* La bande des ecrans reste, et dit qu'elle continue a droite. */
+  .subnav { position: relative; }
+  .subnav::after { content: ""; position: absolute; inset: 0 0 0 auto; width: 26px; pointer-events: none;
+                   background: linear-gradient(90deg, transparent, var(--card)); }
+  .s-tab { font-size: 13.5px; padding: 8px 12px; }
+  /* Les commandes posees par l'ecran ouvert (« Ouvrir dans un onglet »,
+     « Recharger » du tableau de bord RGD) tenaient sur une ligne de 340 px :
+     sous 360 px elles passaient a cote. Elles prennent leur propre rangee. */
+  .subnav { flex-wrap: wrap; }
+  .embed-actions { margin-left: 0; flex: 1 1 100%; min-width: 0; flex-wrap: wrap; justify-content: flex-end; }
+}
+
+/* =====================================================================
+   Saisie et fenetres sur telephone
+   ===================================================================== */
+@media (max-width: 820px) {
+  /* Safari iOS agrandit la page des qu'un champ passe sous 16 px, et ne la
+     reduit pas en sortant : on saisit une fois et l'ecran reste decale. Les
+     champs passent donc a 16 px — c'est la seule taille qui evite le zoom. */
+  .field input, .field select, .field textarea,
+  .toolbar input[type=search], .toolbar select, .filter-input,
+  .mail-champ input, .mail-champ select, .mail-champ textarea { font-size: 16px; }
+
+  /* Une fenetre devient une feuille qui monte du bas : pleine largeur, et les
+     boutons restent sous le pouce meme quand le formulaire est long. */
+  .modal-backdrop { padding: 0; align-items: flex-end; }
+  .modal, .modal.wide { width: 100%; max-height: 92vh; border-radius: 16px 16px 0 0;
+                        border-bottom: 0; display: flex; flex-direction: column; }
+  .modal-head { padding: 15px 16px 13px; }
+  .modal-head h2, .modal-head h3 { font-size: 17px; }
+  .modal-body { padding: 16px 16px 20px; overflow-y: auto; flex: 1; min-height: 0; }
+  .form-actions { position: sticky; bottom: -20px; z-index: 1; background: #fff;
+                  padding: 12px 0 8px; margin-top: 2px; box-shadow: 0 -8px 12px -10px rgba(17,21,28,.3); }
+  .form-actions .btn { flex: 1; justify-content: center; }
+  .form-actions .left { flex: 0 0 auto; }
+
+  /* Cibles au doigt : 28 px de haut se ratent une fois sur trois. */
+  .icon-btn { min-width: 38px; min-height: 38px; display: inline-grid; place-items: center; padding: 0; }
+  .btn { padding: 11px 16px; }
+  .btn.sm { padding: 9px 13px; font-size: 13px; }
+  .check { min-height: 38px; display: inline-flex; align-items: center; }
+
+  /* La bulle de messagerie est posee en bas a droite, exactement la ou la
+     feuille met « Enregistrer » : elle couvrait le bouton. Elle s'efface le
+     temps d'une fenetre ou du tiroir — `no-scroll` n'est posee que par
+     openModal (js/ui.js), rien d'autre ne la met. */
+  body.no-scroll .msg-bulle-zone, body.tiroir-ouvert .msg-bulle-zone { display: none; }
+
+  /* De quoi lire la derniere ligne : la bulle flotte a 12 px du bas et mesure
+     54 px, tout ce qui passe dessous est perdu. */
+  .content { padding-bottom: 92px; }
+  .esp-body { padding-bottom: 92px; }
+}
+
+/* ---- tuiles et pastilles cliquables du tableau de bord ---- */
 .tb-kpi.click { cursor: pointer; transition: border-color .14s, box-shadow .14s; }
 .tb-kpi.click:hover { border-color: var(--line-strong); box-shadow: var(--shadow-lift); }
 button.tb-pp { border: 0; background: none; padding: 2px 0; cursor: pointer; border-radius: 6px; }
