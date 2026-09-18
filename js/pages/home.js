@@ -6,7 +6,7 @@ import { scope } from '../data/scope.js';
 import { ACTIVITIES, ACTIVITY_KEYS } from '../data/schema.js';
 import { propertyMetrics, loanStatus } from '../data/finance.js';
 import {
-  chiffres, total, entonnoir, caMois, leadsMois, derniersMois, moisCle, moisPrecedent,
+  chiffres, total, entonnoir, structuresHorsEntonnoir, caMois, leadsMois, derniersMois, moisCle, moisPrecedent,
   objectifs, objectif, objectifAnnuel, enregistrerObjectifs, ecoule, anneeEnCours, CLES_VISIBLES,
 } from '../data/chiffres.js';
 import {
@@ -81,6 +81,7 @@ export const homePage = {
       const tauxRdv = recus ? avecRdv / recus : null;
       const tauxVente = avecRdv ? conclus / avecRdv : null;
       const entAvant = comparaisonEntonnoir(cles, state.periode, deals);
+      const horsEntonnoir = structuresHorsEntonnoir(cles);
       const part = ecoule(r);
       const obj = cles.reduce((s, k) => s + objectif(k, r), 0);
       // L'objectif se fixe à l'année : on rappelle toujours où en est l'année,
@@ -110,9 +111,8 @@ export const homePage = {
             // ne rien afficher qu'un pourcentage qui ne compare pas ce qu'il dit.
             t.leadsNonDates ? null : evolution(avant?.leadsPeriode, t.leadsPeriode),
             serieDe(cle => cles.reduce((s, k) => s + leadsMois(k, cle, deals), 0)),
-            t.leadsNonDates
-              ? 'prospects en base · arrivée non datée'
-              : `${t.leadsPeriode} nouveau${t.leadsPeriode > 1 ? 'x' : ''} sur la période`)}
+            repartitionLeads(t, cles),
+            false, t.leadsNonDates ? 'Total en base : ces outils ne datent pas l\'arrivée des prospects.' : '')}
           ${kpi('RDV', t.rdv, evolution(avant?.rdv, t.rdv), serieDe(cle => nbRdvMois(cles, cle, deals)), 'atteints sur la période')}
           ${kpi('Affaires signées', t.signees ?? '—', evolution(avant?.signees, t.signees), serieDe(cle => nbSigneesMois(cles, cle, deals)), t.panier ? `panier ${eur(t.panier)}` : 'panier moyen indisponible')}
           ${kpi('CA HT signé', eur(t.ca), evolution(avant?.ca, t.ca), serieDe(caDu), obj ? `objectif ${eur(obj)}` : 'aucun objectif fixé')}
@@ -126,6 +126,9 @@ export const homePage = {
             <section class="card">
               <div class="card-head"><h2>Pipeline &amp; conversion</h2>
                 <span class="muted small">affaires créées sur la période · taux de passage</span></div>
+              ${horsEntonnoir.length ? `<p class="muted small tb-hors">${horsEntonnoir.map(k =>
+                `<span class="ag-src"><span class="dot" style="background:${ACTIVITIES[k].color}"></span>${esc(ACTIVITIES[k].label)}</span>`).join('')}
+                ${horsEntonnoir.length > 1 ? "n'apparaissent pas ici : leurs outils envoient" : "n'apparaît pas ici : son outil envoie"} des totaux, pas le détail des étapes.</p>` : ''}
               <div class="tb-funnel">
                 ${ent.map((s, i) => {
                   const prev = i ? ent[i - 1].n : null;
@@ -210,12 +213,14 @@ export const homePage = {
     };
 
     // ---------- indicateurs ----------
-    const kpi = (libelle, valeur, d, serie, sous, points = false) => `
-      <article class="tb-kpi">
+    // `sous` peut contenir du balisage (les pastilles de structure) : il est
+    // composé ici, jamais saisi par quelqu'un.
+    const kpi = (libelle, valeur, d, serie, sous, points = false, titre = '') => `
+      <article class="tb-kpi"${titre ? ` title="${esc(titre)}"` : ''}>
         <span class="tb-lbl">${libelle}</span>
         <span class="tb-val">${valeur}</span>
         <span class="tb-sub">${delta(d, points)}<span class="muted">${comparaisonLabel(state.periode)}</span></span>
-        <span class="tb-sub muted">${esc(sous)}</span>
+        <span class="tb-sub muted">${sous}</span>
         ${spark(serie, d === null || d >= 0 ? 'var(--green)' : 'var(--red)')}
       </article>`;
 
@@ -262,6 +267,23 @@ export const homePage = {
     return { refresh: draw, destroy: () => chart?.destroy() };
   },
 };
+
+// Qui apporte les leads : en vue Groupe, un nombre seul ne dit pas de quelle
+// structure il vient. Une pastille par structure qui en a, dans sa couleur.
+function repartitionLeads(t, cles) {
+  const avec = t.lignes.filter(x => x.leads > 0);
+  if (!avec.length) return 'aucun prospect en base';
+  if (cles.length === 1) {
+    return t.leadsNonDates ? 'prospects en base · arrivée non datée'
+      : `${t.leadsPeriode} nouveau${t.leadsPeriode > 1 ? 'x' : ''} sur la période`;
+  }
+  // Le nom court plutôt qu'une pastille seule : à cette taille, une couleur ne
+  // suffit pas à reconnaître une structure.
+  return `<span class="tb-part">${avec.map(x =>
+    `<span class="tb-pp" style="--c:${ACTIVITIES[x.cle].color}"
+       title="${esc(ACTIVITIES[x.cle].label)} : ${x.leads} prospect${x.leads > 1 ? 's' : ''}">
+       <i></i>${esc(ACTIVITIES[x.cle].short)} <b>${x.leads}</b></span>`).join('')}</span>`;
+}
 
 // ---------- comparaison avec la période précédente ----------
 function comparaison(cles, periode, deals) {

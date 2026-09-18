@@ -148,17 +148,42 @@ const iMax = (d) => Math.max(
   stageIndex(d.activity, d.stage),
   ...(d.stage_history || []).map(h => stageIndex(d.activity, h.stage)));
 
-export function entonnoir(cles, r, deals = scope.deals()) {
-  const lot = deals.filter(d => cles.includes(d.activity) && inRange(d.created_at, r));
+// Les cinq jalons, tels qu'un outil externe peut les envoyer mois par mois, à
+// côté du montant : { month, amount, deals, leads, contacted, rdv, quotes }.
+const JALONS_EXTERNES = ['leads', 'contacted', 'rdv', 'quotes', 'deals'];
+const aUnEntonnoirExterne = (k) => {
+  const e = externe(k);
+  return !!(e && (e.revenue || []).some(m => m.contacted != null || m.rdv != null || m.quotes != null));
+};
+
+// Entonnoir d'une structure : celui de son outil quand il l'envoie, sinon celui
+// que le CRM sait reconstituer depuis ses propres affaires.
+function entonnoirDe(k, r, deals) {
+  if (aUnEntonnoirExterne(k)) {
+    const mois = (externe(k).revenue || []).filter(m => inRange(m.month + '-01', r));
+    return JALONS_EXTERNES.map(j => mois.reduce((s, m) => s + (Number(m[j]) || 0), 0));
+  }
+  const lot = deals.filter(d => d.activity === k && inRange(d.created_at, r));
   const gagne = d => d.status === 'won';
   return [
-    { nom: 'Leads reçus', n: lot.length },
-    { nom: 'Contactés', n: lot.filter(d => gagne(d) || iMax(d) >= 1).length },
-    { nom: 'RDV réalisés', n: lot.filter(d => reachedRdv(d)).length },
-    { nom: 'Devis / propositions', n: lot.filter(d => gagne(d) || pMax(d) >= 55).length },
-    { nom: 'Signés', n: lot.filter(gagne).length },
+    lot.length,
+    lot.filter(d => gagne(d) || iMax(d) >= 1).length,
+    lot.filter(d => reachedRdv(d)).length,
+    lot.filter(d => gagne(d) || pMax(d) >= 55).length,
+    lot.filter(gagne).length,
   ];
 }
+const NOMS_JALONS = ['Leads reçus', 'Contactés', 'RDV réalisés', 'Devis / propositions', 'Signés'];
+
+export function entonnoir(cles, r, deals = scope.deals()) {
+  const somme = cles.map(k => entonnoirDe(k, r, deals))
+    .reduce((t, x) => t.map((v, i) => v + x[i]), [0, 0, 0, 0, 0]);
+  return NOMS_JALONS.map((nom, i) => ({ nom, n: somme[i] }));
+}
+// Les structures dont l'outil ne raconte pas le parcours : leur pipeline reste
+// invisible ici, et il vaut mieux l'écrire que laisser croire à un entonnoir vide.
+export const structuresHorsEntonnoir = (cles) =>
+  cles.filter(k => externe(k) && !aUnEntonnoirExterne(k));
 
 // ---------- Objectifs de chiffre d'affaires ----------
 // Stockés dans « settings » (clé objectifs_ca), lisible par tous, modifiable par la
