@@ -22,6 +22,7 @@ import {
   CROCHETS, champsDe, remplir, donneesDossier, emailDu,
   mailHtml, URL_LOGO, URL_LOGO_PUBLIC, ouvrirCompose, telechargerEml, copierMiseEnPage,
 } from './btp-mail.js';
+import { ficheDecouverteAmo, imprimerFiche } from './btp-amo.js';
 
 const KEY = 'btp';
 const act = () => ACTIVITIES[KEY];
@@ -939,7 +940,7 @@ const pageMission = (mission) => ({
         <div class="card">
           <div class="card-head"><h2>Pipeline ${esc(MISSIONS[mission].titre)}</h2>
             <span class="grow"></span>
-            <button class="btn" id="m-new">+ Mission ${esc(couleurMission(mission).label)}</button>
+            <button class="btn" id="m-new">${mission === 'amo' ? '+ Fiche découverte AMO' : '+ Mission Expertise'}</button>
           </div>
           ${kanbanHtml(colonnes)}
         </div>
@@ -950,7 +951,7 @@ const pageMission = (mission) => ({
             <span class="muted small">${liste.length} ligne${liste.length > 1 ? 's' : ''}</span>
           </div>
           <div class="table-wrap"><table>
-            <thead><tr><th>Mission</th><th>Client</th><th>Étape</th><th>Niveau</th><th class="num">Points</th><th>Chargé d'affaires</th><th class="num">Montant HT</th></tr></thead>
+            <thead><tr><th>Mission</th><th>Client</th><th>Étape</th><th>Niveau</th><th class="num">Points</th><th>Chargé d'affaires</th><th class="num">Montant HT</th><th></th></tr></thead>
             <tbody>${liste.map(d => {
               const n = niveauDe(d);
               return `<tr class="click" data-deal="${d.id}">
@@ -961,8 +962,11 @@ const pageMission = (mission) => ({
                 <td class="num">${n ? n.points : '—'}</td>
                 <td>${esc(userName(d.owner_id))}</td>
                 <td class="num">${d.amount ? eur(d.amount) : '—'}</td>
+                <td class="num">${d.fields?.decouverte
+                  ? `<button type="button" class="btn ghost sm" data-fiche="${d.id}" title="Imprimer la fiche de mission">Fiche</button>`
+                  : ''}</td>
               </tr>`;
-            }).join('') || `<tr><td colspan="7"><div class="empty">Aucune mission ${esc(MISSIONS[mission].titre)} en cours.</div></td></tr>`}</tbody>
+            }).join('') || `<tr><td colspan="8"><div class="empty">Aucune mission ${esc(MISSIONS[mission].titre)} en cours.</div></td></tr>`}</tbody>
           </table></div>
         </div>
 
@@ -976,9 +980,16 @@ const pageMission = (mission) => ({
 
       bindSearch(root, 'm-q', state, draw); restoreFocus(root, state);
       lierAffaires(root, draw);
+      root.querySelectorAll('[data-fiche]').forEach(b => b.onclick = (e) => {
+        e.stopPropagation();
+        const d = db.byId('deals', b.dataset.fiche);
+        if (d?.fields?.decouverte) imprimerFiche(d.fields.decouverte);
+      });
       // Une mission saisie ici naît dans son métier : le formulaire ouvre avec le type
       // déjà choisi, le reste (contact, montant) se remplit comme partout ailleurs.
-      root.querySelector('#m-new').onclick = () => missionForm(mission, draw);
+      root.querySelector('#m-new').onclick = () => (mission === 'amo'
+        ? ficheDecouverteAmo(draw)
+        : missionForm(mission, draw));
 
       // Une case cliquée cote son critère ; la recliquer l'annule, pour repartir d'un
       // devis sans avoir à tout effacer.

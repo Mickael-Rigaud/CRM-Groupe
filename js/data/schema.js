@@ -116,6 +116,70 @@ export const FRONTIERE_AMO = {
 // totaux écrits : le total et le verdict se recalculent sur la capacité en vigueur.
 // Le manuel les présentait sur 15 points, la capacité retenue au lancement est dans
 // CAPACITE_BTP — les deux ne peuvent pas diverger si on ne les écrit qu'une fois.
+// ---- La fiche découverte AMO du manuel V5 (§40 à §42) ----------------------
+// Le §40 donne les rubriques à remplir en rendez-vous, le §41 la règle de calcul du
+// taux, le §42 celle du niveau. Les trois vont ensemble : on coche, et le taux, les
+// honoraires et les points de charge en découlent.
+
+export const FICHE_AMO = {
+  travaux: ['Rénovation complète', 'Rénovation partielle', 'Extension', 'Réaménagement intérieur',
+    'Salle de bains', 'Cuisine', 'Électricité', 'Plomberie', 'Chauffage / climatisation', 'Isolation',
+    'Menuiseries', 'Façade', 'Toiture', 'Structure / maçonnerie', 'Extérieurs', 'Autre'],
+  avancement: ['Idée / cadrage', 'Plans disponibles', 'Devis déjà reçus', 'Entreprises déjà identifiées',
+    'Travaux déjà commencés', 'Architecte / BET présent', 'Autorisations obtenues', 'Financement validé'],
+  besoins: ['Cadrage du besoin', 'Analyse budget', 'Définition des lots', 'Consultation entreprises',
+    'Analyse / comparaison devis', 'Vérification assurances entreprises', 'Aide à la négociation',
+    'Accompagnement pendant travaux', 'Analyse situations / avenants', 'Assistance réception',
+    'Suivi réserves', 'Clôture documentaire'],
+  risques: ['Copropriété', 'Site occupé', 'Accès difficile', 'Délais courts', 'Budget contraint',
+    'Nombreux intervenants', 'Travaux structurels', 'Patrimoine / contraintes urbanisme',
+    'Sinistre / litige existant', 'Travaux en site sensible', 'Autre'],
+  occupation: ['Logement occupé', 'Logement vacant', 'Occupation partielle', 'Non déterminé'],
+};
+
+// §41 — les cinq critères, chiffrés cette fois : « < 80 k€ » se mesure, « opération
+// limitée » s'interprète. C'est la version qui fait règle dans le CRM.
+export const CRITERES_V5 = [
+  { key: 'budget', label: 'Budget / ampleur', valeurs: ['< 80 k€', '80 à 200 k€', '> 200 k€'], auto: 'budget' },
+  { key: 'lots', label: 'Nombre de lots', valeurs: ['1 à 3', '4 à 6', '7 et +'], auto: 'lots' },
+  { key: 'duree', label: 'Durée', valeurs: ['< 3 mois', '3 à 6 mois', '> 6 mois'], auto: 'duree' },
+  { key: 'intensite', label: 'Intensité client', valeurs: ['Ponctuelle', 'Régulière', 'Très soutenue'] },
+  { key: 'contraintes', label: 'Interfaces / contraintes', valeurs: ['Faibles', 'Multiples', 'Fortes / sensibles'] },
+];
+
+// Ce que le manuel demande au CRM de déduire tout seul. Les seuils sont les siens ;
+// la cotation reste modifiable, le score n'est qu'une aide.
+export const coteBudget = (travauxHt) => {
+  const m = Number(travauxHt) || 0;
+  if (!m) return null;
+  return m < 80000 ? 0 : m <= 200000 ? 1 : 2;
+};
+export const coteDuree = (debut, fin) => {
+  if (!debut || !fin) return null;
+  const mois = (new Date(fin) - new Date(debut)) / (30.44 * 86400000);
+  if (!isFinite(mois) || mois <= 0) return null;
+  return mois < 3 ? 0 : mois <= 6 ? 1 : 2;
+};
+export const coteLots = (nbTravaux) => (nbTravaux ? (nbTravaux <= 3 ? 0 : nbTravaux <= 6 ? 1 : 2) : null);
+
+// §42 — le niveau suggéré par le score. « Le score est une aide et non une règle
+// absolue » : on suggère, on n'impose pas.
+export const niveauSuggere = (score) => {
+  const cle = score <= 3 ? 'amo_ciblee' : score <= 6 ? 'amo_etendue' : 'amo_importante';
+  return NIVEAUX_BTP.find(n => n.key === cle);
+};
+
+// §41 — le garde-fou. Un taux différent du suggéré demande un motif écrit ; sous 5 %,
+// c'est la direction qui tranche.
+export const controleTaux = (suggere, final, motif) => {
+  const ecart = Number(final) !== Number(suggere);
+  return {
+    ecart,
+    motifManquant: ecart && !String(motif || '').trim(),
+    validationDirection: Number(final) < 5,
+  };
+};
+
 // Plus affiché : le système de points se lit sur l'écran des chargés d'affaires.
 export const EXEMPLES_CHARGE = [
   ['amo_importante', 'amo_etendue', 'exp_complexe'],
