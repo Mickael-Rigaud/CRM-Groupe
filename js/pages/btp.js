@@ -1266,19 +1266,9 @@ function ligneReseau({ f, charge, max, amoMax, points, sature }) {
 }
 
 // ---------------------------------------------------------------- Base de données
-// D'où viennent les prospects. Chaque origine regroupe les canaux du CRM qui lui
-// correspondent — la prise de rendez-vous du site écrit « Site internet direct ».
-// À ajuster ici si le cabinet range ses canaux autrement.
-const ORIGINES = [
-  { key: 'site', label: 'Prospect site', canaux: ['Site internet direct', 'Google organique / SEO', 'Google Ads'] },
-  { key: 'partenaires', label: 'Prospect partenaire', canaux: ['Partenaire / apporteur', 'Recommandation client', 'Réseau professionnel'] },
-  { key: 'meta', label: 'Prospect Meta Ads', canaux: ['Meta Ads', 'Instagram organique', 'Facebook organique'] },
-  // Le reste : prospection directe, téléphone, ancien client… et les fiches dont le canal
-  // n'est pas renseigné. La somme des quatre fait donc bien le total des prospects.
-  { key: 'autre', label: 'Autre prospect', canaux: null },
-];
-const classees = ORIGINES.flatMap(o => o.canaux || []);
-const estDeLOrigine = (c, o) => (o.canaux ? o.canaux.includes(c.channel) : !classees.includes(c.channel));
+// L'onglet « Prospects » a disparu : il désignait exactement la même population que
+// « Nouveaux leads ». L'origine d'un lead ne se devine donc plus depuis le canal du
+// contact — elle se lit sur l'affaire, colonne « Origine » de la pile.
 
 // « Nouveaux leads » et « Prospects » designent les memes personnes : ce qui les
 // separe est le moment, pas la nature. Un prospect reste un NOUVEAU LEAD tant que
@@ -1295,10 +1285,35 @@ const estDeLOrigine = (c, o) => (o.canaux ? o.canaux.includes(c.channel) : !clas
 const AVANT_ENTRETIEN = ['lead', 'rdv1'];
 const estNouveauLead = (d) => d.status === 'open' && AVANT_ENTRETIEN.includes(d.stage);
 
+// D'ou vient le lead. Le formulaire du site ecrit `fields.origine` (« Formulaire
+// btpexpertise.fr ») ; une affaire saisie a la main n'a que son canal CRM. On
+// montre la mention la plus precise disponible, sans inventer celle qui manque.
+const origineDe = (d) => d.fields?.origine || d.channel || '';
+
+// Le rendez-vous telephonique : quand l'appel est prevu.
+//
+// La date vit a deux endroits et ils ne disent pas la meme chose. `fields.date_visite`
+// ne porte QUE le jour ; c'est la TACHE de type « rdv » creee avec le lead qui porte
+// l'heure (`due_time`), parce que c'est elle qui alimente « Ma journee ». On lit donc
+// la tache en premier, et on retombe sur le champ du formulaire si elle a disparu —
+// une date sans heure vaut mieux que rien.
+//
+// `passe` sert a signaler un appel dont l'heure est depassee alors que le lead n'a
+// pas bouge : c'est exactement le cas qu'on veut voir dans la pile.
+const rdvTelephonique = (d) => {
+  const t = db.t('activities')
+    .filter(a => a.deal_id === d.id && a.type === 'rdv' && a.due_date)
+    .sort((a, b) => (a.due_date + (a.due_time || '')).localeCompare(b.due_date + (b.due_time || '')))[0];
+  const jour = t?.due_date || d.fields?.date_visite || null;
+  if (!jour) return { texte: '', passe: false };
+  const heure = t?.due_time || '';
+  const quand = new Date(`${jour}T${heure || '23:59'}`);
+  return { texte: `${fmtDate(jour)}${heure ? ` à ${heure}` : ''}`, passe: quand < new Date() };
+};
+
 const VUES = [
   { key: 'leads', label: 'Nouveaux leads' },
   { key: 'clients', label: 'Clients' },
-  { key: 'prospects', label: 'Prospects' },
   { key: 'partenaires', label: 'Partenaires' },
   { key: 'courtiers', label: 'Courtiers' },
   { key: 'tous', label: 'Tous les contacts' },
@@ -1312,10 +1327,7 @@ export const btpBasePage = {
     // On ouvre sur les nouveaux leads s'il y en a : c'est ce qui demande une action.
     const aTraiter = () => deals().filter(estNouveauLead);
     const vues = () => VUES;
-    // Les contacts deja en cours de traitement : ils ne doivent plus remonter
-    // dans la pile, sinon les deux listes se melangent a nouveau.
-    const enPile = () => new Set(aTraiter().map(d => d.contact_id).filter(Boolean));
-    const state = { vue: aTraiter().length ? 'leads' : 'clients', q: '', canal: '', origine: '', focus: null };
+    const state = { vue: aTraiter().length ? 'leads' : 'clients', q: '', canal: '', focus: null };
 
     // Créer depuis cet écran, c'est créer pour BTP Expertise : l'activité est cochée
     // d'avance, et le type suit la vue ouverte. Sans cela la fiche n'apparaîtrait pas ici.
@@ -1343,16 +1355,19 @@ export const btpBasePage = {
       let colonnes = [];
       if (surLeads) {
         lignes = aTraiter()
-          .filter(d => hit([d.title, dealParty(d), d.fields?.problematique, d.fields?.adresse], ts))
+          .filter(d => hit([d.title, dealParty(d), d.fields?.problematique, origineDe(d)], ts))
           .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''))
           .map(d => {
-            const c = d.contact_id && db.byId('contacts', d.contact_id);
-            return { id: d.id, lead: true, recu: d.created_at, nom: d.title, client: dealParty(d),
-                     ville: c?.city || d.fields?.adresse || '', tel: c?.phone, mail: c?.email,
+            const r = rdvTelephonique(d);
+            return { id: d.id, lead: true, recu: d.created_at, origine: origineDe(d), nom: d.title,
+                     client: dealParty(d), rdv: r.texte, rdvPasse: r.passe,
                      responsable: userName(d.owner_id), mission: missionDe(d), activity: d.activity,
                      ownerId: d.owner_id };
           });
-        colonnes = ['Reçu', 'Demande', 'Client', 'Ville', 'Téléphone', 'Email', "Chargé d'affaires"];
+        // Les coordonnées ne sont plus ici : elles vivent dans la fiche du contact,
+        // qu'un clic sur la ligne ouvre. Ce que la pile doit montrer, c'est quand
+        // l'appel est prévu — c'est lui qui fait sortir le lead de la pile.
+        colonnes = ['Reçu', 'Origine', 'Demande', 'Client', 'RDV téléphonique', "Chargé d'affaires"];
       } else if (surOrg) {
         const filtre = state.vue === 'courtiers' ? (o) => o.partner_job === 'Courtier' : (o) => o.type === 'Partenaire';
         lignes = orgs.filter(filtre)
@@ -1363,19 +1378,9 @@ export const btpBasePage = {
           }));
         colonnes = ['Nom', 'Métier', 'Ville', 'Téléphone', 'Email', 'Affaires apportées'];
       } else {
-        // Un prospect encore en attente d'entretien vit dans « Nouveaux leads » :
-        // le reprendre ici remelangerait exactement ce qu'on vient de separer.
-        // « Tous les contacts » garde tout le monde, son libelle le promet.
-        const pile = enPile();
-        const filtre = {
-          clients: (c) => c.type === 'Client',
-          prospects: (c) => c.type === 'Prospect' && !pile.has(c.id),
-          tous: () => true,
-        }[state.vue];
-        const origine = ORIGINES.find(o => o.key === state.origine);
+        const filtre = { clients: (c) => c.type === 'Client', tous: () => true }[state.vue];
         lignes = contacts.filter(filtre)
           .filter(c => !state.canal || c.channel === state.canal)
-          .filter(c => !origine || estDeLOrigine(c, origine))
           .filter(c => hit([contactName(c), c.email, c.phone, c.city, c.channel], ts))
           .map(c => {
             const d = deals().find(x => x.contact_id === c.id);
@@ -1405,7 +1410,6 @@ export const btpBasePage = {
         if (v === 'partenaires') return orgs.filter(o => o.type === 'Partenaire').length;
         if (v === 'courtiers') return orgs.filter(o => o.partner_job === 'Courtier').length;
         if (v === 'tous') return contacts.length;
-        if (v === 'prospects') { const pile = enPile(); return contacts.filter(c => c.type === 'Prospect' && !pile.has(c.id)).length; }
         return contacts.filter(c => c.type === 'Client').length;
       };
 
@@ -1417,13 +1421,9 @@ export const btpBasePage = {
           ${surLeads ? '' : `<button class="btn" id="b-new">+ ${surOrg ? (state.vue === 'courtiers' ? 'Courtier' : 'Partenaire') : 'Contact'}</button>`}
         </div>
         ${surLeads ? `<p class="muted small" style="margin:-4px 0 12px">Les demandes arrivées du site que personne ne porte encore. Choisissez un chargé d'affaires&nbsp;: le lead rejoint aussitôt la base, et l'attribution est inscrite dans l'historique de l'affaire.</p>` : ''}
-        ${state.vue === 'prospects' ? `<div class="pill-tabs">
-          ${ORIGINES.map(o => `<button type="button" data-origine="${o.key}" class="${state.origine === o.key ? 'on' : ''}"
-            aria-pressed="${state.origine === o.key}">${o.label}<span>${contacts.filter(c => c.type === 'Prospect' && !enPile().has(c.id) && estDeLOrigine(c, o)).length}</span></button>`).join('')}
-        </div>` : ''}
         <div class="toolbar">
           ${searchInput('b-q', state, 'Rechercher un nom, une ville, un email…')}
-          ${surOrg || state.vue === 'prospects' ? '' : `<select id="b-canal"><option value="">Tous les canaux</option>${CHANNELS.map(c => `<option ${state.canal === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>`}
+          ${surOrg || surLeads ? '' : `<select id="b-canal"><option value="">Tous les canaux</option>${CHANNELS.map(c => `<option ${state.canal === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>`}
           <span class="muted small">${lignes.length} ligne${lignes.length > 1 ? 's' : ''}</span>
         </div>
         <div class="card">
@@ -1431,13 +1431,12 @@ export const btpBasePage = {
             <thead><tr>${colonnes.map(c => `<th>${c}</th>`).join('')}${surLeads ? '' : '<th></th>'}</tr></thead>
             <tbody>${surLeads ? lignes.map(r => `<tr class="click" data-lead="${r.id}">
               <td class="small">${esc(fmtDate(r.recu))}</td>
+              <td class="small">${r.origine ? esc(r.origine) : '<span class="muted">—</span>'}</td>
               <td>${marqueMission(r.mission)}<b>${esc(r.nom)}</b></td>
               <td>${esc(r.client || '—')}</td>
-              <td>${esc(r.ville || '—')}</td>
-              <td>${r.tel ? `<a href="tel:${esc(r.tel)}">${esc(r.tel)}</a>` : '—'}</td>
-              <td>${r.mail ? `<a href="mailto:${esc(r.mail)}">${esc(r.mail)}</a>` : '—'}</td>
+              <td class="${r.rdvPasse ? 'status-lost' : ''}">${r.rdv ? esc(r.rdv) : '<span class="pill warn">À planifier</span>'}</td>
               <td>${choixResponsable(r.id, r.ownerId, r.activity)}</td>
-            </tr>`).join('') || `<tr><td colspan="7"><div class="empty">Aucun lead en attente. Tout est distribué.</div></td></tr>` : lignes.map(r => `<tr class="click" data-fiche="${r.id}">
+            </tr>`).join('') || `<tr><td colspan="6"><div class="empty">Aucun lead en attente. Tout est distribué.</div></td></tr>` : lignes.map(r => `<tr class="click" data-fiche="${r.id}">
               <td><b>${esc(r.nom)}</b></td>
               ${r.org ? '' : `<td>${choixResponsable(r.dealId, r.ownerId)}</td>`}
               <td>${esc(r.detail || '—')}</td>
@@ -1451,9 +1450,7 @@ export const btpBasePage = {
         </div>`);
 
       bindSearch(root, 'b-q', state, draw); restoreFocus(root, state);
-      root.querySelectorAll('[data-vue]').forEach(b => b.onclick = () => { state.vue = b.dataset.vue; state.origine = ''; draw(); });
-      // Recliquer sur l'onglet ouvert le relâche : on retrouve tous les prospects.
-      root.querySelectorAll('[data-origine]').forEach(b => b.onclick = () => { state.origine = state.origine === b.dataset.origine ? '' : b.dataset.origine; draw(); });
+      root.querySelectorAll('[data-vue]').forEach(b => b.onclick = () => { state.vue = b.dataset.vue; draw(); });
       root.querySelector('#b-canal')?.addEventListener('change', e => { state.canal = e.target.value; draw(); });
       // La ligne ouvre la fiche complète ; le crayon va droit au formulaire, d'où l'on
       // peut aussi supprimer (le CRM refuse la suppression d'un contact qui porte des affaires).
