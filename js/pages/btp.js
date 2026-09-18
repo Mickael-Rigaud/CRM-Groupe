@@ -1537,7 +1537,8 @@ export const btpBasePage = {
               <td class="num acts">${surArchives
                 ? `<button type="button" class="btn ghost sm" data-restaurer="${r.id}" data-org="${r.org ? 1 : ''}" title="Remettre cette fiche dans les listes actives">↩ Restaurer</button>${scope.canSupprimerFiche
                     ? `<button type="button" class="btn ghost sm danger" data-suppr="${r.id}" data-org="${r.org ? 1 : ''}" title="Supprimer définitivement, avec ses affaires et son historique">🗑</button>` : ''}`
-                : `<button type="button" class="btn ghost sm" data-modif="${r.id}" title="Modifier">✎</button><button type="button" class="btn ghost sm" data-archiver="${r.id}" title="Archiver : la fiche sort des listes, rien n'est supprimé">🗄</button>`}</td>
+                : `<button type="button" class="btn ghost sm" data-modif="${r.id}" title="Modifier">✎</button><button type="button" class="btn ghost sm" data-archiver="${r.id}" title="Archiver : la fiche sort des listes, rien n'est supprimé">🗄</button>${scope.canSupprimerFiche
+                    ? `<button type="button" class="btn ghost sm danger" data-suppr="${r.id}" data-org="${r.org ? 1 : ''}" title="Supprimer définitivement, avec ses affaires et son historique">🗑</button>` : ''}`}</td>
             </tr>`).join('') || `<tr><td colspan="${colonnes.length + 1}"><div class="empty">Aucune fiche dans cette vue.</div></td></tr>`}</tbody>
           </table></div>
         </div>`);
