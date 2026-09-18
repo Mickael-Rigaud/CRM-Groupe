@@ -476,7 +476,12 @@ export const ACTIVITIES = {
       { key: 'rdv_complementaire', label: 'Clôturé facturé', p: 100, delivery: true, mission: 'expertise' },
       // AMO : de la définition du besoin à la réception des travaux
       { key: 'amo_cadrage', label: 'Qualifié', p: 20, mission: 'amo' },
-      { key: 'amo_contrat', label: 'Mission AMO', p: 60, mission: 'amo' },
+      // La signature de la mission AMO ouvre la réalisation — c'est ce que dit le
+      // commentaire ci-dessus depuis le début, le `delivery` manquait seulement. Une
+      // mission signée n'est plus une probabilité : d'où p: 100, comme toute étape de
+      // réalisation. Le seuil du CA prévisionnel reste déclaré par `engagement`, par
+      // clé et non par p — les deux notions ne se confondent pas.
+      { key: 'amo_contrat', label: 'Mission AMO signée', p: 100, delivery: true, mission: 'amo' },
       { key: 'amo_programme', label: 'RDV terrain', p: 100, delivery: true, mission: 'amo' },
       { key: 'amo_consultation', label: 'Démarrage chantier', p: 100, delivery: true, mission: 'amo' },
       { key: 'amo_chantier', label: 'Suivi intermédiaire', p: 100, delivery: true, mission: 'amo' },
