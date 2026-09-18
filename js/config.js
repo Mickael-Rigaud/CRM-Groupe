@@ -12,7 +12,7 @@ export const CONFIG = {
   // de base : un chemin (« /prospects »), un fragment (« #/prospects ») ou une
   // adresse complete. Une valeur vide ouvre l'accueil : jamais de lien casse.
   RGD_VUES: {
-    prospects: '',   // Clients & prospects → Prospects
+    prospects: 'index.html#/clients',   // Clients & prospects → Prospects
   },
   get DEMO() { return !this.SUPABASE_URL || !this.SUPABASE_ANON_KEY; },
 };

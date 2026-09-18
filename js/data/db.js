@@ -60,15 +60,11 @@ const localAdapter = {
     this.data[table] = this.data[table].filter(r => (r.id ?? r.key) !== id); this.save();
   },
   reset() { localStorage.removeItem(LS_KEY); localStorage.removeItem(LS_USER); localStorage.removeItem(LS_FILES); },
-  // Mode démo : on rejoue à la main ce que fait la fonction SQL correspondante.
-  async rpc(nom, args) {
-    if (nom !== 'remplacer_agenda') throw new Error('Fonction inconnue en mode démo : ' + nom);
-    const { p_jour, p_calendriers, p_evenements } = args;
-    this.data.agenda_events = (this.data.agenda_events || [])
-      .filter(e => !(e.day === p_jour && p_calendriers.includes(e.calendar_id)));
-    for (const e of (p_evenements || [])) this.data.agenda_events.push({ ...e, day: p_jour, synced_at: new Date().toISOString() });
-    this.save(); return (p_evenements || []).length;
-  },
+  // Mode démo : aucune fonction SQL n'est appelée depuis le navigateur aujourd'hui.
+  // Celles qui existent (push_agenda, push_structure_stats) sont appelées par
+  // l'outil qui pousse les données, pas par le CRM. Si une page venait à en
+  // appeler une, c'est ici qu'on rejouerait son effet à la main.
+  async rpc(nom) { throw new Error('Fonction inconnue en mode démo : ' + nom); },
   // fichiers (démo) : conservés dans le navigateur en base64, petits fichiers uniquement
   files() { try { return JSON.parse(localStorage.getItem(LS_FILES)) || {}; } catch { return {}; } },
   async uploadFile(path, file) {
