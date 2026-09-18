@@ -4,7 +4,11 @@
 import { db } from '../data/db.js';
 import { idsDe, urlAgenda, VUES as VUES_CALENDRIER, CLES_AGENDA, modeEmploi } from '../agenda.js';
 import { scope } from '../data/scope.js';
-import { ACTIVITIES, CHANNELS, weightedAmount, stagesDe, missionDe, NIVEAUX_BTP, CAPACITE_BTP, HONORAIRES_AMO, MISSIONS_BTP, couleurMission, niveauDe, pointsDe } from '../data/schema.js';
+import {
+  ACTIVITIES, CHANNELS, weightedAmount, stagesDe, missionDe, NIVEAUX_BTP, CAPACITE_BTP,
+  HONORAIRES_AMO, MISSIONS_BTP, couleurMission, niveauDe, pointsDe,
+  BAREME_AMO, MATRICE_AMO, tauxSuggere, PHASES_AMO, FRONTIERE_AMO, EXEMPLES_CHARGE, FICHE_CHARGE_BTP,
+} from '../data/schema.js';
 import {
   esc, eur, daysSince, fmtDate, contactName, dealParty, userName, toast,
   openModal, closeModal, confirm, renderForm, readForm, terms, hit,
@@ -355,6 +359,193 @@ function ligneCharge(g) {
   </tr>`;
 }
 
+// ---------------------------------------------------------------- Le référentiel AMO
+// Le manuel opérationnel V5 porte la doctrine du cabinet : le catalogue, la façon de
+// fixer un taux, le déroulé d'une mission, la limite à ne pas franchir. Elle n'avait
+// aucune place dans le CRM — il fallait rouvrir le PDF. Ces blocs la mettent sous les
+// yeux là où on s'en sert, sur l'écran des missions AMO.
+
+// 3. Le catalogue : ce qu'on vend, et ce que ça pèse.
+const catalogueAmo = () => {
+  const lignes = NIVEAUX_BTP.filter(n => n.mission === 'amo');
+  return `<div class="card btp-ref" style="${teinteMission('amo')}">
+    <div class="card-head"><h2>Catalogue AMO</h2>
+      <span class="grow"></span>
+      <span class="muted small">Manuel V5 &middot; §3</span>
+    </div>
+    <p class="btp-ref-phrase">« Honoraires de ${esc(HONORAIRES_AMO.taux)}, selon le montant, la durée, la complexité
+      et le niveau d'accompagnement. Minimum d'honoraires : ${eur(HONORAIRES_AMO.minimum)} HT. »</p>
+    <div class="btp-duo">
+      <div class="table-wrap"><table>
+        <thead><tr><th>Niveau interne</th><th>Profil de mission</th><th class="num">Points</th></tr></thead>
+        <tbody>${lignes.map(n => `<tr>
+          <td><b>${esc(n.label)}</b></td>
+          <td class="small">${esc(n.contenu)}</td>
+          <td class="num"><b class="btp-pts">${n.points}</b></td>
+        </tr>`).join('')}</tbody>
+      </table></div>
+      <div class="table-wrap"><table>
+        <thead><tr><th class="num">Travaux HT</th><th class="num">Taux</th><th class="num">Honoraires HT</th></tr></thead>
+        <tbody>${BAREME_AMO.map(b => `<tr>
+          <td class="num">${eur(b.travaux)}</td>
+          <td class="num">${b.taux ? b.taux + ' %' : `<span class="muted">${esc(b.note || '—')}</span>`}</td>
+          <td class="num"><b>${eur(b.honoraires)}</b></td>
+        </tr>`).join('')}</tbody>
+      </table></div>
+    </div>
+  </div>`;
+};
+
+// 4. La matrice de taux. Le tableau se lit tel quel ; cliquer une case coche le
+// critère et le taux suggéré se calcule — c'est à cela que sert une matrice.
+const matriceAmo = (scores) => {
+  const total = scores.reduce((t, v) => t + (v ?? 0), 0);
+  const choisis = scores.filter(v => v !== null).length;
+  const complet = choisis === MATRICE_AMO.criteres.length;
+  const palier = tauxSuggere(total);
+  return `<div class="card btp-ref" style="${teinteMission('amo')}">
+    <div class="card-head"><h2>Fixer le taux : la matrice de complexité</h2>
+      <span class="grow"></span>
+      <span class="muted small">Manuel V5 &middot; §4</span>
+    </div>
+    <p class="muted small">${esc(MATRICE_AMO.intro)} Cliquez une case par ligne pour obtenir le taux suggéré.</p>
+    <div class="table-wrap"><table class="btp-matrice">
+      <thead><tr><th>Critère</th><th>0 point</th><th>1 point</th><th>2 points</th></tr></thead>
+      <tbody>${MATRICE_AMO.criteres.map((c, i) => `<tr>
+        <th scope="row">${esc(c.label)}</th>
+        ${c.valeurs.map((v, n) => `<td class="choix ${scores[i] === n ? 'on' : ''}" data-crit="${i}" data-score="${n}"
+          role="button" tabindex="0">${esc(v)}</td>`).join('')}
+      </tr>`).join('')}</tbody>
+    </table></div>
+
+    <div class="btp-score">
+      <div class="btp-score-val ${complet ? 'plein' : ''}">
+        <b>${total}</b><span>/ 10 points de complexité</span>
+      </div>
+      <div class="btp-score-taux">
+        ${choisis ? `<b>${palier.taux} %</b><span>${esc(palier.regle)}</span>` : '<span class="muted">Cochez les critères pour voir le taux suggéré.</span>'}
+      </div>
+      ${choisis ? '<button type="button" class="btn ghost sm" id="mx-raz">Effacer</button>' : ''}
+    </div>
+    ${!complet && choisis ? `<p class="muted small">${MATRICE_AMO.criteres.length - choisis} critère${MATRICE_AMO.criteres.length - choisis > 1 ? 's' : ''} encore à coter : le taux affiché n'est pas définitif.</p>` : ''}
+
+    <div class="table-wrap" style="margin-top:14px"><table>
+      <thead><tr><th class="num">Score</th><th class="num">Taux suggéré</th><th>Règle</th></tr></thead>
+      <tbody>${MATRICE_AMO.paliers.map(p => `<tr class="${choisis && p === palier ? 'btp-palier-on' : ''}">
+        <td class="num">${p.min} à ${p.max}</td>
+        <td class="num"><b>${p.taux} %</b></td>
+        <td class="small">${esc(p.regle)}</td>
+      </tr>`).join('')}</tbody>
+    </table></div>
+    <p class="btp-ref-garde">${esc(MATRICE_AMO.reserve)}</p>
+  </div>`;
+};
+
+// 5. Les phases. Le poids sert aussi de clé de facturation, d'où la barre : on voit
+// tout de suite que l'accompagnement travaux pèse le tiers de la mission.
+const phasesAmo = () => `<div class="card btp-ref" style="${teinteMission('amo')}">
+  <div class="card-head"><h2>Phases d'accompagnement</h2>
+    <span class="grow"></span>
+    <span class="muted small">Manuel V5 &middot; §5</span>
+  </div>
+  <ol class="btp-phases">${PHASES_AMO.map(p => {
+    const et = p.etape && act().stages.find(s => s.key === p.etape);
+    return `<li class="btp-phase">
+      <span class="btp-phase-num">${p.num}</span>
+      <div class="btp-phase-corps">
+        <b>${esc(p.label)}</b>
+        ${et ? `<span class="btp-phase-etape">Étape du pipeline&nbsp;: ${esc(et.label)}</span>` : ''}
+        <span class="btp-phase-txt">${esc(p.contenu)}</span>
+      </div>
+      <div class="btp-phase-poids">
+        <b>${p.poids}&nbsp;%</b>
+        <i style="width:${(p.poids / 35) * 100}%"></i>
+      </div>
+    </li>`;
+  }).join('')}</ol>
+  <p class="muted small">Les six poids font 100 % : ils servent de clé de facturation par phase.</p>
+</div>`;
+
+// 6. La limite à ne pas franchir. Elle est ici parce qu'elle se joue au moment du
+// devis, pas au moment du litige.
+const frontiereAmo = () => `<div class="card btp-ref btp-garde" style="${teinteMission('amo')}">
+  <div class="card-head"><h2>Frontière AMO / maîtrise d'œuvre</h2>
+    <span class="grow"></span>
+    <span class="muted small">Manuel V5 &middot; §6</span>
+  </div>
+  <ul class="btp-regles">${FRONTIERE_AMO.regles.map(r => `<li>${esc(r)}</li>`).join('')}</ul>
+  <p class="btp-ref-garde"><b>Référence de travail&nbsp;:</b> ${esc(FRONTIERE_AMO.reference)}</p>
+</div>`;
+
+// 7. Points et capacité. Les exemples du manuel étaient écrits sur 15 points ; ils
+// sont recalculés sur la capacité en vigueur, sans quoi l'écran se contredirait.
+const pointsEtCapacite = () => {
+  const exemple = (composition) => {
+    const niveaux = composition.map(k => NIVEAUX_BTP.find(n => n.key === k));
+    const total = niveaux.reduce((t, n) => t + n.points, 0);
+    const reste = CAPACITE_BTP.points - total;
+    const tenable = NIVEAUX_BTP.filter(n => n.points <= reste).sort((a, b) => b.points - a.points)[0];
+    const ton = reste <= 0 ? 'bad' : reste <= 2 ? 'warn' : 'ok';
+    return `<tr>
+      <td>${niveaux.map(n => `${marqueMission(n.mission)}${esc(n.label)}`).join('<span class="btp-plus">+</span>')}</td>
+      <td class="num">${niveaux.map(n => n.points).join(' + ')} = <b>${total} / ${CAPACITE_BTP.points}</b></td>
+      <td><span class="pill ${ton}">${reste <= 0 ? 'Capacité atteinte'
+        : tenable ? `${reste} points libres — de quoi prendre une ${esc(tenable.label.toLowerCase())}`
+        : `${reste} point${reste > 1 ? 's' : ''} libre${reste > 1 ? 's' : ''}`}</span></td>
+    </tr>`;
+  };
+  return `<div class="card btp-ref">
+    <div class="card-head"><h2>Système de points et capacité</h2>
+      <span class="grow"></span>
+      <a class="btn ghost sm" href="#/btp/charges">Voir le réseau →</a>
+      <span class="muted small">Manuel V5 &middot; §7</span>
+    </div>
+    <div class="btp-duo">
+      <div class="table-wrap"><table>
+        <thead><tr><th>Mission</th><th class="num">Points</th></tr></thead>
+        <tbody>${NIVEAUX_BTP.map(n => `<tr>
+          <td>${marqueMission(n.mission)}${esc(n.label)}</td>
+          <td class="num"><b class="btp-pts">${n.points}</b></td>
+        </tr>`).join('')}</tbody>
+      </table></div>
+      <ul class="btp-regles">
+        <li><b>${CAPACITE_BTP.points} points</b> structurels au maximum par chargé d'affaires.</li>
+        <li><b>${CAPACITE_BTP.amoActives} AMO actives</b> au maximum en même temps.</li>
+        <li>La <b>charge structurelle</b> est la responsabilité totale du portefeuille ; la <b>charge du moment</b> est l'intensité réelle.</li>
+        <li>Les points d'une expertise se <b>libèrent à la clôture</b> ; ceux d'une AMO <b>occupent la capacité longtemps</b>.</li>
+      </ul>
+    </div>
+    <div class="table-wrap" style="margin-top:14px"><table>
+      <thead><tr><th>Portefeuille</th><th class="num">Calcul</th><th>Décision</th></tr></thead>
+      <tbody>${EXEMPLES_CHARGE.map(exemple).join('')}</tbody>
+    </table></div>
+    <p class="muted small">Exemples du manuel, recalculés sur la capacité retenue au lancement
+      (${CAPACITE_BTP.points} points) ; le manuel V5 les présentait sur 15.</p>
+  </div>`;
+};
+
+// 8. La fiche métier, sur l'écran du réseau : ce qu'on attend de quelqu'un avant de
+// l'habiliter, et ce qu'on lui demande une fois qu'il l'est.
+const ficheMetier = () => `<div class="card btp-ref">
+  <div class="card-head"><h2>Fiche métier</h2>
+    <span class="grow"></span>
+    <span class="muted small">Manuel V5 &middot; §8</span>
+  </div>
+  <p class="btp-ref-phrase">${esc(FICHE_CHARGE_BTP.intitule)}</p>
+  <div class="btp-duo">
+    <div class="table-wrap"><table>
+      <thead><tr><th>Dimension</th><th>Attendu</th></tr></thead>
+      <tbody>${FICHE_CHARGE_BTP.dimensions.map(([d, a]) => `<tr>
+        <td><b>${esc(d)}</b></td><td class="small">${esc(a)}</td>
+      </tr>`).join('')}</tbody>
+    </table></div>
+    <div>
+      <h3 class="btp-ref-titre">Missions principales</h3>
+      <ul class="btp-regles">${FICHE_CHARGE_BTP.missions.map(m => `<li>${esc(m)}</li>`).join('')}</ul>
+    </div>
+  </div>
+</div>`;
+
 // ---------------------------------------------------------------- Missions, par métier
 // Un écran par métier : la pipeline entière, et la liste de ce qui la remplit.
 const pageMission = (mission) => ({
@@ -362,7 +553,9 @@ const pageMission = (mission) => ({
   render(root) {
     if (guard(root)) return {};
     const coquille = poser(root);
-    const state = { q: '', focus: null };
+    // La cotation de la matrice de taux vit dans l'état de la page : elle survit aux
+    // redessins, et rien n'est enregistré — c'est une aide au devis, pas une donnée.
+    const state = { q: '', focus: null, scores: MATRICE_AMO.criteres.map(() => null) };
 
     const draw = () => {
       const { siennes, colonnes, pondere } = pipelineDe(mission);
@@ -410,6 +603,14 @@ const pageMission = (mission) => ({
             }).join('') || `<tr><td colspan="7"><div class="empty">Aucune mission ${esc(MISSIONS[mission].titre)} en cours.</div></td></tr>`}</tbody>
           </table></div>
         </div>
+
+        ${mission === 'amo' ? [
+          catalogueAmo(),
+          matriceAmo(state.scores),
+          phasesAmo(),
+          frontiereAmo(),
+          pointsEtCapacite(),
+        ].join('') : ''}
         </div>`);
 
       bindSearch(root, 'm-q', state, draw); restoreFocus(root, state);
@@ -417,6 +618,23 @@ const pageMission = (mission) => ({
       // Une mission saisie ici naît dans son métier : le formulaire ouvre avec le type
       // déjà choisi, le reste (contact, montant) se remplit comme partout ailleurs.
       root.querySelector('#m-new').onclick = () => dealForm(KEY, null, { fields: { type_mission: mission } }, draw);
+
+      // Une case cliquée cote son critère ; la recliquer l'annule, pour repartir d'un
+      // devis sans avoir à tout effacer.
+      const coter = (td) => {
+        const i = Number(td.dataset.crit);
+        const n = Number(td.dataset.score);
+        state.scores[i] = state.scores[i] === n ? null : n;
+        draw();
+      };
+      root.querySelectorAll('[data-crit]').forEach(td => {
+        td.onclick = () => coter(td);
+        td.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); coter(td); } };
+      });
+      root.querySelector('#mx-raz')?.addEventListener('click', () => {
+        state.scores = MATRICE_AMO.criteres.map(() => null);
+        draw();
+      });
     };
 
     draw();
@@ -546,7 +764,9 @@ export const btpChargesPage = {
             <li>Les points d'une <b>expertise se libèrent à sa clôture</b> ; ceux d'une <b>AMO occupent la capacité longtemps</b>.</li>
             <li>Une fiche <b>sans compte CRM</b> n'a pas de charge calculée : ses missions ne peuvent pas lui être rattachées.</li>
           </ul>
-        </div>`);
+        </div>
+
+        ${ficheMetier()}`);
 
       lierAffaires(root, draw);
       root.querySelector('#ca-new').onclick = () => ficheCharge(null, draw);
