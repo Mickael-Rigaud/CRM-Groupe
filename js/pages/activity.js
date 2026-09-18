@@ -47,7 +47,9 @@ export function activityForm(link = {}, existing = null, onSaved, onClose = null
       if (existing) await db.update('activities', existing.id, v);
       // `link` porte les rattachements (affaire, contact…) ; la saisie prime dessus,
       // sinon une clé absente de `link` écraserait ce que l'on vient de choisir.
-      else await db.insert('activities', { ...link, ...v, done: false });
+      // `created_by` : qui envoie la tache. La colonne a auth.uid() pour defaut
+      // cote serveur ; on la pose ici pour que le mode demo se comporte pareil.
+      else await db.insert('activities', { ...link, ...v, done: false, created_by: scope.user?.id || null });
       closeModal(true); toast('Activité enregistrée'); onSaved?.();
     } catch (err) { toast(err.message, 'err'); }
   };

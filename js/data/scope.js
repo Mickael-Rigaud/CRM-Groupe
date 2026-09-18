@@ -29,12 +29,17 @@ export const scope = {
     if (this.role === 'propulsion' && (o.activities || []).includes('propulsion')) return true;
     return db.t('deals').some(d => d.organisation_id === o.id && this.canSeeDeal(d));
   },
+  // Miroir de la policy activities_select. La direction n'a PLUS de passe-droit
+  // ici : une tache rattachee a rien est un pense-bete, il n'appartient qu'a son
+  // auteur et a la personne qui la porte. Une tache accrochee a une fiche reste
+  // visible par qui voit la fiche — sinon la « prochaine action » des pipelines
+  // disparaitrait pour tout le monde.
   canSeeActivity(a) {
-    if (this.isDirection) return true;
     if (a.assignee_id === this.user.id) return true;
+    if (a.created_by && a.created_by === this.user.id) return true;
     if (a.deal_id) { const d = db.byId('deals', a.deal_id); return d ? this.canSeeDeal(d) : false; }
-    if (a.organisation_id) { const o = db.byId('organisations', a.organisation_id); return o ? this.canSeeOrg(o) : false; }
     if (a.contact_id) { const c = db.byId('contacts', a.contact_id); return c ? this.canSeeContact(c) : false; }
+    if (a.organisation_id) { const o = db.byId('organisations', a.organisation_id); return o ? this.canSeeOrg(o) : false; }
     return false;
   },
 
