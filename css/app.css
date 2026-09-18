@@ -480,6 +480,12 @@ tr.btp-mission .btp-pts { color: var(--m-encre); }
 .btp-ref-phrase { margin: 0 0 16px; padding: 12px 16px; border-radius: 10px; font-size: 14px; line-height: 1.55;
   background: var(--m-clair, var(--card-2)); color: var(--m-encre, var(--text)); }
 .btp-ref-garde { margin: 14px 0 0; font-size: 12.5px; line-height: 1.55; color: var(--muted); }
+/* La phrase commerciale ferme la carte du catalogue et ouvre celle de la fiche metier :
+   sa marge suit sa position plutot que de forcer une place. */
+.btp-ref-phrase:last-child { margin: 16px 0 0; }
+.btp-ref-sous { margin: 0 0 14px; font-size: 13px; line-height: 1.55; color: var(--muted); }
+.btp-ref-manque { margin: 10px 0 0; font-size: 12.5px; font-weight: 600; color: var(--amber); }
+.btp-score-fleche { font-size: 20px; color: var(--muted-2); }
 .btp-ref-titre { margin: 0 0 10px; font-family: var(--font-display); font-size: 15px; font-weight: 700; }
 .btp-garde { border-left: 3px solid var(--m, var(--accent)); }
 .btp-plus { color: var(--muted-2); margin: 0 7px; }
@@ -500,7 +506,6 @@ tr.btp-mission .btp-pts { color: var(--m-encre); }
 .btp-score-val b { color: var(--muted-2); }
 .btp-score-val.plein b { color: var(--text); }
 .btp-score-taux b { color: var(--m-encre, var(--accent-ink)); }
-.btp-score button { margin-left: auto; }
 
 /* Les phases : la barre dit tout de suite laquelle pèse le plus */
 .btp-phases { list-style: none; margin: 0; padding: 0; }
@@ -668,26 +673,55 @@ tr.btp-mission .btp-pts { color: var(--m-encre); }
 .todo-groupe.jour::before { background: var(--amber); }
 .todo-groupe.semaine::before { background: var(--accent); }
 
-.todo-tache { display: flex; gap: 10px; align-items: flex-start; background: var(--card); border: 1px solid var(--line); border-left: 3px solid var(--c, var(--line-strong)); border-radius: 4px 12px 12px 4px; padding: 10px 11px; box-shadow: 0 1px 2px rgba(17,21,28,.04); transition: transform .13s, box-shadow .13s, border-color .13s; }
-.todo-tache:hover { transform: translateY(-1px); box-shadow: var(--shadow-lift); border-color: color-mix(in srgb, var(--c, var(--accent)) 45%, var(--line)); border-left-color: var(--c, var(--accent)); }
-/* Urgent : pose a la main, il prime sur le rang d'echeance. La carte le porte
-   franchement, sans effacer le filet de couleur de sa structure. */
+/* La carte : deux lignes, un filet de couleur, et tout le reste en pastilles.
+   Elle se souleve au survol et s'annonce a l'arrivee — c'est ce qui donne a la
+   liste sa vivacite, sans bouger d'un pixel au repos. */
+.todo-tache { display: flex; gap: 11px; align-items: flex-start; background: var(--card); border: 1px solid var(--line); border-left: 3px solid var(--c, var(--line-strong)); border-radius: 5px 14px 14px 5px; padding: 11px 12px; box-shadow: 0 1px 2px rgba(17,21,28,.04); transition: transform .14s cubic-bezier(.2,.8,.3,1), box-shadow .14s, border-color .14s; animation: todo-entre .2s ease both; }
+@keyframes todo-entre { from { opacity: 0; transform: translateY(5px); } }
+.todo-tache + .todo-tache { margin-top: 7px; }
+.todo-tache:hover { transform: translateY(-2px); box-shadow: var(--shadow-lift); border-color: color-mix(in srgb, var(--c, var(--accent)) 45%, var(--line)); border-left-color: var(--c, var(--accent)); }
 .todo-tache.urgent { border-color: color-mix(in srgb, var(--red) 40%, var(--line)); box-shadow: 0 0 0 1px color-mix(in srgb, var(--red) 18%, transparent), 0 1px 2px rgba(17,21,28,.04); }
-.todo-tache.done { opacity: .5; box-shadow: none; }
-/* Ce qu'on vient de cocher : encore lisible, le temps de se raviser. */
-.todo-tache.recente { opacity: 1; background: var(--green-soft); border-color: color-mix(in srgb, var(--green) 30%, var(--line)); }
-.todo-tache.recente .todo-when { color: var(--green); font-weight: 700; }
+.todo-tache.done { opacity: .55; box-shadow: none; }
 .todo-tache.done:hover { transform: none; }
 .todo-tache.done b { text-decoration: line-through; }
-.todo-tache input[type=checkbox] { width: 17px; height: 17px; margin-top: 2px; accent-color: var(--green); flex-shrink: 0; }
-.todo-tache-corps { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-.todo-tache-corps b { font-size: 13px; font-weight: 600; line-height: 1.35; }
-.todo-badge { display: inline-flex; align-items: center; gap: 5px; align-self: flex-start; background: var(--b); color: var(--bt); border-radius: 999px; padding: 3px 9px 3px 4px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; }
+.todo-tache.recente { opacity: 1; background: var(--green-soft); border-color: color-mix(in srgb, var(--green) 30%, var(--line)); }
+
+/* Case a cocher dessinee : la case native est petite et differente sur chaque
+   systeme. Celle-ci se remplit de vert et pose sa coche d'un trait. */
+.todo-case { position: relative; flex: none; width: 21px; height: 21px; margin-top: 1px; cursor: pointer; }
+.todo-case input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+.todo-case span { position: absolute; inset: 0; border: 2px solid var(--line-strong); border-radius: 7px; background: var(--card); transition: background .14s, border-color .14s, transform .14s; }
+.todo-case span::after { content: ""; position: absolute; left: 6px; top: 2px; width: 4px; height: 9px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg) scale(0); transition: transform .16s cubic-bezier(.2,1.5,.4,1); }
+.todo-case:hover span { border-color: var(--green); }
+.todo-case input:checked + span { background: var(--green); border-color: var(--green); }
+.todo-case input:checked + span::after { transform: rotate(45deg) scale(1); }
+.todo-case input:focus-visible + span { box-shadow: 0 0 0 3px color-mix(in srgb, var(--green) 30%, transparent); }
+
+.todo-tache-corps { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.todo-tache-corps b { font-size: 13.5px; font-weight: 600; line-height: 1.35; }
+
+/* La ligne de pastilles : structure, echeance, contexte, destinataire. */
+.todo-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+.todo-chip { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; background: var(--card-2); color: var(--muted); border-radius: 999px; padding: 3px 10px; font-size: 11.5px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.todo-chip.ctx { max-width: 260px; }
+.todo-chip.ctx a { color: var(--muted); text-decoration: none; }
+.todo-chip.ctx:hover a { color: var(--accent); text-decoration: underline; }
+.todo-chip.quand.late { background: var(--red-soft); color: var(--red); font-weight: 700; }
+.todo-chip.quand.today { background: var(--amber-soft); color: var(--amber); font-weight: 700; }
+.todo-chip.pour { background: var(--accent-soft); color: var(--accent-ink); font-weight: 600; }
+.todo-chip.pour i { font-style: normal; opacity: .6; }
+.todo-tache.recente .todo-chip.quand { background: color-mix(in srgb, var(--green) 18%, #fff); color: var(--green); font-weight: 700; }
+
+.todo-badge { display: inline-flex; align-items: center; gap: 5px; background: var(--b); color: var(--bt); border-radius: 999px; padding: 3px 10px 3px 4px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; }
 .todo-badge-logo { display: inline-grid; place-items: center; width: 15px; height: 15px; border-radius: 50%; overflow: hidden; background: #fff; flex-shrink: 0; }
 .todo-badge-logo img { width: 100%; height: 100%; object-fit: contain; }
-.todo-ctx { font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.todo-when { font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
-.todo-when.late { color: var(--red); font-weight: 700; }
+
+/* Le crayon ne s'invite qu'au survol : une icone par ligne en permanence
+   encombre une liste qu'on vient lire, pas editer. */
+.todo-editer { flex: none; opacity: 0; transition: opacity .13s; }
+.todo-tache:hover .todo-editer, .todo-editer:focus-visible { opacity: 1; }
+@media (hover: none) { .todo-editer { opacity: 1; } }
+
 .todo-vide { color: var(--muted-2); font-size: 12.5px; text-align: center; padding: 18px 4px 20px; }
 /* En dessous, les colonnes s'empilent plutôt que de défiler latéralement */
 @media (max-width: 820px) { .todo-board { grid-auto-flow: row; grid-auto-columns: auto; } }

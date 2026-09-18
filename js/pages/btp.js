@@ -365,7 +365,9 @@ function ligneCharge(g) {
 // aucune place dans le CRM — il fallait rouvrir le PDF. Ces blocs la mettent sous les
 // yeux là où on s'en sert, sur l'écran des missions AMO.
 
-// 3. Le catalogue : ce qu'on vend, et ce que ça pèse.
+// 3. Le catalogue : les trois niveaux d'AMO, et rien d'autre. Le barème d'honoraires
+// répond à une autre question — combien facture-t-on — et vient donc à sa place, après
+// le taux. Les mettre côte à côte faisait lire deux sujets pour un seul tableau.
 const catalogueAmo = () => {
   const lignes = NIVEAUX_BTP.filter(n => n.mission === 'amo');
   return `<div class="card btp-ref" style="${teinteMission('amo')}">
@@ -373,42 +375,31 @@ const catalogueAmo = () => {
       <span class="grow"></span>
       <span class="muted small">Manuel V5 &middot; §3</span>
     </div>
+    <p class="btp-ref-sous">Les trois niveaux de mission, et ce que chacun pèse dans la capacité d'un chargé d'affaires.</p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Niveau interne</th><th>Profil de mission</th><th>Honoraires</th><th class="num">Points</th></tr></thead>
+      <tbody>${lignes.map(n => `<tr>
+        <td>${marqueMission('amo')}<b>${esc(n.label)}</b></td>
+        <td class="small">${esc(n.contenu)}</td>
+        <td class="small">${esc(n.tarif)}</td>
+        <td class="num"><b class="btp-pts">${n.points}</b></td>
+      </tr>`).join('')}</tbody>
+    </table></div>
     <p class="btp-ref-phrase">« Honoraires de ${esc(HONORAIRES_AMO.taux)}, selon le montant, la durée, la complexité
       et le niveau d'accompagnement. Minimum d'honoraires : ${eur(HONORAIRES_AMO.minimum)} HT. »</p>
-    <div class="btp-duo">
-      <div class="table-wrap"><table>
-        <thead><tr><th>Niveau interne</th><th>Profil de mission</th><th class="num">Points</th></tr></thead>
-        <tbody>${lignes.map(n => `<tr>
-          <td><b>${esc(n.label)}</b></td>
-          <td class="small">${esc(n.contenu)}</td>
-          <td class="num"><b class="btp-pts">${n.points}</b></td>
-        </tr>`).join('')}</tbody>
-      </table></div>
-      <div class="table-wrap"><table>
-        <thead><tr><th class="num">Travaux HT</th><th class="num">Taux</th><th class="num">Honoraires HT</th></tr></thead>
-        <tbody>${BAREME_AMO.map(b => `<tr>
-          <td class="num">${eur(b.travaux)}</td>
-          <td class="num">${b.taux ? b.taux + ' %' : `<span class="muted">${esc(b.note || '—')}</span>`}</td>
-          <td class="num"><b>${eur(b.honoraires)}</b></td>
-        </tr>`).join('')}</tbody>
-      </table></div>
-    </div>
   </div>`;
 };
 
-// 4. La matrice de taux. Le tableau se lit tel quel ; cliquer une case coche le
-// critère et le taux suggéré se calcule — c'est à cela que sert une matrice.
+// 4. La matrice, seule : cinq critères, zéro à deux points chacun. Cliquer une case
+// cote le critère ; le résultat se lit dans la carte suivante.
 const matriceAmo = (scores) => {
-  const total = scores.reduce((t, v) => t + (v ?? 0), 0);
   const choisis = scores.filter(v => v !== null).length;
-  const complet = choisis === MATRICE_AMO.criteres.length;
-  const palier = tauxSuggere(total);
   return `<div class="card btp-ref" style="${teinteMission('amo')}">
-    <div class="card-head"><h2>Fixer le taux : la matrice de complexité</h2>
+    <div class="card-head"><h2>Matrice interne des critères</h2>
       <span class="grow"></span>
       <span class="muted small">Manuel V5 &middot; §4</span>
     </div>
-    <p class="muted small">${esc(MATRICE_AMO.intro)} Cliquez une case par ligne pour obtenir le taux suggéré.</p>
+    <p class="btp-ref-sous">${esc(MATRICE_AMO.intro)} <b>Cliquez une case par ligne</b> : le score se calcule dans le bloc suivant.</p>
     <div class="table-wrap"><table class="btp-matrice">
       <thead><tr><th>Critère</th><th>0 point</th><th>1 point</th><th>2 points</th></tr></thead>
       <tbody>${MATRICE_AMO.criteres.map((c, i) => `<tr>
@@ -417,17 +408,38 @@ const matriceAmo = (scores) => {
           role="button" tabindex="0">${esc(v)}</td>`).join('')}
       </tr>`).join('')}</tbody>
     </table></div>
+    <p class="muted small">${choisis
+      ? `${choisis} critère${choisis > 1 ? 's' : ''} coté${choisis > 1 ? 's' : ''} sur ${MATRICE_AMO.criteres.length} — recliquer une case l'annule.`
+      : `Aucun critère coté : cliquez une case sur chacune des ${MATRICE_AMO.criteres.length} lignes.`}</p>
+  </div>`;
+};
+
+// 4 bis. Le score et le taux qu'il commande. Séparé de la matrice : l'une se remplit,
+// l'autre se lit.
+const scoreComplexite = (scores) => {
+  const total = scores.reduce((t, v) => t + (v ?? 0), 0);
+  const choisis = scores.filter(v => v !== null).length;
+  const complet = choisis === MATRICE_AMO.criteres.length;
+  const manque = MATRICE_AMO.criteres.length - choisis;
+  const palier = tauxSuggere(total);
+  return `<div class="card btp-ref" style="${teinteMission('amo')}">
+    <div class="card-head"><h2>Score de complexité</h2>
+      <span class="grow"></span>
+      ${choisis ? '<button type="button" class="btn ghost sm" id="mx-raz">Effacer la cotation</button>' : ''}
+      <span class="muted small">Manuel V5 &middot; §4</span>
+    </div>
 
     <div class="btp-score">
       <div class="btp-score-val ${complet ? 'plein' : ''}">
-        <b>${total}</b><span>/ 10 points de complexité</span>
+        <b>${total}</b><span>points de complexité sur 10</span>
       </div>
+      <span class="btp-score-fleche" aria-hidden="true">→</span>
       <div class="btp-score-taux">
-        ${choisis ? `<b>${palier.taux} %</b><span>${esc(palier.regle)}</span>` : '<span class="muted">Cochez les critères pour voir le taux suggéré.</span>'}
+        ${choisis ? `<b>${palier.taux} %</b><span>${esc(palier.regle)}</span>`
+          : '<b class="muted">—</b><span>Cotez les critères ci-dessus</span>'}
       </div>
-      ${choisis ? '<button type="button" class="btn ghost sm" id="mx-raz">Effacer</button>' : ''}
     </div>
-    ${!complet && choisis ? `<p class="muted small">${MATRICE_AMO.criteres.length - choisis} critère${MATRICE_AMO.criteres.length - choisis > 1 ? 's' : ''} encore à coter : le taux affiché n'est pas définitif.</p>` : ''}
+    ${choisis && !complet ? `<p class="btp-ref-manque">${manque} critère${manque > 1 ? 's' : ''} encore à coter : ce taux n'est pas définitif.</p>` : ''}
 
     <div class="table-wrap" style="margin-top:14px"><table>
       <thead><tr><th class="num">Score</th><th class="num">Taux suggéré</th><th>Règle</th></tr></thead>
@@ -440,6 +452,25 @@ const matriceAmo = (scores) => {
     <p class="btp-ref-garde">${esc(MATRICE_AMO.reserve)}</p>
   </div>`;
 };
+
+// 4 ter. Ce que le taux donne en euros, une fois appliqué au montant des travaux.
+const baremeHonoraires = () => `<div class="card btp-ref" style="${teinteMission('amo')}">
+  <div class="card-head"><h2>Exemples d'honoraires</h2>
+    <span class="grow"></span>
+    <span class="muted small">Manuel V5 &middot; §3</span>
+  </div>
+  <p class="btp-ref-sous">Le taux appliqué au montant des travaux. La ligne à ${eur(400000)} redescend
+    volontairement à 6 % : le manuel prévoit une dégressivité sur les grosses opérations.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th class="num">Travaux HT</th><th class="num">Taux</th><th class="num">Honoraires HT</th></tr></thead>
+    <tbody>${BAREME_AMO.map(b => `<tr>
+      <td class="num">${eur(b.travaux)}</td>
+      <td class="num">${b.taux ? b.taux + ' %' : `<span class="muted">${esc(b.note || '—')}</span>`}</td>
+      <td class="num"><b>${eur(b.honoraires)}</b></td>
+    </tr>`).join('')}</tbody>
+  </table></div>
+  <p class="muted small">Plancher : ${eur(HONORAIRES_AMO.minimum)} HT, quel que soit le montant des travaux.</p>
+</div>`;
 
 // 5. Les phases. Le poids sert aussi de clé de facturation, d'où la barre : on voit
 // tout de suite que l'accompagnement travaux pèse le tiers de la mission.
@@ -607,6 +638,8 @@ const pageMission = (mission) => ({
         ${mission === 'amo' ? [
           catalogueAmo(),
           matriceAmo(state.scores),
+          scoreComplexite(state.scores),
+          baremeHonoraires(),
           phasesAmo(),
           frontiereAmo(),
           pointsEtCapacite(),
