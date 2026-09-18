@@ -79,12 +79,24 @@ export const MATRICE_AMO = {
   ],
   reserve: "Le taux reste validé par BTP Expertise. Une dérogation sous 5 % demande une validation de la direction. La matrice devra être recalibrée sur les données réelles.",
 };
-// Les honoraires d'une AMO : le taux appliqué aux travaux, jamais moins que le
-// plancher. Le plancher n'est pas un détail d'affichage — c'est lui qui fait qu'une
-// petite opération reste rentable, et il doit être visible quand il joue.
+// Les honoraires d'une AMO, de bout en bout :
+//   honoraires HT = montant des travaux HT × taux / 100
+//   TVA           = honoraires HT × 20 / 100
+//   honoraires TTC = honoraires HT + TVA
+//
+// Le taux est libre : la matrice du §41 en suggère un, elle ne l'impose pas, et le
+// manuel prévoit lui-même un taux final distinct du taux suggéré.
+//
+// LE MINIMUM DE 3 500 € N'EST PLUS APPLIQUÉ AU RÉSULTAT. Le forcer faisait donner le
+// même montant à 5, 6, 7 et 8 % sur les petites opérations, et le calculateur avait
+// l'air d'ignorer le taux. La règle du manuel n'est pas perdue pour autant :
+// `sousMinimum` la signale, à l'écran comme sur la fiche, sans toucher au nombre.
+export const TVA_TAUX = 20;
 export const honorairesAmo = (travaux, taux) => {
-  const brut = Math.round((Number(travaux) || 0) * (Number(taux) || 0) / 100);
-  return { brut, retenu: Math.max(brut, HONORAIRES_AMO.minimum), plancher: brut < HONORAIRES_AMO.minimum };
+  const cents = (x) => Math.round(x * 100) / 100;
+  const ht = cents((Number(travaux) || 0) * (Number(taux) || 0) / 100);
+  const tva = cents(ht * TVA_TAUX / 100);
+  return { ht, tva, ttc: cents(ht + tva), sousMinimum: ht > 0 && ht < HONORAIRES_AMO.minimum };
 };
 export const tauxSuggere = (score) =>
   MATRICE_AMO.paliers.find(p => score >= p.min && score <= p.max) || MATRICE_AMO.paliers[MATRICE_AMO.paliers.length - 1];

@@ -20,7 +20,7 @@ import { db } from '../data/db.js';
 import { scope } from '../data/scope.js';
 import { esc, eur, fmtDate, toast, openModal, closeModal, contactName } from '../ui.js';
 import {
-  CHANNELS, NIVEAUX_BTP, HONORAIRES_AMO, honorairesAmo, couleurMission, stagesDe, tauxSuggere,
+  CHANNELS, NIVEAUX_BTP, HONORAIRES_AMO, honorairesAmo, TVA_TAUX, couleurMission, stagesDe, tauxSuggere,
   FICHE_AMO, MATRICE_AMO, CRITERES_V5, coteBudget, coteDuree, coteLots, niveauSuggere, controleTaux,
 } from '../data/schema.js';
 import { enteteFiche, piedFiche, signatures, cases, ligne, pageFiche, imprimerPage } from './btp-fiche.js';
@@ -32,44 +32,53 @@ const CANAUX_COURANTS = ['Recommandation client', 'Ancien client', 'Téléphone 
 
 const TYPES_BIEN = ['Maison', 'Appartement', 'Immeuble', 'Local pro', 'Autre'];
 
-// ------------------------------------------------------- Le calcul des honoraires
-// Le plancher de 3 500 € HT écrase le calcul sous 43 750 € de travaux : à 5, 6, 7 ou
-// 8 %, le résultat est le même. L'arithmétique est juste — elle retombe sur les sept
-// lignes du barème du manuel — mais à l'écran le calculateur a l'air d'ignorer le
-// pourcentage. Montrer les quatre taux et leur résultat règle la question : on voit
-// le montant varier, on voit où le plancher mord, et pourquoi.
+// ------------------------------------------------------- Le calculateur d'honoraires
+// Deux saisies libres — le montant des travaux HT et le taux — et trois résultats :
+// honoraires HT, TVA, honoraires TTC. Le taux n'est pas enfermé dans les quatre
+// valeurs de la matrice : elle en suggère un, le manuel prévoit lui-même d'en retenir
+// un autre, et un devis peut se négocier à 6,5 %.
 //
-// Le tableau sert aussi de sélecteur : cliquer une ligne retient ce taux. Un seul
-// objet à l'écran plutôt qu'un choix d'un côté et un résultat de l'autre.
-export const TAUX_AMO = MATRICE_AMO.paliers.map(p => p.taux);
+// Les champs et les résultats sont rendus séparément, exprès : la frappe ne redessine
+// que les résultats, sinon le curseur sauterait du champ à chaque chiffre saisi.
 
-export function tableauHonoraires(travaux, retenu, suggere) {
-  const montant = Number(travaux) || 0;
-  const h = honorairesAmo(montant, retenu);
-  return `
-    <div class="hono-total ${h.plancher ? 'plancher' : ''}">
-      <span>Honoraires HT</span>
-      <b>${montant ? eur(h.retenu) : '—'}</b>
-    </div>
-    <table class="hono-tab"><tbody>${TAUX_AMO.map(t => {
-      const x = honorairesAmo(montant, t);
-      return `<tr class="${t === Number(retenu) ? 'on' : ''}" data-taux="${t}" role="button" tabindex="0"
-        title="Retenir ${t} %">
-        <th>${t} %${t === Number(suggere) ? '<em>suggéré</em>' : ''}</th>
-        <td>${montant ? eur(x.retenu) : '—'}</td>
-        <td class="min">${montant && x.plancher ? 'minimum' : ''}</td>
-      </tr>`;
-    }).join('')}</tbody></table>
-    ${!montant
-      ? '<p class="hono-note">Saisissez le montant des travaux HT.</p>'
-      : h.plancher
-        ? `<p class="hono-note alerte">${retenu} % de ${eur(montant)} donnerait ${eur(h.brut)} : le minimum de ${eur(HONORAIRES_AMO.minimum)} HT s'applique.</p>`
-        : ''}
-    ${montant && montant < Math.round(HONORAIRES_AMO.minimum / (Math.max(...TAUX_AMO) / 100))
-      ? `<p class="hono-note">Sous ${eur(Math.round(HONORAIRES_AMO.minimum / (Math.max(...TAUX_AMO) / 100)))} de travaux, le minimum s'applique quel que soit le taux : le pourcentage ne change plus rien.</p>`
-      : ''}`;
+// Les centimes ne s'affichent que lorsqu'il y en a : « 6 000 € » plutôt que
+// « 6 000,00 € », mais « 6 787,50 € » quand le taux tombe juste.
+const euro = (n) => (Number.isInteger(n)
+  ? eur(n)
+  : eur(n, { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+
+export function champsHonoraires({ travaux, taux, idTravaux = 'hono-travaux', idTaux = 'hono-taux' }) {
+  return `<div class="hono-saisie">
+    <label class="mail-champ"><span>Montant des travaux HT</span>
+      <input type="number" id="${idTravaux}" min="0" step="1000" inputmode="decimal"
+        value="${esc(travaux ?? '')}" placeholder="100000"></label>
+    <label class="mail-champ"><span>Taux d'honoraires</span>
+      <span class="hono-pct">
+        <input type="number" id="${idTaux}" min="0" max="100" step="0.1" inputmode="decimal"
+          value="${esc(taux ?? '')}" placeholder="5"><b>%</b>
+      </span></label>
+  </div>`;
 }
 
+export function resultatsHonoraires(travaux, taux, suggere) {
+  const montant = Number(travaux) || 0;
+  const t = Number(taux) || 0;
+  const h = honorairesAmo(montant, t);
+  const pret = montant > 0 && t > 0;
+  return `
+    ${suggere && Number(suggere) !== t
+      ? `<p class="hono-note">La cotation suggère <button type="button" class="hono-sug" data-taux="${suggere}">${suggere} %</button>.</p>`
+      : ''}
+    <table class="hono-tab"><tbody>
+      <tr><th>Honoraires HT</th><td>${pret ? euro(h.ht) : '—'}</td></tr>
+      <tr><th>TVA ${TVA_TAUX} %</th><td>${pret ? euro(h.tva) : '—'}</td></tr>
+      <tr class="ttc"><th>Honoraires TTC</th><td>${pret ? euro(h.ttc) : '—'}</td></tr>
+    </tbody></table>
+    ${!pret ? '<p class="hono-note">Renseignez le montant des travaux et le taux.</p>' : ''}
+    ${h.sousMinimum
+      ? `<p class="hono-note alerte">${euro(h.ht)} HT : sous le minimum d'honoraires du cabinet, ${eur(HONORAIRES_AMO.minimum)} HT.</p>`
+      : ''}`;
+}
 // ------------------------------------------------------------------ Le formulaire
 export function ficheDecouverteAmo(apres) {
   const users = scope.users();
@@ -248,7 +257,8 @@ export function ficheDecouverteAmo(apres) {
 
     <div class="mf-bloc-titre">Taux retenu et honoraires</div>
     <div class="fa-taux" style="${teinte}">
-      ${tableauHonoraires(v.budget_ht, taux, sug)}
+      ${champsHonoraires({ travaux: v.budget_ht, taux, idTravaux: 'fa-travaux2', idTaux: 'fa-taux' })}
+      <div id="fa-hono">${resultatsHonoraires(v.budget_ht, taux, sug)}</div>
     </div>
     ${ctrl.ecart ? `
       <label class="mail-champ plein" style="margin-bottom:10px"><span>Motif de la dérogation *</span>
@@ -340,10 +350,26 @@ export function ficheDecouverteAmo(apres) {
       td.onclick = coter;
       td.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); coter(); } };
     });
-    corps.querySelectorAll('[data-taux]').forEach(b => {
-      const retenir = () => { v.taux_final = Number(b.dataset.taux); dessine(); };
-      b.onclick = retenir;
-      b.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); retenir(); } };
+    // La frappe ne redessine que les résultats — sinon le curseur quitte le champ.
+    // Le redessin complet attend la sortie du champ : c'est lui qui fait apparaître le
+    // motif de dérogation quand le taux s'écarte de celui que la cotation suggère.
+    const majHono = () => {
+      const z = corps.querySelector('#fa-hono');
+      if (z) z.innerHTML = resultatsHonoraires(v.budget_ht, v.taux_final ?? suggere(), suggere());
+    };
+    const chTaux = corps.querySelector('#fa-taux');
+    if (chTaux) {
+      chTaux.oninput = () => { v.taux_final = chTaux.value === '' ? null : Number(chTaux.value); majHono(); };
+      chTaux.onchange = () => dessine();
+    }
+    const chTrav = corps.querySelector('#fa-travaux2');
+    if (chTrav) {
+      chTrav.oninput = () => { v.budget_ht = chTrav.value; majHono(); };
+      chTrav.onchange = () => dessine();
+    }
+    corps.querySelectorAll('[data-taux]').forEach(b => b.onclick = () => {
+      v.taux_final = Number(b.dataset.taux);
+      dessine();
     });
     corps.querySelectorAll('[data-niveau]').forEach(b => b.onclick = () => { v.niveau = b.dataset.niveau; dessine(); });
     poser('#fa-motif', 'motif');
@@ -365,8 +391,10 @@ export function ficheDecouverteAmo(apres) {
     avancement: v.avancement, besoins: v.besoins, risques: v.risques,
     cotes: CRITERES_V5.map(c => ({ label: c.label, valeurs: c.valeurs, cote: coteDe(c.key) })),
     score: scoreTotal(), taux_suggere: suggere(), taux_final: tauxRetenu(), motif: v.motif,
-    honoraires: Number(v.budget_ht) ? honos().retenu : null,
-    plancher: Number(v.budget_ht) ? honos().plancher : false,
+    honoraires_ht: Number(v.budget_ht) ? honos().ht : null,
+    tva: Number(v.budget_ht) ? honos().tva : null,
+    honoraires_ttc: Number(v.budget_ht) ? honos().ttc : null,
+    sous_minimum: Number(v.budget_ht) ? honos().sousMinimum : false,
     niveau: niveauRetenu().label, points: niveauRetenu().points,
     charge: scope.users().find(u => u.id === v.owner_id)?.full_name || '—',
     etape: etapes.find(e => e.key === v.stage)?.label || v.stage,
@@ -401,7 +429,7 @@ export function ficheDecouverteAmo(apres) {
         title: `${v.travaux[0] || 'AMO'} — ${nomClient()}${v.adresse ? ` (${v.adresse})` : ''}`,
         activity: KEY, stage: v.stage, status: 'open',
         contact_id: contactId, owner_id: v.owner_id, channel: v.canal,
-        amount: fiche.honoraires,
+        amount: fiche.honoraires_ht,
         fields: {
           type_mission: 'amo',
           niveau: niveauRetenu().key,
@@ -494,11 +522,15 @@ ${f.description ? `<h2>Description du projet</h2><div class="desc">${esc(f.descr
   <div><span>Taux retenu</span><b>${f.taux_final} %</b></div>
 </div>
 <div class="bilan fort">
-  <div><span>Honoraires HT</span><b>${f.honoraires ? eur(f.honoraires) : '—'}</b></div>
+  <div><span>Honoraires HT</span><b>${(f.honoraires_ht ?? f.honoraires) != null ? eur(f.honoraires_ht ?? f.honoraires) : '—'}</b></div>
+  <div><span>TVA ${TVA_TAUX} %</span><b>${f.tva != null ? eur(f.tva) : '—'}</b></div>
+  <div><span>Honoraires TTC</span><b>${f.honoraires_ttc != null ? eur(f.honoraires_ttc) : '—'}</b></div>
+</div>
+<div class="bilan">
   <div><span>Niveau de mission</span><b>${esc(f.niveau)}</b></div>
   <div><span>Points de charge</span><b>${f.points}</b></div>
 </div>
-${f.plancher ? `<p class="note">Minimum d'honoraires de ${eur(HONORAIRES_AMO.minimum)} HT appliqué.</p>` : ''}
+${f.sous_minimum ? `<p class="note">Honoraires inférieurs au minimum du cabinet (${eur(HONORAIRES_AMO.minimum)} HT).</p>` : ''}
 ${f.motif ? `<p class="note">Dérogation au taux suggéré — motif : ${esc(f.motif)}</p>` : ''}
 ${f.taux_final < 5 ? '<p class="note">Taux inférieur à 5 % : validation de la direction obligatoire.</p>' : ''}
 

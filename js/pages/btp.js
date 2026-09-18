@@ -22,7 +22,7 @@ import {
   CROCHETS, champsDe, remplir, donneesDossier, emailDu,
   mailHtml, URL_LOGO, URL_LOGO_PUBLIC, ouvrirCompose, telechargerEml, copierMiseEnPage,
 } from './btp-mail.js';
-import { ficheDecouverteAmo, tableauHonoraires } from './btp-amo.js';
+import { ficheDecouverteAmo, champsHonoraires, resultatsHonoraires } from './btp-amo.js';
 import { ficheDecouverteExpertise } from './btp-expertise.js';
 import { imprimerFicheDeal } from './btp-fiche.js';
 
@@ -232,9 +232,13 @@ const pipelineDe = (mission) => {
     const cartes = siennes.filter(d => d.stage === st.key);
     return { st, cartes, somme: cartes.reduce((t, d) => t + (Number(d.amount) || 0), 0) };
   });
+  const ouvertes = siennes.filter(d => d.status === 'open');
   return {
     siennes, colonnes,
-    pondere: siennes.filter(d => d.status === 'open').reduce((t, d) => t + weightedAmount(d), 0),
+    // Deux lectures du même portefeuille : le total des montants, et ce même total
+    // pondéré par la probabilité de chaque étape. Les deux libellés ne se confondent pas.
+    potentiel: ouvertes.reduce((t, d) => t + (Number(d.amount) || 0), 0),
+    pondere: ouvertes.reduce((t, d) => t + weightedAmount(d), 0),
   };
 };
 
@@ -324,7 +328,7 @@ export const btpHomePage = {
       // Le récapitulatif d'une pipeline : ses étapes en une ligne, et le lien vers l'écran
       // du métier, où elle se déplie en entier.
       const recap = (mission) => {
-        const { siennes, colonnes, pondere } = pipelineDe(mission);
+        const { siennes, colonnes, potentiel } = pipelineDe(mission);
         const m = MISSIONS[mission];
         return `<div class="card btp-recap">
           <div class="card-head"><h2>Pipeline ${esc(m.titre)}</h2>
@@ -335,7 +339,7 @@ export const btpHomePage = {
             <a class="btp-recap-etape" href="${m.hash}">
               <span>${esc(st.label)}</span><b>${cartes.length}</b>
             </a>`).join('')}</div>
-          <div class="btp-recap-pied">${siennes.length} mission${siennes.length > 1 ? 's' : ''} en cours · ${eur(pondere)} de CA potentiel pondéré</div>
+          <div class="btp-recap-pied">${siennes.length} mission${siennes.length > 1 ? 's' : ''} en cours · ${eur(potentiel)} de CA potentiel HT</div>
         </div>`;
       };
 
@@ -534,11 +538,7 @@ const scoreComplexite = (scores, travaux, tauxChoisi) => {
 
       <div class="btp-calc">
         <h3 class="btp-ref-titre">Calculateur d'honoraires</h3>
-        <label class="btp-calc-champ">
-          <span>Montant des travaux HT</span>
-          <input type="number" id="hono-travaux" min="0" step="1000" inputmode="numeric"
-            placeholder="200000" value="${esc(travaux ?? '')}">
-        </label>
+        ${champsHonoraires({ travaux, taux: tauxChoisi ?? (scores.some(x => x !== null) ? tauxSuggere(scores.reduce((t, x) => t + (x ?? 0), 0)).taux : '') })}
         <div id="hono-res">${resultatHonoraires(scores, travaux, tauxChoisi)}</div>
       </div>
     </div>
@@ -548,14 +548,12 @@ const scoreComplexite = (scores, travaux, tauxChoisi) => {
 
 // Le résultat seul : il se redessine à chaque frappe, sans refaire toute la page —
 // sans quoi le champ perdrait le curseur à chaque chiffre saisi.
-// Le taux vient de la cotation, mais rien n'oblige à s'y tenir : le manuel prévoit
-// un taux final distinct du taux suggéré. Cliquer une ligne du tableau le retient.
+// Le taux suit la cotation tant qu'on n'y touche pas ; il reste libre ensuite, comme
+// le manuel le prévoit avec son taux final distinct du taux suggéré.
 function resultatHonoraires(scores, travaux, tauxChoisi) {
   const cotes = scores.filter(v => v !== null).length;
   const sug = cotes ? tauxSuggere(scores.reduce((t, v) => t + (v ?? 0), 0)).taux : null;
-  const retenu = tauxChoisi ?? sug ?? MATRICE_AMO.paliers[0].taux;
-  return (cotes ? '' : '<p class="hono-note">Aucun critère coté : le taux ci-dessous est à choisir à la main.</p>')
-    + tableauHonoraires(travaux, retenu, sug);
+  return resultatsHonoraires(travaux, tauxChoisi ?? sug, sug);
 }
 
 // 5. Les phases. Le poids sert aussi de clé de facturation, d'où la barre : on voit
@@ -628,7 +626,7 @@ const pageMission = (mission) => ({
     const state = { q: '', focus: null, scores: MATRICE_AMO.criteres.map(() => null), travaux: '', taux: null };
 
     const draw = () => {
-      const { siennes, colonnes, pondere } = pipelineDe(mission);
+      const { siennes, colonnes, potentiel } = pipelineDe(mission);
       const ts = terms(state.q);
       const liste = siennes.filter(d => hit([d.title, dealParty(d), d.notes], ts))
         .sort((x, y) => (y.amount || 0) - (x.amount || 0));
@@ -639,7 +637,7 @@ const pageMission = (mission) => ({
         <div class="btp-bandeau">${marqueMission(mission)}<b>${esc(couleurMission(mission).label)}</b><span>${esc(mission === 'amo' ? HONORAIRES_AMO.taux + ', minimum ' + eur(HONORAIRES_AMO.minimum) + ' HT' : 'Constat, analyse et rapport')}</span></div>
         <div class="esp-kpis">
           ${kpi({ label: 'Missions en cours', valeur: siennes.length, sous: `${points} point${points > 1 ? 's' : ''} de charge`, icone: '🏗', ton: 'accent', href: MISSIONS[mission].hash })}
-          ${kpi({ label: 'CA potentiel pondéré', valeur: eur(pondere), sous: 'sur les missions ouvertes', icone: '📈', ton: 'green', href: MISSIONS[mission].hash })}
+          ${kpi({ label: 'CA potentiel HT', valeur: eur(potentiel), sous: 'sur les missions ouvertes', icone: '📈', ton: 'green', href: MISSIONS[mission].hash })}
           ${kpi({ label: 'Sans niveau', valeur: siennes.filter(d => !niveauDe(d)).length, sous: 'ne pèsent aucun point', icone: '⚠', ton: 'amber', href: MISSIONS[mission].hash })}
         </div>
 
@@ -716,22 +714,26 @@ const pageMission = (mission) => ({
         draw();
       });
 
+      // Seuls les résultats se redessinent à la frappe : les deux champs gardent leur
+      // curseur. Le raccourci vers le taux suggéré est recréé à chaque mise à jour.
+      const champTravaux = root.querySelector('#hono-travaux');
+      const champTaux = root.querySelector('#hono-taux');
       const majHonoraires = () => {
         const res = root.querySelector('#hono-res');
         if (!res) return;
         res.innerHTML = resultatHonoraires(state.scores, state.travaux, state.taux);
-        lierTaux();
+        res.querySelectorAll('[data-taux]').forEach(b => b.onclick = () => {
+          state.taux = Number(b.dataset.taux);
+          if (champTaux) champTaux.value = state.taux;
+          majHonoraires();
+        });
       };
-      // Les lignes du tableau sont recréées à chaque mise à jour : on les relie après.
-      const lierTaux = () => root.querySelectorAll('#hono-res [data-taux]').forEach(l => {
-        const retenir = () => { state.taux = Number(l.dataset.taux); majHonoraires(); };
-        l.onclick = retenir;
-        l.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); retenir(); } };
-      });
-      lierTaux();
-
-      const champTravaux = root.querySelector('#hono-travaux');
+      majHonoraires();
       if (champTravaux) champTravaux.oninput = () => { state.travaux = champTravaux.value; majHonoraires(); };
+      if (champTaux) champTaux.oninput = () => {
+        state.taux = champTaux.value === '' ? null : Number(champTaux.value);
+        majHonoraires();
+      };
     };
 
     draw();
