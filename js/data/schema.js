@@ -41,6 +41,116 @@ export const CAPACITE_BTP = { points: 18, amoActives: 3 };
 export const niveauDe = (deal) => NIVEAUX_BTP.find(n => n.key === deal?.fields?.niveau) || null;
 export const pointsDe = (deal) => niveauDe(deal)?.points || 0;
 
+// ---- Le référentiel AMO du manuel opérationnel V5 --------------------------
+// Ces tableaux sont la doctrine du cabinet, pas des données : ils ne bougent qu'avec
+// le manuel. Ils vivent ici, avec les niveaux et la capacité, pour qu'un écran n'ait
+// jamais à les réécrire — et pour qu'une V6 se répercute d'un seul endroit.
+
+// Barème indicatif d'honoraires : ce que donne le taux appliqué au montant des
+// travaux. La ligne à 400 000 € redescend volontairement à 6 % — le manuel prévoit
+// une dégressivité sur les grosses opérations, ce n'est pas une coquille.
+// Plus affiché depuis que le calculateur d'honoraires fait le calcul sur le montant
+export const BAREME_AMO = [
+  { travaux: 50000, taux: null, honoraires: 3500, note: 'Minimum' },
+  { travaux: 80000, taux: 5, honoraires: 4000 },
+  { travaux: 100000, taux: 6, honoraires: 6000 },
+  { travaux: 150000, taux: 6, honoraires: 9000 },
+  { travaux: 200000, taux: 7, honoraires: 14000 },
+  { travaux: 300000, taux: 7, honoraires: 21000 },
+  { travaux: 400000, taux: 6, honoraires: 24000 },
+];
+
+// La matrice de complexité. Le taux ne se lit pas sur le seul budget : cinq critères,
+// zéro à deux points chacun, et le total commande le taux suggéré.
+export const MATRICE_AMO = {
+  intro: "Le taux n'est pas déterminé par le seul budget travaux. La matrice guide le chargé d'affaires et homogénéise les devis.",
+  criteres: [
+    { label: 'Montant / taille', valeurs: ['Opération limitée', 'Opération intermédiaire', 'Opération importante'] },
+    { label: 'Nombre de lots', valeurs: ['1 à 3', '4 à 6', '7 et +'] },
+    { label: 'Durée prévisionnelle', valeurs: ['< 3 mois', '3 à 6 mois', '> 6 mois'] },
+    { label: "Intensité d'accompagnement", valeurs: ['Normale', 'Renforcée', 'Très soutenue'] },
+    { label: 'Interfaces / contraintes', valeurs: ['Faibles', 'Multiples', 'Fortes / sensibles'] },
+  ],
+  paliers: [
+    { min: 0, max: 2, taux: 5, regle: 'Sous réserve du minimum de 3 500 € HT' },
+    { min: 3, max: 5, taux: 6, regle: 'Mission intermédiaire' },
+    { min: 6, max: 7, taux: 7, regle: 'Mission soutenue / complexe' },
+    { min: 8, max: 10, taux: 8, regle: 'Mission très consommatrice de temps, contraintes fortes' },
+  ],
+  reserve: "Le taux reste validé par BTP Expertise. Une dérogation sous 5 % demande une validation de la direction. La matrice devra être recalibrée sur les données réelles.",
+};
+// Les honoraires d'une AMO : le taux appliqué aux travaux, jamais moins que le
+// plancher. Le plancher n'est pas un détail d'affichage — c'est lui qui fait qu'une
+// petite opération reste rentable, et il doit être visible quand il joue.
+export const honorairesAmo = (travaux, taux) => {
+  const brut = Math.round((Number(travaux) || 0) * (Number(taux) || 0) / 100);
+  return { brut, retenu: Math.max(brut, HONORAIRES_AMO.minimum), plancher: brut < HONORAIRES_AMO.minimum };
+};
+export const tauxSuggere = (score) =>
+  MATRICE_AMO.paliers.find(p => score >= p.min && score <= p.max) || MATRICE_AMO.paliers[MATRICE_AMO.paliers.length - 1];
+
+// Les six phases d'une AMO, et le poids que chacune pèse dans la mission. Les poids
+// font 100 % : ils servent aussi de clé de facturation par phase.
+export const PHASES_AMO = [
+  { num: 1, label: 'Cadrage', contenu: 'Besoins, contraintes, priorités, enveloppe, calendrier général.', poids: 10, etape: 'amo_cadrage' },
+  { num: 2, label: 'Préparation', contenu: 'Définition fonctionnelle, préconisations, budget, prestations attendues.', poids: 15, etape: 'amo_programme' },
+  { num: 3, label: 'Consultation', contenu: 'Analyse et comparaison des offres, documents, aide au choix et à la négociation.', poids: 20, etape: 'amo_consultation' },
+  { num: 4, label: 'Accompagnement travaux', contenu: 'Points réguliers, avancement, situations, avenants, alertes et conseil.', poids: 35, etape: 'amo_chantier' },
+  { num: 5, label: 'Réception', contenu: 'Préparation, assistance, réserves, conseils sur les paiements.', poids: 15, etape: 'amo_reception' },
+  { num: 6, label: 'Clôture', contenu: 'Documents, suivi des réserves, clôture.', poids: 5 },
+];
+
+// La frontière avec la maîtrise d'œuvre. C'est la règle qui protège le cabinet : la
+// franchir fait basculer la mission dans la responsabilité décennale du constructeur.
+export const FRONTIERE_AMO = {
+  regles: [
+    "L'AMO assiste et conseille le maître d'ouvrage ; elle n'est jamais présentée comme une mission de maîtrise d'œuvre.",
+    'Le contrat définit les actes inclus et les exclusions.',
+    "Tout acte de conception, prescription d'exécution, direction d'entreprise ou pilotage assimilable à une mission de constructeur doit être signalé avant engagement.",
+    'En cas de doute sur une mission : validation direction et assureur avant devis.',
+  ],
+  reference: "Code civil, art. 1792 et 1792-1 ; Code des assurances, art. L241-1. Toute personne dont la responsabilité décennale peut être engagée doit être assurée pour cette responsabilité.",
+};
+
+// Les exemples de charge du manuel, donnés en compositions de niveaux plutôt qu'en
+// totaux écrits : le total et le verdict se recalculent sur la capacité en vigueur.
+// Le manuel les présentait sur 15 points, la capacité retenue au lancement est dans
+// CAPACITE_BTP — les deux ne peuvent pas diverger si on ne les écrit qu'une fois.
+// Plus affiché : le système de points se lit sur l'écran des chargés d'affaires.
+export const EXEMPLES_CHARGE = [
+  ['amo_importante', 'amo_etendue', 'exp_complexe'],
+  ['amo_ciblee', 'amo_ciblee', 'amo_etendue', 'exp_complexe'],
+  ['amo_etendue', 'exp_rapport', 'exp_rapport', 'exp_simple'],
+];
+
+// La fiche métier du réseau. Sert à recruter, à cadrer l'entretien et à rappeler ce
+// qui est attendu une fois la personne habilitée.
+export const FICHE_CHARGE_BTP = {
+  intitule: "Chargé d'affaires indépendant — Expertise bâtiment & AMO",
+  dimensions: [
+    ['Technique', "Culture tous corps d'état, devis, plans, pathologies, règles de l'art."],
+    ['Analyse', 'Constater, documenter, rechercher, et savoir limiter ses conclusions.'],
+    ['Rédaction', 'Rapports factuels, structurés, lisibles et exploitables.'],
+    ['Relation client', 'Pédagogie, neutralité, capacité à expliquer et à alerter.'],
+    ['Organisation', 'CRM, délais, photos, documents et traçabilité.'],
+    ['Autonomie', 'Gestion de portefeuille et remontée des informations.'],
+    ['Mobilité', 'Intervention terrain sur sa zone.'],
+    ['Statut', 'Entreprise indépendante : micro, EI, EURL ou SASU selon la situation.'],
+    ['Assurance', 'RC Pro adaptée, valide et vérifiée.'],
+  ],
+  missions: [
+    'Prendre en charge les rendez-vous découverte qui lui sont attribués.',
+    'Réaliser les visites et constats terrain.',
+    'Analyser les documents, devis, désordres et éléments techniques.',
+    "Produire ou préparer les rapports selon son niveau d'habilitation.",
+    'Assurer les phases AMO qui lui sont confiées.',
+    'Maintenir le dossier et les temps à jour dans le CRM.',
+    'Respecter les méthodes, modèles, délais et contrôles qualité BTP Expertise.',
+  ],
+};
+
+
+
 export const ACTIVITIES = {
   rgd: {
     key: 'rgd', label: 'RGD Renova', short: 'RGD', color: '#FD7A2D',
@@ -119,7 +229,7 @@ export const ACTIVITIES = {
           groupe: m === 'amo' ? 'AMO' : 'Expertise',
           options: NIVEAUX_BTP.filter(n => n.mission === m).map(n => [n.key, `${n.label} — ${n.points} pt${n.points > 1 ? 's' : ''} · ${n.tarif}`]),
         })),
-        hint: "Sert au calcul de la charge du chargé d'affaires (15 points maximum)." },
+        hint: `Sert au calcul de la charge du chargé d'affaires (${CAPACITE_BTP.points} points maximum).` },
       { key: 'problematique', label: 'Type de problématique', type: 'select', options: ['Malfaçons', 'Fissures', 'Humidité', 'Plomberie', 'Électricité', 'Non-conformité', 'Litige travaux', 'Réception de travaux', 'AMO / accompagnement', 'Avant achat', 'Autre'] },
       { key: 'type_bien', label: 'Type de bien', type: 'select', options: ['Maison', 'Appartement', 'Immeuble', 'Local pro', 'Autre'] },
       { key: 'contexte', label: 'Contexte', type: 'select', options: ['Particulier', 'Entreprise', 'Litige', 'Achat immobilier', 'Travaux en cours'] },
@@ -225,12 +335,21 @@ export const ACTIVITY_TYPES = [
   { key: 'autre', label: 'Autre', icon: '•', groupe: 'Interne' },
 ];
 
-// Le degré de traitement qu'on pose à la main sur une tâche. « En retard » et
-// « aujourd'hui » n'y figurent pas : ils se calculent depuis l'échéance, ils ne se
-// saisissent pas. Stocké dans activities.priority — texte libre, donc une valeur
-// intermédiaire s'ajoute ici sans migration.
+// Le degré de traitement d'une tâche. Trois valeurs, et c'est volontairement
+// court : au-delà, plus personne ne les distingue au moment de saisir.
+//
+// « Retard » se POSE à la main tout en se CALCULANT aussi depuis l'échéance :
+// une tâche dont la date est passée tombe dans ce rang sans qu'on ait à y
+// penser, et on peut l'y mettre soi-même pour un retard que la date ne dit pas
+// (un dossier qui traîne, une relance oubliée). Les deux chemins mènent au
+// même endroit, c'est ce qui évite d'avoir à choisir entre eux.
+//
+// Stocké dans activities.priority — texte libre, donc une valeur s'ajoute ici
+// sans migration. NULL vaut « À faire » : l'écrasante majorité des tâches.
 export const PRIORITES = [
   { key: 'urgent', label: 'Urgent', icon: '🔥' },
+  { key: 'retard', label: 'Retard', icon: '⚠' },
+  { key: 'afaire', label: 'À faire', icon: '•' },
 ];
 
 export const CONTACT_TYPES = ['Prospect', 'Client', 'Partenaire', 'Apporteur', 'Fournisseur'];

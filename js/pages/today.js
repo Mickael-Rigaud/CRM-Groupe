@@ -1,11 +1,20 @@
-// « To do list » : une colonne par personne, pour voir d'un coup d'œil qui porte quoi.
-// Dans chaque colonne les tâches sont rangées par échéance, et chacune annonce sa
-// structure — badge à sa couleur, filet sur le bord gauche. Les pastilles du haut
-// filtrent le tableau entier sur une structure.
+// « To do list » : chacun la sienne.
+//
+// Deux onglets. « Ma to do list » ne montre que les taches dont je suis
+// responsable — plus de colonnes par personne, plus de coup d'oeil sur le
+// travail des autres, direction comprise. « Envoyees » montre celles que j'ai
+// ecrites pour quelqu'un d'autre, avec leur etat : c'est ce qui permet de
+// confier une tache sans la perdre de vue.
+//
+// Le cloisonnement n'est pas qu'un filtre d'affichage : les policies RLS de la
+// table `activities` disent la meme chose (migration 20260918100000). Une tache
+// rattachee a une affaire ou a une fiche reste visible par qui voit la fiche —
+// sinon la « prochaine action » des pipelines se viderait. Ce qui devient prive,
+// c'est le pense-bete rattache a rien.
 import { db } from '../data/db.js';
 import { scope } from '../data/scope.js';
 import { ACTIVITIES } from '../data/schema.js';
-import { esc, daysSince, fmtDate, relDay, initials, userName, searchInput, bindSearch, restoreFocus, terms, hit } from '../ui.js';
+import { esc, daysSince, fmtDate, relDay, userName, searchInput, bindSearch, restoreFocus, terms, hit } from '../ui.js';
 import { actType, bindActivityRows, activityForm, nextActivity, structureDe, toggleActivity } from './activity.js';
 import { openDeal } from './deal.js';
 
@@ -35,15 +44,13 @@ const recentes = new Map(); // id de la tâche -> minuteur de disparition
 // retire et il reste la pastille de couleur — le repli qu'utilise déjà le menu.
 const logo = (a, cls = 'todo-logo') => `<i class="${cls}" style="background:${a.color}"><img src="assets/logos/${a.key}.png" alt="" onerror="this.remove()"></i>`;
 
-// Une teinte stable par personne, tirée de son identifiant : les avatars se distinguent
-// sans qu'on ait à tenir une liste de couleurs à jour à chaque arrivée dans l'équipe.
-const teinte = (id) => { let h = 7; for (const c of String(id)) h = (h * 31 + c.charCodeAt(0)) % 360; return h; };
 
-// Une tâche en carte : case à cocher, badge de structure, contexte, échéance.
+// Une tâche en carte. Deux lignes, pas quatre : le titre, puis une ligne de
+// pastilles — structure, contexte, échéance, destinataire. Tout ce qui était
+// empilé tient maintenant côte à côte, et la liste se lit d'un coup d'œil.
 // Les attributs data-toggle / data-edit-act sont ceux que bindActivityRows attend.
-function carte(a) {
+function carte(a, pour = false) {
   const j = ecart(a);
-  const late = !a.done && j !== null && j > 0;
   const t = actType(a.type);
   const s = structureDe(a);
   const act = s ? ACTIVITIES[s] : null;
@@ -56,38 +63,66 @@ function carte(a) {
     !d && !c && o && esc(o.name),
   ].filter(Boolean)[0] || '';
 
+  // L'échéance se lit à sa couleur avant de se lire au texte : rouge en retard,
+  // ambre aujourd'hui, neutre au-delà.
+  const quand = a.due_date
+    ? `<span class="todo-chip quand ${!a.done && j > 0 ? 'late' : ''} ${!a.done && j === 0 ? 'today' : ''}">
+         ${j === 0 ? "Aujourd'hui" : esc(relDay(a.due_date))}${a.due_time ? ' · ' + esc(a.due_time) : ''}</span>`
+    : '<span class="todo-chip">Sans échéance</span>';
+
   return `<div class="todo-tache ${a.done ? 'done' : ''} ${recentes.has(a.id) ? 'recente' : ''} ${a.priority === 'urgent' && !a.done ? 'urgent' : ''}" ${act ? `style="--c:${act.color};--b:${act.accent};--bt:${act.on}"` : ''}>
-    <input type="checkbox" ${a.done ? 'checked' : ''} data-toggle="${a.id}" title="Marquer comme fait">
+    <label class="todo-case" title="${a.done ? 'Rouvrir' : 'Marquer comme fait'}">
+      <input type="checkbox" ${a.done ? 'checked' : ''} data-toggle="${a.id}"><span></span></label>
     <div class="todo-tache-corps">
-      ${act ? `<span class="todo-badge">${logo(act, 'todo-badge-logo')}${esc(act.short)}</span>` : ''}
       <b>${t.icon} ${esc(a.title)}</b>
-      ${ctx ? `<div class="todo-ctx">${ctx}</div>` : ''}
-      <div class="todo-when ${late ? 'late' : ''}">${a.due_date ? `${fmtDate(a.due_date)}${a.due_time ? ' ' + esc(a.due_time) : ''} · ${relDay(a.due_date)}` : 'Sans échéance'}</div>
+      <div class="todo-meta">
+        ${act ? `<span class="todo-badge">${logo(act, 'todo-badge-logo')}${esc(act.short)}</span>` : ''}
+        ${quand}
+        ${ctx ? `<span class="todo-chip ctx">${ctx}</span>` : ''}
+        ${pour ? `<span class="todo-chip pour"><i>→</i>${esc(userName(a.assignee_id))}${a.done ? ' · faite' : ''}</span>` : ''}
+      </div>
     </div>
-    <button class="icon-btn" data-edit-act="${a.id}" title="Modifier">✎</button>
+    <button class="icon-btn todo-editer" data-edit-act="${a.id}" title="Modifier">✎</button>
   </div>`;
 }
+
+// Les deux onglets, et ce que chacun retient.
+// Une tache que j'ai ecrite sans l'assigner reste chez moi : personne d'autre ne
+// l'a prise, ce n'est pas une tache « envoyee ».
+const ONGLETS = [
+  { key: 'mienne', label: 'Ma to do list',
+    garde: (a, moi) => a.assignee_id === moi || (!a.assignee_id && a.created_by === moi) },
+  { key: 'envoyees', label: 'Envoyées',
+    garde: (a, moi) => a.created_by === moi && !!a.assignee_id && a.assignee_id !== moi },
+];
 
 export const todayPage = {
   title: () => 'To do list',
   render(root) {
-    const state = { structure: '', q: '', showDone: false, focus: null };
+    const state = { onglet: 'mienne', structure: '', q: '', showDone: false, focus: null };
+    const moi = scope.user.id;
 
     const draw = () => {
+      const onglet = ONGLETS.find(o => o.key === state.onglet) || ONGLETS[0];
       const ts = terms(state.q);
       const surStructure = (a) => !state.structure
         || (state.structure === '—' ? !structureDe(a) : structureDe(a) === state.structure);
 
-      const vues = scope.activities().filter(a => hit([a.title, a.notes, userName(a.assignee_id)], ts));
+      // Le compteur de chaque onglet se lit avant tout filtre : il dit ce qu'il y a
+      // derriere, pas ce qui reste une fois la recherche tapee.
+      const toutes = scope.activities();
+      const compte = (o) => toutes.filter(a => !a.done && o.garde(a, moi)).length;
+
+      const vues = toutes.filter(a => onglet.garde(a, moi))
+        .filter(a => hit([a.title, a.notes, userName(a.assignee_id)], ts));
       const ouvertes = vues.filter(a => !a.done);
 
-      // Les compteurs des pastilles ignorent le filtre de structure : sinon il ne
+      // Les pastilles de structure ignorent le filtre de structure : sinon il ne
       // resterait plus rien à comparer une fois l'une d'elles ouverte.
       const parStructure = Object.values(ACTIVITIES)
         .filter(a => scope.activityKeys.includes(a.key))
         .map(a => ({ ...a, n: ouvertes.filter(t => structureDe(t) === a.key).length }));
       const sansStructure = ouvertes.filter(a => !structureDe(a)).length;
-      const total = ouvertes.length;
 
       // Les fraîchement cochées restent à leur place au lieu de disparaître aussitôt.
       const retenues = vues.filter(a => !a.done || recentes.has(a.id)).filter(surStructure);
@@ -95,83 +130,64 @@ export const todayPage = {
         ? vues.filter(a => a.done && a.done_at && daysSince(a.done_at) === 0).filter(surStructure)
         : [];
 
-      // Une colonne par personne. L'utilisateur connecté vient en tête — c'est sa liste
-      // qu'il ouvre en premier — puis les autres, du plus chargé au moins chargé.
-      const gens = scope.users().map(u => {
-        const siennes = retenues.filter(a => a.assignee_id === u.id);
-        const aFaire = siennes.filter(a => !a.done);
-        return {
-          id: u.id, nom: u.full_name, taches: siennes, aFaire,
-          faites: faites.filter(a => a.assignee_id === u.id),
-          // Le total du jour, qu'on affiche même quand le détail reste replié
-          bouclees: vues.filter(a => a.done && a.done_at && daysSince(a.done_at) === 0
-            && a.assignee_id === u.id && surStructure(a)).length,
-          retard: aFaire.filter(a => ecart(a) > 0).length,
-        };
-      }).sort((x, y) => (y.id === scope.user.id) - (x.id === scope.user.id)
-        || y.aFaire.length - x.aFaire.length
-        || x.nom.localeCompare(y.nom, 'fr'));
+      const tri = (l) => l.slice().sort((x, y) => (x.due_date || '9999').localeCompare(y.due_date || '9999')
+        || (x.due_time || '99').localeCompare(y.due_time || '99'));
+      const pour = onglet.key === 'envoyees';
+      const groupes = GROUPES.map(gr => ({ ...gr, l: retenues.filter(a => rangDe(a) === gr) })).filter(gr => gr.l.length);
 
-      const orphelines = retenues.filter(a => !a.assignee_id || !db.byId('profiles', a.assignee_id));
-      if (orphelines.length) {
-        gens.push({ id: '', nom: 'Non assigné', taches: orphelines, aFaire: orphelines.filter(a => !a.done), faites: [], bouclees: 0, retard: orphelines.filter(a => !a.done && ecart(a) > 0).length });
-      }
-
-      const colonne = (g) => {
-        const groupes = GROUPES.map(gr => ({ ...gr, l: g.taches.filter(a => rangDe(a) === gr) })).filter(gr => gr.l.length);
-        const tri = (l) => l.slice().sort((x, y) => (x.due_date || '9999').localeCompare(y.due_date || '9999')
-          || (x.due_time || '99').localeCompare(y.due_time || '99'));
-        return `<section class="todo-col ${g.id === scope.user.id ? 'moi' : ''}">
-          <header class="todo-col-head">
-            <span class="todo-av" style="--h:${teinte(g.id || 'x')}">${g.id ? esc(initials(g.id)) : '—'}</span>
-            <span class="todo-col-nom">${esc(g.nom)}<i>${g.aFaire.length} tâche${g.aFaire.length > 1 ? 's' : ''}${g.bouclees ? ` · ${g.bouclees} faite${g.bouclees > 1 ? 's' : ''}` : ''}</i></span>
-            ${g.retard ? `<span class="todo-col-retard" title="${g.retard} en retard">${g.retard}</span>` : ''}
-            ${g.id ? `<button class="icon-btn" data-new-for="${g.id}" title="Ajouter une tâche à ${esc(g.nom)}">+</button>` : ''}
-          </header>
-          <div class="todo-col-body">
-            ${groupes.map(gr => `<div class="todo-groupe ${gr.key}">${gr.titre}<i>${gr.l.filter(a => !a.done).length}</i></div>${tri(gr.l).map(carte).join('')}`).join('')}
-            ${!g.taches.length ? '<div class="todo-vide">Rien à faire</div>' : ''}
-            ${g.faites.length ? `<div class="todo-groupe fait">Fait aujourd&rsquo;hui<i>${g.faites.length}</i></div>${g.faites.map(carte).join('')}` : ''}
-          </div>
-        </section>`;
-      };
-
-      const sansProchaine = scope.deals().filter(d => d.status === 'open' && !nextActivity(d.id)
-        && (!state.structure || state.structure === '—' || d.activity === state.structure));
+      const sansProchaine = onglet.key === 'mienne'
+        ? scope.deals().filter(d => d.status === 'open' && d.owner_id === moi && !nextActivity(d.id)
+            && (!state.structure || state.structure === '—' || d.activity === state.structure))
+        : [];
 
       root.innerHTML = `
+        <div class="pill-tabs todo-onglets">
+          ${ONGLETS.map(o => `<button type="button" data-onglet="${o.key}" class="${state.onglet === o.key ? 'on' : ''}">${esc(o.label)}<span>${compte(o)}</span></button>`).join('')}
+        </div>
+
         <div class="pill-tabs todo-structures">
-          <button type="button" data-struct="" class="${state.structure ? '' : 'on'}">Toutes<span>${total}</span></button>
+          <button type="button" data-struct="" class="${state.structure ? '' : 'on'}">Toutes<span>${ouvertes.length}</span></button>
           ${parStructure.map(a => `<button type="button" data-struct="${a.key}" class="${state.structure === a.key ? 'on' : ''}">${logo(a)}${esc(a.label)}<span>${a.n}</span></button>`).join('')}
           ${sansStructure ? `<button type="button" data-struct="—" class="${state.structure === '—' ? 'on' : ''}">Sans structure<span>${sansStructure}</span></button>` : ''}
         </div>
 
         <div class="toolbar">
           ${searchInput('t-q', state, 'Rechercher une tâche…')}
-          <span class="muted small">${retenues.filter(a => ecart(a) > 0).length} en retard · ${retenues.filter(a => ecart(a) === 0).length} aujourd&rsquo;hui</span>
+          <span class="muted small">${retenues.filter(a => ecart(a) > 0 && !a.done).length} en retard · ${retenues.filter(a => ecart(a) === 0 && !a.done).length} aujourd&rsquo;hui</span>
           <span class="grow"></span>
           <label class="check"><input type="checkbox" id="t-done" ${state.showDone ? 'checked' : ''}> Ce qui est fait</label>
-          <button class="btn" id="t-new">+ Tâche</button>
+          <button class="btn ghost" id="t-new">+ Tâche</button>
+          <button class="btn" id="t-send">Envoyer une tâche</button>
         </div>
 
         ${sansProchaine.length ? `<div class="alert"><b>${sansProchaine.length}</b><div><b>affaire${sansProchaine.length > 1 ? 's' : ''} sans prochaine action</b> — ${sansProchaine.slice(0, 6).map(d => `<a href="#" data-open-deal="${d.id}">${esc(d.title)}</a>`).join(', ')}${sansProchaine.length > 6 ? '…' : ''}</div></div>` : ''}
 
-        <div class="todo-board">${gens.map(colonne).join('')}</div>
-        ${!retenues.length ? '<div class="card"><div class="empty">Rien à faire — tout est à jour.</div></div>' : ''}`;
+        <section class="card todo-liste">
+          ${groupes.map(gr => `<div class="todo-groupe ${gr.key}">${gr.titre}<i>${gr.l.filter(a => !a.done).length}</i></div>${tri(gr.l).map(a => carte(a, pour)).join('')}`).join('')}
+          ${faites.length ? `<div class="todo-groupe fait">Fait aujourd&rsquo;hui<i>${faites.length}</i></div>${tri(faites).map(a => carte(a, pour)).join('')}` : ''}
+          ${!retenues.length && !faites.length ? `<div class="empty">${onglet.key === 'mienne'
+            ? 'Rien à faire — tout est à jour.'
+            : 'Aucune tâche envoyée. Le champ « Responsable » du formulaire sert à en confier une.'}</div>` : ''}
+        </section>`;
 
       bindSearch(root, 't-q', state, draw); restoreFocus(root, state);
+      root.querySelectorAll('[data-onglet]').forEach(b => b.onclick = () => {
+        state.onglet = b.dataset.onglet; state.structure = ''; draw();
+      });
       root.querySelectorAll('[data-struct]').forEach(b => b.onclick = () => {
         state.structure = state.structure === b.dataset.struct ? '' : b.dataset.struct; draw();
       });
       root.querySelector('#t-done').onchange = e => { state.showDone = e.target.checked; draw(); };
-      // Une tâche créée depuis le tableau hérite de ce qui est déjà à l'écran : la
-      // personne dont on a cliqué la colonne, et la structure ouverte s'il y en a une.
-      const contexte = (assignee) => ({
-        ...(assignee ? { assignee_id: assignee } : {}),
-        ...(state.structure && state.structure !== '—' ? { activity: state.structure } : {}),
+      // Une tâche créée ici hérite de ce qui est à l'écran : la structure ouverte,
+      // et le responsable — moi dans ma liste, à choisir dans « Envoyées ».
+      const structureOuverte = () => (state.structure && state.structure !== '—' ? { activity: state.structure } : {});
+      // « + Tâche » : pour moi. « Envoyer une tâche » : pour quelqu'un d'autre —
+      // le responsable est laissé vide, c'est le choix qu'on vient faire, et on
+      // bascule sur l'onglet « Envoyées » pour voir le résultat.
+      root.querySelector('#t-new').onclick = () => activityForm({ assignee_id: moi, ...structureOuverte() }, null, draw);
+      root.querySelector('#t-send').onclick = () => activityForm({ assignee_id: '', ...structureOuverte() }, null, () => {
+        state.onglet = 'envoyees'; draw();
       });
-      root.querySelector('#t-new').onclick = () => activityForm(contexte(''), null, draw);
-      root.querySelectorAll('[data-new-for]').forEach(b => b.onclick = () => activityForm(contexte(b.dataset.newFor), null, draw));
       root.querySelectorAll('[data-open-deal]').forEach(a => a.onclick = e => { e.preventDefault(); openDeal(a.dataset.openDeal, draw); });
       bindActivityRows(root, draw);
       // Posé après bindActivityRows, qui pose son propre gestionnaire sur ces cases.
