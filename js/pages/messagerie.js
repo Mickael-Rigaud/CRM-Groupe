@@ -11,7 +11,7 @@
 // reste donc joignable par tous et joint tout le monde. Le canal « Groupe »,
 // qui était ouvert à tous les comptes, ne l'est plus qu'à la direction. La
 // règle vit dans scope.canSeeConversation / scope.partageStructure, et les
-// policies RLS disent la même chose (migration 20260918140000) : ce qui est
+// policies RLS disent la même chose (migration 20260918100050) : ce qui est
 // masqué ici serait de toute façon refusé par le serveur.
 //
 // La liste des messages directs montre tous les COLLÈGUES joignables, pas

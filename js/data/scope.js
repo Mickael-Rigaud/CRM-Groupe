@@ -45,7 +45,7 @@ export const scope = {
     return false;
   },
 
-  // Messagerie, cloisonnée par structure (miroir de la migration 20260918140000).
+  // Messagerie, cloisonnée par structure (miroir de la migration 20260918100050).
   //
   // Deux personnes ne peuvent se parler que si elles partagent au moins une
   // structure. La direction les porte toutes : elle joint tout le monde et
