@@ -44,16 +44,20 @@ export function leads(k) {
 // Les leads d'un mois donné. L'outil externe peut les fournir mois par mois, en
 // posant « leads » à côté du montant dans revenue ; sinon on compte les affaires
 // créées dans le CRM, seul repère daté dont on dispose pour tout le monde.
+// Les leads d'un mois viennent du compteur à plat, ou de la cohorte de ce mois :
+// dans les deux cas ce sont les prospects arrivés ce mois-là, donc le même nombre.
+const leadsDuMois = (m) => (m.leads != null ? m.leads : m.funnel?.leads);
 export function leadsMois(k, cle, deals) {
   const e = externe(k);
   const ligne = e && (e.revenue || []).find(v => v.month === cle);
-  if (ligne && ligne.leads != null) return Number(ligne.leads) || 0;
+  const v = ligne && leadsDuMois(ligne);
+  if (v != null) return Number(v) || 0;
   if (aDesLeadsExternes(k)) return 0;
   return deals.filter(d => d.activity === k && (d.created_at || '').slice(0, 7) === cle).length;
 }
 const aDesLeadsExternes = (k) => {
   const e = externe(k);
-  return !!(e && (e.revenue || []).some(m => m.leads != null));
+  return !!(e && (e.revenue || []).some(m => leadsDuMois(m) != null));
 };
 // Les leads entrés sur une période. Même règle : l'outil externe fait foi dès
 // qu'il ventile ses leads par mois.
@@ -61,7 +65,7 @@ export function leadsPeriode(k, r, deals) {
   const e = externe(k);
   if (aDesLeadsExternes(k)) {
     return (e.revenue || []).filter(m => inRange(m.month + '-01', r))
-      .reduce((s, m) => s + (Number(m.leads) || 0), 0);
+      .reduce((s, m) => s + (Number(leadsDuMois(m)) || 0), 0);
   }
   return deals.filter(d => d.activity === k && inRange(d.created_at, r)).length;
 }
