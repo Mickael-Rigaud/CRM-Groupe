@@ -22,7 +22,7 @@ import {
   CROCHETS, champsDe, remplir, donneesDossier, emailDu,
   mailHtml, URL_LOGO, URL_LOGO_PUBLIC, ouvrirCompose, telechargerEml, copierMiseEnPage,
 } from './btp-mail.js';
-import { ficheDecouverteAmo } from './btp-amo.js';
+import { ficheDecouverteAmo, tableauHonoraires } from './btp-amo.js';
 import { ficheDecouverteExpertise } from './btp-expertise.js';
 import { imprimerFicheDeal } from './btp-fiche.js';
 
@@ -497,7 +497,7 @@ const matriceAmo = (scores) => {
 // 4 bis. Le score, le taux qu'il commande, et ce que ce taux donne en euros. Le barème
 // d'exemples du manuel a disparu au profit du calculateur : il répond à la même
 // question avec le vrai montant du dossier plutôt qu'avec sept montants ronds.
-const scoreComplexite = (scores, travaux) => {
+const scoreComplexite = (scores, travaux, tauxChoisi) => {
   const totalPts = scores.reduce((t, v) => t + (v ?? 0), 0);
   const choisis = scores.filter(v => v !== null).length;
   const complet = choisis === MATRICE_AMO.criteres.length;
@@ -539,7 +539,7 @@ const scoreComplexite = (scores, travaux) => {
           <input type="number" id="hono-travaux" min="0" step="1000" inputmode="numeric"
             placeholder="200000" value="${esc(travaux ?? '')}">
         </label>
-        <div id="hono-res">${resultatHonoraires(scores, travaux)}</div>
+        <div id="hono-res">${resultatHonoraires(scores, travaux, tauxChoisi)}</div>
       </div>
     </div>
     <p class="btp-ref-garde">${esc(MATRICE_AMO.reserve)}</p>
@@ -548,21 +548,14 @@ const scoreComplexite = (scores, travaux) => {
 
 // Le résultat seul : il se redessine à chaque frappe, sans refaire toute la page —
 // sans quoi le champ perdrait le curseur à chaque chiffre saisi.
-function resultatHonoraires(scores, travaux) {
-  const choisis = scores.filter(v => v !== null).length;
-  const taux = choisis ? tauxSuggere(scores.reduce((t, v) => t + (v ?? 0), 0)).taux : null;
-  const montant = Number(travaux) || 0;
-  if (!taux) return '<p class="btp-calc-vide">Cotez les critères ci-dessus : le taux retenu s\'appliquera ici.</p>';
-  if (montant <= 0) return `<p class="btp-calc-vide">Taux retenu : <b>${taux}&nbsp;%</b>. Saisissez le montant des travaux.</p>`;
-  const h = honorairesAmo(montant, taux);
-  return `
-    <div class="btp-calc-total ${h.plancher ? 'plancher' : ''}">
-      <span>Honoraires HT</span>
-      <b>${eur(h.retenu)}</b>
-    </div>
-    ${h.plancher
-      ? `<p class="btp-calc-note">Minimum d'honoraires appliqué : le taux de ${taux} % seul donnerait ${eur(h.brut)}.</p>`
-      : ''}`;
+// Le taux vient de la cotation, mais rien n'oblige à s'y tenir : le manuel prévoit
+// un taux final distinct du taux suggéré. Cliquer une ligne du tableau le retient.
+function resultatHonoraires(scores, travaux, tauxChoisi) {
+  const cotes = scores.filter(v => v !== null).length;
+  const sug = cotes ? tauxSuggere(scores.reduce((t, v) => t + (v ?? 0), 0)).taux : null;
+  const retenu = tauxChoisi ?? sug ?? MATRICE_AMO.paliers[0].taux;
+  return (cotes ? '' : '<p class="hono-note">Aucun critère coté : le taux ci-dessous est à choisir à la main.</p>')
+    + tableauHonoraires(travaux, retenu, sug);
 }
 
 // 5. Les phases. Le poids sert aussi de clé de facturation, d'où la barre : on voit
@@ -632,7 +625,7 @@ const pageMission = (mission) => ({
     const coquille = poser(root);
     // La cotation de la matrice de taux vit dans l'état de la page : elle survit aux
     // redessins, et rien n'est enregistré — c'est une aide au devis, pas une donnée.
-    const state = { q: '', focus: null, scores: MATRICE_AMO.criteres.map(() => null), travaux: '' };
+    const state = { q: '', focus: null, scores: MATRICE_AMO.criteres.map(() => null), travaux: '', taux: null };
 
     const draw = () => {
       const { siennes, colonnes, pondere } = pipelineDe(mission);
@@ -686,7 +679,7 @@ const pageMission = (mission) => ({
         ${mission === 'amo' ? [
           `<div class="btp-duo btp-duo-cat">${catalogueAmo()}${phasesAmo()}</div>`,
           matriceAmo(state.scores),
-          scoreComplexite(state.scores, state.travaux),
+          scoreComplexite(state.scores, state.travaux, state.taux),
           frontiereAmo(),
         ].join('') : ''}
         </div>`);
@@ -710,6 +703,7 @@ const pageMission = (mission) => ({
         const i = Number(td.dataset.crit);
         const n = Number(td.dataset.score);
         state.scores[i] = state.scores[i] === n ? null : n;
+        state.taux = null;        // on repasse au taux que la cotation suggère
         draw();
       };
       root.querySelectorAll('[data-crit]').forEach(td => {
@@ -718,15 +712,26 @@ const pageMission = (mission) => ({
       });
       root.querySelector('#mx-raz')?.addEventListener('click', () => {
         state.scores = MATRICE_AMO.criteres.map(() => null);
+        state.taux = null;
         draw();
       });
 
-      const champTravaux = root.querySelector('#hono-travaux');
-      if (champTravaux) champTravaux.oninput = () => {
-        state.travaux = champTravaux.value;
+      const majHonoraires = () => {
         const res = root.querySelector('#hono-res');
-        if (res) res.innerHTML = resultatHonoraires(state.scores, state.travaux);
+        if (!res) return;
+        res.innerHTML = resultatHonoraires(state.scores, state.travaux, state.taux);
+        lierTaux();
       };
+      // Les lignes du tableau sont recréées à chaque mise à jour : on les relie après.
+      const lierTaux = () => root.querySelectorAll('#hono-res [data-taux]').forEach(l => {
+        const retenir = () => { state.taux = Number(l.dataset.taux); majHonoraires(); };
+        l.onclick = retenir;
+        l.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); retenir(); } };
+      });
+      lierTaux();
+
+      const champTravaux = root.querySelector('#hono-travaux');
+      if (champTravaux) champTravaux.oninput = () => { state.travaux = champTravaux.value; majHonoraires(); };
     };
 
     draw();

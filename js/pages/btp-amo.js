@@ -21,7 +21,7 @@ import { scope } from '../data/scope.js';
 import { esc, eur, fmtDate, toast, openModal, closeModal, contactName } from '../ui.js';
 import {
   CHANNELS, NIVEAUX_BTP, HONORAIRES_AMO, honorairesAmo, couleurMission, stagesDe, tauxSuggere,
-  FICHE_AMO, CRITERES_V5, coteBudget, coteDuree, coteLots, niveauSuggere, controleTaux,
+  FICHE_AMO, MATRICE_AMO, CRITERES_V5, coteBudget, coteDuree, coteLots, niveauSuggere, controleTaux,
 } from '../data/schema.js';
 import { enteteFiche, piedFiche, signatures, cases, ligne, pageFiche, imprimerPage } from './btp-fiche.js';
 
@@ -31,6 +31,44 @@ const teinte = `--m:${C.couleur};--m-clair:${C.clair};--m-encre:${C.encre}`;
 const CANAUX_COURANTS = ['Recommandation client', 'Ancien client', 'Téléphone / autre', 'Site internet direct', 'Prospection directe'];
 
 const TYPES_BIEN = ['Maison', 'Appartement', 'Immeuble', 'Local pro', 'Autre'];
+
+// ------------------------------------------------------- Le calcul des honoraires
+// Le plancher de 3 500 € HT écrase le calcul sous 43 750 € de travaux : à 5, 6, 7 ou
+// 8 %, le résultat est le même. L'arithmétique est juste — elle retombe sur les sept
+// lignes du barème du manuel — mais à l'écran le calculateur a l'air d'ignorer le
+// pourcentage. Montrer les quatre taux et leur résultat règle la question : on voit
+// le montant varier, on voit où le plancher mord, et pourquoi.
+//
+// Le tableau sert aussi de sélecteur : cliquer une ligne retient ce taux. Un seul
+// objet à l'écran plutôt qu'un choix d'un côté et un résultat de l'autre.
+export const TAUX_AMO = MATRICE_AMO.paliers.map(p => p.taux);
+
+export function tableauHonoraires(travaux, retenu, suggere) {
+  const montant = Number(travaux) || 0;
+  const h = honorairesAmo(montant, retenu);
+  return `
+    <div class="hono-total ${h.plancher ? 'plancher' : ''}">
+      <span>Honoraires HT</span>
+      <b>${montant ? eur(h.retenu) : '—'}</b>
+    </div>
+    <table class="hono-tab"><tbody>${TAUX_AMO.map(t => {
+      const x = honorairesAmo(montant, t);
+      return `<tr class="${t === Number(retenu) ? 'on' : ''}" data-taux="${t}" role="button" tabindex="0"
+        title="Retenir ${t} %">
+        <th>${t} %${t === Number(suggere) ? '<em>suggéré</em>' : ''}</th>
+        <td>${montant ? eur(x.retenu) : '—'}</td>
+        <td class="min">${montant && x.plancher ? 'minimum' : ''}</td>
+      </tr>`;
+    }).join('')}</tbody></table>
+    ${!montant
+      ? '<p class="hono-note">Saisissez le montant des travaux HT.</p>'
+      : h.plancher
+        ? `<p class="hono-note alerte">${retenu} % de ${eur(montant)} donnerait ${eur(h.brut)} : le minimum de ${eur(HONORAIRES_AMO.minimum)} HT s'applique.</p>`
+        : ''}
+    ${montant && montant < Math.round(HONORAIRES_AMO.minimum / (Math.max(...TAUX_AMO) / 100))
+      ? `<p class="hono-note">Sous ${eur(Math.round(HONORAIRES_AMO.minimum / (Math.max(...TAUX_AMO) / 100)))} de travaux, le minimum s'applique quel que soit le taux : le pourcentage ne change plus rien.</p>`
+      : ''}`;
+}
 
 // ------------------------------------------------------------------ Le formulaire
 export function ficheDecouverteAmo(apres) {
@@ -210,14 +248,7 @@ export function ficheDecouverteAmo(apres) {
 
     <div class="mf-bloc-titre">Taux retenu et honoraires</div>
     <div class="fa-taux" style="${teinte}">
-      <div class="mf-seg mf-seg-large">
-        ${[5, 6, 7, 8].map(t => `<button type="button" data-taux="${t}" class="${t === taux ? 'on' : ''}">${t} %</button>`).join('')}
-      </div>
-      <div class="fa-taux-res">
-        <span>Honoraires HT</span>
-        <b>${Number(v.budget_ht) ? eur(h.retenu) : '—'}</b>
-        ${Number(v.budget_ht) && h.plancher ? `<em>Minimum appliqué : le taux seul donnerait ${eur(h.brut)}.</em>` : ''}
-      </div>
+      ${tableauHonoraires(v.budget_ht, taux, sug)}
     </div>
     ${ctrl.ecart ? `
       <label class="mail-champ plein" style="margin-bottom:10px"><span>Motif de la dérogation *</span>
@@ -309,7 +340,11 @@ export function ficheDecouverteAmo(apres) {
       td.onclick = coter;
       td.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); coter(); } };
     });
-    corps.querySelectorAll('[data-taux]').forEach(b => b.onclick = () => { v.taux_final = Number(b.dataset.taux); dessine(); });
+    corps.querySelectorAll('[data-taux]').forEach(b => {
+      const retenir = () => { v.taux_final = Number(b.dataset.taux); dessine(); };
+      b.onclick = retenir;
+      b.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); retenir(); } };
+    });
     corps.querySelectorAll('[data-niveau]').forEach(b => b.onclick = () => { v.niveau = b.dataset.niveau; dessine(); });
     poser('#fa-motif', 'motif');
     choisir('#fa-stage', 'stage'); choisir('#fa-owner', 'owner_id');
