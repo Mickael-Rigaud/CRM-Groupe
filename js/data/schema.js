@@ -448,14 +448,14 @@ export const ACTIVITIES = {
       { key: 'rdv', label: 'RDV sur place', p: 100, delivery: true, mission: 'expertise' },
       { key: 'mission_realisee', label: 'Rédaction en cours', p: 100, delivery: true, mission: 'expertise' },
       { key: 'rapport_remis', label: 'Rapport émis', p: 100, delivery: true, mission: 'expertise' },
-      { key: 'rdv_complementaire', label: 'Clôturé & facturé', p: 100, delivery: true, mission: 'expertise' },
+      { key: 'rdv_complementaire', label: 'Clôturé facturé', p: 100, delivery: true, mission: 'expertise' },
       // AMO : de la définition du besoin à la réception des travaux
       { key: 'amo_cadrage', label: 'Qualifié', p: 20, mission: 'amo' },
       { key: 'amo_contrat', label: 'Mission AMO', p: 60, mission: 'amo' },
       { key: 'amo_programme', label: 'RDV terrain', p: 100, delivery: true, mission: 'amo' },
       { key: 'amo_consultation', label: 'Démarrage chantier', p: 100, delivery: true, mission: 'amo' },
       { key: 'amo_chantier', label: 'Suivi intermédiaire', p: 100, delivery: true, mission: 'amo' },
-      { key: 'amo_reception', label: 'Réception des travaux', p: 100, delivery: true, mission: 'amo' },
+      { key: 'amo_reception', label: 'Réception chantiers', p: 100, delivery: true, mission: 'amo' },
     ],
     fields: [
       // Vit dans deals.fields (jsonb) : pas de colonne, donc pas de migration.
