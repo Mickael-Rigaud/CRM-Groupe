@@ -2,7 +2,7 @@
 import { db } from '../data/db.js';
 import { scope } from '../data/scope.js';
 import { ACTIVITIES, CHANNELS, LOST_REASONS, stageOf, stageIndex, stagesDe, missionDe } from '../data/schema.js';
-import { esc, eur, openModal, closeModal, renderForm, readForm, refField, bindRefFields, toast, fmtDate, fmtDateTime, userName, contactName, dealParty, actBadge, daysSince, confirm } from '../ui.js';
+import { esc, eur, openModal, closeModal, renderForm, readForm, refField, bindRefFields, toast, fmtDate, fmtDateTime, userName, marqueResponsable, contactName, dealParty, actBadge, daysSince, confirm } from '../ui.js';
 import { activityForm, activityRowHtml, bindActivityRows, nextActivity } from './activity.js';
 import { documentsSection, bindDocuments } from '../documents.js';
 
@@ -11,6 +11,52 @@ const orgLabel = o => o.name;
 
 async function logEvent(deal, kind, body) {
   await db.insert('events', { deal_id: deal.id, contact_id: deal.contact_id || null, organisation_id: deal.organisation_id || null, kind, body, author_id: scope.user.id });
+}
+
+// ---------- Attribuer une affaire a un charge d'affaires ----------
+// Un lead venu d'un formulaire du site arrive SANS responsable : la regle
+// d'acces le rend alors invisible a tout charge d'affaires, seule la direction
+// le voit. C'est elle qui distribue, et c'est ici qu'elle le fait — sans passer
+// par le formulaire complet de l'affaire.
+//
+// L'attribution s'inscrit dans l'historique : sans cela, personne ne peut dire
+// plus tard qui a confie quoi, ni quand. C'est tout l'interet de la manoeuvre.
+export function attribuerDeal(deal, onDone, onClose = null) {
+  // Qui peut porter cette affaire : la direction, et les personnes dont le
+  // profil porte l'activite concernee.
+  const candidats = scope.users().filter(u =>
+    u.role === 'direction' || (u.activities || []).includes(deal.activity));
+  const actuel = deal.owner_id && db.byId('profiles', deal.owner_id);
+  const orphelines = db.t('activities').filter(a => a.deal_id === deal.id && !a.done && !a.assignee_id).length;
+
+  const m = openModal(actuel ? 'Changer de responsable' : 'Attribuer cette affaire', `<form class="form" id="attr-form">
+    ${renderForm([{ key: 'owner_id', label: "Chargé d'affaires", type: 'select',
+      options: candidats.map(u => [u.id, `${u.full_name}${u.role === 'direction' ? ' (direction)' : ''}`]),
+      required: true, value: deal.owner_id || '' }])}
+    <p class="muted small">${actuel
+      ? `Actuellement : <b>${esc(actuel.full_name)}</b>. Le changement est inscrit dans l'historique de l'affaire.`
+      : `Personne n'en est responsable : elle n'apparaît aujourd'hui que pour la direction.${orphelines ? ` Les ${orphelines} tâche${orphelines > 1 ? 's' : ''} sans destinataire suivront.` : ''}`}</p>
+    <div class="form-actions"><button type="button" class="btn ghost" data-close>Annuler</button><button class="btn" type="submit">${actuel ? 'Changer' : 'Attribuer'}</button></div>
+  </form>`, { onClose });
+
+  m.querySelector('#attr-form').onsubmit = async e => {
+    e.preventDefault();
+    const id = new FormData(e.target).get('owner_id');
+    if (!id || id === deal.owner_id) { closeModal(true); return onDone?.(); }
+    const u = await db.update('deals', deal.id, { owner_id: id });
+    // Les taches que personne ne porte suivent l'affaire : une tache sans
+    // destinataire est invisible elle aussi. Celles deja confiees a quelqu'un
+    // ne bougent pas — on ne reprend pas le travail d'un tiers au passage.
+    for (const a of db.t('activities').filter(a => a.deal_id === deal.id && !a.done && !a.assignee_id)) {
+      await db.update('activities', a.id, { assignee_id: id });
+    }
+    await logEvent(u, 'system', actuel
+      ? `Responsable : ${actuel.full_name} → ${userName(id)}`
+      : `Affaire attribuée à ${userName(id)}`);
+    closeModal(true);
+    toast(`Attribuée à ${userName(id)}`);
+    onDone?.();
+  };
 }
 
 export async function moveStage(deal, stageKey, { silent = false } = {}) {
@@ -137,10 +183,11 @@ export function openDeal(id, onChange) {
     const next = nextActivity(id);
     const html = `
       <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;margin-bottom:14px">
-        <div>${actBadge(d.activity)} &nbsp; ${status}<div class="muted small" style="margin-top:4px">Créée le ${fmtDate(d.created_at)} · Responsable : ${esc(userName(d.owner_id))}</div></div>
+        <div>${actBadge(d.activity)} &nbsp; ${status}<div class="muted small" style="margin-top:4px">Créée le ${fmtDate(d.created_at)} · Responsable : ${marqueResponsable(d.owner_id)}</div></div>
         <div class="toolbar">
           ${d.status === 'open' ? `<button class="btn green sm" id="d-won">✓ Gagnée</button><button class="btn danger sm" id="d-lost">✕ Perdue</button>` : `<button class="btn ghost sm" id="d-reopen">Réouvrir</button>`}
           ${d.fields?.decouverte ? '<button class="btn ghost sm" id="d-fiche">🖨 Fiche de mission</button>' : ''}
+          ${scope.isDirection ? `<button class="btn ${d.owner_id ? 'ghost ' : ''}sm" id="d-attr">👤 ${d.owner_id ? 'Changer de responsable' : 'Attribuer'}</button>` : ''}
           <button class="btn ghost sm" id="d-edit">✎ Modifier</button>
                     <button class="btn danger sm" id="d-del">🗑 Supprimer</button>
         </div>
@@ -181,6 +228,7 @@ export function openDeal(id, onChange) {
         await imprimerFicheDeal(db.byId('deals', id).fields.decouverte);
       } catch (err) { toast(err.message, 'err'); }
     });
+    m.querySelector('#d-attr')?.addEventListener('click', () => attribuerDeal(db.byId('deals', id), refresh, render));
     m.querySelector('#d-edit').onclick = () => dealForm(d.activity, db.byId('deals', id), {}, (nid) => { if (nid) refresh(); else { onChange?.(); } }, render);
         m.querySelector('#d-del').onclick = async () => {
       const dd = db.byId('deals', id);

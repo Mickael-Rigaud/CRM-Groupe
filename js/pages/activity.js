@@ -66,7 +66,22 @@ export function activityForm(link = {}, existing = null, onSaved, onClose = null
 }
 
 export async function toggleActivity(id, done) {
+  const a = db.byId('activities', id);
   await db.update('activities', id, { done, done_at: done ? new Date().toISOString() : null });
+  // Cocher une tache est une action du dossier, pas un detail d'affichage : la
+  // direction doit pouvoir relire ce qu'un charge d'affaires a fait, et quand.
+  // Sans cette trace, l'historique montrait les changements d'etape et les
+  // notes, mais pas le travail entre les deux.
+  //
+  // L'evenement s'ecrit ici plutot que dans deal.js : ce module y est deja
+  // importe, l'inverse creerait un cycle.
+  if (a?.deal_id) {
+    await db.insert('events', {
+      deal_id: a.deal_id, contact_id: a.contact_id || null, organisation_id: a.organisation_id || null,
+      kind: 'system', author_id: scope.user.id,
+      body: `${done ? 'Fait' : 'Rouverte'} : ${actType(a.type).label} — ${a.title}`,
+    });
+  }
 }
 
 export function activityRowHtml(a, { showContext = false } = {}) {
