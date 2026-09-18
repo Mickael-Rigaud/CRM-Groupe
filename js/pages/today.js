@@ -45,10 +45,18 @@ const recentes = new Map(); // id de la tâche -> minuteur de disparition
 const logo = (a, cls = 'todo-logo') => `<i class="${cls}" style="background:${a.color}"><img src="assets/logos/${a.key}.png" alt="" onerror="this.remove()"></i>`;
 
 
-// Une tâche en carte. Deux lignes, pas quatre : le titre, puis une ligne de
-// pastilles — structure, contexte, échéance, destinataire. Tout ce qui était
-// empilé tient maintenant côte à côte, et la liste se lit d'un coup d'œil.
-// Les attributs data-toggle / data-edit-act sont ceux que bindActivityRows attend.
+// Une tâche en ligne. Le titre à gauche, puis structure, contexte, destinataire
+// et échéance dans des colonnes de largeur fixe : d'une ligne à l'autre elles
+// tombent au même endroit, et l'oeil descend la colonne des échéances sans avoir
+// à relire chaque tâche. Le contenu est le même qu'avant, c'est le contenant qui
+// disparaît — plus de carte, plus de fond, plus de remplissage.
+//
+// `.todo-meta` regroupe les colonnes de droite pour le seul besoin du téléphone,
+// où elles passent ensemble à la ligne ; sur grand écran elle s'efface
+// (display: contents) et ses enfants sont des colonnes de la ligne.
+//
+// La classe .todo-tache est conservée : c'est elle que draw() et
+// bindActivityRows cherchent pour brancher les cases et le crayon.
 function carte(a, pour = false) {
   const j = ecart(a);
   const t = actType(a.type);
@@ -66,21 +74,19 @@ function carte(a, pour = false) {
   // L'échéance se lit à sa couleur avant de se lire au texte : rouge en retard,
   // ambre aujourd'hui, neutre au-delà.
   const quand = a.due_date
-    ? `<span class="todo-chip quand ${!a.done && j > 0 ? 'late' : ''} ${!a.done && j === 0 ? 'today' : ''}">
-         ${j === 0 ? "Aujourd'hui" : esc(relDay(a.due_date))}${a.due_time ? ' · ' + esc(a.due_time) : ''}</span>`
-    : '<span class="todo-chip">Sans échéance</span>';
+    ? `<span class="todo-quand ${!a.done && j > 0 ? 'late' : ''} ${!a.done && j === 0 ? 'today' : ''}">${
+        j === 0 ? "Aujourd'hui" : esc(relDay(a.due_date))}${a.due_time ? ' · ' + esc(a.due_time) : ''}</span>`
+    : '<span class="todo-quand vide">—</span>';
 
   return `<div class="todo-tache ${a.done ? 'done' : ''} ${recentes.has(a.id) ? 'recente' : ''} ${a.priority === 'urgent' && !a.done ? 'urgent' : ''}" ${act ? `style="--c:${act.color};--b:${act.accent};--bt:${act.on}"` : ''}>
     <label class="todo-case" title="${a.done ? 'Rouvrir' : 'Marquer comme fait'}">
       <input type="checkbox" ${a.done ? 'checked' : ''} data-toggle="${a.id}"><span></span></label>
-    <div class="todo-tache-corps">
-      <b>${t.icon} ${esc(a.title)}</b>
-      <div class="todo-meta">
-        ${act ? `<span class="todo-badge">${logo(act, 'todo-badge-logo')}${esc(act.short)}</span>` : ''}
-        ${quand}
-        ${ctx ? `<span class="todo-chip ctx">${ctx}</span>` : ''}
-        ${pour ? `<span class="todo-chip pour"><i>→</i>${esc(userName(a.assignee_id))}${a.done ? ' · faite' : ''}</span>` : ''}
-      </div>
+    <b class="todo-t">${t.icon} ${esc(a.title)}</b>
+    <div class="todo-meta">
+      <span class="todo-struct">${act ? `<span class="todo-badge">${logo(act, 'todo-badge-logo')}${esc(act.short)}</span>` : ''}</span>
+      <span class="todo-ctx">${ctx}</span>
+      ${pour ? `<span class="todo-pour"><i>→</i>${esc(userName(a.assignee_id))}${a.done ? ' · faite' : ''}</span>` : ''}
+      ${quand}
     </div>
     <button class="icon-btn todo-editer" data-edit-act="${a.id}" title="Modifier">✎</button>
   </div>`;

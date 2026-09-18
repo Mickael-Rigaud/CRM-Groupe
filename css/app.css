@@ -766,54 +766,92 @@ tr.btp-mission .btp-pts { color: var(--m-encre); }
 .todo-groupe.afaire { color: var(--accent-ink); }
 .todo-groupe.afaire::before { background: var(--accent); }
 
-/* La carte : deux lignes, un filet de couleur, et tout le reste en pastilles.
-   Elle se souleve au survol et s'annonce a l'arrivee — c'est ce qui donne a la
-   liste sa vivacite, sans bouger d'un pixel au repos. */
-.todo-tache { display: flex; gap: 11px; align-items: flex-start; background: var(--card); border: 1px solid var(--line); border-left: 3px solid var(--c, var(--line-strong)); border-radius: 5px 14px 14px 5px; padding: 11px 12px; box-shadow: 0 1px 2px rgba(17,21,28,.04); transition: transform .14s cubic-bezier(.2,.8,.3,1), box-shadow .14s, border-color .14s; animation: todo-entre .2s ease both; }
-@keyframes todo-entre { from { opacity: 0; transform: translateY(5px); } }
-.todo-tache + .todo-tache { margin-top: 7px; }
-.todo-tache:hover { transform: translateY(-2px); box-shadow: var(--shadow-lift); border-color: color-mix(in srgb, var(--c, var(--accent)) 45%, var(--line)); border-left-color: var(--c, var(--accent)); }
-.todo-tache.urgent { border-color: color-mix(in srgb, var(--red) 40%, var(--line)); box-shadow: 0 0 0 1px color-mix(in srgb, var(--red) 18%, transparent), 0 1px 2px rgba(17,21,28,.04); }
-.todo-tache.done { opacity: .55; box-shadow: none; }
-.todo-tache.done:hover { transform: none; }
-.todo-tache.done b { text-decoration: line-through; }
-.todo-tache.recente { opacity: 1; background: var(--green-soft); border-color: color-mix(in srgb, var(--green) 30%, var(--line)); }
+/* La ligne. Elle n'a ni contour ni fond propre : un filet de couleur a gauche,
+   un trait de separation en bas, et c'est tout. Ce qui prenait une carte de
+   70 px tient en 34 px, et la largeur sert enfin a quelque chose — les colonnes
+   de droite — au lieu d'etre du vide. */
+.todo-tache { display: flex; align-items: center; gap: 12px; padding: 7px 14px 7px 11px;
+              border-left: 3px solid var(--c, transparent); border-bottom: 1px solid var(--line);
+              background: var(--card); transition: background .12s; }
+/* Pas d'animation d'arrivee sur la ligne : draw() reecrit toute la liste a chaque
+   frappe dans la recherche et a chaque case cochee, l'animation repartirait a zero
+   sur toutes les lignes a la fois — la liste clignoterait. Le mouvement vit dans le
+   survol et dans la case a cocher, pas dans l'apparition. */
+.todo-tache:last-child { border-bottom: 0; }
+.todo-tache:hover { background: var(--card-2); }
+/* Urgent : un voile rouge, pas un cadre. Le rang le dit deja en toutes lettres. */
+.todo-tache.urgent { background: color-mix(in srgb, var(--red) 4%, var(--card)); }
+.todo-tache.urgent:hover { background: color-mix(in srgb, var(--red) 8%, var(--card)); }
+.todo-tache.done { opacity: .5; }
+.todo-tache.done .todo-t { text-decoration: line-through; }
+.todo-tache.recente { opacity: 1; background: var(--green-soft); }
 
 /* Case a cocher dessinee : la case native est petite et differente sur chaque
    systeme. Celle-ci se remplit de vert et pose sa coche d'un trait. */
-.todo-case { position: relative; flex: none; width: 21px; height: 21px; margin-top: 1px; cursor: pointer; }
+.todo-case { position: relative; flex: none; width: 19px; height: 19px; cursor: pointer; }
 .todo-case input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
-.todo-case span { position: absolute; inset: 0; border: 2px solid var(--line-strong); border-radius: 7px; background: var(--card); transition: background .14s, border-color .14s, transform .14s; }
-.todo-case span::after { content: ""; position: absolute; left: 6px; top: 2px; width: 4px; height: 9px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg) scale(0); transition: transform .16s cubic-bezier(.2,1.5,.4,1); }
+.todo-case span { position: absolute; inset: 0; border: 2px solid var(--line-strong); border-radius: 6px; background: var(--card); transition: background .14s, border-color .14s; }
+.todo-case span::after { content: ""; position: absolute; left: 5px; top: 1px; width: 4px; height: 9px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg) scale(0); transition: transform .16s cubic-bezier(.2,1.5,.4,1); }
 .todo-case:hover span { border-color: var(--green); }
 .todo-case input:checked + span { background: var(--green); border-color: var(--green); }
 .todo-case input:checked + span::after { transform: rotate(45deg) scale(1); }
 .todo-case input:focus-visible + span { box-shadow: 0 0 0 3px color-mix(in srgb, var(--green) 30%, transparent); }
 
-.todo-tache-corps { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
-.todo-tache-corps b { font-size: 13.5px; font-weight: 600; line-height: 1.35; }
+/* Le titre prend toute la place restante et se coupe plutot que de passer a la
+   ligne : une to do list se parcourt du regard, une ligne = une tache. */
+.todo-t { flex: 1 1 auto; min-width: 0; font-size: 13.5px; font-weight: 600; line-height: 1.4;
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-/* La ligne de pastilles : structure, echeance, contexte, destinataire. */
-.todo-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
-.todo-chip { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; background: var(--card-2); color: var(--muted); border-radius: 999px; padding: 3px 10px; font-size: 11.5px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.todo-chip.ctx { max-width: 260px; }
-.todo-chip.ctx a { color: var(--muted); text-decoration: none; }
-.todo-chip.ctx:hover a { color: var(--accent); text-decoration: underline; }
-.todo-chip.quand.late { background: var(--red-soft); color: var(--red); font-weight: 700; }
-.todo-chip.quand.today { background: var(--amber-soft); color: var(--amber); font-weight: 700; }
-.todo-chip.pour { background: var(--accent-soft); color: var(--accent-ink); font-weight: 600; }
-.todo-chip.pour i { font-style: normal; opacity: .6; }
-.todo-tache.recente .todo-chip.quand { background: color-mix(in srgb, var(--green) 18%, #fff); color: var(--green); font-weight: 700; }
+/* Les colonnes de droite. Sur grand ecran .todo-meta s'efface et ses enfants
+   deviennent des colonnes de la ligne, a largeur fixe pour tomber au meme
+   endroit d'une ligne a l'autre. */
+.todo-meta { display: contents; }
+.todo-struct { flex: 0 0 112px; min-width: 0; }
+.todo-ctx { flex: 0 0 210px; min-width: 0; font-size: 12px; color: var(--muted);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.todo-ctx a { color: var(--muted); text-decoration: none; }
+.todo-ctx a:hover { color: var(--accent); text-decoration: underline; }
+.todo-pour { flex: 0 0 132px; min-width: 0; font-size: 12px; font-weight: 600; color: var(--accent-ink);
+             white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.todo-pour i { font-style: normal; opacity: .55; margin-right: 4px; }
+.todo-quand { flex: 0 0 124px; text-align: right; font-size: 12px; color: var(--muted);
+              font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.todo-quand.late { color: var(--red); font-weight: 700; }
+.todo-quand.today { color: var(--amber); font-weight: 700; }
+.todo-quand.vide { color: var(--muted-2); }
+.todo-tache.recente .todo-quand { color: var(--green); font-weight: 700; }
 
-.todo-badge { display: inline-flex; align-items: center; gap: 5px; background: var(--b); color: var(--bt); border-radius: 999px; padding: 3px 10px 3px 4px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; }
-.todo-badge-logo { display: inline-grid; place-items: center; width: 15px; height: 15px; border-radius: 50%; overflow: hidden; background: #fff; flex-shrink: 0; }
+.todo-badge { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; background: var(--b); color: var(--bt); border-radius: 999px; padding: 2px 9px 2px 3px; font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; overflow: hidden; }
+.todo-badge-logo { display: inline-grid; place-items: center; width: 14px; height: 14px; border-radius: 50%; overflow: hidden; background: #fff; flex-shrink: 0; }
 .todo-badge-logo img { width: 100%; height: 100%; object-fit: contain; }
 
 /* Le crayon ne s'invite qu'au survol : une icone par ligne en permanence
    encombre une liste qu'on vient lire, pas editer. */
-.todo-editer { flex: none; opacity: 0; transition: opacity .13s; }
+.todo-editer { flex: none; width: 24px; height: 24px; padding: 0; font-size: 12px; opacity: 0; transition: opacity .13s; }
 .todo-tache:hover .todo-editer, .todo-editer:focus-visible { opacity: 1; }
 @media (hover: none) { .todo-editer { opacity: 1; } }
+
+/* En dessous, les colonnes n'ont plus la place de s'aligner : elles passent
+   ensemble a la ligne, sous le titre, et reprennent leur largeur naturelle. */
+@media (max-width: 1080px) { .todo-ctx { flex-basis: 150px; } .todo-struct { flex-basis: 96px; } }
+@media (max-width: 860px) {
+  .todo-tache { flex-wrap: wrap; row-gap: 4px; padding-top: 8px; padding-bottom: 8px; }
+  /* Les colonnes passent sous le titre, toutes sur une seule ligne : elles se
+     serrent et se coupent plutot que de s'empiler, sinon une tache reprendrait
+     la hauteur d'une carte — ce qu'on vient justement de supprimer. */
+  /* Sur une ligne qui s'enroule, une base `auto` fait passer le titre entier a la
+     ligne des qu'il depasse. Base 0 : il se serre et se coupe, et il reste a cote
+     de sa case. Le crayon le suit ; les colonnes seules passent en dessous. */
+  .todo-t { flex: 1 1 0; }
+  .todo-editer { order: 1; }
+  .todo-meta { order: 2; display: flex; flex: 1 1 100%; flex-wrap: nowrap; align-items: center;
+               gap: 9px; padding-left: 31px; min-width: 0; }
+  .todo-struct { flex: 0 0 auto; }
+  .todo-ctx { flex: 1 1 auto; min-width: 0; }
+  .todo-pour { flex: 0 1 auto; max-width: 42%; }
+  .todo-quand { flex: 0 0 auto; text-align: left; }
+  .todo-struct:empty { display: none; }
+}
 
 .todo-vide { color: var(--muted-2); font-size: 12.5px; text-align: center; padding: 18px 4px 20px; }
 /* En dessous, les colonnes s'empilent plutôt que de défiler latéralement */
@@ -1383,20 +1421,16 @@ button.lien { border: 0; background: none; padding: 0; color: var(--accent); fon
    au-dessus, inertes, plutot que d'etre effacees d'un fichier partage.
    --------------------------------------------------------------------- */
 .todo-onglets { margin-bottom: 4px; }
-.todo-liste { padding: 6px 14px 14px; }
-.todo-liste .todo-groupe:first-child { margin-top: 6px; }
-/* Dans « Envoyees », la carte dit pour qui — sinon la liste est illisible. */
-.todo-pour { font-size: 12px; color: var(--muted); margin-top: 2px; }
-.todo-pour b { font-weight: 650; color: var(--text); }
-.todo-ok { color: var(--green); font-weight: 650; }
 
-/* L'écran prend toute la largeur ; ce sont les TÂCHES qui ne doivent pas faire
-   un bloc chacune. Elles se posent donc en grille : autant de cartes par ligne
-   que la place le permet, une colonne sur téléphone. Les en-têtes de rang
-   traversent toute la grille pour rester lisibles comme des séparateurs. */
+/* L'ecran prend toute la largeur, et les taches aussi — mais chacune sur une
+   seule ligne. La carte qui les contient ne met plus de remplissage : les lignes
+   vont d'un bord a l'autre, separees par un trait, et l'en-tete de rang est une
+   bande qui les coupe. */
 .todo-page { display: flex; flex-direction: column; gap: 14px; }
 .todo-page .toolbar { margin: 0; }
-.todo-liste { display: grid; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); gap: 9px; align-items: start; }
-.todo-liste > .todo-groupe { grid-column: 1 / -1; }
-.todo-liste > .empty { grid-column: 1 / -1; }
-.todo-tache + .todo-tache { margin-top: 0; }   /* l'écart vient de la grille */
+.todo-liste { padding: 0; overflow: hidden; }
+.todo-liste .empty { padding: 26px 14px 28px; }
+
+/* L'en-tete de rang : une bande discrete, pas une ligne de liste. */
+.todo-liste .todo-groupe { margin: 0; padding: 7px 14px; background: var(--card-2);
+                           border-bottom: 1px solid var(--line); }
