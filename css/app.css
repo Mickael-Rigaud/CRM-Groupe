@@ -486,6 +486,47 @@ tr.btp-mission .btp-pts { color: var(--m-encre); }
 .btp-ref-sous { margin: 0 0 14px; font-size: 13px; line-height: 1.55; color: var(--muted); }
 .btp-ref-manque { margin: 10px 0 0; font-size: 12.5px; font-weight: 600; color: var(--amber); }
 .btp-score-fleche { font-size: 20px; color: var(--muted-2); }
+/* Un tableau ne dit pas de lui-meme qu'il se clique : la consigne est posee en tete,
+   et chaque case porte une pastille a cocher plutot qu'un simple survol. */
+.btp-ref-action { display: flex; align-items: center; gap: 10px; margin: 0 0 14px; padding: 11px 16px;
+  border-radius: 10px; font-size: 13.5px; line-height: 1.5; border-left: 3px solid var(--m, var(--accent));
+  background: var(--m-clair, var(--accent-soft)); color: var(--m-encre, var(--accent-ink)); }
+.btp-ref-action span { margin-left: auto; flex-shrink: 0; padding: 3px 10px; border-radius: 999px;
+  font-size: 12px; font-weight: 700; background: var(--card); color: var(--m-encre, var(--accent-ink)); }
+.btp-coche { display: inline-block; width: 13px; height: 13px; margin-right: 9px; vertical-align: -2px;
+  border-radius: 50%; border: 1.5px solid var(--line-strong); background: var(--card);
+  transition: border-color .12s, background .12s, box-shadow .12s; }
+.btp-matrice td.choix:hover .btp-coche { border-color: var(--m, var(--accent)); }
+.btp-matrice td.choix.on .btp-coche { border-color: var(--m, var(--accent)); background: var(--m, var(--accent));
+  box-shadow: inset 0 0 0 2.5px var(--card); }
+
+/* Le bareme des paliers a gauche, le calcul du dossier a droite */
+.btp-score-duo { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(250px, .95fr); gap: 18px;
+  align-items: start; margin-top: 14px; }
+@media (max-width: 960px) { .btp-score-duo { grid-template-columns: 1fr; } }
+
+.btp-calc { padding: 16px 18px; border-radius: 12px; background: var(--m-clair, var(--card-2));
+  border: 1px solid color-mix(in srgb, var(--m, var(--accent)) 22%, transparent); }
+.btp-calc .btp-ref-titre { color: var(--m-encre, var(--accent-ink)); }
+.btp-calc-champ { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.btp-calc-champ > span { font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--m-encre, var(--muted-2)); }
+.btp-calc-champ input { width: 100%; padding: 10px 12px; font: inherit; font-size: 16px; font-weight: 600;
+  border: 1px solid var(--line); border-radius: 9px; background: var(--card); color: var(--text); }
+.btp-calc-champ input:focus { outline: none; border-color: var(--m, var(--accent));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--m, var(--accent)) 18%, transparent); }
+.btp-calc-vide { margin: 0; font-size: 13px; line-height: 1.5; color: var(--muted); }
+.btp-calc-detail { display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  padding-bottom: 9px; font-size: 13px; color: var(--muted);
+  border-bottom: 1px solid color-mix(in srgb, var(--m, var(--accent)) 25%, transparent); }
+.btp-calc-detail b { color: var(--text); font-variant-numeric: tabular-nums; }
+.btp-calc-total { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-top: 10px; }
+.btp-calc-total span { font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+  color: var(--m-encre, var(--muted)); }
+.btp-calc-total b { font-family: var(--font-display); font-size: 26px; font-weight: 700;
+  color: var(--m-encre, var(--accent-ink)); font-variant-numeric: tabular-nums; }
+.btp-calc-note { margin: 9px 0 0; font-size: 12px; font-weight: 600; line-height: 1.45; color: var(--amber); }
+
 .btp-ref-titre { margin: 0 0 10px; font-family: var(--font-display); font-size: 15px; font-weight: 700; }
 .btp-garde { border-left: 3px solid var(--m, var(--accent)); }
 .btp-plus { color: var(--muted-2); margin: 0 7px; }
@@ -669,9 +710,8 @@ tr.btp-mission .btp-pts { color: var(--m-encre); }
 .todo-groupe.urgent { color: var(--red); }
 .todo-groupe.urgent::before { background: var(--red); }
 .todo-groupe.urgent i { background: var(--red-soft); color: var(--red); }
-.todo-groupe.jour { color: var(--amber); }
-.todo-groupe.jour::before { background: var(--amber); }
-.todo-groupe.semaine::before { background: var(--accent); }
+.todo-groupe.afaire { color: var(--accent-ink); }
+.todo-groupe.afaire::before { background: var(--accent); }
 
 /* La carte : deux lignes, un filet de couleur, et tout le reste en pastilles.
    Elle se souleve au survol et s'annonce a l'arrivee — c'est ce qui donne a la
@@ -1296,3 +1336,9 @@ button.lien { border: 0; background: none; padding: 0; color: var(--accent); fon
 .todo-pour { font-size: 12px; color: var(--muted); margin-top: 2px; }
 .todo-pour b { font-weight: 650; color: var(--text); }
 .todo-ok { color: var(--green); font-weight: 650; }
+
+/* Une to do se lit en colonne, pas en bandeau : au-delà d'environ 60 signes par
+   ligne l'oeil perd le début de la ligne suivante, et une tâche tient en trois
+   mots. On borne la colonne et on la laisse à gauche, alignée sur le reste. */
+.todo-page { max-width: 860px; display: flex; flex-direction: column; gap: 14px; }
+.todo-page .toolbar { margin: 0; }

@@ -49,6 +49,7 @@ export const pointsDe = (deal) => niveauDe(deal)?.points || 0;
 // Barème indicatif d'honoraires : ce que donne le taux appliqué au montant des
 // travaux. La ligne à 400 000 € redescend volontairement à 6 % — le manuel prévoit
 // une dégressivité sur les grosses opérations, ce n'est pas une coquille.
+// Plus affiché depuis que le calculateur d'honoraires fait le calcul sur le montant
 export const BAREME_AMO = [
   { travaux: 50000, taux: null, honoraires: 3500, note: 'Minimum' },
   { travaux: 80000, taux: 5, honoraires: 4000 },
@@ -77,6 +78,13 @@ export const MATRICE_AMO = {
     { min: 8, max: 10, taux: 8, regle: 'Mission très consommatrice de temps, contraintes fortes' },
   ],
   reserve: "Le taux reste validé par BTP Expertise. Une dérogation sous 5 % demande une validation de la direction. La matrice devra être recalibrée sur les données réelles.",
+};
+// Les honoraires d'une AMO : le taux appliqué aux travaux, jamais moins que le
+// plancher. Le plancher n'est pas un détail d'affichage — c'est lui qui fait qu'une
+// petite opération reste rentable, et il doit être visible quand il joue.
+export const honorairesAmo = (travaux, taux) => {
+  const brut = Math.round((Number(travaux) || 0) * (Number(taux) || 0) / 100);
+  return { brut, retenu: Math.max(brut, HONORAIRES_AMO.minimum), plancher: brut < HONORAIRES_AMO.minimum };
 };
 export const tauxSuggere = (score) =>
   MATRICE_AMO.paliers.find(p => score >= p.min && score <= p.max) || MATRICE_AMO.paliers[MATRICE_AMO.paliers.length - 1];
@@ -108,6 +116,7 @@ export const FRONTIERE_AMO = {
 // totaux écrits : le total et le verdict se recalculent sur la capacité en vigueur.
 // Le manuel les présentait sur 15 points, la capacité retenue au lancement est dans
 // CAPACITE_BTP — les deux ne peuvent pas diverger si on ne les écrit qu'une fois.
+// Plus affiché : le système de points se lit sur l'écran des chargés d'affaires.
 export const EXEMPLES_CHARGE = [
   ['amo_importante', 'amo_etendue', 'exp_complexe'],
   ['amo_ciblee', 'amo_ciblee', 'amo_etendue', 'exp_complexe'],
@@ -326,12 +335,21 @@ export const ACTIVITY_TYPES = [
   { key: 'autre', label: 'Autre', icon: '•', groupe: 'Interne' },
 ];
 
-// Le degré de traitement qu'on pose à la main sur une tâche. « En retard » et
-// « aujourd'hui » n'y figurent pas : ils se calculent depuis l'échéance, ils ne se
-// saisissent pas. Stocké dans activities.priority — texte libre, donc une valeur
-// intermédiaire s'ajoute ici sans migration.
+// Le degré de traitement d'une tâche. Trois valeurs, et c'est volontairement
+// court : au-delà, plus personne ne les distingue au moment de saisir.
+//
+// « Retard » se POSE à la main tout en se CALCULANT aussi depuis l'échéance :
+// une tâche dont la date est passée tombe dans ce rang sans qu'on ait à y
+// penser, et on peut l'y mettre soi-même pour un retard que la date ne dit pas
+// (un dossier qui traîne, une relance oubliée). Les deux chemins mènent au
+// même endroit, c'est ce qui évite d'avoir à choisir entre eux.
+//
+// Stocké dans activities.priority — texte libre, donc une valeur s'ajoute ici
+// sans migration. NULL vaut « À faire » : l'écrasante majorité des tâches.
 export const PRIORITES = [
   { key: 'urgent', label: 'Urgent', icon: '🔥' },
+  { key: 'retard', label: 'Retard', icon: '⚠' },
+  { key: 'afaire', label: 'À faire', icon: '•' },
 ];
 
 export const CONTACT_TYPES = ['Prospect', 'Client', 'Partenaire', 'Apporteur', 'Fournisseur'];
