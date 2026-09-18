@@ -5,7 +5,7 @@ import { db } from '../data/db.js';
 import { idsDe, urlAgenda, VUES as VUES_CALENDRIER, CLES_AGENDA, modeEmploi } from '../agenda.js';
 import { scope } from '../data/scope.js';
 import {
-  ACTIVITIES, CHANNELS, weightedAmount, stagesDe, missionDe, NIVEAUX_BTP, CAPACITE_BTP,
+  ACTIVITIES, CHANNELS, weightedAmount, stagesDe, missionDe, estNouveauLead, NIVEAUX_BTP, CAPACITE_BTP,
   HONORAIRES_AMO, MISSIONS_BTP, couleurMission, niveauDe, pointsDe,
   MATRICE_AMO, tauxSuggere, honorairesAmo, PHASES_AMO, FRONTIERE_AMO, FICHE_CHARGE_BTP,
   REMUNERATION_BTP, partRemuneration,
@@ -17,7 +17,7 @@ import {
   openModal, closeModal, confirm, terms, hit,
   searchInput, bindSearch, restoreFocus, csvDownload, marqueResponsable,
 } from '../ui.js';
-import { openDeal, assignerResponsable, candidatsResponsable } from './deal.js';
+import { openDeal, dealForm, assignerResponsable, candidatsResponsable } from './deal.js';
 import { contactForm, openContact } from './contacts.js';
 import { orgForm, openOrg } from './organisations.js';
 import { coquilleEspace, poserEspace, kpiEspace, supprimerFiche } from './espace.js';
@@ -1282,13 +1282,25 @@ function ligneReseau({ f, charge, max, amoMax, points, sature }) {
 //
 // Ce n'est PAS « sans responsable » : un lead attribue reste un nouveau lead tant
 // que l'appel n'a pas eu lieu, et c'est bien ce qu'on veut suivre.
-const AVANT_ENTRETIEN = ['lead', 'rdv1'];
-const estNouveauLead = (d) => d.status === 'open' && AVANT_ENTRETIEN.includes(d.stage);
+//
+// Les etapes concernees sont declarees sur l'activite (`avantEntretien` dans
+// schema.js) et lues par `estNouveauLead` : moveStage s'en sert aussi, pour
+// promouvoir le contact en client quand l'affaire quitte la pile. Une seule
+// definition, sinon les deux ecrans finiraient par ne plus dire la meme chose.
 
-// D'ou vient le lead. Le formulaire du site ecrit `fields.origine` (« Formulaire
-// btpexpertise.fr ») ; une affaire saisie a la main n'a que son canal CRM. On
-// montre la mention la plus precise disponible, sans inventer celle qui manque.
-const origineDe = (d) => d.fields?.origine || d.channel || '';
+// D'ou vient le lead. Trois provenances possibles, dans cet ordre de precision :
+//   - un apporteur nomme — partenaire, courtier, ou un contact : c'est le plus
+//     precis, et c'est ce qu'on veut lire en premier ;
+//   - le formulaire du site, qui ecrit `fields.origine` (« Formulaire btpexpertise.fr ») ;
+//   - a defaut le canal CRM, pour une affaire saisie a la main.
+// On montre la mention la plus precise disponible, sans inventer celle qui manque.
+const origineDe = (d) => {
+  const org = d.referrer_org_id && db.byId('organisations', d.referrer_org_id);
+  if (org) return `${org.partner_job === 'Courtier' ? 'Courtier' : 'Partenaire'} · ${org.name}`;
+  const c = d.referrer_contact_id && db.byId('contacts', d.referrer_contact_id);
+  if (c) return `Apporteur · ${contactName(c)}`;
+  return d.fields?.origine || d.channel || '';
+};
 
 // Le rendez-vous telephonique : quand l'appel est prevu.
 //
@@ -1418,9 +1430,11 @@ export const btpBasePage = {
           <div class="seg">${vues().map(v => `<button data-vue="${v.key}" class="${state.vue === v.key ? 'active' : ''}">${v.label} <span class="cnt">${compte(v.key)}</span></button>`).join('')}</div>
           <span class="grow"></span>
           <button class="btn ghost sm" id="b-export">Export CSV</button>
-          ${surLeads ? '' : `<button class="btn" id="b-new">+ ${surOrg ? (state.vue === 'courtiers' ? 'Courtier' : 'Partenaire') : 'Contact'}</button>`}
+          ${surLeads
+            ? '<button class="btn" id="b-lead">+ Nouveau lead</button>'
+            : `<button class="btn" id="b-new">+ ${surOrg ? (state.vue === 'courtiers' ? 'Courtier' : 'Partenaire') : 'Contact'}</button>`}
         </div>
-        ${surLeads ? `<p class="muted small" style="margin:-4px 0 12px">Les demandes arrivées du site que personne ne porte encore. Choisissez un chargé d'affaires&nbsp;: le lead rejoint aussitôt la base, et l'attribution est inscrite dans l'historique de l'affaire.</p>` : ''}
+        ${surLeads ? `<p class="muted small" style="margin:-4px 0 12px">Les demandes dont le premier entretien téléphonique n'a pas encore eu lieu&nbsp;: formulaire du site, apport d'un partenaire ou d'un courtier, ou saisie à la main. Choisissez un chargé d'affaires pour la confier ; le lead quitte cette pile une fois l'entretien passé, et son contact devient client.</p>` : ''}
         <div class="toolbar">
           ${searchInput('b-q', state, 'Rechercher un nom, une ville, un email…')}
           ${surOrg || surLeads ? '' : `<select id="b-canal"><option value="">Tous les canaux</option>${CHANNELS.map(c => `<option ${state.canal === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>`}
@@ -1480,6 +1494,9 @@ export const btpBasePage = {
       root.querySelectorAll('[data-suppr]').forEach(b => b.onclick = () =>
         supprimerFiche(surOrg ? 'organisations' : 'contacts', b.dataset.suppr, draw));
       root.querySelector('#b-new')?.addEventListener('click', () => nouveau());
+      // Une affaire neuve nait a la premiere etape du pipeline : elle atterrit
+      // donc dans cette pile, exactement comme un lead venu du site.
+      root.querySelector('#b-lead')?.addEventListener('click', () => dealForm(KEY, null, {}, draw));
       root.querySelector('#b-export').onclick = () => csvDownload(`btp-${state.vue}.csv`, lignes.map(({ id, org, dealId, lead, activity, ownerId, ...reste }) => reste));
     };
 

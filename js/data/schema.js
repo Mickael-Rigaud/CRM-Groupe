@@ -399,6 +399,12 @@ export const ACTIVITIES = {
     accent: '#00BBF6', on: '#00455B', accent2: '#00A8DD', soft: '#E6F8FF', ink: '#004B62',
     amountLabel: 'Montant mission HT (€)',
     rdvStage: 'rdv1',
+    // Tant qu'une affaire est a l'une de ces etapes, c'est un NOUVEAU LEAD : le
+    // premier entretien telephonique n'a pas eu lieu. Les deux sont communes a
+    // l'expertise et a l'AMO, et garanties en tete de liste (voir le commentaire
+    // de `stages`). Passer au-dela fait sortir le lead de la pile de l'espace BTP
+    // et promeut son contact en client.
+    avantEntretien: ['lead', 'rdv1'],
     // Le cabinet mène deux métiers au déroulé différent : l'expertise, qui va du
     // constat au rapport, et l'AMO, qui accompagne un chantier de la définition du
     // besoin à la réception. D'où deux pipelines — `mission` dit à laquelle une étape
@@ -516,6 +522,12 @@ export const ACTIVITIES = {
 };
 
 export const ACTIVITY_KEYS = Object.keys(ACTIVITIES);
+
+// Une affaire encore en attente du premier entretien. Une activite qui ne declare
+// pas `avantEntretien` n'a pas cette notion : la fonction repond alors non, et rien
+// ne change pour elle — c'est voulu, seul BTP Expertise sépare sa base en deux.
+export const estNouveauLead = (deal) =>
+  deal?.status === 'open' && !!ACTIVITIES[deal.activity]?.avantEntretien?.includes(deal.stage);
 
 export const CHANNELS = [
   'Google organique / SEO', 'Google Ads', 'Meta Ads', 'Instagram organique', 'Facebook organique', 'LinkedIn',

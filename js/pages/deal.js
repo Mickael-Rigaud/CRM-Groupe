@@ -1,7 +1,7 @@
 // Affaires : fiche détaillée (modale), création / édition, changement d'étape, gagné / perdu.
 import { db } from '../data/db.js';
 import { scope } from '../data/scope.js';
-import { ACTIVITIES, CHANNELS, LOST_REASONS, stageOf, stageIndex, stagesDe, missionDe } from '../data/schema.js';
+import { ACTIVITIES, CHANNELS, LOST_REASONS, stageOf, stageIndex, stagesDe, missionDe, estNouveauLead } from '../data/schema.js';
 import { esc, eur, openModal, closeModal, renderForm, readForm, refField, bindRefFields, toast, fmtDate, fmtDateTime, userName, marqueResponsable, contactName, dealParty, actBadge, daysSince, confirm } from '../ui.js';
 import { activityForm, activityRowHtml, bindActivityRows, nextActivity } from './activity.js';
 import { documentsSection, bindDocuments } from '../documents.js';
@@ -72,12 +72,28 @@ export function attribuerDeal(deal, onDone, onClose = null) {
   };
 }
 
+// Un lead qui passe le premier entretien n'est plus un prospect : son contact
+// devient client. Ce n'est pas cosmetique — l'onglet « Prospects » de la base BTP
+// a disparu, donc un contact qui quitte la pile des nouveaux leads sans devenir
+// client ne se retrouve plus que dans « Tous les contacts ». Il disparaitrait
+// du parcours.
+//
+// On ne redescend jamais : reculer une affaire d'une etape ne « declasse » pas
+// un client en prospect, ce serait absurde vu du client.
+async function promouvoirClient(avant, apres) {
+  if (!apres?.contact_id) return;
+  if (!estNouveauLead(avant) || estNouveauLead(apres)) return;
+  const c = db.byId('contacts', apres.contact_id);
+  if (c && c.type !== 'Client') await db.update('contacts', c.id, { type: 'Client' });
+}
+
 export async function moveStage(deal, stageKey, { silent = false } = {}) {
   const act = ACTIVITIES[deal.activity]; const st = stageOf(deal.activity, stageKey);
   if (!st || deal.stage === stageKey) return;
   const patch = { stage: stageKey, stage_changed_at: new Date().toISOString(), stage_history: [...(deal.stage_history || []), { stage: stageKey, at: new Date().toISOString() }] };
   if (st.delivery && deal.status !== 'won') Object.assign(patch, { status: 'won', won_at: new Date().toISOString(), closed_at: new Date().toISOString(), lost_reason: null });
   const updated = await db.update('deals', deal.id, patch);
+  await promouvoirClient(deal, updated);
   await logEvent(updated, 'stage', `Étape → ${st.label}${patch.status === 'won' ? ' (affaire gagnée)' : ''}`);
   if (!silent) toast(`Étape : ${st.label}`);
   return updated;
@@ -92,6 +108,7 @@ export async function setWon(deal) {
     Object.assign(patch, { stage: firstDelivery.key, stage_changed_at: new Date().toISOString(), stage_history: [...(deal.stage_history || []), { stage: firstDelivery.key, at: new Date().toISOString() }] });
   }
   const u = await db.update('deals', deal.id, patch);
+  await promouvoirClient(deal, u);
   await logEvent(u, 'stage', '🎉 Affaire gagnée');
   // Tâche de suite automatique selon l'activité
   const follow = { rgd: 'Créer le client et le chantier dans Costructor', btp: 'Planifier la mission', courtage: 'Suivre le déblocage et facturer la commission', propulsion: 'Lancer l\'onboarding et renseigner l\'abonnement sur l\'organisation' }[deal.activity];
