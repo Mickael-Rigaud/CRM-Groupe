@@ -580,7 +580,10 @@ export const CLIENT_STATUS = ['Prospect', 'Client actif', 'Ancien client'];
 export const ROLES = {
   direction: { label: 'Direction', description: 'Vision complète, tableaux de bord, paramétrage' },
   propulsion: { label: 'Propulsion', description: 'Pipeline Propulsion, contacts et organisations liés' },
-  commercial: { label: "Chargé d'affaires", description: 'Uniquement les affaires et contacts dont il est responsable' },
+  // La cle est la valeur STOCKEE dans profiles.role, et la contrainte CHECK
+  // de la base n'accepte qu'elle : direction, propulsion, charge_affaires.
+  // 'commercial' a ete renomme le 18/09/2026, en base et ici d'un seul geste.
+  charge_affaires: { label: "Chargé d'affaires", description: 'Uniquement les affaires et contacts dont il est responsable' },
 };
 
 // À quelle mission une affaire appartient : 'amo' ou 'expertise'.

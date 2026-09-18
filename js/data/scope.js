@@ -5,7 +5,9 @@ import { db } from './db.js';
 export const scope = {
   user: null,
   set(user) { this.user = user; },
-  get role() { return this.user?.role || 'commercial'; },
+  // Le role le moins dote par defaut : un profil incomplet ne doit jamais
+  // se retrouver avec plus de droits qu'il n'en a.
+  get role() { return this.user?.role || 'charge_affaires'; },
   get isDirection() { return this.role === 'direction'; },
   get canPatrimony() { return this.isDirection && this.user?.patrimony_access === true; },
   get canRental() { return this.canPatrimony || this.user?.rental_access === true; },

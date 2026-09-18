@@ -9,7 +9,7 @@ export const SEED_USERS = [
   { id: 'u-mickael', full_name: 'Mickael Rigaud', email: 'mickael@example.com', role: 'direction', activities: ['rgd', 'btp', 'courtage', 'propulsion'], active: true, patrimony_access: true },
   { id: 'u-stephanie', full_name: 'Stéphanie', email: 'stephanie@example.com', role: 'propulsion', activities: ['propulsion'], active: true, rental_access: true },
   { id: 'u-elodie', full_name: 'Élodie', email: 'elodie@example.com', role: 'propulsion', activities: ['propulsion'], active: true },
-  { id: 'u-charge', full_name: "Chargé d'affaires (démo)", email: 'charge@example.com', role: 'commercial', activities: ['rgd', 'btp'], active: true },
+  { id: 'u-charge', full_name: "Chargé d'affaires (démo)", email: 'charge@example.com', role: 'charge_affaires', activities: ['rgd', 'btp'], active: true },
 ];
 
 export const SEED = {
