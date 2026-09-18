@@ -140,6 +140,7 @@ export function openDeal(id, onChange) {
         <div>${actBadge(d.activity)} &nbsp; ${status}<div class="muted small" style="margin-top:4px">Créée le ${fmtDate(d.created_at)} · Responsable : ${esc(userName(d.owner_id))}</div></div>
         <div class="toolbar">
           ${d.status === 'open' ? `<button class="btn green sm" id="d-won">✓ Gagnée</button><button class="btn danger sm" id="d-lost">✕ Perdue</button>` : `<button class="btn ghost sm" id="d-reopen">Réouvrir</button>`}
+          ${d.fields?.decouverte ? '<button class="btn ghost sm" id="d-fiche">🖨 Fiche de mission</button>' : ''}
           <button class="btn ghost sm" id="d-edit">✎ Modifier</button>
                     <button class="btn danger sm" id="d-del">🗑 Supprimer</button>
         </div>
@@ -174,6 +175,12 @@ export function openDeal(id, onChange) {
     m.querySelector('#d-won')?.addEventListener('click', async () => { await setWon(db.byId('deals', id)); refresh(); });
     m.querySelector('#d-lost')?.addEventListener('click', () => setLost(db.byId('deals', id), refresh, render));
     m.querySelector('#d-reopen')?.addEventListener('click', async () => { await reopen(db.byId('deals', id)); refresh(); });
+    m.querySelector('#d-fiche')?.addEventListener('click', async () => {
+      try {
+        const { imprimerFiche } = await import('./btp-amo.js');
+        imprimerFiche(db.byId('deals', id).fields.decouverte);
+      } catch (err) { toast(err.message, 'err'); }
+    });
     m.querySelector('#d-edit').onclick = () => dealForm(d.activity, db.byId('deals', id), {}, (nid) => { if (nid) refresh(); else { onChange?.(); } }, render);
         m.querySelector('#d-del').onclick = async () => {
       const dd = db.byId('deals', id);
