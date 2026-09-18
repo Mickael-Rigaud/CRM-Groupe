@@ -447,8 +447,8 @@ export const ACTIVITIES = {
       { key: 'proposition', label: 'Lettre de mission', p: 60, mission: 'expertise' },
       { key: 'rdv', label: 'RDV sur place', p: 100, delivery: true, mission: 'expertise' },
       { key: 'mission_realisee', label: 'Rédaction en cours', p: 100, delivery: true, mission: 'expertise' },
-      { key: 'rdv_complementaire', label: 'Clôturé & facturé', p: 100, delivery: true, mission: 'expertise' },
       { key: 'rapport_remis', label: 'Rapport émis', p: 100, delivery: true, mission: 'expertise' },
+      { key: 'rdv_complementaire', label: 'Clôturé & facturé', p: 100, delivery: true, mission: 'expertise' },
       // AMO : de la définition du besoin à la réception des travaux
       { key: 'amo_cadrage', label: 'Qualifié', p: 20, mission: 'amo' },
       { key: 'amo_contrat', label: 'Mission AMO', p: 60, mission: 'amo' },
