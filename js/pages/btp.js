@@ -1173,8 +1173,15 @@ export const btpChargesPage = {
     const coquille = poser(root);
 
     const draw = () => {
+      // Qui voit quoi. La charge des autres sert à répartir les leads : c'est un geste
+      // de direction. Un chargé d'affaires ne voit donc que SA ligne — mais il garde
+      // l'écran, car c'est ici que vivent le barème de points, les règles de capacité
+      // et sa grille de rémunération, qu'il a toute raison de consulter.
+      const mien = scope.user?.id || null;
+      const visibles = scope.isDirection ? fichesReseau() : fichesReseau().filter(f => f.profile_id === mien);
+
       // Une ligne par fiche du réseau, sa charge lue sur le compte CRM quand il existe.
-      const lignes = fichesReseau().map(f => {
+      const lignes = visibles.map(f => {
         const charge = f.profile_id ? chargeDe(f.profile_id) : null;
         const max = f.points_max || CAPACITE_BTP.points;
         const amoMax = f.amo_max || CAPACITE_BTP.amoActives;
@@ -1186,14 +1193,16 @@ export const btpChargesPage = {
       });
       // Les utilisateurs du CRM rattachés à BTP qui n'ont pas encore de fiche : on les
       // montre plutôt que de les oublier, avec de quoi créer leur fiche d'un clic.
-      const sansFiche = chargesDAffaires().filter(u => !fichesReseau().some(f => f.profile_id === u.id));
+      const sansFiche = scope.isDirection
+        ? chargesDAffaires().filter(u => !fichesReseau().some(f => f.profile_id === u.id))
+        : [];
 
       root.innerHTML = cadre('#/btp/charges', "Chargés d'affaires", `
         <div class="card">
-          <div class="card-head"><h2>Le réseau</h2>
-            <span class="muted small">Capacité et objectif se règlent fiche par fiche</span>
+          <div class="card-head"><h2>${scope.isDirection ? 'Le réseau' : 'Ma charge'}</h2>
+            <span class="muted small">${scope.isDirection ? 'Capacité et objectif se règlent fiche par fiche' : 'Capacité et objectif sont réglés par la direction'}</span>
             <span class="grow"></span>
-            <button class="btn" id="ca-new">+ Chargé d'affaires</button>
+            ${scope.isDirection ? `<button class="btn" id="ca-new">+ Chargé d'affaires</button>` : ''}
           </div>
           <div class="table-wrap"><table>
             <thead><tr>
@@ -1204,7 +1213,9 @@ export const btpChargesPage = {
               <th class="num">CA produit</th><th>Statut</th><th></th>
             </tr></thead>
             <tbody>${lignes.map(l => ligneReseau(l)).join('')
-              || `<tr><td colspan="7"><div class="empty">Aucun chargé d'affaires déclaré. « + Chargé d'affaires » crée la première fiche — une personne peut y figurer avant d'avoir un compte CRM.</div></td></tr>`}</tbody>
+              || `<tr><td colspan="7"><div class="empty">${scope.isDirection
+                ? 'Aucun chargé d\'affaires déclaré. « + Chargé d\'affaires » crée la première fiche — une personne peut y figurer avant d\'avoir un compte CRM.'
+                : 'Votre fiche de réseau n\'a pas encore été créée : la direction la pose depuis cet écran. Le barème et la grille de rémunération ci-dessous restent valables.'}</div></td></tr>`}</tbody>
           </table></div>
           ${sansFiche.length ? `<p class="muted small" style="margin-top:12px">Sur le CRM sans fiche de réseau : ${sansFiche.map(u => `<button type="button" class="btn ghost sm" data-creer="${u.id}">+ ${esc(u.full_name)}</button>`).join(' ')}</p>` : ''}
         </div>
@@ -1226,7 +1237,8 @@ export const btpChargesPage = {
         ${ficheMetier()}`);
 
       lierAffaires(root, draw);
-      root.querySelector('#ca-new').onclick = () => ficheCharge(null, draw);
+      const neuf = root.querySelector('#ca-new');
+      if (neuf) neuf.onclick = () => ficheCharge(null, draw);
       root.querySelectorAll('[data-fiche-ca]').forEach(b => b.onclick = () => ficheCharge(db.byId(TABLE_CHARGES, b.dataset.ficheCa), draw));
       // Fiche pré-remplie depuis un compte du CRM : pas d'id, donc une création.
       root.querySelectorAll('[data-creer]').forEach(b => b.onclick = () => {
@@ -1293,7 +1305,7 @@ function ligneReseau({ f, charge, max, amoMax, points, sature }) {
     <td class="num">${charge && charge.ca ? eur(charge.ca) : '—'}${objectif ? `<div class="small muted">sur ${eur(objectif)}</div>` : ''}</td>
     <td>${f.actif === false ? '<span class="pill">En sommeil</span>'
       : sature ? '<span class="pill bad">Saturé</span>' : '<span class="pill ok">Disponible</span>'}</td>
-    <td class="num"><button type="button" class="icon-btn" data-fiche-ca="${f.id}" title="Modifier la fiche">✎</button></td>
+    <td class="num">${scope.isDirection ? `<button type="button" class="icon-btn" data-fiche-ca="${f.id}" title="Modifier la fiche">✎</button>` : ''}</td>
   </tr>
   ${charge && charge.siennes.length ? `<tr class="btp-detail"><td colspan="7">
     ${charge.siennes.map(d => {
