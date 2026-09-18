@@ -34,7 +34,7 @@ export function contactForm(existing = null, onSaved, onClose = null, allowSwitc
     ${refField('organisation_id', 'Entreprise rattachée', orgs, orgLabel, existing?.organisation_id)}
     ${refField('referrer_org_id', 'Apporteur (entreprise)', orgs, orgLabel, existing?.referrer_org_id)}
     ${refField('referrer_contact_id', 'Apporteur (contact)', contacts, contactLabel, existing?.referrer_contact_id)}
-    <div class="form-actions">${existing ? '<button type="button" class="btn ghost left" id="c-del">Supprimer</button>' : ''}<button type="button" class="btn ghost" data-close>Annuler</button><button class="btn" type="submit">Enregistrer</button></div></form>`, { wide: true, onClose });
+    <div class="form-actions">${existing ? '<button type="button" class="btn ghost left" id="c-del">🗄 Archiver</button>' : ''}<button type="button" class="btn ghost" data-close>Annuler</button><button class="btn" type="submit">Enregistrer</button></div></form>`, { wide: true, onClose });
   const form = m.querySelector('#c-form');
   m.querySelector('[data-kind="org"]')?.addEventListener('click', () => {
     const name = [form.querySelector('[name="first_name"]').value, form.querySelector('[name="last_name"]').value].filter(Boolean).join(' ');
@@ -56,10 +56,12 @@ export function contactForm(existing = null, onSaved, onClose = null, allowSwitc
       closeModal(true); toast('Contact enregistré'); onSaved?.(id);
     } catch (err) { toast(err.message, 'err'); }
   };
+  // Un contact ne se supprime plus : il s'archive. Une fiche jetée emporte ce
+  // qu'on ne saura jamais avoir perdu — un nom déjà rencontré, un numéro déjà
+  // appelé. Voir archiverFiche dans espace.js.
   m.querySelector('#c-del')?.addEventListener('click', async () => {
-    if (db.t('deals').some(d => d.contact_id === existing.id)) return toast('Ce contact a des affaires : supprimez-les d\'abord', 'warn');
-    if (!await confirm('Supprimer ce contact ?')) return;
-    await db.remove('contacts', existing.id); closeModal(true); toast('Contact supprimé'); onSaved?.(null);
+    const { archiverFiche } = await import('./espace.js');
+    await archiverFiche('contacts', existing.id, () => { closeModal(true); onSaved?.(null); });
   });
 }
 

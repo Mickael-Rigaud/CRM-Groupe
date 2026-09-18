@@ -14,7 +14,7 @@ import { openDeal } from './deal.js';
 import { contactForm, openContact } from './contacts.js';
 import { orgForm, openOrg } from './organisations.js';
 import { activityRowHtml, bindActivityRows, nextActivity } from './activity.js';
-import { coquilleEspace, poserEspace, kpiEspace, supprimerFiche } from './espace.js';
+import { coquilleEspace, poserEspace, kpiEspace, archiverFiche, estActive } from './espace.js';
 import { vivierPage } from './vivier.js';
 
 const KEY = 'courtage';
@@ -206,8 +206,10 @@ export const courtageBasePage = {
 
     const draw = () => {
       const ts = terms(state.q);
-      const contacts = scope.contacts().filter(estCourtage);
-      const orgs = scope.orgs().filter(estCourtage);
+      // Les fiches archivées sortent des listes actives. Elles se consultent et se
+      // restaurent depuis l'espace BTP, qui porte l'onglet « Archivés ».
+      const contacts = scope.contacts().filter(estCourtage).filter(estActive);
+      const orgs = scope.orgs().filter(estCourtage).filter(estActive);
       const surOrg = ['apporteurs', 'banques'].includes(state.vue);
       const origineOuverte = ORIGINES.find(o => o.key === state.origine);
 
@@ -305,7 +307,7 @@ export const courtageBasePage = {
         <div class="card">
           <div class="table-wrap"><table>
             <thead><tr>${colonnes.map(c => `<th>${esc(c)}</th>`).join('')}</tr></thead>
-            <tbody>${lignes.map(r => `<tr class="click" data-row="${r.kind}|${r.id}">${r.cells.map(c => `<td>${c}</td>`).join('')}<td class="num acts"><button type="button" class="btn ghost sm" data-modif="${r.kind}|${r.id}" title="Modifier">&#10000;</button><button type="button" class="btn ghost sm danger" data-suppr="${r.kind}|${r.id}" title="Supprimer la fiche et ce qui en dépend">&#128465;</button></td></tr>`).join('')
+            <tbody>${lignes.map(r => `<tr class="click" data-row="${r.kind}|${r.id}">${r.cells.map(c => `<td>${c}</td>`).join('')}<td class="num acts"><button type="button" class="btn ghost sm" data-modif="${r.kind}|${r.id}" title="Modifier">&#10000;</button><button type="button" class="btn ghost sm" data-suppr="${r.kind}|${r.id}" title="Archiver : la fiche sort des listes, rien n&rsquo;est supprimé">&#128451;</button></td></tr>`).join('')
               || `<tr><td colspan="${colonnes.length}"><div class="empty">Aucune fiche dans cette vue. Le bouton « + ${esc(libelleNouveau())} » en crée une, déjà rattachée à La Référence Courtage.</div></td></tr>`}</tbody>
           </table></div>
           ${sansFiche.length ? `<p class="muted small" style="margin-top:12px">Citées sur un dossier mais sans fiche au répertoire : ${sansFiche.map(n => esc(n)).join(', ')}. Créez leur fiche avec « + Banque » pour suivre leurs dossiers ici.</p>` : ''}
@@ -329,7 +331,7 @@ export const courtageBasePage = {
       });
       root.querySelectorAll('[data-suppr]').forEach(b => b.onclick = () => {
         const [kind, id] = b.dataset.suppr.split('|');
-        supprimerFiche(kind === 'org' ? 'organisations' : 'contacts', id, draw);
+        archiverFiche(kind === 'org' ? 'organisations' : 'contacts', id, draw);
       });
       root.querySelector('#c-new').onclick = () => nouveau();
       root.querySelector('#c-export').onclick = () => csvDownload(`courtage-${state.vue}.csv`, lignes.map(r => r.csv));

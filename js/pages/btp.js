@@ -20,7 +20,7 @@ import {
 import { openDeal, dealForm, assignerResponsable, candidatsResponsable } from './deal.js';
 import { contactForm, openContact } from './contacts.js';
 import { orgForm, openOrg } from './organisations.js';
-import { coquilleEspace, poserEspace, kpiEspace, supprimerFiche } from './espace.js';
+import { coquilleEspace, poserEspace, kpiEspace, archiverFiche, restaurerFiche, estActive } from './espace.js';
 import {
   CROCHETS, champsDe, remplir, donneesDossier, emailDu,
   mailHtml, URL_LOGO, URL_LOGO_PUBLIC, ouvrirCompose, telechargerEml, copierMiseEnPage,
@@ -1363,7 +1363,8 @@ const VUES = [
   { key: 'clients', label: 'Clients' },
   { key: 'partenaires', label: 'Partenaires' },
   { key: 'courtiers', label: 'Courtiers' },
-  { key: 'tous', label: 'Tous les contacts' },
+  { key: 'tous', label: 'Dossiers clos' },
+  { key: 'archives', label: 'Archivés' },
 ];
 
 export const btpBasePage = {
@@ -1404,10 +1405,15 @@ export const btpBasePage = {
 
     const draw = () => {
       const ts = terms(state.q);
-      const contacts = scope.contacts().filter(isBtp);
-      const orgs = scope.orgs().filter(isBtp);
+      // Les archives ne se mélangent à rien : elles ont leur onglet, et elles
+      // sortent de tous les autres. C'est la seule raison d'être de l'archivage.
+      const tousContacts = scope.contacts().filter(isBtp);
+      const toutesOrgs = scope.orgs().filter(isBtp);
+      const contacts = tousContacts.filter(estActive);
+      const orgs = toutesOrgs.filter(estActive);
       const surOrg = ['partenaires', 'courtiers'].includes(state.vue);
       const surLeads = state.vue === 'leads';
+      const surArchives = state.vue === 'archives';
 
       let lignes = [];
       let colonnes = [];
@@ -1427,6 +1433,19 @@ export const btpBasePage = {
         // qu'un clic sur la ligne ouvre. Ce que la pile doit montrer, c'est quand
         // l'appel est prévu — c'est lui qui fait sortir le lead de la pile.
         colonnes = ['Reçu', 'Origine', 'Demande', 'Client', 'RDV téléphonique', "Chargé d'affaires", ''];
+      } else if (surArchives) {
+        lignes = [
+          ...tousContacts.filter(c => !estActive(c)).map(c => ({
+            id: c.id, org: false, nom: contactName(c), detail: c.type, ville: c.city,
+            tel: c.phone, mail: c.email, archive: c.archived_at,
+          })),
+          ...toutesOrgs.filter(o => !estActive(o)).map(o => ({
+            id: o.id, org: true, nom: o.name, detail: o.partner_job || o.type, ville: o.city,
+            tel: o.phone, mail: o.email, archive: o.archived_at,
+          })),
+        ].filter(r => hit([r.nom, r.detail, r.ville, r.mail, r.tel], ts))
+         .sort((a, b) => (b.archive || '').localeCompare(a.archive || ''));
+        colonnes = ['Nom', 'Type', 'Ville', 'Téléphone', 'Email', 'Archivé le'];
       } else if (surOrg) {
         const filtre = state.vue === 'courtiers' ? (o) => o.partner_job === 'Courtier' : (o) => o.type === 'Partenaire';
         lignes = orgs.filter(filtre)
@@ -1469,6 +1488,7 @@ export const btpBasePage = {
 
       const compte = (v) => {
         if (v === 'leads') return aTraiter().length;
+        if (v === 'archives') return tousContacts.filter(c => !estActive(c)).length + toutesOrgs.filter(o => !estActive(o)).length;
         if (v === 'partenaires') return orgs.filter(o => o.type === 'Partenaire').length;
         if (v === 'courtiers') return orgs.filter(o => o.partner_job === 'Courtier').length;
         if (v === 'tous') return contacts.filter(c => !clientActif(c) && !enPile(c)).length;
@@ -1480,10 +1500,11 @@ export const btpBasePage = {
           <div class="seg">${vues().map(v => `<button data-vue="${v.key}" class="${state.vue === v.key ? 'active' : ''}">${v.label} <span class="cnt">${compte(v.key)}</span></button>`).join('')}</div>
           <span class="grow"></span>
           <button class="btn ghost sm" id="b-export">Export CSV</button>
-          ${surLeads
-            ? '<button class="btn" id="b-lead">+ Nouveau lead</button>'
+          ${surLeads ? '<button class="btn" id="b-lead">+ Nouveau lead</button>'
+            : surArchives ? ''
             : `<button class="btn" id="b-new">+ ${surOrg ? (state.vue === 'courtiers' ? 'Courtier' : 'Partenaire') : 'Contact'}</button>`}
         </div>
+        ${surArchives ? `<p class="muted small" style="margin:-4px 0 12px">Les fiches mises de côté. <b>Rien n'a été supprimé</b>&nbsp;: affaires, tâches et historique sont intacts, et une fiche restaurée revient exactement là où elle était.</p>` : ''}
         ${surLeads ? `<p class="muted small" style="margin:-4px 0 12px">Les demandes dont le premier entretien téléphonique n'a pas encore eu lieu&nbsp;: formulaire du site, apport d'un partenaire ou d'un courtier, ou saisie à la main. Choisissez un chargé d'affaires pour la confier ; le lead quitte cette pile une fois l'entretien passé, et son contact devient client.</p>` : ''}
         <div class="toolbar">
           ${searchInput('b-q', state, 'Rechercher un nom, une ville, un email…')}
@@ -1505,13 +1526,17 @@ export const btpBasePage = {
                 : `<span class="muted small" title="${r.ownerId ? "Ce chargé d'affaires n'a pas d'adresse e-mail dans son profil" : 'Attribuez le lead pour pouvoir le transmettre'}">—</span>`}</td>
             </tr>`).join('') || `<tr><td colspan="7"><div class="empty">Aucun lead en attente. Tout est distribué.</div></td></tr>` : lignes.map(r => `<tr class="click" data-fiche="${r.id}">
               <td><b>${esc(r.nom)}</b></td>
-              ${r.org ? '' : `<td>${choixResponsable(r.dealId, r.ownerId)}</td>`}
+              ${r.org || surArchives ? '' : `<td>${choixResponsable(r.dealId, r.ownerId)}</td>`}
               <td>${esc(r.detail || '—')}</td>
               <td>${esc(r.ville || '—')}</td>
               <td>${r.tel ? `<a href="tel:${esc(r.tel)}">${esc(r.tel)}</a>` : '—'}</td>
               <td>${r.mail ? `<a href="mailto:${esc(r.mail)}">${esc(r.mail)}</a>` : '—'}</td>
-              ${r.org ? `<td class="num">${r.apports}</td>` : `<td>${esc(r.canal)}</td><td>${r.affaire ? esc(r.affaire) : '—'}</td>`}
-              <td class="num acts"><button type="button" class="btn ghost sm" data-modif="${r.id}" title="Modifier">✎</button><button type="button" class="btn ghost sm danger" data-suppr="${r.id}" title="Supprimer la fiche et ce qui en dépend">🗑</button></td>
+              ${surArchives ? `<td class="small">${esc(fmtDate(r.archive))}</td>`
+                : r.org ? `<td class="num">${r.apports}</td>`
+                : `<td>${esc(r.canal)}</td><td>${r.affaire ? esc(r.affaire) : '—'}</td>`}
+              <td class="num acts">${surArchives
+                ? `<button type="button" class="btn ghost sm" data-restaurer="${r.id}" data-org="${r.org ? 1 : ''}" title="Remettre cette fiche dans les listes actives">↩ Restaurer</button>`
+                : `<button type="button" class="btn ghost sm" data-modif="${r.id}" title="Modifier">✎</button><button type="button" class="btn ghost sm" data-archiver="${r.id}" title="Archiver : la fiche sort des listes, rien n'est supprimé">🗄</button>`}</td>
             </tr>`).join('') || `<tr><td colspan="${colonnes.length + 1}"><div class="empty">Aucune fiche dans cette vue.</div></td></tr>`}</tbody>
           </table></div>
         </div>`);
@@ -1540,14 +1565,19 @@ export const btpBasePage = {
         openDeal(tr.dataset.lead, draw);
       });
       root.querySelectorAll('[data-fiche]').forEach(tr => tr.onclick = (e) => {
-        if (e.target.closest('[data-modif], [data-suppr]')) return;
-        surOrg ? openOrg(tr.dataset.fiche, draw) : openContact(tr.dataset.fiche, draw);
+        if (e.target.closest('[data-modif], [data-archiver], [data-restaurer]')) return;
+        // Dans les archives les deux natures cohabitent : c'est la ligne qui dit
+        // laquelle, pas l'onglet.
+        const org = surArchives ? !!db.byId('organisations', tr.dataset.fiche) : surOrg;
+        org ? openOrg(tr.dataset.fiche, draw) : openContact(tr.dataset.fiche, draw);
       });
       root.querySelectorAll('[data-modif]').forEach(b => b.onclick = () => (surOrg
         ? orgForm(db.byId('organisations', b.dataset.modif), draw)
         : contactForm(db.byId('contacts', b.dataset.modif), draw)));
-      root.querySelectorAll('[data-suppr]').forEach(b => b.onclick = () =>
-        supprimerFiche(surOrg ? 'organisations' : 'contacts', b.dataset.suppr, draw));
+      root.querySelectorAll('[data-archiver]').forEach(b => b.onclick = () =>
+        archiverFiche(surOrg ? 'organisations' : 'contacts', b.dataset.archiver, draw));
+      root.querySelectorAll('[data-restaurer]').forEach(b => b.onclick = () =>
+        restaurerFiche(b.dataset.org ? 'organisations' : 'contacts', b.dataset.restaurer, draw));
       root.querySelector('#b-new')?.addEventListener('click', () => nouveau());
       // Une affaire neuve nait a la premiere etape du pipeline : elle atterrit
       // donc dans cette pile, exactement comme un lead venu du site.
