@@ -1280,13 +1280,23 @@ const ORIGINES = [
 const classees = ORIGINES.flatMap(o => o.canaux || []);
 const estDeLOrigine = (c, o) => (o.canaux ? o.canaux.includes(c.channel) : !classees.includes(c.channel));
 
-// « Nouveaux leads » n'est pas une categorie de contacts mais une PILE DE TRAVAIL :
-// les demandes arrivees du site que personne ne porte encore. Un lead y reste tant
-// qu'il n'a pas de responsable, et rejoint la base des que la direction l'attribue.
-// C'est la meme definition que le filtre « À attribuer » des pipelines — une affaire
-// sans owner_id est invisible pour les charges d'affaires, donc non traitee.
+// « Nouveaux leads » et « Prospects » designent les memes personnes : ce qui les
+// separe est le moment, pas la nature. Un prospect reste un NOUVEAU LEAD tant que
+// l'entretien d'appel n'a pas eu lieu ; une fois cette etape passee, il entre dans
+// la base definitive et ne reparait plus dans la pile.
+//
+// D'ou le critere : les deux premieres etapes du pipeline BTP — « Nouveau » et
+// « RDV 1 » — sont l'avant-entretien. Elles sont communes aux deux metiers du
+// cabinet et garanties en tete de liste (voir ACTIVITIES.btp dans schema.js), ce
+// qui rend la regle valable pour une expertise comme pour une AMO.
+//
+// Ce n'est PAS « sans responsable » : un lead attribue reste un nouveau lead tant
+// que l'appel n'a pas eu lieu, et c'est bien ce qu'on veut suivre.
+const AVANT_ENTRETIEN = ['lead', 'rdv1'];
+const estNouveauLead = (d) => d.status === 'open' && AVANT_ENTRETIEN.includes(d.stage);
+
 const VUES = [
-  { key: 'leads', label: 'Nouveaux leads', direction: true },
+  { key: 'leads', label: 'Nouveaux leads' },
   { key: 'clients', label: 'Clients' },
   { key: 'prospects', label: 'Prospects' },
   { key: 'partenaires', label: 'Partenaires' },
@@ -1300,9 +1310,12 @@ export const btpBasePage = {
     if (guard(root)) return {};
     const coquille = poser(root);
     // On ouvre sur les nouveaux leads s'il y en a : c'est ce qui demande une action.
-    const aTraiter = () => deals().filter(d => !d.owner_id && d.status === 'open');
-    const vues = () => VUES.filter(v => !v.direction || scope.isDirection);
-    const state = { vue: (scope.isDirection && aTraiter().length) ? 'leads' : 'clients', q: '', canal: '', origine: '', focus: null };
+    const aTraiter = () => deals().filter(estNouveauLead);
+    const vues = () => VUES;
+    // Les contacts deja en cours de traitement : ils ne doivent plus remonter
+    // dans la pile, sinon les deux listes se melangent a nouveau.
+    const enPile = () => new Set(aTraiter().map(d => d.contact_id).filter(Boolean));
+    const state = { vue: aTraiter().length ? 'leads' : 'clients', q: '', canal: '', origine: '', focus: null };
 
     // Créer depuis cet écran, c'est créer pour BTP Expertise : l'activité est cochée
     // d'avance, et le type suit la vue ouverte. Sans cela la fiche n'apparaîtrait pas ici.
@@ -1336,7 +1349,8 @@ export const btpBasePage = {
             const c = d.contact_id && db.byId('contacts', d.contact_id);
             return { id: d.id, lead: true, recu: d.created_at, nom: d.title, client: dealParty(d),
                      ville: c?.city || d.fields?.adresse || '', tel: c?.phone, mail: c?.email,
-                     mission: missionDe(d), activity: d.activity };
+                     responsable: userName(d.owner_id), mission: missionDe(d), activity: d.activity,
+                     ownerId: d.owner_id };
           });
         colonnes = ['Reçu', 'Demande', 'Client', 'Ville', 'Téléphone', 'Email', "Chargé d'affaires"];
       } else if (surOrg) {
@@ -1349,7 +1363,15 @@ export const btpBasePage = {
           }));
         colonnes = ['Nom', 'Métier', 'Ville', 'Téléphone', 'Email', 'Affaires apportées'];
       } else {
-        const filtre = { clients: (c) => c.type === 'Client', prospects: (c) => c.type === 'Prospect', tous: () => true }[state.vue];
+        // Un prospect encore en attente d'entretien vit dans « Nouveaux leads » :
+        // le reprendre ici remelangerait exactement ce qu'on vient de separer.
+        // « Tous les contacts » garde tout le monde, son libelle le promet.
+        const pile = enPile();
+        const filtre = {
+          clients: (c) => c.type === 'Client',
+          prospects: (c) => c.type === 'Prospect' && !pile.has(c.id),
+          tous: () => true,
+        }[state.vue];
         const origine = ORIGINES.find(o => o.key === state.origine);
         lignes = contacts.filter(filtre)
           .filter(c => !state.canal || c.channel === state.canal)
@@ -1360,17 +1382,31 @@ export const btpBasePage = {
             return {
               id: c.id, nom: contactName(c), detail: c.type, ville: c.city, tel: c.phone, mail: c.email,
               canal: c.channel || '—', affaire: d ? d.title : null, dealId: d ? d.id : null,
+              responsable: d ? userName(d.owner_id) : '', ownerId: d ? d.owner_id : null,
             };
           });
-        colonnes = ['Nom', 'Type', 'Ville', 'Téléphone', 'Email', 'Canal', 'Affaire'];
+        colonnes = ['Nom', "Chargé d'affaires", 'Type', 'Ville', 'Téléphone', 'Email', 'Canal', 'Affaire'];
       }
+
+      // Le choix du responsable, partout ou il a un sens. Sans affaire rattachee il
+      // n'y a rien a attribuer ; hors direction on affiche le nom sans le modifier,
+      // la distribution restant un acte de la direction.
+      const choixResponsable = (dealId, ownerId, activity = KEY) => {
+        if (!dealId) return '<span class="muted">—</span>';
+        if (!scope.isDirection) return ownerId ? esc(userName(ownerId)) : '<span class="pill warn">À attribuer</span>';
+        return `<select data-attr="${dealId}" aria-label="Chargé d'affaires">
+          <option value="">${ownerId ? '—' : 'À attribuer…'}</option>
+          ${candidatsResponsable(activity).map(u => `<option value="${u.id}" ${u.id === ownerId ? 'selected' : ''}>${esc(u.full_name)}${u.role === 'direction' ? ' (direction)' : ''}</option>`).join('')}
+        </select>`;
+      };
 
       const compte = (v) => {
         if (v === 'leads') return aTraiter().length;
         if (v === 'partenaires') return orgs.filter(o => o.type === 'Partenaire').length;
         if (v === 'courtiers') return orgs.filter(o => o.partner_job === 'Courtier').length;
         if (v === 'tous') return contacts.length;
-        return contacts.filter(c => c.type === (v === 'clients' ? 'Client' : 'Prospect')).length;
+        if (v === 'prospects') { const pile = enPile(); return contacts.filter(c => c.type === 'Prospect' && !pile.has(c.id)).length; }
+        return contacts.filter(c => c.type === 'Client').length;
       };
 
       root.innerHTML = cadre('#/btp/base', "Base de données", `
@@ -1383,7 +1419,7 @@ export const btpBasePage = {
         ${surLeads ? `<p class="muted small" style="margin:-4px 0 12px">Les demandes arrivées du site que personne ne porte encore. Choisissez un chargé d'affaires&nbsp;: le lead rejoint aussitôt la base, et l'attribution est inscrite dans l'historique de l'affaire.</p>` : ''}
         ${state.vue === 'prospects' ? `<div class="pill-tabs">
           ${ORIGINES.map(o => `<button type="button" data-origine="${o.key}" class="${state.origine === o.key ? 'on' : ''}"
-            aria-pressed="${state.origine === o.key}">${o.label}<span>${contacts.filter(c => c.type === 'Prospect' && estDeLOrigine(c, o)).length}</span></button>`).join('')}
+            aria-pressed="${state.origine === o.key}">${o.label}<span>${contacts.filter(c => c.type === 'Prospect' && !enPile().has(c.id) && estDeLOrigine(c, o)).length}</span></button>`).join('')}
         </div>` : ''}
         <div class="toolbar">
           ${searchInput('b-q', state, 'Rechercher un nom, une ville, un email…')}
@@ -1392,7 +1428,7 @@ export const btpBasePage = {
         </div>
         <div class="card">
           <div class="table-wrap"><table>
-            <thead><tr>${colonnes.map(c => `<th>${c}</th>`).join('')}<th></th></tr></thead>
+            <thead><tr>${colonnes.map(c => `<th>${c}</th>`).join('')}${surLeads ? '' : '<th></th>'}</tr></thead>
             <tbody>${surLeads ? lignes.map(r => `<tr class="click" data-lead="${r.id}">
               <td class="small">${esc(fmtDate(r.recu))}</td>
               <td>${marqueMission(r.mission)}<b>${esc(r.nom)}</b></td>
@@ -1400,12 +1436,10 @@ export const btpBasePage = {
               <td>${esc(r.ville || '—')}</td>
               <td>${r.tel ? `<a href="tel:${esc(r.tel)}">${esc(r.tel)}</a>` : '—'}</td>
               <td>${r.mail ? `<a href="mailto:${esc(r.mail)}">${esc(r.mail)}</a>` : '—'}</td>
-              <td><select data-attr="${r.id}" aria-label="Attribuer ce lead">
-                <option value="">À attribuer…</option>
-                ${candidatsResponsable(r.activity).map(u => `<option value="${u.id}">${esc(u.full_name)}${u.role === 'direction' ? ' (direction)' : ''}</option>`).join('')}
-              </select></td>
+              <td>${choixResponsable(r.id, r.ownerId, r.activity)}</td>
             </tr>`).join('') || `<tr><td colspan="7"><div class="empty">Aucun lead en attente. Tout est distribué.</div></td></tr>` : lignes.map(r => `<tr class="click" data-fiche="${r.id}">
               <td><b>${esc(r.nom)}</b></td>
+              ${r.org ? '' : `<td>${choixResponsable(r.dealId, r.ownerId)}</td>`}
               <td>${esc(r.detail || '—')}</td>
               <td>${esc(r.ville || '—')}</td>
               <td>${r.tel ? `<a href="tel:${esc(r.tel)}">${esc(r.tel)}</a>` : '—'}</td>
@@ -1449,7 +1483,7 @@ export const btpBasePage = {
       root.querySelectorAll('[data-suppr]').forEach(b => b.onclick = () =>
         supprimerFiche(surOrg ? 'organisations' : 'contacts', b.dataset.suppr, draw));
       root.querySelector('#b-new')?.addEventListener('click', () => nouveau());
-      root.querySelector('#b-export').onclick = () => csvDownload(`btp-${state.vue}.csv`, lignes.map(({ id, org, dealId, lead, activity, ...reste }) => reste));
+      root.querySelector('#b-export').onclick = () => csvDownload(`btp-${state.vue}.csv`, lignes.map(({ id, org, dealId, lead, activity, ownerId, ...reste }) => reste));
     };
 
     draw();
