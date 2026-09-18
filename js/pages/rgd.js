@@ -4,16 +4,29 @@ import { CONFIG } from '../config.js';
 import { scope } from '../data/scope.js';
 import { esc } from '../ui.js';
 
+// L'adresse d'un ecran interne de l'application RGD Renova.
+// Le CRM ne connait pas le routage de cette application : chaque destination est
+// declaree dans CONFIG.RGD_VUES. Rien de declare = on ouvre l'accueil, donc un
+// lien qui n'existe pas encore ne casse pas la page, il arrive juste plus haut.
+export function urlRgd(vue) {
+  const base = String(CONFIG.RGD_DASHBOARD_URL || '').replace(/\/+$/, '');
+  const suite = String((CONFIG.RGD_VUES || {})[vue] || '').trim();
+  if (!suite) return base;
+  if (/^https?:/i.test(suite)) return suite;
+  if (suite.startsWith('#') || suite.startsWith('?')) return base + '/' + suite;   // .../#/ecran, pas ...sh#/ecran
+  return base + '/' + suite.replace(/^\/+/, '');
+}
+
 export const rgdDashboardPage = {
   title: () => 'RGD Renova',
   fullBleed: true,   // en-tête du CRM réduit à ses commandes : ni titre ni date par-dessus l'application
-  render(root) {
+  render(root, param) {
     if (!scope.activityKeys.includes('rgd')) {
       root.innerHTML = '<div class="card"><div class="empty">Vous n\'avez pas accès à l\'activité RGD Renova.</div></div>';
       return {};
     }
 
-    const url = CONFIG.RGD_DASHBOARD_URL;
+    const url = urlRgd(param);
     // Page à ras : ni carte, ni bordure, ni titre en double — l'application occupe la surface.
     root.classList.add('flush');
     root.innerHTML = '<div class="embed-frame" id="e-frame"></div>';
