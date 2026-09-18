@@ -414,7 +414,7 @@ export const ACTIVITIES = {
     // A partir de cette etape, la mission est ENGAGEE : le client a accepte, meme si
     // rien n'est encore realise ni facture. C'est le seuil du CA previsionnel du
     // tableau de bord. Une etape par metier, parce que l'engagement ne porte pas le
-    // meme nom des deux cotes — « Lettre de mission » en expertise, « Contrat AMO »
+    // meme nom des deux cotes — « Lettre de mission » en expertise, « Mission AMO »
     // en AMO — mais dit la meme chose. Tout ce qui suit dans le deroule du metier
     // compte aussi : on n'enleve pas du previsionnel une mission qui avance.
     engagement: { expertise: 'proposition', amo: 'amo_contrat' },
@@ -446,15 +446,15 @@ export const ACTIVITIES = {
       { key: 'qualifie', label: 'Qualifié', p: 20, mission: 'expertise' },
       { key: 'proposition', label: 'Lettre de mission', p: 60, mission: 'expertise' },
       { key: 'rdv', label: 'RDV sur place', p: 100, delivery: true, mission: 'expertise' },
-      { key: 'mission_realisee', label: 'Rédaction du rapport', p: 100, delivery: true, mission: 'expertise' },
-      { key: 'rdv_complementaire', label: 'RDV complémentaire', p: 100, delivery: true, mission: 'expertise' },
+      { key: 'mission_realisee', label: 'Rédaction en cours', p: 100, delivery: true, mission: 'expertise' },
+      { key: 'rdv_complementaire', label: 'Clôturé & facturé', p: 100, delivery: true, mission: 'expertise' },
       { key: 'rapport_remis', label: 'Rapport émis', p: 100, delivery: true, mission: 'expertise' },
       // AMO : de la définition du besoin à la réception des travaux
-      { key: 'amo_cadrage', label: 'Besoin cadré', p: 20, mission: 'amo' },
-      { key: 'amo_contrat', label: 'Contrat AMO', p: 60, mission: 'amo' },
-      { key: 'amo_programme', label: 'Programme et budget', p: 100, delivery: true, mission: 'amo' },
-      { key: 'amo_consultation', label: 'Consultation entreprises', p: 100, delivery: true, mission: 'amo' },
-      { key: 'amo_chantier', label: 'Suivi de chantier', p: 100, delivery: true, mission: 'amo' },
+      { key: 'amo_cadrage', label: 'Qualifié', p: 20, mission: 'amo' },
+      { key: 'amo_contrat', label: 'Mission AMO', p: 60, mission: 'amo' },
+      { key: 'amo_programme', label: 'RDV terrain', p: 100, delivery: true, mission: 'amo' },
+      { key: 'amo_consultation', label: 'Démarrage chantier', p: 100, delivery: true, mission: 'amo' },
+      { key: 'amo_chantier', label: 'Suivi intermédiaire', p: 100, delivery: true, mission: 'amo' },
       { key: 'amo_reception', label: 'Réception des travaux', p: 100, delivery: true, mission: 'amo' },
     ],
     fields: [

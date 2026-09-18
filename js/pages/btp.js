@@ -318,7 +318,7 @@ export const btpHomePage = {
       const nouveaux = all.filter(d => ['lead', 'rdv1'].includes(d.stage) && d.status === 'open');
       const anneeEnCours = String(new Date().getFullYear());
       // Le CA prévisionnel démarre à l'engagement du client — « Lettre de mission »
-      // en expertise, « Contrat AMO » en AMO — et s'y cumule : les étapes suivantes
+      // en expertise, « Mission AMO » en AMO — et s'y cumule : les étapes suivantes
       // du métier en font toujours partie. Le seuil est déclaré sur l'activité
       // (`engagement`) et lu par `estEngagee` : le tableau de bord ne connaît aucune
       // clé d'étape en dur. Prévisionnel n'est pas facturé : une mission peut être
