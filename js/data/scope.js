@@ -43,13 +43,33 @@ export const scope = {
     return false;
   },
 
-  // Messagerie. Un canal de structure se voit comme le reste de la structure
-  // (miroir de has_activity côté serveur) ; le canal Groupe est ouvert à tous ;
-  // une conversation privée se voit si on y est nommément.
+  // Messagerie, cloisonnée par structure (miroir de la migration 20260918140000).
+  //
+  // Deux personnes ne peuvent se parler que si elles partagent au moins une
+  // structure. La direction les porte toutes : elle joint tout le monde et
+  // reste joignable par tout le monde. Soi-même compte toujours — le créateur
+  // d'une conversation doit pouvoir s'y inscrire, même s'il n'a aucune
+  // structure sur son profil.
+  partageStructure(u) {
+    if (!u || !this.user) return false;
+    if (u.id === this.user.id) return true;
+    if (this.isDirection || u.role === 'direction') return true;
+    return (u.activities || []).some(a => this.activityKeys.includes(a));
+  },
+
+  // Un canal de structure se voit comme le reste de la structure (miroir de
+  // has_activity côté serveur). Le canal « Groupe » n'a pas de structure : il
+  // n'est plus ouvert à tous, sinon un commercial de RGD y lirait ce qu'écrit
+  // un commercial de BTP. La direction le garde.
+  // Une conversation privée demande d'y être nommément ET de partager une
+  // structure avec chacun des autres participants.
   canSeeConversation(c) {
     if (!c) return false;
-    if (c.kind === 'canal') return c.activity ? this.activityKeys.includes(c.activity) : true;
-    return db.t('conversation_members').some(m => m.conversation_id === c.id && m.user_id === this.user.id);
+    if (c.kind === 'canal') return c.activity ? this.activityKeys.includes(c.activity) : this.isDirection;
+    const membres = db.t('conversation_members').filter(m => m.conversation_id === c.id);
+    if (!membres.some(m => m.user_id === this.user.id)) return false;
+    return membres.every(m => m.user_id === this.user.id
+      || this.partageStructure(db.byId('profiles', m.user_id)));
   },
 
   deals() { return db.t('deals').filter(d => this.canSeeDeal(d)); },
@@ -58,4 +78,7 @@ export const scope = {
   orgs() { return db.t('organisations').filter(o => this.canSeeOrg(o)); },
   activities() { return db.t('activities').filter(a => this.canSeeActivity(a)); },
   users() { return db.t('profiles').filter(u => u.active !== false); },
+  // Ceux a qui l'on peut ecrire. `users()` reste entier a cote : confier une
+  // tache ou nommer un responsable d'affaire n'est pas cloisonne.
+  collegues() { return this.users().filter(u => this.partageStructure(u)); },
 };

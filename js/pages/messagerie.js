@@ -1,15 +1,24 @@
 // Messagerie interne : les échanges de l'équipe entre elle.
 //
-// Deux formes, la même table : les CANAUX (un par structure, plus « Groupe »),
-// où l'on entre parce que la structure est sur son profil, et les MESSAGES
-// DIRECTS à deux. Rien ici n'est rattaché à un client : l'historique d'un
-// contact ou d'une affaire, c'est la table `events`, ailleurs.
+// Deux formes, la même table : les CANAUX (un par structure), où l'on entre
+// parce que la structure est sur son profil, et les MESSAGES DIRECTS à deux.
+// Rien ici n'est rattaché à un client : l'historique d'un contact ou d'une
+// affaire, c'est la table `events`, ailleurs.
 //
-// La liste des messages directs montre TOUT LE MONDE, pas seulement les
-// conversations déjà ouvertes : on écrit à un collègue en le choisissant, la
-// conversation se crée toute seule au premier message envoyé. Personne n'a à
-// « créer une conversation » avant de parler, et aucune conversation vide ne
-// traîne si on a seulement cliqué.
+// CLOISONNEMENT PAR STRUCTURE (2026-09-18). On ne parle qu'aux gens avec qui
+// l'on partage une structure : un commercial de BTP Expertise ne voit ni
+// n'atteint ceux de RGD Renova. La direction porte les quatre structures, elle
+// reste donc joignable par tous et joint tout le monde. Le canal « Groupe »,
+// qui était ouvert à tous les comptes, ne l'est plus qu'à la direction. La
+// règle vit dans scope.canSeeConversation / scope.partageStructure, et les
+// policies RLS disent la même chose (migration 20260918140000) : ce qui est
+// masqué ici serait de toute façon refusé par le serveur.
+//
+// La liste des messages directs montre tous les COLLÈGUES joignables, pas
+// seulement les conversations déjà ouvertes : on écrit à quelqu'un en le
+// choisissant, la conversation se crée toute seule au premier message envoyé.
+// Personne n'a à « créer une conversation » avant de parler, et aucune
+// conversation vide ne traîne si on a seulement cliqué.
 //
 // Deux façons de l'ouvrir, un seul code : l'écran plein (#/messagerie) et la
 // bulle posée en bas à droite de toutes les pages. `vueConversation()` rend le
@@ -61,7 +70,8 @@ const nonLus = (cid) => {
 function gensDe(c) {
   if (c.kind !== 'canal') return membresDe(c.id);
   return scope.users()
-    .filter(u => !c.activity || u.role === 'direction' || (u.activities || []).includes(c.activity))
+    .filter(u => (c.activity ? (u.role === 'direction' || (u.activities || []).includes(c.activity))
+                             : u.role === 'direction'))
     .map(u => u.id);
 }
 
@@ -85,7 +95,7 @@ function fils() {
     .map(c => ({ cle: c.slug, genre: 'canal', conv: c, user: null }));
 
   const privees = vues.filter(c => c.kind === 'prive');
-  const gens = scope.users().filter(u => u.id !== scope.user?.id).map(u => ({
+  const gens = scope.collegues().filter(u => u.id !== scope.user?.id).map(u => ({
     cle: u.id, genre: 'direct', user: u,
     conv: privees.find(c => membresDe(c.id).includes(u.id)) || null,
   }));
@@ -490,7 +500,7 @@ export const messageriePage = {
       el.textContent = ouvert.genre === 'canal'
         ? (ouvert.conv.activity
           ? `Canal de structure — toute l’équipe ${ACTIVITIES[ouvert.conv.activity].label} et la direction`
-          : 'Canal ouvert à toute l’équipe')
+          : 'Canal de la direction — elle seule y accède')
         : 'Message direct — vous deux, personne d’autre';
     };
 
