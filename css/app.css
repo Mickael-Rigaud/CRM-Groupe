@@ -539,6 +539,10 @@ tr.btp-mission .btp-pts { color: var(--m-encre); }
 /* Le catalogue et les phases cote a cote : le tableau des niveaux est court, celui
    des phases est long, d'ou la colonne de gauche un peu plus etroite. */
 .btp-duo-cat { grid-template-columns: minmax(0, .92fr) minmax(0, 1.08fr); }
+/* Defini APRES la regle responsive de .btp-duo, et de meme specificite : sans cette
+   ligne, il la gagnerait par l'ordre du fichier et garderait deux colonnes sur
+   telephone. Une surcharge de grille doit toujours emporter sa propre bascule. */
+@media (max-width: 1100px) { .btp-duo-cat { grid-template-columns: minmax(0, 1fr); } }
 .btp-duo-cat > .card { margin: 0; }
 .btp-score-duo { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(250px, .95fr); gap: 18px;
   align-items: start; margin-top: 14px; }
