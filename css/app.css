@@ -434,6 +434,9 @@ body:has(.esp-app) .subnav .datepill { display: none; }
 /* Deux cartes côte à côte, empilées dès que la place manque. */
 .btp-duo { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; align-items: start; }
 @media (max-width: 1100px) { .btp-duo { grid-template-columns: minmax(0, 1fr); } }
+/* Un duo qui n'a plus qu'une carte : le chargé d'affaires ne voit pas la charge du
+   réseau, la répartition du CA reste seule et prend la largeur. */
+.btp-duo-seul { grid-template-columns: minmax(0, 1fr); }
 
 /* Le récapitulatif d'une pipeline : ses étapes en une bande, sans les affaires */
 .btp-recap-etapes { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(84px, 1fr); gap: 8px; overflow-x: auto; min-width: 0; padding-bottom: 4px; }

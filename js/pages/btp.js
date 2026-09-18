@@ -275,6 +275,25 @@ const MISSIONS = {
   amo: { titre: 'AMO', hash: '#/btp/amo' },
 };
 
+// ---- Facturation : ce qui est réellement rentré ----------------------------
+// Le suivi de facturation vit sur l'affaire elle-même (`fields.facture_num`,
+// `facture_date`, `paiement_date`), en attendant Stripe. Ces fonctions sont ici, et
+// non dans l'écran Facturation, parce que le tableau de bord lit les mêmes chiffres :
+// « CA encaissé » et « Encaissé en <année> » doivent afficher le même nombre, donc ils
+// partagent la définition plutôt que de la recopier.
+const champ = (d, k) => ((d.fields || {})[k] || '').toString().trim();
+// Une mission est facturable dès que la prestation est engagée : à partir des étapes
+// de réalisation (`delivery`), soit le RDV sur place en expertise.
+const facturables = () => {
+  const a = act();
+  return deals().filter(d => d.status !== 'lost' && a.stages.find(s => s.key === d.stage)?.delivery);
+};
+// Encaissé = payé, et payé pendant l'année demandée. C'est la date de PAIEMENT qui
+// compte, pas celle de la facture : une facture de décembre payée en janvier appartient
+// à janvier. Sans date de paiement, rien n'est encaissé — un impayé ne compte pas.
+const encaissees = (annee) => facturables().filter(d => champ(d, 'paiement_date').slice(0, 4) === annee);
+const sommeMontants = (l) => l.reduce((t, d) => t + (Number(d.amount) || 0), 0);
+
 // La charge d'un chargé d'affaires, au sens du manuel : la somme des points de ses
 // missions vivantes. Le plafond est structurel — il dit ce que la personne porte, pas
 // ce qu'elle fait aujourd'hui.
@@ -353,21 +372,32 @@ export const btpHomePage = {
         </div>`;
       };
 
-      const gens = chargesDAffaires().map(u => ({ u, ...chargeDe(u.id) }))
-        .sort((x, y) => y.points - x.points || x.u.full_name.localeCompare(y.u.full_name, 'fr'));
+      // Encaissé : la même définition que l'écran Facturation, lue au même endroit.
+      // Prévisionnel et encaissé sont les deux bouts de la même mission — ce qui est
+      // promis, et ce qui est rentré — d'où les deux tuiles côte à côte.
+      const payees = encaissees(anneeEnCours);
+      const caEncaisse = sommeMontants(payees);
+
+      // La charge du réseau ne regarde que la direction : elle sert à répartir les
+      // leads, pas à travailler un dossier. Un chargé d'affaires ne voit ni la tuile
+      // (remplacée par le CA encaissé) ni le tableau des charges.
+      const gens = scope.isDirection
+        ? chargesDAffaires().map(u => ({ u, ...chargeDe(u.id) }))
+          .sort((x, y) => y.points - x.points || x.u.full_name.localeCompare(y.u.full_name, 'fr'))
+        : [];
 
       root.innerHTML = cadre('#/btp', 'Tableau de bord', `
         <div class="esp-kpis">
           ${kpi({ label: 'Nouvelles demandes', valeur: nouveaux.length, sous: 'nouveau et RDV tel', icone: '📨', ton: 'accent', href: '#/pipeline/btp' })}
           ${kpi({ label: 'Missions en cours', valeur: enCours.length, sous: 'expertise et AMO confondues', icone: '🏗', ton: 'amber', href: '#/btp/expertise' })}
           ${kpi({ label: 'CA prévisionnel', valeur: eur(caAnnee), sous: `${engagees.length} mission${engagees.length > 1 ? 's' : ''} engagée${engagees.length > 1 ? 's' : ''} en ${anneeEnCours}`, icone: '📈', ton: 'green', href: '#/btp/facturation' })}
-          ${kpi({ label: 'Charge du réseau', valeur: `${gens.reduce((t, g) => t + g.points, 0)} / ${gens.length * CAPACITE_BTP.points}`, sous: `${gens.length} chargé${gens.length > 1 ? 's' : ''} d'affaires`, icone: '🎯', ton: 'accent', href: '#/btp/charges' })}
+          ${kpi({ label: 'CA encaissé', valeur: eur(caEncaisse), sous: `${payees.length} mission${payees.length > 1 ? 's' : ''} payée${payees.length > 1 ? 's' : ''} en ${anneeEnCours}`, icone: '✅', ton: 'green', href: '#/btp/facturation' })}
         </div>
 
         <div class="btp-duo">${recap('expertise')}${recap('amo')}</div>
 
-        <div class="btp-duo">
-          <div class="card">
+        <div class="btp-duo${scope.isDirection ? '' : ' btp-duo-seul'}">
+          ${scope.isDirection ? `<div class="card">
             <div class="card-head"><h2>Charge des chargés d'affaires</h2>
               <span class="grow"></span>
               <a class="btn ghost sm" href="#/btp/charges">Voir l'équipe →</a>
@@ -382,7 +412,7 @@ export const btpHomePage = {
               <tbody>${gens.map(g => ligneCharge(g)).join('')
                 || `<tr><td colspan="5"><div class="empty">Aucun chargé d'affaires sur BTP Expertise. Cochez l'activité sur leur profil, dans Paramètres.</div></td></tr>`}</tbody>
             </table></div>
-          </div>
+          </div>` : ''}
 
           <div class="card">
             <div class="card-head"><h2>Répartition du CA prévisionnel ${esc(anneeEnCours)}</h2></div>
@@ -2184,13 +2214,6 @@ const FACTU_VUES = [
   { key: 'toutes', label: 'Toutes' },
 ];
 
-// Une mission est facturable dès que la prestation est engagée : à partir du RDV sur place.
-const facturables = () => {
-  const a = act();
-  return deals().filter(d => d.status !== 'lost' && a.stages.find(s => s.key === d.stage)?.delivery);
-};
-const champ = (d, k) => ((d.fields || {})[k] || '').toString().trim();
-
 export const btpFacturationPage = {
   title: () => 'BTP Expertise — Facturation',
   render(root) {
@@ -2222,8 +2245,8 @@ export const btpFacturationPage = {
       const aFacturer = toutes.filter(d => !champ(d, 'facture_date'));
       const impayees = toutes.filter(d => champ(d, 'facture_date') && !champ(d, 'paiement_date'));
       const payees = toutes.filter(d => champ(d, 'paiement_date'));
-      const somme = (l) => l.reduce((s, d) => s + (Number(d.amount) || 0), 0);
-      const encaisse = somme(payees.filter(d => champ(d, 'paiement_date').slice(0, 4) === anneeEnCours));
+      const somme = sommeMontants;
+      const encaisse = somme(encaissees(anneeEnCours));
 
       const listes = { a_facturer: aFacturer, impayees, payees, toutes };
       const lignes = (listes[state.vue] || toutes)
