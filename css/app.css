@@ -501,6 +501,10 @@ tr.btp-mission .btp-pts { color: var(--m-encre); }
   box-shadow: inset 0 0 0 2.5px var(--card); }
 
 /* Le bareme des paliers a gauche, le calcul du dossier a droite */
+/* Le catalogue et les phases cote a cote : le tableau des niveaux est court, celui
+   des phases est long, d'ou la colonne de gauche un peu plus etroite. */
+.btp-duo-cat { grid-template-columns: minmax(0, .92fr) minmax(0, 1.08fr); }
+.btp-duo-cat > .card { margin: 0; }
 .btp-score-duo { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(250px, .95fr); gap: 18px;
   align-items: start; margin-top: 14px; }
 @media (max-width: 960px) { .btp-score-duo { grid-template-columns: 1fr; } }
@@ -516,10 +520,8 @@ tr.btp-mission .btp-pts { color: var(--m-encre); }
 .btp-calc-champ input:focus { outline: none; border-color: var(--m, var(--accent));
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--m, var(--accent)) 18%, transparent); }
 .btp-calc-vide { margin: 0; font-size: 13px; line-height: 1.5; color: var(--muted); }
-.btp-calc-detail { display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
   padding-bottom: 9px; font-size: 13px; color: var(--muted);
   border-bottom: 1px solid color-mix(in srgb, var(--m, var(--accent)) 25%, transparent); }
-.btp-calc-detail b { color: var(--text); font-variant-numeric: tabular-nums; }
 .btp-calc-total { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-top: 10px; }
 .btp-calc-total span { font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
   color: var(--m-encre, var(--muted)); }
@@ -558,7 +560,7 @@ tr.btp-mission .btp-pts { color: var(--m-encre); }
 .btp-phase-corps b { font-size: 14px; }
 .btp-phase-etape { font-size: 11px; font-weight: 600; letter-spacing: .02em; color: var(--m-encre, var(--accent-ink)); }
 .btp-phase-txt { font-size: 13px; line-height: 1.5; color: var(--muted); }
-.btp-phase-poids { flex-shrink: 0; width: 118px; text-align: right; }
+.btp-phase-poids { flex-shrink: 0; width: 88px; text-align: right; }
 .btp-phase-poids b { font-size: 13.5px; font-variant-numeric: tabular-nums; }
 .btp-phase-poids i { display: block; height: 5px; margin: 5px 0 0 auto; border-radius: 999px; background: var(--m, var(--accent)); }
 @media (max-width: 700px) { .btp-phase-poids { width: 70px; } }
@@ -1337,8 +1339,13 @@ button.lien { border: 0; background: none; padding: 0; color: var(--accent); fon
 .todo-pour b { font-weight: 650; color: var(--text); }
 .todo-ok { color: var(--green); font-weight: 650; }
 
-/* Une to do se lit en colonne, pas en bandeau : au-delà d'environ 60 signes par
-   ligne l'oeil perd le début de la ligne suivante, et une tâche tient en trois
-   mots. On borne la colonne et on la laisse à gauche, alignée sur le reste. */
-.todo-page { max-width: 860px; display: flex; flex-direction: column; gap: 14px; }
+/* L'écran prend toute la largeur ; ce sont les TÂCHES qui ne doivent pas faire
+   un bloc chacune. Elles se posent donc en grille : autant de cartes par ligne
+   que la place le permet, une colonne sur téléphone. Les en-têtes de rang
+   traversent toute la grille pour rester lisibles comme des séparateurs. */
+.todo-page { display: flex; flex-direction: column; gap: 14px; }
 .todo-page .toolbar { margin: 0; }
+.todo-liste { display: grid; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); gap: 9px; align-items: start; }
+.todo-liste > .todo-groupe { grid-column: 1 / -1; }
+.todo-liste > .empty { grid-column: 1 / -1; }
+.todo-tache + .todo-tache { margin-top: 0; }   /* l'écart vient de la grille */

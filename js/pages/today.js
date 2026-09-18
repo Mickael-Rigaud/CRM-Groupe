@@ -18,16 +18,16 @@ import { esc, daysSince, fmtDate, relDay, userName, searchInput, bindSearch, res
 import { actType, bindActivityRows, activityForm, nextActivity, structureDe, toggleActivity } from './activity.js';
 import { openDeal } from './deal.js';
 
-// Les degrés de traitement, dans l'ordre où ils se lisent. « Urgent » se pose à la
-// main sur la tâche ; les autres se déduisent de l'échéance — `test` reçoit la tâche
-// et l'écart en jours : positif = en retard, 0 = aujourd'hui, négatif = à venir.
+// Les trois rangs de la liste, dans l'ordre où ils se lisent. Ils reprennent les
+// degrés de traitement de schema.js : ce qu'on pose à la main et ce que l'échéance
+// impose tombent dans le même rang. `test` reçoit la tâche et l'écart en jours —
+// positif = en retard, 0 = aujourd'hui, négatif = à venir. L'échéance exacte reste
+// lisible sur chaque carte : ce sont les en-têtes qui se simplifient, pas les dates.
 const GROUPES = [
   { key: 'urgent', titre: '🔥 Urgent', test: (a) => a.priority === 'urgent' },
-  { key: 'retard', titre: '⚠ En retard', test: (a, j) => j !== null && j > 0 },
-  { key: 'jour', titre: "Aujourd'hui", test: (a, j) => j === 0 },
-  { key: 'semaine', titre: 'Cette semaine', test: (a, j) => j !== null && j < 0 && j >= -7 },
-  { key: 'plus', titre: 'Plus tard', test: (a, j) => j !== null && j < -7 },
-  { key: 'sans', titre: 'Sans échéance', test: () => true },
+  // Une tâche est en retard parce qu'on l'a dit, OU parce que sa date est passée.
+  { key: 'retard', titre: '⚠ Retard', test: (a, j) => a.priority === 'retard' || (j !== null && j > 0) },
+  { key: 'afaire', titre: 'À faire', test: () => true },
 ];
 const ecart = (a) => (a.due_date ? daysSince(a.due_date) : null);
 // Une tâche ne figure que dans le premier rang qui la prend : urgente et en retard,
@@ -141,6 +141,7 @@ export const todayPage = {
         : [];
 
       root.innerHTML = `
+        <div class="todo-page">
         <div class="pill-tabs todo-onglets">
           ${ONGLETS.map(o => `<button type="button" data-onglet="${o.key}" class="${state.onglet === o.key ? 'on' : ''}">${esc(o.label)}<span>${compte(o)}</span></button>`).join('')}
         </div>
@@ -167,8 +168,9 @@ export const todayPage = {
           ${faites.length ? `<div class="todo-groupe fait">Fait aujourd&rsquo;hui<i>${faites.length}</i></div>${tri(faites).map(a => carte(a, pour)).join('')}` : ''}
           ${!retenues.length && !faites.length ? `<div class="empty">${onglet.key === 'mienne'
             ? 'Rien à faire — tout est à jour.'
-            : 'Aucune tâche envoyée. Le champ « Responsable » du formulaire sert à en confier une.'}</div>` : ''}
-        </section>`;
+            : 'Aucune tâche envoyée. Le bouton « Envoyer une tâche » sert à en confier une.'}</div>` : ''}
+        </section>
+        </div>`;
 
       bindSearch(root, 't-q', state, draw); restoreFocus(root, state);
       root.querySelectorAll('[data-onglet]').forEach(b => b.onclick = () => {
