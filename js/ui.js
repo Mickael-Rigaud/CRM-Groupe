@@ -21,6 +21,17 @@ export const relDay = (s) => {
 };
 export const userName = (id) => db.byId('profiles', id)?.full_name || '—';
 export const initials = (id) => (db.byId('profiles', id)?.full_name || '?').split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
+// Le responsable d'une affaire, ou le fait qu'elle n'en ait pas encore.
+//
+// Une affaire sans responsable n'est pas un detail d'affichage : la RLS la rend
+// INVISIBLE a tout charge d'affaires — seule la direction la voit. C'est le cas
+// de tout lead venu d'un formulaire du site, que `creer_prospect_btp` cree sans
+// owner_id. La distribution se faisant a la main, ces affaires doivent se
+// remarquer au premier coup d'oeil, pas se confondre avec un tiret.
+export const SANS_RESPONSABLE = '!sans';
+export const marqueResponsable = (id) =>
+  (id && db.byId('profiles', id)) ? esc(db.byId('profiles', id).full_name)
+                                  : '<span class="pill warn">À attribuer</span>';
 export const contactName = (c) => c ? `${c.first_name || ''} ${c.last_name || ''}`.trim() || c.email || '—' : '—';
 export const dealParty = (d) => {
   const c = d.contact_id && db.byId('contacts', d.contact_id);

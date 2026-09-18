@@ -2,7 +2,7 @@
 import { db } from '../data/db.js';
 import { scope } from '../data/scope.js';
 import { ACTIVITIES, weightedAmount, stagesDe, missionDe } from '../data/schema.js';
-import { esc, eur, toast, daysSince, initials, dealParty, userName, csvDownload, fmtDate, terms, hit, searchInput, bindSearch, restoreFocus } from '../ui.js';
+import { esc, eur, toast, daysSince, initials, dealParty, userName, csvDownload, fmtDate, terms, hit, searchInput, bindSearch, restoreFocus, marqueResponsable, SANS_RESPONSABLE } from '../ui.js';
 import { openDeal, dealForm, moveStage } from './deal.js';
 import { nextActivity } from './activity.js';
 
@@ -24,7 +24,9 @@ export const pipelinePage = {
       const all = scope.deals().filter(d => d.activity === key);
       const filtered = all
         .filter(d => !state.mission || missionDe(d) === state.mission)
-        .filter(d => (!state.owner || d.owner_id === state.owner) && hit([d.title, dealParty(d), d.notes, d.source], terms(state.q)));
+        .filter(d => (!state.owner
+                      || (state.owner === SANS_RESPONSABLE ? !d.owner_id : d.owner_id === state.owner))
+                     && hit([d.title, dealParty(d), d.notes, d.source], terms(state.q)));
       const open = filtered.filter(d => d.status === 'open');
       const won = filtered.filter(d => d.status === 'won');
       const lost = filtered.filter(d => d.status === 'lost');
@@ -42,7 +44,10 @@ export const pipelinePage = {
         </div>` : ''}
         <div class="toolbar">
           ${searchInput('p-q', state, 'Rechercher une affaire, un contact…')}
-          <select id="p-owner"><option value="">Tous les responsables</option>${users.map(u => `<option value="${u.id}" ${state.owner === u.id ? 'selected' : ''}>${esc(u.full_name)}</option>`).join('')}</select>
+          <select id="p-owner"><option value="">Tous les responsables</option>${(() => {
+            const sans = all.filter(d => !d.owner_id && d.status === 'open').length;
+            return sans ? `<option value="${SANS_RESPONSABLE}" ${state.owner === SANS_RESPONSABLE ? 'selected' : ''}>À attribuer (${sans})</option>` : '';
+          })()}${users.map(u => `<option value="${u.id}" ${state.owner === u.id ? 'selected' : ''}>${esc(u.full_name)}</option>`).join('')}</select>
           <div class="seg"><button data-view="open" class="${state.view === 'open' ? 'active' : ''}">Kanban</button><button data-view="list" class="${state.view === 'list' ? 'active' : ''}">Liste</button><button data-view="closed" class="${state.view === 'closed' ? 'active' : ''}">Gagnées / perdues</button></div>
           <button class="btn ghost sm" id="p-export">Export CSV</button>
           <button class="btn" id="p-new">+ Nouvelle affaire</button>
@@ -84,14 +89,16 @@ export const pipelinePage = {
       const rot = d.status === 'open' && daysSince(d.stage_changed_at) > ROTTING_DAYS;
       return `<div class="dcard" draggable="true" data-deal="${d.id}" style="--c:${act.color}">
         <div class="t">${esc(d.title)}</div><div class="p">${esc(dealParty(d))}</div>
-        <div class="foot"><span class="amt">${d.amount ? eur(d.amount) : '<span class="muted">— €</span>'}</span><span class="avatar" title="${esc(userName(d.owner_id))}">${initials(d.owner_id)}</span></div>
+        <div class="foot"><span class="amt">${d.amount ? eur(d.amount) : '<span class="muted">— €</span>'}</span>${d.owner_id
+          ? `<span class="avatar" title="${esc(userName(d.owner_id))}">${initials(d.owner_id)}</span>`
+          : '<span class="pill warn" title="Personne n\'en est responsable : invisible pour les chargés d\'affaires">À attribuer</span>'}</div>
         ${nx ? `<div class="next ${late ? 'late' : todayA ? 'today' : ''}">${late ? '⚠ ' : ''}${esc(nx.title)} · ${fmtDate(nx.due_date)}</div>` : d.status === 'open' ? `<div class="next none">Aucune prochaine action</div>` : ''}
         ${rot ? `<div class="small rot" style="margin-top:6px">${daysSince(d.stage_changed_at)} j sans mouvement</div>` : ''}
       </div>`;
     };
 
     const listHtml = (act, deals) => `<div class="card"><div class="table-wrap"><table><thead><tr><th>Affaire</th><th>Contact / organisation</th><th>Étape</th><th class="num">Montant</th><th>Prochaine action</th><th>Responsable</th><th>Canal</th><th class="num">Dans l'étape</th></tr></thead><tbody>
-      ${deals.sort((a, b) => (a.stage_changed_at || '').localeCompare(b.stage_changed_at || '')).map(d => { const nx = nextActivity(d.id); return `<tr class="click" data-deal="${d.id}"><td><b>${esc(d.title)}</b></td><td>${esc(dealParty(d))}</td><td><span class="pill">${esc(act.stages.find(s => s.key === d.stage)?.label || d.stage)}</span></td><td class="num">${eur(d.amount)}</td><td>${nx ? `${esc(nx.title)} <span class="small ${daysSince(nx.due_date) > 0 ? 'status-lost' : 'muted'}">${fmtDate(nx.due_date)}</span>` : '<span class="pill warn">Aucune</span>'}</td><td>${esc(userName(d.owner_id))}</td><td class="small">${esc(d.channel || '—')}</td><td class="num ${daysSince(d.stage_changed_at) > ROTTING_DAYS ? 'status-lost' : ''}">${daysSince(d.stage_changed_at) ?? 0} j</td></tr>`; }).join('') || '<tr><td colspan="8" class="empty">Aucune affaire</td></tr>'}
+      ${deals.sort((a, b) => (a.stage_changed_at || '').localeCompare(b.stage_changed_at || '')).map(d => { const nx = nextActivity(d.id); return `<tr class="click" data-deal="${d.id}"><td><b>${esc(d.title)}</b></td><td>${esc(dealParty(d))}</td><td><span class="pill">${esc(act.stages.find(s => s.key === d.stage)?.label || d.stage)}</span></td><td class="num">${eur(d.amount)}</td><td>${nx ? `${esc(nx.title)} <span class="small ${daysSince(nx.due_date) > 0 ? 'status-lost' : 'muted'}">${fmtDate(nx.due_date)}</span>` : '<span class="pill warn">Aucune</span>'}</td><td>${marqueResponsable(d.owner_id)}</td><td class="small">${esc(d.channel || '—')}</td><td class="num ${daysSince(d.stage_changed_at) > ROTTING_DAYS ? 'status-lost' : ''}">${daysSince(d.stage_changed_at) ?? 0} j</td></tr>`; }).join('') || '<tr><td colspan="8" class="empty">Aucune affaire</td></tr>'}
     </tbody></table></div></div>`;
 
     const closedHtml = (act, won, lost) => `<div class="grid c2">

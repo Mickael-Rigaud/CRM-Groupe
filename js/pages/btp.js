@@ -15,7 +15,7 @@ import {
 import {
   esc, eur, daysSince, fmtDate, contactName, dealParty, userName, toast,
   openModal, closeModal, confirm, terms, hit,
-  searchInput, bindSearch, restoreFocus, csvDownload,
+  searchInput, bindSearch, restoreFocus, csvDownload, marqueResponsable,
 } from '../ui.js';
 import { openDeal } from './deal.js';
 import { contactForm, openContact } from './contacts.js';
@@ -823,7 +823,7 @@ const pageMission = (mission) => ({
                 <td>${esc(act().stages.find(s => s.key === d.stage)?.label || d.stage)}</td>
                 <td>${n ? esc(n.label) : '<span class="muted">à renseigner</span>'}</td>
                 <td class="num">${n ? n.points : '—'}</td>
-                <td>${esc(userName(d.owner_id))}</td>
+                <td>${marqueResponsable(d.owner_id)}</td>
                 <td class="num">${d.amount ? eur(d.amount) : '—'}</td>
                 <td class="num">${d.fields?.decouverte
                   ? `<button type="button" class="btn ghost sm" data-fiche="${d.id}" title="Imprimer la fiche de mission">Fiche</button>`
