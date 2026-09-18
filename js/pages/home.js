@@ -126,18 +126,24 @@ export const homePage = {
             <section class="card">
               <div class="card-head"><h2>Pipeline &amp; conversion</h2>
                 <span class="muted small">affaires créées sur la période · taux de passage</span></div>
+              ${ent.some((s, i) => i && s.n > ent[i - 1].n) ? `<p class="muted small tb-hors">
+                <span class="ag-abs">Une étape dépasse la précédente : ces affaires sont arrivées avant la période. Un entonnoir ne se lit bien que sur une période assez longue.</span></p>` : ''}
               ${horsEntonnoir.length ? `<p class="muted small tb-hors">${horsEntonnoir.map(k =>
                 `<span class="ag-src"><span class="dot" style="background:${ACTIVITIES[k].color}"></span>${esc(ACTIVITIES[k].label)}</span>`).join('')}
                 ${horsEntonnoir.length > 1 ? "n'apparaissent pas ici : leurs outils envoient" : "n'apparaît pas ici : son outil envoie"} des totaux, pas le détail des étapes.</p>` : ''}
               <div class="tb-funnel">
                 ${ent.map((s, i) => {
                   const prev = i ? ent[i - 1].n : null;
-                  const large = ent[0].n ? s.n / ent[0].n * 100 : 0;
+                  const haut = Math.max(...ent.map(x => x.n)) || 1;
+                  const large = Math.min(100, s.n / haut * 100);
                   const fin = i === ent.length - 1;
+                  const taux = prev ? Math.round(s.n / prev * 100) : null;
                   return `<div class="tb-step">
                     <span class="tb-nm">${s.nom}</span>
                     <div class="tb-bar" style="width:${Math.max(large, s.n ? 4 : 0)}%;${fin ? 'background:var(--green)' : `opacity:${(1 - i * 0.13).toFixed(2)}`}"><span>${s.n}</span></div>
-                    <span class="tb-rate">${prev === null ? '' : prev ? '↓ ' + Math.round(s.n / prev * 100) + ' %' : '—'}</span>
+                    <span class="tb-rate">${taux === null ? (prev === null ? '' : '—') : taux > 100
+                      ? `<span title="Plus d'affaires à cette étape qu'à la précédente : elles viennent de mois antérieurs.">↑ ${taux} %</span>`
+                      : '↓ ' + taux + ' %'}</span>
                   </div>`;
                 }).join('')}
               </div>

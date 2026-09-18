@@ -74,9 +74,20 @@ export const leadsNonDates = (k) => {
 };
 
 // ---------- RDV et signatures ----------
-export const rdvPeriode = (k, r, deals) => deals.filter(d =>
-  d.activity === k && reachedRdv(d)
-  && inRange((d.stage_history || []).find(h => h.stage === ACTIVITIES[k].rdvStage)?.at || d.won_at || d.created_at, r)).length;
+const aDesRdvExternes = (k) => {
+  const e = externe(k);
+  return !!(e && (e.revenue || []).some(m => m.rdv != null));
+};
+export function rdvPeriode(k, r, deals) {
+  const e = externe(k);
+  if (aDesRdvExternes(k)) {
+    return (e.revenue || []).filter(m => inRange(m.month + '-01', r))
+      .reduce((s, m) => s + (Number(m.rdv) || 0), 0);
+  }
+  return deals.filter(d =>
+    d.activity === k && reachedRdv(d)
+    && inRange((d.stage_history || []).find(h => h.stage === ACTIVITIES[k].rdvStage)?.at || d.won_at || d.created_at, r)).length;
+}
 export const signees = (k, r, deals) => deals.filter(d => d.activity === k && d.status === 'won' && inRange(d.won_at, r));
 
 // ---------- Chiffre d'affaires ----------
