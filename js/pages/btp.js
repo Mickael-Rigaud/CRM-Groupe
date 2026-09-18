@@ -479,16 +479,12 @@ function resultatHonoraires(scores, travaux) {
   if (montant <= 0) return `<p class="btp-calc-vide">Taux retenu : <b>${taux}&nbsp;%</b>. Saisissez le montant des travaux.</p>`;
   const h = honorairesAmo(montant, taux);
   return `
-    <div class="btp-calc-detail">
-      <span>${eur(montant)} × ${taux} %</span>
-      <b>${eur(h.brut)}</b>
-    </div>
     <div class="btp-calc-total ${h.plancher ? 'plancher' : ''}">
       <span>Honoraires HT</span>
       <b>${eur(h.retenu)}</b>
     </div>
     ${h.plancher
-      ? `<p class="btp-calc-note">Le calcul donne ${eur(h.brut)} : le minimum de ${eur(HONORAIRES_AMO.minimum)} HT s'applique.</p>`
+      ? `<p class="btp-calc-note">Minimum d'honoraires appliqué : le taux de ${taux} % seul donnerait ${eur(h.brut)}.</p>`
       : ''}`;
 }
 
@@ -609,10 +605,9 @@ const pageMission = (mission) => ({
         </div>
 
         ${mission === 'amo' ? [
-          catalogueAmo(),
+          `<div class="btp-duo btp-duo-cat">${catalogueAmo()}${phasesAmo()}</div>`,
           matriceAmo(state.scores),
           scoreComplexite(state.scores, state.travaux),
-          phasesAmo(),
           frontiereAmo(),
         ].join('') : ''}
         </div>`);
@@ -730,20 +725,7 @@ export const btpChargesPage = {
       // montre plutôt que de les oublier, avec de quoi créer leur fiche d'un clic.
       const sansFiche = chargesDAffaires().filter(u => !fichesReseau().some(f => f.profile_id === u.id));
 
-      const actifs = lignes.filter(l => l.f.actif !== false);
-      const totalPts = actifs.reduce((t, l) => t + l.points, 0);
-      const capacite = actifs.reduce((t, l) => t + l.max, 0);
-      const objectif = actifs.reduce((t, l) => t + (Number(l.f.objectif_ca) || 0), 0);
-      const caProduit = actifs.reduce((t, l) => t + (l.charge ? l.charge.ca : 0), 0);
-
       root.innerHTML = cadre('#/btp/charges', "Chargés d'affaires", `
-        <div class="esp-kpis">
-          ${kpi({ label: 'Réseau actif', valeur: actifs.length, sous: `${lignes.length - actifs.length} fiche${lignes.length - actifs.length > 1 ? 's' : ''} en sommeil`, icone: '👷', ton: 'accent', href: '#/btp/charges' })}
-          ${kpi({ label: 'Charge du réseau', valeur: capacite ? `${totalPts} / ${capacite}` : '—', sous: capacite ? `${Math.round((totalPts / capacite) * 100)} % de la capacité` : 'aucune fiche déclarée', icone: '🎯', ton: 'amber', href: '#/btp/charges' })}
-          ${kpi({ label: 'Saturés', valeur: actifs.filter(l => l.sature).length, sous: 'capacité ou AMO au maximum', icone: '⚠', ton: 'red', href: '#/btp/charges' })}
-          ${kpi({ label: 'CA produit', valeur: eur(caProduit), sous: objectif ? `sur ${eur(objectif)} visés` : 'aucun objectif renseigné', icone: '📈', ton: 'green', href: '#/btp/charges' })}
-        </div>
-
         <div class="card">
           <div class="card-head"><h2>Le réseau</h2>
             <span class="muted small">Capacité et objectif se règlent fiche par fiche</span>
