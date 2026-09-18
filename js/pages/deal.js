@@ -21,11 +21,33 @@ async function logEvent(deal, kind, body) {
 //
 // L'attribution s'inscrit dans l'historique : sans cela, personne ne peut dire
 // plus tard qui a confie quoi, ni quand. C'est tout l'interet de la manoeuvre.
+//
+// Le coeur de l'attribution, partage par la fiche d'affaire et par l'onglet
+// « Nouveaux leads » : les deux doivent produire exactement le meme resultat,
+// trace comprise. Renvoie l'affaire mise a jour.
+export async function assignerResponsable(deal, ownerId) {
+  if (!ownerId || ownerId === deal.owner_id) return deal;
+  const avant = deal.owner_id && db.byId('profiles', deal.owner_id);
+  const u = await db.update('deals', deal.id, { owner_id: ownerId });
+  // Les taches que personne ne porte suivent l'affaire : une tache sans
+  // destinataire est invisible elle aussi. Celles deja confiees a quelqu'un ne
+  // bougent pas — on ne reprend pas le travail d'un tiers au passage.
+  for (const a of db.t('activities').filter(a => a.deal_id === deal.id && !a.done && !a.assignee_id)) {
+    await db.update('activities', a.id, { assignee_id: ownerId });
+  }
+  await logEvent(u, 'system', avant
+    ? `Responsable : ${avant.full_name} → ${userName(ownerId)}`
+    : `Affaire attribuée à ${userName(ownerId)}`);
+  return u;
+}
+
+// Qui peut porter une affaire : la direction, et les personnes dont le profil
+// porte l'activite concernee.
+export const candidatsResponsable = (activity) => scope.users().filter(u =>
+  u.role === 'direction' || (u.activities || []).includes(activity));
+
 export function attribuerDeal(deal, onDone, onClose = null) {
-  // Qui peut porter cette affaire : la direction, et les personnes dont le
-  // profil porte l'activite concernee.
-  const candidats = scope.users().filter(u =>
-    u.role === 'direction' || (u.activities || []).includes(deal.activity));
+  const candidats = candidatsResponsable(deal.activity);
   const actuel = deal.owner_id && db.byId('profiles', deal.owner_id);
   const orphelines = db.t('activities').filter(a => a.deal_id === deal.id && !a.done && !a.assignee_id).length;
 
@@ -43,16 +65,7 @@ export function attribuerDeal(deal, onDone, onClose = null) {
     e.preventDefault();
     const id = new FormData(e.target).get('owner_id');
     if (!id || id === deal.owner_id) { closeModal(true); return onDone?.(); }
-    const u = await db.update('deals', deal.id, { owner_id: id });
-    // Les taches que personne ne porte suivent l'affaire : une tache sans
-    // destinataire est invisible elle aussi. Celles deja confiees a quelqu'un
-    // ne bougent pas — on ne reprend pas le travail d'un tiers au passage.
-    for (const a of db.t('activities').filter(a => a.deal_id === deal.id && !a.done && !a.assignee_id)) {
-      await db.update('activities', a.id, { assignee_id: id });
-    }
-    await logEvent(u, 'system', actuel
-      ? `Responsable : ${actuel.full_name} → ${userName(id)}`
-      : `Affaire attribuée à ${userName(id)}`);
+    await assignerResponsable(deal, id);
     closeModal(true);
     toast(`Attribuée à ${userName(id)}`);
     onDone?.();

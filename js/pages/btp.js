@@ -17,7 +17,7 @@ import {
   openModal, closeModal, confirm, terms, hit,
   searchInput, bindSearch, restoreFocus, csvDownload, marqueResponsable,
 } from '../ui.js';
-import { openDeal } from './deal.js';
+import { openDeal, assignerResponsable, candidatsResponsable } from './deal.js';
 import { contactForm, openContact } from './contacts.js';
 import { orgForm, openOrg } from './organisations.js';
 import { coquilleEspace, poserEspace, kpiEspace, supprimerFiche } from './espace.js';
@@ -1280,7 +1280,13 @@ const ORIGINES = [
 const classees = ORIGINES.flatMap(o => o.canaux || []);
 const estDeLOrigine = (c, o) => (o.canaux ? o.canaux.includes(c.channel) : !classees.includes(c.channel));
 
+// « Nouveaux leads » n'est pas une categorie de contacts mais une PILE DE TRAVAIL :
+// les demandes arrivees du site que personne ne porte encore. Un lead y reste tant
+// qu'il n'a pas de responsable, et rejoint la base des que la direction l'attribue.
+// C'est la meme definition que le filtre « À attribuer » des pipelines — une affaire
+// sans owner_id est invisible pour les charges d'affaires, donc non traitee.
 const VUES = [
+  { key: 'leads', label: 'Nouveaux leads', direction: true },
   { key: 'clients', label: 'Clients' },
   { key: 'prospects', label: 'Prospects' },
   { key: 'partenaires', label: 'Partenaires' },
@@ -1293,7 +1299,10 @@ export const btpBasePage = {
   render(root) {
     if (guard(root)) return {};
     const coquille = poser(root);
-    const state = { vue: 'clients', q: '', canal: '', origine: '', focus: null };
+    // On ouvre sur les nouveaux leads s'il y en a : c'est ce qui demande une action.
+    const aTraiter = () => deals().filter(d => !d.owner_id && d.status === 'open');
+    const vues = () => VUES.filter(v => !v.direction || scope.isDirection);
+    const state = { vue: (scope.isDirection && aTraiter().length) ? 'leads' : 'clients', q: '', canal: '', origine: '', focus: null };
 
     // Créer depuis cet écran, c'est créer pour BTP Expertise : l'activité est cochée
     // d'avance, et le type suit la vue ouverte. Sans cela la fiche n'apparaîtrait pas ici.
@@ -1315,10 +1324,22 @@ export const btpBasePage = {
       const contacts = scope.contacts().filter(isBtp);
       const orgs = scope.orgs().filter(isBtp);
       const surOrg = ['partenaires', 'courtiers'].includes(state.vue);
+      const surLeads = state.vue === 'leads';
 
       let lignes = [];
       let colonnes = [];
-      if (surOrg) {
+      if (surLeads) {
+        lignes = aTraiter()
+          .filter(d => hit([d.title, dealParty(d), d.fields?.problematique, d.fields?.adresse], ts))
+          .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''))
+          .map(d => {
+            const c = d.contact_id && db.byId('contacts', d.contact_id);
+            return { id: d.id, lead: true, recu: d.created_at, nom: d.title, client: dealParty(d),
+                     ville: c?.city || d.fields?.adresse || '', tel: c?.phone, mail: c?.email,
+                     mission: missionDe(d), activity: d.activity };
+          });
+        colonnes = ['Reçu', 'Demande', 'Client', 'Ville', 'Téléphone', 'Email', "Chargé d'affaires"];
+      } else if (surOrg) {
         const filtre = state.vue === 'courtiers' ? (o) => o.partner_job === 'Courtier' : (o) => o.type === 'Partenaire';
         lignes = orgs.filter(filtre)
           .filter(o => hit([o.name, o.partner_job, o.city, o.email, o.phone], ts))
@@ -1345,6 +1366,7 @@ export const btpBasePage = {
       }
 
       const compte = (v) => {
+        if (v === 'leads') return aTraiter().length;
         if (v === 'partenaires') return orgs.filter(o => o.type === 'Partenaire').length;
         if (v === 'courtiers') return orgs.filter(o => o.partner_job === 'Courtier').length;
         if (v === 'tous') return contacts.length;
@@ -1353,11 +1375,12 @@ export const btpBasePage = {
 
       root.innerHTML = cadre('#/btp/base', "Base de données", `
         <div class="toolbar">
-          <div class="seg">${VUES.map(v => `<button data-vue="${v.key}" class="${state.vue === v.key ? 'active' : ''}">${v.label} <span class="cnt">${compte(v.key)}</span></button>`).join('')}</div>
+          <div class="seg">${vues().map(v => `<button data-vue="${v.key}" class="${state.vue === v.key ? 'active' : ''}">${v.label} <span class="cnt">${compte(v.key)}</span></button>`).join('')}</div>
           <span class="grow"></span>
           <button class="btn ghost sm" id="b-export">Export CSV</button>
-          <button class="btn" id="b-new">+ ${surOrg ? (state.vue === 'courtiers' ? 'Courtier' : 'Partenaire') : 'Contact'}</button>
+          ${surLeads ? '' : `<button class="btn" id="b-new">+ ${surOrg ? (state.vue === 'courtiers' ? 'Courtier' : 'Partenaire') : 'Contact'}</button>`}
         </div>
+        ${surLeads ? `<p class="muted small" style="margin:-4px 0 12px">Les demandes arrivées du site que personne ne porte encore. Choisissez un chargé d'affaires&nbsp;: le lead rejoint aussitôt la base, et l'attribution est inscrite dans l'historique de l'affaire.</p>` : ''}
         ${state.vue === 'prospects' ? `<div class="pill-tabs">
           ${ORIGINES.map(o => `<button type="button" data-origine="${o.key}" class="${state.origine === o.key ? 'on' : ''}"
             aria-pressed="${state.origine === o.key}">${o.label}<span>${contacts.filter(c => c.type === 'Prospect' && estDeLOrigine(c, o)).length}</span></button>`).join('')}
@@ -1370,7 +1393,18 @@ export const btpBasePage = {
         <div class="card">
           <div class="table-wrap"><table>
             <thead><tr>${colonnes.map(c => `<th>${c}</th>`).join('')}<th></th></tr></thead>
-            <tbody>${lignes.map(r => `<tr class="click" data-fiche="${r.id}">
+            <tbody>${surLeads ? lignes.map(r => `<tr class="click" data-lead="${r.id}">
+              <td class="small">${esc(fmtDate(r.recu))}</td>
+              <td>${marqueMission(r.mission)}<b>${esc(r.nom)}</b></td>
+              <td>${esc(r.client || '—')}</td>
+              <td>${esc(r.ville || '—')}</td>
+              <td>${r.tel ? `<a href="tel:${esc(r.tel)}">${esc(r.tel)}</a>` : '—'}</td>
+              <td>${r.mail ? `<a href="mailto:${esc(r.mail)}">${esc(r.mail)}</a>` : '—'}</td>
+              <td><select data-attr="${r.id}" aria-label="Attribuer ce lead">
+                <option value="">À attribuer…</option>
+                ${candidatsResponsable(r.activity).map(u => `<option value="${u.id}">${esc(u.full_name)}${u.role === 'direction' ? ' (direction)' : ''}</option>`).join('')}
+              </select></td>
+            </tr>`).join('') || `<tr><td colspan="7"><div class="empty">Aucun lead en attente. Tout est distribué.</div></td></tr>` : lignes.map(r => `<tr class="click" data-fiche="${r.id}">
               <td><b>${esc(r.nom)}</b></td>
               <td>${esc(r.detail || '—')}</td>
               <td>${esc(r.ville || '—')}</td>
@@ -1389,6 +1423,22 @@ export const btpBasePage = {
       root.querySelector('#b-canal')?.addEventListener('change', e => { state.canal = e.target.value; draw(); });
       // La ligne ouvre la fiche complète ; le crayon va droit au formulaire, d'où l'on
       // peut aussi supprimer (le CRM refuse la suppression d'un contact qui porte des affaires).
+      // Attribuer depuis la liste : un choix dans le selecteur suffit, la ligne
+      // quitte la pile au redessin. Meme chemin que le bouton de la fiche
+      // d'affaire — responsable, taches orphelines et trace dans l'historique.
+      root.querySelectorAll('[data-attr]').forEach(sel => sel.onchange = async () => {
+        const id = sel.value; if (!id) return;
+        const d = db.byId('deals', sel.dataset.attr);
+        sel.disabled = true;
+        try { await assignerResponsable(d, id); toast(`« ${d.title} » attribué à ${userName(id)}`); }
+        catch (e) { sel.disabled = false; return toast(e.message, 'err'); }
+        draw();
+      });
+      // La ligne ouvre l'affaire, sauf si l'on vise le selecteur.
+      root.querySelectorAll('[data-lead]').forEach(tr => tr.onclick = (e) => {
+        if (e.target.closest('select')) return;
+        openDeal(tr.dataset.lead, draw);
+      });
       root.querySelectorAll('[data-fiche]').forEach(tr => tr.onclick = (e) => {
         if (e.target.closest('[data-modif], [data-suppr]')) return;
         surOrg ? openOrg(tr.dataset.fiche, draw) : openContact(tr.dataset.fiche, draw);
@@ -1398,8 +1448,8 @@ export const btpBasePage = {
         : contactForm(db.byId('contacts', b.dataset.modif), draw)));
       root.querySelectorAll('[data-suppr]').forEach(b => b.onclick = () =>
         supprimerFiche(surOrg ? 'organisations' : 'contacts', b.dataset.suppr, draw));
-      root.querySelector('#b-new').onclick = () => nouveau();
-      root.querySelector('#b-export').onclick = () => csvDownload(`btp-${state.vue}.csv`, lignes.map(({ id, org, dealId, ...reste }) => reste));
+      root.querySelector('#b-new')?.addEventListener('click', () => nouveau());
+      root.querySelector('#b-export').onclick = () => csvDownload(`btp-${state.vue}.csv`, lignes.map(({ id, org, dealId, lead, activity, ...reste }) => reste));
     };
 
     draw();
