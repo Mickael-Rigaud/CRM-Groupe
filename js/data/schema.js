@@ -248,6 +248,27 @@ export const EXEMPLES_CHARGE = [
   ['amo_etendue', 'exp_rapport', 'exp_rapport', 'exp_simple'],
 ];
 
+// ---- Le modèle de rémunération du réseau (§13) ------------------------------
+// Ce qui revient au chargé d'affaires indépendant, et ce qui reste au cabinet. La
+// clé dépend de l'origine du dossier : un lead que BTP Expertise a payé ne se
+// partage pas comme un client que l'indépendant amène lui-même.
+//
+// Les montants du tableau ne sont pas recopiés du manuel, ils s'en recalculent : le
+// manuel dit lui-même que « les pourcentages restent paramétrables dans le CRM », et
+// des colonnes figées mentiraient le jour où la clé change. Contrôlé sur les six
+// lignes du document.
+export const REMUNERATION_BTP = {
+  origines: [
+    { label: 'Lead BTP Expertise', court: 'Lead cabinet', independant: 55, cabinet: 45 },
+    { label: "Client apporté par l'indépendant", court: 'Client apporté', independant: 65, cabinet: 35 },
+  ],
+  // Les honoraires servant d'exemples sont ceux du barème AMO du §3.
+  exemples: [3500, 6000, 9000, 14000, 21000, 24000],
+  regle: "La part de l'indépendant se calcule et se paie sur les sommes effectivement encaissées par BTP Expertise, pas sur les montants facturés.",
+};
+export const partRemuneration = (honoraires, pourcentage) =>
+  Math.round((Number(honoraires) || 0) * (Number(pourcentage) || 0)) / 100;
+
 // La fiche métier du réseau. Sert à recruter, à cadrer l'entretien et à rappeler ce
 // qui est attendu une fois la personne habilitée.
 export const FICHE_CHARGE_BTP = {

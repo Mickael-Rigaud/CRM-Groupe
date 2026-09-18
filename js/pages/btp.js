@@ -8,6 +8,7 @@ import {
   ACTIVITIES, CHANNELS, weightedAmount, stagesDe, missionDe, NIVEAUX_BTP, CAPACITE_BTP,
   HONORAIRES_AMO, MISSIONS_BTP, couleurMission, niveauDe, pointsDe,
   MATRICE_AMO, tauxSuggere, honorairesAmo, PHASES_AMO, FRONTIERE_AMO, FICHE_CHARGE_BTP,
+  REMUNERATION_BTP, partRemuneration,
 } from '../data/schema.js';
 import {
   esc, eur, daysSince, fmtDate, contactName, dealParty, userName, toast,
@@ -592,6 +593,42 @@ const frontiereAmo = () => `<div class="card btp-ref btp-garde" style="${teinteM
   <p class="btp-ref-garde"><b>Référence de travail&nbsp;:</b> ${esc(FRONTIERE_AMO.reference)}</p>
 </div>`;
 
+// 13. Le partage des honoraires. Deux clés selon l'origine du dossier : un lead que
+// le cabinet a payé ne se partage pas comme un client que l'indépendant amène.
+const modeleRemuneration = () => {
+  const o = REMUNERATION_BTP.origines;
+  return `<div class="card btp-ref">
+    <div class="card-head"><h2>Modèle de rémunération</h2>
+      <span class="grow"></span>
+      <span class="muted small">Manuel V5 &middot; §13</span>
+    </div>
+    <p class="btp-ref-sous">Ce qui revient au chargé d'affaires indépendant, et ce qui reste au cabinet, selon l'origine du dossier.</p>
+
+    <div class="btp-remu-cles">
+      ${o.map(x => `<div class="btp-remu-cle">
+        <span>${esc(x.label)}</span>
+        <b>${x.independant} %</b><em>indépendant</em>
+        <b class="cab">${x.cabinet} %</b><em>cabinet</em>
+      </div>`).join('')}
+    </div>
+
+    <div class="table-wrap"><table class="btp-remu">
+      <thead>
+        <tr><th rowspan="2">Honoraires HT</th>
+          ${o.map(x => `<th colspan="2" class="groupe">${esc(x.court)}</th>`).join('')}</tr>
+        <tr>${o.map(x => `<th class="num">Indép. ${x.independant} %</th><th class="num cab">Cabinet ${x.cabinet} %</th>`).join('')}</tr>
+      </thead>
+      <tbody>${REMUNERATION_BTP.exemples.map(h => `<tr>
+        <th scope="row">${eur(h)}</th>
+        ${o.map(x => `<td class="num"><b>${eur(partRemuneration(h, x.independant))}</b></td>
+          <td class="num cab">${eur(partRemuneration(h, x.cabinet))}</td>`).join('')}
+      </tr>`).join('')}</tbody>
+    </table></div>
+
+    <p class="btp-ref-garde"><b>Règle :</b> ${esc(REMUNERATION_BTP.regle)}</p>
+  </div>`;
+};
+
 // 8. La fiche métier, sur l'écran du réseau : ce qu'on attend de quelqu'un avant de
 // l'habiliter, et ce qu'on lui demande une fois qu'il l'est.
 const ficheMetier = () => `<div class="card btp-ref">
@@ -1004,6 +1041,7 @@ export const btpChargesPage = {
           </ul>
         </div>
 
+        ${modeleRemuneration()}
         ${ficheMetier()}`);
 
       lierAffaires(root, draw);

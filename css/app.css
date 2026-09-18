@@ -676,6 +676,21 @@ tr.btp-mission .btp-pts { color: var(--m-encre); }
 .hono-note { margin: 9px 0 0; font-size: 12px; line-height: 1.45; color: var(--muted); }
 .hono-note.alerte { color: var(--amber); font-weight: 600; }
 
+/* ---------- Le modele de remuneration : deux cles, et ce que ca donne ---------- */
+.btp-remu-cles { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.btp-remu-cle { display: grid; grid-template-columns: auto auto 1fr; align-items: baseline; gap: 2px 8px;
+  padding: 13px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--card-2); }
+.btp-remu-cle > span { grid-column: 1 / -1; font-size: 12px; font-weight: 700; color: var(--muted-2);
+  text-transform: uppercase; letter-spacing: .04em; margin-bottom: 6px; }
+.btp-remu-cle b { font-family: var(--font-display); font-size: 22px; font-weight: 700; color: var(--accent-ink); }
+.btp-remu-cle b.cab { color: var(--muted); }
+.btp-remu-cle em { font-style: normal; font-size: 12px; color: var(--muted); margin-right: 14px; }
+/* La part du cabinet se lit en retrait : sur cet ecran, c est celle de l independant qui compte. */
+.btp-remu th.groupe { text-align: center; border-bottom: 2px solid var(--accent-soft); }
+.btp-remu td.cab, .btp-remu th.cab { color: var(--muted-2); background: color-mix(in srgb, var(--card-2) 60%, transparent); }
+.btp-remu tbody th { text-align: left; font-weight: 700; white-space: nowrap; }
+.btp-remu td { font-variant-numeric: tabular-nums; }
+
 /* La phrase qui explique la consequence d'un choix, juste sous le choix. */
 .mf-aide { margin: 0 0 16px; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
 .mf-aide.attention { color: var(--amber); font-weight: 600; }
