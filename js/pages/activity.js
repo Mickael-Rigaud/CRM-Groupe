@@ -23,7 +23,10 @@ export function activityForm(link = {}, existing = null, onSaved, onClose = null
       })) },
     // Comme pour la structure, un contexte qui désigne déjà quelqu'un (la colonne
     // d'une personne dans la to do list) l'emporte sur le responsable par défaut.
-    { key: 'assignee_id', label: 'Responsable', type: 'select', options: users.map(u => [u.id, u.full_name]), required: true, half: true, value: link.assignee_id || scope.user.id },
+    { key: 'assignee_id', label: 'Responsable', type: 'select', options: users.map(u => [u.id, u.full_name]), required: true, half: true, // Une valeur donnee explicitement fait foi, meme vide : « Envoyer une tache »
+    // passe une chaine vide pour forcer le choix du destinataire au lieu de
+    // proposer l'utilisateur connecte, ce qui serait le contraire du bouton.
+    value: 'assignee_id' in link ? link.assignee_id : scope.user.id },
     { key: 'title', label: 'Intitulé', type: 'text', required: true, placeholder: 'Ex. Relancer le devis' },
     // Le degré de traitement ; vide = tâche ordinaire, rangée à son échéance.
     { key: 'priority', label: 'Degré de traitement', type: 'select', half: true,

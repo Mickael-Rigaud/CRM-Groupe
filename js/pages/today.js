@@ -45,11 +45,12 @@ const recentes = new Map(); // id de la tâche -> minuteur de disparition
 const logo = (a, cls = 'todo-logo') => `<i class="${cls}" style="background:${a.color}"><img src="assets/logos/${a.key}.png" alt="" onerror="this.remove()"></i>`;
 
 
-// Une tâche en carte : case à cocher, badge de structure, contexte, échéance.
+// Une tâche en carte. Deux lignes, pas quatre : le titre, puis une ligne de
+// pastilles — structure, contexte, échéance, destinataire. Tout ce qui était
+// empilé tient maintenant côte à côte, et la liste se lit d'un coup d'œil.
 // Les attributs data-toggle / data-edit-act sont ceux que bindActivityRows attend.
 function carte(a, pour = false) {
   const j = ecart(a);
-  const late = !a.done && j !== null && j > 0;
   const t = actType(a.type);
   const s = structureDe(a);
   const act = s ? ACTIVITIES[s] : null;
@@ -62,16 +63,26 @@ function carte(a, pour = false) {
     !d && !c && o && esc(o.name),
   ].filter(Boolean)[0] || '';
 
+  // L'échéance se lit à sa couleur avant de se lire au texte : rouge en retard,
+  // ambre aujourd'hui, neutre au-delà.
+  const quand = a.due_date
+    ? `<span class="todo-chip quand ${!a.done && j > 0 ? 'late' : ''} ${!a.done && j === 0 ? 'today' : ''}">
+         ${j === 0 ? "Aujourd'hui" : esc(relDay(a.due_date))}${a.due_time ? ' · ' + esc(a.due_time) : ''}</span>`
+    : '<span class="todo-chip">Sans échéance</span>';
+
   return `<div class="todo-tache ${a.done ? 'done' : ''} ${recentes.has(a.id) ? 'recente' : ''} ${a.priority === 'urgent' && !a.done ? 'urgent' : ''}" ${act ? `style="--c:${act.color};--b:${act.accent};--bt:${act.on}"` : ''}>
-    <input type="checkbox" ${a.done ? 'checked' : ''} data-toggle="${a.id}" title="Marquer comme fait">
+    <label class="todo-case" title="${a.done ? 'Rouvrir' : 'Marquer comme fait'}">
+      <input type="checkbox" ${a.done ? 'checked' : ''} data-toggle="${a.id}"><span></span></label>
     <div class="todo-tache-corps">
-      ${act ? `<span class="todo-badge">${logo(act, 'todo-badge-logo')}${esc(act.short)}</span>` : ''}
       <b>${t.icon} ${esc(a.title)}</b>
-      ${pour ? `<div class="todo-pour">pour <b>${esc(userName(a.assignee_id))}</b>${a.done ? ' · <span class="todo-ok">faite</span>' : ''}</div>` : ''}
-      ${ctx ? `<div class="todo-ctx">${ctx}</div>` : ''}
-      <div class="todo-when ${late ? 'late' : ''}">${a.due_date ? `${fmtDate(a.due_date)}${a.due_time ? ' ' + esc(a.due_time) : ''} · ${relDay(a.due_date)}` : 'Sans échéance'}</div>
+      <div class="todo-meta">
+        ${act ? `<span class="todo-badge">${logo(act, 'todo-badge-logo')}${esc(act.short)}</span>` : ''}
+        ${quand}
+        ${ctx ? `<span class="todo-chip ctx">${ctx}</span>` : ''}
+        ${pour ? `<span class="todo-chip pour"><i>→</i>${esc(userName(a.assignee_id))}${a.done ? ' · faite' : ''}</span>` : ''}
+      </div>
     </div>
-    <button class="icon-btn" data-edit-act="${a.id}" title="Modifier">✎</button>
+    <button class="icon-btn todo-editer" data-edit-act="${a.id}" title="Modifier">✎</button>
   </div>`;
 }
 
@@ -145,7 +156,8 @@ export const todayPage = {
           <span class="muted small">${retenues.filter(a => ecart(a) > 0 && !a.done).length} en retard · ${retenues.filter(a => ecart(a) === 0 && !a.done).length} aujourd&rsquo;hui</span>
           <span class="grow"></span>
           <label class="check"><input type="checkbox" id="t-done" ${state.showDone ? 'checked' : ''}> Ce qui est fait</label>
-          <button class="btn" id="t-new">+ Tâche</button>
+          <button class="btn ghost" id="t-new">+ Tâche</button>
+          <button class="btn" id="t-send">Envoyer une tâche</button>
         </div>
 
         ${sansProchaine.length ? `<div class="alert"><b>${sansProchaine.length}</b><div><b>affaire${sansProchaine.length > 1 ? 's' : ''} sans prochaine action</b> — ${sansProchaine.slice(0, 6).map(d => `<a href="#" data-open-deal="${d.id}">${esc(d.title)}</a>`).join(', ')}${sansProchaine.length > 6 ? '…' : ''}</div></div>` : ''}
@@ -168,10 +180,14 @@ export const todayPage = {
       root.querySelector('#t-done').onchange = e => { state.showDone = e.target.checked; draw(); };
       // Une tâche créée ici hérite de ce qui est à l'écran : la structure ouverte,
       // et le responsable — moi dans ma liste, à choisir dans « Envoyées ».
-      root.querySelector('#t-new').onclick = () => activityForm({
-        ...(state.onglet === 'mienne' ? { assignee_id: moi } : {}),
-        ...(state.structure && state.structure !== '—' ? { activity: state.structure } : {}),
-      }, null, draw);
+      const structureOuverte = () => (state.structure && state.structure !== '—' ? { activity: state.structure } : {});
+      // « + Tâche » : pour moi. « Envoyer une tâche » : pour quelqu'un d'autre —
+      // le responsable est laissé vide, c'est le choix qu'on vient faire, et on
+      // bascule sur l'onglet « Envoyées » pour voir le résultat.
+      root.querySelector('#t-new').onclick = () => activityForm({ assignee_id: moi, ...structureOuverte() }, null, draw);
+      root.querySelector('#t-send').onclick = () => activityForm({ assignee_id: '', ...structureOuverte() }, null, () => {
+        state.onglet = 'envoyees'; draw();
+      });
       root.querySelectorAll('[data-open-deal]').forEach(a => a.onclick = e => { e.preventDefault(); openDeal(a.dataset.openDeal, draw); });
       bindActivityRows(root, draw);
       // Posé après bindActivityRows, qui pose son propre gestionnaire sur ces cases.
