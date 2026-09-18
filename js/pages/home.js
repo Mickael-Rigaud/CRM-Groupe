@@ -6,7 +6,7 @@ import { scope } from '../data/scope.js';
 import { ACTIVITIES, ACTIVITY_KEYS } from '../data/schema.js';
 import { propertyMetrics, loanStatus } from '../data/finance.js';
 import {
-  chiffres, total, entonnoir, structuresHorsEntonnoir, caMois, leadsMois, derniersMois, moisCle, moisPrecedent,
+  chiffres, total, entonnoir, entonnoirParCohorte, structuresHorsEntonnoir, caMois, leadsMois, derniersMois, moisCle, moisPrecedent,
   objectifs, objectif, objectifAnnuel, enregistrerObjectifs, ecoule, anneeEnCours, CLES_VISIBLES,
 } from '../data/chiffres.js';
 import {
@@ -78,11 +78,12 @@ export const homePage = {
       // ÷ leads du mois) donnerait des taux que l'entonnoir juste en dessous contredit.
       const ent = entonnoir(cles, r, deals);
       const jalon = (champ) => ent.find(x => x.champ === champ)?.n ?? null;
-      const recus = jalon('leads'), avecRdv = jalon('rdv'), conclus = jalon('deals');
+      const recus = jalon('leads'), avecRdv = jalon('rdv'), conclus = jalon('signed');
       const tauxRdv = recus && avecRdv !== null ? avecRdv / recus : null;
       const tauxVente = avecRdv && conclus !== null ? conclus / avecRdv : null;
       const entAvant = comparaisonEntonnoir(cles, state.periode, deals);
       const horsEntonnoir = structuresHorsEntonnoir(cles);
+      const parCohorte = entonnoirParCohorte(cles);
       const part = ecoule(r);
       const obj = cles.reduce((s, k) => s + objectif(k, r), 0);
       // L'objectif se fixe à l'année : on rappelle toujours où en est l'année,
@@ -114,7 +115,8 @@ export const homePage = {
             serieDe(cle => cles.reduce((s, k) => s + leadsMois(k, cle, deals), 0)),
             repartitionLeads(t, cles),
             false, t.leadsNonDates ? 'Total en base : ces outils ne datent pas l\'arrivée des prospects.' : '')}
-          ${kpi('RDV', t.rdv, evolution(avant?.rdv, t.rdv), serieDe(cle => nbRdvMois(cles, cle, deals)), 'atteints sur la période')}
+          ${kpi('RDV', t.rdv, evolution(avant?.rdv, t.rdv), serieDe(cle => nbRdvMois(cles, cle, deals)),
+            'rendez-vous tenus sur la période')}
           ${kpi('Affaires signées', t.signees ?? '—', evolution(avant?.signees, t.signees), serieDe(cle => nbSigneesMois(cles, cle, deals)), t.panier ? `panier ${eur(t.panier)}` : 'panier moyen indisponible')}
           ${kpi('CA HT', eur(t.ca), evolution(avant?.ca, t.ca), serieDe(caDu), obj ? `objectif ${eur(obj)}` : 'aucun objectif fixé')}
           ${kpi('Lead → RDV', tauxRdv === null ? '—' : pct(tauxRdv) + ' %', ecart(entAvant?.tauxRdv, tauxRdv), [],
@@ -128,8 +130,8 @@ export const homePage = {
 
             <section class="card">
               <div class="card-head"><h2>Pipeline &amp; conversion</h2>
-                <span class="muted small">affaires créées sur la période · taux de passage</span></div>
-              ${ent.some((s, i) => i && s.n > ent[i - 1].n) ? `<p class="muted small tb-hors">
+                <span class="muted small">${parCohorte ? 'prospects arrivés sur la période, suivis jusqu\'à aujourd\'hui' : 'affaires créées sur la période'} · taux de passage</span></div>
+              ${!parCohorte && ent.some((s, i) => i && s.n > ent[i - 1].n) ? `<p class="muted small tb-hors">
                 <span class="ag-abs">Une étape dépasse la précédente : ces affaires sont arrivées avant la période. Un entonnoir ne se lit bien que sur une période assez longue.</span></p>` : ''}
               ${horsEntonnoir.length ? `<p class="muted small tb-hors">${horsEntonnoir.map(k =>
                 `<span class="ag-src"><span class="dot" style="background:${ACTIVITIES[k].color}"></span>${esc(ACTIVITIES[k].label)}</span>`).join('')}
@@ -319,7 +321,7 @@ function comparaisonEntonnoir(cles, periode, deals) {
   const duree = r.end - r.start;
   const e = entonnoir(cles, { start: new Date(r.start.getTime() - duree), end: new Date(r.start.getTime()) }, deals);
   const j = (champ) => e.find(x => x.champ === champ)?.n ?? null;
-  const recus = j('leads'), rdv = j('rdv'), signes = j('deals');
+  const recus = j('leads'), rdv = j('rdv'), signes = j('signed');
   return {
     tauxRdv: recus && rdv !== null ? rdv / recus : null,
     tauxVente: rdv && signes !== null ? signes / rdv : null,

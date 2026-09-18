@@ -74,15 +74,16 @@ export const leadsNonDates = (k) => {
 };
 
 // ---------- RDV et signatures ----------
+const rdvDuMois = (m) => (m.rdv != null ? m.rdv : m.funnel?.rdv);
 const aDesRdvExternes = (k) => {
   const e = externe(k);
-  return !!(e && (e.revenue || []).some(m => m.rdv != null));
+  return !!(e && (e.revenue || []).some(m => rdvDuMois(m) != null));
 };
 export function rdvPeriode(k, r, deals) {
   const e = externe(k);
   if (aDesRdvExternes(k)) {
     return (e.revenue || []).filter(m => inRange(m.month + '-01', r))
-      .reduce((s, m) => s + (Number(m.rdv) || 0), 0);
+      .reduce((s, m) => s + (Number(rdvDuMois(m)) || 0), 0);
   }
   return deals.filter(d =>
     d.activity === k && reachedRdv(d)
@@ -159,30 +160,49 @@ const iMax = (d) => Math.max(
   stageIndex(d.activity, d.stage),
   ...(d.stage_history || []).map(h => stageIndex(d.activity, h.stage)));
 
-// Les jalons qu'un outil externe peut envoyer mois par mois, à côté du montant :
-// { month, amount, deals, leads, contacted, rdv, quotes }. Chacun est facultatif
-// et indépendant — un outil qui ne sait pas dater le premier contact n'envoie pas
-// `contacted`, et l'étape disparaît de l'entonnoir au lieu d'y figurer à zéro.
+// ---------- Entonnoir ----------
+// Deux façons dont un outil externe peut décrire son parcours, et elles ne se
+// mélangent pas :
+//
+//  1. `funnel` — LA COHORTE : parmi les prospects ARRIVÉS ce mois-là, combien ont
+//     atteint chaque statut depuis. { leads, rdv, quotes, signed }. C'est le vrai
+//     entonnoir : décroissant par construction, ses taux ont un sens.
+//  2. les compteurs à plat `rdv` / `quotes` / `deals` — DES FLUX : ce qui s'est
+//     passé pendant le mois, quelle que soit la date d'arrivée du prospect. Utile,
+//     mais un prospect de juin qui signe en août fait remonter l'étape d'août.
+//
+// `funnel` prime quand il est là. `deals` reste le nombre d'affaires signées dans
+// le mois : c'est lui qui donne le panier moyen, il ne doit pas devenir un jalon
+// de cohorte.
 const JALONS = [
-  { champ: 'leads', nom: 'Leads reçus' },
-  { champ: 'contacted', nom: 'Contactés' },
-  { champ: 'rdv', nom: 'RDV réalisés' },
-  { champ: 'quotes', nom: 'Devis / propositions' },
-  { champ: 'deals', nom: 'Signés' },
+  { champ: 'leads', nom: 'Leads reçus', flux: 'leads' },
+  { champ: 'contacted', nom: 'Contactés', flux: 'contacted' },
+  { champ: 'rdv', nom: 'RDV réalisés', flux: 'rdv' },
+  { champ: 'quotes', nom: 'Devis / propositions', flux: 'quotes' },
+  { champ: 'signed', nom: 'Signés', flux: 'deals' },
 ];
-const fournit = (k, champ) => {
+const aUneCohorte = (k) => {
   const e = externe(k);
-  return !!(e && (e.revenue || []).some(m => m[champ] != null));
+  return !!(e && (e.revenue || []).some(m => m.funnel && typeof m.funnel === 'object'));
 };
-const aUnEntonnoirExterne = (k) => JALONS.some(j => j.champ !== 'deals' && fournit(k, j.champ));
+const fournit = (k, j) => {
+  const e = externe(k);
+  if (!e) return false;
+  const lignes = e.revenue || [];
+  return aUneCohorte(k)
+    ? lignes.some(m => m.funnel && m.funnel[j.champ] != null)
+    : lignes.some(m => m[j.flux] != null);
+};
+const aUnEntonnoirExterne = (k) => aUneCohorte(k) || JALONS.some(j => j.flux !== 'deals' && fournit(k, j));
 
 // Entonnoir d'une structure, jalon par jalon. `null` veut dire « cet outil ne
 // sait pas compter cette étape » — à ne pas confondre avec zéro.
 function entonnoirDe(k, r, deals) {
   if (aUnEntonnoirExterne(k)) {
     const mois = (externe(k).revenue || []).filter(m => inRange(m.month + '-01', r));
-    return JALONS.map(j => fournit(k, j.champ)
-      ? mois.reduce((s, m) => s + (Number(m[j.champ]) || 0), 0)
+    const cohorte = aUneCohorte(k);
+    return JALONS.map(j => fournit(k, j)
+      ? mois.reduce((s, m) => s + (Number(cohorte ? m.funnel?.[j.champ] : m[j.flux]) || 0), 0)
       : null);
   }
   const lot = deals.filter(d => d.activity === k && inRange(d.created_at, r));
@@ -208,6 +228,9 @@ export function entonnoir(cles, r, deals = scope.deals()) {
     // n'apprend rien et casse la lecture de l'entonnoir : on le retire aussi.
   }).filter(j => j.n !== null && !(j.partiel && j.n === 0));
 }
+// Vrai quand l'entonnoir suit des cohortes : ses étapes décroissent alors
+// naturellement, et l'avertissement sur les périodes n'a pas lieu d'être.
+export const entonnoirParCohorte = (cles) => cles.some(aUneCohorte);
 // Les structures dont l'outil ne raconte pas le parcours : leur pipeline reste
 // invisible ici, et il vaut mieux l'écrire que laisser croire à un entonnoir vide.
 export const structuresHorsEntonnoir = (cles) =>
