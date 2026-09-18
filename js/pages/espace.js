@@ -8,6 +8,7 @@
 // `activity: '<clé>'`.
 import { db } from '../data/db.js';
 import { esc, confirm, toast } from '../ui.js';
+import { scope } from '../data/scope.js';
 
 const DATE_DU_JOUR = () => new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
@@ -121,6 +122,53 @@ export async function restaurerFiche(table, id, apres) {
     toast(`${nomFiche(table, fiche)} restauré${table === 'organisations' ? 'e' : ''}`);
   } catch (err) {
     toast(err.message || 'Restauration refusée', 'err');
+  }
+  apres?.();
+}
+
+// ---------- Supprimer définitivement : la direction, depuis les archives ----------
+//
+// L'archivage est la règle, la suppression l'exception. Deux garde-fous, et ils
+// se cumulent :
+//   - la DIRECTION seule, en miroir des policies `contacts_delete` et
+//     `orgs_delete` (migration 20260918200000) — le serveur refuse le reste ;
+//   - depuis les ARCHIVES uniquement : il faut avoir rangé avant de jeter, donc
+//     une fiche vivante ne peut pas disparaître d'un clic distrait.
+//
+// Contrairement à l'archivage, celle-ci emporte la grappe entière — affaires,
+// tâches, historique —, et on le dit avant. La suppression se fait ici plutôt
+// que de compter sur une cascade du serveur : en mode démo elle n'existe pas,
+// et une tâche orpheline continuerait d'apparaître dans la to-do.
+export async function supprimerDefinitivement(table, id, apres) {
+  const fiche = db.byId(table, id);
+  if (!fiche) return;
+  if (!scope.canSupprimerFiche) return toast('Seule la direction peut supprimer une fiche', 'warn');
+
+  const nom = nomFiche(table, fiche);
+  const champ = table === 'organisations' ? 'organisation_id' : 'contact_id';
+  const affaires = db.t('deals').filter(d => d[champ] === id);
+  const idsAffaires = new Set(affaires.map(d => d.id));
+  const taches = db.t('activities').filter(a => a[champ] === id || idsAffaires.has(a.deal_id));
+  const echanges = db.t('events').filter(e => e[champ] === id || idsAffaires.has(e.deal_id));
+
+  const detail = [
+    affaires.length && `${affaires.length} affaire${affaires.length > 1 ? 's' : ''}`,
+    taches.length && `${taches.length} tâche${taches.length > 1 ? 's' : ''}`,
+    echanges.length && `${echanges.length} échange${echanges.length > 1 ? 's' : ''} d'historique`,
+  ].filter(Boolean);
+
+  if (!await confirm(detail.length
+    ? `Supprimer définitivement ${nom}, ainsi que ${detail.join(', ')} ? Cette fois rien n'est conservé et c'est irréversible.`
+    : `Supprimer définitivement ${nom} ? Cette fois rien n'est conservé et c'est irréversible.`)) return;
+
+  try {
+    for (const a of taches) await db.remove('activities', a.id);
+    for (const e of echanges) await db.remove('events', e.id);
+    for (const d of affaires) await db.remove('deals', d.id);
+    await db.remove(table, id);
+    toast(`${nom} supprimé${table === 'organisations' ? 'e' : ''} définitivement`);
+  } catch (err) {
+    toast(err.message || 'Suppression refusée', 'err');
   }
   apres?.();
 }

@@ -20,7 +20,7 @@ import {
 import { openDeal, dealForm, assignerResponsable, candidatsResponsable } from './deal.js';
 import { contactForm, openContact } from './contacts.js';
 import { orgForm, openOrg } from './organisations.js';
-import { coquilleEspace, poserEspace, kpiEspace, archiverFiche, restaurerFiche, estActive } from './espace.js';
+import { coquilleEspace, poserEspace, kpiEspace, archiverFiche, restaurerFiche, supprimerDefinitivement, estActive } from './espace.js';
 import {
   CROCHETS, champsDe, remplir, donneesDossier, emailDu,
   mailHtml, URL_LOGO, URL_LOGO_PUBLIC, ouvrirCompose, telechargerEml, copierMiseEnPage,
@@ -1504,7 +1504,7 @@ export const btpBasePage = {
             : surArchives ? ''
             : `<button class="btn" id="b-new">+ ${surOrg ? (state.vue === 'courtiers' ? 'Courtier' : 'Partenaire') : 'Contact'}</button>`}
         </div>
-        ${surArchives ? `<p class="muted small" style="margin:-4px 0 12px">Les fiches mises de côté. <b>Rien n'a été supprimé</b>&nbsp;: affaires, tâches et historique sont intacts, et une fiche restaurée revient exactement là où elle était.</p>` : ''}
+        ${surArchives ? `<p class="muted small" style="margin:-4px 0 12px">Les fiches mises de côté. <b>Rien n'a été supprimé</b>&nbsp;: affaires, tâches et historique sont intacts, et une fiche restaurée revient exactement là où elle était.${scope.canSupprimerFiche ? ' La suppression définitive, elle, n\'est possible que d\'ici et n\'appartient qu\'à la direction.' : ''}</p>` : ''}
         ${surLeads ? `<p class="muted small" style="margin:-4px 0 12px">Les demandes dont le premier entretien téléphonique n'a pas encore eu lieu&nbsp;: formulaire du site, apport d'un partenaire ou d'un courtier, ou saisie à la main. Choisissez un chargé d'affaires pour la confier ; le lead quitte cette pile une fois l'entretien passé, et son contact devient client.</p>` : ''}
         <div class="toolbar">
           ${searchInput('b-q', state, 'Rechercher un nom, une ville, un email…')}
@@ -1535,7 +1535,8 @@ export const btpBasePage = {
                 : r.org ? `<td class="num">${r.apports}</td>`
                 : `<td>${esc(r.canal)}</td><td>${r.affaire ? esc(r.affaire) : '—'}</td>`}
               <td class="num acts">${surArchives
-                ? `<button type="button" class="btn ghost sm" data-restaurer="${r.id}" data-org="${r.org ? 1 : ''}" title="Remettre cette fiche dans les listes actives">↩ Restaurer</button>`
+                ? `<button type="button" class="btn ghost sm" data-restaurer="${r.id}" data-org="${r.org ? 1 : ''}" title="Remettre cette fiche dans les listes actives">↩ Restaurer</button>${scope.canSupprimerFiche
+                    ? `<button type="button" class="btn ghost sm danger" data-suppr="${r.id}" data-org="${r.org ? 1 : ''}" title="Supprimer définitivement, avec ses affaires et son historique">🗑</button>` : ''}`
                 : `<button type="button" class="btn ghost sm" data-modif="${r.id}" title="Modifier">✎</button><button type="button" class="btn ghost sm" data-archiver="${r.id}" title="Archiver : la fiche sort des listes, rien n'est supprimé">🗄</button>`}</td>
             </tr>`).join('') || `<tr><td colspan="${colonnes.length + 1}"><div class="empty">Aucune fiche dans cette vue.</div></td></tr>`}</tbody>
           </table></div>
@@ -1565,7 +1566,7 @@ export const btpBasePage = {
         openDeal(tr.dataset.lead, draw);
       });
       root.querySelectorAll('[data-fiche]').forEach(tr => tr.onclick = (e) => {
-        if (e.target.closest('[data-modif], [data-archiver], [data-restaurer]')) return;
+        if (e.target.closest('[data-modif], [data-archiver], [data-restaurer], [data-suppr]')) return;
         // Dans les archives les deux natures cohabitent : c'est la ligne qui dit
         // laquelle, pas l'onglet.
         const org = surArchives ? !!db.byId('organisations', tr.dataset.fiche) : surOrg;
@@ -1578,6 +1579,8 @@ export const btpBasePage = {
         archiverFiche(surOrg ? 'organisations' : 'contacts', b.dataset.archiver, draw));
       root.querySelectorAll('[data-restaurer]').forEach(b => b.onclick = () =>
         restaurerFiche(b.dataset.org ? 'organisations' : 'contacts', b.dataset.restaurer, draw));
+      root.querySelectorAll('[data-suppr]').forEach(b => b.onclick = () =>
+        supprimerDefinitivement(b.dataset.org ? 'organisations' : 'contacts', b.dataset.suppr, draw));
       root.querySelector('#b-new')?.addEventListener('click', () => nouveau());
       // Une affaire neuve nait a la premiere etape du pipeline : elle atterrit
       // donc dans cette pile, exactement comme un lead venu du site.

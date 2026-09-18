@@ -11,6 +11,11 @@ export const scope = {
   get isDirection() { return this.role === 'direction'; },
   get canPatrimony() { return this.isDirection && this.user?.patrimony_access === true; },
   get canRental() { return this.canPatrimony || this.user?.rental_access === true; },
+  // Supprimer definitivement une fiche : la direction, et elle seule. Un charge
+  // d'affaires archive — il met de cote, il ne detruit pas. Miroir exact des
+  // policies contacts_delete et orgs_delete (migration 20260918200000) : le
+  // serveur refuse de toute facon, ceci evite d'offrir un bouton qui echouerait.
+  get canSupprimerFiche() { return this.isDirection; },
   get activityKeys() { return this.isDirection ? ['rgd', 'btp', 'courtage', 'propulsion'] : (this.user?.activities || []); },
 
   canSeeDeal(d) {
