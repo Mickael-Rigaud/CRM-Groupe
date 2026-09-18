@@ -1,13 +1,19 @@
 // Agendas Google des structures — mécanisme partagé par l'espace BTP Expertise
 // et par « Ma journée » du tableau de bord.
 //
-// Ce que le CRM fait, et ce qu'il ne fait pas : un agenda Google s'affiche ici
-// dans un cadre intégré, mais son contenu reste chez Google. Le CRM ne peut pas
-// lire les rendez-vous, donc pas les mélanger à ses propres tâches dans une même
-// liste. En revanche Google sait superposer plusieurs agendas dans un seul cadre,
-// chacun gardant SA couleur : c'est ainsi qu'on obtient « tous les agendas ».
+// Ce module ne sert plus qu'au CADRE INTÉGRÉ de Google (espace BTP, et repli du
+// tableau de bord) : un agenda s'y affiche, mais son contenu reste chez Google,
+// dans une boîte noire qu'on ne peut ni borner à la journée ni mêler aux tâches
+// du CRM. En revanche Google sait superposer plusieurs agendas dans un seul
+// cadre, chacun gardant SA couleur : c'est ainsi qu'on obtient « tous les agendas ».
+//
+// Les rendez-vous, eux, arrivent par une autre voie : l'outil qui relève les
+// agendas côté serveur les pousse dans `agenda_events` (voir agenda-sync.js).
+// Le navigateur ne lit plus Google, et personne n'a à s'y connecter.
 //
 // Les identifiants vivent dans les réglages, jamais dans le code : dépôt public.
+// C'est le CRM qui les tient : l'outil qui relève vient les lire ici plutôt que
+// d'en garder une copie qui dériverait.
 import { db } from './data/db.js';
 import { scope } from './data/scope.js';
 import { ACTIVITIES, ACTIVITY_KEYS } from './data/schema.js';
