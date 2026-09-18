@@ -59,7 +59,11 @@ const NAV = [
   { key: 'today', icon: 'check', label: 'To do list', hash: '#/today', count: () => scope.activities().filter(a => !a.done && a.due_date && daysSince(a.due_date) >= 0).length },
   {
     key: 'commercial', icon: 'kanban', label: 'Pilotage', items: [
-      { hash: '#/dashboard', label: "Vue d'ensemble", direction: true },
+      // « Vue d'ensemble » a quitté ce menu le 2026-09-18. L'écran existe
+      // toujours et reste joignable à #/dashboard — il porte sa propre garde
+      // (`directionOnly`), le retirer d'ici n'ouvre donc rien à personne. Même
+      // traitement que le vivier courtiers et les DTU : on sort du menu, on
+      // n'efface pas.
       // Une structure qui a son espace l'ouvre ici au lieu de son pipeline : RGD Renova
       // son application, BTP Expertise et La Référence Courtage leurs écrans internes.
       // Les pipelines restent joignables à #/pipeline/<clé>.
@@ -243,12 +247,18 @@ function renderNav() {
   const sub = document.getElementById('subnav');
   const items = here && here.items ? itemsOf(here) : [];
   let sep = false;   // un trait sépare les écrans transverses des structures
-  const screens = items.map(i => {
+  let transverse = false;   // un écran sans structure a-t-il été posé avant ?
+  const screens = items.map((i) => {
     const cnt = i.count ? i.count() : 0;
     // Logo de la structure s'il a été déposé dans assets/logos/, pastille de couleur sinon
     const mark = i.activity && LOGOS.has(i.activity) ? `<span class="brandmark"><img src="assets/logos/${i.activity}.png" alt=""></span>`
       : i.dot ? `<span class="dot" style="background:${i.dot}"></span>` : '';
-    const trait = i.dot && !sep ? (sep = true, '<span class="s-sep" aria-hidden="true"></span>') : '';
+    // Le trait sépare les écrans transverses des structures : il ne se pose que
+    // si un écran transverse l'a précédé. Depuis que « Vue d'ensemble » a quitté
+    // Pilotage, ce menu n'en a plus aucun — le trait ne doit donc plus paraître
+    // du tout, ni en tête de barre ni entre deux structures.
+    const trait = i.dot && transverse && !sep ? (sep = true, '<span class="s-sep" aria-hidden="true"></span>') : '';
+    if (!i.dot) transverse = true;
     return `${trait}<a href="${i.hash}" class="s-tab ${i.dot ? 'brand' : ''} ${isOn(i, hash) ? 'on' : ''}" ${i.dot ? `style="--c:${i.dot}"` : ''} ${isOn(i, hash) ? 'aria-current="page"' : ''}>${mark}${esc(i.label)}${cnt ? `<i class="s-cnt">${cnt}</i>` : ''}</a>`;
   }).join('');
   const posted = sub.querySelector('.embed-actions');   // commandes posées par la page ouverte
