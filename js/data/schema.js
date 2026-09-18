@@ -324,8 +324,14 @@ export const EXEMPLES_CHARGE = [
 
 // ---- Le modèle de rémunération du réseau (§13) ------------------------------
 // Ce qui revient au chargé d'affaires indépendant, et ce qui reste au cabinet. La
-// clé dépend de l'origine du dossier : un lead que BTP Expertise a payé ne se
-// partage pas comme un client que l'indépendant amène lui-même.
+// clé dépend de l'origine du dossier : un client que BTP Expertise a apporté ne se
+// partage pas comme un client que le chargé d'affaires amène lui-même.
+//
+// LE SENS DE LA GRILLE, a garder en tete si les taux rebougent : l'independant
+// prend TOUJOURS plus quand il amene le client (70 contre 60). C'est ce qui
+// recompense l'apport. Une grille ou l'apporteur toucherait moins que sur un
+// client du cabinet inverserait l'interet du reseau — releve le 18/09/2026 sur
+// une consigne ambigue, et tranche dans ce sens.
 //
 // Les montants du tableau ne sont pas recopiés du manuel, ils s'en recalculent : le
 // manuel dit lui-même que « les pourcentages restent paramétrables dans le CRM », et
@@ -333,8 +339,8 @@ export const EXEMPLES_CHARGE = [
 // lignes du document.
 export const REMUNERATION_BTP = {
   origines: [
-    { label: 'Lead BTP Expertise', court: 'Lead cabinet', independant: 55, cabinet: 45 },
-    { label: "Client apporté par l'indépendant", court: 'Client apporté', independant: 65, cabinet: 35 },
+    { label: 'Client BTP Expertise', court: 'Client cabinet', independant: 60, cabinet: 40 },
+    { label: "Client apporté par le chargé d'affaires", court: 'Client apporté', independant: 70, cabinet: 30 },
   ],
   // Les honoraires servant d'exemples sont ceux du barème AMO du §3.
   exemples: [3500, 6000, 9000, 14000, 21000, 24000],

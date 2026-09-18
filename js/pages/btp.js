@@ -595,8 +595,11 @@ const frontiereAmo = () => `<div class="card btp-ref btp-garde" style="${teinteM
   <p class="btp-ref-garde"><b>Référence de travail&nbsp;:</b> ${esc(FRONTIERE_AMO.reference)}</p>
 </div>`;
 
-// 13. Le partage des honoraires. Deux clés selon l'origine du dossier : un lead que
-// le cabinet a payé ne se partage pas comme un client que l'indépendant amène.
+// 13. Le partage des honoraires. Deux clés selon l'origine du dossier : un client que
+// le cabinet a apporté ne se partage pas comme un client que le chargé d'affaires
+// amène lui-même — et c'est toujours l'apporteur qui prend la plus grosse part.
+// Les taux et les montants viennent tous de REMUNERATION_BTP : rien n'est écrit en
+// dur ici, changer la clé dans schema.js suffit à refaire le tableau.
 const modeleRemuneration = () => {
   const o = REMUNERATION_BTP.origines;
   return `<div class="card btp-ref">
