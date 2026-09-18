@@ -18,8 +18,7 @@ import {
   idsDe, idsDeTous, structuresRaccordees, cadreJour, noteAgenda, modeEmploi,
   champsAgendas, enregistrerAgendas, peutRaccorder,
 } from '../agenda.js';
-import { configure as googleConfigure, modeEmploiClient, CLE_CLIENT, clientId } from '../google-agenda.js';
-import { evenementsEnregistres, derniereSync, peutSynchroniser, synchroniser, agendasDe } from '../agenda-sync.js';
+import { evenementsEnregistres, derniereSync, agendasDe } from '../agenda-sync.js';
 
 const LS_FILTRE = 'crm_home_filtre';
 const pct = (v) => Math.round((v || 0) * 100);
@@ -206,7 +205,6 @@ export const homePage = {
       });
       root.querySelector('#tb-obj')?.addEventListener('click', () => formObjectifs(draw));
       root.querySelector('#tb-ag')?.addEventListener('click', () => formAgendas(visibles, draw));
-      remplirJournee(root, visibles, draw);
 
       dessineCourbe(cles, moisSerie, deals);
     };
@@ -368,8 +366,9 @@ function carteJournee(cles) {
   if (!ids.length) {
     return `<section class="card">${entete}
       <div class="tb-ag-vide">
-        <p><b>Aucun agenda n'est encore raccordé.</b> Une fois les calendriers Google des structures renseignés,
-        leurs rendez-vous du jour seront recopiés dans le CRM et visibles par tout le monde, sans connexion Google.</p>
+        <p><b>Aucun agenda n'est encore raccordé.</b> Une fois les calendriers des structures renseignés,
+        leurs rendez-vous du jour sont recopiés automatiquement dans le CRM, visibles par tout le monde.
+        Personne n'a de connexion à faire.</p>
         ${peutRaccorder() ? modeEmploi() + '<p class="muted small">Puis « Raccorder les agendas » ci-dessus.</p>'
           : '<p class="muted small">La direction peut les renseigner depuis cet écran.</p>'}
       </div>
@@ -386,7 +385,7 @@ function carteJournee(cles) {
 }
 const etatSync = (cles) => {
   const d = derniereSync(cles);
-  if (!d) return peutSynchroniser(cles) ? '<span class="ag-abs">jamais synchronisé</span>' : '';
+  if (!d) return '<span class="ag-abs">pas encore relevé</span>';
   const min = Math.round((Date.now() - d.getTime()) / 60000);
   const quand = min < 1 ? 'à l\'instant' : min < 60 ? `il y a ${min} min`
     : d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
@@ -417,41 +416,7 @@ function tachesDuJour() {
     });
 }
 
-async function remplirJournee(root, cles, redraw) {
-  root.querySelector('#tb-gcli')?.addEventListener('click', () => formClientGoogle(redraw));
-  const cible = root.querySelector('#tb-jour');
-  if (!cible || !peutSynchroniser(cles)) return;
-
-  const rendre = (evenements, echecs, aConnecter) => {
-    cible.innerHTML = dessinerJournee([...evenements, ...tachesDuJour()], cles, echecs, aConnecter);
-    const maj = root.querySelector('#tb-maj'); if (maj) maj.outerHTML = `<span id="tb-maj">${etatSync(cles)}</span>`;
-    cible.querySelector('#tb-gconnect')?.addEventListener('click', async (e) => {
-      e.target.disabled = true; e.target.textContent = 'Connexion…';
-      try {
-        const r = await synchroniser(cles, { interactif: true });
-        rendre(r.evenements, r.echecs, false);
-        toast(`${r.copies} rendez-vous relevés`);
-      } catch (err) {
-        toast(err.message, 'err');
-        e.target.disabled = false; e.target.textContent = 'Relever les agendas';
-      }
-    });
-  };
-  try {
-    // Renouvellement silencieux : si la personne a déjà accepté, la journée se
-    // met à jour sans rien lui demander.
-    const r = await synchroniser(cles, { interactif: false });
-    rendre(r.evenements, r.echecs, false);
-  } catch {
-    // Pas encore autorisé. On laisse la journée déjà enregistrée à l'écran et on
-    // propose le bouton : ouvrir la fenêtre Google sans geste serait bloqué.
-    rendre(evenementsEnregistres(cles), [], true);
-  }
-}
-
-// La journée dessinée : une ligne par rendez-vous, l'heure à gauche, un filet à la
-// couleur de la structure, et le trait rouge de l'heure courante à sa place.
-function dessinerJournee(elements, cles, echecs = [], aConnecter = false) {
+function dessinerJournee(elements, cles) {
   const maintenant = new Date();
   const hhmm = (d) => d.toTimeString().slice(0, 5);
   const journee = elements.filter(e => e.journee);
@@ -492,53 +457,25 @@ function dessinerJournee(elements, cles, echecs = [], aConnecter = false) {
     });
     corps += '</div>';
   }
-  if (!journee.length && !horaires.length && !aConnecter)
+  if (!journee.length && !horaires.length)
     corps = '<div class="empty" style="padding:20px 0">Aucun rendez-vous aujourd\'hui.</div>';
 
-  const alerte = aConnecter
-    ? `<div class="tb-jour-connect"><span>Connectez-vous à Google pour relever les agendas : les rendez-vous seront
-       ensuite visibles par toute l'équipe, sans connexion de sa part.</span>
-       <button class="btn sm" id="tb-gconnect">Relever les agendas</button></div>`
-    : echecs.length
-      ? `<div class="tb-jour-alerte">${echecs.length} agenda${echecs.length > 1 ? 's' : ''} illisible${echecs.length > 1 ? 's' : ''} :
-         ${echecs.map(x => `${esc(ACTIVITIES[x.structure]?.label || x.structure)} (${esc(x.motif)})`).join(', ')}.
-         Vérifiez que le calendrier est partagé avec votre compte Google.</div>`
-      : '';
-  return alerte + corps;
+  return corps;
 }
 
 function formAgendas(cles, onSaved) {
   openModal('Agendas des structures',
     `<div id="f-ag">${champsAgendas(cles)}
      <details class="ag-aide"><summary>Où trouver l'identifiant d'un calendrier ?</summary>${modeEmploi()}</details>
-     <details class="ag-aide"><summary>Lecture des agendas (identifiant client Google)</summary>
-       <div class="field" style="margin-top:8px"><label>ID client OAuth</label>
-         <input id="ag-client" value="${esc(clientId())}" placeholder="…apps.googleusercontent.com"></div>
-       ${modeEmploiClient()}</details></div>
+</div>
      <div class="form-actions"><button class="btn ghost" id="ag-x">Annuler</button><button class="btn" id="ag-ok">Enregistrer</button></div>`,
     { wide: true, onOpen: (m) => {
       m.querySelector('#ag-x').onclick = () => closeModal();
       m.querySelector('#ag-ok').onclick = async () => {
         try {
           await enregistrerAgendas(m.querySelector('#f-ag'), cles);
-          await enregistrerReglage(CLE_CLIENT, m.querySelector('#ag-client').value.trim());
           closeModal(true); onSaved();
         } catch (e) { toast(e.message, 'err'); }
-      };
-    } });
-}
-function formClientGoogle(onSaved) {
-  openModal('Lire les agendas dans le CRM',
-    `<div id="f-cli"><p class="muted small" style="margin-top:0">Avec un identifiant client Google, le CRM lit les rendez-vous
-       et dessine la journée lui-même : uniquement aujourd'hui, aux couleurs des structures, avec les tâches du CRM au milieu.</p>
-     <div class="field"><label>ID client OAuth</label><input id="cli-id" value="${esc(clientId())}" placeholder="…apps.googleusercontent.com"></div>
-     ${modeEmploiClient()}</div>
-     <div class="form-actions"><button class="btn ghost" id="cli-x">Annuler</button><button class="btn" id="cli-ok">Enregistrer</button></div>`,
-    { wide: true, onOpen: (m) => {
-      m.querySelector('#cli-x').onclick = () => closeModal();
-      m.querySelector('#cli-ok').onclick = async () => {
-        try { await enregistrerReglage(CLE_CLIENT, m.querySelector('#cli-id').value.trim()); closeModal(true); toast('Enregistré'); onSaved(); }
-        catch (e) { toast(e.message, 'err'); }
       };
     } });
 }

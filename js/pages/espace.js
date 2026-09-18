@@ -13,13 +13,35 @@ const DATE_DU_JOUR = () => new Date().toLocaleDateString('fr-FR', { weekday: 'lo
 
 // La barre du CRM n'ayant que deux niveaux, c'est cette coquille qui porte la
 // navigation interne de la structure : `onglets` = [{ hash, label }], `actif` = le hash ouvert.
+//
+// Un onglet peut porter `sous: [{ hash, label }]` : il devient alors un intitulé de
+// groupe, et ses écrans s'affichent en retrait sous lui. Toujours dépliés — le menu
+// d'une structure tient en quelques lignes, un accordéon n'y apporterait qu'un clic.
+// Un onglet sans `sous` s'affiche exactement comme avant : l'espace La Référence
+// Courtage n'en utilise pas et ne change pas.
+//
+// L'onglet ouvert se reconnaît à l'égalité stricte de son adresse, et non à un
+// préfixe : `#/btp` préfixe toutes les adresses de l'espace, un startsWith allumerait
+// le tableau de bord en permanence. Les adresses sont donc plates — `#/btp/expertise`
+// et non `#/btp/missions/expertise` —, ce qui tombe bien : le routeur du CRM ne lit
+// que deux segments après le croisillon.
+const lienOnglet = (o, actif) => {
+  const ouvert = o.hash === actif;
+  return `<a href="${o.hash}" class="${ouvert ? 'on' : ''}" ${ouvert ? 'aria-current="page"' : ''}>${esc(o.label)}</a>`;
+};
+
 export function coquilleEspace({ cle, marque, baseline = '', onglets, actif, titre, corps }) {
   return `
   <div class="esp-app">
     <aside class="esp-side">
       <div class="esp-side-brand"><img src="assets/logos/${esc(cle)}.png" alt="" onerror="this.remove()"><span>${esc(marque)}</span></div>
       <nav class="esp-side-nav" aria-label="Écrans ${esc(marque)}">
-        ${onglets.map(o => `<a href="${o.hash}" class="${o.hash === actif ? 'on' : ''}" ${o.hash === actif ? 'aria-current="page"' : ''}>${esc(o.label)}</a>`).join('')}
+        ${onglets.map(o => o.sous
+          ? `<div class="esp-side-groupe">
+               <span class="esp-side-titre">${esc(o.label)}</span>
+               ${o.sous.map(x => lienOnglet(x, actif)).join('')}
+             </div>`
+          : lienOnglet(o, actif)).join('')}
       </nav>
       <div class="esp-side-foot"><b>${esc(marque)}</b>${baseline ? `<span>${esc(baseline)}</span>` : ''}</div>
     </aside>

@@ -345,6 +345,10 @@ select.cell-in { text-align: left; }
 .esp-side-nav a { display: block; padding: 11px 15px; border-radius: 9px; text-decoration: none; color: rgba(255,255,255,.76); font-size: 13.5px; font-weight: 600; transition: background .13s, color .13s; }
 .esp-side-nav a:hover { background: rgba(255,255,255,.09); color: #fff; }
 .esp-side-nav a.on { background: var(--accent); color: var(--on-accent); }
+/* Un groupe du menu : son intitule, puis ses ecrans en retrait dessous. */
+.esp-side-groupe { display: flex; flex-direction: column; gap: 3px; margin-top: 4px; }
+.esp-side-titre { padding: 9px 15px 3px; font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; color: rgba(255,255,255,.45); }
+.esp-side-groupe a { padding-left: 27px; font-size: 13px; }
 .esp-side-foot { padding: 16px 18px 20px; border-top: 1px solid rgba(255,255,255,.1); display: flex; flex-direction: column; gap: 3px; }
 .esp-side-foot b { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--accent); }
 .esp-side-foot span { font-size: 11.5px; color: rgba(255,255,255,.55); }
@@ -390,6 +394,86 @@ body:has(.esp-app) .subnav .datepill { display: none; }
 .esp-card-deal .muted { font-size: 11.5px; }
 .esp-card-amount { font-weight: 700; color: var(--accent-ink); font-variant-numeric: tabular-nums; }
 .esp-col-vide { color: var(--muted-2); font-size: 12px; padding: 4px 2px; }
+
+/* ---------- Tableau de bord BTP : deux colonnes, récapitulatifs, charge du réseau ---------- */
+/* Deux cartes côte à côte, empilées dès que la place manque. */
+.btp-duo { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; align-items: start; }
+@media (max-width: 1100px) { .btp-duo { grid-template-columns: 1fr; } }
+
+/* Le récapitulatif d'une pipeline : ses étapes en une bande, sans les affaires */
+.btp-recap-etapes { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(84px, 1fr); gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+.btp-recap-etape { display: flex; flex-direction: column; gap: 3px; padding: 10px 11px; border-radius: 10px; background: var(--card-2); text-decoration: none; color: inherit; border: 1px solid transparent; transition: border-color .13s, background .13s; }
+.btp-recap-etape:hover { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); }
+.btp-recap-etape span { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted-2); line-height: 1.25; }
+.btp-recap-etape b { font-family: var(--font-display); font-size: 21px; font-weight: 700; color: var(--accent-ink); }
+.btp-recap-pied { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 12.5px; color: var(--muted); }
+
+/* La jauge de charge d'un chargé d'affaires */
+.btp-jauge { height: 6px; border-radius: 999px; background: var(--card-2); overflow: hidden; min-width: 90px; }
+.btp-jauge i { display: block; height: 100%; border-radius: 999px; }
+.btp-jauge-val { font-size: 12px; font-weight: 600; margin-bottom: 4px; font-variant-numeric: tabular-nums; }
+
+/* Répartition du CA : le total, puis une part par métier */
+.btp-ca-total { font-family: var(--font-display); font-size: 30px; font-weight: 700; letter-spacing: -.02em; color: var(--accent-ink); margin: 4px 0 16px; }
+.btp-ca-total span { display: block; font-family: "Inter", sans-serif; font-size: 12.5px; font-weight: 500; color: var(--muted); letter-spacing: 0; margin-top: 2px; }
+.btp-ca-part { margin-bottom: 14px; }
+.btp-ca-lbl { display: flex; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 5px; }
+.btp-ca-lbl i { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; }
+.btp-ca-lbl b { font-variant-numeric: tabular-nums; }
+.btp-ca-lbl em { font-style: normal; color: var(--muted); font-size: 12px; min-width: 42px; text-align: right; }
+.btp-ca-bar { height: 8px; border-radius: 999px; background: var(--card-2); overflow: hidden; }
+.btp-ca-bar i { display: block; height: 100%; border-radius: 999px; }
+
+/* Le détail des missions d'une personne, sous sa ligne */
+.btp-detail td { padding-top: 0; border-top: 0; }
+.btp-chip { display: inline-flex; align-items: center; gap: 7px; max-width: 260px; margin: 0 6px 6px 0; padding: 5px 10px; border-radius: 999px; background: var(--card-2); border: 1px solid var(--line); font-size: 12px; text-align: left; }
+.btp-chip:hover { border-color: var(--accent); background: var(--accent-soft); }
+.btp-chip i { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--accent); }
+.btp-chip i.amo { background: var(--green); }
+.btp-chip span { color: var(--muted); white-space: nowrap; }
+.btp-puce { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; background: var(--accent); }
+.btp-puce.amo { background: var(--green); }
+
+/* Expertise ou AMO : les couleurs des deux agendas Google du cabinet, portees par
+   --m / --m-clair / --m-encre que le JS pose sur chaque element concerne. */
+.esp-card-deal.btp-mission { border-left-color: var(--m); }
+tr.btp-mission .btp-pts { color: var(--m-encre); }
+.btp-chip i { background: var(--m, var(--accent)); }
+.btp-chip:hover { border-color: var(--m); background: var(--m-clair); }
+.btp-niveau { font-size: 11px; color: var(--muted); }
+
+/* Les deux compteurs metier du tableau du reseau */
+.btp-compteur { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 1px; padding: 5px 11px; border-radius: 10px; background: var(--m-clair); color: var(--m-encre); font-weight: 800; font-size: 14px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.btp-compteur em { font-style: normal; font-weight: 600; font-size: 10.5px; opacity: .75; }
+.btp-compteur.plein { box-shadow: inset 0 0 0 1.5px var(--m); }
+.btp-col-charge { min-width: 190px; }
+
+/* La jauge se lit en deux segments : ce que pesent les expertises, puis les AMO */
+.btp-jauge-duo { display: flex; gap: 2px; }
+.btp-jauge-duo i { transition: width .2s; }
+.pill.sm { padding: 1px 7px; font-size: 10px; }
+
+/* Une page de metier porte sa couleur, sans la crier */
+.btp-page-mission { display: flex; flex-direction: column; gap: 18px; }
+.btp-bandeau { display: flex; align-items: center; gap: 10px; padding: 11px 16px; border-radius: var(--radius); background: var(--m-clair); border-left: 4px solid var(--m); font-size: 13px; }
+.btp-bandeau b { color: var(--m-encre); font-size: 14px; }
+.btp-bandeau span { color: var(--muted); }
+.btp-page-mission .esp-kpi { border-top: 3px solid var(--m); }
+.btp-page-mission .esp-col-head span, .btp-page-mission .btp-pts { color: var(--m-encre); }
+.btp-large { grid-column: 1 / -1; }
+.btp-sommeil { opacity: .55; }
+.btp-sommeil b { font-weight: 600; }
+
+/* Repartition du CA : l anneau a gauche, les jauges a droite */
+.btp-ca { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+.btp-anneau { width: 130px; height: 130px; flex-shrink: 0; }
+.btp-anneau-val { font-family: var(--font-display); font-size: 17px; font-weight: 700; fill: var(--text); }
+.btp-anneau-lbl { font-size: 10px; fill: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+.btp-ca-parts { flex: 1; min-width: 190px; }
+.btp-bareme .card-head h2 { display: flex; align-items: center; gap: 8px; color: var(--m-encre); }
+
+/* Les règles de capacité, en clair sous le barème */
+.btp-regles { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; font-size: 13px; line-height: 1.45; }
 
 /* ---------- Écrans propres à BTP Expertise (.btp-*) ---------- */
 
@@ -614,9 +698,25 @@ td.acts { display: flex; gap: 6px; justify-content: flex-end; }
 .mail-etape-corps b { font-size: 13.5px; }
 .mail-etape-objet { font-size: 12.5px; color: var(--muted); }
 .mail-etape-quand { font-size: 11.5px; color: var(--muted-2); }
-.mail-etape-copy { flex-shrink: 0; align-self: center; font-size: 12px; font-weight: 600; color: var(--muted);
+.mail-etape-act { flex-shrink: 0; align-self: center; font-size: 12px; font-weight: 600; color: var(--muted);
                    border: 1px solid var(--line-strong); border-radius: 8px; padding: 5px 11px; }
-.mail-etape-copy:hover { border-color: var(--t); color: var(--t); }
+.mail-etape-act:hover { border-color: var(--t); color: var(--t); }
+
+/* Composer un mail : les champs que le dossier ne donne pas, puis l'apercu tel qu'il partira */
+.mail-envoi { padding: 18px 20px 16px; }
+.mail-envoi .mail-vue-tete { margin-bottom: 16px; }
+.mail-envoi-champs { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px 14px; }
+.mail-champ { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.mail-champ > span { font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted-2); }
+.mail-champ input, .mail-champ select { width: 100%; padding: 8px 10px; font: inherit; font-size: 13.5px;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--text); }
+.mail-champ input:focus, .mail-champ select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+/* Un champ que le CRM n'a pas pu remplir se voit : c'est ce qui reste entre crochets dans l'apercu. */
+.mail-champ.trou input { background: var(--amber-soft); border-color: color-mix(in srgb, var(--amber) 35%, var(--line)); }
+.mail-champ.trou input:focus { background: var(--card); }
+.mail-envoi-note { margin: 14px 0 0; }
+.mail-apercu { margin-top: 16px; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: #F4F6F8; }
+.mail-apercu iframe { display: block; width: 100%; height: 520px; border: 0; }
 .mail-mode { flex-shrink: 0; align-self: center; background: var(--card-2); color: var(--muted); border-radius: 999px;
              padding: 3px 10px; font-size: 11px; font-weight: 700; }
 .mail-mode.auto { background: color-mix(in srgb, var(--t) 14%, white); color: var(--t); }

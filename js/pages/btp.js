@@ -4,9 +4,9 @@
 import { db } from '../data/db.js';
 import { idsDe, urlAgenda, VUES as VUES_CALENDRIER, CLES_AGENDA, modeEmploi } from '../agenda.js';
 import { scope } from '../data/scope.js';
-import { ACTIVITIES, CHANNELS, weightedAmount, stagesDe, missionDe } from '../data/schema.js';
+import { ACTIVITIES, CHANNELS, weightedAmount, stagesDe, missionDe, NIVEAUX_BTP, CAPACITE_BTP, HONORAIRES_AMO, MISSIONS_BTP, couleurMission, niveauDe, pointsDe } from '../data/schema.js';
 import {
-  esc, eur, daysSince, fmtDate, contactName, dealParty, toast,
+  esc, eur, daysSince, fmtDate, contactName, dealParty, userName, toast,
   openModal, closeModal, confirm, renderForm, readForm, terms, hit,
   searchInput, bindSearch, restoreFocus, csvDownload,
 } from '../ui.js';
@@ -14,6 +14,10 @@ import { openDeal, dealForm } from './deal.js';
 import { contactForm, openContact } from './contacts.js';
 import { orgForm, openOrg } from './organisations.js';
 import { coquilleEspace, poserEspace, kpiEspace, supprimerFiche } from './espace.js';
+import {
+  CROCHETS, champsDe, remplir, donneesDossier, emailDu,
+  mailHtml, URL_LOGO, URL_LOGO_PUBLIC, ouvrirCompose, telechargerEml, copierMiseEnPage,
+} from './btp-mail.js';
 
 const KEY = 'btp';
 const act = () => ACTIVITIES[KEY];
@@ -30,10 +34,16 @@ const activities = () => {
 // du menu Pilotage du CRM ; cette coquille vit à l'intérieur de la page.
 const ONGLETS = [
   { hash: '#/btp', label: 'Tableau de bord' },
+  // Deux métiers, deux déroulés : chacun son écran, sous un intitulé commun.
+  { label: 'Missions', sous: [
+    { hash: '#/btp/expertise', label: 'Expertise' },
+    { hash: '#/btp/amo', label: 'AMO' },
+  ] },
+  { hash: '#/btp/charges', label: "Chargés d'affaires" },
   { hash: '#/btp/base', label: 'Base de données' },
   { hash: '#/btp/dtu', label: 'DTU' },
   { hash: '#/btp/facturation', label: 'Facturation' },
-  { hash: '#/btp/mails', label: 'Mails types' },
+  { hash: '#/btp/mails', label: 'Mails & modèles' },
 ];
 // Enveloppe un écran dans la coquille commune aux espaces de structure.
 const cadre = (actif, titre, corps) => coquilleEspace({
@@ -48,7 +58,29 @@ const guard = (root) => {
   return true;
 };
 
-// ---------------------------------------------------------------- Tableau de bord
+// Ouvrir une affaire depuis n'importe quelle carte, ligne ou pastille de l'écran.
+function lierAffaires(root, apres) {
+  root.querySelectorAll('[data-deal]').forEach(el => el.onclick = () => openDeal(el.dataset.deal, apres));
+}
+
+// Les commandes de l'agenda : choix de la vue, raccordement et détachement.
+function lierAgenda(root, apres) {
+  root.querySelectorAll('[data-vue]').forEach(b => b.onclick = () => { retenirVue(b.dataset.vue); apres(); });
+  root.querySelector('#cal-save')?.addEventListener('click', async () => {
+    const v = root.querySelector('#cal-id').value.trim();
+    if (!v) return toast("Collez l'identifiant du calendrier", 'warn');
+    try {
+      if (db.setting(CLES_AGENDA.btp) !== undefined) await db.update('settings', CLES_AGENDA.btp, { value: v });
+      else await db.insert('settings', { key: CLES_AGENDA.btp, value: v });
+      toast('Agenda raccordé'); apres();
+    } catch (err) { toast(err.message, 'err'); }
+  });
+  root.querySelector('#cal-edit')?.addEventListener('click', async () => {
+    try { await db.update('settings', CLES_AGENDA.btp, { value: '' }); toast('Calendrier détaché'); apres(); }
+    catch (err) { toast(err.message, 'err'); }
+  });
+}
+
 // Trois blocs : les chiffres clés, la pipeline des missions, l'agenda Google du cabinet.
 const kpi = kpiEspace;
 
@@ -100,6 +132,90 @@ function agenda() {
   </div>`;
 }
 
+// ---------------------------------------------------------------- Le réseau et ses missions
+// Les affaires vivantes : ouvertes, plus les gagnées encore en réalisation. C'est ce
+// qui occupe réellement le réseau — une affaire perdue ou livrée ne pèse plus rien.
+const vivantes = () => {
+  const a = act();
+  const all = deals();
+  return all.filter(d => d.status === 'open')
+    .concat(all.filter(d => d.status === 'won' && a.stages.find(x => x.key === d.stage)?.delivery))
+    .filter((d, i, t) => t.indexOf(d) === i);
+};
+
+// Une pipeline par métier : l'expertise et l'AMO n'ont pas le même déroulé, les mélanger
+// dans un seul kanban donnerait des colonnes vides une fois sur deux.
+const pipelineDe = (mission) => {
+  const siennes = vivantes().filter(d => missionDe(d) === mission);
+  const colonnes = stagesDe(KEY, mission).map(st => {
+    const cartes = siennes.filter(d => d.stage === st.key);
+    return { st, cartes, somme: cartes.reduce((t, d) => t + (Number(d.amount) || 0), 0) };
+  });
+  return {
+    siennes, colonnes,
+    pondere: siennes.filter(d => d.status === 'open').reduce((t, d) => t + weightedAmount(d), 0),
+  };
+};
+
+// Expertise et AMO se distinguent a l'oeil partout ou elles se cotoient : le bleu de
+// la structure pour l'expertise, le vert pour l'AMO. Meme code sur les cartes, les
+// listes, les pastilles et la repartition du CA.
+const carteAffaire = (d) => {
+  const n = niveauDe(d);
+  return `<button type="button" class="esp-card-deal btp-mission" style="${teinteMission(missionDe(d))}" data-deal="${d.id}">
+    <b>${esc(d.title)}</b>
+    <span class="muted">${esc(dealParty(d))}</span>
+    ${n ? `<span class="btp-niveau">${esc(n.label)} · ${n.points} pt${n.points > 1 ? 's' : ''}</span>` : ''}
+    ${d.amount ? `<span class="esp-card-amount">${eur(d.amount)}</span>` : ''}
+  </button>`;
+};
+
+// La pastille d'un metier, a poser devant un intitule.
+const marqueMission = (m) => `<i class="btp-puce" style="background:${couleurMission(m).couleur}" title="${esc(couleurMission(m).label)}"></i>`;
+// Les couleurs d'un metier, posees en variables pour que le CSS s'en serve.
+const teinteMission = (m) => { const c = couleurMission(m); return `--m:${c.couleur};--m-clair:${c.clair};--m-encre:${c.encre}`; };
+
+const kanbanHtml = (colonnes) => `<div class="esp-kanban">${colonnes.map(({ st, cartes, somme }) => `
+  <div class="esp-col">
+    <div class="esp-col-head"><b>${esc(st.label)}</b><span>${cartes.length}</span></div>
+    <div class="esp-col-sum">${somme ? eur(somme) : '—'}</div>
+    <div class="esp-col-body">${cartes.map(carteAffaire).join('') || '<div class="esp-col-vide">—</div>'}</div>
+  </div>`).join('')}</div>`;
+
+const MISSIONS = {
+  expertise: { titre: 'Expertise', hash: '#/btp/expertise' },
+  amo: { titre: 'AMO', hash: '#/btp/amo' },
+};
+
+// La charge d'un chargé d'affaires, au sens du manuel : la somme des points de ses
+// missions vivantes. Le plafond est structurel — il dit ce que la personne porte, pas
+// ce qu'elle fait aujourd'hui.
+function chargeDe(userId) {
+  const siennes = vivantes().filter(d => d.owner_id === userId);
+  const points = siennes.reduce((t, d) => t + pointsDe(d), 0);
+  const amo = siennes.filter(d => missionDe(d) === 'amo');
+  const anneeEnCours = String(new Date().getFullYear());
+  const ca = deals().filter(d => d.owner_id === userId && d.status !== 'lost'
+    && (d.won_at || d.stage_changed_at || d.created_at || '').slice(0, 4) === anneeEnCours
+    && act().stages.find(x => x.key === d.stage)?.delivery)
+    .reduce((t, d) => t + (Number(d.amount) || 0), 0);
+  const sature = points >= CAPACITE_BTP.points || amo.length >= CAPACITE_BTP.amoActives;
+  // Sans niveau renseigné, une mission ne pèse aucun point : on le signale plutôt que
+  // d'afficher une charge faussement basse.
+  const sansNiveau = siennes.filter(d => !niveauDe(d)).length;
+  const expertises = siennes.filter(d => missionDe(d) === 'expertise');
+  const pointsDeLot = (lot) => lot.reduce((t, d) => t + pointsDe(d), 0);
+  return {
+    siennes, points, amo, ca, sature, sansNiveau,
+    expertises: expertises.length,
+    ptsExpertise: pointsDeLot(expertises),
+    ptsAmo: pointsDeLot(amo),
+  };
+}
+
+const chargesDAffaires = () => scope.users().filter(u => (u.activities || []).includes(KEY));
+
+// ---------------------------------------------------------------- Tableau de bord
 export const btpHomePage = {
   title: () => 'BTP Expertise',
   render(root) {
@@ -113,73 +229,331 @@ export const btpHomePage = {
       const enCours = all.filter(d => a.stages.find(s => s.key === d.stage)?.delivery && d.status !== 'lost');
       const nouveaux = all.filter(d => ['lead', 'rdv1'].includes(d.stage) && d.status === 'open');
       const anneeEnCours = String(new Date().getFullYear());
-      // CA signé : les missions engagées ou gagnées dans l'année, montant HT de l'affaire
       const gagnees = all.filter(d => d.status !== 'lost' && a.stages.find(x => x.key === d.stage)?.delivery
         && (d.won_at || d.stage_changed_at || d.created_at || '').slice(0, 4) === anneeEnCours);
       const caAnnee = gagnees.reduce((s, d) => s + (Number(d.amount) || 0), 0);
 
-      // Les affaires vivantes : ouvertes, plus les gagnees encore en realisation.
-      const vivantes = open.concat(all.filter(d => d.status === 'won' && a.stages.find(x => x.key === d.stage)?.delivery))
-        .filter((d, i, t) => t.indexOf(d) === i);
+      // Le CA signé par métier : c'est la question que pose le manuel — ce que pèse
+      // l'AMO à côté de l'expertise, maintenant que le cabinet mène les deux.
+      const caDe = (m) => gagnees.filter(d => missionDe(d) === m).reduce((s, d) => s + (Number(d.amount) || 0), 0);
+      const caExp = caDe('expertise');
+      const caAmo = caDe('amo');
+      const part = (v) => (caAnnee ? Math.round((v / caAnnee) * 100) : 0);
 
-      // Une pipeline par metier : l'expertise et l'AMO n'ont pas le meme deroule, les
-      // melanger dans un seul kanban donnerait des colonnes vides une fois sur deux.
-      const pipeline = (mission) => {
-        const siennes = vivantes.filter(d => missionDe(d) === mission);
-        const colonnes = stagesDe(KEY, mission).map(st => {
-          const cartes = siennes.filter(d => d.stage === st.key);
-          return { s: st, cartes, somme: cartes.reduce((t, d) => t + (Number(d.amount) || 0), 0) };
-        });
-        return { siennes, colonnes, pondere: siennes.filter(d => d.status === 'open').reduce((t, d) => t + weightedAmount(d), 0) };
-      };
-      const bloc = (titre, mission) => {
-        const { siennes, colonnes, pondere } = pipeline(mission);
-        return `<div class="card">
-          <div class="card-head"><h2>${esc(titre)}</h2>
-            <span class="muted small">${siennes.length} affaire${siennes.length > 1 ? 's' : ''} · ${eur(pondere)} de CA potentiel pondéré</span>
+      // Le récapitulatif d'une pipeline : ses étapes en une ligne, et le lien vers l'écran
+      // du métier, où elle se déplie en entier.
+      const recap = (mission) => {
+        const { siennes, colonnes, pondere } = pipelineDe(mission);
+        const m = MISSIONS[mission];
+        return `<div class="card btp-recap">
+          <div class="card-head"><h2>Pipeline ${esc(m.titre)}</h2>
             <span class="grow"></span>
-            <a class="btn ghost sm" href="#/pipeline/btp">Voir la page complète →</a>
+            <a class="btn ghost sm" href="${m.hash}">Voir tout →</a>
           </div>
-          <div class="esp-kanban">${colonnes.map(({ s: st, cartes, somme }) => `
-            <div class="esp-col">
-              <div class="esp-col-head"><b>${esc(st.label)}</b><span>${cartes.length}</span></div>
-              <div class="esp-col-sum">${somme ? eur(somme) : '—'}</div>
-              <div class="esp-col-body">${cartes.map(d => `
-                <button type="button" class="esp-card-deal" data-deal="${d.id}">
-                  <b>${esc(d.title)}</b>
-                  <span class="muted">${esc(dealParty(d))}</span>
-                  ${d.amount ? `<span class="esp-card-amount">${eur(d.amount)}</span>` : ''}
-                </button>`).join('') || '<div class="esp-col-vide">—</div>'}</div>
-            </div>`).join('')}</div>
+          <div class="btp-recap-etapes">${colonnes.map(({ st, cartes }) => `
+            <a class="btp-recap-etape" href="${m.hash}">
+              <span>${esc(st.label)}</span><b>${cartes.length}</b>
+            </a>`).join('')}</div>
+          <div class="btp-recap-pied">${siennes.length} mission${siennes.length > 1 ? 's' : ''} en cours · ${eur(pondere)} de CA potentiel pondéré</div>
         </div>`;
       };
+
+      const gens = chargesDAffaires().map(u => ({ u, ...chargeDe(u.id) }))
+        .sort((x, y) => y.points - x.points || x.u.full_name.localeCompare(y.u.full_name, 'fr'));
 
       root.innerHTML = cadre('#/btp', 'Tableau de bord', `
         <div class="esp-kpis">
           ${kpi({ label: 'Nouvelles demandes', valeur: nouveaux.length, sous: 'nouveau et RDV 1', icone: '📨', ton: 'accent', href: '#/pipeline/btp' })}
-          ${kpi({ label: 'CA HT', valeur: eur(caAnnee), sous: `${gagnees.length} mission${gagnees.length > 1 ? 's' : ''} signée${gagnees.length > 1 ? 's' : ''} en ${anneeEnCours}`, icone: '💶', ton: 'green', href: '#/btp/facturation' })}
-          ${kpi({ label: 'Missions en cours', valeur: enCours.length, sous: 'du RDV sur place au rapport', icone: '🏗', ton: 'amber', href: '#/pipeline/btp' })}
+          ${kpi({ label: `CA signé ${anneeEnCours}`, valeur: eur(caAnnee), sous: `${gagnees.length} mission${gagnees.length > 1 ? 's' : ''} engagée${gagnees.length > 1 ? 's' : ''}`, icone: '📈', ton: 'green', href: '#/btp/facturation' })}
+          ${kpi({ label: 'Missions en cours', valeur: enCours.length, sous: 'expertise et AMO confondues', icone: '🏗', ton: 'amber', href: '#/btp/expertise' })}
+          ${kpi({ label: 'Charge du réseau', valeur: `${gens.reduce((t, g) => t + g.points, 0)} / ${gens.length * CAPACITE_BTP.points}`, sous: `${gens.length} chargé${gens.length > 1 ? 's' : ''} d'affaires`, icone: '🎯', ton: 'accent', href: '#/btp/charges' })}
         </div>
 
-        ${bloc('Pipeline expertise', 'expertise')}
-        ${bloc('Pipeline AMO', 'amo')}
+        <div class="btp-duo">${recap('expertise')}${recap('amo')}</div>
+
+        <div class="btp-duo">
+          <div class="card">
+            <div class="card-head"><h2>Charge des chargés d'affaires</h2>
+              <span class="grow"></span>
+              <a class="btn ghost sm" href="#/btp/charges">Voir l'équipe →</a>
+            </div>
+            <div class="table-wrap"><table>
+              <thead><tr>
+                <th>Chargé d'affaires</th><th>Charge</th>
+                <th class="num" style="color:${couleurMission('expertise').encre}">${marqueMission('expertise')}Expertise</th>
+                <th class="num" style="color:${couleurMission('amo').encre}">${marqueMission('amo')}AMO</th>
+                <th class="num">CA ${esc(anneeEnCours)}</th>
+              </tr></thead>
+              <tbody>${gens.map(g => ligneCharge(g)).join('')
+                || `<tr><td colspan="5"><div class="empty">Aucun chargé d'affaires sur BTP Expertise. Cochez l'activité sur leur profil, dans Paramètres.</div></td></tr>`}</tbody>
+            </table></div>
+          </div>
+
+          <div class="card">
+            <div class="card-head"><h2>Répartition du CA ${esc(anneeEnCours)}</h2></div>
+            <div class="btp-ca">
+              ${anneau(caExp, caAmo, caAnnee)}
+              <div class="btp-ca-parts">
+                ${[['expertise', caExp], ['amo', caAmo]].map(([m, v]) => `
+                  <div class="btp-ca-part" style="${teinteMission(m)}">
+                    <div class="btp-ca-lbl">${marqueMission(m)}${esc(couleurMission(m).label)}<span class="grow"></span><b>${eur(v)}</b><em>${part(v)} %</em></div>
+                    <div class="btp-ca-bar"><i style="width:${part(v)}%;background:var(--m)"></i></div>
+                  </div>`).join('')}
+              </div>
+            </div>
+            ${!caAnnee ? '<p class="muted small">Aucune mission engagée cette année : la répartition apparaîtra dès la première.</p>' : ''}
+          </div>
+        </div>
 
         ${agenda()}`);
 
-      root.querySelectorAll('[data-deal]').forEach(el => el.onclick = () => openDeal(el.dataset.deal, draw));
-      root.querySelectorAll('[data-vue]').forEach(b => b.onclick = () => { retenirVue(b.dataset.vue); draw(); });
-      root.querySelector('#cal-save')?.addEventListener('click', async () => {
-        const v = root.querySelector('#cal-id').value.trim();
-        if (!v) return toast('Collez l\'identifiant du calendrier', 'warn');
-        try {
-          if (db.setting(CLES_AGENDA.btp) !== undefined) await db.update('settings', CLES_AGENDA.btp, { value: v });
-          else await db.insert('settings', { key: CLES_AGENDA.btp, value: v });
-          toast('Agenda raccordé'); draw();
-        } catch (err) { toast(err.message, 'err'); }
+      lierAffaires(root, draw);
+      lierAgenda(root, draw);
+    };
+
+    draw();
+    return { refresh: draw, destroy: coquille.retirer };
+  },
+};
+
+// L'anneau de repartition, en SVG : deux arcs dont la longueur suit la part de chaque
+// metier. Pas de bibliotheque — c'est un cercle et deux traits, et ca evite de charger
+// Chart.js pour deux valeurs.
+function anneau(caExp, caAmo, total) {
+  const R = 52, C = 2 * Math.PI * R;
+  const pExp = total ? caExp / total : 0;
+  const cE = couleurMission('expertise').couleur;
+  const cA = couleurMission('amo').couleur;
+  return `<svg class="btp-anneau" viewBox="0 0 130 130" role="img" aria-label="Répartition du chiffre d'affaires entre expertise et AMO">
+    <circle cx="65" cy="65" r="${R}" fill="none" stroke="var(--card-2)" stroke-width="16"></circle>
+    ${total ? `
+      <circle cx="65" cy="65" r="${R}" fill="none" stroke="${cA}" stroke-width="16"
+              stroke-dasharray="${C}" stroke-dashoffset="0" transform="rotate(-90 65 65)"></circle>
+      <circle cx="65" cy="65" r="${R}" fill="none" stroke="${cE}" stroke-width="16"
+              stroke-dasharray="${C * pExp} ${C}" stroke-dashoffset="0" transform="rotate(-90 65 65)"
+              stroke-linecap="${pExp > 0 && pExp < 1 ? 'butt' : 'round'}"></circle>` : ''}
+    <text x="65" y="61" text-anchor="middle" class="btp-anneau-val">${total ? eur(total) : '—'}</text>
+    <text x="65" y="78" text-anchor="middle" class="btp-anneau-lbl">signé</text>
+  </svg>`;
+}
+
+// Une ligne du tableau de charge : la jauge dit d'un coup d'œil qui peut encore prendre.
+function ligneCharge(g) {
+  const pct = (v) => Math.min(100, (v / CAPACITE_BTP.points) * 100);
+  return `<tr>
+    <td><b>${esc(g.u.full_name)}</b></td>
+    <td class="btp-col-charge">
+      <div class="btp-jauge-val">${g.points} / ${CAPACITE_BTP.points} pts${g.sansNiveau ? ` <span class="muted small" title="${g.sansNiveau} mission(s) sans niveau renseigné : elles ne pèsent aucun point">· ${g.sansNiveau} sans niveau</span>` : ''}</div>
+      <div class="btp-jauge btp-jauge-duo">
+        <i style="width:${pct(g.ptsExpertise)}%;background:${couleurMission('expertise').couleur}" title="Expertise : ${g.ptsExpertise} pts"></i>
+        <i style="width:${pct(g.ptsAmo)}%;background:${couleurMission('amo').couleur}" title="AMO : ${g.ptsAmo} pts"></i>
+      </div>
+    </td>
+    <td class="num"><span class="btp-compteur" style="${teinteMission('expertise')}">${g.expertises}<em>${g.ptsExpertise} pts</em></span></td>
+    <td class="num"><span class="btp-compteur ${g.amo.length >= CAPACITE_BTP.amoActives ? 'plein' : ''}" style="${teinteMission('amo')}">${g.amo.length} / ${CAPACITE_BTP.amoActives}<em>${g.ptsAmo} pts</em></span></td>
+    <td class="num">${g.ca ? eur(g.ca) : '—'}</td>
+  </tr>`;
+}
+
+// ---------------------------------------------------------------- Missions, par métier
+// Un écran par métier : la pipeline entière, et la liste de ce qui la remplit.
+const pageMission = (mission) => ({
+  title: () => `BTP Expertise — ${MISSIONS[mission].titre}`,
+  render(root) {
+    if (guard(root)) return {};
+    const coquille = poser(root);
+    const state = { q: '', focus: null };
+
+    const draw = () => {
+      const { siennes, colonnes, pondere } = pipelineDe(mission);
+      const ts = terms(state.q);
+      const liste = siennes.filter(d => hit([d.title, dealParty(d), d.notes], ts))
+        .sort((x, y) => (y.amount || 0) - (x.amount || 0));
+      const points = siennes.reduce((t, d) => t + pointsDe(d), 0);
+
+      root.innerHTML = cadre(MISSIONS[mission].hash, `Missions — ${MISSIONS[mission].titre}`, `
+        <div class="btp-page-mission" style="${teinteMission(mission)}">
+        <div class="btp-bandeau">${marqueMission(mission)}<b>${esc(couleurMission(mission).label)}</b><span>${esc(mission === 'amo' ? HONORAIRES_AMO.taux + ', minimum ' + eur(HONORAIRES_AMO.minimum) + ' HT' : 'Constat, analyse et rapport')}</span></div>
+        <div class="esp-kpis">
+          ${kpi({ label: 'Missions en cours', valeur: siennes.length, sous: `${points} point${points > 1 ? 's' : ''} de charge`, icone: '🏗', ton: 'accent', href: MISSIONS[mission].hash })}
+          ${kpi({ label: 'CA potentiel pondéré', valeur: eur(pondere), sous: 'sur les missions ouvertes', icone: '📈', ton: 'green', href: MISSIONS[mission].hash })}
+          ${kpi({ label: 'Sans niveau', valeur: siennes.filter(d => !niveauDe(d)).length, sous: 'ne pèsent aucun point', icone: '⚠', ton: 'amber', href: MISSIONS[mission].hash })}
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h2>Pipeline ${esc(MISSIONS[mission].titre)}</h2>
+            <span class="grow"></span>
+            <a class="btn ghost sm" href="#/pipeline/btp">Ouvrir le kanban complet →</a>
+            <button class="btn" id="m-new">+ Mission ${esc(couleurMission(mission).label)}</button>
+          </div>
+          ${kanbanHtml(colonnes)}
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h2>Les missions</h2>
+            ${searchInput('m-q', state, 'Rechercher une mission, un client…')}
+            <span class="muted small">${liste.length} ligne${liste.length > 1 ? 's' : ''}</span>
+          </div>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Mission</th><th>Client</th><th>Étape</th><th>Niveau</th><th class="num">Points</th><th>Chargé d'affaires</th><th class="num">Montant HT</th></tr></thead>
+            <tbody>${liste.map(d => {
+              const n = niveauDe(d);
+              return `<tr class="click" data-deal="${d.id}">
+                <td>${marqueMission(missionDe(d))}<b>${esc(d.title)}</b></td>
+                <td>${esc(dealParty(d))}</td>
+                <td>${esc(act().stages.find(s => s.key === d.stage)?.label || d.stage)}</td>
+                <td>${n ? esc(n.label) : '<span class="muted">à renseigner</span>'}</td>
+                <td class="num">${n ? n.points : '—'}</td>
+                <td>${esc(userName(d.owner_id))}</td>
+                <td class="num">${d.amount ? eur(d.amount) : '—'}</td>
+              </tr>`;
+            }).join('') || `<tr><td colspan="7"><div class="empty">Aucune mission ${esc(MISSIONS[mission].titre)} en cours.</div></td></tr>`}</tbody>
+          </table></div>
+        </div>
+        </div>`);
+
+      bindSearch(root, 'm-q', state, draw); restoreFocus(root, state);
+      lierAffaires(root, draw);
+      // Une mission saisie ici naît dans son métier : le formulaire ouvre avec le type
+      // déjà choisi, le reste (contact, montant) se remplit comme partout ailleurs.
+      root.querySelector('#m-new').onclick = () => dealForm(KEY, null, { fields: { type_mission: mission } }, draw);
+    };
+
+    draw();
+    return { refresh: draw, destroy: coquille.retirer };
+  },
+});
+
+export const btpExpertisePage = pageMission('expertise');
+export const btpAmoPage = pageMission('amo');
+
+// ---------------------------------------------------------------- Chargés d'affaires
+// Le réseau se déclare à la main : une fiche peut exister avant que la personne ait un
+// compte CRM. `profile_id` fait le lien quand elle en a un — et c'est ce lien qui
+// permet de calculer sa charge, puisque les missions portent un owner_id.
+const TABLE_CHARGES = 'btp_charges_affaires';
+const fichesReseau = () => db.t(TABLE_CHARGES).slice()
+  .sort((a, b) => (b.actif !== false) - (a.actif !== false) || String(a.nom).localeCompare(String(b.nom), 'fr'));
+
+const CHAMPS_CHARGE = () => [
+  { key: 'nom', label: 'Nom', type: 'text', required: true, half: true },
+  { key: 'statut', label: 'Statut', type: 'select', half: true,
+    options: ['Indépendant', 'Salarié', 'En cours de recrutement', 'Autre'] },
+  { key: 'email', label: 'Email', type: 'email', half: true },
+  { key: 'telephone', label: 'Téléphone', type: 'tel', half: true },
+  { key: 'objectif_ca', label: 'Objectif de CA annuel (€ HT)', type: 'number', half: true,
+    hint: 'Sert à situer le CA produit en face de ce qui était visé.' },
+  { key: 'profile_id', label: 'Compte CRM', type: 'select', half: true,
+    options: scope.users().map(u => [u.id, u.full_name]),
+    hint: 'À relier pour que ses missions comptent dans sa charge. Laisser vide si la personne n\'a pas encore de compte.' },
+  { key: 'points_max', label: 'Capacité (points)', type: 'number', half: true, value: CAPACITE_BTP.points },
+  { key: 'amo_max', label: 'AMO actives au maximum', type: 'number', half: true, value: CAPACITE_BTP.amoActives },
+  { key: 'actif', label: 'Fiche active', type: 'checkbox', hint: 'Décocher plutôt que supprimer : le réseau garde sa mémoire.' },
+  { key: 'notes', label: 'Notes', type: 'textarea', rows: 2 },
+];
+
+function ficheCharge(existante, apres) {
+  const spec = CHAMPS_CHARGE();
+  const vals = existante || { actif: true };
+  const m = openModal(existante ? esc(existante.nom) : "Nouveau chargé d'affaires",
+    `<form class="form" id="ca-form">${renderForm(spec, vals)}
+      <div class="form-actions">${existante ? '<button type="button" class="btn ghost left" id="ca-del">Supprimer</button>' : ''}
+      <button type="button" class="btn ghost" data-close>Annuler</button>
+      <button class="btn" type="submit">Enregistrer</button></div></form>`, { wide: true });
+  m.querySelector('#ca-form').onsubmit = async (e) => {
+    e.preventDefault();
+    const v = readForm(e.target, spec);
+    // Un select vide renvoie une chaîne : la colonne attend un uuid ou rien.
+    v.profile_id = v.profile_id || null;
+    v.objectif_ca = v.objectif_ca === '' ? null : v.objectif_ca;
+    try {
+      if (existante) await db.update(TABLE_CHARGES, existante.id, { ...v, updated_at: new Date().toISOString() });
+      else await db.insert(TABLE_CHARGES, v);
+      closeModal(true); toast('Chargé d\'affaires enregistré'); apres();
+    } catch (err) { toast(err.message, 'err'); }
+  };
+  m.querySelector('#ca-del')?.addEventListener('click', async () => {
+    if (!await confirm(`Supprimer la fiche de ${existante.nom} ? Ses missions ne sont pas touchées.`)) return;
+    try { await db.remove(TABLE_CHARGES, existante.id); closeModal(true); toast('Fiche supprimée'); apres(); }
+    catch (err) { toast(err.message, 'err'); }
+  });
+}
+
+export const btpChargesPage = {
+  title: () => "BTP Expertise — Chargés d'affaires",
+  render(root) {
+    if (guard(root)) return {};
+    const coquille = poser(root);
+
+    const draw = () => {
+      // Une ligne par fiche du réseau, sa charge lue sur le compte CRM quand il existe.
+      const lignes = fichesReseau().map(f => {
+        const charge = f.profile_id ? chargeDe(f.profile_id) : null;
+        const max = f.points_max || CAPACITE_BTP.points;
+        const amoMax = f.amo_max || CAPACITE_BTP.amoActives;
+        return {
+          f, charge, max, amoMax,
+          points: charge ? charge.points : 0,
+          sature: charge ? (charge.points >= max || charge.amo.length >= amoMax) : false,
+        };
       });
-      root.querySelector('#cal-edit')?.addEventListener('click', async () => {
-        try { await db.update('settings', CLES_AGENDA.btp, { value: '' }); toast('Calendrier détaché'); draw(); }
-        catch (err) { toast(err.message, 'err'); }
+      // Les utilisateurs du CRM rattachés à BTP qui n'ont pas encore de fiche : on les
+      // montre plutôt que de les oublier, avec de quoi créer leur fiche d'un clic.
+      const sansFiche = chargesDAffaires().filter(u => !fichesReseau().some(f => f.profile_id === u.id));
+
+      const actifs = lignes.filter(l => l.f.actif !== false);
+      const totalPts = actifs.reduce((t, l) => t + l.points, 0);
+      const capacite = actifs.reduce((t, l) => t + l.max, 0);
+      const objectif = actifs.reduce((t, l) => t + (Number(l.f.objectif_ca) || 0), 0);
+      const caProduit = actifs.reduce((t, l) => t + (l.charge ? l.charge.ca : 0), 0);
+
+      root.innerHTML = cadre('#/btp/charges', "Chargés d'affaires", `
+        <div class="esp-kpis">
+          ${kpi({ label: 'Réseau actif', valeur: actifs.length, sous: `${lignes.length - actifs.length} fiche${lignes.length - actifs.length > 1 ? 's' : ''} en sommeil`, icone: '👷', ton: 'accent', href: '#/btp/charges' })}
+          ${kpi({ label: 'Charge du réseau', valeur: capacite ? `${totalPts} / ${capacite}` : '—', sous: capacite ? `${Math.round((totalPts / capacite) * 100)} % de la capacité` : 'aucune fiche déclarée', icone: '🎯', ton: 'amber', href: '#/btp/charges' })}
+          ${kpi({ label: 'Saturés', valeur: actifs.filter(l => l.sature).length, sous: 'capacité ou AMO au maximum', icone: '⚠', ton: 'red', href: '#/btp/charges' })}
+          ${kpi({ label: 'CA produit', valeur: eur(caProduit), sous: objectif ? `sur ${eur(objectif)} visés` : 'aucun objectif renseigné', icone: '📈', ton: 'green', href: '#/btp/charges' })}
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h2>Le réseau</h2>
+            <span class="muted small">Capacité et objectif se règlent fiche par fiche</span>
+            <span class="grow"></span>
+            <button class="btn" id="ca-new">+ Chargé d'affaires</button>
+          </div>
+          <div class="table-wrap"><table>
+            <thead><tr>
+              <th>Chargé d'affaires</th>
+              <th>Charge structurelle</th>
+              <th class="num" style="color:${couleurMission('expertise').encre}">${marqueMission('expertise')}Expertise</th>
+              <th class="num" style="color:${couleurMission('amo').encre}">${marqueMission('amo')}AMO</th>
+              <th class="num">CA produit</th><th>Statut</th><th></th>
+            </tr></thead>
+            <tbody>${lignes.map(l => ligneReseau(l)).join('')
+              || `<tr><td colspan="7"><div class="empty">Aucun chargé d'affaires déclaré. « + Chargé d'affaires » crée la première fiche — une personne peut y figurer avant d'avoir un compte CRM.</div></td></tr>`}</tbody>
+          </table></div>
+          ${sansFiche.length ? `<p class="muted small" style="margin-top:12px">Sur le CRM sans fiche de réseau : ${sansFiche.map(u => `<button type="button" class="btn ghost sm" data-creer="${u.id}">+ ${esc(u.full_name)}</button>`).join(' ')}</p>` : ''}
+        </div>
+
+        <div class="btp-duo">${['expertise', 'amo'].map(m => tableauPoints(m)).join('')}</div>
+
+        <div class="card">
+          <div class="card-head"><h2>Règles de capacité</h2></div>
+          <ul class="btp-regles">
+            <li><b>${CAPACITE_BTP.points} points</b> structurels par défaut, ajustables sur chaque fiche.</li>
+            <li><b>${CAPACITE_BTP.amoActives} AMO actives</b> au maximum en même temps.</li>
+            <li>La <b>charge structurelle</b> est la responsabilité totale du portefeuille ; la charge du moment peut être moindre.</li>
+            <li>Les points d'une <b>expertise se libèrent à sa clôture</b> ; ceux d'une <b>AMO occupent la capacité longtemps</b>.</li>
+            <li>Une fiche <b>sans compte CRM</b> n'a pas de charge calculée : ses missions ne peuvent pas lui être rattachées.</li>
+          </ul>
+        </div>`);
+
+      lierAffaires(root, draw);
+      root.querySelector('#ca-new').onclick = () => ficheCharge(null, draw);
+      root.querySelectorAll('[data-fiche-ca]').forEach(b => b.onclick = () => ficheCharge(db.byId(TABLE_CHARGES, b.dataset.ficheCa), draw));
+      root.querySelectorAll('[data-creer]').forEach(b => b.onclick = () => {
+        const u = db.byId('profiles', b.dataset.creer);
+        ficheCharge({ nom: u.full_name, email: u.email, profile_id: u.id, actif: true, points_max: CAPACITE_BTP.points, amo_max: CAPACITE_BTP.amoActives }, draw);
       });
     };
 
@@ -188,7 +562,71 @@ export const btpHomePage = {
   },
 };
 
-// ---------------------------------------------------------------- To-do list
+// Un tableau par métier plutôt qu'un seul melange : on cherche « combien pese une AMO
+// etendue », pas « quel est le bareme general ».
+function tableauPoints(mission) {
+  const c = couleurMission(mission);
+  const lignes = NIVEAUX_BTP.filter(n => n.mission === mission);
+  return `<div class="card btp-bareme" style="${teinteMission(mission)}">
+    <div class="card-head">
+      <h2>${marqueMission(mission)}${esc(c.label)}</h2>
+      <span class="grow"></span>
+      <a class="btn ghost sm" href="${MISSIONS[mission].hash}">Voir les missions →</a>
+    </div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Niveau</th><th>Ce qu'il comprend</th><th>Tarif de travail</th><th class="num">Points</th></tr></thead>
+      <tbody>${lignes.map(n => `<tr>
+        <td><b>${esc(n.label.replace(/^(Expertise|AMO) ?/, '')) || esc(n.label)}</b></td>
+        <td class="small">${esc(n.contenu)}</td>
+        <td class="small">${esc(n.tarif)}</td>
+        <td class="num"><b class="btp-pts">${n.points}</b></td>
+      </tr>`).join('')}</tbody>
+    </table></div>
+    ${mission === 'amo'
+      ? `<p class="muted small" style="margin-top:10px">Honoraires : ${esc(HONORAIRES_AMO.taux)}, minimum ${eur(HONORAIRES_AMO.minimum)} HT.</p>`
+      : '<p class="muted small" style="margin-top:10px">Les points se libèrent à la clôture de la mission.</p>'}
+  </div>`;
+}
+
+// Une ligne du réseau : la jauge, les compteurs, et le détail des missions portées.
+function ligneReseau({ f, charge, max, amoMax, points, sature }) {
+  const pct = (v) => (max ? Math.min(100, (v / max) * 100) : 0);
+  const objectif = Number(f.objectif_ca) || 0;
+  const cExp = couleurMission('expertise');
+  const cAmo = couleurMission('amo');
+  // Deux segments dans la meme jauge : ce que pesent les expertises, ce que pesent les
+  // AMO. On lit d'un coup la charge ET sa composition, ce qu'un total seul cachait.
+  const jauge = `<div class="btp-jauge btp-jauge-duo">
+    <i style="width:${pct(charge ? charge.ptsExpertise : 0)}%;background:${cExp.couleur}" title="Expertise : ${charge ? charge.ptsExpertise : 0} pts"></i>
+    <i style="width:${pct(charge ? charge.ptsAmo : 0)}%;background:${cAmo.couleur}" title="AMO : ${charge ? charge.ptsAmo : 0} pts"></i>
+  </div>`;
+  return `<tr class="${f.actif === false ? 'btp-sommeil' : ''}">
+    <td>
+      <b>${esc(f.nom)}</b>
+      <div class="small muted">${esc(f.statut || '—')}${f.email ? ' · ' + esc(f.email) : ''}</div>
+      ${!f.profile_id ? '<div class="small muted">Pas de compte CRM : charge non calculée</div>' : ''}
+    </td>
+    <td class="btp-col-charge">
+      <div class="btp-jauge-val">${points} / ${max} pts${sature ? ' <span class="pill bad sm">saturé</span>' : ''}${charge && charge.sansNiveau ? ` <span class="muted" title="${charge.sansNiveau} mission(s) sans niveau : elles ne pèsent aucun point">· ${charge.sansNiveau} sans niveau</span>` : ''}</div>
+      ${jauge}
+    </td>
+    <td class="num"><span class="btp-compteur" style="${teinteMission('expertise')}">${charge ? charge.expertises : 0}<em>${charge ? charge.ptsExpertise : 0} pts</em></span></td>
+    <td class="num"><span class="btp-compteur ${charge && charge.amo.length >= amoMax ? 'plein' : ''}" style="${teinteMission('amo')}">${charge ? charge.amo.length : 0} / ${amoMax}<em>${charge ? charge.ptsAmo : 0} pts</em></span></td>
+    <td class="num">${charge && charge.ca ? eur(charge.ca) : '—'}${objectif ? `<div class="small muted">sur ${eur(objectif)}</div>` : ''}</td>
+    <td>${f.actif === false ? '<span class="pill">En sommeil</span>'
+      : sature ? '<span class="pill bad">Saturé</span>' : '<span class="pill ok">Disponible</span>'}</td>
+    <td class="num"><button type="button" class="icon-btn" data-fiche-ca="${f.id}" title="Modifier la fiche">✎</button></td>
+  </tr>
+  ${charge && charge.siennes.length ? `<tr class="btp-detail"><td colspan="7">
+    ${charge.siennes.map(d => {
+      const n = niveauDe(d);
+      return `<button type="button" class="btp-chip" style="${teinteMission(missionDe(d))}" data-deal="${d.id}" title="${esc(d.title)}">
+        <i></i>${esc(d.title)}<span>${n ? n.points + ' pt' + (n.points > 1 ? 's' : '') : 'sans niveau'}</span>
+      </button>`;
+    }).join('')}
+  </td></tr>` : ''}`;
+}
+
 // ---------------------------------------------------------------- Base de données
 // D'où viennent les prospects. Chaque origine regroupe les canaux du CRM qui lui
 // correspondent — la prise de rendez-vous du site écrit « Site internet direct ».
@@ -616,7 +1054,7 @@ export const btpDtuPage = {
   },
 };
 
-// ---------------------------------------------------------------- Mails types
+// ---------------------------------------------------------------- Mails & modèles
 // Les séquences du cabinet, rangées comme dans le dossier d'origine : trois
 // dossiers, chacun sa couleur, et à l'intérieur la chronologie des envois avec
 // la référence de chaque mail (C1…C5, E1…E14, B1…B14).
@@ -642,11 +1080,11 @@ const MAIL_FORM = [
 ];
 
 export const btpMailsPage = {
-  title: () => 'BTP Expertise — Mails types',
+  title: () => 'BTP Expertise — Mails & modèles',
   render(root) {
     if (guard(root)) return {};
     const coquille = poser(root);
-    const state = { seq: SEQUENCES[0].theme, q: '', modele: null, focus: null };
+    const state = { seq: SEQUENCES[0].theme, q: '', modele: null, focus: null, dossier: null, dest: '', saisie: {} };
 
     const editer = (m0, apres) => {
       const m = openModal(m0 ? `${m0.ref ? m0.ref + ' — ' : ''}${m0.title}` : 'Nouveau modèle',
@@ -670,25 +1108,50 @@ export const btpMailsPage = {
       });
     };
 
-    const copier = async (texte, quoi) => {
-      try { await navigator.clipboard.writeText(texte); toast(`${quoi} copié`); }
-      catch { toast('Copie refusée par le navigateur', 'warn'); }
-    };
-
     const auto = (m) => (m.mode || '').toLowerCase() === 'automatique';
+
+    // ---- Composer un mail à partir d'un modèle
+    // Les crochets du modèle ne se demandent plus dans une fenêtre qui bloque :
+    // on choisit le dossier, le CRM y prend ce qu'il sait (prénom, adresse,
+    // référence, montant, date de visite), et ce qui reste se saisit au-dessus de
+    // l'aperçu, qui se met à jour à mesure. Ce qu'on voit est ce qui part.
+    const dossiersBtp = () => db.t('deals')
+      .filter(d => d.activity === KEY)
+      .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));
+
+    const dossierCourant = () => (state.dossier ? db.byId('deals', state.dossier) : null);
+    const valeursDe = () => ({ ...donneesDossier(dossierCourant()), ...state.saisie });
+
+    const sujetFinal = (m) => remplir(m.subject || '', valeursDe());
+    const htmlFinal = (m, logo) => mailHtml(sujetFinal(m), remplir(m.body || '', valeursDe()), logo);
+
+    // Dans l'aperçu seulement, les crochets encore vides sont surlignés. Le mail
+    // envoyé ne porte évidemment pas ce surlignage.
+    const htmlApercu = (m) => mailHtml(sujetFinal(m), remplir(m.body || '', valeursDe()), URL_LOGO).replace(CROCHETS,
+      (brut) => `<span style="background:#FFE9A8;color:#7A5B00;border-radius:3px;padding:0 3px">${brut}</span>`);
+
+    const trousDe = (m) => champsDe(`${m.subject || ''}\n${m.body || ''}`, donneesDossier(dossierCourant()));
+
+    const texteFinal = (m) => {
+      const v = valeursDe();
+      const s = remplir(m.subject || '', v);
+      return s ? `${s}\n\n${remplir(m.body || '', v)}` : remplir(m.body || '', v);
+    };
 
     // ---- Un modèle, en pleine page
     const vueModele = (m) => {
       const s = sequenceDe(m.theme);
+      const dossiers = dossiersBtp();
+      const trous = trousDe(m);
       return `
       <div class="fiche-topbar">
         <button type="button" class="btn ghost sm" id="m-back">← ${esc(s.court)}</button>
         <span class="grow"></span>
-        <button type="button" class="btn ghost sm" id="m-copy-obj">Copier l'objet</button>
-        <button type="button" class="btn sm" id="m-copy">Copier le mail</button>
+        <button type="button" class="btn ghost sm" id="m-eml" title="Télécharge le mail entier, mise en page comprise ; à ouvrir avec Outlook">Fichier .eml</button>
+        <button type="button" class="btn sm" id="m-open">Ouvrir dans Outlook</button>
         <button type="button" class="btn ghost sm" id="m-edit">Modifier</button>
       </div>
-      <article class="mail-vue" style="--t:${s.tint}">
+      <article class="card mail-envoi" style="--t:${s.tint}">
         <header class="mail-vue-tete">
           <span class="mail-vue-ref">${esc(m.ref || '—')}</span>
           <div class="mail-vue-corps">
@@ -698,11 +1161,47 @@ export const btpMailsPage = {
           </div>
           <span class="mail-mode ${auto(m) ? 'auto' : ''}">${esc(m.mode || 'Manuel')}</span>
         </header>
-        <div class="mail-vue-bloc">
-          ${m.subject ? `<div class="mail-objet"><span>Objet</span>${esc(m.subject)}</div>` : ''}
-          <pre class="mail-corps">${esc(m.body)}</pre>
+
+        <div class="mail-envoi-champs">
+          <label class="mail-champ"><span>Dossier</span>
+            <select id="m-dossier">
+              <option value="">— aucun dossier —</option>
+              ${dossiers.map(d => `<option value="${d.id}" ${d.id === state.dossier ? 'selected' : ''}>${esc(d.title || 'Sans titre')}</option>`).join('')}
+            </select>
+          </label>
+          <label class="mail-champ"><span>Destinataire</span>
+            <input type="email" id="m-dest" value="${esc(state.dest || '')}" placeholder="client@exemple.fr">
+          </label>
+          ${trous.map(c => `
+            <label class="mail-champ trou"><span>${esc(c.label)}</span>
+              <input type="text" data-trou="${esc(c.cle)}" value="${esc(state.saisie[c.cle] || '')}" placeholder="à compléter">
+            </label>`).join('')}
         </div>
-      </article>`;
+        <p class="mail-envoi-note muted small">${dossiers.length
+          ? (state.dossier
+            ? `Le CRM a rempli ce qu'il sait de ce dossier. ${trous.length ? `${trous.length} champ${trous.length > 1 ? 's' : ''} à compléter ci-dessus.` : 'Rien ne manque.'}`
+            : `Choisissez un dossier pour que le CRM remplisse prénom, adresse, référence et montant.${trous.length ? ` ${trous.length} champs sont à compléter à la main pour l'instant.` : ''}`)
+          : "Aucune affaire BTP dans le CRM pour l'instant : les champs se saisissent à la main."}</p>
+      </article>
+
+      <div class="mail-apercu"><iframe id="m-apercu" title="Aperçu du mail"></iframe></div>`;
+    };
+
+    // L'aperçu vit dans un cadre isolé : les styles du CRM ne doivent pas déteindre
+    // sur le mail, ni l'inverse. On règle sa hauteur sur son contenu après chargement.
+    let minuteur = null;
+    const rafraichirApercu = (m) => {
+      const vitre = root.querySelector("#m-apercu");
+      if (!vitre) return;
+      vitre.onload = () => {
+        const d = vitre.contentDocument;
+        if (d) vitre.style.height = Math.max(320, d.body.scrollHeight + 8) + 'px';
+      };
+      vitre.srcdoc = htmlApercu(m);
+    };
+    const rafraichirPlusTard = (m) => {
+      clearTimeout(minuteur);
+      minuteur = setTimeout(() => rafraichirApercu(m), 250);
     };
 
     const draw = () => {
@@ -712,11 +1211,50 @@ export const btpMailsPage = {
       if (state.modele) {
         const m = db.byId('mail_templates', state.modele);
         if (!m) { state.modele = null; return draw(); }
-        root.innerHTML = cadre('#/btp/mails', 'Mails types', vueModele(m));
+        root.innerHTML = cadre('#/btp/mails', 'Mails & modèles', vueModele(m));
+        rafraichirApercu(m);
+
         root.querySelector('#m-back').onclick = () => { state.seq = m.theme; state.modele = null; draw(); };
         root.querySelector('#m-edit').onclick = () => editer(m, draw);
-        root.querySelector('#m-copy').onclick = () => copier(m.subject ? `${m.subject}\n\n${m.body}` : m.body, 'Modèle');
-        root.querySelector('#m-copy-obj').onclick = () => copier(m.subject || '', 'Objet');
+
+        root.querySelector('#m-dossier').onchange = (e) => {
+          state.dossier = e.target.value || null;
+          state.dest = emailDu(dossierCourant()) || state.dest || '';
+          draw();
+        };
+        root.querySelector('#m-dest').oninput = (e) => { state.dest = e.target.value; };
+        root.querySelectorAll('[data-trou]').forEach(champ => champ.oninput = () => {
+          state.saisie[champ.dataset.trou] = champ.value;
+          rafraichirPlusTard(m);
+        });
+
+        const restantsDe = () => trousDe(m).filter(c => !String(state.saisie[c.cle] || '').trim()).length;
+        const alerteRestants = (n) => { if (n) toast(`${n} champ${n > 1 ? 's restent' : ' reste'} entre crochets`, 'warn'); };
+
+        // Un seul geste : la mise en page part au presse-papiers et la fenêtre de
+        // rédaction s'ouvre. L'ordre compte — voir ouvrirCompose dans btp-mail.js.
+        root.querySelector('#m-open').onclick = () => {
+          const copie = copierMiseEnPage(htmlFinal(m, URL_LOGO_PUBLIC), texteFinal(m))
+            .then(() => true).catch(() => false);
+          ouvrirCompose({ a: state.dest, sujet: sujetFinal(m) });
+          copie.then(ok => {
+            toast(ok
+              ? 'Outlook s\'ouvre — posez la mise en page avec Ctrl+V'
+              : 'Outlook s\'ouvre — la copie a été refusée, utilisez le fichier .eml', ok ? undefined : 'warn');
+            alerteRestants(restantsDe());
+          });
+        };
+
+        root.querySelector('#m-eml').onclick = async () => {
+          try {
+            await telechargerEml({
+              a: state.dest, sujet: sujetFinal(m), html: htmlFinal(m),
+              nom: `${m.ref || 'mail'}-${sujetFinal(m)}`,
+            });
+            toast('Mail téléchargé — ouvrez-le avec Outlook');
+            alerteRestants(restantsDe());
+          } catch (err) { toast(err.message, 'err'); }
+        };
         return;
       }
 
@@ -740,10 +1278,10 @@ export const btpMailsPage = {
             ${m.trigger_text ? `<span class="mail-etape-quand">${esc(m.trigger_text)}</span>` : ''}
           </span>
           <span class="mail-mode ${auto(m) ? 'auto' : ''}">${auto(m) ? 'Auto' : 'Manuel'}</span>
-          <span class="mail-etape-copy" data-copy="${m.id}" role="button" tabindex="0">Copier</span>
+          <span class="mail-etape-act" data-envoi="${m.id}" role="button" tabindex="0" title="Ouvrir dans Outlook">Ouvrir</span>
         </button>`;
 
-      root.innerHTML = cadre('#/btp/mails', 'Mails types', `
+      root.innerHTML = cadre('#/btp/mails', 'Mails & modèles', `
         <div class="mail-dossiers">${dossiers.map(d => `
           <button type="button" class="mail-dossier ${d.theme === courant?.theme && !recherche ? 'on' : ''}" data-seq="${esc(d.theme)}" style="--t:${d.tint}">
             <span class="mail-dossier-ico">${esc(d.icon)}</span>
@@ -776,13 +1314,13 @@ export const btpMailsPage = {
       root.querySelectorAll('[data-seq]').forEach(b => b.onclick = () => { state.seq = b.dataset.seq; state.q = ''; draw(); });
       root.querySelector('#b-new').onclick = () => editer(null, draw);
       root.querySelectorAll('[data-m]').forEach(l => l.onclick = (e) => {
-        if (e.target.closest('[data-copy]')) return;
+        if (e.target.closest('[data-envoi]')) return;
         state.modele = l.dataset.m; draw();
       });
-      root.querySelectorAll('[data-copy]').forEach(b => b.onclick = (e) => {
+      root.querySelectorAll('[data-envoi]').forEach(b => b.onclick = (e) => {
         e.stopPropagation();
-        const m = db.byId('mail_templates', b.dataset.copy);
-        copier(m.subject ? `${m.subject}\n\n${m.body}` : m.body, 'Modèle');
+        const m = db.byId('mail_templates', b.dataset.envoi);
+        if (m) envoyer(m);
       });
     };
 
