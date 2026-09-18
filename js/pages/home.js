@@ -77,9 +77,10 @@ export const homePage = {
       // pendant la période. Les calculer sur des populations différentes (RDV du mois
       // ÷ leads du mois) donnerait des taux que l'entonnoir juste en dessous contredit.
       const ent = entonnoir(cles, r, deals);
-      const [recus, , avecRdv, , conclus] = ent.map(x => x.n);
-      const tauxRdv = recus ? avecRdv / recus : null;
-      const tauxVente = avecRdv ? conclus / avecRdv : null;
+      const jalon = (champ) => ent.find(x => x.champ === champ)?.n ?? null;
+      const recus = jalon('leads'), avecRdv = jalon('rdv'), conclus = jalon('deals');
+      const tauxRdv = recus && avecRdv !== null ? avecRdv / recus : null;
+      const tauxVente = avecRdv && conclus !== null ? conclus / avecRdv : null;
       const entAvant = comparaisonEntonnoir(cles, state.periode, deals);
       const horsEntonnoir = structuresHorsEntonnoir(cles);
       const part = ecoule(r);
@@ -115,9 +116,11 @@ export const homePage = {
             false, t.leadsNonDates ? 'Total en base : ces outils ne datent pas l\'arrivée des prospects.' : '')}
           ${kpi('RDV', t.rdv, evolution(avant?.rdv, t.rdv), serieDe(cle => nbRdvMois(cles, cle, deals)), 'atteints sur la période')}
           ${kpi('Affaires signées', t.signees ?? '—', evolution(avant?.signees, t.signees), serieDe(cle => nbSigneesMois(cles, cle, deals)), t.panier ? `panier ${eur(t.panier)}` : 'panier moyen indisponible')}
-          ${kpi('CA HT signé', eur(t.ca), evolution(avant?.ca, t.ca), serieDe(caDu), obj ? `objectif ${eur(obj)}` : 'aucun objectif fixé')}
-          ${kpi('Lead → RDV', tauxRdv === null ? '—' : pct(tauxRdv) + ' %', ecart(entAvant?.tauxRdv, tauxRdv), [], `${avecRdv} RDV sur ${recus} lead${recus > 1 ? 's' : ''} reçu${recus > 1 ? 's' : ''}`, true)}
-          ${kpi('RDV → vente', tauxVente === null ? '—' : pct(tauxVente) + ' %', ecart(entAvant?.tauxVente, tauxVente), [], `${conclus} signé${conclus > 1 ? 's' : ''} sur ${avecRdv} RDV`, true)}
+          ${kpi('CA HT', eur(t.ca), evolution(avant?.ca, t.ca), serieDe(caDu), obj ? `objectif ${eur(obj)}` : 'aucun objectif fixé')}
+          ${kpi('Lead → RDV', tauxRdv === null ? '—' : pct(tauxRdv) + ' %', ecart(entAvant?.tauxRdv, tauxRdv), [],
+            tauxRdv === null ? 'étape non comptée' : `${avecRdv} RDV sur ${recus} lead${recus > 1 ? 's' : ''} reçu${recus > 1 ? 's' : ''}`, true)}
+          ${kpi('RDV → vente', tauxVente === null ? '—' : pct(tauxVente) + ' %', ecart(entAvant?.tauxVente, tauxVente), [],
+            tauxVente === null ? 'étape non comptée' : `${conclus} signé${conclus > 1 ? 's' : ''} sur ${avecRdv} RDV`, true)}
         </section>
 
         <div class="tb-grid">
@@ -141,15 +144,17 @@ export const homePage = {
                   return `<div class="tb-step">
                     <span class="tb-nm">${s.nom}</span>
                     <div class="tb-bar" style="width:${Math.max(large, s.n ? 4 : 0)}%;${fin ? 'background:var(--green)' : `opacity:${(1 - i * 0.13).toFixed(2)}`}"><span>${s.n}</span></div>
-                    <span class="tb-rate">${taux === null ? (prev === null ? '' : '—') : taux > 100
+                    <span class="tb-rate">${s.partiel ? '<span title="Toutes les structures ne comptent pas cette étape.">partiel</span>' : ''}${taux === null ? (prev === null ? '' : '—') : taux > 100
                       ? `<span title="Plus d'affaires à cette étape qu'à la précédente : elles viennent de mois antérieurs.">↑ ${taux} %</span>`
                       : '↓ ' + taux + ' %'}</span>
                   </div>`;
                 }).join('')}
               </div>
               <div class="tb-funnel-out">
-                <b>${pct(recus ? conclus / recus : 0)} %</b>
-                <span class="muted small">des leads reçus sur la période sont déjà signés${conclus ? ` · ${eur(montantCohorte(cles, r, deals))} de CA sur ces ${conclus} affaire${conclus > 1 ? 's' : ''}` : ''}</span>
+                <b>${recus && conclus !== null ? pct(conclus / recus) + ' %' : '—'}</b>
+                <span class="muted small">${recus && conclus !== null
+                  ? `des leads reçus sur la période sont déjà signés${conclus ? ` · ${conclus} affaire${conclus > 1 ? 's' : ''}` : ''}`
+                  : 'taux de transformation indisponible sur cette période'}</span>
               </div>
             </section>
 
@@ -159,7 +164,7 @@ export const homePage = {
                   <span class="tb-track" style="width:70px"><span class="tb-fill" style="width:${Math.min(100, pct(caAn / objAn))}%;background:var(--accent)"></span><span class="tb-today" style="left:${Math.min(100, pct(ecoule(an)))}%"></span></span></span>` : ''}
                 ${scope.isDirection ? '<button class="btn ghost sm" id="tb-obj">Fixer les objectifs</button>' : ''}</div>
               ${obj ? `<div class="table-wrap"><table class="tb-goals">
-                <thead><tr><th>Structure</th><th class="num">Objectif ${esc(libellePeriode(state.periode))}</th><th class="num">Signé</th><th class="num">Reste</th><th class="num">Avancement</th></tr></thead>
+                <thead><tr><th>Structure</th><th class="num">Objectif ${esc(libellePeriode(state.periode))}</th><th class="num">Réalisé</th><th class="num">Reste</th><th class="num">Avancement</th></tr></thead>
                 <tbody>
                   ${cles.map(k => ligneObjectif(k, r, deals, part)).join('')}
                   ${cles.length > 1 ? ligneTotal(t.ca, obj, part) : ''}
@@ -170,7 +175,7 @@ export const homePage = {
 
             <section class="card">
               <div class="card-head"><h2>Évolution du chiffre d'affaires</h2>
-                <span class="muted small">CA HT signé · 12 derniers mois</span></div>
+                <span class="muted small">CA HT · 12 derniers mois</span></div>
               <div class="tb-chartwrap">
                 <div class="chart-box tb-chart"><canvas id="tb-canvas"></canvas></div>
                 <div class="tb-totals">
@@ -191,7 +196,8 @@ export const homePage = {
         </div>
 
         ${sources.length ? `<p class="muted small tb-source">${sources.map(x =>
-          `${esc(ACTIVITIES[x.cle].label)} : chiffres déposés par ${esc(x.source)}, mis à jour le ${new Date(x.maj).toLocaleDateString('fr-FR')}`).join(' · ')}</p>` : ''}`;
+          `${esc(ACTIVITIES[x.cle].label)} : chiffres déposés par ${esc(x.source)}, mis à jour le ${new Date(x.maj).toLocaleDateString('fr-FR')}`).join(' · ')}
+          — chaque outil applique ses propres définitions : un CA peut être facturé chez l'un et signé chez l'autre.</p>` : ''}`;
 
       // ---- interactions
       root.querySelectorAll('[data-f]').forEach(b => b.onclick = () => {
@@ -312,8 +318,12 @@ function comparaisonEntonnoir(cles, periode, deals) {
   const r = periodRange(periode);
   const duree = r.end - r.start;
   const e = entonnoir(cles, { start: new Date(r.start.getTime() - duree), end: new Date(r.start.getTime()) }, deals);
-  const [recus, , rdv, , signes] = e.map(x => x.n);
-  return { tauxRdv: recus ? rdv / recus : null, tauxVente: rdv ? signes / rdv : null };
+  const j = (champ) => e.find(x => x.champ === champ)?.n ?? null;
+  const recus = j('leads'), rdv = j('rdv'), signes = j('deals');
+  return {
+    tauxRdv: recus && rdv !== null ? rdv / recus : null,
+    tauxVente: rdv && signes !== null ? signes / rdv : null,
+  };
 }
 // CA porté par les affaires nées ET signées dans la période — le chiffre qui va avec l'entonnoir
 const montantCohorte = (cles, r, deals) => deals
@@ -359,7 +369,7 @@ function formObjectifs(onSaved) {
   const valeurs = Object.fromEntries(ACTIVITY_KEYS.map(k => [k, objectifAnnuel(k) || '']));
   const spec = ACTIVITY_KEYS.map(k => ({
     key: k, label: ACTIVITIES[k].label, type: 'number',
-    hint: k === ACTIVITY_KEYS[0] ? 'Objectif de CA HT signé sur l\'année. Le mois et le trimestre en prennent leur part : un objectif de 480 000 € vaut 40 000 € par mois.' : '',
+    hint: k === ACTIVITY_KEYS[0] ? 'Objectif de CA HT sur l\'année. Le mois et le trimestre en prennent leur part : un objectif de 480 000 € vaut 40 000 € par mois.' : '',
   }));
   openModal('Objectifs annuels de chiffre d\'affaires',
     `<form id="f-obj" class="form">${renderForm(spec, valeurs)}</form>

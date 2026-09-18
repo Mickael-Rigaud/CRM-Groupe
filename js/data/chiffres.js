@@ -159,20 +159,31 @@ const iMax = (d) => Math.max(
   stageIndex(d.activity, d.stage),
   ...(d.stage_history || []).map(h => stageIndex(d.activity, h.stage)));
 
-// Les cinq jalons, tels qu'un outil externe peut les envoyer mois par mois, à
-// côté du montant : { month, amount, deals, leads, contacted, rdv, quotes }.
-const JALONS_EXTERNES = ['leads', 'contacted', 'rdv', 'quotes', 'deals'];
-const aUnEntonnoirExterne = (k) => {
+// Les jalons qu'un outil externe peut envoyer mois par mois, à côté du montant :
+// { month, amount, deals, leads, contacted, rdv, quotes }. Chacun est facultatif
+// et indépendant — un outil qui ne sait pas dater le premier contact n'envoie pas
+// `contacted`, et l'étape disparaît de l'entonnoir au lieu d'y figurer à zéro.
+const JALONS = [
+  { champ: 'leads', nom: 'Leads reçus' },
+  { champ: 'contacted', nom: 'Contactés' },
+  { champ: 'rdv', nom: 'RDV réalisés' },
+  { champ: 'quotes', nom: 'Devis / propositions' },
+  { champ: 'deals', nom: 'Signés' },
+];
+const fournit = (k, champ) => {
   const e = externe(k);
-  return !!(e && (e.revenue || []).some(m => m.contacted != null || m.rdv != null || m.quotes != null));
+  return !!(e && (e.revenue || []).some(m => m[champ] != null));
 };
+const aUnEntonnoirExterne = (k) => JALONS.some(j => j.champ !== 'deals' && fournit(k, j.champ));
 
-// Entonnoir d'une structure : celui de son outil quand il l'envoie, sinon celui
-// que le CRM sait reconstituer depuis ses propres affaires.
+// Entonnoir d'une structure, jalon par jalon. `null` veut dire « cet outil ne
+// sait pas compter cette étape » — à ne pas confondre avec zéro.
 function entonnoirDe(k, r, deals) {
   if (aUnEntonnoirExterne(k)) {
     const mois = (externe(k).revenue || []).filter(m => inRange(m.month + '-01', r));
-    return JALONS_EXTERNES.map(j => mois.reduce((s, m) => s + (Number(m[j]) || 0), 0));
+    return JALONS.map(j => fournit(k, j.champ)
+      ? mois.reduce((s, m) => s + (Number(m[j.champ]) || 0), 0)
+      : null);
   }
   const lot = deals.filter(d => d.activity === k && inRange(d.created_at, r));
   const gagne = d => d.status === 'won';
@@ -184,12 +195,18 @@ function entonnoirDe(k, r, deals) {
     lot.filter(gagne).length,
   ];
 }
-const NOMS_JALONS = ['Leads reçus', 'Contactés', 'RDV réalisés', 'Devis / propositions', 'Signés'];
 
+// L'entonnoir du groupe. Un jalon qu'aucune structure ne sait compter n'apparaît
+// pas : mieux vaut quatre étapes justes que cinq dont une est fausse.
 export function entonnoir(cles, r, deals = scope.deals()) {
-  const somme = cles.map(k => entonnoirDe(k, r, deals))
-    .reduce((t, x) => t.map((v, i) => v + x[i]), [0, 0, 0, 0, 0]);
-  return NOMS_JALONS.map((nom, i) => ({ nom, n: somme[i] }));
+  const lignes = cles.map(k => entonnoirDe(k, r, deals));
+  return JALONS.map((j, i) => {
+    const connus = lignes.map(l => l[i]).filter(v => v !== null);
+    return { nom: j.nom, champ: j.champ, n: connus.length ? connus.reduce((a, b) => a + b, 0) : null,
+             partiel: connus.length > 0 && connus.length < lignes.length };
+    // Un jalon que seule une partie des structures sait compter, et qui vaut zéro,
+    // n'apprend rien et casse la lecture de l'entonnoir : on le retire aussi.
+  }).filter(j => j.n !== null && !(j.partiel && j.n === 0));
 }
 // Les structures dont l'outil ne raconte pas le parcours : leur pipeline reste
 // invisible ici, et il vaut mieux l'écrire que laisser croire à un entonnoir vide.
