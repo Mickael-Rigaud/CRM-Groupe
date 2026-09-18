@@ -5,7 +5,7 @@ import { db } from '../data/db.js';
 import { idsDe, urlAgenda, VUES as VUES_CALENDRIER, CLES_AGENDA, modeEmploi } from '../agenda.js';
 import { scope } from '../data/scope.js';
 import {
-  ACTIVITIES, CHANNELS, weightedAmount, stagesDe, missionDe, estNouveauLead, estEngagee, ORIGINE_PAR_CANAL, ORIGINE_DEFAUT, NIVEAUX_BTP, CAPACITE_BTP,
+  ACTIVITIES, CHANNELS, weightedAmount, stagesDe, stageOf, missionDe, etapeEquivalente, estNouveauLead, estEngagee, ORIGINE_PAR_CANAL, ORIGINE_DEFAUT, NIVEAUX_BTP, CAPACITE_BTP,
   HONORAIRES_AMO, MISSIONS_BTP, couleurMission, niveauDe, pointsDe,
   MATRICE_AMO, tauxSuggere, honorairesAmo, PHASES_AMO, FRONTIERE_AMO, FICHE_CHARGE_BTP,
   REMUNERATION_BTP, partRemuneration, partChargeAffaires,
@@ -17,7 +17,7 @@ import {
   openModal, closeModal, confirm, terms, hit,
   searchInput, bindSearch, restoreFocus, csvDownload, marqueResponsable,
 } from '../ui.js';
-import { openDeal, dealForm, assignerResponsable, candidatsResponsable } from './deal.js';
+import { openDeal, dealForm, moveStage, assignerResponsable, candidatsResponsable } from './deal.js';
 import { contactForm, openContact } from './contacts.js';
 import { orgForm, openOrg } from './organisations.js';
 import { coquilleEspace, poserEspace, kpiEspace, archiverFiche, restaurerFiche, supprimerDefinitivement, estActive } from './espace.js';
@@ -231,13 +231,21 @@ const vivantes = () => {
 // dans un seul kanban donnerait des colonnes vides une fois sur deux.
 const pipelineDe = (mission) => {
   const siennes = vivantes().filter(d => missionDe(d) === mission);
-  const colonnes = stagesDe(KEY, mission).map(st => {
+  const etapes = stagesDe(KEY, mission);
+  const colonnes = etapes.map(st => {
     const cartes = siennes.filter(d => d.stage === st.key);
     return { st, cartes, somme: cartes.reduce((t, d) => t + (Number(d.amount) || 0), 0) };
   });
+  // UNE AFFAIRE NE DOIT JAMAIS DISPARAÎTRE EN SILENCE. Si son étape appartient à
+  // l'autre métier — le cas d'une mission basculée d'expertise en AMO avant que le
+  // formulaire ne replace l'étape —, aucune colonne ne l'accueille : elle sortait du
+  // pipeline tout en restant comptée dans le pied de page, et le pipeline semblait
+  // vide. On les isole pour les montrer, plutôt que de laisser l'écart se deviner.
+  const cles = new Set(etapes.map(st => st.key));
+  const egarees = siennes.filter(d => !cles.has(d.stage));
   const ouvertes = siennes.filter(d => d.status === 'open');
   return {
-    siennes, colonnes,
+    siennes, colonnes, egarees,
     // Deux lectures du même portefeuille : le total des montants, et ce même total
     // pondéré par la probabilité de chaque étape. Les deux libellés ne se confondent pas.
     potentiel: ouvertes.reduce((t, d) => t + (Number(d.amount) || 0), 0),
@@ -842,7 +850,7 @@ const pageMission = (mission) => ({
     const state = { q: '', focus: null, scores: MATRICE_AMO.criteres.map(() => null), travaux: '', taux: null, cotesExp: {} };
 
     const draw = () => {
-      const { siennes, colonnes, potentiel } = pipelineDe(mission);
+      const { siennes, colonnes, potentiel, egarees } = pipelineDe(mission);
       const ts = terms(state.q);
       const liste = siennes.filter(d => hit([d.title, dealParty(d), d.notes], ts))
         .sort((x, y) => (y.amount || 0) - (x.amount || 0));
@@ -863,6 +871,12 @@ const pageMission = (mission) => ({
             <button class="btn" id="m-new">+ Fiche découverte ${esc(couleurMission(mission).label)}</button>
           </div>
           ${kanbanHtml(colonnes)}
+          ${egarees.length ? `<div class="btp-egarees">
+            <p><b>${egarees.length} mission${egarees.length > 1 ? 's' : ''}</b> de ce métier ${egarees.length > 1 ? 'sont' : 'est'} à une étape de l'autre pipeline : ${egarees.length > 1 ? 'elles n\'apparaissent' : 'elle n\'apparaît'} donc dans aucune colonne ci-dessus.</p>
+            <ul>${egarees.map(d => `<li><button type="button" class="lien" data-deal="${d.id}">${esc(d.title)}</button>
+              <span class="muted">— étape « ${esc(stageOf(KEY, d.stage)?.label || d.stage)} »</span>
+              <button type="button" class="btn ghost sm" data-replacer="${d.id}">Replacer dans ${esc(MISSIONS[mission].titre)}</button></li>`).join('')}</ul>
+          </div>` : ''}
         </div>
 
         <div class="card">
@@ -905,6 +919,14 @@ const pageMission = (mission) => ({
 
       bindSearch(root, 'm-q', state, draw); restoreFocus(root, state);
       lierAffaires(root, draw);
+      // Replacer une égarée : même rang dans le déroulé de ce métier, et une trace.
+      root.querySelectorAll('[data-replacer]').forEach(b => b.onclick = async () => {
+        const d = db.byId('deals', b.dataset.replacer);
+        const vers = etapeEquivalente(KEY, d.stage, mission);
+        if (!vers) return toast('Aucune étape équivalente dans ce pipeline', 'warn');
+        await moveStage(d, vers);
+        draw();
+      });
       root.querySelectorAll('[data-fiche]').forEach(b => b.onclick = (e) => {
         e.stopPropagation();
         const d = db.byId('deals', b.dataset.fiche);

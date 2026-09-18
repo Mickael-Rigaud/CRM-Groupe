@@ -439,6 +439,13 @@ body:has(.esp-app) .subnav .datepill { display: none; }
 /* Un duo qui n'a plus qu'une carte : le chargé d'affaires ne voit pas la charge du
    réseau, la répartition du CA reste seule et prend la largeur. */
 .btp-duo-seul { grid-template-columns: minmax(0, 1fr); }
+/* Missions egarees : une etape de l autre metier, donc aucune colonne pour les tenir.
+   Ambre, pas rouge : rien n est perdu, il y a juste un geste a faire. */
+.btp-egarees { margin-top: 14px; padding: 12px 14px; border: 1px solid var(--amber); border-radius: 12px;
+  background: var(--amber-soft, color-mix(in srgb, var(--amber) 10%, transparent)); }
+.btp-egarees p { margin: 0 0 8px; font-size: 13px; }
+.btp-egarees ul { margin: 0; padding-left: 18px; font-size: 13px; }
+.btp-egarees li { margin-bottom: 6px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
 /* Le récapitulatif d'une pipeline : ses étapes en une bande, sans les affaires */
 .btp-recap-etapes { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(84px, 1fr); gap: 8px; overflow-x: auto; min-width: 0; padding-bottom: 4px; }

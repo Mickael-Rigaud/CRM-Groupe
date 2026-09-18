@@ -1,7 +1,7 @@
 // Affaires : fiche détaillée (modale), création / édition, changement d'étape, gagné / perdu.
 import { db } from '../data/db.js';
 import { scope } from '../data/scope.js';
-import { ACTIVITIES, CHANNELS, LOST_REASONS, stageOf, stageIndex, stagesDe, missionDe, estNouveauLead } from '../data/schema.js';
+import { ACTIVITIES, CHANNELS, LOST_REASONS, stageOf, stageIndex, stagesDe, missionDe, couleurMission, estNouveauLead, etapeEquivalente } from '../data/schema.js';
 import { esc, eur, openModal, closeModal, renderForm, readForm, refField, bindRefFields, toast, fmtDate, fmtDateTime, userName, marqueResponsable, contactName, dealParty, actBadge, daysSince, confirm } from '../ui.js';
 import { activityForm, activityRowHtml, bindActivityRows, nextActivity } from './activity.js';
 import { documentsSection, bindDocuments } from '../documents.js';
@@ -173,7 +173,36 @@ export function dealForm(activityKey, existing = null, presets = {}, onSaved, on
     if (activityKey === 'propulsion' && !b.amount && s.montant_mensuel && s.duree_mois) b.amount = s.montant_mensuel * s.duree_mois;
     if (b.channel === 'Partenaire / apporteur' && !refs.referrer_org_id && !refs.referrer_contact_id) return toast("Canal « Partenaire / apporteur » : indiquez l'apporteur", 'warn');
     try {
-      if (existing) { await db.update('deals', existing.id, { ...b, ...refs, fields: s }); toast('Affaire mise à jour'); closeModal(true); onSaved?.(existing.id); }
+      if (existing) {
+        const patch = { ...b, ...refs, fields: s };
+        // CHANGER DE MÉTIER, C'EST CHANGER DE PIPELINE. Chez BTP Expertise, chaque étape
+        // appartient à l'expertise OU à l'AMO. Basculer `type_mission` sans toucher à
+        // l'étape laissait l'affaire à une étape de l'autre métier : elle disparaissait
+        // de son pipeline — aucune colonne ne l'accueillait — tout en restant comptée
+        // dans le pied de page. Silencieux, et constaté en production le 19/09/2026.
+        // On replace donc l'affaire au même rang dans le déroulé du nouveau métier, et
+        // on le dit : à l'écran, et dans l'historique.
+        const apres = { ...existing, fields: s };
+        const equivalente = etapeEquivalente(existing.activity, existing.stage, missionDe(apres));
+        if (equivalente) {
+          const quand = new Date().toISOString();
+          Object.assign(patch, { stage: equivalente, stage_changed_at: quand,
+            stage_history: [...(existing.stage_history || []), { stage: equivalente, at: quand }] });
+        }
+        const maj = await db.update('deals', existing.id, patch);
+        if (equivalente) {
+          // Les deux métiers ont des étapes de même nom (« Qualifié » des deux côtés) :
+          // sans nommer le métier, l'historique dirait « Qualifié » remplacé par
+          // « Qualifié » et ne voudrait rien dire.
+          const nom = (m) => couleurMission(m).label;
+          const avant = stageOf(existing.activity, existing.stage)?.label || existing.stage;
+          const vers = stageOf(existing.activity, equivalente)?.label || equivalente;
+          await logEvent(maj, 'stage', `Métier : ${nom(missionDe(existing))} → ${nom(missionDe(apres))}. `
+            + `Étape « ${avant} » replacée au même rang : « ${vers} ».`);
+          toast(`Métier changé : l'affaire rejoint le pipeline ${nom(missionDe(apres))}, étape « ${vers} »`);
+        } else toast('Affaire mise à jour');
+        closeModal(true); onSaved?.(existing.id);
+      }
       else {
         const stage = act.stages[0].key;
         const d = await db.insert('deals', { ...b, ...refs, activity: activityKey, stage, status: 'open', fields: s, stage_history: [{ stage, at: new Date().toISOString() }], stage_changed_at: new Date().toISOString() });

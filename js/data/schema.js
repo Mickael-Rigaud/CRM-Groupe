@@ -686,6 +686,25 @@ export const missionDe = (deal) => {
   return DIT_AMO.test(deal?.fields?.besoin || deal?.fields?.problematique || '') ? 'amo' : 'expertise';
 };
 
+// Traduire une étape d'un métier vers l'autre. Les deux déroulés de BTP Expertise se
+// répondent un à un — Qualifié ↔ Qualifié, Lettre de mission ↔ Mission AMO, RDV sur
+// place ↔ RDV terrain… — donc le RANG dans la liste du métier suffit : aucune table de
+// correspondance à tenir à jour, elle se périmerait au premier renommage.
+//
+// Rend `null` quand il n'y a rien à faire : étape commune aux deux métiers (avant
+// l'entretien), étape déjà du bon métier, ou activité sans métiers du tout — c'est le
+// cas des trois autres pipelines, que cette fonction laisse donc intacts.
+export const etapeEquivalente = (activity, stage, mission) => {
+  const a = ACTIVITIES[activity];
+  const st = a?.stages.find(x => x.key === stage);
+  if (!st?.mission || st.mission === mission) return null;
+  const depart = a.stages.filter(x => x.mission === st.mission);
+  const arrivee = a.stages.filter(x => x.mission === mission);
+  if (!arrivee.length) return null;
+  const rang = depart.findIndex(x => x.key === stage);
+  return arrivee[Math.min(rang, arrivee.length - 1)].key;
+};
+
 // Les étapes d'une mission : les siennes, plus les communes. L'ordre de la liste est
 // conservé, c'est celui du déroulé.
 export const stagesDe = (activity, mission) =>
