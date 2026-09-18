@@ -1374,6 +1374,17 @@ export const btpBasePage = {
     // On ouvre sur les nouveaux leads s'il y en a : c'est ce qui demande une action.
     const aTraiter = () => deals().filter(estNouveauLead);
     const vues = () => VUES;
+    // Les trois onglets se suivent dans le temps et ne se chevauchent JAMAIS :
+    //   Nouveaux leads   affaire ouverte, entretien d'appel pas encore passé
+    //   Clients          affaire ouverte, entretien passé — le dossier vit
+    //   Tous les contacts  plus aucune affaire en cours : gagnée, perdue, ou
+    //                      aucun dossier. C'est l'après, pas un fourre-tout.
+    // Le calcul se fait sur l'ETAT DE L'AFFAIRE et non sur `contacts.type` :
+    // l'état ne peut pas mentir, alors que le type est une saisie qui peut
+    // rester en arrière (c'est exactement ce qui s'était produit).
+    const clientActif = (c) => deals().some(d =>
+      d.contact_id === c.id && d.status === 'open' && !estNouveauLead(d));
+    const enPile = (c) => deals().some(d => d.contact_id === c.id && estNouveauLead(d));
     const state = { vue: aTraiter().length ? 'leads' : 'clients', q: '', canal: '', focus: null };
 
     // Créer depuis cet écran, c'est créer pour BTP Expertise : l'activité est cochée
@@ -1426,7 +1437,10 @@ export const btpBasePage = {
           }));
         colonnes = ['Nom', 'Métier', 'Ville', 'Téléphone', 'Email', 'Affaires apportées'];
       } else {
-        const filtre = { clients: (c) => c.type === 'Client', tous: () => true }[state.vue];
+        const filtre = {
+          clients: clientActif,
+          tous: (c) => !clientActif(c) && !enPile(c),
+        }[state.vue];
         lignes = contacts.filter(filtre)
           .filter(c => !state.canal || c.channel === state.canal)
           .filter(c => hit([contactName(c), c.email, c.phone, c.city, c.channel], ts))
@@ -1457,8 +1471,8 @@ export const btpBasePage = {
         if (v === 'leads') return aTraiter().length;
         if (v === 'partenaires') return orgs.filter(o => o.type === 'Partenaire').length;
         if (v === 'courtiers') return orgs.filter(o => o.partner_job === 'Courtier').length;
-        if (v === 'tous') return contacts.length;
-        return contacts.filter(c => c.type === 'Client').length;
+        if (v === 'tous') return contacts.filter(c => !clientActif(c) && !enPile(c)).length;
+        return contacts.filter(clientActif).length;
       };
 
       root.innerHTML = cadre('#/btp/base', "Base de données", `
