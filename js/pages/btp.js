@@ -9,6 +9,8 @@ import {
   HONORAIRES_AMO, MISSIONS_BTP, couleurMission, niveauDe, pointsDe,
   MATRICE_AMO, tauxSuggere, honorairesAmo, PHASES_AMO, FRONTIERE_AMO, FICHE_CHARGE_BTP,
   REMUNERATION_BTP, partRemuneration,
+  POSITIONNEMENT_EXPERTISE, TYPOLOGIE_EXPERTISE, OFFRE_EXPERTISE_NOTE, QUALIF_EXPERTISE_V6,
+  QUALIF_EXPERTISE_REGLE, niveauExpertise, GRAVITE_EXPERTISE, GRAVITE_REGLE, SPECIALISTES_EXPERTISE,
 } from '../data/schema.js';
 import {
   esc, eur, daysSince, fmtDate, contactName, dealParty, userName, toast,
@@ -651,6 +653,126 @@ const ficheMetier = () => `<div class="card btp-ref">
   </div>
 </div>`;
 
+// ---------------------------------------------------------------- Le référentiel Expertise
+// Le manuel V6, propre au pôle Expertise, dit ce que le cabinet est, ce qu'il sait
+// faire, comment il qualifie une mission et où il passe la main. Comme pour l'AMO,
+// cette doctrine est posée sur l'écran où l'on s'en sert.
+
+// 1. Le positionnement, et la chaîne de rédaction qui en découle.
+const positionnementExpertise = () => `<div class="card btp-ref" style="${teinteMission('expertise')}">
+  <div class="card-head"><h2>Positionnement du pôle Expertise</h2>
+    <span class="grow"></span>
+    <span class="muted small">Manuel V6 &middot; §1</span>
+  </div>
+  <p class="btp-ref-phrase">${esc(POSITIONNEMENT_EXPERTISE.intro)}</p>
+  <div class="table-wrap"><table>
+    <tbody>${POSITIONNEMENT_EXPERTISE.principes.map(([k, v], i) => `<tr${i === POSITIONNEMENT_EXPERTISE.principes.length - 1 ? ' class="exp-limite"' : ''}>
+      <th scope="row">${esc(k)}</th><td class="small">${esc(v)}</td>
+    </tr>`).join('')}</tbody>
+  </table></div>
+  <div class="mf-bloc-titre" style="margin-top:16px">Principe de rédaction — chaque maillon reste séparé</div>
+  <div class="exp-chaine">${POSITIONNEMENT_EXPERTISE.redaction.map(x => `<span>${esc(x)}</span>`).join('<i>→</i>')}</div>
+</div>`;
+
+// 2. Ce qu'on sait faire, rangé par famille.
+const typologieExpertise = () => `<div class="card btp-ref" style="${teinteMission('expertise')}">
+  <div class="card-head"><h2>Typologie des missions</h2>
+    <span class="grow"></span>
+    <span class="muted small">Manuel V6 &middot; §2</span>
+  </div>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Famille</th><th>Exemples de missions</th></tr></thead>
+    <tbody>${TYPOLOGIE_EXPERTISE.map(([f, ex]) => `<tr>
+      <td>${marqueMission('expertise')}<b>${esc(f)}</b></td><td class="small">${esc(ex)}</td>
+    </tr>`).join('')}</tbody>
+  </table></div>
+</div>`;
+
+// 3. L'offre : les trois niveaux, leur contenu, leur tarif de travail et leur poids.
+const offreExpertise = () => {
+  const lignes = NIVEAUX_BTP.filter(n => n.mission === 'expertise');
+  return `<div class="card btp-ref" style="${teinteMission('expertise')}">
+    <div class="card-head"><h2>Offre commerciale</h2>
+      <span class="grow"></span>
+      <span class="muted small">Manuel V6 &middot; §3</span>
+    </div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Niveau</th><th>Contenu indicatif</th><th>Tarif de travail HT</th><th class="num">Points</th></tr></thead>
+      <tbody>${lignes.map(n => `<tr>
+        <td>${marqueMission('expertise')}<b>${esc(n.label)}</b></td>
+        <td class="small">${esc(n.contenu)}</td>
+        <td class="small">${esc(n.tarif)}</td>
+        <td class="num"><b class="btp-pts">${n.points}</b></td>
+      </tr>`).join('')}</tbody>
+    </table></div>
+    <p class="btp-ref-garde">${esc(OFFRE_EXPERTISE_NOTE)}</p>
+  </div>`;
+};
+
+// 4. La qualification. Comme la matrice AMO, elle se coche ; mais rien ne s'additionne :
+// chaque critère désigne un niveau, et le plus souvent désigné l'emporte.
+const qualificationExpertise = (cotes) => {
+  const niveaux = NIVEAUX_BTP.filter(n => n.mission === 'expertise');
+  const sug = niveauExpertise(cotes, QUALIF_EXPERTISE_V6);
+  const faits = QUALIF_EXPERTISE_V6.filter(c => cotes[c.key] !== undefined).length;
+  return `<div class="card btp-ref" style="${teinteMission('expertise')}">
+    <div class="card-head"><h2>Qualification interne du niveau</h2>
+      <span class="grow"></span>
+      ${faits ? '<button type="button" class="btn ghost sm" id="qx-raz">Effacer</button>' : ''}
+      <span class="muted small">Manuel V6 &middot; §4</span>
+    </div>
+    <p class="btp-ref-action">
+      <b>Cochez une case par ligne</b> — chaque critère désigne un niveau, le plus souvent retenu est proposé.
+      <span>${faits} sur ${QUALIF_EXPERTISE_V6.length}</span>
+    </p>
+    <div class="table-wrap"><table class="btp-matrice fa-matrice">
+      <thead><tr><th>Critère</th>${niveaux.map(n => `<th>${esc(n.label.replace('Expertise ', '').replace(/^./, c => c.toUpperCase()))} — ${n.points} pt${n.points > 1 ? 's' : ''}</th>`).join('')}</tr></thead>
+      <tbody>${QUALIF_EXPERTISE_V6.map(c => `<tr>
+        <th scope="row">${esc(c.label)}</th>
+        ${c.valeurs.map((lbl, n) => `<td class="choix ${cotes[c.key] === n ? 'on' : ''}" data-qx="${c.key}" data-score="${n}"
+          role="radio" aria-checked="${cotes[c.key] === n}" tabindex="0"><span class="btp-coche"></span>${esc(lbl)}</td>`).join('')}
+      </tr>`).join('')}</tbody>
+    </table></div>
+    ${sug ? `<div class="btp-score" style="${teinteMission('expertise')}">
+      <div class="btp-score-val plein"><b>${sug.comptes[0]} · ${sug.comptes[1]} · ${sug.comptes[2]}</b><span>critères vers simple · rapport · complexe</span></div>
+      <span class="btp-score-fleche" aria-hidden="true">→</span>
+      <div class="btp-score-taux"><b>${esc(sug.niveau.label)}</b><span>${sug.niveau.points} point${sug.niveau.points > 1 ? 's' : ''} de charge · ${esc(sug.niveau.tarif)}</span></div>
+    </div>` : ''}
+    <p class="btp-ref-garde">${esc(QUALIF_EXPERTISE_REGLE)}</p>
+  </div>`;
+};
+
+// 5. La gravité : elle commande l'urgence de la visite et le ton de l'alerte.
+const graviteExpertise = () => `<div class="card btp-ref" style="${teinteMission('expertise')}">
+  <div class="card-head"><h2>Gravité et urgence</h2>
+    <span class="grow"></span>
+    <span class="muted small">Manuel V6 &middot; §17</span>
+  </div>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Niveau</th><th>Définition interne</th><th>Action</th></tr></thead>
+    <tbody>${GRAVITE_EXPERTISE.map(g => `<tr>
+      <td><span class="pill ${g.ton}">${esc(g.code)}</span></td>
+      <td class="small">${esc(g.definition)}</td>
+      <td class="small">${esc(g.action)}</td>
+    </tr>`).join('')}</tbody>
+  </table></div>
+  <p class="btp-ref-garde">${esc(GRAVITE_REGLE)}</p>
+</div>`;
+
+// 6. Où l'expertise s'arrête. Le pendant de la frontière AMO / maîtrise d'œuvre.
+const specialistesExpertise = () => `<div class="card btp-ref btp-garde" style="${teinteMission('expertise')}">
+  <div class="card-head"><h2>Quand passer la main</h2>
+    <span class="grow"></span>
+    <span class="muted small">Manuel V6 &middot; §18</span>
+  </div>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Situation</th><th>Orientation</th></tr></thead>
+    <tbody>${SPECIALISTES_EXPERTISE.map(([s, o]) => `<tr>
+      <td class="small"><b>${esc(s)}</b></td><td class="small">${esc(o)}</td>
+    </tr>`).join('')}</tbody>
+  </table></div>
+</div>`;
+
 // ---------------------------------------------------------------- Missions, par métier
 // Un écran par métier : la pipeline entière, et la liste de ce qui la remplit.
 const pageMission = (mission) => ({
@@ -660,7 +782,7 @@ const pageMission = (mission) => ({
     const coquille = poser(root);
     // La cotation de la matrice de taux vit dans l'état de la page : elle survit aux
     // redessins, et rien n'est enregistré — c'est une aide au devis, pas une donnée.
-    const state = { q: '', focus: null, scores: MATRICE_AMO.criteres.map(() => null), travaux: '', taux: null };
+    const state = { q: '', focus: null, scores: MATRICE_AMO.criteres.map(() => null), travaux: '', taux: null, cotesExp: {} };
 
     const draw = () => {
       const { siennes, colonnes, potentiel } = pipelineDe(mission);
@@ -716,7 +838,12 @@ const pageMission = (mission) => ({
           matriceAmo(state.scores),
           scoreComplexite(state.scores, state.travaux, state.taux),
           frontiereAmo(),
-        ].join('') : ''}
+        ].join('') : [
+          positionnementExpertise(),
+          `<div class="btp-duo btp-duo-cat">${offreExpertise()}${typologieExpertise()}</div>`,
+          qualificationExpertise(state.cotesExp),
+          `<div class="btp-duo">${graviteExpertise()}${specialistesExpertise()}</div>`,
+        ].join('')}
         </div>`);
 
       bindSearch(root, 'm-q', state, draw); restoreFocus(root, state);
@@ -750,6 +877,20 @@ const pageMission = (mission) => ({
         state.taux = null;
         draw();
       });
+
+      // La grille du V6 ne s'additionne pas : recliquer une case l'annule, et le
+      // niveau proposé suit le compte des critères.
+      root.querySelectorAll('[data-qx]').forEach(td => {
+        const coter = () => {
+          const cle = td.dataset.qx;
+          const n = Number(td.dataset.score);
+          if (state.cotesExp[cle] === n) delete state.cotesExp[cle]; else state.cotesExp[cle] = n;
+          draw();
+        };
+        td.onclick = coter;
+        td.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); coter(); } };
+      });
+      root.querySelector('#qx-raz')?.addEventListener('click', () => { state.cotesExp = {}; draw(); });
 
       // Seuls les résultats se redessinent à la frappe : les deux champs gardent leur
       // curseur. Le raccourci vers le taux suggéré est recréé à chaque mise à jour.

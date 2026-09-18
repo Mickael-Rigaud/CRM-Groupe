@@ -691,6 +691,18 @@ tr.btp-mission .btp-pts { color: var(--m-encre); }
 .btp-remu tbody th { text-align: left; font-weight: 700; white-space: nowrap; }
 .btp-remu td { font-variant-numeric: tabular-nums; }
 
+/* ---------- Referentiel Expertise (manuel V6) ---------- */
+/* La ligne Limite du positionnement porte la regle qui protege le cabinet : elle se
+   detache du reste du tableau. */
+.exp-limite th, .exp-limite td { background: var(--m-clair); color: var(--m-encre); font-weight: 600; }
+.btp-ref table tbody th[scope="row"] { text-align: left; font-weight: 700; white-space: nowrap;
+  color: var(--muted); padding-right: 14px; }
+/* La chaine de redaction : chaque maillon reste separe, le dessin le dit. */
+.exp-chaine { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.exp-chaine span { padding: 5px 11px; border-radius: 999px; font-size: 12.5px; font-weight: 600;
+  background: var(--m-clair); color: var(--m-encre); }
+.exp-chaine i { font-style: normal; color: var(--muted-2); font-size: 13px; }
+
 /* La phrase qui explique la consequence d'un choix, juste sous le choix. */
 .mf-aide { margin: 0 0 16px; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
 .mf-aide.attention { color: var(--amber); font-weight: 600; }

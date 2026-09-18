@@ -128,6 +128,80 @@ export const FRONTIERE_AMO = {
 // totaux écrits : le total et le verdict se recalculent sur la capacité en vigueur.
 // Le manuel les présentait sur 15 points, la capacité retenue au lancement est dans
 // CAPACITE_BTP — les deux ne peuvent pas diverger si on ne les écrit qu'une fois.
+// ---- Le référentiel Expertise du manuel V6 ---------------------------------
+// Le V6 est un document propre au pôle Expertise, postérieur au manuel V5. Il en
+// reprend les niveaux et les tarifs à l'identique — d'où l'absence de doublon ici —
+// mais il ajoute ce qui manquait : le positionnement, la typologie des missions, une
+// grille de qualification plus fine, une échelle de gravité et la limite au-delà de
+// laquelle on passe la main.
+
+// §1 — ce que le cabinet est, et ce qu'il n'est pas. La dernière ligne est la plus
+// importante : c'est elle qui sépare le technique du juridique.
+export const POSITIONNEMENT_EXPERTISE = {
+  intro: "Expert bâtiment non judiciaire, sur des missions amiables, techniques et documentées. Le cabinet peut être missionné par un particulier, un maître d'ouvrage, un acquéreur, un bailleur, un syndic, un artisan ou une entreprise.",
+  principes: [
+    ['Rôle', 'Constater, analyser, documenter, expliquer et préconiser dans les limites de la mission.'],
+    ['Posture', "Technique, factuelle, indépendante dans l'analyse ; ni avocat, ni juge, ni expert judiciaire."],
+    ['Clients', "Particuliers et professionnels, y compris artisans et entreprises confrontés à une réclamation ou un litige."],
+    ['Livrables', 'Restitution technique, rapport structuré, avis sur pièces, assistance technique contradictoire selon la mission.'],
+    ['Limite', "Ne jamais présenter une conclusion juridique comme une décision de responsabilité : distinguer le technique du droit."],
+  ],
+  // La chaîne de rédaction : chaque maillon doit rester séparé des autres dans le
+  // rapport. Mélanger la déclaration du client et le constat est l'erreur classique.
+  redaction: ['Déclaration du client', 'Constat objectif', 'Mesure', 'Analyse',
+    'Hypothèse / cause probable', 'Niveau de confiance', 'Risque', 'Préconisation'],
+};
+
+// §2 — ce qu'on sait faire, rangé par famille.
+export const TYPOLOGIE_EXPERTISE = [
+  ['Désordres / pathologies', 'Fissures, humidité, infiltrations, condensation, remontées capillaires, moisissures, déformations.'],
+  ['Malfaçons / non-conformités', "Travaux contestés, défauts d'exécution, réserves, écarts aux documents contractuels ou aux règles techniques."],
+  ['Second œuvre / équipements', 'Plomberie, évacuations, sanitaire, électricité, revêtements, menuiseries, ventilation.'],
+  ['Structure / enveloppe', 'Maçonnerie, planchers, façades, toiture, étanchéité ; recours à un spécialiste si nécessaire.'],
+  ['Réception', 'Assistance technique avant ou lors de la réception, identification des désordres et des réserves.'],
+  ['Avant achat / avant travaux', 'Repérage visuel des points techniques sensibles et des risques apparents, dans le périmètre contractuel.'],
+  ['Litige amiable', "Analyse technique pour un particulier, un artisan ou une entreprise ; préparation d'arguments techniques."],
+  ['Contradictoire amiable', 'Participation à une réunion avec les parties et experts, observations techniques et compte rendu.'],
+  ['Avis sur pièces', 'Analyse de devis, photos, factures, plans, rapports et échanges, avec limites explicites.'],
+];
+
+export const OFFRE_EXPERTISE_NOTE = "Le tarif final dépend du déplacement, du volume documentaire, du nombre de désordres, des mesures nécessaires, du nombre d'intervenants, du contradictoire et du temps de rédaction. Ces tarifs sont des bases de travail, à recalibrer sur les temps réels.";
+
+// §4 — la grille de qualification du V6 : six critères là où le V5 en donnait cinq,
+// et des repères plus concrets. Chaque critère désigne un niveau, rien ne s'additionne.
+export const QUALIF_EXPERTISE_V6 = [
+  { key: 'desordres', label: 'Désordres', valeurs: ['1 sujet ciblé', '1 à 3 sujets liés', 'Multiples / imbriqués'] },
+  { key: 'documents', label: 'Documents', valeurs: ['Faibles', 'Volume moyen', 'Volume important / historique long'] },
+  { key: 'intervenants', label: 'Intervenants', valeurs: ['1 à 2', 'Plusieurs', 'Multiples parties / assureurs / experts'] },
+  { key: 'mesures', label: 'Mesures', valeurs: ['Simples', 'Plusieurs mesures', 'Investigations poussées / spécialiste'] },
+  { key: 'enjeu', label: 'Enjeu', valeurs: ['Information / décision', 'Réclamation / réception', 'Litige sensible / contradictoire'] },
+  { key: 'livrable', label: 'Livrable', valeurs: ['Restitution', 'Rapport complet', 'Rapport renforcé + annexes / réunions'] },
+];
+export const QUALIF_EXPERTISE_REGLE = "Le chargé d'affaires propose le niveau ; BTP Expertise peut reclasser la mission avant signature, ou après analyse des pièces si le périmètre réel est supérieur.";
+
+// §17 — l'échelle de gravité. Elle commande l'urgence de la visite et le ton de
+// l'alerte, pas la qualification réglementaire du désordre.
+export const GRAVITE_EXPERTISE = [
+  { code: 'G0', ton: 'ok', definition: 'Esthétique ou mineur, sans aggravation identifiée.', action: 'Rapport et conseil normaux.' },
+  { code: 'G1', ton: 'info', definition: "Désordre fonctionnel, ou risque d'aggravation modérée.", action: 'Préconisation et délai de traitement.' },
+  { code: 'G2', ton: 'warn', definition: 'Aggravation probable, dommage actif ou usage fortement affecté.', action: 'Alerte client, action rapide ou investigation.' },
+  { code: 'G3', ton: 'bad', definition: 'Risque potentiel pour la sécurité des personnes ou la stabilité.', action: 'Alerte immédiate ; sécurisation, spécialiste ou autorité compétente selon le cas.' },
+];
+export const GRAVITE_REGLE = "Outil interne de priorisation, et non une qualification réglementaire universelle.";
+
+// §18 — là où l'expertise s'arrête et où un spécialiste prend le relais. Le pendant,
+// côté expertise, de la frontière AMO / maîtrise d'œuvre.
+export const SPECIALISTES_EXPERTISE = [
+  ['Structure complexe, mouvement important', 'Ingénieur structure / bureau d’études.'],
+  ['Sol et fondations', 'Géotechnicien selon la problématique.'],
+  ['Étanchéité complexe', 'Spécialiste enveloppe et étanchéité.'],
+  ['Installation électrique à diagnostic réglementaire', 'Professionnel habilité ou diagnostiqueur selon la mission.'],
+  ['Recherche de fuite invasive', 'Entreprise spécialisée.'],
+  ['Amiante, plomb, termites, DPE', 'Diagnostiqueur certifié selon le diagnostic.'],
+  ['Calcul thermique ou acoustique', 'Bureau d’études spécialisé.'],
+  ['Chiffrage détaillé multi-lots', 'Économiste de la construction si nécessaire.'],
+];
+
 // ---- La fiche découverte Expertise du manuel V5 (§36) ----------------------
 // Même esprit que la fiche AMO, mais l'expertise se qualifie autrement : pas un score
 // de 0 à 10, une grille où chaque critère désigne directement un niveau. Le manuel ne
@@ -164,10 +238,10 @@ export const QUALIF_EXPERTISE = [
 // critères, et tranche vers le HAUT en cas d'égalité — sous-estimer une expertise
 // coûte plus cher que la sur-estimer, on s'engage sur un tarif. Ce n'est qu'une
 // proposition : le niveau reste choisi à la main.
-export const niveauExpertise = (cotes) => {
+export const niveauExpertise = (cotes, grille = QUALIF_EXPERTISE) => {
   const niveaux = NIVEAUX_BTP.filter(n => n.mission === 'expertise');   // simple, rapport, complexe
   const comptes = [0, 0, 0];
-  for (const c of QUALIF_EXPERTISE) {
+  for (const c of grille) {
     const v = cotes?.[c.key];
     if (v === 0 || v === 1 || v === 2) comptes[v] += 1;
   }
