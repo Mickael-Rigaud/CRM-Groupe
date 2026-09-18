@@ -624,6 +624,36 @@ tr.btp-mission .btp-pts { color: var(--m-encre); }
 /* L'aide d'un champ, sous le champ lui-meme. */
 .mf-champ-aide { font-style: normal; margin-top: 1px; font-size: 11.5px; line-height: 1.45; color: var(--muted-2); }
 
+/* ---------- La fiche decouverte AMO : des listes a cocher qui se lisent ---------- */
+/* Le manuel aligne seize cases a cocher : en etiquettes, on voit d'un coup ce qui
+   est retenu, et la rangee s'enroule au lieu de faire une colonne interminable. */
+.fa-chips { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 10px; }
+.fa-chip { padding: 6px 12px; border: 1px solid var(--line-strong); border-radius: 999px; background: var(--card);
+  font: inherit; font-size: 12.5px; font-weight: 600; color: var(--muted); cursor: pointer;
+  transition: border-color .12s, background .12s, color .12s; }
+.fa-chip:hover { border-color: var(--m, var(--accent)); color: var(--m-encre, var(--accent-ink)); }
+.fa-chip.on { border-color: var(--m, var(--accent)); background: var(--m-clair, var(--accent-soft));
+  color: var(--m-encre, var(--accent-ink)); box-shadow: inset 0 0 0 1px var(--m, var(--accent)); }
+
+/* Une cotation deduite du dossier le dit, pour qu'on sache qu'elle se discute. */
+.fa-deduit, .fa-suggere { display: inline-block; margin-left: 7px; padding: 1px 7px; border-radius: 999px;
+  font-style: normal; font-size: 9.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+  background: var(--m-clair, var(--accent-soft)); color: var(--m-encre, var(--accent-ink)); }
+.fa-matrice td.choix { font-size: 12.5px; }
+
+/* Le taux retenu et ce qu'il donne, cote a cote. */
+.fa-taux { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; margin-bottom: 14px;
+  padding: 13px 16px; border-radius: 12px; background: var(--m-clair);
+  border: 1px solid color-mix(in srgb, var(--m) 22%, transparent); }
+.fa-taux .mf-seg { margin: 0; background: var(--card); }
+.fa-taux-res { margin-left: auto; text-align: right; }
+.fa-taux-res span { display: block; font-size: 10.5px; font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--m-encre); }
+.fa-taux-res b { font-family: var(--font-display); font-size: 24px; font-weight: 700; color: var(--m-encre);
+  font-variant-numeric: tabular-nums; }
+.fa-taux-res em { display: block; font-style: normal; font-size: 11.5px; font-weight: 600; color: var(--amber); }
+@media (max-width: 620px) { .fa-taux-res { margin-left: 0; text-align: left; } }
+
 /* La phrase qui explique la consequence d'un choix, juste sous le choix. */
 .mf-aide { margin: 0 0 16px; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
 .mf-aide.attention { color: var(--amber); font-weight: 600; }
