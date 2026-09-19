@@ -43,8 +43,11 @@ export const estAmoHenrri = (d) => d?.activity === 'btp' && missionDe(d) === 'am
  */
 async function appeler(action, corps = {}) {
   if (CONFIG.DEMO) throw new Error('Mode démo : Henrri n’est pas joignable.');
-  const { data } = await db.client.auth.getSession();
-  const jeton = data?.session?.access_token;
+  // Par la façade, jamais par `db.client` : le client Supabase n'est pas exposé
+  // hors de `db.js`. C'est ce raccourci qui donnait « Cannot read properties of
+  // undefined (reading 'auth') » — une erreur de plomberie affichée comme un
+  // refus de Henrri, alors que Henrri n'avait même pas été appelé.
+  const jeton = await db.accessToken();
   if (!jeton) throw new Error('Session expirée : reconnectez-vous.');
 
   const r = await fetch(`${CONFIG.SUPABASE_URL}/functions/v1/henrri-amo`, {

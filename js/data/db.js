@@ -82,6 +82,8 @@ const localAdapter = {
   async resetPassword() { throw new Error('Pas de mot de passe en mode démo'); },
   async updatePassword() { throw new Error('Pas de mot de passe en mode démo'); },
   isRecovery() { return false; },
+  // Pas de session en mode démo : un appel qui l'exige doit le voir tout de suite.
+  async accessToken() { return null; },
 };
 
 // ---------- Adaptateur Supabase ----------
@@ -142,6 +144,15 @@ const supabaseAdapter = {
     return this.currentUser();
   },
   async signOut() { await this.client.auth.signOut(); },
+  // Le jeton de la session, pour les appels qui sortent du client Supabase —
+  // aujourd'hui l'Edge Function `henrri-amo`, qui s'en sert pour vérifier les
+  // droits côté serveur. Il passe par la façade : le client lui-même n'est PAS
+  // exposé hors de ce fichier, sinon chaque page finirait par requêter à côté
+  // du cache et de la pagination.
+  async accessToken() {
+    const { data } = await this.client.auth.getSession();
+    return data?.session?.access_token || null;
+  },
   async resetPassword(email) {
     const { error } = await this.client.auth.resetPasswordForEmail(email, { redirectTo: location.href.split('#')[0] });
     if (error) throw new Error(error.message);
@@ -234,5 +245,6 @@ export const db = {
   resetPassword(email) { return this.adapter.resetPassword(email); },
   updatePassword(pw) { return this.adapter.updatePassword(pw); },
   isRecovery() { return this.adapter.isRecovery(); },
+  accessToken() { return this.adapter.accessToken(); },
   resetDemo() { if (this.demo) localAdapter.reset(); },
 };

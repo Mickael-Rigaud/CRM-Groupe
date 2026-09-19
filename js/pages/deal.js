@@ -336,8 +336,12 @@ export function openDeal(id, onChange) {
         etatHenrri(id)
           .then(e => { etatCourant = e; render(); })
           .catch(e => {
+            // NE PAS ACCUSER HENRRI D'OFFICE. Cette lecture ne sort même pas
+            // chez Henrri — elle interroge la base — donc un échec ici est le
+            // plus souvent local (session expirée, plomberie). Dire « Henrri
+            // injoignable » envoyait chercher la panne au mauvais endroit.
             const zone = m.querySelector('#henrri-attente');
-            if (zone) zone.textContent = `Henrri injoignable : ${e.message}`;
+            if (zone) zone.textContent = `Facturation illisible : ${e.message}`;
           });
       }
     }
