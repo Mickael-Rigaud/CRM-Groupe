@@ -15,11 +15,26 @@
 // =====================================================================
 import { CONFIG } from './config.js';
 import { db } from './data/db.js';
-import { missionDe } from './data/schema.js';
+import { missionDe, stageOf } from './data/schema.js';
 import { esc, eur, fmtDate, toast } from './ui.js';
 
-/** Une affaire relève-t-elle de Henrri ? Seules les AMO de BTP Expertise. */
-export const estAmoHenrri = (d) => d?.activity === 'btp' && missionDe(d) === 'amo';
+/**
+ * Une affaire relève-t-elle de Henrri ? Seules les AMO de BTP Expertise, et
+ * seulement **à partir de « Mission AMO signée »**.
+ *
+ * Le seuil n'est pas écrit ici : c'est `delivery`, le drapeau qui dit que le
+ * travail commence et que la mission devient facturable. En AMO il est posé sur
+ * « Mission AMO signée » et sur tout ce qui suit — il n'y a donc rien à tenir à
+ * jour le jour où une étape est renommée ou intercalée. Avant ce seuil il n'y a
+ * pas de mission, seulement un prospect : un bloc de facturation sur un lead
+ * qu'on n'a pas encore appelé n'a aucun sens.
+ *
+ * ⚠ Conséquence assumée : reculer une mission avant « Mission AMO signée » fait
+ * disparaître le bloc. Rien n'est perdu — les documents restent chez Henrri et
+ * dans `henrri_documents` —, ils réapparaissent dès que l'étape est rétablie.
+ */
+export const estAmoHenrri = (d) => d?.activity === 'btp' && missionDe(d) === 'amo'
+  && !!stageOf(d.activity, d.stage)?.delivery;
 
 /**
  * Appel de l'Edge Function, avec le jeton de la session en cours : c'est
