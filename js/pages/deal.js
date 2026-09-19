@@ -5,6 +5,7 @@ import { ACTIVITIES, CHANNELS, LOST_REASONS, stageOf, stageIndex, stagesDe, miss
 import { esc, eur, openModal, closeModal, renderForm, readForm, refField, bindRefFields, toast, fmtDate, fmtDateTime, userName, marqueResponsable, contactName, dealParty, actBadge, daysSince, confirm } from '../ui.js';
 import { activityForm, activityRowHtml, bindActivityRows, nextActivity } from './activity.js';
 import { documentsSection, bindDocuments } from '../documents.js';
+import { estAmoHenrri, blocHenrri, lierHenrri, etatHenrri } from '../henrri.js';
 
 const contactLabel = c => `${contactName(c)}${c.city ? ' (' + c.city + ')' : ''}`;
 const orgLabel = o => o.name;
@@ -240,6 +241,11 @@ export function dealForm(activityKey, existing = null, presets = {}, onSaved, on
 
 // ---------- Fiche affaire ----------
 export function openDeal(id, onChange) {
+  // L'état chez Henrri est distant : on ne peut pas le lire pendant le rendu,
+  // qui est synchrone. Il est donc gardé ici, à côté de la fiche, et le bloc
+  // se redessine quand la réponse arrive. Seules les missions AMO le lisent —
+  // les autres affaires n'appellent jamais Henrri.
+  let etatCourant = null;
   const render = () => {
     const d = db.byId('deals', id); if (!d) return closeModal();
     const act = ACTIVITIES[d.activity];
@@ -288,6 +294,7 @@ export function openDeal(id, onChange) {
             <div style="display:flex;flex-direction:column;gap:8px" id="d-acts">${acts.length ? acts.map(a => activityRowHtml(a)).join('') : '<div class="empty">Aucune activité</div>'}</div>
           </div>
           ${documentsSection('deals', id)}
+          ${estAmoHenrri(d) ? blocHenrri(d, etatCourant) : ''}
         </div>
       </div>`;
     const m = openModal(d.title, html, { wide: true, onClose: () => onChange?.() });
@@ -320,6 +327,20 @@ export function openDeal(id, onChange) {
     m.querySelector('#note-form').onsubmit = async e => { e.preventDefault(); const body = e.target.body.value.trim(); if (!body) return; await logEvent(d, 'note', body); refresh(); };
     bindActivityRows(m.querySelector('#d-acts'), refresh, render);
     bindDocuments(m, 'deals', id, render);
+
+    // Henrri, pour les seules missions AMO. La lecture est gratuite chez eux,
+    // donc on relit à chaque ouverture ; l'écriture, elle, part d'un clic.
+    if (estAmoHenrri(d)) {
+      lierHenrri(m, d, () => { etatCourant = null; render(); });
+      if (!etatCourant) {
+        etatHenrri(id)
+          .then(e => { etatCourant = e; render(); })
+          .catch(e => {
+            const zone = m.querySelector('#henrri-attente');
+            if (zone) zone.textContent = `Henrri injoignable : ${e.message}`;
+          });
+      }
+    }
   };
   render();
 }
