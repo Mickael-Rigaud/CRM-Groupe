@@ -69,18 +69,30 @@ async function appeler(action, corps = {}) {
 // ---------------------------------------------------------------- lecture
 // Les quatre montants de la mission. Le RESTE À ENCAISSER se calcule ici et
 // ne se range jamais en base : il se périmerait au premier règlement.
+//
+// ⚠ CHAQUE MONTANT EXISTE EN HT ET EN TTC, et l'écran ne doit jamais mélanger
+// les deux d'une tuile à l'autre. « Facturé 3 500 » à côté de « Encaissé 0 » et
+// « Reste 4 200 » est illisible : on croit à une erreur de calcul alors que le
+// premier chiffre est HT et les autres TTC. Les trois tuiles affichent donc le
+// HT en grand — c'est lui qui se compare au montant de la mission — et le TTC
+// juste en dessous, qui est ce qui entre réellement en banque.
+//
 // ⚠ Sans la portée « Payment » chez Henrri, l'encaissé est un TOUT OU RIEN :
 // `paye` dit payé / pas payé, pas combien. Une facture à moitié réglée
 // compte donc pour zéro. L'écran doit le dire, pas le masquer.
 export function totauxHenrri(documents = []) {
   const factures = documents.filter(x => x.type === 'facture');
-  const facture = factures.reduce((t, x) => t + (Number(x.montant_ttc) || 0), 0);
-  const encaisse = factures.filter(x => x.paye).reduce((t, x) => t + (Number(x.montant_ttc) || 0), 0);
+  const payees = factures.filter(x => x.paye);
+  const somme = (liste, champ) => liste.reduce((t, x) => t + (Number(x[champ]) || 0), 0);
+  const ht = somme(factures, 'montant_ht');
+  const ttc = somme(factures, 'montant_ttc');
+  const encaisseHt = somme(payees, 'montant_ht');
+  const encaisseTtc = somme(payees, 'montant_ttc');
   return {
-    ht: documents.filter(x => x.type === 'facture').reduce((t, x) => t + (Number(x.montant_ht) || 0), 0),
-    facture,
-    encaisse,
-    reste: facture - encaisse,
+    ht, ttc,
+    encaisseHt, encaisseTtc,
+    resteHt: ht - encaisseHt,
+    resteTtc: ttc - encaisseTtc,
     partiel: factures.some(x => x.montant_paye != null),   // vrai le jour où la portée arrive
   };
 }
@@ -194,9 +206,9 @@ export function blocHenrri(deal, etat) {
 
     <div class="tb-kpis" style="grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:10px">
       ${[['Montant HT', eur(Number(deal.amount) || 0), 'de la mission'],
-         ['Facturé', eur(t.facture), 'TTC, toutes factures'],
-         ['Encaissé', eur(t.encaisse), 'factures marquées payées'],
-         ['Reste à encaisser', eur(t.reste), 'facturé moins encaissé']]
+         ['Facturé HT', eur(t.ht), `${eur(t.ttc)} TTC · toutes factures`],
+         ['Encaissé HT', eur(t.encaisseHt), `${eur(t.encaisseTtc)} TTC · factures marquées payées`],
+         ['Reste à encaisser HT', eur(t.resteHt), `${eur(t.resteTtc)} TTC · facturé moins encaissé`]]
         .map(([l, v, s]) => `<div class="card" style="padding:10px 12px">
            <div class="muted small" style="text-transform:uppercase;letter-spacing:.04em">${l}</div>
            <div style="font-family:var(--font-display);font-size:20px;font-weight:700">${v}</div>
