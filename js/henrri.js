@@ -88,7 +88,7 @@ export function totauxHenrri(documents = []) {
 // Un BROUILLON n'est pas une pièce comptable : son numéro n'est pas définitif et
 // il reste modifiable. « Finaliser » le fige chez Henrri — d'où le bouton, et
 // d'où le fait qu'il disparaisse une fois le document finalisé.
-const ligneDoc = (x) => `<tr>
+const ligneDoc = (x, dejaTransforme = false) => `<tr>
   <td><b>${x.type === 'facture' ? 'Facture' : x.type === 'avoir' ? 'Avoir' : 'Devis'}</b>
     ${x.numero ? `<span class="muted small"> ${esc(x.numero)}</span>` : ''}</td>
   <td>${x.date_emission ? fmtDate(x.date_emission) : '—'}</td>
@@ -96,6 +96,9 @@ const ligneDoc = (x) => `<tr>
   <td class="num">${x.montant_ht != null ? eur(x.montant_ht) : '—'}</td>
   <td class="num">${x.montant_ttc != null ? eur(x.montant_ttc) : '—'}</td>
   <td style="display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap">
+    ${x.type === 'devis' && x.finalise && !dejaTransforme ? `<button type="button" class="btn ghost sm" data-henrri-transformer="${esc(x.henrri_id)}"
+      data-montant="${x.montant_ht ?? ''}"
+      title="Henrri crée la facture à partir de ce devis : elle en garde le lien, et le devis est marqué facturé. Elle porte le montant ENTIER du devis.">&rarr; Facture</button>` : ''}
     ${x.finalise ? '' : `<button type="button" class="btn ghost sm" data-henrri-finaliser="${esc(x.henrri_id)}"
       data-nom="${esc(`${x.type === 'facture' ? 'la facture' : x.type === 'avoir' ? "l'avoir" : 'le devis'} ${x.numero || ''}`.trim())}"
       title="Fige le document chez Henrri et verrouille son numéro. Irréversible.">Finaliser</button>`}
@@ -104,13 +107,15 @@ const ligneDoc = (x) => `<tr>
 </tr>`;
 
 // ---------------------------------------------------------- échéancier
-// Une mission AMO ne se facture pas d'un bloc : 40 % au démarrage du chantier,
-// 40 % au suivi intermédiaire, 20 % à la réception. Chaque échéance attend son
-// étape, et ne s'appelle qu'une fois.
+// Une mission AMO ne se facture pas d'un bloc : 40 % à la signature, 40 % au
+// suivi intermédiaire, 20 % à la réception. Chaque échéance attend son étape,
+// et ne s'appelle qu'une fois.
 //
 // LE TABLEAU EST LA COMMANDE. Il n'y a pas de bouton « + Facture » libre sur une
 // AMO : il facturerait le montant entier d'un clic, à côté de l'échéancier, sans
-// que rien ne le rattrape. On ne facture que depuis une ligne d'échéancier.
+// que rien ne le rattrape. On ne facture que depuis une ligne d'échéancier — ou,
+// pour une mission qu'on veut facturer en UNE fois, en transformant son devis
+// (« → Facture » sur sa ligne), ce que le pied du tableau signale alors.
 const ligneEcheance = (e, faite) => {
   const etat = faite
     ? `<span class="pill ${faite.paye ? 'ok' : faite.finalise ? 'info' : ''}">${esc(faite.statut || 'Facturée')}</span>
@@ -131,6 +136,11 @@ function blocEcheancier(deal, documents) {
   if (!plan.length) return '';
   const faites = new Map(documents.filter(d => d.type === 'facture' && d.echeance).map(d => [d.echeance, d]));
   const appele = plan.filter(e => faites.has(e.cle)).reduce((t, e) => t + e.montant, 0);
+  // Ce qui a été facturé SANS passer par l'échéancier : une facture créée à part,
+  // ou un devis transformé. On ne le cache pas et on ne bloque rien — on le montre,
+  // parce que lui seul permet de voir qu'une mission risque d'être facturée deux fois.
+  const horsPlan = documents.filter(d => d.type === 'facture' && !d.echeance);
+  const sommeHorsPlan = horsPlan.reduce((t, d) => t + (Number(d.montant_ht) || 0), 0);
   const total = plan.reduce((t, e) => t + e.montant, 0);
 
   return `<div style="margin:14px 0 4px">
@@ -139,6 +149,10 @@ function blocEcheancier(deal, documents) {
     <div class="table-wrap"><table>
       <tbody>${plan.map(e => ligneEcheance(e, faites.get(e.cle))).join('')}</tbody>
     </table></div>
+    ${horsPlan.length ? `<p class="muted small" style="margin:6px 0 0">
+      ⚠ <b>${horsPlan.length} facture${horsPlan.length > 1 ? 's' : ''} hors échéancier</b> (${eur(sommeHorsPlan)} HT)
+      s’ajoute${horsPlan.length > 1 ? 'nt' : ''} à ce tableau — une facture créée à part, ou un devis transformé,
+      porte le montant entier de la mission. Vérifiez avant d’appeler une échéance de plus.</p>` : ''}
     ${plan.every(e => faites.has(e.cle)) ? '' : `<p class="muted small" style="margin:6px 0 0">
       Une échéance se débloque quand la mission atteint son étape, et ne s’appelle qu’une fois.</p>`}
   </div>`;
@@ -155,6 +169,12 @@ export function blocHenrri(deal, etat) {
       <div class="empty" id="henrri-attente">Lecture en cours…</div></div>`;
   }
   const t = totauxHenrri(etat.documents);
+  // Une facture SANS échéance est, en pratique, soit un devis transformé, soit une
+  // facture créée à part : dans les deux cas elle porte le montant entier, et
+  // reproposer « → Facture » inviterait à facturer deux fois. Henrri refuserait de
+  // toute façon une seconde transformation — on évite simplement d'avoir à le lui
+  // demander. Ce n'est pas un drapeau en base : on le lit de ce qui existe.
+  const dejaTransforme = etat.documents.some(d => d.type === 'facture' && !d.echeance);
   const bac = etat.environnement !== 'production'
     ? '<span class="pill" title="Aucune écriture dans vos données réelles">Bac à sable</span>' : '';
 
@@ -187,7 +207,7 @@ export function blocHenrri(deal, etat) {
 
     ${etat.documents.length ? `<div class="table-wrap"><table>
       <thead><tr><th>Document</th><th>Date</th><th>Statut</th><th class="num">HT</th><th class="num">TTC</th><th></th></tr></thead>
-      <tbody>${etat.documents.map(ligneDoc).join('')}</tbody>
+      <tbody>${etat.documents.map(x => ligneDoc(x, dejaTransforme)).join('')}</tbody>
     </table></div>` : `<div class="empty">Aucun document dans Henrri pour cette mission.
       ${etat.client_henrri ? '' : ' Le client y sera créé au premier devis.'}</div>`}
 
@@ -250,6 +270,24 @@ export function lierHenrri(racine, deal, redessiner) {
     try {
       await appeler('finaliser', { deal_id: deal.id, henrri_id: id });
       toast('Document finalisé chez Henrri');
+      redessiner();
+    } catch (e) {
+      toast(e.message, 'err');
+      b.disabled = false;
+    }
+  });
+
+  // Transformer le devis en facture : c'est Henrri qui la crée, à partir du devis,
+  // et elle porte le MONTANT ENTIER. Sur une mission qui suit l'échéancier, c'est
+  // donc un choix et non une étape de plus — la confirmation le dit.
+  racine.querySelectorAll('[data-henrri-transformer]').forEach(b => b.onclick = async () => {
+    const m = Number(b.dataset.montant);
+    const somme = Number.isFinite(m) && m > 0 ? ` de ${eur(m)} HT` : '';
+    if (!await confirm(`Transformer ce devis en facture${somme} ? Elle portera le montant entier du devis, hors échéancier, et le devis sera marqué facturé chez Henrri.`)) return;
+    b.disabled = true;
+    try {
+      await appeler('transformer', { deal_id: deal.id, henrri_id: b.dataset.henrriTransformer });
+      toast('Facture créée à partir du devis');
       redessiner();
     } catch (e) {
       toast(e.message, 'err');
