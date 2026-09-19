@@ -452,6 +452,23 @@ export const ACTIVITIES = {
     // Arbitré le 19/09/2026, en deux temps : d'abord « gagnée seulement à la dernière
     // étape », puis « gagnée une fois cette étape terminée ».
     gain: { expertise: 'rdv_complementaire', amo: 'amo_reception' },
+    // COMMENT UNE MISSION SE FACTURE, en trois fois. Arbitré par Mickael le
+    // 19/09/2026 : 40 % au démarrage du chantier, 40 % au suivi intermédiaire,
+    // 20 % à la réception. Chaque échéance est accrochée à une ÉTAPE du pipeline :
+    // avancer la mission débloque la facture, plutôt que de laisser quelqu'un
+    // décider de tête quand appeler l'argent.
+    // ⚠ Les parts sont déclarées ici et nulle part ailleurs. Le dernier montant est
+    // calculé par DIFFÉRENCE (voir `echeancesDe`) : trois pourcentages arrondis
+    // chacun de leur côté ne retombent pas toujours sur le total, et une mission
+    // facturée à un centime près du contrat est un litige en puissance.
+    // Seule l'AMO en a un — une expertise se facture en une fois, et ira sur Stripe.
+    echeances: {
+      amo: [
+        { cle: 'acompte', label: 'Acompte', part: 40, stage: 'amo_consultation' },
+        { cle: 'intermediaire', label: 'Situation intermédiaire', part: 40, stage: 'amo_chantier' },
+        { cle: 'solde', label: 'Solde', part: 20, stage: 'amo_reception' },
+      ],
+    },
     // Le cabinet mène deux métiers au déroulé différent : l'expertise, qui va du
     // constat au rapport, et l'AMO, qui accompagne un chantier de la définition du
     // besoin à la réception. D'où deux pipelines — `mission` dit à laquelle une étape
@@ -699,6 +716,50 @@ export const missionDe = (deal) => {
   if (t === 'amo' || t === 'expertise') return t;
   return DIT_AMO.test(deal?.fields?.besoin || deal?.fields?.problematique || '') ? 'amo' : 'expertise';
 };
+
+/**
+ * L'échéancier d'une affaire : ce qu'il y a à facturer, quand, et pour combien.
+ *
+ * Rend une liste `{cle, label, part, stage, etape, montant, atteinte}`, ou `[]` pour
+ * une activité ou un métier qui n'en déclare pas — une expertise se facture en une
+ * fois, et rien ne change pour les trois autres pipelines.
+ *
+ * ⚠ LE DERNIER MONTANT EST LE RESTE, jamais un pourcentage. 40 %, 40 % et 20 % de
+ * 3 333,33 € arrondis chacun de leur côté ne redonnent pas 3 333,33 € : la somme des
+ * factures doit retomber au centime sur le montant de la mission, sinon le client a
+ * raison de contester la dernière.
+ *
+ * `atteinte` dit si l'étape déclenchante est passée — le rang se compare DANS LA
+ * LISTE DU MÉTIER, jamais dans la liste complète : les étapes de l'AMO suivent celles
+ * de l'expertise dans le tableau, leurs indices ne sont pas comparables.
+ */
+export const echeancesDe = (deal) => {
+  const a = ACTIVITIES[deal?.activity];
+  const mission = missionDe(deal);
+  const plan = a?.echeances?.[mission];
+  if (!plan?.length) return [];
+  const etapes = a.stages.filter(s => !s.mission || s.mission === mission);
+  const rangAffaire = etapes.findIndex(s => s.key === deal.stage);
+  const total = Math.round((Number(deal.amount) || 0) * 100) / 100;
+
+  let reste = total;
+  return plan.map((e, i) => {
+    const dernier = i === plan.length - 1;
+    const montant = dernier ? Math.round(reste * 100) / 100
+                            : Math.round(total * e.part) / 100;
+    reste = Math.round((reste - montant) * 100) / 100;
+    const rangEtape = etapes.findIndex(s => s.key === e.stage);
+    return {
+      ...e,
+      montant,
+      etape: etapes[rangEtape]?.label ?? e.stage,
+      atteinte: rangEtape >= 0 && rangAffaire >= rangEtape,
+    };
+  });
+};
+
+/** Une échéance par sa clé, avec son montant — pour la facturer. */
+export const echeanceDe = (deal, cle) => echeancesDe(deal).find(e => e.cle === cle) ?? null;
 
 // Traduire une étape d'un métier vers l'autre. Les deux déroulés de BTP Expertise se
 // répondent un à un — Qualifié ↔ Qualifié, Lettre de mission ↔ Mission AMO, RDV sur

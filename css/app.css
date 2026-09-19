@@ -438,6 +438,11 @@ body:has(.esp-app) .subnav .datepill { display: none; }
 @media (max-width: 1100px) { .btp-duo { grid-template-columns: minmax(0, 1fr); } }
 /* Un duo qui n'a plus qu'une carte : le chargé d'affaires ne voit pas la charge du
    réseau, la répartition du CA reste seule et prend la largeur. */
+/* Échéancier Henrri : une échéance qui attend son étape se lit en retrait,
+   celle qui est prête se voit. Pas de couleur d'état ici — vert, rouge et
+   ambre restent réservés aux états, et « à venir » n'en est pas un. */
+.ech-attente td { opacity: .55; }
+.ech-prete td { background: var(--accent-soft); }
 .btp-duo-seul { grid-template-columns: minmax(0, 1fr); }
 /* Missions egarees : une etape de l autre metier, donc aucune colonne pour les tenir.
    Ambre, pas rouge : rien n est perdu, il y a juste un geste a faire. */

@@ -15,7 +15,7 @@
 // =====================================================================
 import { CONFIG } from './config.js';
 import { db } from './data/db.js';
-import { missionDe, stageOf } from './data/schema.js';
+import { echeancesDe, missionDe, stageOf } from './data/schema.js';
 import { confirm, esc, eur, fmtDate, toast } from './ui.js';
 
 /**
@@ -103,6 +103,47 @@ const ligneDoc = (x) => `<tr>
       title="Demande à Henrri un lien de téléchargement">Ouvrir</button></td>
 </tr>`;
 
+// ---------------------------------------------------------- échéancier
+// Une mission AMO ne se facture pas d'un bloc : 40 % au démarrage du chantier,
+// 40 % au suivi intermédiaire, 20 % à la réception. Chaque échéance attend son
+// étape, et ne s'appelle qu'une fois.
+//
+// LE TABLEAU EST LA COMMANDE. Il n'y a pas de bouton « + Facture » libre sur une
+// AMO : il facturerait le montant entier d'un clic, à côté de l'échéancier, sans
+// que rien ne le rattrape. On ne facture que depuis une ligne d'échéancier.
+const ligneEcheance = (e, faite) => {
+  const etat = faite
+    ? `<span class="pill ${faite.paye ? 'ok' : faite.finalise ? 'info' : ''}">${esc(faite.statut || 'Facturée')}</span>
+       ${faite.numero ? `<span class="muted small">${esc(faite.numero)}</span>` : ''}`
+    : e.atteinte
+      ? `<button type="button" class="btn sm" data-echeance="${esc(e.cle)}" data-montant="${e.montant}"
+           data-nom="${esc(`${e.label} — ${eur(e.montant)}`)}">Facturer</button>`
+      : `<span class="muted small">À l’étape « ${esc(e.etape)} »</span>`;
+  return `<tr class="${faite ? '' : e.atteinte ? 'ech-prete' : 'ech-attente'}">
+    <td><b>${esc(e.label)}</b> <span class="muted small">${e.part} %</span></td>
+    <td class="num">${eur(e.montant)}</td>
+    <td>${etat}</td>
+  </tr>`;
+};
+
+function blocEcheancier(deal, documents) {
+  const plan = echeancesDe(deal);
+  if (!plan.length) return '';
+  const faites = new Map(documents.filter(d => d.type === 'facture' && d.echeance).map(d => [d.echeance, d]));
+  const appele = plan.filter(e => faites.has(e.cle)).reduce((t, e) => t + e.montant, 0);
+  const total = plan.reduce((t, e) => t + e.montant, 0);
+
+  return `<div style="margin:14px 0 4px">
+    <h4 style="margin:0 0 6px;font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)">
+      Échéancier · appelé ${eur(appele)} sur ${eur(total)}</h4>
+    <div class="table-wrap"><table>
+      <tbody>${plan.map(e => ligneEcheance(e, faites.get(e.cle))).join('')}</tbody>
+    </table></div>
+    ${plan.every(e => faites.has(e.cle)) ? '' : `<p class="muted small" style="margin:6px 0 0">
+      Une échéance se débloque quand la mission atteint son étape, et ne s’appelle qu’une fois.</p>`}
+  </div>`;
+}
+
 /** Le bloc, à poser dans la fiche d'une mission AMO. */
 export function blocHenrri(deal, etat) {
   if (CONFIG.DEMO) {
@@ -123,7 +164,7 @@ export function blocHenrri(deal, etat) {
       <span class="toolbar">
         <button class="btn ghost sm" id="henrri-refresh" title="Relit les documents chez Henrri (sans coût)">↻</button>
         <button class="btn sm" id="henrri-devis">+ Devis</button>
-        <button class="btn sm" id="henrri-facture">+ Facture</button>
+        ${echeancesDe(deal).length ? '' : '<button class="btn sm" id="henrri-facture">+ Facture</button>'}
       </span>
     </h3>
 
@@ -141,6 +182,8 @@ export function blocHenrri(deal, etat) {
     ${!t.partiel ? `<p class="muted small" style="margin:0 0 10px">
       ⚠ Henrri ne donne ici que <b>payé / non payé</b>, pas le montant réglé : la portée « Payment »
       n’est pas accordée à la clé. Une facture partiellement réglée compte donc pour zéro.</p>` : ''}
+
+    ${blocEcheancier(deal, etat.documents)}
 
     ${etat.documents.length ? `<div class="table-wrap"><table>
       <thead><tr><th>Document</th><th>Date</th><th>Statut</th><th class="num">HT</th><th class="num">TTC</th><th></th></tr></thead>
@@ -177,6 +220,24 @@ export function lierHenrri(racine, deal, redessiner) {
   agir(racine.querySelector('#henrri-devis'), 'devis', {}, 'Devis créé dans Henrri');
   agir(racine.querySelector('#henrri-facture'), 'facture', {}, 'Facture créée dans Henrri');
   agir(racine.querySelector('#henrri-refresh'), 'rafraichir', {}, 'Documents relus');
+
+  // Appeler une échéance, c'est demander de l'argent à un client : on confirme,
+  // en disant laquelle et combien. Le montant affiché part avec la demande —
+  // le serveur refait le calcul et refuse s'il ne trouve pas la même somme, pour
+  // qu'aucune facture ne porte un montant que personne n'a vu à l'écran.
+  racine.querySelectorAll('[data-echeance]').forEach(b => b.onclick = async () => {
+    const montant = Number(b.dataset.montant);
+    if (!await confirm(`Facturer « ${b.dataset.nom} » à ce client ? La facture sera créée dans Henrri.`)) return;
+    b.disabled = true;
+    try {
+      await appeler('facture', { deal_id: deal.id, echeance: b.dataset.echeance, montant_affiche: montant });
+      toast(`${b.dataset.nom} — facture créée dans Henrri`);
+      redessiner();
+    } catch (e) {
+      toast(e.message, 'err');
+      b.disabled = false;
+    }
+  });
 
   // Finaliser est IRRÉVERSIBLE — Henrri interdit toute modification ensuite —
   // et coûte des crédits en production : on demande confirmation, en nommant
