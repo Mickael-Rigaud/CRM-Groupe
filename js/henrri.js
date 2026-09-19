@@ -301,8 +301,15 @@ export function lierHenrri(racine, deal, redessiner) {
 
   // Le lien d'ouverture est TEMPORAIRE : il se demande au clic, jamais à
   // l'avance. Stocké, il serait mort à la première consultation.
+  // ⚠ CE LIEN PEUT SE FAIRE ATTENDRE. Constaté le 19/09/2026 : chez Henrri,
+  // `POST /v1/documents/{id}/pdf/url` reste parfois pendu, et la fonction ne
+  // rend alors son refus qu'au bout de vingt secondes. Un bouton simplement
+  // grisé pendant vingt secondes ressemble à une application figée : il dit
+  // donc ce qu'il attend, et retrouve son libellé quoi qu'il arrive.
   racine.querySelectorAll('[data-henrri-pdf]').forEach(b => b.onclick = async () => {
+    const libelle = b.textContent;
     b.disabled = true;
+    b.textContent = 'Ouverture…';
     try {
       const r = await appeler('pdf', { deal_id: deal.id, henrri_id: b.dataset.henrriPdf });
       const url = typeof r.url === 'string' ? r.url : null;
@@ -310,6 +317,7 @@ export function lierHenrri(racine, deal, redessiner) {
       window.open(url, '_blank', 'noopener');
     } catch (e) { toast(e.message, 'err'); }
     b.disabled = false;
+    b.textContent = libelle;
   });
 }
 
