@@ -627,8 +627,16 @@ function resultatHonoraires(scores, travaux, tauxChoisi) {
   return resultatsHonoraires(travaux, tauxChoisi ?? sug, sug);
 }
 
-// 5. Les phases. Le poids sert aussi de clé de facturation, d'où la barre : on voit
-// tout de suite que l'accompagnement travaux pèse le tiers de la mission.
+// 5. Les phases. Le poids dit ce que chacune PÈSE dans la mission, d'où la barre :
+// on voit tout de suite que l'accompagnement travaux en fait le tiers.
+//
+// ⚠ CE N'EST PLUS LA CLÉ DE FACTURATION, et le texte ne doit plus le dire. Le
+// manuel V5 présentait ces poids comme tels, mais le cabinet facture désormais en
+// trois appels — 40 % à la signature, 40 % au suivi intermédiaire, 20 % à la
+// réception (`ACTIVITIES.btp.echeances.amo`, arbitré le 19/09/2026). Laisser
+// « clé de facturation » ici donnait deux vérités dans la même application : celui
+// qui lit cet écran facturerait 10 % au cadrage, celui qui lit l'échéancier
+// facturerait 40 % à la signature. Une seule fait foi, c'est l'échéancier.
 const phasesAmo = () => `<div class="card btp-ref" style="${teinteMission('amo')}">
   <div class="card-head"><h2>Phases d'accompagnement</h2>
     <span class="grow"></span>
@@ -649,7 +657,9 @@ const phasesAmo = () => `<div class="card btp-ref" style="${teinteMission('amo')
       </div>
     </li>`;
   }).join('')}</ol>
-  <p class="muted small">Les six poids font 100 % : ils servent de clé de facturation par phase.</p>
+  <p class="muted small">Les six poids font 100 % et disent ce que chaque phase pèse dans la mission.
+    <b>Ce n'est pas l'échéancier</b> : une mission se facture en trois fois — 40 % à la signature,
+    40 % au suivi intermédiaire, 20 % à la réception —, depuis la fiche de l'affaire.</p>
 </div>`;
 
 // 6. La limite à ne pas franchir. Elle est ici parce qu'elle se joue au moment du

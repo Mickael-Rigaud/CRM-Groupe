@@ -453,10 +453,14 @@ export const ACTIVITIES = {
     // étape », puis « gagnée une fois cette étape terminée ».
     gain: { expertise: 'rdv_complementaire', amo: 'amo_reception' },
     // COMMENT UNE MISSION SE FACTURE, en trois fois. Arbitré par Mickael le
-    // 19/09/2026 : 40 % au démarrage du chantier, 40 % au suivi intermédiaire,
-    // 20 % à la réception. Chaque échéance est accrochée à une ÉTAPE du pipeline :
+    // 19/09/2026 : 40 % à la signature, 40 % au suivi intermédiaire, 20 % à la
+    // réception. Chaque échéance est accrochée à une ÉTAPE du pipeline :
     // avancer la mission débloque la facture, plutôt que de laisser quelqu'un
     // décider de tête quand appeler l'argent.
+    // ⚠ L'ACOMPTE PART DE LA SIGNATURE, pas du démarrage du chantier — corrigé le
+    // même jour. Entre « Mission AMO signée » et « Démarrage chantier » il y a la
+    // consultation des entreprises : des semaines de travail que l'acompte est
+    // précisément là pour couvrir. L'attacher au démarrage revenait à les avancer.
     // ⚠ Les parts sont déclarées ici et nulle part ailleurs. Le dernier montant est
     // calculé par DIFFÉRENCE (voir `echeancesDe`) : trois pourcentages arrondis
     // chacun de leur côté ne retombent pas toujours sur le total, et une mission
@@ -464,7 +468,7 @@ export const ACTIVITIES = {
     // Seule l'AMO en a un — une expertise se facture en une fois, et ira sur Stripe.
     echeances: {
       amo: [
-        { cle: 'acompte', label: 'Acompte', part: 40, stage: 'amo_consultation' },
+        { cle: 'acompte', label: 'Acompte', part: 40, stage: 'amo_contrat' },
         { cle: 'intermediaire', label: 'Situation intermédiaire', part: 40, stage: 'amo_chantier' },
         { cle: 'solde', label: 'Solde', part: 20, stage: 'amo_reception' },
       ],
