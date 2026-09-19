@@ -120,11 +120,15 @@ const ligneEcheance = (e, faite) => {
   const etat = faite
     ? `<span class="pill ${faite.paye ? 'ok' : faite.finalise ? 'info' : ''}">${esc(faite.statut || 'Facturée')}</span>
        ${faite.numero ? `<span class="muted small">${esc(faite.numero)}</span>` : ''}`
-    : e.atteinte
+    // Sans montant HT sur la mission, une échéance vaut 0 € : le serveur refuserait,
+    // et un bouton qui ne peut pas aboutir ne vaut pas mieux qu'une explication.
+    : e.montant <= 0
+      ? `<span class="muted small">Montant de la mission à renseigner</span>`
+      : e.atteinte
       ? `<button type="button" class="btn sm" data-echeance="${esc(e.cle)}" data-montant="${e.montant}"
            data-nom="${esc(`${e.label} — ${eur(e.montant)}`)}">Facturer</button>`
       : `<span class="muted small">À l’étape « ${esc(e.etape)} »</span>`;
-  return `<tr class="${faite ? '' : e.atteinte ? 'ech-prete' : 'ech-attente'}">
+  return `<tr class="${faite || e.montant <= 0 ? '' : e.atteinte ? 'ech-prete' : 'ech-attente'}">
     <td><b>${esc(e.label)}</b> <span class="muted small">${e.part} %</span></td>
     <td class="num">${eur(e.montant)}</td>
     <td>${etat}</td>
