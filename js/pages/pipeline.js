@@ -1,7 +1,7 @@
 // Pipeline kanban d'une activité, avec glisser-déposer entre étapes.
 import { db } from '../data/db.js';
 import { scope } from '../data/scope.js';
-import { ACTIVITIES, weightedAmount, stagesDe, missionDe, estGagnante } from '../data/schema.js';
+import { ACTIVITIES, weightedAmount, stagesDe, missionDe } from '../data/schema.js';
 import { esc, eur, toast, daysSince, initials, dealParty, userName, csvDownload, fmtDate, terms, hit, searchInput, bindSearch, restoreFocus, marqueResponsable, SANS_RESPONSABLE } from '../ui.js';
 import { openDeal, dealForm, moveStage } from './deal.js';
 import { nextActivity } from './activity.js';
@@ -79,7 +79,7 @@ export const pipelinePage = {
     const kanbanHtml = (act, deals) => `<div class="kanban">${stagesDe(key, state.mission).map(s => {
       const col = deals.filter(d => d.stage === s.key);
       const sum = col.reduce((t, d) => t + (Number(d.amount) || 0), 0);
-      return `<div class="col" data-col="${s.key}"><div class="col-head"><div><b>${esc(s.label)}</b><span class="sum">${eur(sum)}${estGagnante(act.key, s.key) ? ' · gagné' : s.delivery ? ' · en réalisation' : ' · ' + s.p + ' %'}</span></div><span>${col.length}</span></div>
+      return `<div class="col" data-col="${s.key}"><div class="col-head"><div><b>${esc(s.label)}</b><span class="sum">${eur(sum)}${s.delivery ? ' · en réalisation' : ' · ' + s.p + ' %'}</span></div><span>${col.length}</span></div>
         ${col.map(d => cardHtml(act, d)).join('')}</div>`;
     }).join('')}</div>`;
 

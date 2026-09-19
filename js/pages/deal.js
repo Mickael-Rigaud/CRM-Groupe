@@ -1,7 +1,7 @@
 // Affaires : fiche détaillée (modale), création / édition, changement d'étape, gagné / perdu.
 import { db } from '../data/db.js';
 import { scope } from '../data/scope.js';
-import { ACTIVITIES, CHANNELS, LOST_REASONS, stageOf, stageIndex, stagesDe, missionDe, couleurMission, estNouveauLead, etapeEquivalente, estGagnante, etapeGain } from '../data/schema.js';
+import { ACTIVITIES, CHANNELS, LOST_REASONS, stageOf, stageIndex, stagesDe, missionDe, couleurMission, estNouveauLead, etapeEquivalente, estEtapeFinale, etapeFinale } from '../data/schema.js';
 import { esc, eur, openModal, closeModal, renderForm, readForm, refField, bindRefFields, toast, fmtDate, fmtDateTime, userName, marqueResponsable, contactName, dealParty, actBadge, daysSince, confirm } from '../ui.js';
 import { activityForm, activityRowHtml, bindActivityRows, nextActivity } from './activity.js';
 import { documentsSection, bindDocuments } from '../documents.js';
@@ -91,16 +91,19 @@ export async function moveStage(deal, stageKey, { silent = false } = {}) {
   const act = ACTIVITIES[deal.activity]; const st = stageOf(deal.activity, stageKey);
   if (!st || deal.stage === stageKey) return;
   const patch = { stage: stageKey, stage_changed_at: new Date().toISOString(), stage_history: [...(deal.stage_history || []), { stage: stageKey, at: new Date().toISOString() }] };
-  // GAGNÉE N'EST PAS EN COURS. Une mission qui tourne n'est pas encore remportée :
-  // l'affaire ne se gagne qu'à la dernière étape du déroulé, déclarée par `gain` sur
-  // l'activité et lue par `estGagnante`. Une activité qui n'en déclare pas garde
-  // l'ancienne règle (toute étape de réalisation gagne), donc rien ne bouge ailleurs.
-  // Le retour en arrière suit la même règle : quitter l'étape de gain ROUVRE l'affaire,
-  // sans quoi un dossier reculé resterait gagné et le CA compterait une victoire qui
-  // n'a plus lieu. C'est le miroir exact du gain, pas une décision de plus.
-  const gagnante = estGagnante(deal.activity, stageKey);
-  if (gagnante && deal.status !== 'won') Object.assign(patch, { status: 'won', won_at: new Date().toISOString(), closed_at: new Date().toISOString(), lost_reason: null });
-  else if (!gagnante && deal.status === 'won') Object.assign(patch, { status: 'open', won_at: null, closed_at: null });
+  // ARRIVER À LA DERNIÈRE ÉTAPE NE FAIT PAS GAGNER. Une mission posée sur « Réception
+  // chantiers » est encore en cours tant que la réception n'est pas faite : aucune
+  // étape ne déclenche donc le gain chez BTP Expertise, il se déclare par `setWon`
+  // quand le travail est réellement fini. Une activité qui ne déclare pas d'étape
+  // finale (`gain`) garde l'ancienne règle — toute étape de réalisation gagne —, ce
+  // qui laisse Propulsion intacte.
+  // Le RECUL, lui, reste automatique : une affaire gagnée qu'on ramène avant sa
+  // dernière étape se rouvre, sans quoi le CA compterait une victoire qui n'a plus
+  // lieu. Gagner est une décision, ne plus l'être est une conséquence.
+  const finale = estEtapeFinale(deal.activity, stageKey);
+  const gainAutomatique = !ACTIVITIES[deal.activity]?.gain;
+  if (finale && gainAutomatique && deal.status !== 'won') Object.assign(patch, { status: 'won', won_at: new Date().toISOString(), closed_at: new Date().toISOString(), lost_reason: null });
+  else if (!finale && deal.status === 'won') Object.assign(patch, { status: 'open', won_at: null, closed_at: null });
   const updated = await db.update('deals', deal.id, patch);
   await promouvoirClient(deal, updated);
   const mention = patch.status === 'won' ? ' (affaire gagnée)' : patch.status === 'open' ? ' (affaire remise en cours)' : '';
@@ -111,10 +114,10 @@ export async function moveStage(deal, stageKey, { silent = false } = {}) {
 
 export async function setWon(deal) {
   const act = ACTIVITIES[deal.activity];
-  // « Marquer gagnée » emmène l'affaire à l'étape qui fait gagner — la dernière du
-  // déroulé chez BTP Expertise, la première de réalisation ailleurs. Elle diffère d'un
-  // métier à l'autre : une expertise se clôt sur sa facturation, une AMO à la réception.
-  const gain = etapeGain(deal.activity, missionDe(deal));
+  // « Marquer gagnée » est LE geste qui gagne une affaire chez BTP Expertise : il dit
+  // que la dernière étape est terminée — réception faite en AMO, dossier clôturé et
+  // facturé en expertise. Il emmène l'affaire à cette étape si elle n'y est pas encore.
+  const gain = etapeFinale(deal.activity, missionDe(deal));
   const patch = { status: 'won', won_at: new Date().toISOString(), closed_at: new Date().toISOString(), lost_reason: null };
   if (gain && stageIndex(deal.activity, deal.stage) < stageIndex(deal.activity, gain)) {
     Object.assign(patch, { stage: gain, stage_changed_at: new Date().toISOString(), stage_history: [...(deal.stage_history || []), { stage: gain, at: new Date().toISOString() }] });
@@ -263,7 +266,7 @@ export function openDeal(id, onChange) {
                     <button class="btn danger sm" id="d-del">🗑 Supprimer</button>
         </div>
       </div>
-      <div class="stage-steps" style="margin-bottom:18px">${etapes.map((s, i) => `<button data-stage="${s.key}" class="${i === curIdx ? 'cur' : i < curIdx ? 'past' : ''}" title="${estGagnante(d.activity, s.key) ? 'Étape de gain : l\'affaire est remportée' : s.delivery ? 'Étape de réalisation — la mission tourne, elle n\'est pas encore gagnée' : 'Probabilité ' + s.p + ' %'}">${esc(s.label)}</button>`).join('')}</div>
+      <div class="stage-steps" style="margin-bottom:18px">${etapes.map((s, i) => `<button data-stage="${s.key}" class="${i === curIdx ? 'cur' : i < curIdx ? 'past' : ''}" title="${estEtapeFinale(d.activity, s.key) ? 'Dernière étape. Y être ne suffit pas : l\'affaire se gagne avec « Marquer gagnée », une fois ce travail terminé.' : s.delivery ? 'Étape de réalisation — la mission tourne, elle n\'est pas encore gagnée' : 'Probabilité ' + s.p + ' %'}">${esc(s.label)}</button>`).join('')}</div>
       ${d.status === 'open' && !next ? `<div class="alert" style="margin-bottom:16px"><b>!</b><div>Aucune prochaine action planifiée — <a href="#" id="d-add-act-inline">en ajouter une maintenant</a>.</div></div>` : ''}
       <div class="detail">
         <div>

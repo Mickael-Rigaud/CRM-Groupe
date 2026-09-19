@@ -443,11 +443,14 @@ export const ACTIVITIES = {
     // en AMO — mais dit la meme chose. Tout ce qui suit dans le deroule du metier
     // compte aussi : on n'enleve pas du previsionnel une mission qui avance.
     engagement: { expertise: 'proposition', amo: 'amo_contrat' },
-    // GAGNÉE N'EST PAS EN COURS. Une mission qui tourne n'est pas une mission
-    // remportée : elle peut encore s'arrêter, se réduire, mal finir. L'affaire n'est
-    // gagnée qu'à la DERNIÈRE étape du déroulé — « Clôturé facturé » en expertise,
-    // « Réception chantiers » en AMO. Arbitré le 19/09/2026 ; avant, n'importe quelle
-    // étape de réalisation suffisait, ce qui déclarait gagnée une AMO à peine signée.
+    // LA DERNIÈRE ÉTAPE DU DÉROULÉ, par métier. Y être n'est pas l'avoir terminée :
+    // une mission arrivée à la réception des chantiers est encore en cours tant que
+    // la réception n'est pas faite. Le gain ne se déduit donc PAS de l'étape — il se
+    // déclare, par « Marquer gagnée », une fois le travail réellement fini. Cette
+    // déclaration sert à deux choses : savoir où poser une affaire qu'on gagne, et
+    // savoir qu'une affaire gagnée qu'on recule doit se rouvrir.
+    // Arbitré le 19/09/2026, en deux temps : d'abord « gagnée seulement à la dernière
+    // étape », puis « gagnée une fois cette étape terminée ».
     gain: { expertise: 'rdv_complementaire', amo: 'amo_reception' },
     // Le cabinet mène deux métiers au déroulé différent : l'expertise, qui va du
     // constat au rapport, et l'AMO, qui accompagne un chantier de la définition du
@@ -716,12 +719,14 @@ export const etapeEquivalente = (activity, stage, mission) => {
   return arrivee[Math.min(rang, arrivee.length - 1)].key;
 };
 
-// L'étape à partir de laquelle une affaire est GAGNÉE. Une activité qui ne déclare pas
-// `gain` garde l'ancienne règle — toute étape de réalisation vaut gain —, donc les
-// trois autres pipelines ne changent pas. Une étape commune aux deux métiers (avant
-// l'entretien) n'est jamais gagnante : on ne remporte pas une affaire qu'on n'a pas
-// encore qualifiée.
-export const estGagnante = (activity, stage) => {
+// L'étape où se tient une affaire gagnée : la dernière du déroulé de son métier.
+// ⚠ Elle ne FAIT pas gagner — chez BTP Expertise le gain se déclare à la main, une
+// fois la réception terminée. Elle sert à savoir où poser une affaire qu'on gagne, et
+// à rouvrir celle qu'on recule. Une activité qui ne déclare pas `gain` garde l'ancienne
+// règle, où toute étape de réalisation vaut gain : c'est le cas de Propulsion, et c'est
+// pourquoi les trois autres pipelines ne changent pas. Une étape commune aux deux
+// métiers (avant l'entretien) n'est jamais finale.
+export const estEtapeFinale = (activity, stage) => {
   const a = ACTIVITIES[activity];
   const st = a?.stages.find(x => x.key === stage);
   if (!st) return false;
@@ -733,10 +738,10 @@ export const estGagnante = (activity, stage) => {
   return seuil >= 0 && rang >= seuil;
 };
 
-// L'étape qui fait gagner, pour un métier donné : celle où « Marquer gagnée » emmène
-// l'affaire. À défaut de déclaration, la première étape de réalisation — l'ancien
-// comportement, conservé pour les activités sans métiers.
-export const etapeGain = (activity, mission) => {
+// Où « Marquer gagnée » emmène l'affaire, pour un métier donné. À défaut de
+// déclaration, la première étape de réalisation — l'ancien comportement, conservé pour
+// les activités sans métiers.
+export const etapeFinale = (activity, mission) => {
   const a = ACTIVITIES[activity];
   if (!a) return null;
   if (a.gain?.[mission]) return a.gain[mission];

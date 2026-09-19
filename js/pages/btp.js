@@ -217,8 +217,11 @@ function lireGrille(racine, spec) {
 }
 
 // ---------------------------------------------------------------- Le réseau et ses missions
-// Les affaires vivantes : ouvertes, plus les gagnées encore en réalisation. C'est ce
-// qui occupe réellement le réseau — une affaire perdue ou livrée ne pèse plus rien.
+// Ce que le pipeline doit MONTRER : les affaires ouvertes, plus les gagnées, qui
+// restent visibles dans leur dernière colonne. Une affaire ne doit pas disparaître d'un
+// écran parce qu'elle s'est bien terminée.
+// ⚠ Ce n'est pas la même chose que ce qui OCCUPE quelqu'un : une mission gagnée est
+// finie, elle ne pèse plus aucun point — voir `chargeDe`, qui s'en tient aux ouvertes.
 const vivantes = () => {
   const a = act();
   const all = deals();
@@ -306,7 +309,9 @@ const sommeMontants = (l) => l.reduce((t, d) => t + (Number(d.amount) || 0), 0);
 // missions vivantes. Le plafond est structurel — il dit ce que la personne porte, pas
 // ce qu'elle fait aujourd'hui.
 function chargeDe(userId) {
-  const siennes = vivantes().filter(d => d.owner_id === userId);
+  // Seules les affaires OUVERTES occupent quelqu'un. Une mission gagnée est terminée —
+  // le gain se déclare quand la dernière étape est faite —, elle libère donc sa charge.
+  const siennes = vivantes().filter(d => d.owner_id === userId && d.status === 'open');
   const points = siennes.reduce((t, d) => t + pointsDe(d), 0);
   const amo = siennes.filter(d => missionDe(d) === 'amo');
   const anneeEnCours = String(new Date().getFullYear());
@@ -341,7 +346,12 @@ export const btpHomePage = {
       const a = act();
       const all = deals();
       const open = all.filter(d => d.status === 'open');
-      const enCours = all.filter(d => a.stages.find(s => s.key === d.stage)?.delivery && d.status !== 'lost');
+      // « Missions en cours » = le travail qui tourne, de la première étape de
+      // réalisation à la dernière. Une mission GAGNÉE en sort : le gain se déclare
+      // quand la dernière étape est terminée, donc il n'y a plus rien à faire dessus.
+      // Une perdue en sort aussi. Ce compteur répond à « qu'est-ce qui m'occupe ? »,
+      // pas à « qu'est-ce que j'ai fait cette année ? ».
+      const enCours = all.filter(d => a.stages.find(s => s.key === d.stage)?.delivery && d.status === 'open');
       const nouveaux = all.filter(d => ['lead', 'rdv1'].includes(d.stage) && d.status === 'open');
       const anneeEnCours = String(new Date().getFullYear());
       // Le CA prévisionnel démarre à l'engagement du client — « Lettre de mission »
