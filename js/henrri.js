@@ -16,7 +16,7 @@
 import { CONFIG } from './config.js';
 import { db } from './data/db.js';
 import { missionDe, stageOf } from './data/schema.js';
-import { esc, eur, fmtDate, toast } from './ui.js';
+import { confirm, esc, eur, fmtDate, toast } from './ui.js';
 
 /**
  * Une affaire relève-t-elle de Henrri ? Seules les AMO de BTP Expertise, et
@@ -85,6 +85,9 @@ export function totauxHenrri(documents = []) {
   };
 }
 
+// Un BROUILLON n'est pas une pièce comptable : son numéro n'est pas définitif et
+// il reste modifiable. « Finaliser » le fige chez Henrri — d'où le bouton, et
+// d'où le fait qu'il disparaisse une fois le document finalisé.
 const ligneDoc = (x) => `<tr>
   <td><b>${x.type === 'facture' ? 'Facture' : x.type === 'avoir' ? 'Avoir' : 'Devis'}</b>
     ${x.numero ? `<span class="muted small"> ${esc(x.numero)}</span>` : ''}</td>
@@ -92,7 +95,11 @@ const ligneDoc = (x) => `<tr>
   <td><span class="pill ${x.paye ? 'ok' : x.finalise ? 'info' : ''}">${esc(x.statut || '—')}</span></td>
   <td class="num">${x.montant_ht != null ? eur(x.montant_ht) : '—'}</td>
   <td class="num">${x.montant_ttc != null ? eur(x.montant_ttc) : '—'}</td>
-  <td class="num"><button type="button" class="btn ghost sm" data-henrri-pdf="${esc(x.henrri_id)}"
+  <td style="display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap">
+    ${x.finalise ? '' : `<button type="button" class="btn ghost sm" data-henrri-finaliser="${esc(x.henrri_id)}"
+      data-nom="${esc(`${x.type === 'facture' ? 'la facture' : x.type === 'avoir' ? "l'avoir" : 'le devis'} ${x.numero || ''}`.trim())}"
+      title="Fige le document chez Henrri et verrouille son numéro. Irréversible.">Finaliser</button>`}
+    <button type="button" class="btn ghost sm" data-henrri-pdf="${esc(x.henrri_id)}"
       title="Demande à Henrri un lien de téléchargement">Ouvrir</button></td>
 </tr>`;
 
@@ -170,6 +177,24 @@ export function lierHenrri(racine, deal, redessiner) {
   agir(racine.querySelector('#henrri-devis'), 'devis', {}, 'Devis créé dans Henrri');
   agir(racine.querySelector('#henrri-facture'), 'facture', {}, 'Facture créée dans Henrri');
   agir(racine.querySelector('#henrri-refresh'), 'rafraichir', {}, 'Documents relus');
+
+  // Finaliser est IRRÉVERSIBLE — Henrri interdit toute modification ensuite —
+  // et coûte des crédits en production : on demande confirmation, en nommant
+  // le document pour qu'on sache lequel on fige.
+  racine.querySelectorAll('[data-henrri-finaliser]').forEach(b => b.onclick = async () => {
+    const id = b.dataset.henrriFinaliser;
+    const nom = b.dataset.nom || 'ce document';
+    if (!await confirm(`Finaliser ${nom} chez Henrri ? Le document sera figé et son numéro verrouillé : on ne pourra plus le modifier.`)) return;
+    b.disabled = true;
+    try {
+      await appeler('finaliser', { deal_id: deal.id, henrri_id: id });
+      toast('Document finalisé chez Henrri');
+      redessiner();
+    } catch (e) {
+      toast(e.message, 'err');
+      b.disabled = false;
+    }
+  });
 
   // Le lien d'ouverture est TEMPORAIRE : il se demande au clic, jamais à
   // l'avance. Stocké, il serait mort à la première consultation.
