@@ -1,7 +1,7 @@
 // Affaires : fiche détaillée (modale), création / édition, changement d'étape, gagné / perdu.
 import { db } from '../data/db.js';
 import { scope } from '../data/scope.js';
-import { ACTIVITIES, CHANNELS, LOST_REASONS, stageOf, stageIndex, stagesDe, missionDe, couleurMission, estNouveauLead, etapeEquivalente } from '../data/schema.js';
+import { ACTIVITIES, CHANNELS, LOST_REASONS, stageOf, stageIndex, stagesDe, missionDe, couleurMission, estNouveauLead, etapeEquivalente, estGagnante, etapeGain } from '../data/schema.js';
 import { esc, eur, openModal, closeModal, renderForm, readForm, refField, bindRefFields, toast, fmtDate, fmtDateTime, userName, marqueResponsable, contactName, dealParty, actBadge, daysSince, confirm } from '../ui.js';
 import { activityForm, activityRowHtml, bindActivityRows, nextActivity } from './activity.js';
 import { documentsSection, bindDocuments } from '../documents.js';
@@ -91,21 +91,33 @@ export async function moveStage(deal, stageKey, { silent = false } = {}) {
   const act = ACTIVITIES[deal.activity]; const st = stageOf(deal.activity, stageKey);
   if (!st || deal.stage === stageKey) return;
   const patch = { stage: stageKey, stage_changed_at: new Date().toISOString(), stage_history: [...(deal.stage_history || []), { stage: stageKey, at: new Date().toISOString() }] };
-  if (st.delivery && deal.status !== 'won') Object.assign(patch, { status: 'won', won_at: new Date().toISOString(), closed_at: new Date().toISOString(), lost_reason: null });
+  // GAGNÉE N'EST PAS EN COURS. Une mission qui tourne n'est pas encore remportée :
+  // l'affaire ne se gagne qu'à la dernière étape du déroulé, déclarée par `gain` sur
+  // l'activité et lue par `estGagnante`. Une activité qui n'en déclare pas garde
+  // l'ancienne règle (toute étape de réalisation gagne), donc rien ne bouge ailleurs.
+  // Le retour en arrière suit la même règle : quitter l'étape de gain ROUVRE l'affaire,
+  // sans quoi un dossier reculé resterait gagné et le CA compterait une victoire qui
+  // n'a plus lieu. C'est le miroir exact du gain, pas une décision de plus.
+  const gagnante = estGagnante(deal.activity, stageKey);
+  if (gagnante && deal.status !== 'won') Object.assign(patch, { status: 'won', won_at: new Date().toISOString(), closed_at: new Date().toISOString(), lost_reason: null });
+  else if (!gagnante && deal.status === 'won') Object.assign(patch, { status: 'open', won_at: null, closed_at: null });
   const updated = await db.update('deals', deal.id, patch);
   await promouvoirClient(deal, updated);
-  await logEvent(updated, 'stage', `Étape → ${st.label}${patch.status === 'won' ? ' (affaire gagnée)' : ''}`);
+  const mention = patch.status === 'won' ? ' (affaire gagnée)' : patch.status === 'open' ? ' (affaire remise en cours)' : '';
+  await logEvent(updated, 'stage', `Étape → ${st.label}${mention}`);
   if (!silent) toast(`Étape : ${st.label}`);
   return updated;
 }
 
 export async function setWon(deal) {
   const act = ACTIVITIES[deal.activity];
-  // Une AMO et une expertise n'entrent pas en realisation a la meme etape.
-  const firstDelivery = stagesDe(deal.activity, missionDe(deal)).find(s => s.delivery);
+  // « Marquer gagnée » emmène l'affaire à l'étape qui fait gagner — la dernière du
+  // déroulé chez BTP Expertise, la première de réalisation ailleurs. Elle diffère d'un
+  // métier à l'autre : une expertise se clôt sur sa facturation, une AMO à la réception.
+  const gain = etapeGain(deal.activity, missionDe(deal));
   const patch = { status: 'won', won_at: new Date().toISOString(), closed_at: new Date().toISOString(), lost_reason: null };
-  if (firstDelivery && stageIndex(deal.activity, deal.stage) < stageIndex(deal.activity, firstDelivery.key)) {
-    Object.assign(patch, { stage: firstDelivery.key, stage_changed_at: new Date().toISOString(), stage_history: [...(deal.stage_history || []), { stage: firstDelivery.key, at: new Date().toISOString() }] });
+  if (gain && stageIndex(deal.activity, deal.stage) < stageIndex(deal.activity, gain)) {
+    Object.assign(patch, { stage: gain, stage_changed_at: new Date().toISOString(), stage_history: [...(deal.stage_history || []), { stage: gain, at: new Date().toISOString() }] });
   }
   const u = await db.update('deals', deal.id, patch);
   await promouvoirClient(deal, u);
@@ -251,7 +263,7 @@ export function openDeal(id, onChange) {
                     <button class="btn danger sm" id="d-del">🗑 Supprimer</button>
         </div>
       </div>
-      <div class="stage-steps" style="margin-bottom:18px">${etapes.map((s, i) => `<button data-stage="${s.key}" class="${i === curIdx ? 'cur' : i < curIdx ? 'past' : ''}" title="${s.delivery ? 'Étape de réalisation (affaire gagnée)' : 'Probabilité ' + s.p + ' %'}">${esc(s.label)}</button>`).join('')}</div>
+      <div class="stage-steps" style="margin-bottom:18px">${etapes.map((s, i) => `<button data-stage="${s.key}" class="${i === curIdx ? 'cur' : i < curIdx ? 'past' : ''}" title="${estGagnante(d.activity, s.key) ? 'Étape de gain : l\'affaire est remportée' : s.delivery ? 'Étape de réalisation — la mission tourne, elle n\'est pas encore gagnée' : 'Probabilité ' + s.p + ' %'}">${esc(s.label)}</button>`).join('')}</div>
       ${d.status === 'open' && !next ? `<div class="alert" style="margin-bottom:16px"><b>!</b><div>Aucune prochaine action planifiée — <a href="#" id="d-add-act-inline">en ajouter une maintenant</a>.</div></div>` : ''}
       <div class="detail">
         <div>

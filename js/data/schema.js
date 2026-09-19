@@ -443,6 +443,12 @@ export const ACTIVITIES = {
     // en AMO — mais dit la meme chose. Tout ce qui suit dans le deroule du metier
     // compte aussi : on n'enleve pas du previsionnel une mission qui avance.
     engagement: { expertise: 'proposition', amo: 'amo_contrat' },
+    // GAGNÉE N'EST PAS EN COURS. Une mission qui tourne n'est pas une mission
+    // remportée : elle peut encore s'arrêter, se réduire, mal finir. L'affaire n'est
+    // gagnée qu'à la DERNIÈRE étape du déroulé — « Clôturé facturé » en expertise,
+    // « Réception chantiers » en AMO. Arbitré le 19/09/2026 ; avant, n'importe quelle
+    // étape de réalisation suffisait, ce qui déclarait gagnée une AMO à peine signée.
+    gain: { expertise: 'rdv_complementaire', amo: 'amo_reception' },
     // Le cabinet mène deux métiers au déroulé différent : l'expertise, qui va du
     // constat au rapport, et l'AMO, qui accompagne un chantier de la définition du
     // besoin à la réception. D'où deux pipelines — `mission` dit à laquelle une étape
@@ -708,6 +714,33 @@ export const etapeEquivalente = (activity, stage, mission) => {
   if (!arrivee.length) return null;
   const rang = depart.findIndex(x => x.key === stage);
   return arrivee[Math.min(rang, arrivee.length - 1)].key;
+};
+
+// L'étape à partir de laquelle une affaire est GAGNÉE. Une activité qui ne déclare pas
+// `gain` garde l'ancienne règle — toute étape de réalisation vaut gain —, donc les
+// trois autres pipelines ne changent pas. Une étape commune aux deux métiers (avant
+// l'entretien) n'est jamais gagnante : on ne remporte pas une affaire qu'on n'a pas
+// encore qualifiée.
+export const estGagnante = (activity, stage) => {
+  const a = ACTIVITIES[activity];
+  const st = a?.stages.find(x => x.key === stage);
+  if (!st) return false;
+  if (!a.gain) return !!st.delivery;
+  if (!st.mission) return false;
+  const etapes = a.stages.filter(x => x.mission === st.mission);
+  const seuil = etapes.findIndex(x => x.key === a.gain[st.mission]);
+  const rang = etapes.findIndex(x => x.key === stage);
+  return seuil >= 0 && rang >= seuil;
+};
+
+// L'étape qui fait gagner, pour un métier donné : celle où « Marquer gagnée » emmène
+// l'affaire. À défaut de déclaration, la première étape de réalisation — l'ancien
+// comportement, conservé pour les activités sans métiers.
+export const etapeGain = (activity, mission) => {
+  const a = ACTIVITIES[activity];
+  if (!a) return null;
+  if (a.gain?.[mission]) return a.gain[mission];
+  return stagesDe(activity, mission).find(s => s.delivery)?.key || null;
 };
 
 // Les étapes d'une mission : les siennes, plus les communes. L'ordre de la liste est
