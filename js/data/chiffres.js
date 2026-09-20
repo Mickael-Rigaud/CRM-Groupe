@@ -8,7 +8,7 @@
 // le calcul interne — sinon on additionnerait deux comptages du même réel.
 import { db } from './db.js';
 import { scope } from './scope.js';
-import { ACTIVITIES, ACTIVITY_KEYS, reachedRdv, stageIndex, stageOf } from './schema.js';
+import { ACTIVITIES, ACTIVITY_KEYS, aAtteint, missionDe, reachedRdv, stageIndex, stageOf } from './schema.js';
 import { inRange, isoDay } from '../ui.js';
 
 // ---------- Mois ----------
@@ -305,6 +305,92 @@ export async function enregistrerObjectifs(valeurs) {
   if (existe) await db.update('settings', OBJECTIFS_CLE, { value: payload });
   else await db.insert('settings', { key: OBJECTIFS_CLE, value: payload });
 }
+// ---------- Objectifs de volume, et le suivi qui va avec ----------
+// Leads, qualifiés, RDV : des NOMBRES, saisis PAR MOIS — c'est ainsi qu'on raisonne
+// (« vingt leads par mois »), et l'écran de réglage ne parle que de mois.
+//
+// ⚠ DEUX CONVENTIONS COHABITENT, et c'est assumé : l'objectif de CA est stocké à
+// l'ANNÉE (`objectifs_ca`, partagé avec le tableau de bord du groupe), les volumes
+// au MOIS. La raison est qu'un chiffre a une source et une seule : le CA de BTP
+// Expertise était déjà saisi ailleurs, le redemander ici donnerait deux vérités
+// pour la même chose. Le formulaire affiche donc le CA par mois et écrit son
+// douzième-inverse dans l'objectif annuel existant — l'utilisateur ne voit qu'une
+// convention, le stockage n'en garde qu'une par chiffre.
+export const OBJECTIFS_VOLUME_CLE = 'objectifs_volume';
+export function objectifsVolume() {
+  const v = db.setting(OBJECTIFS_VOLUME_CLE);
+  if (!v) return {};
+  try { return (typeof v === 'string' ? JSON.parse(v) : v) || {}; } catch { return {}; }
+}
+const MOIS_MS = AN / 12;
+// Combien de mois vaut une période, pour ramener un objectif mensuel à sa durée.
+// Mois, trimestre, année : des mois entiers, donc un compte exact — pas de prorata
+// par jours, un objectif de 20 leads vaut 20 en février comme en juillet. Journée
+// ou semaine : là, le prorata est le seul repère honnête.
+export function moisDe(r) {
+  if (r.end - r.start > 1.5 * AN) return 0;          // « Tout » : un objectif n'a plus de sens
+  if (r.start.getDate() === 1 && r.end.getDate() === 1) {
+    let n = 0; const d = new Date(r.start);
+    while (d < r.end && n < 24) { n++; d.setMonth(d.getMonth() + 1); }
+    return n;
+  }
+  return (r.end - r.start) / MOIS_MS;
+}
+export const objectifVolume = (k, cle, r) =>
+  (Number(objectifsVolume()[k]?.[cle]) || 0) * moisDe(r);
+
+export async function enregistrerObjectifsVolume(k, valeurs) {
+  const tout = { ...objectifsVolume(), [k]: valeurs };
+  const payload = JSON.stringify(tout);
+  const existe = db.t('settings').some(s => s.key === OBJECTIFS_VOLUME_CLE);
+  if (existe) await db.update('settings', OBJECTIFS_VOLUME_CLE, { value: payload });
+  else await db.insert('settings', { key: OBJECTIFS_VOLUME_CLE, value: payload });
+}
+
+/**
+ * Le suivi d'une structure sur une période : par jalon, ce qui est visé, ce qui est
+ * fait, et le taux de passage depuis le jalon précédent.
+ *
+ * ⚠ TOUS LES JALONS SE LISENT SUR LA MÊME COHORTE : les affaires CRÉÉES dans la
+ * période. Compter les leads de septembre puis tous les RDV tenus en septembre
+ * mélangerait deux populations, et le taux de passage ne voudrait plus rien dire —
+ * un lead de juin reçu en RDV en septembre ferait remonter l'étape. C'est la même
+ * règle que l'entonnoir du groupe, et pour la même raison.
+ *
+ * Le CA fait exception et c'est voulu : c'est le CA SIGNÉ dans la période, quelle
+ * que soit la date d'arrivée du dossier — c'est ce qu'on encaisse, pas ce que la
+ * cohorte a produit. Il n'a donc pas de taux de passage.
+ */
+export function suiviObjectifs(k, r, deals = scope.deals()) {
+  const jalons = ACTIVITIES[k]?.objectifs;
+  if (!jalons?.length) return null;
+  const cohorte = deals.filter(d => d.activity === k && inRange(d.created_at, r));
+  let precedent = null;
+  return jalons.map(j => {
+    const euros = j.unite === 'euros';
+    const realise = euros ? ca(k, r, deals).montant
+      : j.etape ? cohorte.filter(d => aAtteint(d, j.etape[missionDe(d)])).length
+      : cohorte.length;
+    const vise = euros ? objectif(k, r) : objectifVolume(k, j.cle, r);
+    // Taux de passage depuis le jalon précédent : le réel d'un côté, le visé de
+    // l'autre, pour voir non pas « combien », mais OÙ ça décroche. Pas de taux sur
+    // le premier jalon — rien ne le précède — ni sur le CA : des euros ne se
+    // divisent pas par des rendez-vous.
+    const compare = !euros && precedent && precedent.unite !== 'euros';
+    const ligne = {
+      ...j, realise, vise,
+      part: vise > 0 ? realise / vise : null,
+      taux: compare ? {
+        reel: precedent.realise > 0 ? realise / precedent.realise : null,
+        vise: precedent.vise > 0 ? vise / precedent.vise : null,
+        depuis: precedent.label,
+      } : null,
+    };
+    precedent = ligne;
+    return ligne;
+  });
+}
+
 // Part de la période déjà écoulée : sert à dire « en avance » ou « en retard »
 // plutôt que d'afficher un pourcentage brut qui ne veut rien dire le 3 du mois.
 export function ecoule(r) {

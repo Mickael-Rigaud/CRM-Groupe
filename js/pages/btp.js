@@ -16,6 +16,7 @@ import {
   esc, eur, daysSince, fmtDate, contactName, dealParty, userName, toast,
   openModal, closeModal, confirm, terms, hit,
   searchInput, bindSearch, restoreFocus, csvDownload, marqueResponsable,
+  PERIODS, periodRange,
 } from '../ui.js';
 import { openDeal, dealForm, moveStage, assignerResponsable, candidatsResponsable } from './deal.js';
 import { contactForm, openContact } from './contacts.js';
@@ -26,6 +27,10 @@ import {
   mailHtml, URL_LOGO, URL_LOGO_PUBLIC, ouvrirCompose, telechargerEml, copierMiseEnPage,
 } from './btp-mail.js';
 import { ficheDecouverteAmo, champsHonoraires, resultatsHonoraires } from './btp-amo.js';
+import {
+  suiviObjectifs, objectifsVolume, enregistrerObjectifsVolume,
+  objectifs as objectifsCa, objectifAnnuel, enregistrerObjectifs, ecoule,
+} from '../data/chiffres.js';
 import { ficheDecouverteExpertise } from './btp-expertise.js';
 import { imprimerFicheDeal } from './btp-fiche.js';
 
@@ -860,6 +865,164 @@ const specialistesExpertise = () => `<div class="card btp-ref btp-garde" style="
 
 // ---------------------------------------------------------------- Missions, par métier
 // Un écran par métier : la pipeline entière, et la liste de ce qui la remplit.
+// ---------------------------------------------------------- objectifs
+// Le bloc posé au-dessus des deux pipelines de missions : sur la période choisie,
+// ce qui est visé, ce qui est fait, et où ça décroche.
+//
+// ⚠ L'OBJECTIF EST CELUI DU CABINET, pas du métier affiché. Un lead arrive avant
+// qu'on sache s'il deviendra une expertise ou une AMO — les étapes `lead` et `rdv1`
+// sont communes aux deux déroulés, et `missionDe()` répond « expertise » par défaut.
+// Découper l'objectif par métier ferait donc apparaître presque tous les leads du
+// côté expertise et presque aucun côté AMO. Le même bloc s'affiche des deux côtés,
+// avec les mêmes chiffres : c'est le cabinet qu'on pilote.
+const PERIODES_OBJECTIF = PERIODS.filter(([k]) => ['month', 'quarter', 'year'].includes(k));
+const pourcent = (v) => Math.round((v || 0) * 100);
+const LIBELLE_PERIODE = { month: 'ce mois-ci', quarter: 'ce trimestre', year: 'cette année' };
+
+const valeurJalon = (j, v) => j.unite === 'euros' ? eur(v) : Math.round(v);
+
+function carteObjectifs(periode) {
+  const r = periodRange(periode);
+  const lignes = suiviObjectifs(KEY, r) || [];
+  const part = ecoule(r);
+  const regle = scope.isDirection;
+  const rien = lignes.every(l => !l.vise);
+
+  return `<div class="card obj-card">
+    <div class="card-head"><h2>Objectifs</h2>
+      <div class="seg obj-periode">${PERIODES_OBJECTIF.map(([k, l]) =>
+        `<button type="button" data-op="${k}" class="${periode === k ? 'active' : ''}">${esc(l)}</button>`).join('')}</div>
+      <span class="grow"></span>
+      ${regle ? '<button class="btn ghost sm" id="obj-regler">Régler</button>' : ''}
+    </div>
+    ${rien ? `<div class="empty">Aucun objectif n'est encore réglé pour BTP Expertise.${
+        regle ? ' Le bouton « Régler » ci-dessus les saisit.' : ' La direction les saisit.'}</div>`
+    : `<table class="obj-table"><tbody>${lignes.map(l => {
+      const p = l.part;
+      const atteint = p != null && p >= 1;
+      const avance = p != null && p >= part;
+      return `<tr>
+        <th>${esc(l.label)}</th>
+        <td class="obj-barre">
+          <div class="obj-piste" title="${p == null ? 'Aucun objectif' : pourcent(p) + ' % de l’objectif'}">
+            <i style="width:${Math.min(100, pourcent(p))}%" class="${atteint ? 'ok' : avance ? '' : 'retard'}"></i>
+            <b style="left:${pourcent(part)}%" title="${pourcent(part)} % de la période écoulée"></b>
+          </div>
+        </td>
+        <td class="obj-chiffres">${l.vise > 0
+          ? `<b>${valeurJalon(l, l.realise)}</b> / ${valeurJalon(l, l.vise)}`
+          : `<b>${valeurJalon(l, l.realise)}</b> <span class="muted">sans objectif</span>`}</td>
+        <td class="obj-part ${atteint ? 'ok' : avance ? '' : 'retard'}">${p == null ? '—' : pourcent(p) + ' %'}</td>
+        <td class="obj-taux">${l.taux ? tauxHtml(l.taux) : ''}</td>
+      </tr>`;
+    }).join('')}</tbody></table>
+    <p class="muted small obj-legende"><i></i><span>Le repère marque ${pourcent(part)} % de la période écoulée : à droite,
+      l'objectif est en avance. Les leads, les qualifiés et les RDV suivent <b>la même cohorte</b> — les affaires
+      arrivées ${esc(LIBELLE_PERIODE[periode] || 'sur la période')} —, sans quoi les taux de passage ne voudraient rien dire.
+      Le CA, lui, est celui <b>signé</b> sur la période, quelle que soit la date d'arrivée du dossier.</span></p>`}
+  </div>`;
+}
+
+// Le taux de passage depuis le jalon précédent : le réel, et le visé à côté.
+// Un taux réel au-dessus du visé n'est pas forcément une bonne nouvelle s'il porte
+// sur trois dossiers — d'où le libellé qui nomme d'où l'on vient.
+function tauxHtml(t) {
+  if (t.reel == null && t.vise == null) return '';
+  const ecart = t.reel != null && t.vise != null ? t.reel - t.vise : null;
+  const ton = ecart == null ? '' : ecart >= -0.02 ? 'ok' : 'retard';
+  return `<span class="obj-conv ${ton}" title="Taux de passage depuis « ${esc(t.depuis)} »">
+    ${t.reel == null ? '—' : pourcent(t.reel) + ' %'}
+    ${t.vise != null ? `<em>visé ${pourcent(t.vise)} %</em>` : ''}</span>`;
+}
+
+/**
+ * Réglage des objectifs — direction seulement.
+ *
+ * ⚠ DEUX SAISIES POUR LA MÊME CHOSE, et c'est voulu : on entre un NOMBRE, ou le
+ * TAUX de passage depuis la ligne du dessus, et l'autre se recalcule. C'est la même
+ * grandeur vue de deux façons — « je veux 12 qualifiés » ou « je veux convertir
+ * 60 % de mes leads » —, et selon le jour l'une ou l'autre est la plus naturelle.
+ * Le nombre reste ce qui est ENREGISTRÉ : le taux n'est qu'une façon de l'écrire,
+ * il n'est stocké nulle part, sinon deux vérités cohabiteraient.
+ *
+ * ⚠ LE CA N'EST PAS STOCKÉ ICI. Il vit dans l'objectif annuel de la structure,
+ * partagé avec le tableau de bord du groupe : on affiche son douzième pour rester
+ * dans une saisie mensuelle, et on réécrit l'annuel. Un chiffre, une source.
+ */
+function modaleObjectifs(apres) {
+  const jalons = ACTIVITIES[KEY].objectifs;
+  const volumes = objectifsVolume()[KEY] || {};
+  const valeurs = Object.fromEntries(jalons.map(j => [j.cle, j.unite === 'euros'
+    ? Math.round(objectifAnnuel(KEY) / 12)
+    : Number(volumes[j.cle]) || 0]));
+
+  const champ = (j, i) => {
+    // ⚠ UN TAUX RELIE DEUX GRANDEURS DE MÊME NATURE. Il faut donc que la ligne du
+    // dessus ET celle-ci soient des nombres : « 12 000 € rapportés à 10 RDV » n'est
+    // pas un taux de passage mais un panier moyen, et il est dit ailleurs, en clair.
+    // Sans cette condition la ligne du CA proposait « 120 000 % de RDV terrain ».
+    const precedent = i > 0 && j.unite !== 'euros' && jalons[i - 1].unite !== 'euros' ? jalons[i - 1] : null;
+    return `<tr>
+      <th>${esc(j.label)}</th>
+      <td><input type="number" min="0" step="${j.unite === 'euros' ? '100' : '1'}"
+        data-obj="${j.cle}" value="${valeurs[j.cle] || ''}" inputmode="numeric">
+        <span class="obj-unite">${j.unite === 'euros' ? '€ HT / mois' : '/ mois'}</span></td>
+      <td>${precedent ? `<input type="number" min="0" max="100" step="1" data-taux="${j.cle}"
+        data-depuis="${precedent.cle}" inputmode="numeric"><span class="obj-unite">% de « ${esc(precedent.label)} »</span>` : ''}</td>
+    </tr>`;
+  };
+
+  const m = openModal('Objectifs mensuels — BTP Expertise', `
+    <p class="muted small">Saisis par mois. Un trimestre en vaut trois, une année douze.
+      Renseigne le <b>nombre</b> ou le <b>taux de passage</b> : l'autre se met à jour tout seul.</p>
+    <table class="obj-reglage"><tbody>${jalons.map(champ).join('')}</tbody></table>
+    <p class="muted small" id="obj-panier"></p>
+    <div class="form-actions"><button class="btn ghost" data-close>Annuler</button>
+      <button class="btn" id="obj-ok">Enregistrer</button></div>`);
+
+  const nb = (cle) => m.querySelector(`[data-obj="${cle}"]`);
+  const tx = (cle) => m.querySelector(`[data-taux="${cle}"]`);
+  const lire = (el) => Number(el.value) || 0;
+
+  // Redessine ce qui DÉCOULE de la saisie, jamais ce qu'on est en train de taper.
+  const rafraichir = (saufCle = null) => {
+    jalons.forEach((j, i) => {
+      const t = tx(j.cle); if (!t) return;
+      const base = lire(nb(jalons[i - 1].cle)), v = lire(nb(j.cle));
+      if (j.cle !== saufCle) t.value = base > 0 ? Math.round((v / base) * 100) : '';
+    });
+    const rdv = lire(nb('rdv')), ca = lire(nb('ca'));
+    const p = m.querySelector('#obj-panier');
+    p.innerHTML = rdv > 0 && ca > 0
+      ? `Soit <b>${esc(eur(Math.round(ca / rdv)))}</b> de CA signé par RDV terrain visé.`
+      : '';
+  };
+
+  jalons.forEach((j, i) => {
+    nb(j.cle).oninput = () => rafraichir();
+    const t = tx(j.cle);
+    if (t) t.oninput = () => {                       // le taux commande le nombre
+      const base = lire(nb(jalons[i - 1].cle));
+      nb(j.cle).value = Math.round((base * lire(t)) / 100);
+      rafraichir(j.cle);
+    };
+  });
+  rafraichir();
+
+  m.querySelector('#obj-ok').onclick = async () => {
+    const vols = Object.fromEntries(jalons.filter(j => j.unite !== 'euros').map(j => [j.cle, lire(nb(j.cle))]));
+    await enregistrerObjectifsVolume(KEY, vols);
+    // Le CA rejoint l'objectif ANNUEL de la structure, sans toucher aux autres.
+    const mensuel = lire(nb('ca'));
+    const base = { ...objectifsCa().base };
+    delete base.periode; delete base.mois;
+    await enregistrerObjectifs({ ...base, [KEY]: mensuel * 12 });
+    closeModal();
+    toast('Objectifs enregistrés');
+    apres?.();
+  };
+}
+
 const pageMission = (mission) => ({
   title: () => `BTP Expertise — ${MISSIONS[mission].titre}`,
   render(root) {
@@ -867,7 +1030,10 @@ const pageMission = (mission) => ({
     const coquille = poser(root);
     // La cotation de la matrice de taux vit dans l'état de la page : elle survit aux
     // redessins, et rien n'est enregistré — c'est une aide au devis, pas une donnée.
-    const state = { q: '', focus: null, scores: MATRICE_AMO.criteres.map(() => null), travaux: '', taux: null, cotesExp: {} };
+    const state = { q: '', focus: null, scores: MATRICE_AMO.criteres.map(() => null), travaux: '', taux: null, cotesExp: {},
+      // La période choisie survit au changement d'écran et au rechargement : on
+      // ne veut pas repasser au mois chaque fois qu'on ouvre l'autre métier.
+      periode: localStorage.getItem('crm_btp_objectifs_periode') || 'month' };
 
     const draw = () => {
       const { siennes, colonnes, potentiel, egarees } = pipelineDe(mission);
@@ -884,6 +1050,8 @@ const pageMission = (mission) => ({
           ${kpi({ label: 'CA potentiel HT', valeur: eur(potentiel), sous: 'sur les missions ouvertes', icone: '📈', ton: 'green', href: MISSIONS[mission].hash })}
           ${kpi({ label: 'Sans niveau', valeur: siennes.filter(d => !niveauDe(d)).length, sous: 'ne pèsent aucun point', icone: '⚠', ton: 'amber', href: MISSIONS[mission].hash })}
         </div>
+
+        ${carteObjectifs(state.periode)}
 
         <div class="card">
           <div class="card-head"><h2>Pipeline ${esc(MISSIONS[mission].titre)}</h2>
@@ -939,6 +1107,12 @@ const pageMission = (mission) => ({
 
       bindSearch(root, 'm-q', state, draw); restoreFocus(root, state);
       lierAffaires(root, draw);
+      root.querySelectorAll('[data-op]').forEach(b => b.onclick = () => {
+        state.periode = b.dataset.op;
+        localStorage.setItem('crm_btp_objectifs_periode', state.periode);
+        draw();
+      });
+      root.querySelector('#obj-regler')?.addEventListener('click', () => modaleObjectifs(draw));
       // Replacer une égarée : même rang dans le déroulé de ce métier, et une trace.
       root.querySelectorAll('[data-replacer]').forEach(b => b.onclick = async () => {
         const d = db.byId('deals', b.dataset.replacer);

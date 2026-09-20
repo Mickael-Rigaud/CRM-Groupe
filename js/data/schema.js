@@ -456,6 +456,27 @@ export const ACTIVITIES = {
     // Arbitré le 19/09/2026, en deux temps : d'abord « gagnée seulement à la dernière
     // étape », puis « gagnée une fois cette étape terminée ».
     gain: { expertise: 'rdv_complementaire', amo: 'amo_reception' },
+    // LES JALONS SUIVIS PAR L'OBJECTIF MENSUEL, et rien d'autre. Le bloc posé au-dessus
+    // des deux pipelines de missions compare, sur la période choisie, ce qui est fait à
+    // ce qui était visé. Les valeurs, elles, ne sont pas ici : elles se règlent à l'écran
+    // et vivent dans `settings` — ce tableau ne dit que CE QU'ON COMPTE.
+    //
+    // ⚠ Chaque jalon nomme UNE ÉTAPE PAR MÉTIER, jamais une seule pour les deux. Les
+    // deux déroulés se répondent un à un mais n'ont pas les mêmes clés : « Qualifié »
+    // s'appelle `qualifie` en expertise et `amo_cadrage` en AMO, et le RDV sur le terrain
+    // `rdv` d'un côté, `amo_programme` de l'autre. Comparer des rangs dans la liste
+    // fusionnée ne marcherait pas — les étapes de l'AMO suivent celles de l'expertise,
+    // donc « Qualifié » côté AMO passerait pour postérieur à « Clôturé facturé » côté
+    // expertise. C'est `aAtteint()` qui fait la comparaison, dans la liste du métier.
+    //
+    // Le dernier jalon n'a pas d'étape : c'est du CHIFFRE D'AFFAIRES, et il lit
+    // l'objectif de CA déjà saisi pour la structure — un chiffre, une source.
+    objectifs: [
+      { cle: 'leads', label: 'Leads', unite: 'nombre' },
+      { cle: 'qualifie', label: 'Qualifiés', unite: 'nombre', etape: { expertise: 'qualifie', amo: 'amo_cadrage' } },
+      { cle: 'rdv', label: 'RDV terrain', unite: 'nombre', etape: { expertise: 'rdv', amo: 'amo_programme' } },
+      { cle: 'ca', label: 'Missions signées', unite: 'euros' },
+    ],
     // COMMENT UNE MISSION SE FACTURE, en trois fois. Arbitré par Mickael le
     // 19/09/2026 : 40 % à la signature, 40 % au suivi intermédiaire, 20 % à la
     // réception. Chaque échéance est accrochée à une ÉTAPE du pipeline :
@@ -828,6 +849,30 @@ export function stageOf(activity, key) {
 export function stageIndex(activity, key) {
   return ACTIVITIES[activity]?.stages.findIndex(s => s.key === key) ?? -1;
 }
+/**
+ * Cette affaire a-t-elle ATTEINT l'étape `cle` — maintenant, ou à un moment ?
+ *
+ * ⚠ LE RANG SE COMPARE DANS LA LISTE DU MÉTIER, jamais dans la liste complète des
+ * étapes. Chez BTP Expertise, celles de l'AMO suivent celles de l'expertise dans le
+ * tableau : « Qualifié » côté AMO est au rang 8 de la liste fusionnée, donc plus
+ * loin que « Clôturé facturé » (rang 7) côté expertise, alors que les deux métiers
+ * commencent au même endroit. C'est le même piège que celui d'`estEngagee()`.
+ *
+ * On regarde l'étape courante ET l'historique : une affaire qui avance vite peut
+ * n'avoir jamais été vue à l'étape intermédiaire, elle l'a pourtant franchie. Une
+ * affaire gagnée a tout franchi, par construction.
+ */
+export function aAtteint(deal, cle) {
+  if (!deal || !cle) return false;
+  if (deal.status === 'won') return true;
+  const etapes = stagesDe(deal.activity, missionDe(deal));
+  const cible = etapes.findIndex(s => s.key === cle);
+  if (cible < 0) return false;   // étape d'un autre métier : ne rien affirmer
+  const rang = (k) => etapes.findIndex(s => s.key === k);
+  const vus = [rang(deal.stage), ...(deal.stage_history || []).map(h => rang(h.stage))];
+  return Math.max(...vus) >= cible;
+}
+
 export function reachedRdv(deal) {
   const a = ACTIVITIES[deal.activity];
   if (!a) return false;

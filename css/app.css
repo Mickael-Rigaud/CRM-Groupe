@@ -1722,3 +1722,52 @@ body.tiroir-ouvert { overflow: hidden; }
 .tb-kpi.click:hover { border-color: var(--line-strong); box-shadow: var(--shadow-lift); }
 button.tb-pp { border: 0; background: none; padding: 2px 0; cursor: pointer; border-radius: 6px; }
 button.tb-pp:hover { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
+
+/* ---- objectifs du cabinet, au-dessus des pipelines de missions ---- */
+/* La barre prend --accent, donc la couleur de la structure : sur l'espace BTP,
+   applyBrand() l'a déjà repeinte. Vert / ambre restent réservés aux états. */
+.obj-card .card-head { flex-wrap: wrap; gap: 10px; }
+.obj-table { width: 100%; border-collapse: collapse; }
+.obj-table tr + tr th, .obj-table tr + tr td { border-top: 1px solid var(--line); }
+.obj-table th { text-align: left; padding: 9px 12px 9px 0; font-weight: 700; white-space: nowrap; }
+.obj-table td { padding: 9px 0; vertical-align: middle; }
+.obj-barre { width: 100%; padding-right: 16px !important; }
+.obj-piste { position: relative; height: 10px; border-radius: 99px; background: var(--card-2); min-width: 80px; }
+.obj-piste i { position: absolute; inset: 0 auto 0 0; border-radius: 99px; background: var(--accent); transition: width .2s; }
+.obj-piste i.ok { background: var(--green); }
+.obj-piste i.retard { background: var(--amber); }
+/* Le repère de période écoulée : à sa droite, l'objectif est en avance. */
+.obj-piste b { position: absolute; top: -4px; bottom: -4px; width: 2px; border-radius: 2px; background: var(--text); opacity: .45; }
+.obj-chiffres { white-space: nowrap; text-align: right; padding-right: 14px !important; }
+.obj-chiffres b { font-family: var(--font-display); font-size: 15px; }
+.obj-part { font-family: var(--font-display); font-weight: 700; text-align: right; min-width: 52px; color: var(--muted); }
+.obj-part.ok { color: var(--green); }
+.obj-part.retard { color: var(--amber); }
+.obj-taux { text-align: right; padding-left: 16px !important; white-space: nowrap; }
+.obj-conv { font-size: 12.5px; color: var(--muted); }
+.obj-conv.ok { color: var(--green); }
+.obj-conv.retard { color: var(--amber); }
+.obj-conv em { font-style: normal; opacity: .65; margin-left: 6px; }
+/* ⚠ Le texte est dans un <span> : en display:flex, chaque <b> deviendrait un
+   élément de la grille et la phrase se casserait en colonnes. */
+.obj-legende { display: flex; align-items: flex-start; gap: 8px; margin: 12px 0 0; }
+.obj-legende i { display: inline-block; width: 2px; height: 12px; background: var(--text); opacity: .45; flex: none; margin-top: 3px; }
+.obj-legende span { min-width: 0; }
+@media (max-width: 720px) {
+  /* Le taux de passage est la première chose qu'on sacrifie : les chiffres et le
+     pourcentage d'atteinte portent l'essentiel, et une colonne rognée ne sert à rien. */
+  .obj-taux, .obj-legende i { display: none; }
+  .obj-table th { font-size: 13px; padding-right: 8px; }
+  .obj-piste { min-width: 40px; }
+  .obj-barre { padding-right: 8px !important; }
+  .obj-chiffres { padding-right: 8px !important; }
+  .obj-chiffres b { font-size: 14px; }
+  .obj-part { min-width: 40px; font-size: 13px; }
+}
+/* ---- la modale de réglage ---- */
+.obj-reglage { width: 100%; border-collapse: collapse; margin: 6px 0 4px; }
+.obj-reglage th { text-align: left; padding: 7px 12px 7px 0; font-weight: 700; white-space: nowrap; }
+.obj-reglage td { padding: 7px 0 7px 10px; }
+.obj-reglage input { width: 110px; }
+.obj-unite { color: var(--muted); font-size: 12.5px; margin-left: 7px; }
+@media (max-width: 560px) { .obj-reglage input { width: 88px; } .obj-unite { display: block; margin: 2px 0 0; } }
