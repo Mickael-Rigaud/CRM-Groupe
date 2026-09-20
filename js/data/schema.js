@@ -337,9 +337,13 @@ export const EXEMPLES_CHARGE = [
 // manuel dit lui-même que « les pourcentages restent paramétrables dans le CRM », et
 // des colonnes figées mentiraient le jour où la clé change. Contrôlé sur les six
 // lignes du document.
+// ⚠ LES DEUX CLÉS ONT ÉTÉ RÉVISÉES le 20/09/2026, à la baisse pour le chargé
+// d'affaires : 60/40 et 70/30 sont devenus 55/45 et 65/35. Elles ne sont écrites
+// qu'ICI — l'écran « Chargés d'affaires » et le tableau de bord les lisent, ils ne
+// les recopient pas. Une révision se fait donc sur ces deux lignes, nulle part ailleurs.
 export const REMUNERATION_BTP = {
   origines: [
-    { cle: 'cabinet', label: 'Client BTP Expertise', court: 'Client cabinet', independant: 60, cabinet: 40 },
+    { cle: 'cabinet', label: 'Client BTP Expertise', court: 'Client cabinet', independant: 55, cabinet: 45 },
     // Ce qui fait d'un dossier un CLIENT APPORTE, ce n'est pas une case a cocher : c'est
     // l'origine du lead choisie sur la fiche decouverte, expertise comme AMO. Deux
     // canaux disent que le chargé d'affaires est alle chercher le client lui-meme —
@@ -347,7 +351,7 @@ export const REMUNERATION_BTP = {
     // autres canaux decrivent un lead venu au cabinet (site, publicite, partenaire,
     // telephone), donc un client du cabinet. Arbitre le 18/09/2026.
     { cle: 'apporte', label: "Client apporté par le chargé d'affaires", court: 'Client apporté',
-      independant: 70, cabinet: 30, canaux: ['Recommandation client', 'Prospection directe'] },
+      independant: 65, cabinet: 35, canaux: ['Recommandation client', 'Prospection directe'] },
   ],
   // Les honoraires servant d'exemples sont ceux du barème AMO du §3.
   exemples: [3500, 6000, 9000, 14000, 21000, 24000],
