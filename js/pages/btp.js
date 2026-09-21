@@ -16,7 +16,7 @@ import {
   esc, eur, daysSince, fmtDate, contactName, dealParty, userName, toast,
   openModal, closeModal, confirm, terms, hit,
   searchInput, bindSearch, restoreFocus, csvDownload, marqueResponsable,
-  PERIODS, periodRange,
+  PERIODS,
 } from '../ui.js';
 import { openDeal, dealForm, moveStage, assignerResponsable, candidatsResponsable } from './deal.js';
 import { contactForm, openContact } from './contacts.js';
@@ -875,27 +875,90 @@ const specialistesExpertise = () => `<div class="card btp-ref btp-garde" style="
 // Découper l'objectif par métier ferait donc apparaître presque tous les leads du
 // côté expertise et presque aucun côté AMO. Le même bloc s'affiche des deux côtés,
 // avec les mêmes chiffres : c'est le cabinet qu'on pilote.
-const PERIODES_OBJECTIF = PERIODS.filter(([k]) => ['month', 'quarter', 'year'].includes(k));
+const PERIODES_OBJECTIF = [...PERIODS.filter(([k]) => ['month', 'quarter', 'year'].includes(k)), ['dates', 'Dates']];
 const pourcent = (v) => Math.round((v || 0) * 100);
-const LIBELLE_PERIODE = { month: 'ce mois-ci', quarter: 'ce trimestre', year: 'cette année' };
+
+// La période regardée : un des trois raccourcis, décalé de `decalage` crans vers le
+// passé ou l'avenir, ou deux dates choisies à la main.
+//
+// ⚠ LA FIN EST EXCLUE, comme partout ailleurs (`inRange` teste `t < end`). Une
+// saisie « du 1er au 30 septembre » doit donc se terminer au 1er octobre, sinon
+// tout ce qui s'est passé le 30 disparaîtrait des chiffres sans que personne le voie.
+const ISO = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+function plageObjectifs(e) {
+  if (e.periode === 'dates') {
+    const a = e.debut ? new Date(e.debut + 'T00:00:00') : null;
+    const b = e.fin ? new Date(e.fin + 'T00:00:00') : null;
+    if (!a || !b || b < a) return null;            // saisie incomplète ou à l'envers : on le dit
+    const end = new Date(b); end.setDate(end.getDate() + 1);
+    return { start: a, end };
+  }
+  const n = Number(e.decalage) || 0, d = new Date();
+  if (e.periode === 'quarter') {
+    const s = new Date(d.getFullYear(), (Math.floor(d.getMonth() / 3) + n) * 3, 1);
+    return { start: s, end: new Date(s.getFullYear(), s.getMonth() + 3, 1) };
+  }
+  if (e.periode === 'year') {
+    const s = new Date(d.getFullYear() + n, 0, 1);
+    return { start: s, end: new Date(s.getFullYear() + 1, 0, 1) };
+  }
+  const s = new Date(d.getFullYear(), d.getMonth() + n, 1);
+  return { start: s, end: new Date(s.getFullYear(), s.getMonth() + 1, 1) };
+}
+// Ce qu'on lit au-dessus des chiffres, et dans la légende.
+function libellePlage(e, r) {
+  if (!r) return 'période incomplète';
+  if (e.periode === 'dates') {
+    const veille = new Date(r.end); veille.setDate(veille.getDate() - 1);
+    return `du ${fmtDate(ISO(r.start))} au ${fmtDate(ISO(veille))}`;
+  }
+  if (e.periode === 'quarter') return `T${Math.floor(r.start.getMonth() / 3) + 1} ${r.start.getFullYear()}`;
+  if (e.periode === 'year') return String(r.start.getFullYear());
+  return r.start.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+}
 
 const valeurJalon = (j, v) => j.unite === 'euros' ? eur(v) : Math.round(v);
 
-function carteObjectifs(periode) {
-  const r = periodRange(periode);
-  const lignes = suiviObjectifs(KEY, r) || [];
-  const part = ecoule(r);
+// La période regardée est une préférence d'écran, pas une donnée : localStorage
+// suffit, et elle reste propre à ce navigateur. L'ancienne clé ne portait que la
+// période — une valeur seule s'y relit encore, sans rien perdre.
+const CLE_PERIODE = 'crm_btp_objectifs_periode';
+function lireObjectifsPeriode() {
+  const v = localStorage.getItem(CLE_PERIODE);
+  const defaut = { periode: 'month', decalage: 0, debut: '', fin: '' };
+  if (!v) return defaut;
+  try { return { ...defaut, ...JSON.parse(v) }; } catch { return { ...defaut, periode: v }; }
+}
+const garderObjectifsPeriode = (e) => localStorage.setItem(CLE_PERIODE,
+  JSON.stringify({ periode: e.periode, decalage: e.decalage, debut: e.debut, fin: e.fin }));
+
+function carteObjectifs(e) {
+  const r = plageObjectifs(e);
+  const lignes = r ? (suiviObjectifs(KEY, r) || []) : [];
+  const part = r ? ecoule(r) : 0;
   const regle = scope.isDirection;
-  const rien = lignes.every(l => !l.vise);
+  const rien = !r || lignes.every(l => !l.vise);
+  const dates = e.periode === 'dates';
 
   return `<div class="card obj-card">
     <div class="card-head"><h2>Objectifs</h2>
       <div class="seg obj-periode">${PERIODES_OBJECTIF.map(([k, l]) =>
-        `<button type="button" data-op="${k}" class="${periode === k ? 'active' : ''}">${esc(l)}</button>`).join('')}</div>
+        `<button type="button" data-op="${k}" class="${e.periode === k ? 'active' : ''}">${esc(l)}</button>`).join('')}</div>
+      ${dates
+        ? `<span class="obj-dates">du <input type="date" id="obj-debut" value="${esc(e.debut || '')}" max="2100-12-31">
+             au <input type="date" id="obj-fin" value="${esc(e.fin || '')}" max="2100-12-31"></span>`
+        : `<span class="obj-nav">
+             <button type="button" class="icon-btn" data-oq="-1" title="Période précédente" aria-label="Période précédente">‹</button>
+             <b>${esc(libellePlage(e, r))}</b>
+             <button type="button" class="icon-btn" data-oq="1" title="Période suivante" aria-label="Période suivante">›</button>
+             ${e.decalage ? '<button type="button" class="lien" data-oq="0">aujourd\'hui</button>' : ''}
+           </span>`}
       <span class="grow"></span>
       ${regle ? '<button class="btn ghost sm" id="obj-regler">Régler</button>' : ''}
     </div>
-    ${rien ? `<div class="empty">Aucun objectif n'est encore réglé pour BTP Expertise.${
+    ${!r ? `<div class="empty">Choisissez une date de début et une date de fin${
+        e.debut && e.fin ? ' — la fin ne peut pas précéder le début.' : '.'}</div>`
+    : rien ? `<div class="empty">Aucun objectif n'est encore réglé pour BTP Expertise.${
         regle ? ' Le bouton « Régler » ci-dessus les saisit.' : ' La direction les saisit.'}</div>`
     : `<table class="obj-table"><tbody>${lignes.map(l => {
       const p = l.part;
@@ -918,8 +981,9 @@ function carteObjectifs(periode) {
     }).join('')}</tbody></table>
     <p class="muted small obj-legende"><i></i><span>Le repère marque ${pourcent(part)} % de la période écoulée : à droite,
       l'objectif est en avance. Les leads, les qualifiés et les RDV suivent <b>la même cohorte</b> — les affaires
-      arrivées ${esc(LIBELLE_PERIODE[periode] || 'sur la période')} —, sans quoi les taux de passage ne voudraient rien dire.
-      Le CA, lui, est celui <b>signé</b> sur la période, quelle que soit la date d'arrivée du dossier.</span></p>`}
+      arrivées <b>${esc(libellePlage(e, r))}</b> —, sans quoi les taux de passage ne voudraient rien dire.
+      Le CA, lui, est celui <b>signé</b> sur la période, quelle que soit la date d'arrivée du dossier.${
+        dates ? " Sur des dates choisies à la main, l'objectif est ramené au prorata de la durée." : ''}</span></p>`}
   </div>`;
 }
 
@@ -1033,7 +1097,7 @@ const pageMission = (mission) => ({
     const state = { q: '', focus: null, scores: MATRICE_AMO.criteres.map(() => null), travaux: '', taux: null, cotesExp: {},
       // La période choisie survit au changement d'écran et au rechargement : on
       // ne veut pas repasser au mois chaque fois qu'on ouvre l'autre métier.
-      periode: localStorage.getItem('crm_btp_objectifs_periode') || 'month' };
+      ...lireObjectifsPeriode() };
 
     const draw = () => {
       const { siennes, colonnes, potentiel, egarees } = pipelineDe(mission);
@@ -1051,7 +1115,7 @@ const pageMission = (mission) => ({
           ${kpi({ label: 'Sans niveau', valeur: siennes.filter(d => !niveauDe(d)).length, sous: 'ne pèsent aucun point', icone: '⚠', ton: 'amber', href: MISSIONS[mission].hash })}
         </div>
 
-        ${carteObjectifs(state.periode)}
+        ${carteObjectifs(state)}
 
         <div class="card">
           <div class="card-head"><h2>Pipeline ${esc(MISSIONS[mission].titre)}</h2>
@@ -1109,8 +1173,26 @@ const pageMission = (mission) => ({
       lierAffaires(root, draw);
       root.querySelectorAll('[data-op]').forEach(b => b.onclick = () => {
         state.periode = b.dataset.op;
-        localStorage.setItem('crm_btp_objectifs_periode', state.periode);
-        draw();
+        state.decalage = 0;                       // changer d'échelle remet sur la période courante
+        // Passer sur « Dates » sans bornes ouvrirait un écran vide : on part du
+        // mois en cours, que la personne élargit ou resserre ensuite.
+        if (state.periode === 'dates' && !(state.debut && state.fin)) {
+          const d = new Date(), fin = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+          state.debut = ISO(new Date(d.getFullYear(), d.getMonth(), 1));
+          state.fin = ISO(fin);
+        }
+        garderObjectifsPeriode(state); draw();
+      });
+      root.querySelectorAll('[data-oq]').forEach(b => b.onclick = () => {
+        const n = Number(b.dataset.oq);
+        state.decalage = n === 0 ? 0 : (Number(state.decalage) || 0) + n;
+        garderObjectifsPeriode(state); draw();
+      });
+      // Une borne se modifie sans redessiner tant que l'autre n'est pas cohérente :
+      // `change` ne part qu'une fois la date complète, contrairement à `input`.
+      ['debut', 'fin'].forEach(quoi => {
+        const el = root.querySelector('#obj-' + quoi);
+        if (el) el.onchange = () => { state[quoi] = el.value; garderObjectifsPeriode(state); draw(); };
       });
       root.querySelector('#obj-regler')?.addEventListener('click', () => modaleObjectifs(draw));
       // Replacer une égarée : même rang dans le déroulé de ce métier, et une trace.

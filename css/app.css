@@ -1773,3 +1773,16 @@ button.tb-pp:hover { color: var(--text); text-decoration: underline; text-underl
 .obj-reglage input { width: 110px; }
 .obj-unite { color: var(--muted); font-size: 12.5px; margin-left: 7px; }
 @media (max-width: 560px) { .obj-reglage input { width: 88px; } .obj-unite { display: block; margin: 2px 0 0; } }
+/* ---- choix de la période sur le bloc Objectifs ---- */
+.obj-nav { display: inline-flex; align-items: center; gap: 4px; }
+.obj-nav b { font-family: var(--font-display); font-size: 13.5px; min-width: 116px; text-align: center;
+  text-transform: capitalize; }
+.obj-nav .icon-btn { width: 26px; height: 26px; font-size: 16px; line-height: 1; }
+.obj-nav .lien { font-size: 12.5px; margin-left: 4px; }
+.obj-dates { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; }
+.obj-dates input { width: 142px; padding: 5px 8px; font-size: 13px; }
+@media (max-width: 720px) {
+  .obj-nav b { min-width: 0; }
+  .obj-dates { flex-wrap: wrap; }
+  .obj-dates input { width: 130px; }
+}
