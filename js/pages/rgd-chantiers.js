@@ -1,8 +1,9 @@
 // Espace RGD Renova — chantiers et clients, lus dans le CRM
 //
 // ÉTAPE 4 DE LA MIGRATION, RANG 1
-// Ces deux écrans sont les premiers de RGD Renova à vivre dans le CRM plutôt
-// que dans son application d'origine. Ils lisent `rgd_chantiers` et les
+// Les deux premiers écrans de RGD Renova à vivre dans le CRM plutôt que dans
+// son application d'origine. La coquille — onglets, cadre, bandeau — est
+// partagée avec les écrans des rangs suivants et vit dans `rgd-espace.js`. Ils lisent `rgd_chantiers` et les
 // contacts marqués `rgd` — c'est-à-dire le relevé que le worker dépose toutes
 // les demi-heures. Les douze autres écrans restent dans l'application, qui
 // garde son onglet : la bascule se fait un rang à la fois.
@@ -20,41 +21,16 @@
 // deux ensemble, ce que ni l'un ni l'autre ne sait faire seul.
 import { db } from '../data/db.js';
 import { scope } from '../data/scope.js';
-import { ACTIVITIES } from '../data/schema.js';
 import { esc, eur, fmtDate, terms, hit, searchInput, bindSearch, restoreFocus } from '../ui.js';
-import { coquilleEspace, poserEspace, kpiEspace } from './espace.js';
+import { poserEspace, kpiEspace } from './espace.js';
 import { openDeal } from './deal.js';
 
-const KEY = 'rgd';
-const act = () => ACTIVITIES[KEY];
+import { KEY, act, cadre, BANDEAU, guard, clientDe as clientDeAffaire } from './rgd-espace.js';
 
-const ONGLETS = [
-  { hash: '#/rgd', label: 'Chantiers' },
-  { hash: '#/rgd/clients', label: 'Clients' },
-  // Tout ce qui n'est pas encore repris vit toujours dans l'application
-  // d'origine. L'onglet reste tant qu'il y a des écrans dedans.
-  { hash: '#/rgd/app', label: 'Application RGD' },
-];
-
-const cadre = (actif, titre, corps) => coquilleEspace({
-  actif, titre, corps,
-  cle: KEY, marque: act().label, baseline: 'Rénovation tous corps d’état', onglets: ONGLETS,
-});
-
-// Le bandeau qui dit d'où viennent ces chiffres et pourquoi on ne les modifie
-// pas ici. Il disparaîtra à l'étape 5, quand le CRM deviendra la source.
-const BANDEAU = `<div class="alert rgd-source">
-  <b>i</b>
-  <div>Ces écrans <b>lisent</b> les données du tableau de bord RGD Renova, relevées
-  toutes les 30 minutes. Pour créer ou modifier, passez par l&rsquo;onglet
-  <a href="#/rgd/app">Application RGD</a> — une modification faite ici serait
-  écrasée au relevé suivant.</div>
-</div>`;
-
-const guard = (root) => {
-  if (scope.activityKeys.includes(KEY)) return false;
-  root.innerHTML = '<div class="card"><div class="empty">Vous n’avez pas accès à l’activité RGD Renova.</div></div>';
-  return true;
+// Le client d'une affaire, avec la forme attendue par cet écran.
+const clientDe = (affaire) => {
+  const nom = clientDeAffaire(affaire, db);
+  return nom ? { nom } : null;
 };
 
 // Les états d'exécution, dans l'ordre du chantier. `null` = pas encore vendu :
@@ -78,19 +54,6 @@ function chantiers() {
     .filter(c => c.affaire)
     .sort((a, b) => String(b.date_debut_prevue || '').localeCompare(String(a.date_debut_prevue || '')));
 }
-
-const clientDe = (affaire) => {
-  if (!affaire) return null;
-  if (affaire.contact_id) {
-    const c = db.byId('contacts', affaire.contact_id);
-    return c ? { nom: `${c.first_name || ''} ${c.last_name || ''}`.trim() || '—', id: c.id, genre: 'contact' } : null;
-  }
-  if (affaire.organisation_id) {
-    const o = db.byId('organisations', affaire.organisation_id);
-    return o ? { nom: o.name, id: o.id, genre: 'organisation' } : null;
-  }
-  return null;
-};
 
 // ---------------------------------------------------------------- Chantiers
 export const rgdChantiersPage = {

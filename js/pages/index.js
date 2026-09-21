@@ -7,6 +7,7 @@ import { homePage } from './home.js';
 import { patrimoinePage, propertiesPage, loansPage, expensesPage } from './patrimoine.js';
 import { rgdDashboardPage } from './rgd.js';
 import { rgdChantiersPage, rgdClientsPage } from './rgd-chantiers.js';
+import { rgdDevisPage, rgdPaiementsPage } from './rgd-facturation.js';
 import { btpHomePage, btpExpertisePage, btpAmoPage, btpChargesPage, btpBasePage, btpDtuPage, btpMailsPage, btpFacturationPage } from './btp.js';
 import { courtageHomePage, courtageBasePage, courtageVivierPage } from './courtage.js';
 import { messageriePage } from './messagerie.js';
@@ -29,6 +30,8 @@ export const pages = {
   rgd: rgdDashboardPage,          // conservé : ancienne adresse plate
   rgd_home: rgdChantiersPage,
   rgd_clients: rgdClientsPage,
+  rgd_devis: rgdDevisPage,
+  rgd_paiements: rgdPaiementsPage,
   rgd_app: rgdDashboardPage,
   // `#/rgd/prospects` menait à l'écran Clients de l'application. Il mène
   // maintenant au nôtre : un signet ou un lien ancien continue de marcher.
