@@ -733,6 +733,12 @@ export const ROLES = {
   charge_affaires: { label: "Chargé d'affaires", description: 'Uniquement les affaires et contacts dont il est responsable' },
 };
 
+// Les rôles qu'on propose en créant un compte. « Propulsion » n'y figure plus :
+// l'agence ne recrute pas par le CRM, et un rôle qu'on n'attribue jamais n'a pas
+// sa place dans un choix. Il reste dans ROLES, sans quoi le compte qui le porte
+// déjà s'afficherait avec sa clé brute au lieu de son libellé.
+export const ROLES_ATTRIBUABLES = ['direction', 'charge_affaires'];
+
 // À quelle mission une affaire appartient : 'amo' ou 'expertise'.
 //
 // Le type saisi fait foi. À défaut, on lit la problématique : le formulaire du site y

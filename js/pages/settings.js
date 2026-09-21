@@ -3,7 +3,7 @@ import { CONFIG } from '../config.js';
 import { db } from '../data/db.js';
 import { creerCompte } from '../comptes.js';
 import { scope } from '../data/scope.js';
-import { ACTIVITIES, ACTIVITY_KEYS, CHANNELS, ROLES, LOST_REASONS, ACTIVITY_TYPES } from '../data/schema.js';
+import { ACTIVITIES, ACTIVITY_KEYS, CHANNELS, ROLES, ROLES_ATTRIBUABLES, LOST_REASONS, ACTIVITY_TYPES } from '../data/schema.js';
 import { esc, toast, openModal, closeModal, renderForm, readForm, confirm, csvDownload } from '../ui.js';
 
 function parseCsv(text) {
@@ -108,7 +108,7 @@ export const settingsPage = {
 
           <div class="mf-bloc-titre">Rôle</div>
           <div class="mf-seg mf-seg-large">
-            ${Object.entries(ROLES).map(([k, r]) =>
+            ${ROLES_ATTRIBUABLES.map(k => [k, ROLES[k]]).map(([k, r]) =>
               `<button type="button" data-role="${k}" class="${k === v.role ? 'on' : ''}">${esc(r.label)}</button>`).join('')}
           </div>
           <p class="mf-aide">${esc(ROLES[v.role]?.description || '')}</p>
