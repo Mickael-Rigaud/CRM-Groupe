@@ -1,6 +1,7 @@
 // Paramètres : utilisateurs et droits, import CSV, référentiel, entrée des leads (Make), démo.
 import { CONFIG } from '../config.js';
 import { db } from '../data/db.js';
+import { creerCompte } from '../comptes.js';
 import { scope } from '../data/scope.js';
 import { ACTIVITIES, ACTIVITY_KEYS, CHANNELS, ROLES, LOST_REASONS, ACTIVITY_TYPES } from '../data/schema.js';
 import { esc, toast, openModal, closeModal, renderForm, readForm, confirm, csvDownload } from '../ui.js';
@@ -29,12 +30,12 @@ export const settingsPage = {
       const users = db.t('profiles');
       root.innerHTML = `
         <div class="grid c2">
-          <div class="card"><div class="card-head"><h2>Utilisateurs et droits</h2>${scope.isDirection && db.demo ? '<button class="btn sm" id="u-new">+ Utilisateur (démo)</button>' : ''}</div>
+          <div class="card"><div class="card-head"><h2>Utilisateurs et droits</h2>${scope.isDirection ? `<button class="btn sm" id="u-new">+ ${db.demo ? 'Utilisateur (démo)' : 'Compte'}</button>` : ''}</div>
             <div class="table-wrap"><table><thead><tr><th>Nom</th><th>Rôle</th><th>Activités</th><th>Actif</th></tr></thead><tbody>
               ${users.map(u => `<tr><td><b>${esc(u.full_name)}</b><div class="small muted">${esc(u.email || '')}</div></td><td><span class="pill">${esc(ROLES[u.role]?.label || u.role)}</span></td><td>${(u.activities || []).map(k => `<span class="badge" style="--c:${ACTIVITIES[k]?.color}">${esc(ACTIVITIES[k]?.short || k)}</span>`).join(' ')}</td><td>${u.active === false ? '<span class="pill bad">Non</span>' : '<span class="pill ok">Oui</span>'}</td></tr>`).join('')}
             </tbody></table></div>
             <p class="muted small">${Object.entries(ROLES).map(([k, r]) => `<b>${r.label}</b> : ${r.description}`).join('<br>')}</p>
-            ${!db.demo ? '<p class="muted small">En production, les comptes se créent dans Supabase (Authentication → Users), puis une ligne dans la table <code>profiles</code> fixe le rôle et les activités.</p>' : ''}
+            ${!db.demo && scope.isDirection ? '<p class="muted small">« + Compte » crée le compte et envoie un lien d\'invitation : la personne choisit son mot de passe. Le rôle et les structures se règlent à la création — sans structure, elle ne verrait aucune donnée.</p>' : ''}
           </div>
           <div class="card"><div class="card-head"><h2>Import de contacts (CSV)</h2></div>
             <p class="muted small">Colonnes reconnues : prénom, nom, téléphone, email, adresse, code postal, ville, société, type, canal, campagne, activités (rgd|btp|courtage|propulsion), notes. Séparateur ; ou ,. Les doublons (même email ou téléphone) sont ignorés.</p>
@@ -88,10 +89,111 @@ export const settingsPage = {
       root.querySelector('#tok-save')?.addEventListener('click', async () => { const v = root.querySelector('#tok').value.trim(); if (v.length < 12) return toast('Jeton trop court', 'warn'); if (db.setting('intake_token') !== undefined) await db.update('settings', 'intake_token', { value: v }); else await db.insert('settings', { key: 'intake_token', value: v }); toast('Jeton enregistré'); });
       root.querySelector('#exp-all').onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(db.cache, null, 2)], { type: 'application/json' })); a.download = `crm-export-${new Date().toISOString().slice(0, 10)}.json`; a.click(); };
       root.querySelector('#reset-demo')?.addEventListener('click', async () => { if (await confirm('Effacer les données de démo de ce navigateur et recharger l\'exemple ?')) { db.resetDemo(); location.reload(); } });
+      // ---- Créer le compte d'une personne
+      // En démo, on écrit simplement une ligne `profiles` : il n'y a pas
+      // d'authentification. En production, la création d'un compte demande la clé
+      // de service, qui ne descend jamais dans le navigateur — c'est l'Edge
+      // Function `creer-utilisateur` qui s'en charge, et elle vérifie elle-même
+      // que l'appelant est de la direction.
       root.querySelector('#u-new')?.addEventListener('click', () => {
-        const spec = [{ key: 'full_name', label: 'Nom complet', type: 'text', required: true }, { key: 'email', label: 'Email', type: 'email', half: true }, { key: 'role', label: 'Rôle', type: 'select', options: Object.entries(ROLES).map(([k, r]) => [k, r.label]), required: true, half: true }, { key: 'activities', label: 'Activités', type: 'multiselect', options: ACTIVITY_KEYS.map(k => [k, ACTIVITIES[k].label]) }];
-        const m = openModal('Nouvel utilisateur (démo)', `<form class="form" id="u-form">${renderForm(spec)}<div class="form-actions"><button type="button" class="btn ghost" data-close>Annuler</button><button class="btn">Créer</button></div></form>`);
-        m.querySelector('#u-form').onsubmit = async e => { e.preventDefault(); await db.insert('profiles', { ...readForm(e.target, spec), active: true }); closeModal(true); draw(); };
+        const v = { nom: '', email: '', role: 'charge_affaires', structures: [] };
+
+        const corps = (etat) => `
+          <div class="mf-grille">
+            <label class="mail-champ"><span>Nom et prénom *</span>
+              <input id="u-nom" value="${esc(v.nom)}" placeholder="Patrick Martin"></label>
+            <label class="mail-champ"><span>Adresse e-mail *</span>
+              <input id="u-mail" type="email" value="${esc(v.email)}" placeholder="patrick@exemple.fr"></label>
+          </div>
+
+          <div class="mf-bloc-titre">Rôle</div>
+          <div class="mf-seg mf-seg-large">
+            ${Object.entries(ROLES).map(([k, r]) =>
+              `<button type="button" data-role="${k}" class="${k === v.role ? 'on' : ''}">${esc(r.label)}</button>`).join('')}
+          </div>
+          <p class="mf-aide">${esc(ROLES[v.role]?.description || '')}</p>
+
+          <div class="mf-bloc-titre">Structures</div>
+          <div class="fa-chips" data-structures>
+            ${ACTIVITY_KEYS.map(k => `<button type="button" class="fa-chip ${v.structures.includes(k) ? 'on' : ''}"
+              data-val="${k}">${esc(ACTIVITIES[k].label)}</button>`).join('')}
+          </div>
+          <p class="mf-aide ${v.role !== 'direction' && !v.structures.length ? 'attention' : ''}">${
+            v.role === 'direction'
+              ? 'La direction voit les quatre structures, quel que soit ce qui est coché ici.'
+              : v.structures.length
+                ? 'Cette personne ne verra que ses propres affaires, et seulement dans ces structures.'
+                : 'Sans structure, la personne ne verrait aucune donnée : choisissez-en au moins une.'}</p>
+
+          <div id="u-retour"></div>
+          <div class="form-actions">
+            <button type="button" class="btn ghost" data-close>Annuler</button>
+            <button type="button" class="btn" id="u-creer">${db.demo ? 'Créer (démo)' : 'Créer le compte'}</button>
+          </div>`;
+
+        const m = openModal(db.demo ? 'Nouvel utilisateur (démo)' : 'Nouveau compte', '<div id="u-corps"></div>', { wide: true });
+        const zone = m.querySelector('#u-corps');
+
+        const dessine = () => {
+          zone.innerHTML = corps();
+          zone.querySelectorAll('[data-role]').forEach(b => b.onclick = () => { v.role = b.dataset.role; dessine(); });
+          zone.querySelectorAll('[data-structures] .fa-chip').forEach(b => b.onclick = () => {
+            const k = b.dataset.val;
+            v.structures = v.structures.includes(k) ? v.structures.filter(x => x !== k) : [...v.structures, k];
+            dessine();
+          });
+          const nom = zone.querySelector('#u-nom'); nom.oninput = () => { v.nom = nom.value; };
+          const mail = zone.querySelector('#u-mail'); mail.oninput = () => { v.email = mail.value; };
+          zone.querySelector('#u-creer').onclick = creer;
+        };
+
+        async function creer() {
+          if (!v.nom.trim()) return toast('Le nom est nécessaire', 'warn');
+          if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.email.trim())) return toast('Adresse e-mail invalide', 'warn');
+          if (v.role !== 'direction' && !v.structures.length) {
+            return toast('Choisissez au moins une structure', 'warn');
+          }
+          const bouton = zone.querySelector('#u-creer');
+          bouton.disabled = true;
+          try {
+            if (db.demo) {
+              await db.insert('profiles', {
+                full_name: v.nom.trim(), email: v.email.trim().toLowerCase(),
+                role: v.role, activities: v.structures, active: true,
+              });
+              closeModal(true); toast('Utilisateur de démonstration créé'); draw();
+              return;
+            }
+            const rep = await creerCompte({
+              email: v.email.trim(), full_name: v.nom.trim(),
+              role: v.role, activities: v.structures,
+            });
+            // Le lien vaut mot de passe tant qu'il n'a pas servi : on l'affiche une
+            // fois, à la personne qui vient de créer le compte, et on ne l'écrit
+            // nulle part. Il se regénère depuis Supabase s'il se perd.
+            zone.querySelector('#u-retour').innerHTML = `
+              <div class="card" style="margin-top:14px">
+                <p class="mf-aide ok" style="margin-bottom:8px">Compte créé pour ${esc(v.nom)}.</p>
+                ${rep.lien
+                  ? `<label class="mail-champ"><span>Lien d'invitation — à transmettre à la personne</span>
+                      <input id="u-lien" value="${esc(rep.lien)}" readonly></label>
+                     <p class="mf-aide">Elle choisira son mot de passe elle-même. Ce lien ne s'affichera plus : copiez-le maintenant.</p>
+                     <button type="button" class="btn ghost sm" id="u-copier">Copier le lien</button>`
+                  : '<p class="mf-aide attention">Le compte existe, mais le lien d\'invitation n\'a pas pu être produit. Il se regénère depuis Supabase (Authentication → Users).</p>'}
+              </div>`;
+            zone.querySelector('#u-copier')?.addEventListener('click', async () => {
+              try { await navigator.clipboard.writeText(rep.lien); toast('Lien copié'); }
+              catch { zone.querySelector('#u-lien')?.select(); toast('Copiez le lien sélectionné', 'warn'); }
+            });
+            bouton.textContent = 'Compte créé';
+            draw();
+          } catch (err) {
+            bouton.disabled = false;
+            toast(err.message, 'err');
+          }
+        }
+
+        dessine();
       });
     };
     draw();
