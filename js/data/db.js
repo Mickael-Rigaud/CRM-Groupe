@@ -22,6 +22,7 @@ export const TABLES = ['profiles', 'organisations', 'contacts', 'deals', 'activi
   // n'y écrit depuis le CRM tant que la migration n'est pas terminée.
   'rgd_chantiers', 'rgd_devis', 'rgd_paiements', 'rgd_demandes',
   'rgd_sous_traitants', 'rgd_missions', 'rgd_st_paiements', 'rgd_st_commissions',
+  'rgd_apporteurs', 'rgd_fournitures', 'rgd_realisations', 'rgd_carrousel',
   // messagerie interne (canaux par structure + conversations privées)
   'conversations', 'conversation_members', 'messages', 'message_reads',
   // agenda du groupe : le reflet des rendez-vous Google, recopié par la direction

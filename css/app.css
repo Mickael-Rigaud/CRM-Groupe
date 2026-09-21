@@ -787,6 +787,18 @@ tr.btp-mission .btp-pts { color: var(--m-encre); }
 
 /* ---------- Écrans propres à BTP Expertise (.btp-*) ---------- */
 
+/* Realisations : une grille de vignettes. `auto-fill` et non `auto-fit` — avec
+   `auto-fit` une seule carte s'etirerait sur toute la largeur, ce qui donne une
+   photo geante des qu'un filtre ne rend qu'un resultat. */
+.rea-grille { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
+.rea-carte { padding: 0; overflow: hidden; display: flex; flex-direction: column; }
+.rea-photo { aspect-ratio: 4 / 3; background: var(--card-2); display: grid; place-items: center; overflow: hidden; }
+.rea-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.rea-corps { padding: 11px 12px 13px; display: flex; flex-direction: column; gap: 6px; }
+.rea-faits { display: flex; flex-wrap: wrap; gap: 5px; }
+.rea-avis { margin: 2px 0 0; color: var(--muted); font-style: italic; }
+@media (max-width: 520px) { .rea-grille { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); } }
+
 /* Agenda d'espace : une table groupee par journee. La ligne d'en-tete de jour
    ne peut pas etre un <th>, sinon elle se fige avec l'en-tete collant de la
    table ; c'est donc une <tr> a part, reconnaissable a son fond. */
