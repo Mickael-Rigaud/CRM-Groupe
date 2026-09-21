@@ -21,7 +21,7 @@ export const TABLES = ['profiles', 'organisations', 'contacts', 'deals', 'activi
   // Cloudflare D1 reste la source ; ces tables en sont le reflet, personne
   // n'y écrit depuis le CRM tant que la migration n'est pas terminée.
   'rgd_chantiers', 'rgd_devis', 'rgd_paiements', 'rgd_demandes',
-  'rgd_sous_traitants', 'rgd_missions',
+  'rgd_sous_traitants', 'rgd_missions', 'rgd_st_paiements', 'rgd_st_commissions',
   // messagerie interne (canaux par structure + conversations privées)
   'conversations', 'conversation_members', 'messages', 'message_reads',
   // agenda du groupe : le reflet des rendez-vous Google, recopié par la direction

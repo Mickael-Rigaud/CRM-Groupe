@@ -20,6 +20,7 @@ export const ONGLETS = [
     { hash: '#/rgd/devis', label: 'Devis' },
     { hash: '#/rgd/paiements', label: 'Encaissements' },
   ] },
+  { hash: '#/rgd/soustraitants', label: 'Sous-traitants' },
   { hash: '#/rgd/app', label: 'Application RGD' },
 ];
 

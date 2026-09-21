@@ -331,6 +331,19 @@ select.cell-in { text-align: left; }
 .chip:hover { border-color: var(--accent); color: var(--accent); }
 .chip:hover span { color: var(--accent); }
 .chip.q { background: var(--card-2); }
+/* Pastilles d'état. `.chip` est à l'origine un bouton de filtre, d'où le
+   curseur et le survol ; utilisée comme étiquette d'état elle n'a ni l'un ni
+   l'autre, et prend la couleur de ce qu'elle annonce.
+   Sans ces trois règles, « Absent », « Expiré » et une date valide
+   s'affichaient exactement pareil — constaté sur l'écran des sous-traitants
+   de RGD Renova, où toute la lecture repose sur ce coup d'oeil. */
+.chip.red, .chip.green, .chip.amber, .chip.muted { cursor: default; }
+.chip.red:hover, .chip.green:hover, .chip.amber:hover, .chip.muted:hover { border-color: currentColor; }
+.chip.red { background: var(--red-soft); border-color: color-mix(in srgb, var(--red) 35%, transparent); color: var(--red); }
+.chip.green { background: var(--green-soft); border-color: color-mix(in srgb, var(--green) 35%, transparent); color: var(--green); }
+.chip.amber { background: var(--amber-soft); border-color: color-mix(in srgb, var(--amber) 40%, transparent); color: var(--amber); }
+.chip.muted { background: var(--card-2); border-color: var(--line); color: var(--muted); }
+.chip.accent { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 35%, transparent); color: var(--accent-ink); cursor: default; }
 
 /* ---------- Application externe intégrée (iframe) ---------- */
 /* Page à ras : l'application occupe toute la surface, sans cadre ni carte. */
