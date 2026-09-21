@@ -303,6 +303,7 @@ function route() {
   if (name === 'locatif') page = pages['locatif_' + (param || 'home')] || pages.locatif_home;
   if (name === 'btp') page = pages['btp_' + (param || 'home')] || pages.btp_home;
   if (name === 'courtage') page = pages['courtage_' + (param || 'home')] || pages.courtage_home;
+  if (name === 'rgd') page = pages['rgd_' + (param || 'home')] || pages.rgd_home;
   if (page.directionOnly && !scope.isDirection) page = pages.today;
   if (name === 'pipeline' && !scope.activityKeys.includes(param)) { location.hash = `#/pipeline/${scope.activityKeys[0] || 'rgd'}`; return; }
   closeModal(true);

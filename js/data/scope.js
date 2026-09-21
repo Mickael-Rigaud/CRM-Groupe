@@ -96,6 +96,13 @@ export const scope = {
   contacts() { return db.t('contacts').filter(c => this.canSeeContact(c)); },
   orgs() { return db.t('organisations').filter(o => this.canSeeOrg(o)); },
   activities() { return db.t('activities').filter(a => this.canSeeActivity(a)); },
+  // Espace RGD Renova. Miroir exact des policies `rgd_*_acces`, qui tiennent
+  // toutes en `has_activity('rgd')` — l'équipe RGD et la direction, personne
+  // d'autre. Ces tables sont le reflet du relevé déposé par le worker toutes
+  // les 30 minutes : on les lit, on n'y écrit pas tant que Cloudflare fait foi.
+  get canRgd() { return this.activityKeys.includes('rgd'); },
+  rgd(table) { return this.canRgd ? db.t(table) : []; },
+
   users() { return db.t('profiles').filter(u => u.active !== false); },
   // Ceux a qui l'on peut ecrire. `users()` reste entier a cote : confier une
   // tache ou nommer un responsable d'affaire n'est pas cloisonne.

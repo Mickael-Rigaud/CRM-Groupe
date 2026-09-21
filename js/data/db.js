@@ -17,6 +17,11 @@ export const TABLES = ['profiles', 'organisations', 'contacts', 'deals', 'activi
   'structure_stats',
   // réseau de chargés d'affaires de BTP Expertise
   'btp_charges_affaires',
+  // espace RGD Renova : le relevé déposé toutes les 30 min par son worker.
+  // Cloudflare D1 reste la source ; ces tables en sont le reflet, personne
+  // n'y écrit depuis le CRM tant que la migration n'est pas terminée.
+  'rgd_chantiers', 'rgd_devis', 'rgd_paiements', 'rgd_demandes',
+  'rgd_sous_traitants', 'rgd_missions',
   // messagerie interne (canaux par structure + conversations privées)
   'conversations', 'conversation_members', 'messages', 'message_reads',
   // agenda du groupe : le reflet des rendez-vous Google, recopié par la direction

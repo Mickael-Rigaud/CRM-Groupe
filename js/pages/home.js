@@ -22,7 +22,7 @@ import { evenementsEnregistres, derniereSync, agendasDe } from '../agenda-sync.j
 
 const LS_FILTRE = 'crm_home_filtre';
 const BASE_PROSPECTS = {
-  rgd: '#/rgd/prospects',       // Clients & prospects → Prospects, dans l'application RGD Renova
+  rgd: '#/rgd/clients',         // Clients & prospects → l'écran Clients du CRM (repris de l'application)
   btp: '#/btp/base',
   courtage: '#/courtage/base',
   propulsion: '#/pipeline/propulsion',
