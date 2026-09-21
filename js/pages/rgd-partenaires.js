@@ -8,13 +8,20 @@
 // achats tiennent aujourd'hui en UNE ligne — leur consacrer un écran entier
 // ferait une page vide avec un titre dessus.
 //
-// LA COLONNE « APPORTS » N'EST PAS UN CHIFFRE VÉRIFIÉ
+// DEUX COMPTES D'APPORTS, ET C'EST VOULU
 // `apports_declares` vient de `nb_prospects_manuel` : quelqu'un l'a saisi à la
-// main dans le tableau de bord RGD. Le CRM sait par ailleurs rattacher une
-// affaire à son apporteur (`referrer_org_id` / `referrer_contact_id`), mais ce
-// lien n'est PAS repris de Cloudflare — les affaires RGD n'en portent aucun.
-// Recouper les deux est donc impossible aujourd'hui, et l'écran le dit sous le
-// tableau au lieu de laisser croire à un compte vérifié.
+// main. « Rattachés » est le nombre de fiches clients qui désignent vraiment ce
+// partenaire (`rgd_clients.apporteur_id`), repris au rang 6.
+//
+// Jusqu'au rang 6, cet écran affichait « le CRM ne sait pas rattacher une
+// affaire à son apporteur ». C'était vrai, mais la raison n'était pas celle
+// qu'on croyait : le lien existait dans D1 depuis le début, il n'était
+// simplement pas relevé. La phrase est tombée avec la colonne.
+//
+// Les deux comptes peuvent diverger, et c'est une information : un apporteur
+// crédité à la main sans aucune fiche rattachée, c'est soit une saisie
+// optimiste, soit un rattachement oublié. L'écran montre les deux plutôt que
+// d'en choisir un.
 import { scope } from '../data/scope.js';
 import { db } from '../data/db.js';
 import { esc, eur, fmtDate, terms, hit, searchInput, bindSearch, restoreFocus } from '../ui.js';
@@ -42,6 +49,8 @@ export const rgdPartenairesPage = {
     const draw = () => {
       const tous = scope.rgd('rgd_apporteurs');
       const achats = scope.rgd('rgd_fournitures');
+      const fiches = scope.rgd('rgd_clients');
+      const rattaches = (a) => fiches.filter(c => c.apporteur_id === a.id).length;
       const actifs = tous.filter(a => a.actif !== false);
       const declares = tous.reduce((t, a) => t + (Number(a.apports_declares) || 0), 0);
       const signes = tous.filter(a => a.partenariat_signe).length;
@@ -54,6 +63,7 @@ export const rgdPartenairesPage = {
         // Les actifs d'abord, puis ceux qui apportent le plus : c'est une liste
         // de gens à rappeler, pas un annuaire alphabétique.
         .sort((a, b) => (a.actif === false) - (b.actif === false)
+          || rattaches(b) - rattaches(a)
           || (Number(b.apports_declares) || 0) - (Number(a.apports_declares) || 0)
           || String(nomDe(a)).localeCompare(String(nomDe(b)), 'fr'));
 
@@ -63,9 +73,9 @@ export const rgdPartenairesPage = {
           ${kpiEspace({ label: 'Partenaires actifs', valeur: actifs.length,
             sous: tous.length > actifs.length ? `${tous.length - actifs.length} inactif${tous.length - actifs.length > 1 ? 's' : ''}` : 'tous actifs',
             icone: '🤝', href: '#/rgd/partenaires' })}
-          ${kpiEspace({ label: 'Apports déclarés', valeur: declares,
-            sous: 'comptés à la main dans l’application RGD', icone: '↗',
-            ton: declares ? 'accent' : 'muted', href: '#/rgd/partenaires' })}
+          ${kpiEspace({ label: 'Clients apportés', valeur: tous.reduce((t, a) => t + rattaches(a), 0),
+            sous: `${declares} déclaré${declares > 1 ? 's' : ''} à la main côté RGD`, icone: '↗',
+            ton: 'accent', href: '#/rgd/partenaires' })}
           ${kpiEspace({ label: 'Partenariats signés', valeur: signes,
             sous: signes < tous.length ? `${tous.length - signes} sans convention` : 'tous signés',
             icone: '✍', ton: signes ? 'green' : 'amber', href: '#/rgd/partenaires' })}
@@ -97,7 +107,9 @@ export const rgdPartenairesPage = {
         <section class="card table-wrap">
           <table>
             <thead><tr><th>Partenaire</th><th>Rôle</th><th>Métier</th><th>Ville</th>
-              <th>Contact</th><th>Convention</th><th class="num">Apports</th></tr></thead>
+              <th>Contact</th><th>Convention</th>
+              <th class="num" title="Fiches clients qui désignent ce partenaire">Rattachés</th>
+              <th class="num" title="Compté à la main dans l’application RGD">Déclarés</th></tr></thead>
             <tbody>${vus.map(a => { const r = role(a.type_partenaire); return `<tr class="${a.actif === false ? 'muted' : ''}">
               <td><b>${esc(nomDe(a))}</b>
                   ${a.actif === false ? '<span class="chip">Inactif</span>' : ''}
@@ -110,12 +122,15 @@ export const rgdPartenairesPage = {
               <td>${a.partenariat_signe
                 ? `<span class="chip green">Signée${a.date_signature ? ' · ' + esc(fmtDate(a.date_signature)) : ''}</span>`
                 : '<span class="chip amber">Non signée</span>'}</td>
-              <td class="num">${Number(a.apports_declares) ? esc(String(a.apports_declares)) : '<span class="muted">—</span>'}</td>
-            </tr>`; }).join('') || '<tr><td colspan="7"><div class="empty">Aucun partenaire ne correspond.</div></td></tr>'}</tbody>
+              <td class="num">${rattaches(a) || '<span class="muted">—</span>'}</td>
+              <td class="num muted">${Number(a.apports_declares) ? esc(String(a.apports_declares)) : '—'}</td>
+            </tr>`; }).join('') || '<tr><td colspan="8"><div class="empty">Aucun partenaire ne correspond.</div></td></tr>'}</tbody>
           </table>
-          <p class="small muted">La colonne « Apports » est le compte tenu à la main dans
-          l&rsquo;application RGD. Le CRM ne sait pas encore rattacher une affaire à son
-          apporteur pour RGD Renova : ce chiffre n&rsquo;est donc pas vérifié ici.</p>
+          <p class="small muted"><b>Rattachés</b> compte les fiches clients qui désignent
+          vraiment ce partenaire ; <b>Déclarés</b> est le compte tenu à la main dans
+          l&rsquo;application RGD. Un écart entre les deux n&rsquo;est pas une erreur du CRM :
+          c&rsquo;est soit une saisie optimiste, soit un rattachement oublié à la création
+          du client.</p>
         </section>` : `
         <div class="toolbar">
           <span class="muted small">${achats.length} achat${achats.length > 1 ? 's' : ''}

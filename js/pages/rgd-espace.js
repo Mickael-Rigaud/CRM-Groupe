@@ -28,6 +28,7 @@ export const ONGLETS = [
   { hash: '#/rgd/soustraitants', label: 'Sous-traitants' },
   { hash: '#/rgd/partenaires', label: 'Partenaires' },
   { hash: '#/rgd/realisations', label: 'Réalisations' },
+  { hash: '#/rgd/costructor', label: 'Costructor' },
   { hash: '#/rgd/app', label: 'Application RGD' },
 ];
 

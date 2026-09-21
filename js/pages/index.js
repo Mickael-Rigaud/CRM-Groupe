@@ -13,6 +13,7 @@ import { rgdAgendaPage } from './rgd-agenda.js';
 import { rgdPartenairesPage } from './rgd-partenaires.js';
 import { rgdRealisationsPage } from './rgd-realisations.js';
 import { rgdPilotagePage } from './rgd-pilotage.js';
+import { rgdCostructorPage } from './rgd-costructor.js';
 import { btpHomePage, btpExpertisePage, btpAmoPage, btpChargesPage, btpBasePage, btpDtuPage, btpMailsPage, btpFacturationPage } from './btp.js';
 import { courtageHomePage, courtageBasePage, courtageVivierPage } from './courtage.js';
 import { messageriePage } from './messagerie.js';
@@ -44,6 +45,7 @@ export const pages = {
   rgd_soustraitants: rgdSousTraitantsPage,
   rgd_partenaires: rgdPartenairesPage,
   rgd_realisations: rgdRealisationsPage,
+  rgd_costructor: rgdCostructorPage,
   rgd_app: rgdDashboardPage,
   // `#/rgd/prospects` menait à l'écran Clients de l'application. Il mène
   // maintenant au nôtre : un signet ou un lien ancien continue de marcher.

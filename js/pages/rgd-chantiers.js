@@ -147,6 +147,40 @@ function etapeLabel(affaire) {
 }
 
 // ------------------------------------------------------------------ Clients
+// Les leads venus de Facebook ou d'Instagram. Ils ont onze champs que les
+// autres n'ont pas — campagne, ensemble de publicités, formulaire — et c'est
+// tout l'intérêt : savoir quelle publicité rapporte quoi. Le bloc ne s'affiche
+// que s'il y en a, plutôt que de montrer un tableau vide en permanence.
+function blocMeta(metas, fiches) {
+  if (!metas.length) return '';
+  const parCampagne = [...new Set(metas.map(m => m.meta_campaign || '(sans campagne)'))]
+    .map(nom => ({ nom, n: metas.filter(m => (m.meta_campaign || '(sans campagne)') === nom).length }))
+    .sort((a, b) => b.n - a.n);
+  return `<section class="card">
+    <div class="card-head"><h2>Leads Meta Ads</h2>
+      <span class="muted small">${metas.length} sur ${fiches.length} fiches</span></div>
+    <div class="toolbar">${parCampagne.map(c =>
+      `<span class="chip accent">${esc(c.nom)} · ${c.n}</span>`).join(' ')}</div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Reçu le</th><th>Campagne</th><th>Publicité</th><th>Formulaire</th>
+        <th>Projet</th><th>Bien</th><th>Budget annoncé</th></tr></thead>
+      <tbody>${metas.slice()
+        .sort((a, b) => String(b.meta_received_at || '').localeCompare(String(a.meta_received_at || '')))
+        .map(m => `<tr>
+          <td>${m.meta_received_at ? fmtDate(m.meta_received_at) : '<span class="muted">—</span>'}</td>
+          <td>${esc(m.meta_campaign || '—')}</td>
+          <td class="muted">${esc(m.meta_ad_name || '—')}</td>
+          <td class="muted">${esc(m.meta_form_name || '—')}</td>
+          <td>${esc(m.meta_type_projet || '—')}</td>
+          <td class="muted">${esc(m.meta_type_bien || '—')}</td>
+          <td class="muted">${esc(m.meta_budget || '—')}</td>
+        </tr>`).join('')}</tbody>
+    </table></div>
+    <p class="small muted">Le budget annoncé est ce que la personne a coché dans le
+    formulaire Meta : c&rsquo;est une fourchette déclarée, pas un montant de devis.</p>
+  </section>`;
+}
+
 export const rgdClientsPage = {
   title: () => 'RGD Renova — Clients',
   render(root) {
@@ -166,6 +200,14 @@ export const rgdClientsPage = {
         .filter(c => !state.type || c.type === state.type)
         .filter(c => hit([c._nom, c.email, c.phone, c.city], ts));
 
+      // La fiche commerciale RGD d'une personne, reprise au rang 6 : budget,
+      // nature des travaux, apporteur, origine Meta. Elle vit à côté de
+      // `contacts`, qui est partagée par les quatre structures du groupe.
+      const fiches = scope.rgd('rgd_clients');
+      const apporteurs = scope.rgd('rgd_apporteurs');
+      const ficheDe = (c) => fiches.find(f => f.contact_id === c.id || f.organisation_id === c.id);
+      const metas = fiches.filter(f => f.source === 'meta_ads');
+
       // Une demande de devis est un signal : quelqu'un revient. On compte
       // celles qui n'ont pas encore été traitées.
       const demandes = scope.rgd('rgd_demandes');
@@ -182,6 +224,11 @@ export const rgdClientsPage = {
             sous: 'ont déjà signé', icone: '🤝', ton: 'green', href: '#/rgd/clients' })}
           ${kpiEspace({ label: 'Demandes de devis', valeur: demandes.length,
             sous: `${aTraiter.length} à traiter`, icone: '📨', ton: aTraiter.length ? 'amber' : 'accent', href: '#/rgd/clients' })}
+          ${kpiEspace({ label: 'Leads Meta Ads', valeur: metas.length,
+            sous: (() => { if (!metas.length) return 'aucun lead Facebook ou Instagram';
+              const n = new Set(metas.map(m => m.meta_campaign).filter(Boolean)).size;
+              return n ? `${n} campagne${n > 1 ? 's' : ''}` : 'campagne non renseignée'; })(),
+            icone: '📣', ton: metas.length ? 'accent' : 'muted', href: '#/rgd/clients' })}
         </div>
 
         ${aTraiter.length ? `<section class="card">
@@ -212,26 +259,34 @@ export const rgdClientsPage = {
 
         <section class="card table-wrap">
           <table>
-            <thead><tr><th>Nom</th><th>Nature</th><th>Statut</th><th>Ville</th><th>Téléphone</th><th>Email</th><th class="num">Chantiers</th></tr></thead>
+            <thead><tr><th>Nom</th><th>Nature</th><th>Statut</th><th>Projet</th><th>Apporteur</th>
+              <th>Ville</th><th>Téléphone</th><th class="num">Budget</th><th class="num">Chantiers</th></tr></thead>
             <tbody>${vus.map(c => {
               const n = scope.rgd('rgd_chantiers').filter(ch => {
                 const d = db.byId('deals', ch.deal_id);
                 return d && (d.contact_id === c.id || d.organisation_id === c.id);
               }).length;
+              const f = ficheDe(c);
+              const ap = f?.apporteur_id && apporteurs.find(a => a.id === f.apporteur_id);
+              const projet = [f?.type_bien, f?.nature_travaux].filter(Boolean).join(' · ');
               return `<tr>
-                <td><b>${esc(c._nom || '—')}</b></td>
+                <td><b>${esc(c._nom || '—')}</b>
+                    ${f?.source === 'meta_ads' ? '<span class="chip accent" title="Lead Facebook ou Instagram">Meta</span>' : ''}
+                    ${c.email ? `<div class="s muted">${esc(c.email)}</div>` : ''}</td>
                 <td class="muted">${esc(c._genre)}</td>
                 <td>${c.type ? `<span class="chip">${esc(c.type)}</span>` : '<span class="muted">—</span>'}</td>
+                <td class="muted">${esc(projet || '—')}</td>
+                <td class="muted">${ap ? esc(ap.societe || [ap.prenom, ap.nom].filter(Boolean).join(' ')) : '—'}</td>
                 <td>${esc(c.city || '—')}</td>
                 <td>${esc(c.phone || '—')}</td>
-                <td>${c.email ? `<a href="mailto:${esc(c.email)}">${esc(c.email)}</a>` : '<span class="muted">—</span>'}</td>
+                <td class="num">${Number(f?.budget_travaux) ? eur(f.budget_travaux) : '<span class="muted">—</span>'}</td>
                 <td class="num">${n || '<span class="muted">—</span>'}</td>
               </tr>`;
-            }).join('') || '<tr><td colspan="7"><div class="empty">Aucune fiche ne correspond.</div></td></tr>'}</tbody>
+            }).join('') || '<tr><td colspan="9"><div class="empty">Aucune fiche ne correspond.</div></td></tr>'}</tbody>
           </table>
         </section>`;
 
-      root.innerHTML = cadre('#/rgd/clients', 'Clients', corps);
+      root.innerHTML = cadre('#/rgd/clients', 'Clients', corps + blocMeta(metas, fiches));
       bindSearch(root, 'rcl-q', state, draw); restoreFocus(root, state);
       root.querySelectorAll('[data-type]').forEach(b => b.onclick = () => {
         state.type = state.type === b.dataset.type ? '' : b.dataset.type; draw();
