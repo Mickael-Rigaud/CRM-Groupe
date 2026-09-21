@@ -32,10 +32,10 @@ export const settingsPage = {
         <div class="grid c2">
           <div class="card"><div class="card-head"><h2>Utilisateurs et droits</h2>${scope.isDirection ? `<button class="btn sm" id="u-new">+ ${db.demo ? 'Utilisateur (démo)' : 'Compte'}</button>` : ''}</div>
             <div class="table-wrap"><table><thead><tr><th>Nom</th><th>Rôle</th><th>Activités</th><th>Actif</th></tr></thead><tbody>
-              ${users.map(u => `<tr><td><b>${esc(u.full_name)}</b><div class="small muted">${esc(u.email || '')}</div></td><td><span class="pill">${esc(ROLES[u.role]?.label || u.role)}</span></td><td>${(u.activities || []).map(k => `<span class="badge" style="--c:${ACTIVITIES[k]?.color}">${esc(ACTIVITIES[k]?.short || k)}</span>`).join(' ')}</td><td>${u.active === false ? '<span class="pill bad">Non</span>' : '<span class="pill ok">Oui</span>'}</td></tr>`).join('')}
+              ${users.map(u => `<tr ${scope.isDirection ? `class="click" data-compte="${u.id}"` : ''}><td><b>${esc(u.full_name)}</b><div class="small muted">${esc(u.email || '')}</div></td><td><span class="pill">${esc(ROLES[u.role]?.label || u.role)}</span></td><td>${(u.activities || []).map(k => `<span class="badge" style="--c:${ACTIVITIES[k]?.color}">${esc(ACTIVITIES[k]?.short || k)}</span>`).join(' ')}</td><td>${u.active === false ? '<span class="pill bad">Non</span>' : '<span class="pill ok">Oui</span>'}</td></tr>`).join('')}
             </tbody></table></div>
             <p class="muted small">${Object.entries(ROLES).map(([k, r]) => `<b>${r.label}</b> : ${r.description}`).join('<br>')}</p>
-            ${!db.demo && scope.isDirection ? '<p class="muted small">« + Compte » crée le compte et envoie un lien d\'invitation : la personne choisit son mot de passe. Le rôle et les structures se règlent à la création — sans structure, elle ne verrait aucune donnée.</p>' : ''}
+            ${!db.demo && scope.isDirection ? '<p class="muted small">« + Compte » crée le compte et produit un lien d\'invitation : la personne choisit son mot de passe. Cliquez une ligne pour changer le rôle, les structures ou mettre le compte en sommeil.</p>' : ''}
           </div>
           <div class="card"><div class="card-head"><h2>Import de contacts (CSV)</h2></div>
             <p class="muted small">Colonnes reconnues : prénom, nom, téléphone, email, adresse, code postal, ville, société, type, canal, campagne, activités (rgd|btp|courtage|propulsion), notes. Séparateur ; ou ,. Les doublons (même email ou téléphone) sont ignorés.</p>
@@ -89,21 +89,41 @@ export const settingsPage = {
       root.querySelector('#tok-save')?.addEventListener('click', async () => { const v = root.querySelector('#tok').value.trim(); if (v.length < 12) return toast('Jeton trop court', 'warn'); if (db.setting('intake_token') !== undefined) await db.update('settings', 'intake_token', { value: v }); else await db.insert('settings', { key: 'intake_token', value: v }); toast('Jeton enregistré'); });
       root.querySelector('#exp-all').onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(db.cache, null, 2)], { type: 'application/json' })); a.download = `crm-export-${new Date().toISOString().slice(0, 10)}.json`; a.click(); };
       root.querySelector('#reset-demo')?.addEventListener('click', async () => { if (await confirm('Effacer les données de démo de ce navigateur et recharger l\'exemple ?')) { db.resetDemo(); location.reload(); } });
-      // ---- Créer le compte d'une personne
-      // En démo, on écrit simplement une ligne `profiles` : il n'y a pas
-      // d'authentification. En production, la création d'un compte demande la clé
-      // de service, qui ne descend jamais dans le navigateur — c'est l'Edge
-      // Function `creer-utilisateur` qui s'en charge, et elle vérifie elle-même
-      // que l'appelant est de la direction.
-      root.querySelector('#u-new')?.addEventListener('click', () => {
-        const v = { nom: '', email: '', role: 'charge_affaires', structures: [] };
+      // ---- La fiche d'un compte : la même pour en créer un et pour le modifier
+      //
+      // Créer demande la clé de service, qui ne descend jamais dans le navigateur :
+      // c'est l'Edge Function `creer-utilisateur` qui s'en charge. Modifier ne la
+      // demande pas — la policy `profiles_write` autorise déjà la direction — donc
+      // l'écriture se fait directement, sans détour inutile.
+      //
+      // L'ADRESSE NE SE MODIFIE PAS ICI. Elle est l'identifiant de connexion et vit
+      // dans deux endroits : `auth.users` et `profiles`. La changer d'un seul côté
+      // désynchroniserait les deux, et la personne se connecterait toujours avec
+      // l'ancienne. Ce sera un geste à part le jour où ce sera nécessaire.
+      const ficheCompte = (profil) => {
+        const edition = !!profil;
+        const moi = edition && profil.id === scope.user?.id;
+        const v = {
+          nom: profil?.full_name || '',
+          email: profil?.email || '',
+          role: profil?.role || 'charge_affaires',
+          structures: [...(profil?.activities || [])],
+          actif: profil ? profil.active !== false : true,
+        };
 
-        const corps = (etat) => `
+        // Retirer la direction au dernier qui la porte fermerait le paramétrage à
+        // tout le monde, sans moyen de revenir en arrière depuis l'application.
+        const autresDirections = () => db.t('profiles')
+          .filter(u => u.id !== profil?.id && u.role === 'direction' && u.active !== false).length;
+
+        const corps = () => `
           <div class="mf-grille">
             <label class="mail-champ"><span>Nom et prénom *</span>
               <input id="u-nom" value="${esc(v.nom)}" placeholder="Patrick Martin"></label>
-            <label class="mail-champ"><span>Adresse e-mail *</span>
-              <input id="u-mail" type="email" value="${esc(v.email)}" placeholder="patrick@exemple.fr"></label>
+            <label class="mail-champ"><span>Adresse e-mail${edition ? '' : ' *'}</span>
+              <input id="u-mail" type="email" value="${esc(v.email)}" placeholder="patrick@exemple.fr"
+                ${edition ? 'readonly' : ''}>
+              ${edition ? '<em class="mf-champ-aide">L\'adresse sert à se connecter : elle se change depuis Supabase.</em>' : ''}</label>
           </div>
 
           <div class="mf-bloc-titre">Rôle</div>
@@ -125,13 +145,24 @@ export const settingsPage = {
                 ? 'Cette personne ne verra que ses propres affaires, et seulement dans ces structures.'
                 : 'Sans structure, la personne ne verrait aucune donnée : choisissez-en au moins une.'}</p>
 
+          ${edition ? `
+            <div class="mf-bloc-titre">État du compte</div>
+            <div class="mf-seg">
+              <button type="button" data-actif="1" class="${v.actif ? 'on' : ''}">Actif</button>
+              <button type="button" data-actif="0" class="${v.actif ? '' : 'on'}">En sommeil</button>
+            </div>
+            <p class="mf-aide">${moi
+              ? 'Vous ne pouvez pas mettre votre propre compte en sommeil.'
+              : 'Un compte en sommeil ne peut plus se connecter, mais ses affaires et son historique restent.'}</p>` : ''}
+
           <div id="u-retour"></div>
           <div class="form-actions">
             <button type="button" class="btn ghost" data-close>Annuler</button>
-            <button type="button" class="btn" id="u-creer">${db.demo ? 'Créer (démo)' : 'Créer le compte'}</button>
+            <button type="button" class="btn" id="u-ok">${edition ? 'Enregistrer' : (db.demo ? 'Créer (démo)' : 'Créer le compte')}</button>
           </div>`;
 
-        const m = openModal(db.demo ? 'Nouvel utilisateur (démo)' : 'Nouveau compte', '<div id="u-corps"></div>', { wide: true });
+        const m = openModal(edition ? `Compte de ${profil.full_name}` : (db.demo ? 'Nouvel utilisateur (démo)' : 'Nouveau compte'),
+          '<div id="u-corps"></div>', { wide: true });
         const zone = m.querySelector('#u-corps');
 
         const dessine = () => {
@@ -142,20 +173,34 @@ export const settingsPage = {
             v.structures = v.structures.includes(k) ? v.structures.filter(x => x !== k) : [...v.structures, k];
             dessine();
           });
+          zone.querySelectorAll('[data-actif]').forEach(b => b.onclick = () => {
+            if (moi && b.dataset.actif === '0') return toast('Vous ne pouvez pas mettre votre propre compte en sommeil', 'warn');
+            v.actif = b.dataset.actif === '1';
+            dessine();
+          });
           const nom = zone.querySelector('#u-nom'); nom.oninput = () => { v.nom = nom.value; };
-          const mail = zone.querySelector('#u-mail'); mail.oninput = () => { v.email = mail.value; };
-          zone.querySelector('#u-creer').onclick = creer;
+          const mail = zone.querySelector('#u-mail'); if (!edition) mail.oninput = () => { v.email = mail.value; };
+          zone.querySelector('#u-ok').onclick = valider;
         };
 
-        async function creer() {
+        async function valider() {
           if (!v.nom.trim()) return toast('Le nom est nécessaire', 'warn');
-          if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.email.trim())) return toast('Adresse e-mail invalide', 'warn');
-          if (v.role !== 'direction' && !v.structures.length) {
-            return toast('Choisissez au moins une structure', 'warn');
+          if (!edition && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.email.trim())) return toast('Adresse e-mail invalide', 'warn');
+          if (v.role !== 'direction' && !v.structures.length) return toast('Choisissez au moins une structure', 'warn');
+          if (edition && profil.role === 'direction' && (v.role !== 'direction' || !v.actif) && autresDirections() === 0) {
+            return toast('C\'est le dernier compte de direction : personne ne pourrait plus régler les droits.', 'warn');
           }
-          const bouton = zone.querySelector('#u-creer');
+          const bouton = zone.querySelector('#u-ok');
           bouton.disabled = true;
           try {
+            if (edition) {
+              await db.update('profiles', profil.id, {
+                full_name: v.nom.trim(), role: v.role,
+                activities: v.structures, active: v.actif,
+              });
+              closeModal(true); toast('Compte mis à jour'); draw();
+              return;
+            }
             if (db.demo) {
               await db.insert('profiles', {
                 full_name: v.nom.trim(), email: v.email.trim().toLowerCase(),
@@ -194,6 +239,12 @@ export const settingsPage = {
         }
 
         dessine();
+      };
+
+      root.querySelector('#u-new')?.addEventListener('click', () => ficheCompte(null));
+      root.querySelectorAll('[data-compte]').forEach(tr => tr.onclick = () => {
+        const u = db.byId('profiles', tr.dataset.compte);
+        if (u) ficheCompte(u);
       });
     };
     draw();
