@@ -372,6 +372,30 @@ select.cell-in { text-align: left; }
 .esp-side-groupe { display: flex; flex-direction: column; gap: 3px; margin-top: 4px; }
 .esp-side-titre { padding: 9px 15px 3px; font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; color: rgba(255,255,255,.45); }
 .esp-side-groupe a { padding-left: 27px; font-size: 13px; }
+/* ---------- Formations : des fiches en accordeon ----------
+   Un <details> natif plutot qu'un accordeon maison : il s'ouvre au clavier, se
+   cherche avec Ctrl+F du navigateur meme replie sur les navigateurs recents, et
+   ne demande pas une ligne de JavaScript. */
+.fo-rubrique .card-head h2 { display: flex; align-items: center; gap: 9px; }
+.fo-ico { font-size: 19px; line-height: 1; }
+.fo-fiche { border-top: 1px solid var(--line); padding: 2px 0; }
+.fo-fiche > summary { cursor: pointer; padding: 11px 2px; list-style: none;
+  display: flex; flex-direction: column; gap: 2px; border-radius: 8px; }
+.fo-fiche > summary::-webkit-details-marker { display: none; }
+.fo-fiche > summary:hover { background: var(--card-2); }
+/* Le chevron est dessine plutot qu'ecrit : un caractere varie d'une police a
+   l'autre et se copie avec le texte quand on selectionne la fiche. */
+.fo-fiche > summary b::before { content: ""; display: inline-block; width: 6px; height: 6px;
+  margin-right: 9px; vertical-align: 2px; border-right: 1.5px solid var(--muted);
+  border-bottom: 1.5px solid var(--muted); transform: rotate(-45deg); transition: transform .15s; }
+.fo-fiche[open] > summary b::before { transform: rotate(45deg); }
+.fo-fiche[open] > summary { color: var(--accent-ink); }
+.fo-section { padding: 2px 2px 14px 17px; }
+.fo-section b { display: block; font-size: 13px; margin-bottom: 3px; }
+.fo-section p { margin: 0; color: var(--muted); line-height: 1.55; }
+.fo-puces { margin: 4px 0 0; padding-left: 18px; color: var(--muted); line-height: 1.55; }
+.fo-puces li { margin-bottom: 3px; }
+
 /* ---------- Menu de l'espace RGD Renova ----------
    Fond noir au lieu du brun de la marque (--accent-ink vaut #6D3413 pour RGD).
    On le pose ici, sur le seul espace concerne, plutot que de changer `ink`

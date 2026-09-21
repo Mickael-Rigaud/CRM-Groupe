@@ -15,9 +15,9 @@ export const act = () => ACTIVITIES[KEY];
 // nommés par ce qu'ils contiennent, pas par l'ordre d'arrivée des écrans —
 // l'ordre de la migration n'intéressait que nous.
 //
-// « Formations » figurait dans le dessin mais n'existe pas encore dans le CRM :
-// mieux vaut un onglet absent qu'un lien mort. Il viendra avec les trois autres
-// écrans non repris (To-do, Équipe, Paramètres).
+// « Formations » est repris depuis le tableau de bord (21/09/2026) : c'était du
+// contenu rédigé, sans base derrière, donc rien à relever. Restent trois écrans
+// non repris — To-do, Équipe, Paramètres — accessibles par « Application RGD ».
 export const ONGLETS = [
   { hash: '#/rgd', label: 'Vue d’ensemble' },
   { label: 'Base de données', sous: [
@@ -34,6 +34,7 @@ export const ONGLETS = [
     { hash: '#/rgd/paiements', label: 'Encaissements' },
   ] },
   { hash: '#/rgd/agenda', label: 'Agenda' },
+  { hash: '#/rgd/formations', label: 'Formations' },
   // Les deux derniers ne sont pas dans l'arborescence demandee, et sont gardes
   // pour une raison chacun. Costructor n'a aucune autre porte : sans ce lien,
   // l'ecran qui dit pourquoi un devis n'arrive pas devient introuvable.
