@@ -787,6 +787,13 @@ tr.btp-mission .btp-pts { color: var(--m-encre); }
 
 /* ---------- Écrans propres à BTP Expertise (.btp-*) ---------- */
 
+/* Agenda d'espace : une table groupee par journee. La ligne d'en-tete de jour
+   ne peut pas etre un <th>, sinon elle se fige avec l'en-tete collant de la
+   table ; c'est donc une <tr> a part, reconnaissable a son fond. */
+.rdv-jour td { background: var(--card-2); border-top: 2px solid var(--line-strong); padding: 8px 10px; }
+.rdv-jour td .small { margin-left: 8px; }
+.rdv-h { white-space: nowrap; font-variant-numeric: tabular-nums; width: 1%; }
+
 /* Agenda Google, habillé aux couleurs de la structure. L'intérieur du cadre est
    rendu par Google : on soigne ce qui l'entoure et les couleurs qu'on lui passe. */
 .agenda-head { display: flex; align-items: center; gap: 11px; flex-wrap: wrap; margin-bottom: 14px; }

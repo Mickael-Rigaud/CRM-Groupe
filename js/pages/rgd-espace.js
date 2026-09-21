@@ -16,6 +16,7 @@ export const act = () => ACTIVITIES[KEY];
 export const ONGLETS = [
   { hash: '#/rgd', label: 'Chantiers' },
   { hash: '#/rgd/clients', label: 'Clients' },
+  { hash: '#/rgd/agenda', label: 'Agenda' },
   { label: 'Facturation', sous: [
     { hash: '#/rgd/devis', label: 'Devis' },
     { hash: '#/rgd/paiements', label: 'Encaissements' },
