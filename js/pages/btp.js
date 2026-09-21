@@ -933,6 +933,9 @@ const garderObjectifsPeriode = (e) => localStorage.setItem(CLE_PERIODE,
   JSON.stringify({ periode: e.periode, decalage: e.decalage, debut: e.debut, fin: e.fin }));
 
 function carteObjectifs(e) {
+  // Les objectifs du cabinet sont un chiffre de pilotage : ils ne s'affichent pas
+  // pour un chargé d'affaires, qui travaille sur ses propres missions.
+  if (!scope.canPilotage) return '';
   const r = plageObjectifs(e);
   const lignes = r ? (suiviObjectifs(KEY, r) || []) : [];
   const part = r ? ecoule(r) : 0;

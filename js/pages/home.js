@@ -126,7 +126,8 @@ export const homePage = {
           ${kpi('RDV', t.rdv, evolution(avant?.rdv, t.rdv), serieDe(cle => nbRdvMois(cles, cle, deals)),
             'rendez-vous tenus sur la période')}
           ${kpi('Affaires signées', t.signees ?? '—', evolution(avant?.signees, t.signees), serieDe(cle => nbSigneesMois(cles, cle, deals)), t.panier ? `panier ${eur(t.panier)}` : 'panier moyen indisponible')}
-          ${kpi('CA HT', eur(t.ca), evolution(avant?.ca, t.ca), serieDe(caDu), obj ? `objectif ${eur(obj)}` : 'aucun objectif fixé')}
+          ${kpi('CA HT', eur(t.ca), evolution(avant?.ca, t.ca), serieDe(caDu),
+            obj ? `objectif ${eur(obj)}` : scope.canPilotage ? 'aucun objectif fixé' : 'sur vos affaires')}
           ${kpi('Lead → RDV', tauxRdv === null ? '—' : pct(tauxRdv) + ' %', ecart(entAvant?.tauxRdv, tauxRdv), [],
             tauxRdv === null ? 'étape non comptée' : `${avecRdv} RDV sur ${recus} lead${recus > 1 ? 's' : ''} reçu${recus > 1 ? 's' : ''}`, true)}
           ${kpi('RDV → vente', tauxVente === null ? '—' : pct(tauxVente) + ' %', ecart(entAvant?.tauxVente, tauxVente), [],
@@ -168,6 +169,7 @@ export const homePage = {
               </div>
             </section>
 
+            ${scope.canPilotage ? `
             <section class="card">
               <div class="card-head"><h2>Objectifs &amp; performance</h2>
                 ${objAn ? `<span class="muted small tb-an">Année ${an.annee} : <b>${eur(caAn)}</b> sur ${eur(objAn)} · ${pct(caAn / objAn)} %
@@ -181,7 +183,7 @@ export const homePage = {
                 </tbody></table></div>
                 <p class="muted small tb-legend"><i></i> Objectif annuel ramené ${esc(libellePeriode(state.periode))} ; le repère marque ${pct(part)} % de la période écoulée. À droite du repère, la structure est en avance.</p>`
               : `<p class="empty" style="padding:22px">${objAn ? 'Pas d\'objectif calculable sur cette période.' : 'Aucun objectif fixé.'}${scope.isDirection && !objAn ? ' Utilisez « Fixer les objectifs » pour définir un objectif de CA annuel par structure.' : ''}</p>`}
-            </section>
+            </section>` : ''}
 
             <section class="card">
               <div class="card-head"><h2>Évolution du chiffre d'affaires</h2>

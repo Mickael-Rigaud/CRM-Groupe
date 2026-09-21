@@ -16,6 +16,12 @@ export const scope = {
   // policies contacts_delete et orgs_delete (migration 20260918200000) : le
   // serveur refuse de toute facon, ceci evite d'offrir un bouton qui echouerait.
   get canSupprimerFiche() { return this.isDirection; },
+  // Les chiffres de pilotage — objectifs de CA et de volume, chiffres consolidés
+  // poussés par les outils des structures — ne regardent que la direction.
+  // Miroir des policies settings_read et stats_read (migrations 20260921100000 et
+  // 20260921100100) : en production le serveur ne les envoie déjà plus, ceci évite
+  // d'afficher des cadres vides et garde le mode démo fidèle à la production.
+  get canPilotage() { return this.isDirection; },
   get activityKeys() { return this.isDirection ? ['rgd', 'btp', 'courtage', 'propulsion'] : (this.user?.activities || []); },
 
   canSeeDeal(d) {

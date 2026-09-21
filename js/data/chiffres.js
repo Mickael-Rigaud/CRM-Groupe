@@ -29,7 +29,9 @@ export const moisPrecedent = (cle) => {
 };
 
 // ---------- Chiffres déposés par un outil externe ----------
-export const externe = (k) => db.t('structure_stats').find(x => x.activity === k) || null;
+export const externe = (k) => (scope.canPilotage
+  ? db.t('structure_stats').find(x => x.activity === k) || null
+  : null);
 const aDesMoisExternes = (k) => { const e = externe(k); return !!(e && (e.revenue || []).length); };
 
 // ---------- Leads ----------
@@ -249,6 +251,7 @@ export const structuresHorsEntonnoir = (cles) =>
 // toucher à l'objectif annuel — utile pour un mois creux ou une grosse affaire.
 export const OBJECTIFS_CLE = 'objectifs_ca';
 export function objectifs() {
+  if (!scope.canPilotage) return { base: {}, mois: {}, annuel: true };
   const v = db.setting(OBJECTIFS_CLE);
   if (!v) return { base: {}, mois: {}, annuel: true };
   try {
