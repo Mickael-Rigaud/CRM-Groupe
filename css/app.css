@@ -1886,3 +1886,36 @@ button.tb-pp:hover { color: var(--text); text-decoration: underline; text-underl
   .obj-dates { flex-wrap: wrap; }
   .obj-dates input { width: 130px; }
 }
+
+/* ---- Vue d'ensemble RGD : le CA en tête, puis le pipeline ---- */
+/* L'orange de la marque arrive par applyBrand() : --accent EST déjà celui de
+   RGD sur cet écran. Rien n'est écrit en dur ici. */
+.rgd-ca-ligne { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin: 2px 0; }
+.rgd-ca-montant { font-family: var(--font-display); font-size: 32px; font-weight: 700; color: var(--accent-ink); }
+.rgd-ca-sous { margin: 2px 0 10px; }
+.rgd-courbe { width: 100%; height: auto; display: block; overflow: visible; margin-bottom: 4px; }
+.rgd-barre { fill: var(--accent); opacity: .18; }
+.rgd-trait { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; }
+.rgd-point { fill: var(--accent); }
+.rgd-grille { stroke: var(--line); stroke-width: 1; }
+.rgd-axe { fill: var(--muted); font-size: 11px; }
+
+.rgd-pipe-table { width: 100%; border-collapse: collapse; }
+.rgd-pipe-table tr + tr th, .rgd-pipe-table tr + tr td { border-top: 1px solid var(--line); }
+.rgd-pipe-table th { text-align: left; padding: 9px 14px 9px 0; font-weight: 600;
+  color: var(--muted); white-space: nowrap; font-size: 12.5px; }
+.rgd-pipe-table td { padding: 9px 0; vertical-align: middle; }
+.rgd-pipe-barre { width: 100%; padding-right: 14px !important; }
+.rgd-pipe-piste { height: 22px; border-radius: 8px; background: var(--card-2); overflow: hidden; }
+.rgd-pipe-piste i { display: block; height: 100%; border-radius: inherit; transition: width .35s ease-out; }
+/* Le nombre reste HORS de la barre : dedans, il disparaît sur les étapes basses,
+   qui sont justement celles qu'on regarde. */
+.rgd-pipe-n { text-align: right; font-family: var(--font-display); font-weight: 700;
+  font-size: 15px; min-width: 44px; }
+.rgd-pipe-pied { margin: 12px 0 0; border-top: 1px solid var(--line); padding-top: 10px; }
+@media (max-width: 720px) {
+  .rgd-ca-montant { font-size: 26px; }
+  .rgd-pipe-table th { font-size: 12px; padding-right: 8px; }
+  .rgd-pipe-barre { padding-right: 8px !important; }
+  .rgd-pipe-n { min-width: 34px; font-size: 14px; }
+}
