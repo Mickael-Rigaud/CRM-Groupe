@@ -24,9 +24,15 @@ export const scope = {
   get canPilotage() { return this.isDirection; },
   get activityKeys() { return this.isDirection ? ['rgd', 'btp', 'courtage', 'propulsion'] : (this.user?.activities || []); },
 
+  // Une affaire appartient à une structure autant qu'à une personne. Porter
+  // l'affaire ne suffit donc pas : encore faut-il être de sa structure. Sans cette
+  // condition, une affaire attribuée par erreur à quelqu'un d'une autre structure
+  // entrerait dans ses totaux — invisible tant qu'il n'y a qu'un chargé d'affaires
+  // par structure, gênant dès qu'il y en a plusieurs.
+  // Miroir de can_see_deal (migration 20260921110000).
   canSeeDeal(d) {
     if (this.isDirection) return true;
-    if (d.owner_id === this.user.id) return true;
+    if (d.owner_id === this.user.id && this.activityKeys.includes(d.activity)) return true;
     if (this.role === 'propulsion') return d.activity === 'propulsion';
     return false;
   },
