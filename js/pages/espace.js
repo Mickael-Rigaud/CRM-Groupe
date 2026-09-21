@@ -31,9 +31,20 @@ const lienOnglet = (o, actif) => {
   return `<a href="${o.hash}" class="${ouvert ? 'on' : ''}" ${ouvert ? 'aria-current="page"' : ''}>${esc(o.label)}</a>`;
 };
 
+// `data-espace` permet de styler UNE structure sans toucher aux trois autres :
+// cette coquille est partagée par RGD, BTP, le courtage et Propulsion, et une
+// couleur changée ici les repeindrait toutes.
 export function coquilleEspace({ cle, marque, baseline = '', onglets, actif, titre, corps }) {
+  // Un écran qui désigne un onglet inexistant n'échoue pas : il s'affiche avec
+  // un menu où RIEN n'est marqué, et personne ne sait plus où il se trouve.
+  // C'est arrivé le 21/09/2026 — la vue d'ensemble RGD déclarait
+  // `#/rgd/pilotage` quand le menu proposait `#/rgd` — et rien ne l'a signalé.
+  // Un avertissement en console coûte une ligne et fait gagner la recherche.
+  if (actif && !onglets.some(o => o.hash === actif || (o.sous || []).some(x => x.hash === actif))) {
+    console.warn(`coquilleEspace : l'onglet « ${actif} » n'existe pas dans le menu de ${cle} — aucun repère ne sera marqué.`);
+  }
   return `
-  <div class="esp-app">
+  <div class="esp-app" data-espace="${esc(cle)}">
     <aside class="esp-side">
       <div class="esp-side-brand"><img src="assets/logos/${esc(cle)}.png" alt="" onerror="this.remove()"><span>${esc(marque)}</span></div>
       <nav class="esp-side-nav" aria-label="Écrans ${esc(marque)}">

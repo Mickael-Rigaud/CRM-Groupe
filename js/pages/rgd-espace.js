@@ -11,23 +11,35 @@ import { coquilleEspace } from './espace.js';
 export const KEY = 'rgd';
 export const act = () => ACTIVITIES[KEY];
 
-// L'ordre de la bascule est celui du plan de migration : les écrans repris en
-// haut, l'application d'origine en bas tant qu'il lui reste des écrans.
+// L'ARBORESCENCE, telle que Mickael l'a dessinée le 21/09/2026. Trois groupes
+// nommés par ce qu'ils contiennent, pas par l'ordre d'arrivée des écrans —
+// l'ordre de la migration n'intéressait que nous.
+//
+// « Formations » figurait dans le dessin mais n'existe pas encore dans le CRM :
+// mieux vaut un onglet absent qu'un lien mort. Il viendra avec les trois autres
+// écrans non repris (To-do, Équipe, Paramètres).
 export const ONGLETS = [
-  // L'accueil de l'espace est la vue d'ensemble, comme dans le tableau de bord
-  // d'origine dont la route par defaut est `overview`. `#/rgd/chantiers` porte
-  // desormais la liste ; l'ancienne adresse `#/rgd` ne pointe plus dessus.
   { hash: '#/rgd', label: 'Vue d’ensemble' },
-  { hash: '#/rgd/chantiers', label: 'Chantiers' },
-  { hash: '#/rgd/clients', label: 'Clients' },
-  { hash: '#/rgd/agenda', label: 'Agenda' },
+  { label: 'Base de données', sous: [
+    { hash: '#/rgd/clients', label: 'Clients & prospects' },
+    { hash: '#/rgd/partenaires', label: 'Partenaires' },
+    { hash: '#/rgd/soustraitants', label: 'Sous-traitants' },
+  ] },
+  { label: 'Travaux', sous: [
+    { hash: '#/rgd/chantiers', label: 'Chantiers' },
+    { hash: '#/rgd/realisations', label: 'Réalisations' },
+  ] },
   { label: 'Facturation', sous: [
     { hash: '#/rgd/devis', label: 'Devis' },
     { hash: '#/rgd/paiements', label: 'Encaissements' },
   ] },
-  { hash: '#/rgd/soustraitants', label: 'Sous-traitants' },
-  { hash: '#/rgd/partenaires', label: 'Partenaires' },
-  { hash: '#/rgd/realisations', label: 'Réalisations' },
+  { hash: '#/rgd/agenda', label: 'Agenda' },
+  // Les deux derniers ne sont pas dans l'arborescence demandee, et sont gardes
+  // pour une raison chacun. Costructor n'a aucune autre porte : sans ce lien,
+  // l'ecran qui dit pourquoi un devis n'arrive pas devient introuvable.
+  // « Application RGD » mene au tableau de bord d'origine, qui reste l'outil de
+  // SAISIE tant que l'etape 5 n'est pas faite — le CRM ne sait que lire.
+  // Les deux disparaitront quand le CRM ecrira et que Surge sera debranche.
   { hash: '#/rgd/costructor', label: 'Costructor' },
   { hash: '#/rgd/app', label: 'Application RGD' },
 ];

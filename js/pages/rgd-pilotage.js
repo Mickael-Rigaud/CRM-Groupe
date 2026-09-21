@@ -217,7 +217,7 @@ export const rgdPilotagePage = {
         rien n’a été repris — afficher zéro laisserait croire qu’il n’y a rien à faire,
         alors que le CRM n’en sait rien.</p>`;
 
-      root.innerHTML = cadre('#/rgd/pilotage', 'Vue d’ensemble', corps);
+      root.innerHTML = cadre('#/rgd', 'Vue d’ensemble', corps);
     };
 
     draw();
