@@ -14,7 +14,11 @@ export const act = () => ACTIVITIES[KEY];
 // L'ordre de la bascule est celui du plan de migration : les écrans repris en
 // haut, l'application d'origine en bas tant qu'il lui reste des écrans.
 export const ONGLETS = [
-  { hash: '#/rgd', label: 'Chantiers' },
+  // L'accueil de l'espace est la vue d'ensemble, comme dans le tableau de bord
+  // d'origine dont la route par defaut est `overview`. `#/rgd/chantiers` porte
+  // desormais la liste ; l'ancienne adresse `#/rgd` ne pointe plus dessus.
+  { hash: '#/rgd', label: 'Vue d’ensemble' },
+  { hash: '#/rgd/chantiers', label: 'Chantiers' },
   { hash: '#/rgd/clients', label: 'Clients' },
   { hash: '#/rgd/agenda', label: 'Agenda' },
   { label: 'Facturation', sous: [

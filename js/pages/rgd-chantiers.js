@@ -122,7 +122,7 @@ export const rgdChantiersPage = {
           </table>
         </section>`;
 
-      root.innerHTML = cadre('#/rgd', 'Chantiers', corps);
+      root.innerHTML = cadre('#/rgd/chantiers', 'Chantiers', corps);
       bindSearch(root, 'rc-q', state, draw); restoreFocus(root, state);
       root.querySelectorAll('[data-etat]').forEach(b => b.onclick = () => {
         state.etat = state.etat === b.dataset.etat ? '' : b.dataset.etat; draw();

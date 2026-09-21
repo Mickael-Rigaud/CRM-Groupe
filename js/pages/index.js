@@ -12,6 +12,7 @@ import { rgdSousTraitantsPage } from './rgd-soustraitants.js';
 import { rgdAgendaPage } from './rgd-agenda.js';
 import { rgdPartenairesPage } from './rgd-partenaires.js';
 import { rgdRealisationsPage } from './rgd-realisations.js';
+import { rgdPilotagePage } from './rgd-pilotage.js';
 import { btpHomePage, btpExpertisePage, btpAmoPage, btpChargesPage, btpBasePage, btpDtuPage, btpMailsPage, btpFacturationPage } from './btp.js';
 import { courtageHomePage, courtageBasePage, courtageVivierPage } from './courtage.js';
 import { messageriePage } from './messagerie.js';
@@ -32,7 +33,10 @@ export const pages = {
   // Espace RGD Renova. Les écrans repris vivent dans le CRM ; l'application
   // d'origine garde son onglet pour les douze autres, le temps de l'étape 4.
   rgd: rgdDashboardPage,          // conservé : ancienne adresse plate
-  rgd_home: rgdChantiersPage,
+  // L'accueil est la vue d'ensemble, comme dans le tableau de bord d'origine.
+  rgd_home: rgdPilotagePage,
+  rgd_pilotage: rgdPilotagePage,
+  rgd_chantiers: rgdChantiersPage,
   rgd_clients: rgdClientsPage,
   rgd_agenda: rgdAgendaPage,
   rgd_devis: rgdDevisPage,

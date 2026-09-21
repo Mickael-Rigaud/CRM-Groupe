@@ -23,6 +23,7 @@ export const TABLES = ['profiles', 'organisations', 'contacts', 'deals', 'activi
   'rgd_chantiers', 'rgd_devis', 'rgd_paiements', 'rgd_demandes',
   'rgd_sous_traitants', 'rgd_missions', 'rgd_st_paiements', 'rgd_st_commissions',
   'rgd_apporteurs', 'rgd_fournitures', 'rgd_realisations', 'rgd_carrousel',
+  'rgd_reglages',
   // messagerie interne (canaux par structure + conversations privées)
   'conversations', 'conversation_members', 'messages', 'message_reads',
   // agenda du groupe : le reflet des rendez-vous Google, recopié par la direction
