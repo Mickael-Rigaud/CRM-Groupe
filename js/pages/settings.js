@@ -1,7 +1,7 @@
 // Paramètres : utilisateurs et droits, import CSV, référentiel, entrée des leads (Make), démo.
 import { CONFIG } from '../config.js';
 import { db } from '../data/db.js';
-import { creerCompte } from '../comptes.js';
+import { creerCompte, supprimerCompte } from '../comptes.js';
 import { scope } from '../data/scope.js';
 import { ACTIVITIES, ACTIVITY_KEYS, CHANNELS, ROLES, ROLES_ATTRIBUABLES, LOST_REASONS, ACTIVITY_TYPES } from '../data/schema.js';
 import { esc, toast, openModal, closeModal, renderForm, readForm, confirm, csvDownload } from '../ui.js';
@@ -157,6 +157,7 @@ export const settingsPage = {
 
           <div id="u-retour"></div>
           <div class="form-actions">
+            ${edition && !moi && !db.demo ? '<button type="button" class="btn ghost left danger" id="u-suppr">Supprimer le compte</button>' : ''}
             <button type="button" class="btn ghost" data-close>Annuler</button>
             <button type="button" class="btn" id="u-ok">${edition ? 'Enregistrer' : (db.demo ? 'Créer (démo)' : 'Créer le compte')}</button>
           </div>`;
@@ -181,7 +182,76 @@ export const settingsPage = {
           const nom = zone.querySelector('#u-nom'); nom.oninput = () => { v.nom = nom.value; };
           const mail = zone.querySelector('#u-mail'); if (!edition) mail.oninput = () => { v.email = mail.value; };
           zone.querySelector('#u-ok').onclick = valider;
+          zone.querySelector('#u-suppr')?.addEventListener('click', supprimer);
         };
+
+        // On ne supprime pas à l'aveugle, et on ne DEMANDE pas à l'aveugle non plus.
+        // Le premier clic ne fait qu'inventorier : ce que la personne porte — et qui
+        // empêche la suppression — et ce qui partirait avec elle sans qu'on l'ait
+        // demandé, ses messages. La confirmation se pose DANS la fiche, pas dans une
+        // modale : elles ne s'empilent pas ici (openModal ferme la précédente), donc
+        // un confirm() ferait disparaître la fiche derrière la question.
+        const NOMS = {
+          affaires: ['affaire', 'affaires'], contacts: ['contact', 'contacts'],
+          organisations: ['entreprise', 'entreprises'], taches: ['tâche', 'tâches'],
+          historique: ['trace d’historique', 'traces d’historique'],
+          documents: ['document', 'documents'],
+          agenda: ['relevé d’agenda', 'relevés d’agenda'],
+        };
+        const dit = (cle, n) => `${n} ${(NOMS[cle] || [cle, cle])[n > 1 ? 1 : 0]}`;
+
+        async function supprimer() {
+          const bouton = zone.querySelector('#u-suppr');
+          bouton.disabled = true;
+          try {
+            const inv = await supprimerCompte(profil.id);
+            const porte = Object.entries(inv.bloquant || {}).filter(([, n]) => n > 0);
+            const messages = inv.efface?.messages || 0;
+            zone.querySelector('#u-retour').innerHTML = porte.length ? `
+              <div class="card u-suppr-zone">
+                <p class="mf-aide attention">Ce compte ne peut pas être supprimé : il porte encore
+                  ${porte.map(([k, n]) => `<b>${dit(k, n)}</b>`).join(', ')}.</p>
+                <p class="mf-aide">Confiez ces dossiers à quelqu'un d'autre, ou mettez le compte
+                  en sommeil : la personne ne pourra plus se connecter, et tout restera lisible.</p>
+              </div>` : `
+              <div class="card u-suppr-zone">
+                <p class="mf-aide">Ce compte ne porte aucun dossier : rien ne sera perdu du travail
+                  de ${esc(profil.full_name)}.</p>
+                ${messages ? `<p class="mf-aide attention">En revanche, ses
+                  <b>${messages} message${messages > 1 ? 's' : ''}</b> de la messagerie seront
+                  effacés, y compris dans les conversations partagées.</p>` : ''}
+                <p class="mf-aide">La suppression est définitive : le compte ne pourra plus se
+                  reconnecter et ne se recrée pas.</p>
+                <div class="form-actions">
+                  <button type="button" class="btn ghost" id="u-nonsuppr">Ne rien faire</button>
+                  <button type="button" class="btn danger" id="u-suppr-ok">Supprimer définitivement</button>
+                </div>
+              </div>`;
+            zone.querySelector('#u-nonsuppr')?.addEventListener('click', () => {
+              zone.querySelector('#u-retour').innerHTML = '';
+              bouton.disabled = false;
+            });
+            zone.querySelector('#u-suppr-ok')?.addEventListener('click', confirmerSuppression);
+            if (porte.length) bouton.disabled = false;
+          } catch (err) {
+            bouton.disabled = false;
+            toast(err.message, 'err');
+          }
+        }
+
+        async function confirmerSuppression() {
+          const ok = zone.querySelector('#u-suppr-ok');
+          ok.disabled = true; ok.textContent = 'Suppression…';
+          try {
+            await supprimerCompte(profil.id, { confirmer: true });
+            closeModal(true);
+            toast(`Compte de ${profil.full_name} supprimé`);
+            draw();
+          } catch (err) {
+            ok.disabled = false; ok.textContent = 'Supprimer définitivement';
+            toast(err.message, 'err');
+          }
+        }
 
         async function valider() {
           if (!v.nom.trim()) return toast('Le nom est nécessaire', 'warn');

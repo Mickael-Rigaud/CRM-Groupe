@@ -1022,6 +1022,9 @@ tr.btp-mission .btp-pts { color: var(--m-encre); }
 td.acts { display: flex; gap: 6px; justify-content: flex-end; }
 .btn.ghost.danger { color: var(--red); }
 .btn.ghost.danger:hover { background: var(--red-soft); border-color: var(--red); }
+/* Suppression d un compte : la confirmation se pose dans la fiche, encadree de rouge. */
+.u-suppr-zone { margin-top: 14px; border-color: var(--red); background: var(--red-soft); }
+.u-suppr-zone .form-actions { margin-top: 12px; }
 
 /* Mails types — trois dossiers, chacun sa couleur, et la séquence en chronologie.
    La teinte vient de la séquence (--t), posée par le JS. */

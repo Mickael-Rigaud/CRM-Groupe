@@ -32,3 +32,38 @@ export async function creerCompte({ email, full_name, role, activities }) {
   if (rep.profil) db.cache?.profiles?.push(rep.profil);
   return rep;
 }
+
+// Supprimer un compte : geste irréversible, donc en deux temps.
+//
+// Premier appel sans `confirmer` : la fonction rend l'inventaire de ce que la
+// personne porte, sans rien toucher. Second appel avec `confirmer` : elle
+// supprime, et refuse si l'inventaire n'est pas vide.
+//
+// Ce n'est pas de la prudence décorative. La base REFUSE de supprimer quelqu'un
+// qui porte des affaires — mais elle EFFACE ses messages en cascade, sans rien
+// demander. L'inventaire sert à montrer les deux avant d'agir.
+export async function supprimerCompte(id, { confirmer = false } = {}) {
+  if (CONFIG.DEMO) throw new Error('Mode démo : aucun compte réel n’est supprimé.');
+  const jeton = await db.accessToken();
+  if (!jeton) throw new Error('Session expirée : reconnectez-vous.');
+
+  const r = await fetch(`${CONFIG.SUPABASE_URL}/functions/v1/supprimer-utilisateur`, {
+    method: 'POST',
+    headers: {
+      apikey: CONFIG.SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${jeton}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ id, confirmer }),
+  });
+  const rep = await r.json().catch(() => ({}));
+  if (!r.ok || rep.ok === false) {
+    throw Object.assign(new Error(rep.erreur || `Erreur ${r.status}`), { bloquant: rep.bloquant });
+  }
+  if (confirmer) {
+    // Le profil est parti avec le compte : on le retire du cache pour que la
+    // liste se referme sans attendre un rechargement.
+    if (db.cache?.profiles) db.cache.profiles = db.cache.profiles.filter(u => u.id !== id);
+  }
+  return rep;
+}
