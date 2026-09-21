@@ -694,8 +694,10 @@ tr.btp-mission .btp-pts { color: var(--m-encre); }
 .hono-note.alerte { color: var(--amber); font-weight: 600; }
 
 /* ---------- Le modele de remuneration : deux cles, et ce que ca donne ---------- */
-.btp-remu-cles { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin-bottom: 16px; }
-.btp-remu-cle { display: grid; grid-template-columns: auto auto 1fr; align-items: baseline; gap: 2px 8px;
+.btp-remu-cles { display: grid; grid-template-columns: repeat(auto-fit, minmax(310px, 1fr)); gap: 12px; margin-bottom: 16px; }
+/* ⚠ QUATRE COLONNES POUR QUATRE ÉLÉMENTS : 55 % · indépendant · 45 % · cabinet.
+   Avec trois, le dernier libellé retombait seul à la ligne sous le pourcentage. */
+.btp-remu-cle { display: grid; grid-template-columns: auto auto auto 1fr; align-items: baseline; gap: 2px 8px;
   padding: 13px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--card-2); }
 .btp-remu-cle > span { grid-column: 1 / -1; font-size: 12px; font-weight: 700; color: var(--muted-2);
   text-transform: uppercase; letter-spacing: .04em; margin-bottom: 6px; }
