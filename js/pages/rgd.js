@@ -17,7 +17,7 @@ import { esc } from '../ui.js';
 // injoignable, session expirée — on ne fait rien : l'application affiche son
 // formulaire de connexion comme avant. On ne perd jamais l'accès, au pire le
 // confort.
-const API_RGD = 'https://rgd-renova-api.rgdrenova.workers.dev';
+const API_RGD = (CONFIG.RGD_API_URL || 'https://rgd-renova-api.rgdrenova.workers.dev').replace(/\/$/, '');
 
 async function jetonRgd() {
   const session = await db.accessToken();

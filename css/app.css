@@ -410,6 +410,24 @@ select.cell-in { text-align: left; }
 .chip.st-perdu { background: var(--red-soft);
   border-color: color-mix(in srgb, var(--red) 35%, transparent); color: var(--red); }
 .rcl-intro { margin: -4px 0 0; }
+/* Le menu de statut reprend la couleur de la pastille : on lit l'etape sans
+   ouvrir la liste, comme dans le tableau de bord. Les regles `.chip.st-*`
+   ci-dessus portent les fonds ; celles-ci ne font que la forme. */
+.statut-menu { font: inherit; font-size: 12px; font-weight: 600; padding: 4px 8px;
+  border: 1px solid var(--line); border-radius: 999px; background: var(--card-2);
+  color: var(--muted); cursor: pointer; max-width: 170px; }
+.statut-menu:disabled { cursor: progress; opacity: .6; }
+.statut-menu.en-cours { opacity: .6; }
+.statut-menu.st-a_contacter, .statut-menu.st-qualifie {
+  background: var(--amber-soft); border-color: color-mix(in srgb, var(--amber) 35%, transparent); color: var(--amber); }
+.statut-menu.st-rdv_planifie { background: var(--blue-soft);
+  border-color: color-mix(in srgb, var(--sea-ink) 25%, transparent); color: var(--sea-ink); }
+.statut-menu.st-devis_envoye, .statut-menu.st-devis_accepte {
+  background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 40%, transparent); color: var(--accent-ink); }
+.statut-menu.st-chantier_en_cours, .statut-menu.st-chantier_termine {
+  background: var(--green-soft); border-color: color-mix(in srgb, var(--green) 35%, transparent); color: var(--green); }
+.statut-menu.st-perdu { background: var(--red-soft);
+  border-color: color-mix(in srgb, var(--red) 35%, transparent); color: var(--red); }
 
 /* ---------- Formations : des fiches en accordeon ----------
    Un <details> natif plutot qu'un accordeon maison : il s'ouvre au clavier, se
@@ -497,6 +515,15 @@ body:has(.esp-app) .subnav .datepill { display: none; }
 
 /* Indicateurs : libellé à gauche, icône en pastille à droite, valeur en gros */
 .esp-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); gap: 14px; }
+/* Sous-traitants potentiels : un bloc a part, une carte par corps de metier.
+   Deux colonnes des qu'il y a la place — une liste de trois artisans n'a pas
+   besoin de toute la largeur, et on en voit davantage d'un coup d'oeil. */
+.rst-potentiels { margin-top: 30px; border-top: 1px solid var(--line); padding-top: 22px; }
+.rst-tete { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+.rst-tete h2 { margin: 0 0 3px; display: flex; align-items: center; gap: 9px; }
+.rst-tete p { margin: 0; max-width: 62ch; }
+.rst-metiers { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 14px; align-items: start; }
+@media (max-width: 900px) { .rst-metiers { grid-template-columns: 1fr; } .rst-tete { flex-direction: column; } }
 .esp-kpi { position: relative; overflow: hidden; display: flex; flex-direction: column; gap: 2px; text-decoration: none; color: inherit; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px 18px; box-shadow: var(--shadow); transition: transform .13s, box-shadow .13s, border-color .13s; }
 .esp-kpi::after { content: ""; position: absolute; inset: auto -40px -40px auto; width: 150px; height: 150px; border-radius: 50%; background: var(--ts); opacity: .5; }
 .esp-kpi:hover { transform: translateY(-2px); box-shadow: var(--shadow-lift); border-color: var(--t); }

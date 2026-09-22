@@ -27,16 +27,36 @@
 // dans l'original — une demande a un projet et un budget annoncés, une fiche a
 // un statut et une adresse.
 //
-// CE QUI EST EN LECTURE SEULE ET NE FAIT PAS SEMBLANT
-// Le tableau de bord met un menu déroulant dans la colonne Statut et un champ
-// de note dans Commentaire. Ici ce sont du texte : un contrôle qui a l'air de
-// s'ouvrir et ne fait rien est pire qu'un texte. La saisie reste dans
-// l'application RGD tant que l'étape 5 n'est pas faite.
+// LE STATUT S'ÉCRIT D'ICI — LE PREMIER CHAMP DE L'ESPACE RGD À LE FAIRE
+// Le reste de l'écran lit un reflet relevé toutes les 30 minutes ; le statut,
+// lui, part à la SOURCE. Écrire dans le reflet n'aurait servi à rien : le
+// relevé suivant l'écraserait sans un mot. Le menu appelle donc l'API du
+// tableau de bord (`js/data/rgd-api.js`), qui écrit dans Cloudflare D1 avec le
+// jeton de la connexion unique — personne ne gagne de droit au passage.
+//
+// DEUX EFFETS DE BORD, ET CE SONT CEUX DU TABLEAU DE BORD
+// Changer le statut d'un client pousse les champs portables vers Costructor,
+// et **envoie un email à l'apporteur** quand le client en a un. Ce n'est pas
+// une invention d'ici, c'est ce que fait déjà le menu de l'application — mais
+// un écran qui ouvre ce menu doit le dire, et il le dit.
+//
+// L'AFFICHAGE AVANCE AVANT LE RELEVÉ, ET REVIENT SI ÇA ÉCHOUE
+// Une fois l'écriture acceptée, le reflet local est mis à jour tout de suite :
+// attendre le relevé ferait revenir l'ancienne valeur sous les yeux de qui
+// vient de la changer. En cas de refus, la ligne reprend sa valeur d'avant et
+// le motif s'affiche — un menu qui ne dit rien laisserait croire que c'est
+// passé.
+//
+// LE RESTE DE L'ÉCRAN NE S'ÉCRIT TOUJOURS PAS
+// Le champ « Note » du tableau de bord reste du texte ici. Il n'a pas été
+// demandé, et chaque champ ouvert est un chemin d'écriture de plus à tenir.
 import { scope } from '../data/scope.js';
 import { db } from '../data/db.js';
 import { esc, fmtDate, fmtDateTime, relDay, terms, hit, searchInput, bindSearch, restoreFocus } from '../ui.js';
 import { poserEspace } from './espace.js';
 import { cadre, BANDEAU, guard } from './rgd-espace.js';
+import { peutEcrire, majStatutClient, majStatutDemande } from '../data/rgd-api.js';
+import { toast } from '../ui.js';
 
 const s_ = (n) => (n > 1 ? 's' : '');
 
@@ -81,6 +101,18 @@ const pastilleSuivi = (cle) => {
   const st = dit(STATUTS_SUIVI, cle || 'nouveau_prospect');
   return `<span class="chip st-${esc(st.key)}">${esc(st.label)}</span>`;
 };
+
+// Le menu déroulant, aux couleurs du statut courant — comme dans le tableau de
+// bord, où la couleur se lit sans ouvrir la liste. `data-cible` dit quelle
+// table écrire, `data-id` l'identifiant CÔTÉ CLOUDFLARE : le worker ne connaît
+// pas les uuid du CRM.
+const menuStatut = (cle, cible, d1Id) => {
+  const courant = cle || 'nouveau_prospect';
+  return `<select class="statut-menu st-${esc(courant)}" data-cible="${esc(cible)}"
+    data-id="${esc(String(d1Id))}" data-avant="${esc(courant)}" aria-label="Statut">
+    ${STATUTS_SUIVI.map(st => `<option value="${esc(st.key)}" ${st.key === courant ? 'selected' : ''}>${esc(st.label)}</option>`).join('')}
+  </select>`;
+};
 const pastilleFiche = (cle) => cle
   ? `<span class="chip st-${esc(dit(STATUTS_FICHE, cle).key)}">${esc(dit(STATUTS_FICHE, cle).label)}</span>`
   : '<span class="muted">—</span>';
@@ -98,7 +130,13 @@ export const rgdClientsPage = {
   render(root) {
     if (guard(root)) return {};
     const coquille = poserEspace(root);
-    const state = { vue: 'clients', sousVue: 'site', q: '', type: '', statut: '', focus: null };
+    const state = { vue: 'clients', sousVue: 'site', q: '', type: '', statut: '',
+                    focus: null, ecriture: false };
+
+    // On demande une fois si l'écriture est possible, puis on redessine. Sans
+    // compte RGD au même email — ou en mode démo — le menu reste une pastille :
+    // mieux vaut un texte figé qu'un contrôle qui échoue au premier clic.
+    peutEcrire().then(ok => { if (ok !== state.ecriture) { state.ecriture = ok; draw(); } });
 
     const draw = () => {
       const fiches = scope.rgd('rgd_clients');
@@ -190,7 +228,9 @@ export const rgdClientsPage = {
                   ${f.source === 'meta_ads' ? '<span class="chip accent" title="Lead Facebook ou Instagram">Meta</span>' : ''}
                   ${ap ? `<div class="s muted">apporté par ${esc(ap.societe || [ap.prenom, ap.nom].filter(Boolean).join(' '))}</div>` : ''}</td>
               <td class="muted">${esc(p?.type || '—')}</td>
-              <td>${surProspects ? pastilleSuivi(f.statut_suivi) : pastilleFiche(f.statut)}</td>
+              <td>${!surProspects ? pastilleFiche(f.statut)
+                : state.ecriture ? menuStatut(f.statut_suivi, 'client', f.d1_id)
+                : pastilleSuivi(f.statut_suivi)}</td>
               <td>${p?.email ? `<a href="mailto:${esc(p.email)}">${esc(p.email)}</a>` : '<span class="muted">—</span>'}</td>
               <td>${esc(p?.tel || '—')}</td>
               <td class="muted">${esc(adresseDe(p))}</td>
@@ -213,12 +253,13 @@ export const rgdClientsPage = {
             <td class="muted">${esc(String(d.budget || '—').trim())}</td>
             <td class="muted">${esc([d.adresse, [d.code_postal, d.ville].filter(Boolean).join(' ')].filter(Boolean).join(' ') || '—')}</td>
             <td class="muted">${esc(d.comment_connu || '—')}</td>
-            <td>${pastilleSuivi(d.statut)}</td>
+            <td>${state.ecriture ? menuStatut(d.statut, 'demande', d.d1_id) : pastilleSuivi(d.statut)}</td>
             <td class="muted small">${esc(d.commentaire_admin || '—')}</td>
           </tr>`).join('') || `<tr><td colspan="10"><div class="empty">${esc(vide())}</div></td></tr>`}</tbody>
         </table>
-        <p class="small muted">Le statut et le commentaire se modifient dans
-        l&rsquo;<a href="#/rgd/app">application RGD</a> : ici ils sont lus, pas saisis.</p>
+        <p class="small muted">${state.ecriture
+          ? 'Le statut se change ici et part directement dans le tableau de bord RGD. Le commentaire, lui, se saisit dans l’<a href="#/rgd/app">application RGD</a>.'
+          : 'Le statut et le commentaire se modifient dans l’<a href="#/rgd/app">application RGD</a> : ici ils sont lus, pas saisis.'}</p>
       </section>`;
 
       // LES LEADS META ONT LEURS PROPRES COLONNES, et pour une raison : ce
@@ -245,12 +286,13 @@ export const rgdClientsPage = {
             <td class="muted">${esc(f.meta_type_bien || '—')}</td>
             <td class="muted">${esc(p?.ville || '—')}</td>
             <td class="muted">${esc(f.meta_budget || '—')}</td>
-            <td>${pastilleSuivi(f.statut_suivi)}</td>
+            <td>${state.ecriture ? menuStatut(f.statut_suivi, 'client', f.d1_id) : pastilleSuivi(f.statut_suivi)}</td>
             <td class="muted small">${esc(f.notes || '—')}</td>
           </tr>`).join('') || `<tr><td colspan="9"><div class="empty">${esc(vide())}</div></td></tr>`}</tbody>
         </table>
-        <p class="small muted">Le statut et la note se modifient dans
-        l&rsquo;<a href="#/rgd/app">application RGD</a> : ici ils sont lus, pas saisis.</p>
+        <p class="small muted">${state.ecriture
+          ? 'Le statut se change ici et part directement dans le tableau de bord RGD — et, si le lead a un apporteur, celui-ci en est averti par email. La note se saisit dans l’<a href="#/rgd/app">application RGD</a>.'
+          : 'Le statut et la note se modifient dans l’<a href="#/rgd/app">application RGD</a> : ici ils sont lus, pas saisis.'}</p>
       </section>`;
 
       function vide() {
@@ -260,8 +302,20 @@ export const rgdClientsPage = {
         return 'Aucun prospect de cette provenance.';
       }
 
+      // Le bandeau commun dit que toute modification faite ici serait écrasée au
+      // relevé suivant. Ce n'est plus vrai du statut, qui part à la source :
+      // laisser la phrase telle quelle ferait hésiter devant un menu qui marche.
+      const bandeau = state.ecriture ? `<div class="alert rgd-source">
+        <b>i</b>
+        <div>Ces écrans <b>lisent</b> les données du tableau de bord RGD Renova, relevées
+        toutes les 30 minutes — <b>sauf le statut</b>, qui se change ici et part
+        directement dans le tableau de bord. Pour tout le reste, passez par l&rsquo;onglet
+        <a href="#/rgd/app">Application RGD</a> : une modification faite ici serait
+        écrasée au relevé suivant.</div>
+      </div>` : BANDEAU;
+
       const corps = `
-        ${BANDEAU}
+        ${bandeau}
 
         <div class="pill-tabs">
           ${RUBRIQUES.map(r => `<button type="button" data-vue="${r.key}"
@@ -310,6 +364,41 @@ export const rgdClientsPage = {
       if (t) t.onchange = () => { state.type = t.value; draw(); };
       const st = root.querySelector('#rcl-statut');
       if (st) st.onchange = () => { state.statut = st.value; draw(); };
+
+      // L'écriture du statut. On ne redessine PAS tout de suite : redessiner
+      // remplacerait le menu que la personne vient d'ouvrir, et lui ferait
+      // perdre le fil. On repeint la seule pastille concernée, et on attend le
+      // prochain rendu naturel pour le reste.
+      root.querySelectorAll('.statut-menu').forEach(m => {
+        m.onchange = async () => {
+          const avant = m.dataset.avant;
+          const apres = m.value;
+          if (avant === apres) return;
+          m.disabled = true;
+          m.className = `statut-menu st-${apres} en-cours`;
+          const r = m.dataset.cible === 'demande'
+            ? await majStatutDemande(m.dataset.id, apres)
+            : await majStatutClient(m.dataset.id, apres);
+          m.disabled = false;
+          if (r.ok) {
+            m.dataset.avant = apres;
+            m.className = `statut-menu st-${apres}`;
+            // On avance le reflet local : le relevé confirmera dans la
+            // demi-heure, mais l'écran ne doit pas revenir en arrière entre-temps.
+            const table = m.dataset.cible === 'demande' ? 'rgd_demandes' : 'rgd_clients';
+            const champ = m.dataset.cible === 'demande' ? 'statut' : 'statut_suivi';
+            const ligne = scope.rgd(table).find(x => String(x.d1_id) === m.dataset.id);
+            if (ligne) ligne[champ] = apres;
+            toast('Statut mis à jour dans le tableau de bord RGD');
+          } else {
+            m.value = avant;
+            m.className = `statut-menu st-${avant}`;
+            toast(r.motif === 'pas-de-compte'
+              ? 'Aucun compte RGD à votre adresse : le statut n’a pas été changé.'
+              : `Statut non enregistré — ${r.motif}`, 'err');
+          }
+        };
+      });
     };
 
     draw();
