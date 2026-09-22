@@ -1,6 +1,10 @@
 // Espace RGD Renova — réalisations et carrousel
 //
-// ÉTAPE 4 DE LA MIGRATION, RANG 5. Lecture seule, comme les rangs précédents.
+// ÉTAPE 4 DE LA MIGRATION, RANG 5 — en écriture depuis le 22/09/2026, et
+// c'est le SEUL écran de l'espace dont l'écriture sort vers le public.
+// La modification passe par `js/pages/rgd-realisation-edit.js`, qui relit le
+// document publié à la source et le republie entier : lire les trois
+// contraintes de stockage en tête de ce fichier avant d'y toucher.
 //
 // CE QUE CET ÉCRAN MONTRE, ET À QUI IL SERT
 // Les 31 chantiers publiés sur rgdrenova.fr, avec leur ville, leur surface, leur
@@ -15,15 +19,18 @@
 // 20260921250000. Un blob ne se cherche pas, ne se compte pas, ne se trie pas ;
 // une table, si. Le découpage suit la structure du JSON, il n'en invente pas.
 //
-// ET C'EST LE SITE QUI FAIT FOI
-// Ces contenus sont ceux d'un site web que le CRM ne publie pas. Une correction
-// se fait dans l'application RGD, qui écrit sur rgdrenova.fr ; faite ici, elle
-// serait écrasée au relevé suivant — et ne serait de toute façon jamais partie
-// en ligne.
+// LA LISTE LIT LE REFLET, L'ÉDITEUR LIT LA SOURCE — ET C'EST VOULU
+// La liste se cherche, se trie, se filtre : elle a besoin de lignes, donc du
+// reflet, avec son retard de trente minutes. L'éditeur, lui, republie le
+// document entier : il ne peut pas partir d'une copie vieille d'une demi-heure
+// ni d'un reflet qui a perdu les descriptions de catégories. Il relit la
+// source à l'ouverture, et une seconde fois au moment de publier.
 import { scope } from '../data/scope.js';
 import { esc, terms, hit, searchInput, bindSearch, restoreFocus } from '../ui.js';
 import { poserEspace, kpiEspace } from './espace.js';
 import { cadre, guard } from './rgd-espace.js';
+import { peutEcrire } from '../data/rgd-api.js';
+import { ouvrirEditionRealisation } from './rgd-realisation-edit.js';
 
 // La première photo d'un projet, quand il y en a une. Deux projets sur
 // trente et un n'en ont aucune : la vignette se tait plutôt que de montrer un
@@ -47,7 +54,8 @@ export const rgdRealisationsPage = {
   render(root) {
     if (guard(root)) return {};
     const coquille = poserEspace(root);
-    const state = { vue: 'realisations', q: '', cat: '', focus: null };
+    const state = { vue: 'realisations', q: '', cat: '', focus: null, ecriture: false };
+    peutEcrire().then(ok => { if (ok !== state.ecriture) { state.ecriture = ok; draw(); } });
 
     const draw = () => {
       const tous = scope.rgd('rgd_realisations').slice()
@@ -76,10 +84,10 @@ export const rgdRealisationsPage = {
       const corps = `
         <div class="alert rgd-source">
           <b>i</b>
-          <div>Ces réalisations sont celles publiées sur <b>rgdrenova.fr</b>. Elles
-          se modifient dans l’<a href="#/rgd/app">application RGD</a>, qui écrit sur
-          le site — une correction faite ici ne partirait pas en ligne et serait
-          écrasée au relevé suivant.</div>
+          <div>Ces réalisations sont celles publiées sur <b>rgdrenova.fr</b>.
+          ${state.ecriture
+            ? '<b>Les modifier ici les publie sur le site</b> — il n’y a pas de brouillon. La liste, elle, est relevée toutes les trente minutes : une modification publiée n’y apparaît pas tout de suite.'
+            : 'Elles se modifient dans l’<a href="#/rgd/app">application RGD</a>, qui écrit sur le site — une correction faite ici ne partirait pas en ligne et serait écrasée au relevé suivant.'}</div>
         </div>
 
         <div class="esp-kpis">
@@ -129,7 +137,12 @@ export const rgdRealisationsPage = {
                 </div>
                 ${t ? `<p class="s rea-avis">« ${esc(String(t.text).slice(0, 160))} »
                   ${t.author ? `<span class="muted">— ${esc(t.author)}</span>` : ''}</p>` : ''}
-                ${p.url ? `<a class="s" href="${esc(p.url)}" target="_blank" rel="noopener">voir sur le site</a>` : ''}
+                <div class="rea-actions">
+                  ${p.url ? `<a class="s" href="${esc(p.url)}" target="_blank" rel="noopener">voir sur le site</a>` : ''}
+                  ${state.ecriture && p.slug
+                    ? `<button type="button" class="btn ghost sm" data-modifier="${esc(p.slug)}">Modifier</button>`
+                    : ''}
+                </div>
               </div>
             </article>`; }).join('') || `<div class="card"><div class="empty">${
               state.q || state.cat ? 'Aucune réalisation ne correspond.' : 'Aucune réalisation relevée.'
@@ -163,6 +176,12 @@ export const rgdRealisationsPage = {
       root.querySelectorAll('[data-vue]').forEach(b => b.onclick = () => {
         state.vue = b.dataset.vue; state.q = ''; state.cat = ''; draw();
       });
+      // `draw` après publication ne montrera rien de neuf : la liste lit le
+      // reflet, qui met jusqu'à trente minutes à rapatrier le changement. On
+      // redessine quand même — le bandeau et les compteurs restent justes, et
+      // ne rien faire laisserait croire que le clic n'a pas abouti.
+      root.querySelectorAll('[data-modifier]').forEach(b => b.onclick = () =>
+        ouvrirEditionRealisation(b.dataset.modifier, draw));
     };
 
     draw();

@@ -955,6 +955,18 @@ tr.btp-mission .btp-pts { color: var(--m-encre); }
 .rea-faits { display: flex; flex-wrap: wrap; gap: 5px; }
 .rea-avis { margin: 2px 0 0; color: var(--muted); font-style: italic; }
 @media (max-width: 520px) { .rea-grille { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); } }
+/* Le pied d'une carte : le lien vers le site et le bouton de modification.
+   `margin-top:auto` les colle en bas, pour que deux cartes côte à côte alignent
+   leurs boutons même quand leurs titres n'ont pas le même nombre de lignes. */
+.rea-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: auto; padding-top: 4px; }
+/* Les vignettes de l'éditeur. Format carré et `object-fit: cover` : les photos
+   du site vont du portrait 2252x4000 au paysage, et une grille qui suit leurs
+   proportions devient illisible. */
+.rea-edit-photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 10px; }
+.rea-edit-photos figure { margin: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--card-2); }
+.rea-edit-photos img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; }
+.rea-edit-photos figcaption { display: flex; align-items: center; gap: 4px; padding: 5px 6px; }
+.rea-edit-photos figcaption .chip { margin-right: auto; }
 
 /* Agenda d'espace : une table groupee par journee. La ligne d'en-tete de jour
    ne peut pas etre un <th>, sinon elle se fige avec l'en-tete collant de la

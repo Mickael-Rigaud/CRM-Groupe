@@ -292,3 +292,59 @@ export const majApporteur = (d1Id, champs) =>
 export const creerFourniture = (champs) => envoyer('/api/fournitures', versD1Fourniture(champs), 'POST');
 export const majFourniture = (d1Id, champs) =>
   envoyer(`/api/fournitures/${encodeURIComponent(d1Id)}`, versD1Fourniture(champs));
+
+// ------------------------------------------------------------- réalisations
+//
+// ⚠ CE SONT LES SEULES ÉCRITURES DE L'ESPACE QUI SORTENT VERS LE PUBLIC.
+// `POST /api/realisations` ne modifie pas une ligne : il REMPLACE le document
+// entier, et c'est ce document que rgdrenova.fr lit pour sa page « Nos
+// réalisations ». Enregistrer ici, c'est publier.
+//
+// ⚠ IL FAUT DONC TOUJOURS RELIRE AVANT D'ÉCRIRE, ET NE JAMAIS RECONSTRUIRE
+// LE DOCUMENT DEPUIS LE REFLET. `rgd_realisations` déplie le JSON en lignes
+// pour qu'on puisse le chercher et le trier, mais il PERD les descriptions
+// des cinq catégories — de longs textes de référencement qui n'ont pas de
+// colonne. Repartir du reflet les effacerait du site sans que rien ne le dise.
+//
+// ⚠ ET IL N'Y A QU'UN SEUL NIVEAU DE RETOUR ARRIÈRE. Chaque enregistrement
+// pousse l'ancien document dans `data_backup` et écrase le précédent : deux
+// mauvais enregistrements de suite, et la bonne version n'existe plus nulle
+// part. L'écran doit le dire avant de proposer « restaurer ».
+
+// Le document complet, lu à la source. Route PUBLIQUE (le site s'en sert),
+// donc sans jeton — mais on coupe le cache : le worker répond avec un
+// `max-age=60`, et relire une version d'il y a une minute avant de la
+// réécrire ferait perdre la modification de quelqu'un d'autre.
+export async function lireRealisations() {
+  try {
+    const r = await fetch(`${API}/api/realisations`, { cache: 'no-store' });
+    if (!r.ok) return { ok: false, motif: `HTTP ${r.status}` };
+    const d = await r.json();
+    if (!Array.isArray(d?.categories)) return { ok: false, motif: 'document inattendu' };
+    return { ok: true, donnees: d };
+  } catch (e) {
+    return { ok: false, motif: String(e.message || e).slice(0, 120) };
+  }
+}
+
+// Publier le document. `doc` doit être le document ENTIER — le worker refuse
+// (400) tout ce qui n'a pas de `categories`, ce qui est le garde-fou minimal
+// contre un envoi tronqué.
+export const enregistrerRealisations = (doc) =>
+  envoyer('/api/realisations', doc, 'POST');
+
+// Revenir à la version précédente. UNE seule, voir plus haut.
+export const restaurerRealisations = () =>
+  envoyer('/api/realisations/restore', {}, 'POST');
+
+// Déposer une ou plusieurs photos. Elles vont dans le KV de Cloudflare et le
+// worker rend leurs URL publiques — à poser ensuite dans `images` d'un projet,
+// puis à enregistrer : le dépôt seul ne publie rien.
+// 20 Mo par image, formats jpeg/png/webp/gif/avif. Le worker refuse TOUT LE
+// LOT si une seule image cloche, pour qu'on voie ce qui ne va pas au lieu de
+// chercher la photo manquante.
+export function deposerPhotosRealisations(fichiers) {
+  const f = new FormData();
+  for (const x of fichiers) f.append('file', x);
+  return televerser('/api/realisations/upload', f);
+}
