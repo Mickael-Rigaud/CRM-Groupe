@@ -1,6 +1,12 @@
 // Espace RGD Renova — partenaires et achats
 //
-// ÉTAPE 4 DE LA MIGRATION, RANG 5. Lecture seule, comme les rangs précédents.
+// ÉTAPE 4 DE LA MIGRATION, RANG 5 — en écriture depuis le 22/09/2026.
+//
+// CE SONT LES ÉCRITURES LES PLUS SIMPLES DE L'ESPACE, ET C'EST RARE ICI.
+// Ni email, ni poussée vers Costructor, ni statut traduit en trois colonnes :
+// `PATCH /api/apporteurs/:id` et `PATCH /api/fournitures/:id` écrivent une
+// ligne et s'arrêtent là. Tout le soin est ailleurs — dans les noms, voir
+// `versD1Apporteur` et `versD1Fourniture` dans `js/data/rgd-api.js`.
 //
 // POURQUOI LES DEUX SUR LE MÊME ÉCRAN
 // Un apporteur envoie du travail, un fournisseur en vend la matière : ce sont
@@ -27,6 +33,9 @@ import { db } from '../data/db.js';
 import { esc, eur, fmtDate, terms, hit, searchInput, bindSearch, restoreFocus } from '../ui.js';
 import { poserEspace, kpiEspace } from './espace.js';
 import { cadre, guard } from './rgd-espace.js';
+import { peutEcrire, creerApporteur, majApporteur,
+         creerFourniture, majFourniture } from '../data/rgd-api.js';
+import { toast, openModal, closeModal } from '../ui.js';
 
 // Les trois rôles que D1 range dans la même table. L'ordre est celui de
 // l'intérêt commercial : celui qui apporte des affaires d'abord.
@@ -39,16 +48,234 @@ const role = (k) => ROLES[k] || { label: k || 'Non précisé', ton: 'muted' };
 
 const nomDe = (a) => [a.prenom, a.nom].filter(Boolean).join(' ').trim() || a.societe || '—';
 
+// Le formulaire d'un partenaire. Il sert à créer comme à modifier : le worker
+// a deux routes mais les mêmes champs, et deux formulaires jumeaux finissent
+// toujours par diverger sur un détail.
+function formulairePartenaire(a, apres) {
+  const creation = !a;
+  const v = a || {};
+  const corps = `
+    <form id="pa-form" class="reg-grille" style="grid-template-columns:1fr 1fr">
+      <label class="reg-champ"><span>Nom *</span><input name="nom" required value="${esc(v.nom || '')}"></label>
+      <label class="reg-champ"><span>Prénom</span><input name="prenom" value="${esc(v.prenom || '')}"></label>
+      <label class="reg-champ"><span>Société</span><input name="societe" value="${esc(v.societe || '')}"></label>
+      <label class="reg-champ"><span>Métier</span><input name="profession" value="${esc(v.profession || '')}"></label>
+      <label class="reg-champ">
+        <span>Rôle</span>
+        <select name="type_partenaire">
+          ${Object.entries(ROLES).map(([k, r]) =>
+            `<option value="${esc(k)}" ${v.type_partenaire === k ? 'selected' : ''}>${esc(r.label)}</option>`).join('')}
+        </select>
+      </label>
+      <label class="reg-champ"><span>Téléphone</span><input name="telephone" value="${esc(v.telephone || '')}"></label>
+      <label class="reg-champ" style="grid-column:1/-1"><span>Email</span>
+        <input name="email" type="email" value="${esc(v.email || '')}"></label>
+      <label class="reg-champ"><span>Code postal</span><input name="code_postal" value="${esc(v.code_postal || '')}"></label>
+      <label class="reg-champ"><span>Ville</span><input name="ville" value="${esc(v.ville || '')}"></label>
+      <label class="reg-champ">
+        <span>Convention de partenariat</span>
+        <select name="partenariat_signe">
+          <option value="0" ${v.partenariat_signe ? '' : 'selected'}>Non signée</option>
+          <option value="1" ${v.partenariat_signe ? 'selected' : ''}>Signée</option>
+        </select>
+      </label>
+      <label class="reg-champ"><span>Date de signature</span>
+        <input name="date_signature" type="date" value="${esc(v.date_signature || '')}"></label>
+      <label class="reg-champ"><span>Apports déclarés</span>
+        <input name="apports_declares" inputmode="numeric" value="${v.apports_declares != null ? esc(String(v.apports_declares)) : ''}"></label>
+      <label class="reg-champ">
+        <span>Partenaire</span>
+        <select name="actif">
+          <option value="1" ${v.actif === false ? '' : 'selected'}>Actif</option>
+          <option value="0" ${v.actif === false ? 'selected' : ''}>Inactif</option>
+        </select>
+      </label>
+      <label class="reg-champ" style="grid-column:1/-1"><span>Notes</span>
+        <textarea name="notes" rows="2">${esc(v.notes || '')}</textarea></label>
+    </form>
+    <p class="small muted"><b>Apports déclarés</b> est un compte tenu à la main : il ne
+    remplace pas la colonne « Rattachés », qui compte les fiches clients désignant
+    vraiment ce partenaire. Les deux coexistent, et leur écart est une information.</p>
+    <div class="toolbar" style="margin-top:12px">
+      <button type="button" class="btn primary" id="pa-ok">${creation ? 'Créer le partenaire' : 'Enregistrer'}</button>
+      <button type="button" class="btn ghost" data-close>Annuler</button>
+      <span class="grow"></span><span class="muted small" id="pa-etat"></span>
+    </div>`;
+
+  openModal(creation ? 'Nouveau partenaire' : `Modifier — ${nomDe(v)}`, corps, { onOpen: (m) => {
+    m.querySelector('#pa-ok').onclick = async () => {
+      const f = m.querySelector('#pa-form');
+      if (!f.reportValidity()) return;
+      const d = Object.fromEntries(new FormData(f).entries());
+      const champs = {
+        nom: d.nom.trim(),
+        partenariat_signe: d.partenariat_signe === '1',
+        actif: d.actif === '1',
+      };
+      for (const k of ['prenom', 'societe', 'profession', 'type_partenaire',
+                       'telephone', 'email', 'code_postal', 'ville', 'notes']) {
+        // À la création, un champ vide n'est pas envoyé. À la modification il
+        // l'est, à null : c'est ainsi qu'on EFFACE une valeur, et ne pas
+        // l'envoyer rendrait impossible de retirer un email saisi par erreur.
+        if (d[k] && d[k].trim()) champs[k] = d[k].trim();
+        else if (!creation) champs[k] = null;
+      }
+      // Même règle que les autres champs : à la création on n'envoie rien,
+      // à la modification on envoie `null` pour effacer. Poser `null` dans un
+      // INSERT marche ici, mais c'est l'habitude qui compte — c'est ce réflexe
+      // qui a fait écrire `null` dans une colonne `not null default` ailleurs.
+      if (d.date_signature) champs.date_signature = d.date_signature;
+      else if (!creation) champs.date_signature = null;
+      if (d.apports_declares.trim()) {
+        const n = Number(d.apports_declares.replace(/\s/g, ''));
+        if (!Number.isFinite(n) || n < 0) { toast('Les apports déclarés ne sont pas un nombre', 'err'); return; }
+        champs.apports_declares = n;
+      } else if (!creation) champs.apports_declares = null;
+
+      const b = m.querySelector('#pa-ok');
+      b.disabled = true;
+      m.querySelector('#pa-etat').textContent = 'Envoi au tableau de bord…';
+      const r = creation ? await creerApporteur(champs) : await majApporteur(v.d1_id, champs);
+      b.disabled = false;
+      m.querySelector('#pa-etat').textContent = '';
+      if (!r.ok) {
+        toast(r.motif === 'pas-de-compte'
+          ? 'Aucun compte RGD à votre adresse : rien n’a été enregistré.'
+          : `Non enregistré — ${r.motif}`, 'err');
+        return;
+      }
+      // La ligne existante avance à l'écran ; une création, elle, n'apparaîtra
+      // qu'au relevé suivant — le CRM ne peut pas inventer le `d1_id` que le
+      // worker vient d'attribuer.
+      if (!creation) Object.assign(v, champs);
+      closeModal();
+      toast(creation
+        ? 'Partenaire créé — visible ici au prochain relevé'
+        : 'Partenaire enregistré dans le tableau de bord');
+      apres?.();
+    };
+  } });
+}
+
+// Le formulaire d'un achat. ⚠ `chantier_id` est EXIGÉ par le worker à la
+// création (400 sans lui), alors que le relevé accepte une fourniture sans
+// chantier : on ne peut donc pas créer ici un achat non rattaché, et la modale
+// le dit plutôt que de le laisser découvrir.
+function formulaireAchat(f0, chantiers, apres) {
+  const creation = !f0;
+  const v = f0 || {};
+  const mats = Array.isArray(v.materiau) ? v.materiau : [];
+  const corps = `
+    <form id="ac-form" class="reg-grille" style="grid-template-columns:1fr 1fr">
+      <label class="reg-champ" style="grid-column:1/-1">
+        <span>Chantier ${creation ? '*' : ''}</span>
+        <select name="chantier" ${creation ? 'required' : ''}>
+          <option value="">${creation ? 'Choisir un chantier…' : 'Ne pas changer'}</option>
+          ${chantiers.map(c => `<option value="${esc(String(c.d1_id))}" ${
+            !creation && c.deal_id && c.deal_id === v.deal_id ? 'selected' : ''}>${esc(c.nom)}</option>`).join('')}
+        </select>
+      </label>
+      <label class="reg-champ" style="grid-column:1/-1"><span>Libellé *</span>
+        <input name="libelle" required value="${esc(v.libelle || '')}"></label>
+      <label class="reg-champ"><span>Fournisseur</span>
+        <input name="fournisseur" value="${esc(v.fournisseur || '')}"></label>
+      <label class="reg-champ"><span>Date d’achat</span>
+        <input name="date_achat" type="date" value="${esc(v.date_achat || '')}"></label>
+      <label class="reg-champ"><span>Montant HT (€)</span>
+        <input name="montant_ht" inputmode="decimal" value="${v.montant_ht != null ? esc(String(v.montant_ht)) : ''}"></label>
+      <label class="reg-champ"><span>Montant TTC (€)</span>
+        <input name="montant_ttc" inputmode="decimal" value="${v.montant_ttc != null ? esc(String(v.montant_ttc)) : ''}"></label>
+      <label class="reg-champ" style="grid-column:1/-1"><span>Matériaux</span>
+        <input name="materiau" value="${esc(mats.join(', '))}" placeholder="Béton, Charpente bois"></label>
+      <label class="reg-champ" style="grid-column:1/-1"><span>Référence facture</span>
+        <input name="reference_facture" value="${esc(v.reference_facture || '')}"></label>
+      <label class="reg-champ" style="grid-column:1/-1"><span>Notes</span>
+        <textarea name="notes" rows="2">${esc(v.notes || '')}</textarea></label>
+    </form>
+    <p class="small muted">Les <b>matériaux</b> se séparent par des virgules.
+    ${creation ? 'Un achat créé ici doit être rattaché à un chantier : le tableau de bord le refuse sans. ' : ''}
+    La ligne apparaîtra dans cette liste au prochain relevé.</p>
+    <div class="toolbar" style="margin-top:12px">
+      <button type="button" class="btn primary" id="ac-ok">${creation ? 'Créer l’achat' : 'Enregistrer'}</button>
+      <button type="button" class="btn ghost" data-close>Annuler</button>
+      <span class="grow"></span><span class="muted small" id="ac-etat"></span>
+    </div>`;
+
+  openModal(creation ? 'Nouvel achat' : `Modifier — ${v.libelle || 'achat'}`, corps, { onOpen: (m) => {
+    m.querySelector('#ac-ok').onclick = async () => {
+      const form = m.querySelector('#ac-form');
+      if (!form.reportValidity()) return;
+      const d = Object.fromEntries(new FormData(form).entries());
+      const champs = { libelle: d.libelle.trim() };
+      if (d.chantier) champs.chantier_id = Number(d.chantier);
+      for (const k of ['fournisseur', 'reference_facture', 'notes']) {
+        if (d[k] && d[k].trim()) champs[k] = d[k].trim();
+        else if (!creation) champs[k] = null;
+      }
+      if (d.date_achat) champs.date_achat = d.date_achat;
+      else if (!creation) champs.date_achat = null;
+      // Une liste vide s'envoie comme une liste vide — c'est ainsi qu'on RETIRE
+      // les matériaux d'un achat. Mais il n'y a rien à retirer d'un achat qui
+      // n'existe pas encore : à la création, un champ vide ne part pas.
+      const mats = d.materiau.split(',').map(x => x.trim()).filter(Boolean);
+      if (mats.length || !creation) champs.materiau = mats;
+      for (const k of ['montant_ht', 'montant_ttc']) {
+        const brut = String(d[k] || '').trim();
+        if (!brut) { if (!creation) champs[k] = null; continue; }
+        const n = Number(brut.replace(/\s/g, '').replace(',', '.'));
+        if (!Number.isFinite(n)) {
+          toast(`Le ${k === 'montant_ht' ? 'montant HT' : 'montant TTC'} n’est pas un nombre`, 'err');
+          return;
+        }
+        champs[k] = n;
+      }
+
+      const b = m.querySelector('#ac-ok');
+      b.disabled = true;
+      m.querySelector('#ac-etat').textContent = 'Envoi au tableau de bord…';
+      const r = creation ? await creerFourniture(champs) : await majFourniture(v.d1_id, champs);
+      b.disabled = false;
+      m.querySelector('#ac-etat').textContent = '';
+      if (!r.ok) {
+        toast(r.motif === 'pas-de-compte'
+          ? 'Aucun compte RGD à votre adresse : rien n’a été enregistré.'
+          : `Non enregistré — ${r.motif}`, 'err');
+        return;
+      }
+      if (!creation) {
+        Object.assign(v, champs);
+        // `chantier_id` est le nom de D1 ; la ligne du CRM porte `deal_id`.
+        // Le laisser là afficherait un chantier faux jusqu'au relevé.
+        delete v.chantier_id;
+      }
+      closeModal();
+      toast(creation
+        ? 'Achat créé — visible ici au prochain relevé'
+        : 'Achat enregistré dans le tableau de bord');
+      apres?.();
+    };
+  } });
+}
+
 export const rgdPartenairesPage = {
   title: () => 'RGD Renova — Partenaires',
   render(root) {
     if (guard(root)) return {};
     const coquille = poserEspace(root);
-    const state = { vue: 'partenaires', q: '', focus: null };
+    const state = { vue: 'partenaires', q: '', focus: null, ecriture: false };
+    peutEcrire().then(ok => { if (ok !== state.ecriture) { state.ecriture = ok; draw(); } });
 
     const draw = () => {
       const tous = scope.rgd('rgd_apporteurs');
       const achats = scope.rgd('rgd_fournitures');
+      // Les chantiers, pour rattacher un achat. On envoie le `d1_id` — celui
+      // de Cloudflare —, jamais l'uuid de l'affaire, que le worker ne connaît
+      // pas. Un chantier sans `d1_id` ne peut donc pas être proposé.
+      const chantiers = scope.rgd('rgd_chantiers')
+        .filter(c => c.d1_id)
+        .map(c => ({ d1_id: c.d1_id, deal_id: c.deal_id,
+                     nom: (c.deal_id && db.byId('deals', c.deal_id)?.title) || `Chantier ${c.d1_id}` }))
+        .sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
       const fiches = scope.rgd('rgd_clients');
       const rattaches = (a) => fiches.filter(c => c.apporteur_id === a.id).length;
       const actifs = tous.filter(a => a.actif !== false);
@@ -88,7 +315,9 @@ export const rgdPartenairesPage = {
           <div><b>Aucun partenariat n’est signé.</b> Les ${tous.length} partenaires
           travaillent sans convention enregistrée — ce qui ne les empêche pas
           d’apporter des affaires, mais ne fixe rien sur la rémunération de
-          l’apport. Les conventions se saisissent dans l’<a href="#/rgd/app">application RGD</a>.</div>
+          l’apport. ${state.ecriture
+            ? 'La convention se note sur la fiche du partenaire, bouton <b>Modifier</b> au bout de la ligne.'
+            : 'Les conventions se saisissent dans l’<a href="#/rgd/app">application RGD</a>.'}</div>
         </div>` : ''}
 
         <div class="pill-tabs">
@@ -101,6 +330,7 @@ export const rgdPartenairesPage = {
           ${searchInput('rpa-q', state, 'Rechercher un partenaire, un métier, une ville…')}
           <span class="grow"></span>
           <span class="muted small">ceux qui apportent le plus en premier</span>
+          ${state.ecriture ? '<button type="button" class="btn primary" id="rpa-nouveau">+ Nouveau partenaire</button>' : ''}
         </div>
 
         <section class="card table-wrap">
@@ -108,7 +338,8 @@ export const rgdPartenairesPage = {
             <thead><tr><th>Partenaire</th><th>Rôle</th><th>Métier</th><th>Ville</th>
               <th>Contact</th><th>Convention</th>
               <th class="num" title="Fiches clients qui désignent ce partenaire">Rattachés</th>
-              <th class="num" title="Compté à la main dans l’application RGD">Déclarés</th></tr></thead>
+              <th class="num" title="Compté à la main dans l’application RGD">Déclarés</th>
+              ${state.ecriture ? '<th></th>' : ''}</tr></thead>
             <tbody>${vus.map(a => { const r = role(a.type_partenaire); return `<tr class="${a.actif === false ? 'muted' : ''}">
               <td><b>${esc(nomDe(a))}</b>
                   ${a.actif === false ? '<span class="chip">Inactif</span>' : ''}
@@ -123,7 +354,10 @@ export const rgdPartenairesPage = {
                 : '<span class="chip amber">Non signée</span>'}</td>
               <td class="num">${rattaches(a) || '<span class="muted">—</span>'}</td>
               <td class="num muted">${Number(a.apports_declares) ? esc(String(a.apports_declares)) : '—'}</td>
-            </tr>`; }).join('') || '<tr><td colspan="8"><div class="empty">Aucun partenaire ne correspond.</div></td></tr>'}</tbody>
+              ${state.ecriture ? `<td class="num">${a.d1_id
+                ? `<button type="button" class="btn ghost sm" data-partenaire="${esc(String(a.d1_id))}">Modifier</button>`
+                : ''}</td>` : ''}
+            </tr>`; }).join('') || `<tr><td colspan="${state.ecriture ? 9 : 8}"><div class="empty">Aucun partenaire ne correspond.</div></td></tr>`}</tbody>
           </table>
           <p class="small muted"><b>Rattachés</b> compte les fiches clients qui désignent
           vraiment ce partenaire ; <b>Déclarés</b> est le compte tenu à la main dans
@@ -134,12 +368,15 @@ export const rgdPartenairesPage = {
         <div class="toolbar">
           <span class="muted small">${achats.length} achat${achats.length > 1 ? 's' : ''}
           pour ${eur(totalAchats)} HT</span>
+          <span class="grow"></span>
+          ${state.ecriture && chantiers.length ? '<button type="button" class="btn primary" id="rpa-achat">+ Nouvel achat</button>' : ''}
         </div>
 
         <section class="card table-wrap">
           <table>
             <thead><tr><th>Date</th><th>Achat</th><th>Fournisseur</th><th>Chantier</th>
-              <th>Matériaux</th><th class="num">Montant HT</th></tr></thead>
+              <th>Matériaux</th><th class="num">Montant HT</th>
+              ${state.ecriture ? '<th></th>' : ''}</tr></thead>
             <tbody>${achats.slice()
               .sort((a, b) => String(b.date_achat || '').localeCompare(String(a.date_achat || '')))
               .map(f => {
@@ -155,14 +392,31 @@ export const rgdPartenairesPage = {
                   <td>${affaire ? esc(affaire.title) : '<span class="muted small">sans chantier</span>'}</td>
                   <td>${mats.length ? mats.map(m => `<span class="chip">${esc(m)}</span>`).join(' ') : '<span class="muted">—</span>'}</td>
                   <td class="num">${eur(f.montant_ht)}</td>
+                  ${state.ecriture ? `<td class="num">${f.d1_id
+                    ? `<button type="button" class="btn ghost sm" data-achat="${esc(String(f.d1_id))}">Modifier</button>`
+                    : ''}</td>` : ''}
                 </tr>`;
-              }).join('') || '<tr><td colspan="6"><div class="empty">Aucun achat enregistré.</div></td></tr>'}</tbody>
+              }).join('') || `<tr><td colspan="${state.ecriture ? 7 : 6}"><div class="empty">Aucun achat enregistré.</div></td></tr>`}</tbody>
           </table>
         </section>`}`;
 
       root.innerHTML = cadre('#/rgd/partenaires', 'Partenaires', corps);
       if (state.vue === 'partenaires') { bindSearch(root, 'rpa-q', state, draw); restoreFocus(root, state); }
       root.querySelectorAll('[data-vue]').forEach(b => b.onclick = () => { state.vue = b.dataset.vue; draw(); });
+
+      const nouveau = root.querySelector('#rpa-nouveau');
+      if (nouveau) nouveau.onclick = () => formulairePartenaire(null, draw);
+      const achat = root.querySelector('#rpa-achat');
+      if (achat) achat.onclick = () => formulaireAchat(null, chantiers, draw);
+
+      root.querySelectorAll('[data-partenaire]').forEach(b => b.onclick = () => {
+        const a = tous.find(x => String(x.d1_id) === b.dataset.partenaire);
+        if (a) formulairePartenaire(a, draw);
+      });
+      root.querySelectorAll('[data-achat]').forEach(b => b.onclick = () => {
+        const f = achats.find(x => String(x.d1_id) === b.dataset.achat);
+        if (f) formulaireAchat(f, chantiers, draw);
+      });
     };
 
     draw();

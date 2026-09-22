@@ -248,3 +248,47 @@ export const convertirSt = (d1Id, champs = {}) =>
 // prospection n'en ont pas.
 export const majSousTraitant = (d1Id, champs) =>
   envoyer(`/api/sous-traitants/${encodeURIComponent(d1Id)}`, champs);
+
+// ------------------------------------------------- partenaires et achats
+//
+// ⚠ LE CRM ET D1 N'EMPLOIENT PAS LES MÊMES NOMS, ET LE RELEVÉ TRADUIT.
+// `reprise_crm.js` renomme en chemin. Envoyer le nom du CRM au worker ne
+// produit PAS d'erreur : `update` ne retient que les champs qu'il connaît et
+// ignore les autres en silence, puis répond `{ ok: true }`. On croirait avoir
+// enregistré. La traduction se fait donc ICI, une fois, et pas dans l'écran.
+//
+//   CRM                  D1
+//   partenariat_signe →  signed_partnership   (booléen → 0/1)
+//   apports_declares  →  nb_prospects_manuel
+//   actif             →  actif                (booléen → 0/1)
+//   deal_id           →  chantier_id          (et c'est le `d1_id` du chantier)
+//   materiau (liste)  →  materiau             (une CHAÎNE JSON, pas un tableau)
+const versD1Apporteur = (c) => {
+  const d = { ...c };
+  if ('partenariat_signe' in d) { d.signed_partnership = d.partenariat_signe ? 1 : 0; delete d.partenariat_signe; }
+  if ('apports_declares' in d) { d.nb_prospects_manuel = d.apports_declares; delete d.apports_declares; }
+  if ('actif' in d) d.actif = d.actif ? 1 : 0;
+  return d;
+};
+
+// `materiau` est stocké en TEXTE dans D1 et le worker lie la valeur telle
+// quelle : passer le tableau ferait échouer la requête (D1 ne sait pas lier un
+// tableau), et le passer en objet écrirait « [object Object] ».
+const versD1Fourniture = (c) => {
+  const d = { ...c };
+  if ('materiau' in d) d.materiau = Array.isArray(d.materiau) ? JSON.stringify(d.materiau) : d.materiau;
+  return d;
+};
+
+// Aucun effet de bord côté worker pour ces quatre routes : pas d'email, pas de
+// poussée vers Costructor. Ce sont les écritures les plus simples de l'espace.
+export const creerApporteur = (champs) => envoyer('/api/apporteurs', versD1Apporteur(champs), 'POST');
+export const majApporteur = (d1Id, champs) =>
+  envoyer(`/api/apporteurs/${encodeURIComponent(d1Id)}`, versD1Apporteur(champs));
+
+// ⚠ `chantier_id` est EXIGÉ à la création (le worker répond 400 sans lui),
+// alors que le relevé accepte une fourniture sans chantier. On ne peut donc pas
+// créer ici un achat non rattaché : l'écran le dit plutôt que de le découvrir.
+export const creerFourniture = (champs) => envoyer('/api/fournitures', versD1Fourniture(champs), 'POST');
+export const majFourniture = (d1Id, champs) =>
+  envoyer(`/api/fournitures/${encodeURIComponent(d1Id)}`, versD1Fourniture(champs));
