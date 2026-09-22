@@ -7,6 +7,10 @@
   --line: #E6E6F0; --line-strong: #D3D3E2;
   --green: #12805C; --red: #C8483C; --amber: #A96C10; --blue: #2F6FED; --violet: #E24C86;
   --green-soft: #E3F3EB; --red-soft: #FBE9E6; --amber-soft: #FAF0DF; --blue-soft: #E9F0FE;
+  /* `muted` manquait sa variante douce : un indicateur « on ne sait pas »
+     retombait sur le fond accentué, donc un chiffre gris sur un fond de
+     marque — la couleur disait « regardez-moi » et le chiffre « rien à voir ». */
+  --muted-soft: #EEEFF4;
   /* Alias conservés : plusieurs pages les utilisent en style inline */
   --orange: #A96C10; --orange-2: #C4881F; --orange-soft: #FAF0DF;
   --dark: #16172B; --dark-2: #2E2F4A;

@@ -173,8 +173,19 @@ export const rgdPilotagePage = {
         t + pourChantier(c, missions).reduce((s, m) => s + (Number(m.montant_ht_paye) || 0), 0)
           + pourChantier(c, fournitures).reduce((s, f) => s + (Number(f.montant_ht) || 0), 0), 0);
       const margeEur = caRenta - coutRenta;
-      const margePct = caRenta > 0 ? (margeEur / caRenta) * 100 : 0;
-      const tonMarge = margePct >= 20 ? 'green' : margePct >= 10 ? 'amber' : 'red';
+      // ⚠ NE RIEN SAVOIR ET VALOIR ZÉRO NE SONT PAS LA MÊME CHOSE.
+      // `avecCouts` vide donnait `margePct = 0`, donc un grand **0 % rouge** :
+      // « on perd de l'argent » là où la réalité est « aucun chantier n'a de
+      // coût saisi ». La sous-ligne disait bien « 0 chantier avec coûts
+      // connus », mais personne ne lit la sous-ligne d'un grand chiffre rouge.
+      // Le cas est devenu réel le 22/09/2026 : les deux seules sources de coût
+      // de la base étaient des données d'essai, effacées ce jour-là.
+      const marge = avecCouts.length && caRenta > 0 ? (margeEur / caRenta) * 100 : null;
+      // `ton: null` ne prendrait pas le défaut de `kpiEspace` — un défaut de
+      // paramètre ne s'applique qu'à `undefined` — et la CSS recevrait
+      // `var(--null)`. D'où un ton gris explicite pour « on ne sait pas ».
+      const tonMarge = marge === null ? 'muted'
+        : marge >= 20 ? 'green' : marge >= 10 ? 'amber' : 'red';
 
       // CA DE L'EXERCICE — calculé, puis la correction manuelle par-dessus.
       // Les deux sont montrés : l'écart dit à quel point Costructor est en retard.
@@ -233,8 +244,11 @@ export const rgdPilotagePage = {
         </section>
 
         <div class="esp-kpis">
-          ${kpiEspace({ label: 'Rentabilité moyenne', valeur: pct(margePct),
-            sous: `${eur(margeEur)} HT · ${avecCouts.length} chantier${avecCouts.length > 1 ? 's' : ''} avec coûts connus`,
+          ${kpiEspace({ label: 'Rentabilité moyenne',
+            valeur: marge === null ? '—' : pct(marge),
+            sous: marge === null
+              ? 'aucun chantier avec coûts connus'
+              : `${eur(margeEur)} HT · ${avecCouts.length} chantier${avecCouts.length > 1 ? 's' : ''} avec coûts connus`,
             icone: '📈', ton: tonMarge, href: '#/rgd' })}
           ${kpiEspace({ label: 'Chantiers en cours', valeur: enCours.length,
             sous: `${eur(caEnCours)} HT`, icone: '🏗', ton: 'accent', href: '#/rgd/chantiers' })}
