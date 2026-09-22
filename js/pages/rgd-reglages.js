@@ -20,14 +20,25 @@
 // telle quelle, sinon les deux outils annonceraient deux chiffres d'affaires.
 //
 // ⚠ SAISIR 0 N'ÉCRIT PAS « ZÉRO EURO »
-// La route du worker efface la correction et rend la main au calcul. C'est
-// utile le jour où Costructor sera complet, et c'est exactement le genre de
-// chose qu'un écran doit dire plutôt que de laisser découvrir.
+// Cela EFFACE la correction et rend la main au calcul automatique. C'est utile
+// le jour où Costructor sera complet, et c'est exactement le genre de chose
+// qu'un écran doit dire plutôt que de laisser découvrir.
+//
+// ⚠ CES TROIS RÉGLAGES SONT PASSÉS À SUPABASE — 22/09/2026, phase 2.
+// L'écran écrit maintenant DIRECTEMENT dans `rgd_reglages` : le relevé ne les
+// envoie plus, et les réécrire toutes les trente minutes aurait effacé la
+// correction à peine saisie.
+//
+// ⚠ MAIS LA TABLE A DEUX PROPRIÉTAIRES, et c'est la différence avec les
+// apporteurs. `costructor_clients_uniques` est CALCULÉ par le worker à partir
+// de Costructor : il reste relayé, et cet écran ne doit pas y toucher. Une
+// table peut appartenir à deux endroits selon la clé — le croire basculée en
+// entier ferait écraser un chiffre qu'on ne sait pas produire ici.
 import { scope } from '../data/scope.js';
 import { esc, eur, toast } from '../ui.js';
 import { poserEspace } from './espace.js';
 import { cadre, guard } from './rgd-espace.js';
-import { peutEcrire, majCaManuel } from '../data/rgd-api.js';
+import { db } from '../data/db.js';
 
 const nombreDe = (v) => {
   const n = Number(String(v ?? '').replace(/\s/g, '').replace(',', '.'));
@@ -39,8 +50,9 @@ export const rgdReglagesPage = {
   render(root) {
     if (guard(root)) return {};
     const coquille = poserEspace(root);
-    const state = { ecriture: false };
-    peutEcrire().then(ok => { if (ok !== state.ecriture) { state.ecriture = ok; draw(); } });
+    // La policy `rgd_reglages_acces` est en `has_activity('rgd')` : il n'y a
+    // plus de compte sur le tableau de bord à exiger, puisqu'on n'y va plus.
+    const state = { ecriture: scope.canRgd };
 
     const draw = () => {
       const lire = (cle) => scope.rgd('rgd_reglages').find(r => r.cle === cle)?.valeur ?? null;
@@ -59,10 +71,11 @@ export const rgdReglagesPage = {
       const corps = `
         <div class="alert rgd-source">
           <b>i</b>
-          <div>Ces valeurs vivent dans le <b>tableau de bord RGD</b> et y sont écrites
-          directement : ce n&rsquo;est pas une copie locale. Elles l&rsquo;emportent sur le
-          calcul automatique du chiffre d&rsquo;affaires, parce que la reprise Costructor
-          est incomplète et que le calcul sous-estime.</div>
+          <div>Ces corrections sont <b>enregistrées ici</b>, et c&rsquo;est le CRM qui en
+          est la source depuis le 22/09/2026 — elles ne sont plus recopiées depuis le
+          tableau de bord. Elles l&rsquo;emportent sur le calcul automatique du chiffre
+          d&rsquo;affaires, parce que la reprise Costructor est incomplète et que le
+          calcul sous-estime.</div>
         </div>
 
         <section class="card">
@@ -79,7 +92,7 @@ export const rgdReglagesPage = {
           </div>
 
           <p class="small muted"><b>Saisir 0 n’écrit pas « zéro euro »</b> : la correction
-          est effacée et le tableau de bord recalcule à partir des factures. C’est ce
+          est effacée et le CRM réaffiche le calcul à partir des factures. C’est ce
           qu’il faudra faire le jour où la reprise Costructor sera complète.</p>
 
           ${state.ecriture ? `<div class="toolbar">
@@ -133,26 +146,38 @@ export const rgdReglagesPage = {
         }
 
         bouton.disabled = true;
-        root.querySelector('#reg-etat').textContent = 'Envoi au tableau de bord…';
-        const r = await majCaManuel(corpsMaj);
-        bouton.disabled = false;
+        root.querySelector('#reg-etat').textContent = 'Enregistrement…';
 
-        if (!r.ok) {
+        // 0 EFFACE la correction : on écrit `null`, pas « 0 ». Écrire la chaîne
+        // « 0 » ferait afficher un chiffre d'affaires de zéro euro au lieu de
+        // rendre la main au calcul — l'écran promet l'inverse trois lignes
+        // plus haut.
+        const poser = async (cle, val) => {
+          const valeur = val === 0 ? null : String(val);
+          const ligne = scope.rgd('rgd_reglages').find(x => x.cle === cle);
+          // La ligne peut ne pas exister : une correction jamais saisie n'a
+          // jamais été relevée. On la crée alors, au lieu d'échouer sur une
+          // mise à jour sans cible.
+          if (ligne) {
+            const maj = await db.update('rgd_reglages', cle, { valeur });
+            ligne.valeur = maj?.valeur ?? valeur;
+          } else {
+            scope.rgd('rgd_reglages').push(await db.insert('rgd_reglages', { cle, valeur }));
+          }
+        };
+
+        try {
+          if (corpsMaj.ht !== undefined) await poser('manual_ca_ht_exercice', corpsMaj.ht);
+          if (corpsMaj.ttc !== undefined) await poser('manual_ca_ttc_exercice', corpsMaj.ttc);
+        } catch (e) {
+          bouton.disabled = false;
           root.querySelector('#reg-etat').textContent = '';
-          toast(r.motif === 'pas-de-compte'
-            ? 'Aucun compte RGD à votre adresse : rien n’a été changé.'
-            : `Non enregistré — ${r.motif}`, 'err');
+          toast(`Non enregistré — ${String(e.message).slice(0, 120)}`, 'err');
           return;
         }
-        // On avance le reflet local : le relevé confirmera, mais l'écran ne
-        // doit pas réafficher l'ancienne valeur entre-temps.
-        const poser = (cle, val) => {
-          const l = scope.rgd('rgd_reglages').find(x => x.cle === cle);
-          if (l) l.valeur = val === 0 ? null : String(val);
-        };
-        if (corpsMaj.ht !== undefined) poser('manual_ca_ht_exercice', corpsMaj.ht);
-        if (corpsMaj.ttc !== undefined) poser('manual_ca_ttc_exercice', corpsMaj.ttc);
-        toast('Enregistré dans le tableau de bord RGD');
+        bouton.disabled = false;
+        root.querySelector('#reg-etat').textContent = '';
+        toast('Enregistré');
         draw();
       };
     };

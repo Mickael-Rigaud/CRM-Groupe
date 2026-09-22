@@ -35,6 +35,26 @@ const LS_USER = 'crm_local_user';
 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : 'id-' + Math.random().toString(36).slice(2) + Date.now());
 
+// Les tables qui ne sont pas clées sur `id`.
+//
+// C'était un ternaire (`table === 'settings' ? 'key' : 'id'`), ce qui allait
+// tant qu'il n'y avait qu'une exception. `rgd_reglages` est la deuxième — clée
+// sur `cle` — et une troisième viendra avec la suite de la bascule. Une carte
+// se lit ; un ternaire imbriqué se relit trois fois.
+//
+// ⚠ Les DEUX adaptateurs la lisent. Les faire diverger donnerait un mode démo
+// qui marche là où la production échoue, ou l'inverse — et ce genre d'écart ne
+// se voit qu'en production.
+//
+// Déclarée AVANT les deux adaptateurs, et pas entre eux : un `const` utilisé
+// plus haut que sa déclaration marche tant que l'usage est dans une fonction,
+// et casse le jour où quelqu'un le sort de la fonction. Autant ne pas laisser
+// le piège en place.
+const CLE_PRIMAIRE = {
+  settings: 'key',
+  rgd_reglages: 'cle',
+};
+
 // ---------- Adaptateur local (démo) ----------
 const localAdapter = {
   name: 'local',
@@ -59,13 +79,15 @@ const localAdapter = {
     this.data[table].push(r); this.save(); return structuredClone(r);
   },
   async update(table, id, patch) {
-    const i = this.data[table].findIndex(r => (r.id ?? r.key) === id);
+    const col = CLE_PRIMAIRE[table] || 'id';
+    const i = this.data[table].findIndex(r => r[col] === id);
     if (i < 0) throw new Error('Introuvable');
     this.data[table][i] = { ...this.data[table][i], ...patch, updated_at: new Date().toISOString() };
     this.save(); return structuredClone(this.data[table][i]);
   },
   async remove(table, id) {
-    this.data[table] = this.data[table].filter(r => (r.id ?? r.key) !== id); this.save();
+    const col = CLE_PRIMAIRE[table] || 'id';
+    this.data[table] = this.data[table].filter(r => r[col] !== id); this.save();
   },
   reset() { localStorage.removeItem(LS_KEY); localStorage.removeItem(LS_USER); localStorage.removeItem(LS_FILES); },
   // Mode démo : aucune fonction SQL n'est appelée depuis le navigateur aujourd'hui.
@@ -128,12 +150,12 @@ const supabaseAdapter = {
     if (error) throw new Error(error.message); return data;
   },
   async update(table, id, patch) {
-    const col = table === 'settings' ? 'key' : 'id';
+    const col = CLE_PRIMAIRE[table] || 'id';
     const { data, error } = await this.client.from(table).update(patch).eq(col, id).select().single();
     if (error) throw new Error(error.message); return data;
   },
   async remove(table, id) {
-    const { error } = await this.client.from(table).delete().eq('id', id);
+    const { error } = await this.client.from(table).delete().eq(CLE_PRIMAIRE[table] || 'id', id);
     if (error) throw new Error(error.message);
   },
   async rpc(nom, args) {
