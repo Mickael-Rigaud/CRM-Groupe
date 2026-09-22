@@ -539,6 +539,13 @@ body:has(.esp-app) .subnav .datepill { display: none; }
 .rst-tete p { margin: 0; max-width: 62ch; }
 .rst-metiers { display: grid; grid-template-columns: 1fr; gap: 14px; align-items: start; }
 @media (max-width: 900px) { .rst-tete { flex-direction: column; } }
+/* L'aperçu du mail de relance. Cadre cloisonné (`sandbox` vide) : le HTML vient
+   du worker mais porte des noms saisis à la main — l'injecter dans la page
+   donnerait à une fiche mal nommée le droit d'y exécuter du script. Fond blanc
+   imposé : un mail se lit sur blanc, y compris quand le CRM est en sombre. */
+.rst-apercu { width: 100%; height: 340px; border: 1px solid var(--line);
+  border-radius: 10px; background: #fff; margin: 10px 0; display: block; }
+@media (max-width: 720px) { .rst-apercu { height: 260px; } }
 .esp-kpi { position: relative; overflow: hidden; display: flex; flex-direction: column; gap: 2px; text-decoration: none; color: inherit; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px 18px; box-shadow: var(--shadow); transition: transform .13s, box-shadow .13s, border-color .13s; }
 .esp-kpi::after { content: ""; position: absolute; inset: auto -40px -40px auto; width: 150px; height: 150px; border-radius: 50%; background: var(--ts); opacity: .5; }
 .esp-kpi:hover { transform: translateY(-2px); box-shadow: var(--shadow-lift); border-color: var(--t); }

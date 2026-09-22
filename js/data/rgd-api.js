@@ -84,6 +84,55 @@ async function envoyer(chemin, corps, methode = 'PATCH') {
   return { ok: false, motif: d.error || `HTTP ${r.status}` };
 }
 
+// Lire à la SOURCE, pas dans le reflet. Le reflet a jusqu'à trente minutes de
+// retard et, pour les sous-traitants, il ne porte que les DATES d'expiration —
+// pas les `*_url` qui disent si la pièce a vraiment été déposée. Un écran de
+// conformité qui affiche « à jour » sans savoir si le document existe ment.
+async function lire(chemin) {
+  const t = await obtenirJeton();
+  if (!t) return { ok: false, motif: 'pas-de-compte' };
+  const r = await fetch(`${API}${chemin}`, { headers: { Authorization: `Bearer ${t}` } });
+  if (r.ok) return { ok: true, donnees: await r.json() };
+  if (r.status === 401) { jeton = null; expire = 0; }
+  const d = await r.json().catch(() => ({}));
+  return { ok: false, motif: d.error || `HTTP ${r.status}` };
+}
+
+// Envoyer un fichier. ⚠ NE JAMAIS POSER `Content-Type` ICI : c'est le
+// navigateur qui doit l'écrire, parce que lui seul connaît la frontière
+// (`boundary`) qu'il vient de tirer au sort. L'imposer à la main donne un
+// en-tête sans frontière, et le worker reçoit un corps qu'il ne sait pas
+// découper — une erreur qui ressemble à « aucun fichier fourni ».
+async function televerser(chemin, formulaire) {
+  const t = await obtenirJeton();
+  if (!t) return { ok: false, motif: 'pas-de-compte' };
+  const r = await fetch(`${API}${chemin}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${t}` },
+    body: formulaire,
+  });
+  if (r.ok) return { ok: true, donnees: await r.json().catch(() => ({})) };
+  if (r.status === 401) { jeton = null; expire = 0; }
+  const d = await r.json().catch(() => ({}));
+  return { ok: false, motif: d.error || `HTTP ${r.status}` };
+}
+
+// Récupérer le PDF d'une pièce. Il faut le jeton, donc un `<a href>` ne suffit
+// pas : on rapatrie le corps et on fabrique une URL d'objet, que l'appelant
+// révoque. Le lien direct renverrait un 401 dans un onglet vide.
+export async function pieceStFichier(d1Id, type) {
+  const t = await obtenirJeton();
+  if (!t) return { ok: false, motif: 'pas-de-compte' };
+  const r = await fetch(`${API}/api/sous-traitants/${encodeURIComponent(d1Id)}/documents/${encodeURIComponent(type)}`,
+    { headers: { Authorization: `Bearer ${t}` } });
+  if (!r.ok) {
+    if (r.status === 401) { jeton = null; expire = 0; }
+    const d = await r.json().catch(() => ({}));
+    return { ok: false, motif: d.error || `HTTP ${r.status}` };
+  }
+  return { ok: true, url: URL.createObjectURL(await r.blob()) };
+}
+
 // Le statut de suivi d'un client. `d1Id` est `rgd_clients.d1_id`, l'identifiant
 // côté Cloudflare — surtout pas l'uuid du CRM, que le worker ne connaît pas.
 export const majStatutClient = (d1Id, statutSuivi) =>
@@ -146,3 +195,56 @@ export const creerChantier = (champs) => envoyer('/api/chantiers', champs, 'POST
 // — c'est un geste que Mickael utilise — mais l'écran prévient.
 export const signerDevis = (d1Id) =>
   envoyer(`/api/devis/${encodeURIComponent(d1Id)}/signer`, {}, 'POST');
+
+// ---------------------------------------------------------------- sous-traitants
+//
+// POURQUOI CET ÉCRAN ÉCRIT PLUS QUE LES AUTRES
+// Les pièces administratives d'un sous-traitant ne se déposent nulle part
+// ailleurs que dans le tableau de bord. Tant que c'était vrai, couper Surge
+// aurait coupé le seul endroit où l'on peut prouver qu'un artisan est en règle.
+// Le CRM reprend donc le dépôt lui-même ; les fichiers, eux, restent chez
+// Cloudflare (KV) jusqu'à la phase 3 du plan de sortie.
+
+// La fiche complète, à la source. Donne les `*_url` que le relevé ne porte pas,
+// et donc la seule réponse honnête à « la pièce existe-t-elle ? ».
+export const ficheSousTraitant = (d1Id) =>
+  lire(`/api/sous-traitants/${encodeURIComponent(d1Id)}`);
+
+// Déposer une pièce. `type` est une clé du worker (kbis, urssaf, vigilance,
+// decennale, rc_pro, regularite_fiscale, contrat_st, rib), `fichier` un PDF de
+// 24 Mo au plus — le worker refuse tout le reste, et l'écran le dit avant.
+// `dateExpire` est facultative : le RIB et le contrat n'expirent pas.
+export function deposerPieceSt(d1Id, type, fichier, dateExpire) {
+  const f = new FormData();
+  f.append('file', fichier);
+  // Une chaîne vide n'est pas une date : la laisser passer écrirait '' dans une
+  // colonne qui doit rester nulle, et la pastille deviendrait « expiré » au
+  // lieu d'« absent ».
+  if (dateExpire) f.append('expire_date', dateExpire);
+  return televerser(`/api/sous-traitants/${encodeURIComponent(d1Id)}/documents/${encodeURIComponent(type)}`, f);
+}
+
+// L'aperçu de la relance : le worker rend le HTML du mail SANS l'envoyer.
+// On le montre toujours avant l'envoi — un mail part chez un artisan, il n'y a
+// pas de retour en arrière.
+export const apercuRelanceSt = (d1Id) =>
+  envoyer(`/api/sous-traitants/${encodeURIComponent(d1Id)}/relance-documents`, { preview: true }, 'POST');
+
+// ⚠ CELLE-CI ENVOIE VRAIMENT UN EMAIL, via Brevo, au sous-traitant.
+// Le worker refuse (400) s'il n'y a rien à relancer ou si la fiche n'a pas
+// d'email, et note la date d'envoi dans `date_dernier_email_relance_docs`.
+export const envoyerRelanceSt = (d1Id) =>
+  envoyer(`/api/sous-traitants/${encodeURIComponent(d1Id)}/relance-documents`, {}, 'POST');
+
+// Faire passer un artisan repéré en prospection au rang de sous-traitant.
+// ⚠ CE GESTE OUVRE LES OBLIGATIONS DE CONFORMITÉ : à partir de là, l'absence
+// d'attestation de vigilance engage le donneur d'ordre. L'écran doit le dire,
+// pas le faire glisser dans un menu.
+export const convertirSt = (d1Id, champs = {}) =>
+  envoyer(`/api/sous-traitants/${encodeURIComponent(d1Id)}/convertir`, champs, 'POST');
+
+// La fiche elle-même : coordonnées, spécialités, notes. Sans email, la relance
+// est impossible — le worker la refuse — et trois des onze artisans en
+// prospection n'en ont pas.
+export const majSousTraitant = (d1Id, champs) =>
+  envoyer(`/api/sous-traitants/${encodeURIComponent(d1Id)}`, champs);

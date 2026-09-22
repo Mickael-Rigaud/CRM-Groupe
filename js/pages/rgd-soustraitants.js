@@ -1,6 +1,12 @@
 // Espace RGD Renova — sous-traitants
 //
-// ÉTAPE 4 DE LA MIGRATION, RANG 3. Lecture seule, comme les rangs précédents.
+// ÉTAPE 4 DE LA MIGRATION, RANG 3 — puis, le 22/09/2026, LE DERNIER VERROU.
+// L'écran était en lecture seule. Il ne l'est plus, et pas par goût de
+// l'uniformité : les attestations ne se déposaient QUE dans le tableau de bord,
+// donc éteindre Surge éteignait le seul endroit où l'on peut prouver qu'un
+// artisan est en règle. Le dépôt, la relance et la conversion passent par
+// `js/pages/rgd-st-pieces.js`, qui écrit à la SOURCE — D1 — et jamais dans le
+// reflet, qu'un relevé de trente minutes écraserait sans un mot.
 //
 // POURQUOI LES ATTESTATIONS PASSENT AVANT L'ARGENT
 // Un sous-traitant sans attestation de vigilance à jour, c'est le donneur
@@ -31,24 +37,40 @@
 // tableau de bord d'origine : on les consulte pour trouver un couvreur, pas
 // pour relancer un dossier.
 //
-// CE QUE CET ÉCRAN NE MONTRE PAS
-// Les fichiers eux-mêmes. Les attestations sont stockées chez Cloudflare (KV)
-// et n'ont pas été reprises : la décision a été gardée à part dans le plan de
-// migration. Les dates d'expiration, elles, sont là — et c'est ce qui permet
-// de savoir qui relancer. Le lien « voir » renvoie à l'application d'origine.
+// CE QUE LA LISTE NE PEUT PAS SAVOIR
+// Le relevé ne rapatrie que les DATES d'expiration — pas les `*_url`, qui
+// disent si la pièce a été déposée. La liste ne distingue donc pas « attestation
+// déposée, valable jusqu'au… » d'« une date saisie, aucun document derrière ».
+// Le panneau des pièces, lui, lit la fiche à la source et fait la différence :
+// c'est la raison pour laquelle il fait un appel au lieu de se servir du reflet.
+// Les fichiers restent hébergés chez Cloudflare (KV) ; les déplacer vers
+// Storage est la phase 3 du plan de sortie, pas ce chantier-ci.
+//
+// CE QUI N'EST PAS OUVERT ICI, ET POURQUOI
+// Créer un artisan en prospection, et supprimer une pièce déposée. Le premier
+// est une saisie d'annuaire qui n'a rien d'urgent ; le second retire une preuve
+// de conformité, et ce geste-là reste dans l'application d'origine tant que
+// personne n'a dit qui doit pouvoir le faire.
 import { scope } from '../data/scope.js';
 import { db } from '../data/db.js';
 import { esc, eur, fmtDate, fmtDateTime, daysSince, terms, hit, searchInput, bindSearch, restoreFocus } from '../ui.js';
 import { poserEspace, kpiEspace } from './espace.js';
 import { cadre, guard } from './rgd-espace.js';
+import { peutEcrire, convertirSt } from '../data/rgd-api.js';
+import { toast, openModal, closeModal } from '../ui.js';
+import { ouvrirPiecesSt, ouvrirRelanceSt } from './rgd-st-pieces.js';
 
 // Les quatre pièces qu'un sous-traitant doit tenir à jour. L'ordre est celui
 // du risque : le travail dissimulé et la décennale d'abord.
+// `doc` est la clé du worker (`DOC_MAP`), celle que le panneau de dépôt
+// renvoie. La déduire de `key` par une comparaison de chaînes marchait, mais
+// se serait tue le jour où une colonne change de nom — et une pastille qui ne
+// s'actualise pas ressemble à un dépôt qui a échoué.
 const PIECES = [
-  { key: 'attestation_vigilance_expire', label: 'Vigilance', court: 'Vig.' },
-  { key: 'assurance_decennale_expire', label: 'Décennale', court: 'Déc.' },
-  { key: 'attestation_urssaf_expire', label: 'URSSAF', court: 'URSSAF' },
-  { key: 'kbis_expire', label: 'Kbis', court: 'Kbis' },
+  { key: 'attestation_vigilance_expire', doc: 'vigilance', label: 'Vigilance', court: 'Vig.' },
+  { key: 'assurance_decennale_expire', doc: 'decennale', label: 'Décennale', court: 'Déc.' },
+  { key: 'attestation_urssaf_expire', doc: 'urssaf', label: 'URSSAF', court: 'URSSAF' },
+  { key: 'kbis_expire', doc: 'kbis', label: 'Kbis', court: 'Kbis' },
 ];
 
 // L'état d'une pièce. `null` n'est pas « à jour » : c'est « on ne sait pas »,
@@ -61,12 +83,81 @@ const etatPiece = (valeur) => {
   return { key: 'ok', label: fmtDate(valeur), ton: 'green', poids: 3 };
 };
 
+// Faire passer un artisan repéré en prospection au rang de sous-traitant.
+//
+// ⚠ CE GESTE N'EST PAS UN CHANGEMENT D'ÉTIQUETTE. À partir de là, l'absence
+// d'attestation de vigilance engage le donneur d'ordre et l'absence de
+// décennale met le sinistre à la charge de RGD Renova. La modale le dit avant,
+// et propose d'enchaîner sur le dépôt des pièces — c'est le moment où on les
+// demande, pas trois mois plus tard.
+function formulaireConversion(st, apres) {
+  const corps = `
+    <div class="alert">
+      <b>!</b>
+      <div><b>${esc(st.raison_sociale || 'Cet artisan')} deviendra un sous-traitant actif.</b>
+      Les obligations de conformité s&rsquo;ouvrent à cet instant : sans attestation de
+      vigilance à jour, c&rsquo;est le donneur d&rsquo;ordre qui répond du travail dissimulé ;
+      sans décennale, c&rsquo;est RGD Renova qui porte le sinistre.</div>
+    </div>
+    <form id="cv-form" class="reg-grille" style="grid-template-columns:1fr 1fr">
+      <label class="reg-champ"><span>Contact</span><input name="contact_nom" value="${esc(st.contact_nom || '')}"></label>
+      <label class="reg-champ"><span>SIRET</span><input name="siret" value="${esc(st.siret || '')}"></label>
+      <label class="reg-champ"><span>Email</span><input name="email" type="email" value="${esc(st.email || '')}"></label>
+      <label class="reg-champ"><span>Téléphone</span><input name="telephone" value="${esc(st.telephone || '')}"></label>
+      <label class="reg-champ" style="grid-column:1/-1">
+        <span>Spécialités</span><input name="specialites" value="${esc(st.specialites || '')}"></label>
+    </form>
+    <p class="small muted">Sans email, aucune relance de documents ne pourra partir —
+    le worker la refuse. La fiche reste modifiable ensuite.</p>
+    <div class="toolbar" style="margin-top:12px">
+      <button type="button" class="btn primary" id="cv-ok">Convertir en actif</button>
+      <button type="button" class="btn ghost" data-close>Annuler</button>
+      <span class="grow"></span><span class="muted small" id="cv-etat"></span>
+    </div>`;
+
+  openModal(`Convertir — ${st.raison_sociale || 'sans nom'}`, corps, { onOpen: (m) => {
+    m.querySelector('#cv-ok').onclick = async () => {
+      const d = Object.fromEntries(new FormData(m.querySelector('#cv-form')).entries());
+      // Un champ vide n'est pas envoyé : le worker écrirait une chaîne vide là
+      // où l'absence de valeur veut dire « on ne sait pas encore ».
+      const champs = {};
+      for (const k of ['contact_nom', 'siret', 'email', 'telephone', 'specialites']) {
+        if (d[k] && d[k].trim()) champs[k] = d[k].trim();
+      }
+      const b = m.querySelector('#cv-ok');
+      b.disabled = true;
+      m.querySelector('#cv-etat').textContent = 'Envoi au tableau de bord…';
+      const r = await convertirSt(st.d1_id, champs);
+      b.disabled = false;
+      m.querySelector('#cv-etat').textContent = '';
+      if (!r.ok) {
+        toast(r.motif === 'pas-de-compte'
+          ? 'Aucun compte RGD à votre adresse : rien n’a été converti.'
+          : `Non converti — ${r.motif}`, 'err');
+        return;
+      }
+      // On avance la fiche à l'écran : le relevé mettra jusqu'à trente minutes
+      // à la faire changer de table, et la voir rester « en prospection »
+      // donnerait envie de recommencer.
+      st.statut_relation = 'actif';
+      Object.assign(st, champs);
+      closeModal();
+      toast(`${st.raison_sociale || 'L’artisan'} est maintenant un sous-traitant actif`);
+      apres?.();
+      // Enchaîner sur les pièces : c'est la suite logique du geste, et le seul
+      // moment où on est sûr que quelqu'un s'occupe de ce dossier.
+      ouvrirPiecesSt(st);
+    };
+  } });
+}
+
 export const rgdSousTraitantsPage = {
   title: () => 'RGD Renova — Sous-traitants',
   render(root) {
     if (guard(root)) return {};
     const coquille = poserEspace(root);
-    const state = { vue: 'conformite', q: '', focus: null };
+    const state = { vue: 'conformite', q: '', focus: null, ecriture: false };
+    peutEcrire().then(ok => { if (ok !== state.ecriture) { state.ecriture = ok; draw(); } });
 
     const draw = () => {
       const tous = scope.rgd('rgd_sous_traitants');
@@ -156,7 +247,9 @@ export const rgdSousTraitantsPage = {
           <div><b>${sansAucun.length} sous-traitant${sansAucun.length > 1 ? 's actifs n’ont' : ' actif n’a'}
           aucune pièce enregistrée.</b> Sans attestation de vigilance à jour, le donneur d&rsquo;ordre
           répond du travail dissimulé ; sans décennale, c&rsquo;est RGD Renova qui porte le sinistre.
-          Les pièces se déposent dans l&rsquo;<a href="#/rgd/app">application RGD</a>.
+          ${state.ecriture
+            ? 'Les pièces se déposent ici, bouton <b>Pièces</b> au bout de la ligne.'
+            : 'Les pièces se déposent dans l&rsquo;<a href="#/rgd/app">application RGD</a>.'}
           Les artisans en prospection ne sont pas comptés ici : on ne leur demande rien
           tant qu&rsquo;on ne les a pas fait travailler.</div>
         </div>` : ''}
@@ -185,7 +278,7 @@ export const rgdSousTraitantsPage = {
           <table>
             <thead><tr><th>Sous-traitant</th><th>Contact</th><th>Spécialités</th>
               ${PIECES.map(p => `<th title="${esc(p.label)}">${esc(p.court)}</th>`).join('')}
-              <th class="num">Versé</th></tr></thead>
+              <th class="num">Versé</th>${state.ecriture ? '<th></th>' : ''}</tr></thead>
             <tbody>${vus.map(st => {
               const verse = somme(paiements.filter(p => p.sous_traitant_id === st.id));
               return `<tr class="${st.actif === false ? 'muted' : ''}">
@@ -198,8 +291,12 @@ export const rgdSousTraitantsPage = {
                 ${PIECES.map(p => { const e = etatPiece(st[p.key]);
                   return `<td><span class="chip ${e.ton}" title="${esc(p.label)}">${esc(e.label)}</span></td>`; }).join('')}
                 <td class="num">${verse ? eur(verse) : '<span class="muted">—</span>'}</td>
+                ${state.ecriture ? `<td class="num">
+                  <button type="button" class="btn ghost sm" data-pieces="${esc(String(st.d1_id))}">Pièces</button>
+                  ${st.email ? `<button type="button" class="btn ghost sm" data-relance="${esc(String(st.d1_id))}">Relancer</button>` : ''}
+                </td>` : ''}
               </tr>`;
-            }).join('') || '<tr><td colspan="8"><div class="empty">Aucun sous-traitant ne correspond.</div></td></tr>'}</tbody>
+            }).join('') || `<tr><td colspan="${state.ecriture ? 9 : 8}"><div class="empty">Aucun sous-traitant ne correspond.</div></td></tr>`}</tbody>
           </table>
         </section>
 
@@ -215,7 +312,7 @@ export const rgdSousTraitantsPage = {
               <p class="muted small">${potentiels.length} artisan${potentiels.length > 1 ? 's' : ''} à qualifier —
               prospection, salons, recommandations. Aucune pièce n&rsquo;est demandée à ce stade.</p>
             </div>
-            <a class="btn ghost sm" href="#/rgd/app">Qualifier dans l&rsquo;application RGD</a>
+            <a class="btn ghost sm" href="#/rgd/app">Ajouter un artisan dans l&rsquo;application RGD</a>
           </div>
 
           <div class="rst-metiers">
@@ -226,13 +323,17 @@ export const rgdSousTraitantsPage = {
                   <span class="muted small">${g.lignes.length} artisan${g.lignes.length > 1 ? 's' : ''}</span>
                 </div>
                 <table>
-                  <thead><tr><th>Nom</th><th>Téléphone</th><th>Mail</th><th>Adresse</th><th>Commentaires</th></tr></thead>
+                  <thead><tr><th>Nom</th><th>Téléphone</th><th>Mail</th><th>Adresse</th><th>Commentaires</th>
+                    ${state.ecriture ? '<th></th>' : ''}</tr></thead>
                   <tbody>${g.lignes.map(st => `<tr>
                     <td><b>${esc(st.raison_sociale || '—')}</b></td>
                     <td>${st.telephone ? esc(st.telephone) : '<span class="muted">—</span>'}</td>
                     <td>${st.email ? `<a href="mailto:${esc(st.email)}">${esc(st.email)}</a>` : '<span class="muted">—</span>'}</td>
                     <td class="s">${st.adresse ? esc(st.adresse) : '<span class="muted">—</span>'}</td>
                     <td class="s muted">${st.notes ? esc(st.notes) : '—'}</td>
+                    ${state.ecriture ? `<td class="num">
+                      <button type="button" class="btn ghost sm" data-convertir="${esc(String(st.d1_id))}">Convertir en actif</button>
+                    </td>` : ''}
                   </tr>`).join('')}</tbody>
                 </table>
               </section>`).join('')}
@@ -290,6 +391,31 @@ export const rgdSousTraitantsPage = {
       root.innerHTML = cadre('#/rgd/soustraitants', 'Sous-traitants', corps);
       if (state.vue === 'conformite') { bindSearch(root, 'rst-q', state, draw); restoreFocus(root, state); }
       root.querySelectorAll('[data-vue]').forEach(b => b.onclick = () => { state.vue = b.dataset.vue; draw(); });
+
+      const parD1 = (id) => tous.find(x => String(x.d1_id) === String(id));
+
+      root.querySelectorAll('[data-pieces]').forEach(b => b.onclick = () => {
+        const st = parD1(b.dataset.pieces);
+        if (!st) return;
+        // Le dépôt écrit dans D1 ; le reflet du CRM mettra jusqu'à trente
+        // minutes à le rapatrier. On avance donc la ligne à l'écran, sinon la
+        // pastille resterait rouge juste après le dépôt et on déposerait deux
+        // fois la même attestation.
+        ouvrirPiecesSt(st, (cle, quand) => {
+          const p = PIECES.find(x => x.doc === cle);
+          if (p && quand) { st[p.key] = quand; draw(); }
+        });
+      });
+
+      root.querySelectorAll('[data-relance]').forEach(b => b.onclick = () => {
+        const st = parD1(b.dataset.relance);
+        if (st) ouvrirRelanceSt(st);
+      });
+
+      root.querySelectorAll('[data-convertir]').forEach(b => b.onclick = () => {
+        const st = parD1(b.dataset.convertir);
+        if (st) formulaireConversion(st, draw);
+      });
     };
 
     draw();
