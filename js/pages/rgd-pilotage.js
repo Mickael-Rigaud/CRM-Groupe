@@ -26,7 +26,7 @@
 import { scope } from '../data/scope.js';
 import { esc, eur, pct, isoDay, fmtDate, daysSince } from '../ui.js';
 import { poserEspace, kpiEspace } from './espace.js';
-import { cadre, BANDEAU, guard, KEY } from './rgd-espace.js';
+import { cadre, guard, KEY } from './rgd-espace.js';
 
 // L'exercice comptable de RGD Renova : 1er octobre → 30 septembre, aligné sur
 // Costructor. Ce n'est pas l'année civile, et s'y tromper décale tout le CA.
@@ -205,7 +205,6 @@ export const rgdPilotagePage = {
       // chiffres clés ensuite, puis le pipeline qui résume l'activité. La
       // journée et les alertes ferment l'écran.
       const corps = `
-        ${BANDEAU}
 
         <section class="card rgd-ca">
           <div class="card-head"><h2>Chiffre d’affaires ${esc(ex.label)}</h2>

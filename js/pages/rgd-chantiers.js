@@ -27,7 +27,7 @@ import { esc, eur, fmtDate, terms, hit, searchInput, bindSearch, restoreFocus } 
 import { poserEspace, kpiEspace } from './espace.js';
 import { openDeal } from './deal.js';
 
-import { KEY, act, cadre, BANDEAU, guard, clientDe as clientDeAffaire } from './rgd-espace.js';
+import { KEY, act, cadre, guard, clientDe as clientDeAffaire } from './rgd-espace.js';
 
 // Le client d'une affaire, avec la forme attendue par cet écran.
 const clientDe = (affaire) => {
@@ -77,7 +77,6 @@ export const rgdChantiersPage = {
       const aVendre = tous.filter(c => !c.etat);
 
       const corps = `
-        ${BANDEAU}
         <div class="esp-kpis">
           ${kpiEspace({ label: 'Chantiers en cours', valeur: enCours.length,
             sous: `${eur(somme(enCours))} HT engagés`, icone: '🏗', href: '#/rgd' })}

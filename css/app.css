@@ -515,15 +515,16 @@ body:has(.esp-app) .subnav .datepill { display: none; }
 
 /* Indicateurs : libellé à gauche, icône en pastille à droite, valeur en gros */
 .esp-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); gap: 14px; }
-/* Sous-traitants potentiels : un bloc a part, une carte par corps de metier.
-   Deux colonnes des qu'il y a la place — une liste de trois artisans n'a pas
-   besoin de toute la largeur, et on en voit davantage d'un coup d'oeil. */
+/* Sous-traitants potentiels : un bloc a part, une carte par corps de metier,
+   chacune sur toute la largeur. Essaye en deux colonnes le 22/09/2026 : cinq
+   colonnes dont une adresse ne tiennent pas dans 420 px — le tableau prenait
+   une barre de defilement et l'adresse partait sur quatre lignes. */
 .rst-potentiels { margin-top: 30px; border-top: 1px solid var(--line); padding-top: 22px; }
 .rst-tete { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
 .rst-tete h2 { margin: 0 0 3px; display: flex; align-items: center; gap: 9px; }
 .rst-tete p { margin: 0; max-width: 62ch; }
-.rst-metiers { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 14px; align-items: start; }
-@media (max-width: 900px) { .rst-metiers { grid-template-columns: 1fr; } .rst-tete { flex-direction: column; } }
+.rst-metiers { display: grid; grid-template-columns: 1fr; gap: 14px; align-items: start; }
+@media (max-width: 900px) { .rst-tete { flex-direction: column; } }
 .esp-kpi { position: relative; overflow: hidden; display: flex; flex-direction: column; gap: 2px; text-decoration: none; color: inherit; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px 18px; box-shadow: var(--shadow); transition: transform .13s, box-shadow .13s, border-color .13s; }
 .esp-kpi::after { content: ""; position: absolute; inset: auto -40px -40px auto; width: 150px; height: 150px; border-radius: 50%; background: var(--ts); opacity: .5; }
 .esp-kpi:hover { transform: translateY(-2px); box-shadow: var(--shadow-lift); border-color: var(--t); }

@@ -26,7 +26,7 @@ import { scope } from '../data/scope.js';
 import { db } from '../data/db.js';
 import { esc, eur, fmtDate, terms, hit, searchInput, bindSearch, restoreFocus } from '../ui.js';
 import { poserEspace, kpiEspace } from './espace.js';
-import { cadre, BANDEAU, guard } from './rgd-espace.js';
+import { cadre, guard } from './rgd-espace.js';
 
 // Les trois rôles que D1 range dans la même table. L'ordre est celui de
 // l'intérêt commercial : celui qui apporte des affaires d'abord.
@@ -68,7 +68,6 @@ export const rgdPartenairesPage = {
           || String(nomDe(a)).localeCompare(String(nomDe(b)), 'fr'));
 
       const corps = `
-        ${BANDEAU}
         <div class="esp-kpis">
           ${kpiEspace({ label: 'Partenaires actifs', valeur: actifs.length,
             sous: tous.length > actifs.length ? `${tous.length - actifs.length} inactif${tous.length - actifs.length > 1 ? 's' : ''}` : 'tous actifs',

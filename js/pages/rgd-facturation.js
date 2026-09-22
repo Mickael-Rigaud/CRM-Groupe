@@ -24,7 +24,7 @@ import { scope } from '../data/scope.js';
 import { esc, eur, fmtDate, terms, hit, searchInput, bindSearch, restoreFocus } from '../ui.js';
 import { poserEspace, kpiEspace } from './espace.js';
 import { openDeal } from './deal.js';
-import { cadre, BANDEAU, guard, clientDe } from './rgd-espace.js';
+import { cadre, guard, clientDe } from './rgd-espace.js';
 
 // Le chantier et son client, pour une ligne qui porte un `deal_id`.
 function rattachement(deal_id) {
@@ -75,7 +75,6 @@ export const rgdDevisPage = {
       const tranches = signes.length + refuses.length;
 
       const corps = `
-        ${BANDEAU}
         <div class="esp-kpis">
           ${kpiEspace({ label: 'Devis signés', valeur: signes.length,
             sous: `${eur(somme(signes))} HT`, icone: '✍', ton: 'green', href: '#/rgd/devis' })}
@@ -178,7 +177,6 @@ export const rgdPaiementsPage = {
       const sansChantier = tous.filter(p => !p.deal_id).length;
 
       const corps = `
-        ${BANDEAU}
         <div class="esp-kpis">
           ${kpiEspace({ label: 'Encaissé', valeur: eur(somme(recus)),
             sous: `${recus.length} règlement${recus.length > 1 ? 's' : ''} reçu${recus.length > 1 ? 's' : ''}`, icone: '💶', ton: 'green', href: '#/rgd/paiements' })}

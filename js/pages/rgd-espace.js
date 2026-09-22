@@ -50,15 +50,13 @@ export const cadre = (actif, titre, corps) => coquilleEspace({
   cle: KEY, marque: act().label, baseline: 'Rénovation tous corps d’état', onglets: ONGLETS,
 });
 
-// D'où viennent ces chiffres, et pourquoi on ne les modifie pas ici. Le
-// bandeau disparaîtra à l'étape 5, quand le CRM deviendra la source.
-export const BANDEAU = `<div class="alert rgd-source">
-  <b>i</b>
-  <div>Ces écrans <b>lisent</b> les données du tableau de bord RGD Renova, relevées
-  toutes les 30 minutes. Pour créer ou modifier, passez par l&rsquo;onglet
-  <a href="#/rgd/app">Application RGD</a> — une modification faite ici serait
-  écrasée au relevé suivant.</div>
-</div>`;
+// LE BANDEAU « CES ÉCRANS LISENT… » A ÉTÉ RETIRÉ le 22/09/2026.
+// Il s'affichait en tête de chaque écran de l'espace et répétait la même
+// phrase huit fois. Deux raisons de le supprimer plutôt que de le déplacer :
+// aucun écran n'offre de contrôle d'écriture là où l'écriture est impossible,
+// donc il n'y avait rien à empêcher ; et le statut, lui, s'écrit désormais
+// vraiment (voir `js/data/rgd-api.js`), ce qui rendait la phrase à moitié
+// fausse. Ce qui doit se dire se dit à l'endroit concerné, sous le tableau.
 
 export const guard = (root) => {
   if (scope.activityKeys.includes(KEY)) return false;

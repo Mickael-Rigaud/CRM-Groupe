@@ -54,7 +54,7 @@ import { scope } from '../data/scope.js';
 import { db } from '../data/db.js';
 import { esc, fmtDate, fmtDateTime, relDay, terms, hit, searchInput, bindSearch, restoreFocus } from '../ui.js';
 import { poserEspace } from './espace.js';
-import { cadre, BANDEAU, guard } from './rgd-espace.js';
+import { cadre, guard } from './rgd-espace.js';
 import { peutEcrire, majStatutClient, majStatutDemande } from '../data/rgd-api.js';
 import { toast } from '../ui.js';
 
@@ -302,20 +302,7 @@ export const rgdClientsPage = {
         return 'Aucun prospect de cette provenance.';
       }
 
-      // Le bandeau commun dit que toute modification faite ici serait écrasée au
-      // relevé suivant. Ce n'est plus vrai du statut, qui part à la source :
-      // laisser la phrase telle quelle ferait hésiter devant un menu qui marche.
-      const bandeau = state.ecriture ? `<div class="alert rgd-source">
-        <b>i</b>
-        <div>Ces écrans <b>lisent</b> les données du tableau de bord RGD Renova, relevées
-        toutes les 30 minutes — <b>sauf le statut</b>, qui se change ici et part
-        directement dans le tableau de bord. Pour tout le reste, passez par l&rsquo;onglet
-        <a href="#/rgd/app">Application RGD</a> : une modification faite ici serait
-        écrasée au relevé suivant.</div>
-      </div>` : BANDEAU;
-
       const corps = `
-        ${bandeau}
 
         <div class="pill-tabs">
           ${RUBRIQUES.map(r => `<button type="button" data-vue="${r.key}"

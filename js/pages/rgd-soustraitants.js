@@ -40,7 +40,7 @@ import { scope } from '../data/scope.js';
 import { db } from '../data/db.js';
 import { esc, eur, fmtDate, daysSince, terms, hit, searchInput, bindSearch, restoreFocus } from '../ui.js';
 import { poserEspace, kpiEspace } from './espace.js';
-import { cadre, BANDEAU, guard } from './rgd-espace.js';
+import { cadre, guard } from './rgd-espace.js';
 
 // Les quatre pièces qu'un sous-traitant doit tenir à jour. L'ordre est celui
 // du risque : le travail dissimulé et la décennale d'abord.
@@ -128,7 +128,6 @@ export const rgdSousTraitantsPage = {
           || String(a.raison_sociale || '').localeCompare(String(b.raison_sociale || ''), 'fr'));
 
       const corps = `
-        ${BANDEAU}
         <div class="esp-kpis">
           ${kpiEspace({ label: 'Sous-traitants actifs', valeur: actifs.length,
             sous: `${surLesquels.length - actifs.length} inactif${surLesquels.length - actifs.length > 1 ? 's' : ''}`, icone: '🔧', href: '#/rgd/soustraitants' })}
@@ -165,7 +164,7 @@ export const rgdSousTraitantsPage = {
         </div>` : ''}
 
         <div class="pill-tabs">
-          <button type="button" data-vue="conformite" class="${state.vue === 'conformite' ? 'on' : ''}">Conformité<span>${tous.length}</span></button>
+          <button type="button" data-vue="conformite" class="${state.vue === 'conformite' ? 'on' : ''}">Conformité<span>${surLesquels.length}</span></button>
           <button type="button" data-vue="argent" class="${state.vue === 'argent' ? 'on' : ''}">Règlements<span>${paiements.length + commissions.length}</span></button>
         </div>
 
