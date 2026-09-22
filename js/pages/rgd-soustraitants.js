@@ -38,7 +38,7 @@
 // de savoir qui relancer. Le lien « voir » renvoie à l'application d'origine.
 import { scope } from '../data/scope.js';
 import { db } from '../data/db.js';
-import { esc, eur, fmtDate, daysSince, terms, hit, searchInput, bindSearch, restoreFocus } from '../ui.js';
+import { esc, eur, fmtDate, fmtDateTime, daysSince, terms, hit, searchInput, bindSearch, restoreFocus } from '../ui.js';
 import { poserEspace, kpiEspace } from './espace.js';
 import { cadre, guard } from './rgd-espace.js';
 
@@ -86,6 +86,12 @@ export const rgdSousTraitantsPage = {
       // Tant que le relevé n'envoie pas la colonne, AUCUNE fiche ne la porte :
       // on le dit, plutôt que de laisser croire qu'il n'y a pas de prospects.
       const relaisMuet = tous.length > 0 && tous.every(st => st.statut_relation == null);
+      // ZERO PROSPECT NE VEUT PAS DIRE LA MEME CHOSE SELON LE MOMENT : il peut
+      // n'y en avoir aucun, ou le relevé peut n'avoir pas encore tourné depuis
+      // que le worker sait les envoyer. Sans date, les deux se ressemblent —
+      // constaté le 22/09/2026, l'écran semblait n'avoir pas changé.
+      const dernierReleve = tous.reduce((m, st) =>
+        st.updated_at && st.updated_at > m ? st.updated_at : m, '');
 
       const actifs = surLesquels.filter(st => st.actif !== false);
       const enDefaut = actifs.filter(st => defautsDe(st) > 0);
@@ -196,6 +202,10 @@ export const rgdSousTraitantsPage = {
             }).join('') || '<tr><td colspan="8"><div class="empty">Aucun sous-traitant ne correspond.</div></td></tr>'}</tbody>
           </table>
         </section>
+
+        ${!potentiels.length && !relaisMuet ? `<p class="small muted" style="margin-top:14px">
+          Aucun artisan en prospection dans le dernier relevé${dernierReleve ? ' (' + fmtDateTime(dernierReleve) + ')' : ''}.
+          Ils se saisissent dans l&rsquo;<a href="#/rgd/app">application RGD</a> et apparaissent ici au relevé suivant.</p>` : ''}
 
         ${potentiels.length ? `
         <section class="rst-potentiels">
