@@ -372,6 +372,12 @@ select.cell-in { text-align: left; }
 .esp-side-groupe { display: flex; flex-direction: column; gap: 3px; margin-top: 4px; }
 .esp-side-titre { padding: 9px 15px 3px; font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; color: rgba(255,255,255,.45); }
 .esp-side-groupe a { padding-left: 27px; font-size: 13px; }
+/* Une seconde rangee d'onglets, sous la premiere : les provenances de
+   prospect. Plus petite et sans trait de separation, pour qu'on voie d'un coup
+   d'oeil laquelle des deux commande l'autre. */
+.pill-tabs.sous { margin-top: -6px; }
+.pill-tabs.sous button { font-size: 12.5px; padding: 6px 12px; }
+
 /* ---------- Formations : des fiches en accordeon ----------
    Un <details> natif plutot qu'un accordeon maison : il s'ouvre au clavier, se
    cherche avec Ctrl+F du navigateur meme replie sur les navigateurs recents, et
