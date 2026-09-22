@@ -108,3 +108,17 @@ export const majCaManuel = ({ ht, ttc }) => {
   if (ttc !== undefined) corps.ttc = ttc;
   return envoyer('/api/stats/manual-ca', corps);
 };
+
+// Le statut d'un chantier, aux dix valeurs du tableau de bord. `d1Id` est
+// `rgd_chantiers.d1_id`.
+//
+// ⚠ EFFET DE BORD : le worker propage vers le `statut_suivi` du prospect, ce
+// qui peut déclencher un email à son apporteur. C'est le comportement du
+// tableau de bord ; l'écran le dit.
+//
+// ⚠ ET LE CRM NE VOIT PAS LE CHANGEMENT TOUT DE SUITE : `deals.stage`,
+// `deals.status` et `rgd_chantiers.etat` sont des TRADUCTIONS calculées par
+// `push_rgd`. Elles ne se recalculent qu'au relevé suivant. L'écran avance
+// donc le statut brut et laisse le reste rattraper.
+export const majStatutChantier = (d1Id, statut) =>
+  envoyer(`/api/chantiers/${encodeURIComponent(d1Id)}`, { statut });

@@ -28,6 +28,25 @@ import { poserEspace, kpiEspace } from './espace.js';
 import { openDeal } from './deal.js';
 
 import { KEY, act, cadre, guard, clientDe as clientDeAffaire } from './rgd-espace.js';
+import { peutEcrire, majStatutChantier } from '../data/rgd-api.js';
+import { toast } from '../ui.js';
+
+// LES DIX STATUTS DU TABLEAU DE BORD, dans son ordre — de la préparation à la
+// réception. Ils ne se confondent pas avec `etat`, qui n'en est qu'une
+// TRADUCTION en quatre valeurs (`push_rgd`) : `relance_1` et `relance_2`
+// donnent le même état, d'où la colonne `statut_d1` qui porte le brut.
+const STATUTS_CHANTIER = [
+  { key: 'en_preparation',   label: 'En préparation' },
+  { key: 'visite_technique', label: 'Visite technique' },
+  { key: 'devis_en_cours',   label: 'Devis en cours' },
+  { key: 'devis_presente',   label: 'Devis présenté' },
+  { key: 'relance_1',        label: 'Relance 1' },
+  { key: 'relance_2',        label: 'Relance 2' },
+  { key: 'devis_signe',      label: 'Devis signé' },
+  { key: 'demarrage',        label: 'Démarrage' },
+  { key: 'en_cours',         label: 'Chantier en cours' },
+  { key: 'termine',          label: 'Chantier terminé' },
+];
 
 // Le client d'une affaire, avec la forme attendue par cet écran.
 const clientDe = (affaire) => {
@@ -58,12 +77,28 @@ function chantiers() {
 }
 
 // ---------------------------------------------------------------- Chantiers
+// La cellule « Statut ». Un menu quand l'écriture est possible ET que le
+// statut brut est connu : sans lui, on ne saurait pas quoi présélectionner, et
+// un menu qui s'ouvre sur la mauvaise valeur est pire qu'un texte.
+function statutCellule(c, ecriture) {
+  const st = STATUTS_CHANTIER.find(x => x.key === c.statut_d1);
+  if (!ecriture || !c.statut_d1) {
+    return st ? `<span class="chip">${esc(st.label)}</span>`
+      : `<span class="muted">${esc(etapeLabel(c.affaire))}</span>`;
+  }
+  return `<select class="statut-menu" data-chantier="${esc(String(c.d1_id))}"
+    data-avant="${esc(c.statut_d1)}" aria-label="Statut du chantier">
+    ${STATUTS_CHANTIER.map(x => `<option value="${esc(x.key)}" ${x.key === c.statut_d1 ? 'selected' : ''}>${esc(x.label)}</option>`).join('')}
+  </select>`;
+}
+
 export const rgdChantiersPage = {
   title: () => 'RGD Renova — Chantiers',
   render(root) {
     if (guard(root)) return {};
     const coquille = poserEspace(root);
-    const state = { etat: '', q: '', focus: null };
+    const state = { etat: '', q: '', focus: null, ecriture: false };
+    peutEcrire().then(ok => { if (ok !== state.ecriture) { state.ecriture = ok; draw(); } });
 
     const draw = () => {
       const tous = chantiers();
@@ -104,7 +139,7 @@ export const rgdChantiersPage = {
           <table>
             <thead><tr>
               <th>Chantier</th><th>Client</th><th>Ville</th>
-              <th>État</th><th>Étape commerciale</th><th class="num">Montant HT</th><th>Début prévu</th>
+              <th>État</th><th>Statut</th><th class="num">Montant HT</th><th>Début prévu</th>
             </tr></thead>
             <tbody>${vus.map(c => {
               const cl = clientDe(c.affaire);
@@ -115,18 +150,46 @@ export const rgdChantiersPage = {
                 <td>${cl ? esc(cl.nom) : '<span class="muted">—</span>'}</td>
                 <td>${esc(c.ville || '—')}</td>
                 <td>${e ? `<span class="chip ${e.ton}">${esc(e.label)}</span>` : '<span class="muted small">pas encore vendu</span>'}</td>
-                <td class="muted">${esc(etapeLabel(c.affaire))}</td>
+                <td>${statutCellule(c, state.ecriture)}</td>
                 <td class="num">${c.montant_ht ? eur(c.montant_ht) : '<span class="muted">—</span>'}</td>
                 <td>${c.date_debut_prevue ? fmtDate(c.date_debut_prevue) : '<span class="muted">—</span>'}</td>
               </tr>`;
             }).join('') || '<tr><td colspan="7"><div class="empty">Aucun chantier ne correspond.</div></td></tr>'}</tbody>
           </table>
+          ${state.ecriture ? `<p class="small muted">Le statut se change ici et part
+          directement dans le tableau de bord RGD. <b>Si le chantier vient d'un prospect
+          apporté, son apporteur en est averti par email.</b> L'état et l'étape
+          commerciale ci-contre sont des traductions recalculées au relevé suivant :
+          ils rattraperont dans la demi-heure.</p>` : ''}
         </section>`;
 
       root.innerHTML = cadre('#/rgd/chantiers', 'Chantiers', corps);
       bindSearch(root, 'rc-q', state, draw); restoreFocus(root, state);
       root.querySelectorAll('[data-etat]').forEach(b => b.onclick = () => {
         state.etat = state.etat === b.dataset.etat ? '' : b.dataset.etat; draw();
+      });
+
+      // On ne redessine pas après coup : le menu qu'on vient d'ouvrir
+      // disparaîtrait sous la main. Seule la cellule concernée est reprise.
+      root.querySelectorAll('[data-chantier]').forEach(m => {
+        m.onchange = async () => {
+          const avant = m.dataset.avant, apres = m.value;
+          if (avant === apres) return;
+          m.disabled = true;
+          const r = await majStatutChantier(m.dataset.chantier, apres);
+          m.disabled = false;
+          if (r.ok) {
+            m.dataset.avant = apres;
+            const ligne = scope.rgd('rgd_chantiers').find(x => String(x.d1_id) === m.dataset.chantier);
+            if (ligne) ligne.statut_d1 = apres;
+            toast('Statut envoyé au tableau de bord RGD');
+          } else {
+            m.value = avant;
+            toast(r.motif === 'pas-de-compte'
+              ? 'Aucun compte RGD à votre adresse : le statut n’a pas été changé.'
+              : `Statut non enregistré — ${r.motif}`, 'err');
+          }
+        };
       });
       root.querySelectorAll('[data-affaire]').forEach(a => a.onclick = (e) => {
         e.preventDefault(); openDeal(a.dataset.affaire, draw);
