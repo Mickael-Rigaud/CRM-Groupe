@@ -1997,6 +1997,14 @@ button.tb-pp:hover { color: var(--text); text-decoration: underline; text-underl
 .rgd-ca-ligne { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin: 2px 0; }
 .rgd-ca-montant { font-family: var(--font-display); font-size: 32px; font-weight: 700; color: var(--accent-ink); }
 .rgd-ca-sous { margin: 2px 0 10px; }
+/* La ligne de fraîcheur du CA. Elle porte un fond quand le relevé est en
+   retard : un simple texte gris se lit comme une note de bas de page, or ce
+   qu'elle annonce, c'est que le grand chiffre juste au-dessus est périmé. */
+.rgd-ca-frais { display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin: 10px 0 0; padding: 8px 10px; border-radius: 10px;
+  border: 1px solid var(--line); color: var(--muted); }
+.rgd-ca-frais.ko { border-color: var(--red); background: var(--red-soft); color: var(--text); }
+.rgd-ca-frais a { margin-left: auto; }
 .rgd-courbe { width: 100%; height: auto; display: block; overflow: visible; margin-bottom: 4px; }
 .rgd-barre { fill: var(--accent); opacity: .18; }
 .rgd-trait { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; }

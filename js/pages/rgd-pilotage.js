@@ -197,6 +197,19 @@ export const rgdPilotagePage = {
       const caHt = corrigeHt !== null ? Number(corrigeHt) : calculeHt;
       const corrige = corrigeHt !== null && Math.round(Number(corrigeHt)) !== Math.round(calculeHt);
 
+      // DE QUAND DATE CE CA. Le CA calculé ne vaut que ce que vaut le dernier
+      // relevé des encaissements Costructor, et ça, l'écran ne le disait pas :
+      // la synchronisation des paiements s'est arrêtée le 24/07/2026 sans que
+      // rien ne le signale, et deux mois plus tard le chiffre affiché était
+      // toujours celui de juillet — avec l'air d'être à jour. Une donnée vieille
+      // est plus dangereuse qu'une donnée absente, parce qu'elle se lit comme
+      // fraîche : c'est la seule raison d'être de ce bloc.
+      const syncPaiements = scope.rgd('rgd_costructor_etat').find(e => e.ressource === 'payments');
+      const ageSync = syncPaiements?.dernier_succes ? daysSince(syncPaiements.dernier_succes) : null;
+      const syncKo = ageSync === null || ageSync > 2;
+      const dernierEncaissement = paiements
+        .map(p => p.date_facturation).filter(Boolean).sort().at(-1) || null;
+
       // Pièces de sous-traitants qui expirent sous 30 jours ou sont déjà passées.
       const docsSt = sousTraitants.filter(st => st.actif !== false
         && ['attestation_urssaf_expire', 'attestation_vigilance_expire', 'assurance_decennale_expire']
@@ -241,6 +254,15 @@ export const rgdPilotagePage = {
           ${reglage('manual_clients_actifs') !== null ? `<p class="small muted">
             Clients actifs déclarés : <b>${esc(reglage('manual_clients_actifs'))}</b>,
             également saisi à la main côté RGD.</p>` : ''}
+          <p class="rgd-ca-frais small ${syncKo ? 'ko' : 'ok'}">
+            <span class="chip ${syncKo ? 'red' : 'green'}">${syncKo ? 'Encaissements en retard' : 'Encaissements à jour'}</span>
+            <span class="grow">${syncPaiements?.dernier_succes
+              ? `Dernier relevé Costructor des paiements ${esc(fmtDate(syncPaiements.dernier_succes))}${ageSync > 2
+                ? `, il y a ${ageSync} jours : <b>le CA calculé est celui de cette date</b>, pas celui d’aujourd’hui.` : '.'}`
+              : 'Aucun relevé Costructor des paiements n’est enregistré : rien ne dit de quand date ce CA.'}
+            ${dernierEncaissement ? ` Dernière facture connue : ${esc(fmtDate(dernierEncaissement))}.` : ''}</span>
+            <a href="#/rgd/costructor">Voir la synchronisation</a>
+          </p>
         </section>
 
         <div class="esp-kpis">
