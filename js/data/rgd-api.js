@@ -93,3 +93,18 @@ export const majStatutClient = (d1Id, statutSuivi) =>
 // demande porte `statut`, un client porte `statut_suivi`.
 export const majStatutDemande = (d1Id, statut) =>
   envoyer(`/api/demandes/${encodeURIComponent(d1Id)}`, { statut });
+
+// Les corrections manuelles du chiffre d'affaires de l'exercice. Elles vivent
+// dans `app_settings` côté D1 et l'emportent sur le calcul automatique, parce
+// que la reprise Costructor est incomplète.
+//
+// ⚠ ENVOYER 0 REND LA MAIN AU CALCUL, il n'écrit pas « zéro euro ». C'est le
+// comportement de la route côté worker (`effaceOuEcrit`) : la valeur est
+// effacée, et le tableau de bord recalcule. Un écran qui ne le dirait pas
+// ferait croire à une saisie perdue.
+export const majCaManuel = ({ ht, ttc }) => {
+  const corps = {};
+  if (ht !== undefined) corps.ht = ht;
+  if (ttc !== undefined) corps.ttc = ttc;
+  return envoyer('/api/stats/manual-ca', corps);
+};

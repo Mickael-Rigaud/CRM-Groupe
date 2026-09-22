@@ -42,6 +42,7 @@ export const ONGLETS = [
   // SAISIE tant que l'etape 5 n'est pas faite — le CRM ne sait que lire.
   // Les deux disparaitront quand le CRM ecrira et que Surge sera debranche.
   { hash: '#/rgd/costructor', label: 'Costructor' },
+  { hash: '#/rgd/reglages', label: 'Réglages' },
   { hash: '#/rgd/app', label: 'Application RGD' },
 ];
 
