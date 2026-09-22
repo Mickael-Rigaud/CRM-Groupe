@@ -40,6 +40,51 @@ import { cadre, BANDEAU, guard } from './rgd-espace.js';
 
 const s_ = (n) => (n > 1 ? 's' : '');
 
+// LES STATUTS DE SUIVI, dans l'ordre du tableau de bord (`STATUTS_DEMANDE`).
+// Ils décrivent l'avancement d'un prospect, du premier contact au chantier.
+// Les tons suivent ceux de l'original : gris au départ, ambre quand on a
+// parlé, bleu quand un rendez-vous est posé, orange sur le devis, vert quand
+// le chantier tourne, rouge quand c'est perdu.
+const STATUTS_SUIVI = [
+  { key: 'nouveau_prospect',  label: 'Nouveau prospect',    ton: 'muted' },
+  { key: 'relance_1',         label: 'Relance 1',           ton: 'muted' },
+  { key: 'relance_2',         label: 'Relance 2',           ton: 'muted' },
+  { key: 'relance_3',         label: 'Relance 3',           ton: 'muted' },
+  { key: 'a_contacter',       label: 'Contacté',            ton: 'amber' },
+  { key: 'rdv_planifie',      label: 'Rendez-vous planifié', ton: 'bleu' },
+  { key: 'devis_envoye',      label: 'Devis envoyé',        ton: 'accent' },
+  { key: 'devis_accepte',     label: 'Devis accepté',       ton: 'accent' },
+  { key: 'chantier_en_cours', label: 'Chantier en cours',   ton: 'green' },
+  { key: 'chantier_termine',  label: 'Chantier terminé',    ton: 'green' },
+  { key: 'perdu',             label: 'Perdu',               ton: 'red' },
+];
+
+// Les statuts de FICHE, qui sont autre chose : ils disent ce qu'est la
+// personne, pas où en est l'affaire. Deux vocabulaires, deux colonnes
+// (`statut` et `statut_suivi`), et les confondre ferait un filtre qui ne rend
+// jamais rien.
+const STATUTS_FICHE = [
+  { key: 'prospect',   label: 'Prospect',   ton: '' },
+  { key: 'client',     label: 'Client',     ton: 'green' },
+  { key: 'partenaire', label: 'Partenaire', ton: 'accent' },
+  { key: 'qualifie',   label: 'Qualifié',   ton: 'amber' },
+  { key: 'inactif',    label: 'Inactif',    ton: 'muted' },
+  { key: 'perdu',      label: 'Perdu',      ton: 'red' },
+];
+
+const dit = (liste, cle) => liste.find(x => x.key === cle)
+  || { key: cle, label: String(cle || '').replace(/_/g, ' '), ton: '' };
+
+// Un statut absent vaut « nouveau prospect » côté suivi, comme dans le
+// tableau de bord : une fiche jamais touchée n'est pas une fiche sans état.
+const pastilleSuivi = (cle) => {
+  const st = dit(STATUTS_SUIVI, cle || 'nouveau_prospect');
+  return `<span class="chip st-${esc(st.key)}">${esc(st.label)}</span>`;
+};
+const pastilleFiche = (cle) => cle
+  ? `<span class="chip st-${esc(dit(STATUTS_FICHE, cle).key)}">${esc(dit(STATUTS_FICHE, cle).label)}</span>`
+  : '<span class="muted">—</span>';
+
 // Les quatre provenances de prospect du tableau de bord, dans son ordre.
 const SOURCES = [
   { key: 'site', label: 'Prospect site' },
@@ -82,8 +127,12 @@ export const rgdClientsPage = {
         site: demandes,
         partenaire: fiches.filter(f => f.apporteur_id),
         meta: fiches.filter(f => f.source === 'meta_ads'),
-        autre: fiches.filter(f => !f.costructor_id && !f.apporteur_id
-          && f.source !== 'meta_ads' && f.source !== 'Formulaire site'),
+        // La définition du tableau de bord, mot pour mot : une fiche SAISIE À
+        // LA MAIN et sans apporteur. Ma première version prenait « tout ce qui
+        // n'est ni Costructor, ni Meta, ni le site », une négation qui ramassait
+        // les 18 fiches marquées `Costructor` sans identifiant et les 2 venues
+        // de Google Agenda — vingt lignes là où l'original en montre zéro.
+        autre: fiches.filter(f => f.source === 'manuel' && !f.apporteur_id),
       };
       const nProspects = SOURCES.reduce((t, s) => t + parSource[s.key].length, 0);
 
@@ -96,25 +145,33 @@ export const rgdClientsPage = {
 
       const ts = terms(state.q);
       const surDemandes = state.vue === 'prospects' && state.sousVue === 'site';
+      const surMeta = state.vue === 'prospects' && state.sousVue === 'meta';
 
-      // Les statuts réellement présents, pour ne pas proposer un filtre qui ne
-      // rend jamais rien. Ceux des demandes et ceux des fiches sont deux jeux
-      // différents : on prend celui de la liste affichée.
       const listeBrute = state.vue === 'clients' ? clients
         : state.vue === 'contacts' ? contacts
         : parSource[state.sousVue];
-      const statuts = [...new Set(listeBrute.map(x => x.statut).filter(Boolean))].sort();
+
+      // Sur les prospects on filtre l'AVANCEMENT (`statut_suivi`, onze valeurs) ;
+      // sur les clients et les contacts, la NATURE de la fiche (`statut`). Le
+      // menu propose la liste complète du tableau de bord même quand une valeur
+      // n'est pas encore présente : c'est ainsi qu'on voit qu'aucune affaire
+      // n'est au stade « devis envoyé », ce qu'une liste réduite cacherait.
+      const surProspects = state.vue === 'prospects';
+      const champStatut = (x) => surProspects
+        ? (state.sousVue === 'site' ? x.statut : (x.statut_suivi || 'nouveau_prospect'))
+        : x.statut;
+      const statuts = surProspects ? STATUTS_SUIVI : STATUTS_FICHE;
 
       const lignesFiches = listeBrute
         .filter(f => !surDemandes)
         .map(f => ({ f, p: qui(f) }))
         .filter(({ f, p }) => (!state.type || p?.type === state.type)
-          && (!state.statut || f.statut === state.statut)
+          && (!state.statut || champStatut(f) === state.statut)
           && hit([p?.nom, p?.email, p?.tel, p?.ville, p?.adresse], ts))
         .sort((a, b) => String(a.p?.nom || '').localeCompare(String(b.p?.nom || ''), 'fr'));
 
       const lignesDemandes = (surDemandes ? demandes : [])
-        .filter(d => (!state.statut || d.statut === state.statut)
+        .filter(d => (!state.statut || (d.statut || 'nouveau_prospect') === state.statut)
           && hit([`${d.prenom || ''} ${d.nom || ''}`, d.email, d.telephone, d.ville,
                   d.adresse, d.type_projet, d.projet_description], ts))
         .sort((a, b) => String(b.date_demande || '').localeCompare(String(a.date_demande || '')));
@@ -133,9 +190,7 @@ export const rgdClientsPage = {
                   ${f.source === 'meta_ads' ? '<span class="chip accent" title="Lead Facebook ou Instagram">Meta</span>' : ''}
                   ${ap ? `<div class="s muted">apporté par ${esc(ap.societe || [ap.prenom, ap.nom].filter(Boolean).join(' '))}</div>` : ''}</td>
               <td class="muted">${esc(p?.type || '—')}</td>
-              <td>${f.statut
-                ? `<span class="chip ${f.statut === 'client' ? 'green' : f.statut === 'perdu' ? 'red' : ''}">${esc(f.statut)}</span>`
-                : '<span class="muted">—</span>'}</td>
+              <td>${surProspects ? pastilleSuivi(f.statut_suivi) : pastilleFiche(f.statut)}</td>
               <td>${p?.email ? `<a href="mailto:${esc(p.email)}">${esc(p.email)}</a>` : '<span class="muted">—</span>'}</td>
               <td>${esc(p?.tel || '—')}</td>
               <td class="muted">${esc(adresseDe(p))}</td>
@@ -158,13 +213,43 @@ export const rgdClientsPage = {
             <td class="muted">${esc(String(d.budget || '—').trim())}</td>
             <td class="muted">${esc([d.adresse, [d.code_postal, d.ville].filter(Boolean).join(' ')].filter(Boolean).join(' ') || '—')}</td>
             <td class="muted">${esc(d.comment_connu || '—')}</td>
-            <td>${d.statut
-              ? `<span class="chip ${d.statut === 'nouveau_prospect' ? 'amber' : ''}">${esc(d.statut.replace(/_/g, ' '))}</span>`
-              : '<span class="muted">—</span>'}</td>
+            <td>${pastilleSuivi(d.statut)}</td>
             <td class="muted small">${esc(d.commentaire_admin || '—')}</td>
           </tr>`).join('') || `<tr><td colspan="10"><div class="empty">${esc(vide())}</div></td></tr>`}</tbody>
         </table>
         <p class="small muted">Le statut et le commentaire se modifient dans
+        l&rsquo;<a href="#/rgd/app">application RGD</a> : ici ils sont lus, pas saisis.</p>
+      </section>`;
+
+      // LES LEADS META ONT LEURS PROPRES COLONNES, et pour une raison : ce
+      // sont LES QUESTIONS DU FORMULAIRE Facebook. Projet, type de bien,
+      // ville, budget — la personne y a répondu elle-même. Les ranger dans le
+      // tableau générique des fiches reviendrait à jeter ce qu'elle a dit pour
+      // afficher ce que la base en a fait.
+      const tableauMeta = () => `<p class="small muted rcl-intro">Leads reçus depuis les campagnes
+        Facebook et Instagram (webhook Zapier). Chaque prospect a reçu un email de
+        confirmation automatique.</p>
+        <section class="card table-wrap">
+        <table>
+          <thead><tr><th>Reçu</th><th>Nom</th><th>Contact</th><th>Projet</th><th>Bien</th>
+            <th>Ville</th><th>Budget</th><th>Statut</th><th>Note</th></tr></thead>
+          <tbody>${lignesFiches.map(({ f, p }) => `<tr>
+            <td class="small">${f.meta_received_at
+              ? esc(new Date(f.meta_received_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' }))
+              : '<span class="muted">—</span>'}</td>
+            <td><b>${esc(p?.nom || '—')}</b></td>
+            <td>${p?.email ? `<a href="mailto:${esc(p.email)}">${esc(p.email)}</a>` : ''}
+                ${p?.tel ? `<div class="s">${esc(p.tel)}</div>` : ''}
+                ${!p?.email && !p?.tel ? '<span class="muted">—</span>' : ''}</td>
+            <td>${esc(f.meta_type_projet || '—')}</td>
+            <td class="muted">${esc(f.meta_type_bien || '—')}</td>
+            <td class="muted">${esc(p?.ville || '—')}</td>
+            <td class="muted">${esc(f.meta_budget || '—')}</td>
+            <td>${pastilleSuivi(f.statut_suivi)}</td>
+            <td class="muted small">${esc(f.notes || '—')}</td>
+          </tr>`).join('') || `<tr><td colspan="9"><div class="empty">${esc(vide())}</div></td></tr>`}</tbody>
+        </table>
+        <p class="small muted">Le statut et la note se modifient dans
         l&rsquo;<a href="#/rgd/app">application RGD</a> : ici ils sont lus, pas saisis.</p>
       </section>`;
 
@@ -190,22 +275,24 @@ export const rgdClientsPage = {
         </div>` : ''}
 
         <div class="toolbar">
-          ${searchInput('rcl-q', state, surDemandes
+          ${searchInput('rcl-q', state, surDemandes || surMeta
             ? 'Recherche nom, email, ville…' : 'Rechercher nom, email, téléphone…')}
-          ${surDemandes ? '' : `<select id="rcl-type" aria-label="Type">
+          ${surDemandes || surMeta ? '' : `<select id="rcl-type" aria-label="Type">
             <option value="">Tous types</option>
             <option value="particulier" ${state.type === 'particulier' ? 'selected' : ''}>Particulier</option>
             <option value="professionnel" ${state.type === 'professionnel' ? 'selected' : ''}>Professionnel</option>
           </select>`}
           <select id="rcl-statut" aria-label="Statut">
             <option value="">Tous statuts</option>
-            ${statuts.map(st => `<option value="${esc(st)}" ${state.statut === st ? 'selected' : ''}>${esc(st.replace(/_/g, ' '))}</option>`).join('')}
+            ${statuts.map(st => `<option value="${esc(st.key)}" ${state.statut === st.key ? 'selected' : ''}>${esc(st.label)}</option>`).join('')}
           </select>
           <span class="grow"></span>
           <span class="muted small">${affichees} ligne${s_(affichees)}</span>
         </div>
 
-        ${surDemandes ? tableauDemandes() : tableauFiches()}`;
+        ${surDemandes ? tableauDemandes()
+          : state.vue === 'prospects' && state.sousVue === 'meta' ? tableauMeta()
+          : tableauFiches()}`;
 
       root.innerHTML = cadre('#/rgd/clients', 'Clients & prospects', corps);
       bindSearch(root, 'rcl-q', state, draw);

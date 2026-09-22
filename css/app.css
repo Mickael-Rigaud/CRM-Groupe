@@ -376,7 +376,40 @@ select.cell-in { text-align: left; }
    prospect. Plus petite et sans trait de separation, pour qu'on voie d'un coup
    d'oeil laquelle des deux commande l'autre. */
 .pill-tabs.sous { margin-top: -6px; }
-.pill-tabs.sous button { font-size: 12.5px; padding: 6px 12px; }
+.pill-tabs.sous button { font-size: 12.5px; padding: 6px 12px 9px; }
+/* La sous-rubrique active se SOULIGNE au lieu de se remplir. Deux pastilles
+   pleines l'une sous l'autre se disputaient le regard ; un trait dit « c'est
+   ici » sans prétendre au même rang que l'onglet du dessus. */
+.pill-tabs.sous button.on {
+  background: none; color: var(--accent-ink); font-weight: 700;
+  border-radius: 0; box-shadow: inset 0 -2px 0 var(--accent);
+}
+.pill-tabs.sous button.on span { background: var(--accent-soft); color: var(--accent-ink); }
+.pill-tabs.sous button.on:hover { background: none; }
+
+/* Les statuts de suivi d'un prospect, aux tons du tableau de bord : gris au
+   depart, ambre quand on a parle, bleu quand un rendez-vous est pose, orange
+   sur le devis, vert quand le chantier tourne, rouge quand c'est perdu. Une
+   classe par statut plutot qu'un ton calcule : on lit la couleur d'une etape
+   dans la feuille de style, sans derouler du JavaScript. */
+.chip[class*="st-"] { white-space: nowrap; }
+.chip.st-nouveau_prospect, .chip.st-relance_1, .chip.st-relance_2, .chip.st-relance_3,
+.chip.st-inactif { background: var(--card-2); border-color: var(--line); color: var(--muted); }
+.chip.st-a_contacter, .chip.st-qualifie { background: var(--amber-soft);
+  border-color: color-mix(in srgb, var(--amber) 35%, transparent); color: var(--amber); }
+.chip.st-rdv_planifie { background: var(--blue-soft);
+  border-color: color-mix(in srgb, var(--sea-ink) 25%, transparent); color: var(--sea-ink); }
+.chip.st-devis_envoye, .chip.st-devis_accepte, .chip.st-partenaire {
+  background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  color: var(--accent-ink); }
+.chip.st-devis_accepte { border-color: var(--accent); }
+.chip.st-chantier_en_cours, .chip.st-chantier_termine, .chip.st-client {
+  background: var(--green-soft); border-color: color-mix(in srgb, var(--green) 35%, transparent);
+  color: var(--green); }
+.chip.st-chantier_termine { border-color: var(--green); }
+.chip.st-perdu { background: var(--red-soft);
+  border-color: color-mix(in srgb, var(--red) 35%, transparent); color: var(--red); }
+.rcl-intro { margin: -4px 0 0; }
 
 /* ---------- Formations : des fiches en accordeon ----------
    Un <details> natif plutot qu'un accordeon maison : il s'ouvre au clavier, se
