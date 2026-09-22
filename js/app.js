@@ -292,7 +292,18 @@ function renderNav() {
 function route() {
   if (!scope.user) return;
   const hash = location.hash || '#/home';
-  const [, name, param] = hash.split('/');
+  // ⚠ LA CHAINE DE REQUETE NE FAIT PAS PARTIE DU NOM DE LA PAGE.
+  // `#/rgd/clients?vue=prospects&onglet=meta` se découpe en `rgd` et
+  // `clients?vue=prospects&onglet=meta` : sans ce retrait, la recherche
+  // `pages['rgd_' + param]` échoue et l'adresse retombe sur l'accueil de
+  // l'activité — silencieusement, puisqu'un repli n'est pas une erreur.
+  //
+  // Les écrans qui acceptent des paramètres les relisent eux-mêmes depuis
+  // `location.hash`, qui reste entier : on ne retire la requête que du nom de
+  // page, pas du hash. C'est ce que fait `rgd-clients.js`, qui ouvre ainsi
+  // directement un onglet donné depuis un lien de mail.
+  const [, name, paramEtRequete] = hash.split('/');
+  const param = (paramEtRequete || '').split('?')[0];
   // Le vivier courtiers a rejoint l'espace La Référence Courtage : l'ancienne adresse y mène.
   if (name === 'vivier') { location.hash = '#/courtage/vivier'; return; }
   // La to do list de BTP Expertise a disparu au profit de celle du CRM, commune
