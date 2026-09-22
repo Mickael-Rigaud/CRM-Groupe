@@ -86,7 +86,7 @@ export const rgdRealisationsPage = {
           <b>i</b>
           <div>Ces réalisations sont celles publiées sur <b>rgdrenova.fr</b>.
           ${state.ecriture
-            ? '<b>Les modifier ici les publie sur le site</b> — il n’y a pas de brouillon. La liste, elle, est relevée toutes les trente minutes : une modification publiée n’y apparaît pas tout de suite.'
+            ? '<b>Les modifier ici les publie sur le site</b> — il n’y a pas de brouillon, et la liste ci-dessous suit immédiatement.'
             : 'Elles se modifient dans l’<a href="#/rgd/app">application RGD</a>, qui écrit sur le site — une correction faite ici ne partirait pas en ligne et serait écrasée au relevé suivant.'}</div>
         </div>
 
@@ -176,10 +176,9 @@ export const rgdRealisationsPage = {
       root.querySelectorAll('[data-vue]').forEach(b => b.onclick = () => {
         state.vue = b.dataset.vue; state.q = ''; state.cat = ''; draw();
       });
-      // `draw` après publication ne montrera rien de neuf : la liste lit le
-      // reflet, qui met jusqu'à trente minutes à rapatrier le changement. On
-      // redessine quand même — le bandeau et les compteurs restent justes, et
-      // ne rien faire laisserait croire que le clic n'a pas abouti.
+      // Depuis la bascule du 22/09/2026, `draw` montre bien la nouvelle
+      // version : la publication redéplie `rgd_realisations` dans la même
+      // transaction, et l'éditeur recharge la table avant de rendre la main.
       root.querySelectorAll('[data-modifier]').forEach(b => b.onclick = () =>
         ouvrirEditionRealisation(b.dataset.modifier, draw));
     };

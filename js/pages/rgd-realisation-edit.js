@@ -29,6 +29,7 @@
 // faite ailleurs pendant qu'on rédigeait survit ; si le projet a disparu entre
 // les deux, on s'arrête et on le dit.
 import { esc, toast, openModal, closeModal } from '../ui.js';
+import { db } from '../data/db.js';
 import { lireRealisations, enregistrerRealisations, restaurerRealisations,
          deposerPhotosRealisations } from '../data/rgd-api.js';
 
@@ -217,6 +218,7 @@ export function ouvrirEditionRealisation(slugOuProjet, apresPublication) {
               : `Restauration impossible — ${r.motif}`, 'err');
             return;
           }
+          await db.recharger('rgd_realisations');
           closeModal();
           toast('Version précédente rétablie sur le site');
           apresPublication?.();
@@ -259,8 +261,15 @@ export function ouvrirEditionRealisation(slugOuProjet, apresPublication) {
               : `Non publié — ${r.motif}`, 'err');
             return;
           }
+          // ⚠ PLUS D'ATTENTE DEPUIS LA BASCULE (22/09/2026).
+          // `rgd_publier_site` redéplie `rgd_realisations` dans la MÊME
+          // transaction : la base est à jour avant que cette ligne s'exécute.
+          // Seul le cache du navigateur est en retard — on le recharge, et la
+          // liste montre la nouvelle version tout de suite. Promettre « au
+          // prochain relevé » enverrait attendre trente minutes pour rien.
+          await db.recharger('rgd_realisations');
           closeModal();
-          toast('Publié sur rgdrenova.fr — visible ici au prochain relevé');
+          toast('Publié sur rgdrenova.fr');
           apresPublication?.();
         };
       };

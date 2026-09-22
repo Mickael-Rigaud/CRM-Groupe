@@ -292,9 +292,15 @@ export const majFourniture = (d1Id, champs) =>
 // ------------------------------------------------------------- réalisations
 //
 // ⚠ CE SONT LES SEULES ÉCRITURES DE L'ESPACE QUI SORTENT VERS LE PUBLIC.
-// `POST /api/realisations` ne modifie pas une ligne : il REMPLACE le document
+// `rgd_publier_site` ne modifie pas une ligne : il REMPLACE le document
 // entier, et c'est ce document que rgdrenova.fr lit pour sa page « Nos
 // réalisations ». Enregistrer ici, c'est publier.
+//
+// ⚠ PASSÉ À SUPABASE LE 22/09/2026 — le worker n'est plus dans la boucle.
+// Le document vit dans `rgd_site_documents`, le site le lit par l'Edge
+// Function `site-realisations`, et la RPC redéplie `rgd_realisations` dans la
+// même transaction. Les PHOTOS, elles, sont encore chez Cloudflare : leur
+// dépôt (`deposerPhotosRealisations`) passe toujours par le worker.
 //
 // ⚠ IL FAUT DONC TOUJOURS RELIRE AVANT D'ÉCRIRE, ET NE JAMAIS RECONSTRUIRE
 // LE DOCUMENT DEPUIS LE REFLET. `rgd_realisations` déplie le JSON en lignes
@@ -313,9 +319,11 @@ export const majFourniture = (d1Id, champs) =>
 // réécrire ferait perdre la modification de quelqu'un d'autre.
 export async function lireRealisations() {
   try {
-    const r = await fetch(`${API}/api/realisations`, { cache: 'no-store' });
-    if (!r.ok) return { ok: false, motif: `HTTP ${r.status}` };
-    const d = await r.json();
+    // ⚠ On passe par `rgd_lire_site`, PAS par la fonction publique du site :
+    // celle-ci sert un cache d'une minute aux visiteurs, et republier une
+    // version vieille d'une minute annulerait la modification de quelqu'un
+    // d'autre — exactement ce que la relecture avant publication protège.
+    const d = await db.rpc('rgd_lire_site', { p_cle: 'realisations' });
     if (!Array.isArray(d?.categories)) return { ok: false, motif: 'document inattendu' };
     return { ok: true, donnees: d };
   } catch (e) {
@@ -326,12 +334,28 @@ export async function lireRealisations() {
 // Publier le document. `doc` doit être le document ENTIER — le worker refuse
 // (400) tout ce qui n'a pas de `categories`, ce qui est le garde-fou minimal
 // contre un envoi tronqué.
-export const enregistrerRealisations = (doc) =>
-  envoyer('/api/realisations', doc, 'POST');
+export async function enregistrerRealisations(doc) {
+  try {
+    // L'auteur n'est pas passé : la fonction le lit dans le jeton, où
+    // personne ne peut l'inventer.
+    const r = await db.rpc('rgd_publier_site', { p_cle: 'realisations', p_doc: doc });
+    if (r?.ok === false) return { ok: false, motif: r.error || 'refusé' };
+    return { ok: true, donnees: r };
+  } catch (e) {
+    return { ok: false, motif: String(e.message || e).slice(0, 160) };
+  }
+}
 
 // Revenir à la version précédente. UNE seule, voir plus haut.
-export const restaurerRealisations = () =>
-  envoyer('/api/realisations/restore', {}, 'POST');
+export async function restaurerRealisations() {
+  try {
+    const r = await db.rpc('rgd_restaurer_site', { p_cle: 'realisations' });
+    if (r?.ok === false) return { ok: false, motif: r.error || 'refusé' };
+    return { ok: true, donnees: r };
+  } catch (e) {
+    return { ok: false, motif: String(e.message || e).slice(0, 160) };
+  }
+}
 
 // Déposer une ou plusieurs photos. Elles vont dans le KV de Cloudflare et le
 // worker rend leurs URL publiques — à poser ensuite dans `images` d'un projet,
