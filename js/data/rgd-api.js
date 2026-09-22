@@ -68,15 +68,15 @@ export async function peutEcrire() {
   return !!(await obtenirJeton());
 }
 
-async function envoyer(chemin, corps) {
+async function envoyer(chemin, corps, methode = 'PATCH') {
   const t = await obtenirJeton();
   if (!t) return { ok: false, motif: 'pas-de-compte' };
   const r = await fetch(`${API}${chemin}`, {
-    method: 'PATCH',
+    method: methode,
     headers: { Authorization: `Bearer ${t}`, 'Content-Type': 'application/json' },
     body: JSON.stringify(corps),
   });
-  if (r.ok) return { ok: true };
+  if (r.ok) return { ok: true, donnees: await r.json().catch(() => ({})) };
   // Un jeton périmé se reconnaît à un 401 : on l'oublie pour que l'appel
   // suivant en redemande un, au lieu de rejouer le même échec.
   if (r.status === 401) { jeton = null; expire = 0; }
@@ -122,3 +122,14 @@ export const majCaManuel = ({ ht, ttc }) => {
 // donc le statut brut et laisse le reste rattraper.
 export const majStatutChantier = (d1Id, statut) =>
   envoyer(`/api/chantiers/${encodeURIComponent(d1Id)}`, { statut });
+
+// Créer un chantier. `client_d1Id` est l'identifiant CÔTÉ CLOUDFLARE du client
+// (`rgd_clients.d1_id`), pas l'uuid du contact dans le CRM.
+//
+// ⚠ DEUX CHOSES À DIRE À QUI APPELLE.
+// 1. Le worker fait passer le prospect en « chantier en cours », ce qui
+//    **envoie un email à son apporteur** s'il en a un.
+// 2. Le chantier n'apparaîtra PAS tout de suite dans le CRM : celui-ci lit un
+//    reflet relevé toutes les 30 minutes. Un écran qui ferait croire le
+//    contraire enverrait quelqu'un chercher une ligne qui n'existe pas encore.
+export const creerChantier = (champs) => envoyer('/api/chantiers', champs, 'POST');

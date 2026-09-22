@@ -28,8 +28,8 @@ import { poserEspace, kpiEspace } from './espace.js';
 import { openDeal } from './deal.js';
 
 import { KEY, act, cadre, guard, clientDe as clientDeAffaire } from './rgd-espace.js';
-import { peutEcrire, majStatutChantier } from '../data/rgd-api.js';
-import { toast } from '../ui.js';
+import { peutEcrire, majStatutChantier, creerChantier } from '../data/rgd-api.js';
+import { toast, openModal, closeModal } from '../ui.js';
 
 // LES DIX STATUTS DU TABLEAU DE BORD, dans son ordre — de la préparation à la
 // réception. Ils ne se confondent pas avec `etat`, qui n'en est qu'une
@@ -92,6 +92,98 @@ function statutCellule(c, ecriture) {
   </select>`;
 }
 
+// Le formulaire de création. Volontairement court : `client_id` et `nom`
+// suffisent au worker, le reste se complète ensuite dans la fiche. Un
+// formulaire qui exige douze champs pour ouvrir un chantier fait qu'on ouvre
+// le chantier ailleurs.
+function formulaireChantier(apresCreation) {
+  const clients = scope.rgd('rgd_clients')
+    .map(f => {
+      const c = f.contact_id && db.byId('contacts', f.contact_id);
+      const o = f.organisation_id && db.byId('organisations', f.organisation_id);
+      const nom = c ? `${c.first_name || ''} ${c.last_name || ''}`.trim() : (o ? o.name : null);
+      return nom && f.d1_id ? { d1_id: f.d1_id, nom, ville: c?.city || o?.city || '' } : null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
+
+  const corps = `
+    <form id="ch-form" class="reg-grille" style="grid-template-columns:1fr 1fr">
+      <label class="reg-champ" style="grid-column:1/-1">
+        <span>Client *</span>
+        <select name="client_id" required>
+          <option value="">Choisir un client…</option>
+          ${clients.map(c => `<option value="${esc(String(c.d1_id))}">${esc(c.nom)}${c.ville ? ` — ${esc(c.ville)}` : ''}</option>`).join('')}
+        </select>
+      </label>
+      <label class="reg-champ" style="grid-column:1/-1">
+        <span>Intitulé du chantier *</span>
+        <input name="nom" required placeholder="Ex. Rénovation salle de bain — Dupont">
+      </label>
+      <label class="reg-champ" style="grid-column:1/-1">
+        <span>Adresse</span><input name="adresse">
+      </label>
+      <label class="reg-champ"><span>Code postal</span><input name="code_postal"></label>
+      <label class="reg-champ"><span>Ville</span><input name="ville"></label>
+      <label class="reg-champ"><span>Montant HT (€)</span><input name="montant_ht" inputmode="decimal"></label>
+      <label class="reg-champ"><span>Début prévu</span><input name="date_debut_prevue" type="date"></label>
+      <label class="reg-champ" style="grid-column:1/-1">
+        <span>Statut de départ</span>
+        <select name="statut">
+          ${STATUTS_CHANTIER.map(x => `<option value="${esc(x.key)}" ${x.key === 'en_preparation' ? 'selected' : ''}>${esc(x.label)}</option>`).join('')}
+        </select>
+      </label>
+    </form>
+    <div class="alert" style="margin-top:14px">
+      <b>i</b>
+      <div>Le chantier est créé <b>dans le tableau de bord RGD</b>, pas ici : il
+      apparaîtra dans cette liste au prochain relevé, d&rsquo;ici trente minutes.
+      Si le client a été apporté par un partenaire, <b>celui-ci sera averti par
+      email</b> que son dossier passe en chantier.</div>
+    </div>
+    <div class="toolbar" style="margin-top:12px">
+      <button type="button" class="btn primary" id="ch-ok">Créer le chantier</button>
+      <button type="button" class="btn ghost" data-close>Annuler</button>
+      <span class="grow"></span><span class="muted small" id="ch-etat"></span>
+    </div>`;
+
+  openModal('Nouveau chantier', corps, { onOpen: (m) => {
+    m.querySelector('#ch-ok').onclick = async () => {
+      const f = m.querySelector('#ch-form');
+      if (!f.reportValidity()) return;
+      const d = Object.fromEntries(new FormData(f).entries());
+      // Un champ vide n'est pas envoyé : le worker écrirait une chaîne vide là
+      // où l'absence de valeur veut dire « on ne sait pas encore ».
+      const champs = { client_id: Number(d.client_id), nom: d.nom.trim() };
+      for (const k of ['adresse', 'code_postal', 'ville', 'date_debut_prevue', 'statut']) {
+        if (d[k]) champs[k] = d[k];
+      }
+      if (d.montant_ht) {
+        const n = Number(String(d.montant_ht).replace(/\s/g, '').replace(',', '.'));
+        if (!Number.isFinite(n)) { toast('Le montant n’est pas un nombre', 'err'); return; }
+        champs.montant_ht = n;
+      }
+
+      const b = m.querySelector('#ch-ok');
+      b.disabled = true;
+      m.querySelector('#ch-etat').textContent = 'Envoi au tableau de bord…';
+      const r = await creerChantier(champs);
+      b.disabled = false;
+      m.querySelector('#ch-etat').textContent = '';
+
+      if (!r.ok) {
+        toast(r.motif === 'pas-de-compte'
+          ? 'Aucun compte RGD à votre adresse : le chantier n’a pas été créé.'
+          : `Non créé — ${r.motif}`, 'err');
+        return;
+      }
+      closeModal();
+      toast('Chantier créé dans le tableau de bord — visible ici au prochain relevé');
+      apresCreation?.();
+    };
+  } });
+}
+
 export const rgdChantiersPage = {
   title: () => 'RGD Renova — Chantiers',
   render(root) {
@@ -133,6 +225,7 @@ export const rgdChantiersPage = {
           ${searchInput('rc-q', state, 'Rechercher un chantier, une ville, un client…')}
           <span class="grow"></span>
           <span class="muted small">${vus.length} chantier${vus.length > 1 ? 's' : ''}</span>
+          ${state.ecriture ? '<button type="button" class="btn primary" id="rc-nouveau">+ Nouveau chantier</button>' : ''}
         </div>
 
         <section class="card table-wrap">
@@ -171,6 +264,9 @@ export const rgdChantiersPage = {
 
       // On ne redessine pas après coup : le menu qu'on vient d'ouvrir
       // disparaîtrait sous la main. Seule la cellule concernée est reprise.
+      const nouveau = root.querySelector('#rc-nouveau');
+      if (nouveau) nouveau.onclick = () => formulaireChantier(draw);
+
       root.querySelectorAll('[data-chantier]').forEach(m => {
         m.onchange = async () => {
           const avant = m.dataset.avant, apres = m.value;
