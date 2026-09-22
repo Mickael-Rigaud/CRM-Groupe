@@ -25,6 +25,8 @@ import { esc, eur, fmtDate, terms, hit, searchInput, bindSearch, restoreFocus } 
 import { poserEspace, kpiEspace } from './espace.js';
 import { openDeal } from './deal.js';
 import { cadre, guard, clientDe } from './rgd-espace.js';
+import { peutEcrire, signerDevis } from '../data/rgd-api.js';
+import { toast, confirm as demander } from '../ui.js';
 
 // Le chantier et son client, pour une ligne qui porte un `deal_id`.
 function rattachement(deal_id) {
@@ -54,7 +56,8 @@ export const rgdDevisPage = {
   render(root) {
     if (guard(root)) return {};
     const coquille = poserEspace(root);
-    const state = { statut: '', q: '', focus: null };
+    const state = { statut: '', q: '', focus: null, ecriture: false };
+    peutEcrire().then(ok => { if (ok !== state.ecriture) { state.ecriture = ok; draw(); } });
 
     const draw = () => {
       const tous = scope.rgd('rgd_devis')
@@ -101,7 +104,8 @@ export const rgdDevisPage = {
         <section class="card table-wrap">
           <table>
             <thead><tr><th>Numéro</th><th>Chantier</th><th>Objet</th><th>Statut</th>
-              <th class="num">Montant HT</th><th>Créé le</th><th>Signé le</th></tr></thead>
+              <th class="num">Montant HT</th><th>Créé le</th><th>Signé le</th>
+              ${state.ecriture ? '<th></th>' : ''}</tr></thead>
             <tbody>${vus.map(d => {
               const r = rattachement(d.deal_id);
               const s = STATUTS_DEVIS.find(x => x.key === d.statut);
@@ -113,13 +117,44 @@ export const rgdDevisPage = {
                 <td class="num">${eur(d.montant_ht)}</td>
                 <td>${d.date_creation ? fmtDate(d.date_creation) : '<span class="muted">—</span>'}</td>
                 <td>${d.date_signature ? fmtDate(d.date_signature) : '<span class="muted">—</span>'}</td>
+                ${state.ecriture ? `<td>${d.statut === 'signe' || !d.d1_id ? ''
+                  : `<button type="button" class="btn ghost sm" data-signer="${esc(String(d.d1_id))}">Marquer signé</button>`}</td>` : ''}
               </tr>`;
-            }).join('') || '<tr><td colspan="7"><div class="empty">Aucun devis ne correspond.</div></td></tr>'}</tbody>
+            }).join('') || `<tr><td colspan="${state.ecriture ? 8 : 7}"><div class="empty">Aucun devis ne correspond.</div></td></tr>`}</tbody>
           </table>
+          ${state.ecriture ? `<p class="small muted">⚠ <b>Costructor reste la source des devis.</b>
+          « Marquer signé » écrit dans le tableau de bord, mais la synchronisation
+          Costructor réécrit le statut et la date de signature à chaque passage :
+          si le devis n'est pas accepté <b>chez Costructor</b>, il y reviendra.
+          Le bouton dépanne, il ne remplace pas l'acceptation là-bas.</p>` : ''}
         </section>`;
 
       root.innerHTML = cadre('#/rgd/devis', 'Devis', corps);
       bindSearch(root, 'rd-q', state, draw); restoreFocus(root, state);
+
+      // On demande confirmation avec la modale du CRM, pas celle du navigateur :
+      // la seconde ne se met pas aux couleurs de l'application et, sur certains
+      // navigateurs, se fait bloquer sans un mot.
+      root.querySelectorAll('[data-signer]').forEach(b => b.onclick = async () => {
+        const ok = await demander(
+          'Marquer ce devis comme signé dans le tableau de bord RGD ? '
+          + 'Costructor reste la source : si le devis n’y est pas accepté, le statut '
+          + 'y reviendra à la prochaine synchronisation.');
+        if (!ok) return;
+        b.disabled = true;
+        const r = await signerDevis(b.dataset.signer);
+        b.disabled = false;
+        if (!r.ok) {
+          toast(r.motif === 'pas-de-compte'
+            ? 'Aucun compte RGD à votre adresse : rien n’a été changé.'
+            : `Non enregistré — ${r.motif}`, 'err');
+          return;
+        }
+        const ligne = scope.rgd('rgd_devis').find(x => String(x.d1_id) === b.dataset.signer);
+        if (ligne) { ligne.statut = 'signe'; ligne.date_signature = new Date().toISOString().slice(0, 10); }
+        toast('Devis marqué signé dans le tableau de bord RGD');
+        draw();
+      });
       root.querySelectorAll('[data-statut]').forEach(b => b.onclick = () => {
         state.statut = state.statut === b.dataset.statut ? '' : b.dataset.statut; draw();
       });

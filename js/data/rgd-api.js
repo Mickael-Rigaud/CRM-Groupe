@@ -133,3 +133,16 @@ export const majStatutChantier = (d1Id, statut) =>
 //    reflet relevé toutes les 30 minutes. Un écran qui ferait croire le
 //    contraire enverrait quelqu'un chercher une ligne qui n'existe pas encore.
 export const creerChantier = (champs) => envoyer('/api/chantiers', champs, 'POST');
+
+// Marquer un devis signé. `d1Id` est `rgd_devis.d1_id`.
+//
+// ⚠ CE N'EST PAS LA SOURCE DE VÉRITÉ, ET C'EST IMPORTANT.
+// Les devis viennent de Costructor, dont la synchro réécrit `statut` ET
+// `date_signature` à chaque passage, depuis le statut du devis chez lui. Ce
+// bouton pose donc une valeur que Costructor peut défaire à la synchro
+// suivante s'il ne considère pas le devis comme accepté.
+//
+// Le tableau de bord expose le même bouton, sans le dire. On le reprend
+// — c'est un geste que Mickael utilise — mais l'écran prévient.
+export const signerDevis = (d1Id) =>
+  envoyer(`/api/devis/${encodeURIComponent(d1Id)}/signer`, {}, 'POST');
