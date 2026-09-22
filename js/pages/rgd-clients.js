@@ -130,8 +130,29 @@ export const rgdClientsPage = {
   render(root) {
     if (guard(root)) return {};
     const coquille = poserEspace(root);
-    const state = { vue: 'clients', sousVue: 'site', q: '', type: '', statut: '',
-                    focus: null, ecriture: false };
+    // ⚠ L'ONGLET D'ARRIVÉE PEUT ÊTRE DEMANDÉ DANS L'ADRESSE.
+    // `#/rgd/clients?vue=prospects&onglet=meta` ouvre directement les prospects
+    // Meta Ads. C'est le mail de notification d'un nouveau lead qui s'en sert :
+    // il ne peut PAS viser la fiche elle-même — au moment où il part, le relevé
+    // n'a pas encore tourné, la fiche n'existe donc pas dans le CRM et n'a pas
+    // d'identifiant à citer. Ouvrir sur la bonne liste est ce qu'on peut
+    // promettre sans mentir.
+    //
+    // Les valeurs sont VÉRIFIÉES contre les listes existantes : une adresse
+    // bricolée ne doit pas laisser l'écran dans un état qu'aucun bouton ne
+    // produit, avec des compteurs qui ne correspondent à rien.
+    const params = new URLSearchParams((location.hash.split('?')[1] || ''));
+    const vueDemandee = params.get('vue');
+    const ongletDemande = params.get('onglet');
+    const state = {
+      // ⚠ Les trois onglets sont construits dans `draw()`, pas dans une
+      // constante : on liste leurs clés ici. Les tenir à jour ensemble est le
+      // prix d'une adresse qui ne casse pas — et une valeur inconnue retombe
+      // simplement sur « clients ».
+      vue: ['clients', 'prospects', 'contacts'].includes(vueDemandee) ? vueDemandee : 'clients',
+      sousVue: SOURCES.some(x => x.key === ongletDemande) ? ongletDemande : 'site',
+      q: '', type: '', statut: '', focus: null, ecriture: false,
+    };
 
     // On demande une fois si l'écriture est possible, puis on redessine. Sans
     // compte RGD au même email — ou en mode démo — le menu reste une pastille :
