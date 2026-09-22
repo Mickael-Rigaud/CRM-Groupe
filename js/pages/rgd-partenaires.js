@@ -2,11 +2,22 @@
 //
 // ÉTAPE 4 DE LA MIGRATION, RANG 5 — en écriture depuis le 22/09/2026.
 //
-// CE SONT LES ÉCRITURES LES PLUS SIMPLES DE L'ESPACE, ET C'EST RARE ICI.
-// Ni email, ni poussée vers Costructor, ni statut traduit en trois colonnes :
-// `PATCH /api/apporteurs/:id` et `PATCH /api/fournitures/:id` écrivent une
-// ligne et s'arrêtent là. Tout le soin est ailleurs — dans les noms, voir
-// `versD1Apporteur` et `versD1Fourniture` dans `js/data/rgd-api.js`.
+// ⚠ LES DEUX MOITIÉS DE CET ÉCRAN N'ÉCRIVENT PLUS AU MÊME ENDROIT.
+//
+// **Les apporteurs sont passés à Supabase** le 22/09/2026 — première table de
+// la phase 2. L'écran les crée et les modifie EN DIRECT, avec `db.insert` et
+// `db.update`, sans traverser le worker et sans traduire un seul nom de champ.
+// Le relevé ne les envoie plus, et `d1_id` est devenu nullable : une fiche née
+// ici n'a pas d'origine Cloudflare, et n'en a pas besoin.
+//
+// **Les achats, eux, passent encore par le worker** (`PATCH /api/fournitures/:id`),
+// parce que `rgd_fournitures` porte un `chantier_id` qui désigne un chantier de
+// D1 : la basculer avant les chantiers laisserait un achat rattaché à une
+// référence que Supabase ne saurait pas résoudre. Ils suivront.
+//
+// D'où deux styles dans le même fichier. Ce n'est pas une incohérence, c'est
+// une bascule en cours — et la retenir vaut mieux que de l'uniformiser trop
+// tôt dans un sens ou dans l'autre.
 //
 // POURQUOI LES DEUX SUR LE MÊME ÉCRAN
 // Un apporteur envoie du travail, un fournisseur en vend la matière : ce sont
@@ -33,8 +44,7 @@ import { db } from '../data/db.js';
 import { esc, eur, fmtDate, terms, hit, searchInput, bindSearch, restoreFocus } from '../ui.js';
 import { poserEspace, kpiEspace } from './espace.js';
 import { cadre, guard } from './rgd-espace.js';
-import { peutEcrire, creerApporteur, majApporteur,
-         creerFourniture, majFourniture } from '../data/rgd-api.js';
+import { peutEcrire, creerFourniture, majFourniture } from '../data/rgd-api.js';
 import { toast, openModal, closeModal } from '../ui.js';
 
 // Les trois rôles que D1 range dans la même table. L'ordre est celui de
@@ -134,24 +144,30 @@ function formulairePartenaire(a, apres) {
 
       const b = m.querySelector('#pa-ok');
       b.disabled = true;
-      m.querySelector('#pa-etat').textContent = 'Envoi au tableau de bord…';
-      const r = creation ? await creerApporteur(champs) : await majApporteur(v.d1_id, champs);
-      b.disabled = false;
-      m.querySelector('#pa-etat').textContent = '';
-      if (!r.ok) {
-        toast(r.motif === 'pas-de-compte'
-          ? 'Aucun compte RGD à votre adresse : rien n’a été enregistré.'
-          : `Non enregistré — ${r.motif}`, 'err');
+      m.querySelector('#pa-etat').textContent = 'Enregistrement…';
+      try {
+        // Écriture directe : `rgd_apporteurs` est à nous. Les noms sont ceux du
+        // CRM, les booléens sont des booléens, et il n'y a pas de `d1_id` à
+        // inventer — la colonne accepte `null` depuis la bascule.
+        if (creation) {
+          const cree = await db.insert('rgd_apporteurs', champs);
+          scope.rgd('rgd_apporteurs').push(cree);
+        } else {
+          const maj = await db.update('rgd_apporteurs', v.id, champs);
+          Object.assign(v, maj);
+        }
+      } catch (e) {
+        b.disabled = false;
+        m.querySelector('#pa-etat').textContent = '';
+        toast(`Non enregistré — ${String(e.message).slice(0, 120)}`, 'err');
         return;
       }
-      // La ligne existante avance à l'écran ; une création, elle, n'apparaîtra
-      // qu'au relevé suivant — le CRM ne peut pas inventer le `d1_id` que le
-      // worker vient d'attribuer.
-      if (!creation) Object.assign(v, champs);
+      b.disabled = false;
+      m.querySelector('#pa-etat').textContent = '';
       closeModal();
-      toast(creation
-        ? 'Partenaire créé — visible ici au prochain relevé'
-        : 'Partenaire enregistré dans le tableau de bord');
+      // Plus d'attente : la ligne est là tout de suite, création comprise.
+      // C'est la différence concrète entre écrire chez soi et écrire ailleurs.
+      toast(creation ? 'Partenaire créé' : 'Partenaire enregistré');
       apres?.();
     };
   } });
@@ -262,7 +278,16 @@ export const rgdPartenairesPage = {
   render(root) {
     if (guard(root)) return {};
     const coquille = poserEspace(root);
-    const state = { vue: 'partenaires', q: '', focus: null, ecriture: false };
+    // ⚠ DEUX PORTES, ET ELLES NE S'OUVRENT PAS AVEC LA MÊME CLÉ.
+    // `ecriture` = un compte RGD existe au même email, ce qu'exige le worker —
+    // et donc ce qu'exigent les ACHATS, qui passent encore par lui.
+    // `ecritureLocale` = l'activité RGD dans le CRM, ce qu'exige la policy
+    // `rgd_apporteurs_acces` — et donc ce qu'exigent les APPORTEURS, qui
+    // s'écrivent maintenant en direct.
+    // Les confondre priverait d'un droit qu'on a : quelqu'un de l'équipe RGD
+    // sans compte sur le tableau de bord peut modifier un partenaire.
+    const state = { vue: 'partenaires', q: '', focus: null,
+                    ecriture: false, ecritureLocale: scope.canRgd };
     peutEcrire().then(ok => { if (ok !== state.ecriture) { state.ecriture = ok; draw(); } });
 
     const draw = () => {
@@ -315,7 +340,7 @@ export const rgdPartenairesPage = {
           <div><b>Aucun partenariat n’est signé.</b> Les ${tous.length} partenaires
           travaillent sans convention enregistrée — ce qui ne les empêche pas
           d’apporter des affaires, mais ne fixe rien sur la rémunération de
-          l’apport. ${state.ecriture
+          l’apport. ${state.ecritureLocale
             ? 'La convention se note sur la fiche du partenaire, bouton <b>Modifier</b> au bout de la ligne.'
             : 'Les conventions se saisissent dans l’<a href="#/rgd/app">application RGD</a>.'}</div>
         </div>` : ''}
@@ -330,7 +355,7 @@ export const rgdPartenairesPage = {
           ${searchInput('rpa-q', state, 'Rechercher un partenaire, un métier, une ville…')}
           <span class="grow"></span>
           <span class="muted small">ceux qui apportent le plus en premier</span>
-          ${state.ecriture ? '<button type="button" class="btn primary" id="rpa-nouveau">+ Nouveau partenaire</button>' : ''}
+          ${state.ecritureLocale ? '<button type="button" class="btn primary" id="rpa-nouveau">+ Nouveau partenaire</button>' : ''}
         </div>
 
         <section class="card table-wrap">
@@ -339,7 +364,7 @@ export const rgdPartenairesPage = {
               <th>Contact</th><th>Convention</th>
               <th class="num" title="Fiches clients qui désignent ce partenaire">Rattachés</th>
               <th class="num" title="Compté à la main dans l’application RGD">Déclarés</th>
-              ${state.ecriture ? '<th></th>' : ''}</tr></thead>
+              ${state.ecritureLocale ? '<th></th>' : ''}</tr></thead>
             <tbody>${vus.map(a => { const r = role(a.type_partenaire); return `<tr class="${a.actif === false ? 'muted' : ''}">
               <td><b>${esc(nomDe(a))}</b>
                   ${a.actif === false ? '<span class="chip">Inactif</span>' : ''}
@@ -354,10 +379,10 @@ export const rgdPartenairesPage = {
                 : '<span class="chip amber">Non signée</span>'}</td>
               <td class="num">${rattaches(a) || '<span class="muted">—</span>'}</td>
               <td class="num muted">${Number(a.apports_declares) ? esc(String(a.apports_declares)) : '—'}</td>
-              ${state.ecriture ? `<td class="num">${a.d1_id
-                ? `<button type="button" class="btn ghost sm" data-partenaire="${esc(String(a.d1_id))}">Modifier</button>`
-                : ''}</td>` : ''}
-            </tr>`; }).join('') || `<tr><td colspan="${state.ecriture ? 9 : 8}"><div class="empty">Aucun partenaire ne correspond.</div></td></tr>`}</tbody>
+              ${state.ecritureLocale ? `<td class="num">
+                <button type="button" class="btn ghost sm" data-partenaire="${esc(String(a.id))}">Modifier</button>
+              </td>` : ''}
+            </tr>`; }).join('') || `<tr><td colspan="${state.ecritureLocale ? 9 : 8}"><div class="empty">Aucun partenaire ne correspond.</div></td></tr>`}</tbody>
           </table>
           <p class="small muted"><b>Rattachés</b> compte les fiches clients qui désignent
           vraiment ce partenaire ; <b>Déclarés</b> est le compte tenu à la main dans
@@ -409,8 +434,10 @@ export const rgdPartenairesPage = {
       const achat = root.querySelector('#rpa-achat');
       if (achat) achat.onclick = () => formulaireAchat(null, chantiers, draw);
 
+      // La clé est `id`, l'uuid du CRM — plus `d1_id`, qui n'existe pas sur une
+      // fiche créée ici et n'est donc plus un identifiant utilisable.
       root.querySelectorAll('[data-partenaire]').forEach(b => b.onclick = () => {
-        const a = tous.find(x => String(x.d1_id) === b.dataset.partenaire);
+        const a = tous.find(x => String(x.id) === b.dataset.partenaire);
         if (a) formulairePartenaire(a, draw);
       });
       root.querySelectorAll('[data-achat]').forEach(b => b.onclick = () => {

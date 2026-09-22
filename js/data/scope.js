@@ -98,8 +98,14 @@ export const scope = {
   activities() { return db.t('activities').filter(a => this.canSeeActivity(a)); },
   // Espace RGD Renova. Miroir exact des policies `rgd_*_acces`, qui tiennent
   // toutes en `has_activity('rgd')` — l'équipe RGD et la direction, personne
-  // d'autre. Ces tables sont le reflet du relevé déposé par le worker toutes
-  // les 30 minutes : on les lit, on n'y écrit pas tant que Cloudflare fait foi.
+  // d'autre.
+  //
+  // ⚠ CES TABLES NE SONT PLUS TOUTES DES REFLETS (depuis le 22/09/2026).
+  // La phase 2 les fait basculer une par une : celles que Supabase possède
+  // s'écrivent EN DIRECT, celles qui restent un reflet du worker se lisent
+  // seulement. `rgd_apporteurs` est la première à avoir basculé. Pour savoir
+  // où en est une table, chercher `d1_id` : `not null` = encore un reflet,
+  // nullable = Supabase fait foi.
   get canRgd() { return this.activityKeys.includes('rgd'); },
   rgd(table) { return this.canRgd ? db.t(table) : []; },
 

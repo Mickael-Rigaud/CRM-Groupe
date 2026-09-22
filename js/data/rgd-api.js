@@ -258,19 +258,11 @@ export const majSousTraitant = (d1Id, champs) =>
 // enregistré. La traduction se fait donc ICI, une fois, et pas dans l'écran.
 //
 //   CRM                  D1
-//   partenariat_signe →  signed_partnership   (booléen → 0/1)
-//   apports_declares  →  nb_prospects_manuel
-//   actif             →  actif                (booléen → 0/1)
 //   deal_id           →  chantier_id          (et c'est le `d1_id` du chantier)
 //   materiau (liste)  →  materiau             (une CHAÎNE JSON, pas un tableau)
-const versD1Apporteur = (c) => {
-  const d = { ...c };
-  if ('partenariat_signe' in d) { d.signed_partnership = d.partenariat_signe ? 1 : 0; delete d.partenariat_signe; }
-  if ('apports_declares' in d) { d.nb_prospects_manuel = d.apports_declares; delete d.apports_declares; }
-  if ('actif' in d) d.actif = d.actif ? 1 : 0;
-  return d;
-};
-
+//
+// (La traduction des apporteurs a disparu avec leur bascule : ils s'écrivent
+// désormais en direct dans Supabase, sans passer par D1 ni par ces noms-là.)
 // `materiau` est stocké en TEXTE dans D1 et le worker lie la valeur telle
 // quelle : passer le tableau ferait échouer la requête (D1 ne sait pas lier un
 // tableau), et le passer en objet écrirait « [object Object] ».
@@ -280,11 +272,15 @@ const versD1Fourniture = (c) => {
   return d;
 };
 
-// Aucun effet de bord côté worker pour ces quatre routes : pas d'email, pas de
-// poussée vers Costructor. Ce sont les écritures les plus simples de l'espace.
-export const creerApporteur = (champs) => envoyer('/api/apporteurs', versD1Apporteur(champs), 'POST');
-export const majApporteur = (d1Id, champs) =>
-  envoyer(`/api/apporteurs/${encodeURIComponent(d1Id)}`, versD1Apporteur(champs));
+// ⚠ LES APPORTEURS NE PASSENT PLUS PAR ICI — 22/09/2026, phase 2.
+// `rgd_apporteurs` n'est plus un reflet de Cloudflare : Supabase en est la
+// source. L'écran écrit donc DIRECTEMENT dans la table, avec `db.insert` et
+// `db.update`, sans traversée du worker et sans traduction de noms.
+//
+// Le relevé ne les envoie plus (`reprise_crm.js`), et `d1_id` est devenu
+// nullable pour accueillir les fiches qui n'ont pas d'origine Cloudflare.
+// `versD1Apporteur` n'a donc plus d'appelant pour la création et la
+// modification — il reste pour les fournitures, qui, elles, passent encore.
 
 // ⚠ `chantier_id` est EXIGÉ à la création (le worker répond 400 sans lui),
 // alors que le relevé accepte une fourniture sans chantier. On ne peut donc pas
