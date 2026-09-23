@@ -39,6 +39,7 @@ import { scope } from '../data/scope.js';
 import { esc, eur, pct, isoDay, fmtDate, daysSince } from '../ui.js';
 import { poserEspace, kpiEspace } from './espace.js';
 import { cadre, guard, KEY } from './rgd-espace.js';
+import { etapesRgd } from '../data/rgd-etapes.js';
 
 // L'exercice comptable de RGD Renova : 1er octobre → 30 septembre, aligné sur
 // Costructor. Ce n'est pas l'année civile, et s'y tromper décale tout le CA.
@@ -49,33 +50,52 @@ const exercice = (d = new Date()) => {
     : { du: `${a - 1}-10-01`, au: `${a}-09-30`, label: `${a - 1}–${a}` };
 };
 
-// LE PIPELINE COMMERCIAL, sept étapes, celui de `/api/stats/pipeline-detail`
-// du worker RGD. Il remplace sur cet écran le kanban des chantiers, qui vit
-// entier sur `#/rgd/chantiers` : ici on veut voir d'un coup d'œil où en est
-// l'activité, pas manipuler des cartes.
+// LE PIPELINE COMMERCIAL — LES SEPT ÉTAPES DE « CLIENTS & PROSPECTS »
 //
-// ⚠ CE N'EST PAS UNE COHORTE, contrairement à l'entonnoir du groupe : chaque
-// étape compte ce qui s'y trouve AUJOURD'HUI, pas ce qu'est devenue une
-// population arrivée à une date donnée. Les nombres ne décroissent donc pas
-// forcément, et il n'y a pas de taux de passage à en tirer.
-const PIPELINE = [
-  // Un nouveau prospect ne compte QUE s'il a un apporteur : sans lui, la ligne
-  // vient d'un import et non d'une démarche. C'est la règle du worker.
-  { cle: 'nouveau', label: 'Nouveaux prospects', couleur: '#9CA3AF',
-    n: (d) => d.clients.filter(c => c.statut_suivi === 'nouveau_prospect' && c.apporteur_id).length },
-  { cle: 'contacter', label: 'À contacter', couleur: '#95720F',
-    n: (d) => d.clients.filter(c => c.statut_suivi === 'a_contacter').length },
-  { cle: 'rdv', label: 'RDV planifiés', couleur: '#2A6FBF',
-    n: (d) => d.clients.filter(c => c.statut_suivi === 'rdv_planifie').length },
-  { cle: 'devis', label: 'Devis envoyés', couleur: '#B45C00',
-    n: (d) => d.devis.filter(x => x.statut === 'envoye').length },
-  { cle: 'accepte', label: 'Devis acceptés', couleur: '#FD7A2C',
-    n: (d) => d.devis.filter(x => ['signe', 'accepte'].includes(x.statut)).length },
-  { cle: 'chantier', label: 'Chantiers en cours', couleur: '#22C55E',
-    n: (d) => d.chantiers.filter(c => ['demarrage', 'en_cours'].includes(c.etat)).length },
-  { cle: 'livre', label: 'Chantiers terminés', couleur: '#059669',
-    n: (d) => d.chantiers.filter(c => c.etat === 'termine').length },
-];
+// ⚠ IL NE CALCULE PLUS RIEN : `etapesRgd()` fait foi (js/data/rgd-etapes.js).
+// Avant le 23/09/2026 cet écran reprenait sept étapes d'une route du worker,
+// bâties sur `statut_suivi` seul — deux écrans, deux vocabulaires, et des
+// nombres qui ne se retrouvaient nulle part.
+//
+// J'avais d'abord réécrit le calcul ici. C'était l'erreur à ne pas faire :
+// « deux écrans qui affichent deux vérités sur le même chiffre valent moins
+// que pas d'écran du tout ». Et ma version se trompait déjà — il lui manquait
+// le garde qui écarte les fiches Costructor restées au statut par défaut, donc
+// les 158 de l'annuaire se seraient déversées dans « Nouvelle demande ».
+//
+// ⚠ CE N'EST PAS UNE COHORTE. Chaque étape compte ce qui s'y trouve
+// AUJOURD'HUI, pas ce qu'est devenue une population arrivée à une date donnée.
+// Les nombres ne décroissent donc pas forcément et il n'y a aucun taux de
+// passage à en tirer — d'où une frise à colonnes de MÊME largeur, et surtout
+// pas un entonnoir qui rétrécit : la forme raconterait ce que les chiffres
+// démentent.
+const COULEURS = {
+  demande: '#9CA3AF', rdv: '#2A6FBF', devis_encours: '#B45C00',
+  devis_accepte: '#FD7A2C', chantier_encours: '#22C55E',
+  chantier_termine: '#059669', archives: '#B91C1C',
+};
+
+/**
+ * La frise du pipeline : une colonne par étape, cliquable vers son onglet.
+ * ⚠ MÊME LARGEUR POUR TOUTES — voir plus haut : ce n'est pas un entonnoir.
+ */
+function frisePipeline(etapes) {
+  const max = Math.max(1, ...etapes.map(e => e.n));
+  const total = etapes.filter(e => !e.hors).reduce((t, e) => t + e.n, 0);
+  const carte = (e) => `<a class="rgd-et${e.hors ? ' hors' : ''}"
+      href="#/rgd/clients?vue=${esc(e.cle)}" style="--c:${esc(e.couleur)}"
+      title="${esc(e.titre || e.label)} — ouvrir dans Clients &amp; prospects">
+    <span class="rgd-et-n">${e.n}</span>
+    <span class="rgd-et-label">${esc(e.label)}</span>
+    <span class="rgd-et-piste"><i style="height:${Math.round((e.n / max) * 100)}%"></i></span>
+    <span class="rgd-et-part">${total && !e.hors ? Math.round((e.n / total) * 100) + ' %' : ''}</span>
+  </a>`;
+  return `<div class="rgd-frise">
+    ${etapes.filter(e => !e.hors).map(carte).join('')}
+    <span class="rgd-frise-sep" aria-hidden="true"></span>
+    ${etapes.filter(e => e.hors).map(carte).join('')}
+  </div>`;
+}
 
 
 /**
@@ -277,9 +297,13 @@ export const rgdPilotagePage = {
       const clients = scope.rgd('rgd_clients');
       const mois = caParMois(paiements);
       const moyenne = mois.length ? Math.round(caHt / mois.length) : 0;
-      const etapes = PIPELINE.map(e => ({ ...e, n: e.n({ clients, devis, chantiers }) }));
-      const maxEtape = Math.max(1, ...etapes.map(e => e.n));
-      const totalEtapes = etapes.reduce((t, e) => t + e.n, 0);
+      // Les sept étapes viennent du module commun : le pipeline et la liste
+      // comptent forcément les mêmes personnes, y compris les gardes.
+      const etapes = etapesRgd().map(e => ({
+        ...e, cle: e.key, couleur: COULEURS[e.key] || 'var(--accent)',
+        hors: e.key === 'archives',
+      }));
+      const totalEtapes = etapes.filter(e => !e.hors).reduce((t, e) => t + e.n, 0);
 
       // L'ORDRE DE LA PAGE, arrêté par Mickael le 21/09/2026 : le chiffre
       // d'affaires de l'exercice d'abord — c'est ce qu'on vient voir —, les
@@ -366,21 +390,16 @@ export const rgdPilotagePage = {
         <section class="card rgd-pipe">
           <div class="card-head"><h2>Pipeline</h2>
             <span class="grow"></span>
-            <a class="btn ghost sm" href="#/rgd/chantiers">Voir les chantiers →</a></div>
-          <table class="rgd-pipe-table"><tbody>${etapes.map(e => `<tr>
-            <th>${esc(e.label)}</th>
-            <td class="rgd-pipe-barre"><div class="rgd-pipe-piste">
-              <i style="width:${(e.n / maxEtape) * 100}%;background:${esc(e.couleur)}"></i></div></td>
-            <td class="rgd-pipe-n">${e.n}</td>
-          </tr>`).join('')}</tbody></table>
+            <a class="btn ghost sm" href="#/rgd/clients">Ouvrir la base →</a></div>
+          ${frisePipeline(etapes)}
           <p class="small muted rgd-pipe-pied">${totalEtapes
             ? `${totalEtapes} affaire${totalEtapes > 1 ? 's' : ''} suivie${totalEtapes > 1 ? 's' : ''}, toutes étapes confondues.`
             : 'Aucune affaire à suivre pour le moment.'}
             Chaque étape compte ce qui s’y trouve <b>aujourd’hui</b> : ce n’est pas une
             cohorte, les nombres ne décroissent donc pas forcément et il n’y a pas de
             taux de passage à en tirer.
-            ${chantiers.filter(c => !c.etat).length ? `${chantiers.filter(c => !c.etat).length} chantier${chantiers.filter(c => !c.etat).length > 1 ? 's n’ont' : ' n’a'}
-              aucun état renseigné et ne compte${chantiers.filter(c => !c.etat).length > 1 ? 'nt' : ''} dans aucune étape.` : ''}</p>
+            Chaque colonne mène à son onglet dans <a href="#/rgd/clients">Clients &amp; prospects</a>,
+            où l’on retrouve exactement les mêmes personnes.</p>
         </section>
 
 
