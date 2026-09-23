@@ -595,50 +595,39 @@ select.cell-in { text-align: left; }
 .rgdf-fil li.rgdf-vide::before { display: none; }
 
 /* LE FORMULAIRE DE NOUVELLE DEMANDE (js/pages/rgd-demande-saisie.js)
-   Il pose les quinze questions du formulaire du site. Quinze champs d'un
-   bloc, c'est une page qu'on repousse ; deux ecrans de six et neuf, c'est
-   deux gestes. D'ou le chemin en haut, qui dit combien il en reste.
+   Il recueille les memes informations que le formulaire du site, mais il ne
+   lui ressemble pas — et c'est la correction du 23/09/2026. La premiere
+   version recopiait le site : deux etapes, un chemin en haut, un bouton
+   « Continuer ». Refusee, a raison. Un visiteur qu'on menage et un collegue
+   qui note pendant un appel n'ont pas besoin du meme objet : le premier veut
+   qu'on lui simplifie, le second veut TOUT VOIR. D'ou deux colonnes, la
+   personne a gauche, le projet a droite, et un seul bouton.
 
    Rien ici ne reutilise `.field` : les intitules gris en petites capitales du
    CRM conviennent a un formulaire d'administration, pas a une conversation
-   qu'on transcrit pendant un appel. */
+   qu'on transcrit au telephone. */
 .ndf { display: block; }
 
-/* ---- le chemin ---- */
-.ndf-chemin { list-style: none; display: flex; align-items: center; gap: 10px;
-  margin: 0 0 20px; padding: 0 0 18px; border-bottom: 1px solid var(--line); }
-.ndf-chemin li { display: flex; align-items: center; gap: 10px; min-width: 0; }
-/* Le trait entre les deux etapes : il pousse la seconde a droite et se
-   remplit quand on l'atteint. */
-.ndf-chemin li + li::before { content: ''; width: 46px; height: 2px;
-  background: var(--line-strong); border-radius: 1px; margin-right: 4px;
-  transition: background .3s ease; }
-/* Le trait appartient a l'etape QU'IL AMENE : il se remplit quand celle-ci
-   devient active, pas avant. `li.est-actif + li` colorerait le trait des que
-   l'etape PRECEDENTE est atteinte, c'est-a-dire tout de suite — le chemin
-   serait plein au premier ecran et ne dirait plus rien. Le premier li n'a pas
-   de ::before, donc ce selecteur ne touche que le second. */
-.ndf-chemin li.est-actif::before { background: var(--accent); }
-.ndf-chemin i { width: 27px; height: 27px; flex: 0 0 auto; border-radius: 50%;
-  display: grid; place-items: center; font-style: normal; font-size: 13px;
-  font-weight: 700; background: var(--card-2); color: var(--muted);
-  border: 2px solid var(--line-strong); transition: all .25s ease; }
-.ndf-chemin li.est-actif i { background: var(--accent); color: var(--on-accent);
-  border-color: var(--accent); }
-.ndf-chemin b { display: block; font-size: 14px; letter-spacing: -.01em; }
-.ndf-chemin small { display: block; font-size: 11.5px; color: var(--muted); }
-.ndf-chemin li:not(.est-actif) b { color: var(--muted); }
+/* ---- les deux colonnes ---- */
+.ndf-colonnes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px; align-items: start; }
+.ndf-bloc { background: var(--card-2); border: 1px solid var(--line);
+  border-radius: 13px; padding: 16px 18px 18px; min-width: 0; }
+/* ⚠ LE `h3` GLOBAL EST EN PETITES CAPITALES GRISES (voir plus haut). Sans
+   cette remise a zero, « La personne » et « Le projet » se liraient comme des
+   etiquettes de champ et non comme des titres de bloc. */
+.ndf-bloc > h3 { margin: 0 0 14px; font-size: 15px; letter-spacing: -.01em;
+  text-transform: none; color: var(--text); }
 
-/* ---- un ecran ---- */
 /* `minmax(0, 1fr)` et non `1fr` : sans le zero, une liste deroulante dont une
    option est longue refuse de se reduire et deborde la colonne. */
 .ndf-grille { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 15px 16px; align-items: start; }
+  gap: 13px 14px; align-items: start; }
 .ndf-champ { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
 .ndf-champ.est-large { grid-column: 1 / -1; }
-.ndf-champ > label { font-size: 13px; font-weight: 600; color: var(--text); }
+.ndf-champ > label { font-size: 12.5px; font-weight: 600; color: var(--muted); }
 .ndf-champ input, .ndf-champ select, .ndf-champ textarea {
-  border: 1px solid var(--line-strong); border-radius: 10px; padding: 10px 12px;
+  border: 1px solid var(--line-strong); border-radius: 10px; padding: 9px 12px;
   background: #fff; width: 100%; font: inherit; font-size: 14px;
   transition: border-color .15s ease, box-shadow .15s ease; }
 .ndf-champ textarea { resize: vertical; }
@@ -655,45 +644,36 @@ select.cell-in { text-align: left; }
 /* Le champ reste dans le gabarit — le clavier et les lecteurs d'ecran en ont
    besoin — mais il ne se dessine pas : `appearance: none` seul laisserait un
    carre vide, `display: none` le retirerait de la tabulation. */
-.ndf-puces { display: flex; flex-wrap: wrap; gap: 8px; }
+.ndf-puces { display: flex; flex-wrap: wrap; gap: 7px; }
 .ndf-puce { position: relative; }
 .ndf-puce input { position: absolute; opacity: 0; width: 100%; height: 100%;
   margin: 0; inset: 0; cursor: pointer; }
-.ndf-puce span { display: block; padding: 8px 14px; border-radius: 999px;
-  border: 1px solid var(--line-strong); background: #fff; font-size: 13.5px;
+.ndf-puce span { display: block; padding: 7px 13px; border-radius: 999px;
+  border: 1px solid var(--line-strong); background: #fff; font-size: 13px;
   font-weight: 500; color: var(--muted); cursor: pointer;
   transition: all .18s cubic-bezier(.4,0,.2,1); }
 .ndf-puce:hover span { border-color: var(--accent); color: var(--text); }
 .ndf-puce input:checked + span { background: var(--accent); border-color: var(--accent);
-  color: var(--on-accent); font-weight: 600; transform: translateY(-1px);
+  color: var(--on-accent, #fff); font-weight: 600; transform: translateY(-1px);
   box-shadow: 0 3px 10px -3px color-mix(in srgb, var(--accent) 55%, transparent); }
 .ndf-puce input:focus-visible + span {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent); }
 
-/* ---- le passage d'un ecran a l'autre ---- */
-/* Le glissement dit DANS QUEL SENS on va. Sans lui, les deux ecrans se
-   remplacent d'un coup et on doute d'avoir avance ou recule. */
-@keyframes ndf-droite { from { opacity: 0; transform: translateX(22px); } }
-@keyframes ndf-gauche { from { opacity: 0; transform: translateX(-22px); } }
-.ndf-ecran.entre-droite { animation: ndf-droite .3s cubic-bezier(.4,0,.2,1); }
-.ndf-ecran.entre-gauche { animation: ndf-gauche .3s cubic-bezier(.4,0,.2,1); }
-@media (prefers-reduced-motion: reduce) {
-  .ndf-ecran.entre-droite, .ndf-ecran.entre-gauche { animation: none; }
-}
-
-.ndf-pied { display: flex; align-items: center; gap: 10px; margin-top: 22px;
-  padding-top: 16px; border-top: 1px solid var(--line); }
+/* ---- le pied ---- */
+.ndf-pied { display: flex; align-items: center; gap: 12px; margin-top: 18px;
+  padding-top: 16px; border-top: 1px solid var(--line); flex-wrap: wrap; }
+.ndf-note { font-size: 12px; color: var(--muted); max-width: 46ch; line-height: 1.45; }
 /* ⚠ `hidden` NE SUFFIT PAS SUR UN `.btn`. La regle du navigateur pour
-   `[hidden]` est un `display: none` de specificite nulle : `.btn { display:
-   inline-flex }` la bat, et les trois boutons du pied s'affichaient ENSEMBLE
-   — « Retour », « Continuer » et « Creer la demande » des le premier ecran.
-   Vu a l'ecran le 23/09/2026, pas dans le code. */
-.ndf-pied [hidden], .ndf [hidden] { display: none; }
+   `[hidden]` est un `display: none` de specificite nulle, et `.btn { display:
+   inline-flex }` la bat. Vu a l'ecran le 23/09/2026 : les boutons caches
+   s'affichaient tous. */
+.ndf [hidden] { display: none; }
 
-@media (max-width: 640px) {
+@media (max-width: 900px) {
+  .ndf-colonnes { grid-template-columns: 1fr; }
+}
+@media (max-width: 560px) {
   .ndf-grille { grid-template-columns: 1fr; }
-  .ndf-chemin li + li::before { width: 20px; }
-  .ndf-chemin small { display: none; }
 }
 
 /* LA FRISE ET L'ANNUAIRE SONT DEUX CHOSES, ET LA BARRE DOIT LE DIRE.

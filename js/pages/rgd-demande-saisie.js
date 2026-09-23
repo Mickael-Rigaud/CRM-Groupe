@@ -1,13 +1,28 @@
-// Saisir une demande de devis à la main, avec les champs du formulaire du site
+// Saisir une demande de devis à la main
 //
 // POURQUOI CE MODULE N'EST PAS `rgd-prospect-saisie.js`
 // Celui-là crée une fiche `rgd_clients` de trois champs : nature des travaux,
 // budget, note. C'était assez tant que « + Nouvelle demande » servait à noter
-// un nom en vitesse. Demandé par Mickael le 23/09/2026 : que la saisie à la
-// main pose LES MÊMES QUESTIONS que le formulaire de
+// un nom en vitesse. Demandé le 23/09/2026 : que la saisie à la main recueille
+// LES MÊMES INFORMATIONS que le formulaire de
 // https://www.rgdrenova.fr/demandez-un-devis/ — pour qu'un appel reçu et une
 // demande arrivée du site donnent la même fiche, et qu'aucune des deux ne soit
 // plus pauvre que l'autre.
+//
+// ⚠ LES MÊMES INFORMATIONS, PAS LE MÊME FORMULAIRE. Première version refusée
+// le 23/09/2026 : j'avais recopié le site à l'identique, ses deux étapes, son
+// vouvoiement, « Vous êtes », « Le projet concerne ». Or ce sont deux gestes
+// qui n'ont rien à voir. Le site parle à un inconnu qu'il faut mettre en
+// confiance et qui ne reviendra pas s'il se lasse : il découpe, il explique,
+// il ménage. Ici c'est quelqu'un de la maison qui note pendant un appel, avec
+// la personne au bout du fil : il lui faut TOUT SOUS LES YEUX D'UN COUP, pour
+// remplir dans l'ordre où ça vient et non dans l'ordre qu'on lui impose. Un
+// écran, deux colonnes, aucun bouton « Continuer ».
+//
+// Ce qui est repris du site, ce sont les CHAMPS et les VALEURS de leurs
+// listes — là, à la lettre. Une demande saisie et une demande reçue doivent se
+// comparer ; « Maison » d'un côté et « Une maison » de l'autre feraient deux
+// populations qu'aucun décompte ne réunit.
 //
 // ⚠ ELLE ÉCRIT DANS `rgd_demandes`, PAS DANS `rgd_clients`, et ce n'est pas un
 // détail d'implémentation. `rgd_demandes` est la table du formulaire : elle a
@@ -80,84 +95,61 @@ const vide = (o) => Object.fromEntries(
   Object.entries(o).filter(([, v]) => v !== '' && v != null));
 
 export function formulaireDemande(apresEnregistrement) {
+  // ⚠ LA PERSONNE AVANT LE PROJET, et c'est l'inverse du site. Le site
+  // commence par le projet parce qu'il doit accrocher avant d'oser demander
+  // un numéro. Au téléphone, le nom et le numéro sont ce qui arrive en
+  // premier, et ce sont eux qu'on perd si l'appel coupe.
   const m = openModal('Nouvelle demande', `<form id="ndf" class="ndf" novalidate>
-    <!-- Le chemin. Il dit ou on en est AVANT de montrer le premier champ :
-         un formulaire long sans debut ni fin visible se remplit a reculons. -->
-    <ol class="ndf-chemin">
-      <li class="est-actif" data-pas="0"><i>1</i>
-        <div><b>Le projet</b><small>Ce qu’il y a à faire</small></div></li>
-      <li data-pas="1"><i>2</i>
-        <div><b>La personne</b><small>Pour la rappeler</small></div></li>
-    </ol>
-
-    <section class="ndf-ecran" data-ecran="0">
-      <div class="ndf-grille">
-        ${liste('type_demandeur', 'Vous êtes', DEMANDEUR)}
-        ${liste('type_projet', 'Le projet concerne', BIEN)}
-        ${liste('type_intervention', 'Il s’agit de', RESIDENCE)}
-        ${texte('superficie', 'Superficie (m²)', { type: 'number', inputmode: 'numeric', placeholder: 'm²' })}
-        ${puces('types_travaux', 'Type de travaux', TRAVAUX, 'checkbox')}
-        ${puces('budget', 'Budget des travaux', BUDGETS, 'radio')}
-      </div>
-    </section>
-
-    <section class="ndf-ecran" data-ecran="1" hidden>
-      <div class="ndf-grille">
-        ${texte('prenom', 'Prénom')}
-        ${texte('nom', 'Nom')}
-        ${texte('email', 'E-mail', { type: 'email', placeholder: 'nom@exemple.fr' })}
-        ${texte('telephone', 'Téléphone', { type: 'tel', placeholder: '06 …' })}
-        ${texte('adresse', 'Adresse', { large: true })}
-        ${texte('code_postal', 'Code postal')}
-        ${texte('ville', 'Ville')}
-        ${champ('projet_description', 'Décrivez le projet',
-          '<textarea id="ndf-projet_description" name="projet_description" rows="3"></textarea>',
-          { large: true })}
-        ${liste('comment_connu', 'Comment nous a-t-elle connus ?', CONNU, { large: true })}
-        <!-- Ce champ n'existe que si la reponse precedente est une
-             recommandation, exactement comme sur le site. -->
-        <div class="ndf-champ est-large" data-champ="recommandation" hidden>
-          <label for="ndf-recommandation">Qui l’a recommandée ?</label>
-          <input id="ndf-recommandation" name="recommandation" type="text">
+    <div class="ndf-colonnes">
+      <section class="ndf-bloc">
+        <h3>La personne</h3>
+        <div class="ndf-grille">
+          ${texte('prenom', 'Prénom')}
+          ${texte('nom', 'Nom')}
+          ${texte('telephone', 'Téléphone', { type: 'tel', placeholder: '06 …' })}
+          ${texte('email', 'E-mail', { type: 'email', placeholder: 'nom@exemple.fr' })}
+          ${texte('adresse', 'Adresse', { large: true })}
+          ${texte('code_postal', 'Code postal')}
+          ${texte('ville', 'Ville')}
+          ${liste('type_demandeur', 'Type de demandeur', DEMANDEUR)}
+          ${liste('comment_connu', 'Connu via', CONNU)}
+          <!-- Ce champ ne sert que si la reponse precedente est une
+               recommandation ; le reste du temps il encombre. -->
+          <div class="ndf-champ est-large" data-champ="recommandation" hidden>
+            <label for="ndf-recommandation">Recommandé par</label>
+            <input id="ndf-recommandation" name="recommandation" type="text"
+              placeholder="Nom de la personne ou du partenaire">
+          </div>
         </div>
-      </div>
-    </section>
+      </section>
+
+      <section class="ndf-bloc">
+        <h3>Le projet</h3>
+        <div class="ndf-grille">
+          ${liste('type_projet', 'Type de bien', BIEN)}
+          ${liste('type_intervention', 'Usage du bien', RESIDENCE)}
+          ${texte('superficie', 'Superficie', { type: 'number', inputmode: 'numeric', placeholder: 'm²' })}
+          ${puces('types_travaux', 'Types de travaux', TRAVAUX, 'checkbox')}
+          ${puces('budget', 'Budget annoncé', BUDGETS, 'radio')}
+          ${champ('projet_description', 'Ce que la personne demande',
+            `<textarea id="ndf-projet_description" name="projet_description" rows="4"
+               placeholder="Noté pendant l'appel : ce qu'elle veut faire, ses délais, ce qui l'inquiète…"></textarea>`,
+            { large: true })}
+        </div>
+      </section>
+    </div>
 
     <div class="ndf-pied">
-      <button type="button" class="btn ghost" data-close>Annuler</button>
+      <span class="ndf-note">Créée <b>dans le CRM</b> : elle apparaît tout de suite
+        et la synchronisation Cloudflare ne l’écrasera jamais.</span>
       <span class="grow"></span>
-      <button type="button" class="btn ghost" id="ndf-retour" hidden>‹ Retour</button>
-      <button type="button" class="btn" id="ndf-suite">Continuer ›</button>
-      <button type="submit" class="btn" id="ndf-creer" hidden>Créer la demande</button>
+      <button type="button" class="btn ghost" data-close>Annuler</button>
+      <button type="submit" class="btn" id="ndf-creer">Créer la demande</button>
     </div>
   </form>`, { wide: true });
 
   const form = m.querySelector('#ndf');
-  const ecrans = [...form.querySelectorAll('.ndf-ecran')];
-  const pas = [...form.querySelectorAll('.ndf-chemin li')];
-  const retour = form.querySelector('#ndf-retour');
-  const suite = form.querySelector('#ndf-suite');
   const creer = form.querySelector('#ndf-creer');
-  let courant = 0;
-
-  const montre = (n, sens) => {
-    courant = n;
-    ecrans.forEach((e, i) => {
-      e.hidden = i !== n;
-      if (i !== n) return;
-      e.classList.remove('entre-gauche', 'entre-droite');
-      // Relancer une animation demande de forcer un calcul entre les deux
-      // classes, sinon le navigateur ne voit qu'un seul etat et ne joue rien.
-      void e.offsetWidth;
-      e.classList.add(sens === 'arriere' ? 'entre-gauche' : 'entre-droite');
-    });
-    pas.forEach((p, i) => p.classList.toggle('est-actif', i <= n));
-    retour.hidden = n === 0;
-    suite.hidden = n === ecrans.length - 1;
-    creer.hidden = n !== ecrans.length - 1;
-    form.querySelector(`.ndf-ecran[data-ecran="${n}"] input,
-      .ndf-ecran[data-ecran="${n}"] select`)?.focus();
-  };
 
   // Signaler un manque là où il est, pas dans un message en bas : une liste
   // d'erreurs oblige à chercher le champ dont elle parle.
@@ -175,9 +167,6 @@ export function formulaireDemande(apresEnregistrement) {
     premier?.scrollIntoView({ block: 'center', behavior: 'smooth' });
     return !premier;
   };
-
-  suite.onclick = () => montre(1, 'avant');
-  retour.onclick = () => montre(0, 'arriere');
 
   // La recommandation ne se demande qu'apres la reponse qui l'appelle.
   const connu = form.querySelector('[name="comment_connu"]');
@@ -216,7 +205,6 @@ export function formulaireDemande(apresEnregistrement) {
     // fiche faute de superficie perdrait le prospect pour de bon. Le nom seul
     // ne suffit pas non plus — une fiche qu'on ne peut pas rappeler n'est pas
     // un prospect, c'est une ligne.
-    if (courant !== 1) montre(1, 'avant');
     if (!exige(['nom'])) return toast('Le nom est obligatoire', 'warn');
     const email = lire('email');
     const tel = lire('telephone');
@@ -270,5 +258,5 @@ export function formulaireDemande(apresEnregistrement) {
     }
   };
 
-  montre(0, 'avant');
+  form.querySelector('[name="prenom"]').focus();
 }
