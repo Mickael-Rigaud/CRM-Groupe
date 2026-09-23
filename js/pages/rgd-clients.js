@@ -466,6 +466,12 @@ export const rgdClientsPage = {
       // un choix d'ergonomie : depuis que le statut décide de l'onglet, chaque
       // onglet EST un groupe de statuts. Un menu « Tous statuts » par-dessus
       // ne pourrait que vider la liste qu'on vient d'ouvrir.
+      //
+      // ⚠ UNE CONDITION, UN USAGE. `surProspects` en portait DEUX : le filtre
+      // de statut et le bouton « + Nouveau prospect ». La passer à `false` pour
+      // retirer le premier a emporté le second sans un mot, et la création a
+      // disparu de l'écran — signalé par Mickael le 23/09/2026. Deux réglages
+      // qui n'ont rien à voir ne partagent pas un drapeau.
       const surProspects = false;
       // Le plus récent en haut : c'est celui qu'on n'a pas encore rappelé.
       const lignesProspects = (surFrise ? aEtape(state.vue) : [])
@@ -631,8 +637,8 @@ export const rgdClientsPage = {
           </select>`}
           <span class="grow"></span>
           <span class="muted small">${affichees} ligne${s_(affichees)}</span>
-          ${surProspects && scope.canRgd
-            ? '<button class="btn" id="rcl-nouveau">+ Nouveau prospect</button>' : ''}
+          ${surDemande && scope.canRgd
+            ? '<button class="btn" id="rcl-nouveau">+ Nouvelle demande</button>' : ''}
         </div>
 
         ${surFrise ? tableauProspects() : tableauFiches()}`;
@@ -667,6 +673,10 @@ export const rgdClientsPage = {
       // La saisie à la main crée une fiche « manuel », donc une provenance
       // « Direct » — c'est ce que le formulaire produisait déjà sous l'onglet
       // « Autre prospect ».
+      // La saisie à la main crée une fiche « manuel », donc une provenance
+      // « Direct », et elle naît à la première étape. Le bouton ne s'affiche
+      // donc que là : créé depuis « Chantier terminé », le prospect
+      // apparaîtrait dans un autre onglet que celui qu'on regarde.
       if (nouveau) nouveau.onclick = () => formulaireProspect('autre', apporteurs, draw);
 
       // Supprimer : le bouton n'existe que sur les fiches nees dans le CRM
