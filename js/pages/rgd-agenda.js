@@ -18,12 +18,22 @@
 // ⚠ TROIS ÉCARTS AVEC L'ORIGINAL, ET AUCUN N'EST UN OUBLI.
 //
 // 1. LA FENÊTRE. L'original interroge Google en direct pour le mois affiché ;
-//    ici on lit un reflet qui ne couvre que **J-7 → J+30**. Un calendrier où
-//    l'on peut naviguer donne envie de reculer de deux mois, et l'écran serait
+//    ici on lit un reflet, qui ne couvre que ce que le worker a relevé. Un
+//    calendrier navigable donne envie d'aller loin, et au-delà l'écran serait
 //    vide — non pas parce qu'il n'y a rien, mais parce que rien n'a été relevé.
-//    La navigation est donc **bornée à la fenêtre relevée**, les flèches se
-//    grisent au bout, et les bornes sont écrites sous le calendrier. Un agenda
-//    incomplet se lit sinon comme un agenda libre, ce qui est pire que faux.
+//    La navigation est donc **bornée à la fenêtre**, les flèches se grisent au
+//    bout, et les bornes sont écrites sous le calendrier. Un agenda incomplet se
+//    lit sinon comme un agenda libre, ce qui est pire que faux.
+//
+//    ⚠ LES BORNES SE CALCULENT, ELLES NE SE DÉDUISENT PAS DES DONNÉES.
+//    La première version prenait `min(day)` et `max(day)` des lignes reçues :
+//    c'étaient les bornes du PREMIER et du DERNIER RENDEZ-VOUS, pas celles de la
+//    fenêtre. Au 23/09/2026 elle annonçait « relevé jusqu'au 13 octobre » alors
+//    que le worker allait à J+30, et **interdisait de naviguer dans les jours
+//    relevés mais vides** — des jours dont on sait pourtant qu'ils sont libres,
+//    ce qui est une information. Les constantes ci-dessous sont donc le miroir de
+//    `PASSE` / `AVENIR` du worker (`worker/src/agenda_crm.js`) : les changer d'un
+//    côté sans l'autre fait promettre des jours qu'on n'a pas, ou en cacher.
 //
 // 2. LES COULEURS. L'original teinte chaque rendez-vous avec le `colorId` de
 //    Google. `agenda_events` **n'a pas cette colonne** — le relevé ne la
@@ -48,12 +58,26 @@ import { poserEspace } from './espace.js';
 import { cadre, guard, KEY } from './rgd-espace.js';
 import { peutEcrire, creerEvenement } from '../data/rgd-api.js';
 
+// LE MIROIR DE LA FENÊTRE DU WORKER — `PASSE` et `AVENIR` de
+// `worker/src/agenda_crm.js`, élargis à 90 / 365 le 23/09/2026. Voir l'encadré
+// ci-dessus : ces deux nombres disent jusqu'où l'écran a le droit de naviguer.
+const FENETRE = { passe: 90, avenir: 365 };
+
 const MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet',
   'août', 'septembre', 'octobre', 'novembre', 'décembre'];
 const JOURS = ['lun', 'mar', 'mer', 'jeu', 'ven', 'sam', 'dim'];
 
 const jourLong = (j) => new Date(j + 'T00:00:00')
   .toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+
+// ⚠ AVEC L'ANNÉE, et c'est nécessaire depuis que la fenêtre fait quinze mois :
+// `jourLong` l'omet, si bien que les bornes « du 25 juin au 23 septembre »
+// se lisaient comme trois mois alors qu'elles en couvrent quinze. L'année n'est
+// ajoutée que lorsqu'elle diffère de l'année en cours — la mettre partout
+// alourdit un titre qu'on lit vingt fois par jour.
+const jourLongAn = (j) => j.slice(0, 4) === String(new Date().getFullYear())
+  ? jourLong(j)
+  : `${jourLong(j)} ${j.slice(0, 4)}`;
 
 // La première lettre seulement. `text-transform: capitalize` en CSS les met
 // toutes — « Semaine Du Lundi 21 Septembre » — et ce n'est pas du français.
@@ -110,7 +134,7 @@ function miniCalendrier(mois, jourSel, parJour, min, max) {
     cases.push(`<button type="button" class="ag-case${dansLeMois(j) ? '' : ' hors'}${
       j === jourSel ? ' on' : ''}${j === isoDay() ? ' auj' : ''}"
       ${dispo ? `data-jour="${j}"` : 'disabled'}
-      title="${esc(jourLong(j))}${n ? ` — ${n} rendez-vous` : ''}">
+      title="${esc(jourLongAn(j))}${n ? ` — ${n} rendez-vous` : ''}">
       ${Number(j.slice(8))}${n ? `<i class="ag-pt"></i>` : ''}</button>`);
   }
   const [a, m] = mois.split('-').map(Number);
@@ -288,11 +312,11 @@ export const rgdAgendaPage = {
       const aujourdhui = isoDay();
       const tous = scope.rgd('agenda_events').filter(e => e.activity === KEY);
 
-      // La fenêtre RÉELLEMENT relevée. Sans ces bornes, naviguer hors d'elle
-      // montrerait un agenda vide qu'on lirait comme un agenda libre.
-      const jours = tous.map(e => e.day).filter(Boolean).sort();
-      const min = jours[0] || aujourdhui;
-      const max = jours[jours.length - 1] || aujourdhui;
+      // La fenêtre relevée, CALCULÉE et non déduite des lignes reçues : un jour
+      // sans rendez-vous est un jour libre, pas un jour inconnu, et il doit
+      // rester consultable. Voir l'encadré en tête de fichier.
+      const min = decale(aujourdhui, -FENETRE.passe);
+      const max = decale(aujourdhui, FENETRE.avenir);
       if (state.jour < min) state.jour = min;
       if (state.jour > max) state.jour = max;
 
@@ -322,8 +346,8 @@ export const rgdAgendaPage = {
         .slice(0, 6);
 
       const titre = majuscule(state.vue === 'jour'
-        ? jourLong(state.jour)
-        : `semaine du ${jourLong(lundiDe(state.jour))}`);
+        ? jourLongAn(state.jour)
+        : `semaine du ${jourLongAn(lundiDe(state.jour))}`);
 
       const corps = `
         <div class="ag-hub">
@@ -343,7 +367,7 @@ export const rgdAgendaPage = {
             </section>
 
             <p class="small muted ag-fenetre">
-              Relevé du <b>${esc(jourLong(min))}</b> au <b>${esc(jourLong(max))}</b>${
+              Relevé du <b>${esc(jourLongAn(min))}</b> au <b>${esc(jourLongAn(max))}</b>${
                 vu ? `, ${esc(depuis(new Date(vu)))}` : ''}.
               Au-delà, l’écran ne sait rien : ce n’est pas un agenda vide, c’est la fin de
               la fenêtre. La journée en cours est relevée toutes les 30 minutes, les jours
