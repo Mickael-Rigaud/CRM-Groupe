@@ -64,6 +64,232 @@ const ETATS = [
 ];
 const etatDe = (c) => ETATS.find(e => e.key === c.etat) || null;
 
+// ---------------------------------------------------------------- Pipeline
+// LES QUATRE COLONNES, reprises du tableau de bord RGD à l'identique, couleurs
+// comprises. Ce n'est pas l'inventaire des chantiers : c'est ceux sur lesquels
+// il reste quelque chose à faire. Voir `rangerEnPipeline` pour ce qui en sort.
+const PIPELINE_ETAPES = [
+  { key: 'visite_technique', label: 'Visite technique',  couleur: '#93C5FD' },
+  { key: 'demarrage',        label: 'Démarrage',         couleur: '#FFB877' },
+  { key: 'en_cours',         label: 'Chantier en cours', couleur: '#FF9A3D' },
+  { key: 'termine',          label: 'Chantier terminé',  couleur: '#FF8A00' },
+];
+
+// Trois mois sans le moindre mouvement de facturation : on ne relance plus, le
+// chantier quitte la pipeline. Il reste entier dans la liste et dans la fiche.
+const JOURS_SANS_MOUVEMENT = 90;
+
+// Ce que le tableau de bord calculait côté serveur et renvoyait tout mâché
+// (`nb_devis_signes`, `total_recu_ht`…). Ici les devis et les factures sont
+// déjà en mémoire : on les compte sur place, ce qui évite une table de plus à
+// tenir à jour — et surtout évite qu'elle se désynchronise.
+function mesure(c) {
+  const devis = scope.rgd('rgd_devis').filter(d => d.deal_id === c.deal_id);
+  const factures = scope.rgd('rgd_paiements').filter(p => p.deal_id === c.deal_id);
+  const signes = devis.filter(d => d.statut === 'signe');
+  // ⚠ Un avoir et une facture annulée ne seront jamais « reçus ». Les compter
+  // comme dues empêcherait tout chantier de sortir de la pipeline.
+  const reelles = factures.filter(p => p.type !== 'remboursement' && p.statut !== 'annule');
+  const recues = reelles.filter(p => p.statut === 'recu');
+  const somme = (l, ch) => l.reduce((t, x) => t + (Number(x[ch]) || 0), 0);
+  const dates = factures.map(p => p.date_reception || p.date_facturation).filter(Boolean).sort();
+  return {
+    signes: signes.length,
+    factures: reelles.length,
+    soldesRecus: reelles.filter(p => p.type === 'solde' && p.statut === 'recu').length,
+    // Ce qui reste dû : le signé moins l'encaissé. Pas « les factures en
+    // attente » — il peut rester du signé pas encore facturé du tout.
+    resteADevoir: somme(signes, 'montant_ht') - somme(recues, 'montant_ht'),
+    dernierMouvement: dates.length ? dates[dates.length - 1] : null,
+  };
+}
+
+// LA RÈGLE DE LA PIPELINE, reprise du tableau de bord. Elle ne lit PAS `etat` :
+// elle regarde les faits — devis signés, factures, encaissements — sauf quand
+// un statut a été posé à la main, qui l'emporte.
+//
+// ⚠ UN CHANTIER EN SORT, ET C'EST VOULU. Trois cas :
+//   · entièrement encaissé — il n'y a plus rien à suivre ;
+//   · plus aucun mouvement depuis trois mois — le recouvrement est abandonné ;
+//   · « démarrage » sans la moindre facture — fantôme d'un vieux devis
+//     Costructor signé il y a longtemps, que personne ne considère plus actif.
+// « Chantier terminé » ne veut donc pas dire « archivé » : cette colonne
+// montre les travaux finis dont il RESTE DE L'ARGENT À ENCAISSER. C'est une
+// colonne de relance, pas un cimetière — d'où le zéro qu'on y voit souvent.
+function rangerEnPipeline(tous) {
+  const aujourdhui = new Date().toISOString().slice(0, 10);
+  const limite = new Date(Date.now() - JOURS_SANS_MOUVEMENT * 86400000)
+    .toISOString().slice(0, 10);
+  const paniers = Object.fromEntries(PIPELINE_ETAPES.map(e => [e.key, []]));
+
+  for (const c of tous) {
+    const m = mesure(c);
+    const fiche = { ...c, m };
+    // Fantôme Costructor : annoncé démarré, jamais facturé.
+    if (c.statut_d1 === 'demarrage' && m.factures === 0) continue;
+    const abandonne = m.dernierMouvement && m.dernierMouvement < limite;
+
+    if (c.statut_d1 === 'termine') {
+      if (m.resteADevoir <= 0 || abandonne) continue;
+      paniers.termine.push(fiche); continue;
+    }
+    if (m.soldesRecus > 0) {
+      if (m.resteADevoir <= 0 || abandonne) continue;
+      paniers.termine.push(fiche); continue;
+    }
+    // Posé à la main : il l'emporte sur les faits, c'est une décision.
+    if (c.statut_d1 === 'visite_technique') { paniers.visite_technique.push(fiche); continue; }
+    // Sans devis signé il n'y a pas de chantier, seulement une affaire.
+    if (m.signes === 0) continue;
+    const debut = c.work_start_at || c.date_debut_prevue;
+    (debut && debut <= aujourdhui ? paniers.en_cours : paniers.demarrage).push(fiche);
+  }
+  return paniers;
+}
+
+// La barre d'avancement des travaux, sur la seule colonne « en cours ».
+// Ailleurs elle n'aurait rien à mesurer.
+function barreAvancement(debut, fin) {
+  const j = 86400000;
+  const d = new Date(debut + 'T12:00:00'), f = new Date(fin + 'T12:00:00');
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  let pct = 0, ton = 'avant';
+  if (today < d) { pct = 0; ton = 'avant'; }
+  else if (today > f) { pct = 100; ton = 'retard'; }
+  else { pct = Math.round(((today - d) / (f - d)) * 100); ton = pct > 80 ? 'fin' : 'cours'; }
+  const restants = Math.ceil((f - today) / j);
+  const mot = ton === 'avant' ? `Démarre dans ${Math.ceil((d - today) / j)} j`
+    : ton === 'retard' ? `Retard ${Math.abs(restants)} j`
+    : `${restants} j restants`;
+  return `<div class="rch-avance rch-avance-${ton}">
+    <div class="rch-piste"><i style="width:${pct}%"></i><b style="left:${pct}%"></b></div>
+    <div class="rch-avance-bas">
+      <span>${fmtDate(debut)} → ${fmtDate(fin)}</span>
+      <span class="rch-pct">${pct} %</span>
+    </div>
+    <div class="rch-reste">${esc(mot)}</div>
+  </div>`;
+}
+
+function carteChantier(c, ecriture) {
+  const cl = clientDe(c.affaire);
+  const debut = c.work_start_at || c.date_debut_prevue;
+  const fin = c.work_end_at || c.date_fin_prevue;
+  // ⚠ LE GRAND CHIFFRE EST LE TTC, le petit le HT. Le tableau de bord
+  // affichait `montant_ht` aux DEUX places : les deux lignes d'une carte y
+  // montrent le même nombre, dont l'une étiquetée « HT ». Corrigé ici.
+  const ttc = Number(c.montant_ttc) || Number(c.montant_ht) || 0;
+  const ht = Number(c.montant_ht) || 0;
+  return `<article class="dcard rch-carte" data-chantier-id="${esc(String(c.id))}"
+      data-affaire="${esc(String(c.affaire.id))}"
+      ${ecriture && c.d1_id ? `draggable="true" data-d1="${esc(String(c.d1_id))}"` : ''}
+      style="--c:${esc(PIPELINE_ETAPES.find(e => e.key === c.statut_d1)?.couleur || '#FF9A3D')}">
+    <div class="rch-client">${esc(cl ? cl.nom : '—')}</div>
+    <div class="t">${esc(c.affaire.title || c.reference || 'Chantier')}</div>
+    ${c.ville ? `<div class="p">${esc(c.ville)}</div>` : ''}
+    ${c.statut_d1 === 'en_cours' && debut && fin ? barreAvancement(debut, fin) : ''}
+    <div class="rch-sous">
+      <div class="rch-ttc">${eur(ttc)}</div>
+      ${ht ? `<div class="rch-ht">${eur(ht)} HT</div>` : ''}
+    </div>
+    <div class="foot">
+      <span class="muted">${debut ? fmtDate(debut) : ''}</span>
+      <span class="muted s">${c.m.signes} devis · ${c.m.factures} fact.</span>
+    </div>
+  </article>`;
+}
+
+function pipeline(tous, state) {
+  const paniers = rangerEnPipeline(tous);
+  const dedans = PIPELINE_ETAPES.reduce((t, e) => t + paniers[e.key].length, 0);
+  return `
+    <section class="rch-pipeline kanban">
+      ${PIPELINE_ETAPES.map(e => {
+        const cartes = paniers[e.key];
+        const total = cartes.reduce((t, c) => t + (Number(c.montant_ht) || 0), 0);
+        return `<div class="col rch-col" data-cible="${esc(e.key)}"
+            style="border-top:3px solid ${esc(e.couleur)}">
+          <div class="rch-tete">
+            <b>${esc(e.label)}</b>
+            <div class="rch-tete-bas">
+              <span class="rch-n">${cartes.length}</span>
+              <span class="rch-total">${eur(total)}</span>
+            </div>
+          </div>
+          <div class="rch-cartes">
+            ${cartes.map(c => carteChantier(c, state.ecriture)).join('')
+              || '<div class="empty s">—</div>'}
+          </div>
+        </div>`;
+      }).join('')}
+    </section>
+    ${dedans === 0 && tous.length ? `<div class="alert amber rch-note">
+      <b>i</b>
+      <div>Aucun de ces ${tous.length} chantiers n'est suivi ici, et ce n'est pas
+      une panne : la pipeline ne montre que ceux où il reste quelque chose à
+      faire. Un chantier sans devis signé n'y entre pas encore ; un chantier
+      entièrement encaissé en est sorti. <b>Ils sont tous dans la liste.</b></div>
+    </div>` : ''}
+    <p class="small muted rch-note">
+      ${dedans} chantier${dedans > 1 ? 's' : ''} suivi${dedans > 1 ? 's' : ''} sur ${tous.length}.
+      Les étapes suivent les faits : un devis signé met le chantier en
+      <b>Démarrage</b>, la date de début atteinte le passe <b>En cours</b>.
+      <b>Chantier terminé</b> ne veut pas dire archivé — cette colonne montre les
+      travaux finis dont il <b>reste de l'argent à encaisser</b>. Un chantier
+      entièrement réglé, ou sans le moindre mouvement depuis trois mois, sort de
+      la pipeline ; il reste entier dans la liste.
+      ${state.ecriture ? '' : ' <i>Lecture seule : le statut se change depuis la liste.</i>'}
+    </p>`;
+}
+
+// Le glisser-déposer. Il n'existe que si l'écriture est possible ET si le
+// chantier porte son `d1_id` : c'est lui que le tableau de bord attend.
+function brancherPipeline(root, state, draw) {
+  root.querySelectorAll('.rch-carte').forEach(carte => {
+    carte.onclick = (e) => {
+      if (e.target.closest('a')) return;
+      openDeal(carte.dataset.affaire, draw);
+    };
+    if (!carte.draggable) return;
+    carte.addEventListener('dragstart', (e) => {
+      e.dataTransfer.setData('text/plain', carte.dataset.d1);
+      carte.classList.add('dragging');
+    });
+    carte.addEventListener('dragend', () => carte.classList.remove('dragging'));
+  });
+
+  if (!state.ecriture) return;
+  root.querySelectorAll('.rch-col').forEach(col => {
+    col.addEventListener('dragover', (e) => { e.preventDefault(); col.classList.add('over'); });
+    col.addEventListener('dragleave', () => col.classList.remove('over'));
+    col.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      col.classList.remove('over');
+      const d1 = e.dataTransfer.getData('text/plain');
+      const cible = col.dataset.cible;
+      if (!d1 || !cible) return;
+      const ligne = scope.rgd('rgd_chantiers').find(x => String(x.d1_id) === d1);
+      if (!ligne || ligne.statut_d1 === cible) return;
+      // ⚠ ON REDESSINE AVANT LA RÉPONSE, et on revient en arrière si elle est
+      // mauvaise. Une carte qui reste sous le doigt pendant l'aller-retour
+      // réseau donne l'impression que le geste n'a pas pris, et on le refait.
+      const avant = ligne.statut_d1;
+      ligne.statut_d1 = cible;
+      draw();
+      const r = await majStatutChantier(d1, cible);
+      if (r.ok) {
+        toast(`Déplacé vers « ${PIPELINE_ETAPES.find(x => x.key === cible)?.label || cible} »`);
+      } else {
+        ligne.statut_d1 = avant;
+        draw();
+        toast(r.motif === 'pas-de-compte'
+          ? 'Aucun compte RGD à votre adresse : le statut n’a pas été changé.'
+          : `Statut non enregistré — ${r.motif}`, 'err');
+      }
+    });
+  });
+}
+
 // Un chantier, vu avec son affaire. Les deux vont toujours ensemble : sans
 // l'affaire on ne sait pas à qui c'est, sans le chantier on ne sait pas où ça
 // en est.
@@ -189,7 +415,11 @@ export const rgdChantiersPage = {
   render(root) {
     if (guard(root)) return {};
     const coquille = poserEspace(root);
-    const state = { etat: '', q: '', focus: null, ecriture: false };
+    // La vue choisie survit au rechargement : on revient sur l'écran qu'on
+    // avait quitté, pas sur celui que le code préfère.
+    let vue = 'liste';
+    try { vue = localStorage.getItem('rgd_chantiers_vue') || 'pipeline'; } catch { vue = 'pipeline'; }
+    const state = { etat: '', q: '', focus: null, ecriture: false, vue };
     peutEcrire().then(ok => { if (ok !== state.ecriture) { state.ecriture = ok; draw(); } });
 
     const draw = () => {
@@ -215,6 +445,12 @@ export const rgdChantiersPage = {
             sous: `${eur(somme(tous))} HT tous chantiers`, icone: '📋', href: '#/rgd' })}
         </div>
 
+        <div class="pill-tabs">
+          <button type="button" data-vue="pipeline" class="${state.vue === 'pipeline' ? 'on' : ''}">Pipeline</button>
+          <button type="button" data-vue="liste" class="${state.vue === 'liste' ? 'on' : ''}">Liste<span>${tous.length}</span></button>
+        </div>
+
+        ${state.vue === 'pipeline' ? pipeline(tous, state) : `
         <div class="pill-tabs">
           <button type="button" data-etat="" class="${state.etat ? '' : 'on'}">Tous<span>${tous.length}</span></button>
           ${ETATS.map(e => `<button type="button" data-etat="${e.key}" class="${state.etat === e.key ? 'on' : ''}">${esc(e.label)}<span>${tous.filter(c => c.etat === e.key).length}</span></button>`).join('')}
@@ -254,10 +490,16 @@ export const rgdChantiersPage = {
           apporté, son apporteur en est averti par email.</b> L'état et l'étape
           commerciale ci-contre sont des traductions recalculées au relevé suivant :
           ils rattraperont dans la demi-heure.</p>` : ''}
-        </section>`;
+        </section>`}`;
 
       root.innerHTML = cadre('#/rgd/chantiers', 'Chantiers', corps);
       bindSearch(root, 'rc-q', state, draw); restoreFocus(root, state);
+      root.querySelectorAll('[data-vue]').forEach(b => b.onclick = () => {
+        state.vue = b.dataset.vue;
+        try { localStorage.setItem('rgd_chantiers_vue', state.vue); } catch { /* navigation privée */ }
+        draw();
+      });
+      if (state.vue === 'pipeline') brancherPipeline(root, state, draw);
       root.querySelectorAll('[data-etat]').forEach(b => b.onclick = () => {
         state.etat = state.etat === b.dataset.etat ? '' : b.dataset.etat; draw();
       });

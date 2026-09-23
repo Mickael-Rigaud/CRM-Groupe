@@ -2807,3 +2807,50 @@ img.photo-ko { border: 1px dashed var(--red); box-sizing: border-box;
   .car-ligne { flex-wrap: wrap; }
   .car-legende { order: 9; flex-basis: 100%; }
 }
+
+/* ---------- Pipeline chantiers RGD (rch-) ----------
+   Elle se pose sur le kanban existant (.kanban/.col/.dcard) et n'ajoute que ce
+   qui lui est propre : le liseré de couleur, le bloc montant TTC/HT et la
+   barre d'avancement des travaux. Classes prefixees `rch-` pour qu'aucun autre
+   ecran ne les attrape par accident. */
+.rch-pipeline { grid-auto-columns: minmax(250px, 1fr); }
+.rch-col { padding-top: 0; background: var(--card-2); }
+.rch-tete { padding: 11px 7px 12px; }
+.rch-tete b { display: block; font-size: 13.5px; line-height: 1.25; }
+.rch-tete-bas { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 5px; }
+/* Le compte est le chiffre qu'on lit de loin : il doit primer sur la regle
+   generique `.col-head span`, d'ou la specificite portee a deux classes. */
+.rch-col .rch-n { font-family: var(--font-display); font-size: 27px; font-weight: 700;
+  line-height: 1; color: var(--ink); }
+.rch-col .rch-total { font-size: 11.5px; font-weight: 600; color: var(--muted); }
+.rch-cartes { display: flex; flex-direction: column; gap: 8px; min-height: 90px; }
+.rch-carte { cursor: grab; }
+.rch-carte:active { cursor: grabbing; }
+.rch-client { font-size: 10.5px; font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--c, var(--accent)); margin-bottom: 3px; }
+.rch-sous { border-top: 1px dashed var(--line); margin-top: 9px; padding-top: 8px; }
+.rch-ttc { font-family: var(--font-display); font-size: 21px; font-weight: 700; line-height: 1.1; }
+.rch-ht { font-size: 11.5px; color: var(--muted); margin-top: 1px; }
+.rch-note { margin-top: 14px; line-height: 1.55; }
+
+/* La barre d'avancement : uniquement sur « Chantier en cours ». */
+.rch-avance { margin-top: 9px; }
+.rch-piste { position: relative; height: 5px; border-radius: 3px; background: var(--card-2); }
+.rch-piste i { display: block; height: 100%; border-radius: inherit; background: var(--c, var(--accent)); }
+.rch-piste b { position: absolute; top: 50%; width: 9px; height: 9px; border-radius: 50%;
+  background: var(--c, var(--accent)); transform: translate(-50%, -50%); box-shadow: 0 0 0 2px #fff; }
+.rch-avance-bas { display: flex; justify-content: space-between; align-items: baseline;
+  margin-top: 5px; font-size: 11px; color: var(--muted); }
+.rch-pct { font-weight: 700; color: var(--ink); }
+.rch-reste { font-size: 11px; font-weight: 700; text-align: right; margin-top: 1px; color: var(--muted); }
+.rch-avance-retard .rch-piste i, .rch-avance-retard .rch-piste b { background: var(--red); }
+.rch-avance-retard .rch-pct, .rch-avance-retard .rch-reste { color: var(--red); }
+.rch-avance-fin .rch-piste i, .rch-avance-fin .rch-piste b { background: var(--amber); }
+.rch-avance-fin .rch-reste { color: var(--amber); }
+.rch-avance-avant .rch-piste i, .rch-avance-avant .rch-piste b { background: var(--muted); }
+
+@media (max-width: 720px) {
+  /* Une carte se glisse mal au doigt : sous cette largeur la pipeline defile
+     horizontalement, et le statut se change depuis la liste. */
+  .rch-pipeline { grid-auto-columns: minmax(225px, 85vw); }
+}
