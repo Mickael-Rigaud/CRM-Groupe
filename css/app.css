@@ -2660,7 +2660,7 @@ button.tb-pp:hover { color: var(--text); text-decoration: underline; text-underl
    La liste rangée par catégorie à gauche, le projet ouvert à droite. Une
    galerie de cartes répond à « montre-moi tout » ; cet écran sert à « ouvre-moi
    celui-là », et c'est la sidebar qui le permet. */
-.rea-atelier { display: grid; grid-template-columns: 268px 1fr; gap: 16px; align-items: start; }
+.rea-atelier { display: grid; grid-template-columns: 290px 1fr; gap: 16px; align-items: start; }
 .rea-cote { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
   box-shadow: var(--shadow); padding: 12px; max-height: 76vh; overflow: auto; }
 .rea-cote-tete { display: flex; align-items: baseline; justify-content: space-between;
@@ -2669,17 +2669,25 @@ button.tb-pp:hover { color: var(--text); text-decoration: underline; text-underl
 .rea-groupe-titre { font-size: 11px; text-transform: uppercase; letter-spacing: .6px;
   color: var(--muted-2); padding: 6px; display: flex; gap: 6px; align-items: center; }
 .rea-groupe-titre span { background: var(--card-2); border-radius: 8px; padding: 0 6px; }
-.rea-item { display: flex; align-items: center; gap: 6px; width: 100%; text-align: left;
+/* ⚠ LE TITRE N'EST PLUS TRONQUÉ (23/09/2026, demandé par Mickael : « je
+   voudrais les noms complets des projets pour que je puisse me repérer »).
+   L'ellipsis coupait exactement là où l'information commence : onze titres
+   sur trente et un débutent par « Rénovation d'une salle de bain… », et
+   c'est la VILLE, à la fin, qui les distingue — on lisait donc onze lignes
+   identiques. Le titre passe à la ligne ; l'alignement part en haut pour
+   que le compteur et l'étoile restent sur la première ligne, en face du
+   début du nom et non au milieu d'un pavé de deux lignes. */
+.rea-item { display: flex; align-items: flex-start; gap: 6px; width: 100%; text-align: left;
   border: 0; background: none; border-radius: 8px; padding: 7px 8px; cursor: pointer;
-  font: inherit; font-size: 13px; color: var(--text); }
+  font: inherit; font-size: 13px; line-height: 1.4; color: var(--text); }
 .rea-item:hover { background: var(--card-2); }
 .rea-item.on { background: var(--accent); color: var(--on-accent); }
-.rea-item-nom { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rea-item-nom { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 /* Le nombre de photos, et l'étoile d'un avis : deux signaux qu'on lit en
    parcourant la liste, sans avoir à ouvrir chaque fiche. */
-.rea-item-n { font-size: 11px; color: var(--muted-2); }
+.rea-item-n { font-size: 11px; color: var(--muted-2); flex: 0 0 auto; }
 .rea-item.on .rea-item-n, .rea-item.on .rea-item-avis { color: var(--on-accent); }
-.rea-item-avis { font-size: 11px; color: var(--amber); }
+.rea-item-avis { font-size: 11px; color: var(--amber); flex: 0 0 auto; }
 
 .rea-panneau { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
   box-shadow: var(--shadow); padding: 18px 20px; min-width: 0; }
