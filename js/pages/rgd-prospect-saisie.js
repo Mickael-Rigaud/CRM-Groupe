@@ -33,6 +33,7 @@
 // la liste montre produirait des lignes à moitié vides.
 import { db } from '../data/db.js';
 import { openModal, closeModal, confirm, renderForm, readForm, toast, esc } from '../ui.js';
+import { supprimerClientSource, supprimerDemandeSource } from '../data/rgd-api.js';
 
 // Ce que chaque sous-onglet réclame, en plus de l'identité.
 // `table` dit où atterrit la fiche, `fixe` les colonnes imposées par la
@@ -179,43 +180,100 @@ export function formulaireProspect(sousVue, apporteurs, apresEnregistrement) {
   };
 }
 
-// ⚠ NE JAMAIS APPELER CECI SUR UNE FICHE QUI PORTE UN `d1_id`.
-// L'appelant ne montre le bouton que sur les fiches nées dans le CRM, mais on
-// revérifie ici : un écran est un garde-fou, pas une garantie.
-export async function supprimerProspect(sousVue, ligne, apresSuppression) {
-  const forme = FORMES[sousVue];
-  if (!forme) return;
-  if (ligne.d1_id != null) {
-    return toast('Cette fiche vient du tableau de bord RGD : elle doit y être supprimée.', 'warn');
-  }
+// ---------------------------------------------------------------- supprimer
+//
+// ⚠ UNE SUPPRESSION SE FAIT DES DEUX CÔTÉS, ET DANS CET ORDRE.
+// Le relevé Cloudflare ne fait que des `insert … on conflict do update`, sans
+// aucun `delete` : une ligne effacée dans le CRM seul **reviendrait** au
+// passage suivant. On efface donc à la SOURCE d'abord ; si cet appel échoue on
+// s'arrête, parce qu'une fiche toujours là vaut mieux qu'une fiche qui
+// disparaît puis réapparaît une demi-heure plus tard sans explication.
+//
+// Les fiches nées dans le CRM (`d1_id` à NULL) n'ont pas de source : pour
+// elles, la seule écriture Supabase suffit.
 
-  // `rgd_demandes` porte le nom en propre ; `rgd_clients` ne l'a pas et il faut
-  // aller le chercher sur le contact. Sans ce repli, la confirmation demandait
-  // « Supprimer undefined ? ».
+// Ce qui pend à une fiche. On compte AVANT de proposer quoi que ce soit : un
+// client qui porte des devis, des chantiers ou des paiements ne se supprime
+// pas d'un clic — ces lignes portent de l'argent, et les orpheliner fausserait
+// le chiffre d'affaires sans que rien ne le signale.
+function rattachements(contactId) {
+  if (!contactId) return { total: 0, detail: [] };
+  const affaires = db.t('deals').filter(d => d.contact_id === contactId);
+  const idsAffaires = new Set(affaires.map(d => d.id));
+  const devis = db.t('rgd_devis').filter(d => d.contact_id === contactId);
+  const chantiers = db.t('rgd_chantiers').filter(c => idsAffaires.has(c.deal_id));
+  const idsChantiers = new Set(chantiers.map(c => c.id));
+  // Un paiement se rattache à son chantier, jamais directement au client.
+  const paiements = db.t('rgd_paiements').filter(p => idsChantiers.has(p.chantier_id));
+
+  const detail = [
+    [devis.length, 'devis', 'devis'],
+    [chantiers.length, 'chantier', 'chantiers'],
+    [paiements.length, 'paiement', 'paiements'],
+  ].filter(([n]) => n > 0)
+   .map(([n, un, plusieurs]) => `${n} ${n > 1 ? plusieurs : un}`);
+
+  return { total: devis.length + chantiers.length + paiements.length, detail };
+}
+
+// `sousVue` vaut `site` pour une demande du formulaire, autre chose pour une
+// fiche client. Les onglets Clients et Contacts appellent donc avec autre chose
+// que `site` et tombent sur `rgd_clients`, ce qui est correct.
+export async function supprimerFiche(sousVue, ligne, apresSuppression) {
+  const surDemande = sousVue === 'site';
+  const table = surDemande ? 'rgd_demandes' : 'rgd_clients';
+
   const c = ligne.contact_id ? db.byId('contacts', ligne.contact_id) : null;
   const nom = [ligne.prenom, ligne.nom].filter(Boolean).join(' ')
     || [c?.first_name, c?.last_name].filter(Boolean).join(' ')
     || 'cette fiche';
-  if (!await confirm(`Supprimer ${nom} ? La fiche est retirée définitivement. `
-    + `Le contact, lui, est archivé et reste récupérable.`)) return;
+
+  // ⚠ LE REFUS PASSE AVANT LA CONFIRMATION. Demander « êtes-vous sûr ? » puis
+  // répondre « en fait non » fait perdre du temps et de la confiance.
+  const liens = rattachements(ligne.contact_id);
+  if (liens.total) {
+    return toast(`${nom} porte ${liens.detail.join(', ')} : la fiche ne peut pas être `
+      + `supprimée sans les orpheliner. Retirez-les d'abord.`, 'warn');
+  }
+
+  const venuDeCloudflare = ligne.d1_id != null;
+  if (!await confirm(venuDeCloudflare
+    ? `Supprimer ${nom} ? Elle sera retirée du tableau de bord RGD ET du CRM. C'est définitif.`
+    : `Supprimer ${nom} ? La fiche est retirée définitivement. Le contact, lui, est `
+      + `archivé et reste récupérable.`)) return;
 
   try {
-    await db.remove(forme.table, ligne.id);
-    // Le contact suit, mais archivé et non supprimé — voir l'en-tête.
+    // 1. La source, quand il y en a une. On s'arrête net si ça échoue.
+    if (venuDeCloudflare) {
+      const r = surDemande
+        ? await supprimerDemandeSource(ligne.d1_id)
+        : await supprimerClientSource(ligne.d1_id);
+      if (!r.ok) {
+        return toast(r.motif === 'pas-de-compte'
+          ? 'Aucun compte RGD à votre adresse : rien n’a été supprimé.'
+          : `Suppression refusée par le tableau de bord RGD — ${r.motif}. `
+            + `Rien n’a été touché dans le CRM.`, 'err');
+      }
+    }
+
+    // 2. Le reflet.
+    await db.remove(table, ligne.id);
+
+    // 3. Le contact suit, mais ARCHIVÉ et non supprimé — voir l'en-tête.
     if (ligne.contact_id) {
       try { await db.update('contacts', ligne.contact_id, { archived_at: new Date().toISOString() }); }
-      catch { /* L'archivage est un confort : son échec ne doit pas annuler la suppression. */ }
+      catch { /* L'archivage est un confort : son échec n'annule pas la suppression. */ }
     }
-    toast('Prospect supprimé');
+    toast(venuDeCloudflare ? 'Fiche supprimée des deux côtés' : 'Fiche supprimée');
     apresSuppression?.();
   } catch (err) {
     toast(`Suppression impossible : ${String(err.message || err).slice(0, 120)}`, 'warn');
   }
 }
 
-// Le bouton de suppression d'une ligne — rendu seulement quand la fiche est
-// née dans le CRM. Sur une fiche venue de Cloudflare on ne met rien : une
-// corbeille grisée invite à cliquer pour comprendre pourquoi elle est grisée.
-export const boutonSuppression = (ligne) => ligne.d1_id == null
-  ? `<button class="icon-btn" data-suppr="${esc(ligne.id)}" title="Supprimer cette fiche">🗑</button>`
-  : '';
+// La corbeille d'une ligne. Elle s'affiche partout désormais — l'infobulle dit
+// seulement si le geste ira aussi chercher la source.
+export const boutonSuppression = (ligne) =>
+  `<button class="icon-btn" data-suppr="${esc(ligne.id)}" title="${
+    ligne.d1_id == null ? 'Supprimer cette fiche'
+      : 'Supprimer dans le tableau de bord RGD et dans le CRM'}">🗑</button>`;

@@ -143,6 +143,35 @@ export const majStatutClient = (d1Id, statutSuivi) =>
 export const majStatutDemande = (d1Id, statut) =>
   envoyer(`/api/demandes/${encodeURIComponent(d1Id)}`, { statut });
 
+// Le commentaire libre. Deux tables, deux noms de colonne — `notes` pour un
+// client, `commentaire_admin` pour une demande du site : ce sont les noms de
+// D1, et le worker n'accepte QUE les champs de sa liste `FIELDS`. Un nom qui
+// n'y figure pas est ignoré **sans un mot**, puis la route répond `{ok: true}` :
+// on croirait avoir enregistré. Les deux ci-dessous ont été vérifiés dans
+// `routes/clients.js` et `routes/leads.js` le 23/09/2026.
+export const majNoteClient = (d1Id, notes) =>
+  envoyer(`/api/clients/${encodeURIComponent(d1Id)}`, { notes });
+
+export const majCommentaireDemande = (d1Id, commentaire) =>
+  envoyer(`/api/demandes/${encodeURIComponent(d1Id)}`, { commentaire_admin: commentaire });
+
+// ⚠ SUPPRIMER À LA SOURCE, ET C'EST LA MOITIÉ DU GESTE.
+// Le relevé ne fait que des `insert … on conflict do update`, sans aucun
+// `delete` : une ligne effacée dans le CRM seul reviendrait au passage suivant.
+// Une suppression se fait donc des DEUX côtés — ici d'abord, Supabase ensuite.
+// Si cet appel échoue, il ne faut PAS effacer côté CRM : mieux vaut une fiche
+// toujours là qu'une fiche qui disparaît puis réapparaît sans explication.
+//
+// Côté worker, `clients.remove` fait un geste de plus qu'un simple DELETE : si
+// la fiche vient de Costructor, il inscrit son identifiant dans
+// `costructor_contacts_ignored` pour que la synchronisation ne la recrée pas.
+// Sans cela, une fiche Costructor supprimée revient au prochain passage.
+export const supprimerClientSource = (d1Id) =>
+  envoyer(`/api/clients/${encodeURIComponent(d1Id)}`, {}, 'DELETE');
+
+export const supprimerDemandeSource = (d1Id) =>
+  envoyer(`/api/demandes/${encodeURIComponent(d1Id)}`, {}, 'DELETE');
+
 // Les corrections manuelles du chiffre d'affaires de l'exercice. Elles vivent
 // dans `app_settings` côté D1 et l'emportent sur le calcul automatique, parce
 // que la reprise Costructor est incomplète.

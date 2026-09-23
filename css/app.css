@@ -2023,3 +2023,21 @@ button.tb-pp:hover { color: var(--text); text-decoration: underline; text-underl
   .rgd-pipe-barre { padding-right: 8px !important; }
   .rgd-pipe-n { min-width: 34px; font-size: 14px; }
 }
+
+/* Commentaire modifiable en place, dans les listes de prospects et de clients.
+   Le champ se fond dans la cellule tant qu'on n'y touche pas : une bordure sur
+   chaque ligne ferait un tableau en grillage, et on ne lirait plus les noms.
+   Il se révèle au survol et au focus, là où on s'apprête à écrire. */
+.rcl-note { min-width: 150px; }
+.rcl-note input {
+  width: 100%; border: 1px solid transparent; background: transparent;
+  border-radius: 6px; padding: 4px 6px; font-size: 13px; color: var(--muted);
+}
+.rcl-note input::placeholder { color: var(--muted); opacity: .45; }
+.rcl-note input:hover { border-color: var(--line); }
+.rcl-note input:focus {
+  border-color: var(--accent); background: var(--card); color: var(--ink); outline: none;
+}
+/* Pendant l'enregistrement le champ est désactivé : le dire, sinon une saisie
+   qui ne répond plus ressemble à une application figée. */
+.rcl-note input:disabled { opacity: .5; cursor: progress; }

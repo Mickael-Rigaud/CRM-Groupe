@@ -55,9 +55,10 @@ import { db } from '../data/db.js';
 import { esc, fmtDate, fmtDateTime, relDay, terms, hit, searchInput, bindSearch, restoreFocus } from '../ui.js';
 import { poserEspace } from './espace.js';
 import { cadre, guard } from './rgd-espace.js';
-import { peutEcrire, majStatutClient, majStatutDemande } from '../data/rgd-api.js';
+import { peutEcrire, majStatutClient, majStatutDemande,
+         majNoteClient, majCommentaireDemande } from '../data/rgd-api.js';
 import { toast } from '../ui.js';
-import { formulaireProspect, supprimerProspect, boutonSuppression } from './rgd-prospect-saisie.js';
+import { formulaireProspect, supprimerFiche, boutonSuppression } from './rgd-prospect-saisie.js';
 
 const s_ = (n) => (n > 1 ? 's' : '');
 
@@ -120,6 +121,25 @@ const menuStatut = (cle, cible, d1Id, uuid) => {
     ${STATUTS_SUIVI.map(st => `<option value="${esc(st.key)}" ${st.key === courant ? 'selected' : ''}>${esc(st.label)}</option>`).join('')}
   </select>`;
 };
+// Le commentaire libre, modifiable sur place. Deux colonnes selon la table :
+// `notes` pour une fiche client, `commentaire_admin` pour une demande du site.
+// Ce sont les noms de D1, et le worker n'accepte que les champs de sa liste —
+// un nom hors liste serait ignoré SANS UN MOT, puis la route répondrait
+// « ok ». Les deux ont été vérifiés dans le worker le 23/09/2026.
+//
+// ⚠ QUI PEUT ÉCRIRE DÉPEND DE LA LIGNE, pas de l'écran. Une fiche née dans le
+// CRM s'écrit dans Supabase : il suffit de porter l'activité RGD. Une fiche
+// venue de Cloudflare doit s'écrire À LA SOURCE, ce qui exige un compte RGD au
+// même email — sans lui, mieux vaut un texte figé qu'un champ qui échouera.
+const champNote = (ligne, cible, ecritureWorker) => {
+  const v = (cible === 'demande' ? ligne.commentaire_admin : ligne.notes) || '';
+  const modifiable = scope.canRgd && (ligne.d1_id == null || ecritureWorker);
+  if (!modifiable) return v ? esc(v) : '<span class="muted">—</span>';
+  return `<input class="note-champ" data-cible="${esc(cible)}"
+    data-id="${esc(String(ligne.d1_id ?? ''))}" data-uuid="${esc(ligne.id)}"
+    value="${esc(v)}" placeholder="Commentaire…" aria-label="Commentaire">`;
+};
+
 const pastilleFiche = (cle) => cle
   ? `<span class="chip st-${esc(dit(STATUTS_FICHE, cle).key)}">${esc(dit(STATUTS_FICHE, cle).label)}</span>`
   : '<span class="muted">—</span>';
@@ -176,11 +196,14 @@ export const rgdClientsPage = {
       // professionnel une organisation. `push_rgd` range, on relit.
       const qui = (f) => {
         const c = f.contact_id && db.byId('contacts', f.contact_id);
-        if (c) return { nom: `${c.first_name || ''} ${c.last_name || ''}`.trim(), email: c.email,
+        if (c) return { nom: `${c.first_name || ''} ${c.last_name || ''}`.trim(),
+                        famille: c.last_name || c.first_name || '', cree: c.created_at,
+                        email: c.email,
                         tel: c.phone, adresse: c.address, cp: c.postal_code, ville: c.city,
                         type: 'particulier' };
         const o = f.organisation_id && db.byId('organisations', f.organisation_id);
-        if (o) return { nom: o.name, email: o.email, tel: o.phone, adresse: o.address,
+        if (o) return { nom: o.name, famille: o.name || '', cree: o.created_at,
+                        email: o.email, tel: o.phone, adresse: o.address,
                         cp: o.postal_code, ville: o.city, type: 'professionnel' };
         return null;
       };
@@ -228,13 +251,28 @@ export const rgdClientsPage = {
         : x.statut;
       const statuts = surProspects ? STATUTS_SUIVI : STATUTS_FICHE;
 
+      const recuLe = ({ f, p }) => f.meta_received_at || p?.cree || '';
+
       const lignesFiches = listeBrute
         .filter(f => !surDemandes)
         .map(f => ({ f, p: qui(f) }))
         .filter(({ f, p }) => (!state.type || p?.type === state.type)
           && (!state.statut || champStatut(f) === state.statut)
           && hit([p?.nom, p?.email, p?.tel, p?.ville, p?.adresse], ts))
-        .sort((a, b) => String(a.p?.nom || '').localeCompare(String(b.p?.nom || ''), 'fr'));
+        // ⚠ DEUX TRIS, PARCE QUE CE SONT DEUX USAGES.
+        // Un prospect se travaille dans l'ordre d'arrivée : le plus récent en
+        // haut, c'est celui qu'on n'a pas encore rappelé. Un client ou un
+        // contact se CHERCHE : on connaît son nom, pas sa date d'entrée, donc
+        // l'alphabétique par nom de FAMILLE.
+        //
+        // ⚠ La date d'arrivée d'un prospect n'est pas dans `rgd_clients` : la
+        // table n'a pas de `created_at`. Seuls les leads Meta portent une date
+        // propre (`meta_received_at`) ; pour les autres, c'est la création du
+        // CONTACT qui fait foi. Une fiche sans ni l'un ni l'autre part en bas
+        // plutôt qu'en haut : « je ne sais pas quand » n'est pas « à l'instant ».
+        .sort(surProspects
+          ? (a, b) => String(recuLe(b) || '').localeCompare(String(recuLe(a) || ''))
+          : (a, b) => String(a.p?.famille || '').localeCompare(String(b.p?.famille || ''), 'fr'));
 
       const lignesDemandes = (surDemandes ? demandes : [])
         .filter(d => (!state.statut || (d.statut || 'nouveau_prospect') === state.statut)
@@ -248,7 +286,7 @@ export const rgdClientsPage = {
       const tableauFiches = () => `<section class="card table-wrap">
         <table>
           <thead><tr><th>Nom</th><th>Type</th><th>Statut</th><th>Email</th>
-            <th>Téléphone</th><th>Adresse</th><th>Maj</th>${surProspects ? '<th></th>' : ''}</tr></thead>
+            <th>Téléphone</th><th>Adresse</th><th>Maj</th><th>Commentaire</th><th></th></tr></thead>
           <tbody>${lignesFiches.map(({ f, p }) => {
             const ap = f.apporteur_id && apporteurs.find(a => a.id === f.apporteur_id);
             return `<tr>
@@ -263,9 +301,10 @@ export const rgdClientsPage = {
               <td>${esc(p?.tel || '—')}</td>
               <td class="muted">${esc(adresseDe(p))}</td>
               <td class="muted small">${f.maj ? esc(relDay(f.maj)) : '—'}</td>
-              ${surProspects ? `<td>${boutonSuppression(f)}</td>` : ''}
+              <td class="rcl-note">${champNote(f, 'client', state.ecriture)}</td>
+              <td>${boutonSuppression(f)}</td>
             </tr>`;
-          }).join('') || `<tr><td colspan="${surProspects ? 8 : 7}"><div class="empty">${esc(vide())}</div></td></tr>`}</tbody>
+          }).join('') || `<tr><td colspan="9"><div class="empty">${esc(vide())}</div></td></tr>`}</tbody>
         </table>
       </section>`;
 
@@ -283,7 +322,7 @@ export const rgdClientsPage = {
             <td class="muted">${esc([d.adresse, [d.code_postal, d.ville].filter(Boolean).join(' ')].filter(Boolean).join(' ') || '—')}</td>
             <td class="muted">${esc(d.comment_connu || '—')}</td>
             <td>${state.ecriture ? menuStatut(d.statut, 'demande', d.d1_id, d.id) : pastilleSuivi(d.statut)}</td>
-            <td class="muted small">${esc(d.commentaire_admin || '—')}</td>
+            <td class="rcl-note">${champNote(d, 'demande', state.ecriture)}</td>
             <td>${boutonSuppression(d)}</td>
           </tr>`).join('') || `<tr><td colspan="11"><div class="empty">${esc(vide())}</div></td></tr>`}</tbody>
         </table>
@@ -317,7 +356,7 @@ export const rgdClientsPage = {
             <td class="muted">${esc(p?.ville || '—')}</td>
             <td class="muted">${esc(f.meta_budget || '—')}</td>
             <td>${state.ecriture ? menuStatut(f.statut_suivi, 'client', f.d1_id, f.id) : pastilleSuivi(f.statut_suivi)}</td>
-            <td class="muted small">${esc(f.notes || '—')}</td>
+            <td class="rcl-note">${champNote(f, 'client', state.ecriture)}</td>
             <td>${boutonSuppression(f)}</td>
           </tr>`).join('') || `<tr><td colspan="10"><div class="empty">${esc(vide())}</div></td></tr>`}</tbody>
         </table>
@@ -392,7 +431,48 @@ export const rgdClientsPage = {
       root.querySelectorAll('[data-suppr]').forEach(b => b.onclick = () => {
         const table = surDemandes ? demandes : fiches;
         const ligne = table.find(x => x.id === b.dataset.suppr);
-        if (ligne) supprimerProspect(state.sousVue, ligne, draw);
+        if (ligne) supprimerFiche(state.vue === 'prospects' ? state.sousVue : 'client', ligne, draw);
+      });
+
+      // L'écriture du commentaire, sur le même principe que le statut : deux
+      // chemins selon l'origine de la ligne, et l'ancienne valeur revient si
+      // l'enregistrement échoue. On écrit au `change` (sortie du champ), pas à
+      // chaque frappe : un appel par lettre saturerait le worker pour rien.
+      root.querySelectorAll('.note-champ').forEach(i => {
+        i.dataset.avant = i.value;
+        i.onchange = async () => {
+          const avant = i.dataset.avant;
+          const apres = i.value.trim();
+          if (avant === apres) return;
+          const demande = i.dataset.cible === 'demande';
+          const table = demande ? 'rgd_demandes' : 'rgd_clients';
+          const champ = demande ? 'commentaire_admin' : 'notes';
+          i.disabled = true;
+          const natif = !i.dataset.id;
+          // Un champ vide efface : on envoie `null`, pas la chaîne vide, pour
+          // pouvoir distinguer plus tard « effacé » de « jamais rempli ».
+          const valeur = apres === '' ? null : apres;
+          const r = natif
+            ? await db.update(table, i.dataset.uuid, { [champ]: valeur })
+                .then(() => ({ ok: true }))
+                .catch(e => ({ ok: false, motif: String(e.message || e).slice(0, 80) }))
+            : demande ? await majCommentaireDemande(i.dataset.id, valeur)
+                      : await majNoteClient(i.dataset.id, valeur);
+          i.disabled = false;
+          if (r.ok) {
+            i.dataset.avant = apres;
+            if (!natif) {
+              const ligne = scope.rgd(table).find(x => String(x.d1_id) === i.dataset.id);
+              if (ligne) ligne[champ] = valeur;
+            }
+            toast('Commentaire enregistré');
+          } else {
+            i.value = avant;
+            toast(r.motif === 'pas-de-compte'
+              ? 'Aucun compte RGD à votre adresse : le commentaire n’a pas été enregistré.'
+              : `Commentaire non enregistré — ${r.motif}`, 'err');
+          }
+        };
       });
 
       const t = root.querySelector('#rcl-type');
