@@ -411,8 +411,14 @@ export const rgdClientsPage = {
         if (!brut.startsWith('[')) return brut;
         try { return JSON.parse(brut).join(', '); } catch { return brut; }
       };
-      const provenanceDemande = (d) => VIA(d.comment_connu)
-        || (d.source === 'manuel' ? 'direct' : 'site');
+      // ⚠ L'APPORTEUR PASSE AVANT TOUT LE RESTE. Un nom de partenaire est un
+      // fait vérifiable ; « Recommandation » coché dans la liste d'à côté est
+      // une catégorie, et c'est souvent la même chose dite plus vaguement. Le
+      // fait gagne — sinon un prospect apporté par un partenaire nommé se
+      // rangerait en « Recommandation », et le décompte des apports du
+      // partenaire ne le verrait jamais.
+      const provenanceDemande = (d) => d.apporteur_id ? 'partenaire'
+        : VIA(d.comment_connu) || (d.source === 'manuel' ? 'direct' : 'site');
 
       const prospects = [
         ...demandes.map(d => {
@@ -704,7 +710,7 @@ export const rgdClientsPage = {
       // « Direct », et elle naît à la première étape. Le bouton ne s'affiche
       // donc que là : créé depuis « Chantier terminé », le prospect
       // apparaîtrait dans un autre onglet que celui qu'on regarde.
-      if (nouveau) nouveau.onclick = () => formulaireDemande(draw);
+      if (nouveau) nouveau.onclick = () => formulaireDemande(apporteurs, draw);
 
       // Supprimer : le bouton n'existe que sur les fiches nees dans le CRM
       // (`boutonSuppression` ne rend rien autrement), et `supprimerProspect`

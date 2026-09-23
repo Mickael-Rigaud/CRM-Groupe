@@ -157,11 +157,24 @@ export function ouvrirFicheRgd(x, onChange) {
     // « comment nous avez-vous connus », donc quand la personne a repondu
     // « Recommandation » les deux valeurs sont le meme mot — la ligne
     // affichait « Recommandation · Recommandation · par Mme Perrot ».
+    // L'apporteur : le partenaire qui a envoyé la personne. Il vit sur les deux
+    // tables — `rgd_clients` depuis l'origine, `rgd_demandes` depuis la
+    // migration `20260923180000`.
+    const apporteur = f.apporteur_id
+      ? scope.rgd('rgd_apporteurs').find(a => a.id === f.apporteur_id) : null;
+    const nomApporteur = apporteur
+      ? (apporteur.societe || apporteur.raison_sociale
+         || [apporteur.prenom, apporteur.nom].filter(Boolean).join(' ') || '')
+      : '';
+
     const provenance = (() => {
       const deduite = x.provenanceLabel || x.provenance;
       const dite = String(d.comment_connu || '').trim();
       const memeMot = dite.toLowerCase() === String(deduite).toLowerCase();
-      return [deduite, memeMot ? '' : dite, d.recommandation && `par ${d.recommandation}`]
+      // ⚠ QUAND IL Y A UN APPORTEUR, IL A SA PROPRE LIGNE juste au-dessus :
+      // remettre son nom ici ferait lire deux fois la même chose.
+      return [deduite, memeMot ? '' : dite,
+        !nomApporteur && d.recommandation ? `par ${d.recommandation}` : '']
         .filter(Boolean).join(' · ');
     })();
 
@@ -233,6 +246,7 @@ export function ouvrirFicheRgd(x, onChange) {
             ${info('regle', 'Superficie', d.superficie ? esc(d.superficie) + ' m²' : '', 'est-bleu')}
             ${info('personne', 'Le demandeur', esc(d.type_demandeur || ''), 'est-gris')}
             ${info('texte', 'Ce qui est demandé', esc(d.projet_description || ''), 'est-gris')}
+            ${info('personne', 'Apporté par', esc(nomApporteur), 'est-vert')}
             ${info('source', 'Provenance', esc(provenance), 'est-violet')}
             ${!x.projet && !x.budget && !bien ? '<p class="rgdf-rien">Le projet n’a pas encore été décrit.</p>' : ''}
           </section>

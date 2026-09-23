@@ -9,6 +9,13 @@
 // demande arrivée du site donnent la même fiche, et qu'aucune des deux ne soit
 // plus pauvre que l'autre.
 //
+// ⚠ UN CHAMP QUE LE SITE N'A PAS : « Apporté par ». Le site ne demande pas
+// qui a envoyé la personne — il n'a personne à qui le demander. Ici si, et
+// c'est même le cas le plus fréquent après le bouche-à-oreille. Ce champ
+// existait dans l'ancien sous-onglet « Prospect partenaire », retiré de
+// l'écran dans la refonte du 23/09/2026 ; il revient avec sa colonne
+// (migration `20260923180000_rgd_demandes_apporteur`).
+//
 // ⚠ LES MÊMES INFORMATIONS, PAS LE MÊME FORMULAIRE. Première version refusée
 // le 23/09/2026 : j'avais recopié le site à l'identique, ses deux étapes, son
 // vouvoiement, « Vous êtes », « Le projet concerne ». Or ce sont deux gestes
@@ -78,6 +85,16 @@ const liste = (cle, libelle, options, opts = {}) => champ(cle, libelle,
      ${options.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join('')}
    </select>`, opts);
 
+// Le même, mais dont les valeurs sont des identifiants et non le texte
+// affiché. Une liste déroulante d'apporteurs ne peut pas enregistrer un nom :
+// deux partenaires peuvent s'appeler pareil, et un nom qui change casserait
+// le lien — c'est l'`id` qui part en base.
+const listeRef = (cle, libelle, couples, opts = {}) => champ(cle, libelle,
+  `<select id="ndf-${cle}" name="${cle}">
+     <option value="">—</option>
+     ${couples.map(([v, l]) => `<option value="${esc(v)}">${esc(l)}</option>`).join('')}
+   </select>`, opts);
+
 // Les cases à cocher et les boutons radio deviennent des PUCES : le vrai champ
 // reste dans le gabarit (il fait le travail, et le clavier le voit), c'est son
 // étiquette qui se dessine. Sept cases à cocher alignées se lisent mal ; sept
@@ -94,7 +111,14 @@ const puces = (cle, libelle, options, type) => champ(cle, libelle,
 const vide = (o) => Object.fromEntries(
   Object.entries(o).filter(([, v]) => v !== '' && v != null));
 
-export function formulaireDemande(apresEnregistrement) {
+export function formulaireDemande(apporteurs, apresEnregistrement) {
+  // On montre la société quand elle existe, sinon la personne : c'est sous ce
+  // nom-là qu'un partenaire se désigne au téléphone.
+  const choixApporteurs = (apporteurs || [])
+    .map(a => [a.id, a.societe || a.raison_sociale
+      || [a.prenom, a.nom].filter(Boolean).join(' ') || '(sans nom)'])
+    .sort((x, y) => x[1].localeCompare(y[1], 'fr'));
+
   // ⚠ LA PERSONNE AVANT LE PROJET, et c'est l'inverse du site. Le site
   // commence par le projet parce qu'il doit accrocher avant d'oser demander
   // un numéro. Au téléphone, le nom et le numéro sont ce qui arrive en
@@ -113,6 +137,10 @@ export function formulaireDemande(apresEnregistrement) {
           ${texte('ville', 'Ville')}
           ${liste('type_demandeur', 'Type de demandeur', DEMANDEUR)}
           ${liste('comment_connu', 'Connu via', CONNU)}
+          <!-- ⚠ L'APPORTEUR PASSE DEVANT LE « CONNU VIA » DANS LA DECISION DE
+               PROVENANCE : un nom coche ici est un fait, « Recommandation »
+               dans la liste d'a cote est une categorie. -->
+          ${listeRef('apporteur_id', 'Apporté par', choixApporteurs, { large: true })}
           <!-- Ce champ ne sert que si la reponse precedente est une
                recommandation ; le reste du temps il encombre. -->
           <div class="ndf-champ est-large" data-champ="recommandation" hidden>
@@ -247,6 +275,7 @@ export function formulaireDemande(apresEnregistrement) {
         types_travaux: travaux, budget: lire('budget'),
         projet_description: lire('projet_description'),
         comment_connu: lire('comment_connu'), recommandation: lire('recommandation'),
+        apporteur_id: lire('apporteur_id') || null,
       }));
 
       closeModal();
