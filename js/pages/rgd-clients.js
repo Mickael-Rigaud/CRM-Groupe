@@ -128,6 +128,24 @@ const ETAPE_DU_STATUT = {
   perdu: 'archives',
 };
 
+// ⚠ L'INVERSE DE LA TABLE CI-DESSUS : le statut que porte une étape.
+// Il sert à tenir la promesse « le statut affiché correspond toujours à
+// l'onglet ». Mesuré le 23/09/2026 : 27 fiches affichaient « Nouveau
+// prospect » alors qu'elles avaient un chantier — la pastille contredisait
+// l'onglet, et c'est le genre d'incohérence qui fait douter de tout l'écran.
+//
+// « demande » n'y figure pas, et c'est voulu : cinq statuts y mènent (nouveau,
+// trois relances, contacté), et les écraser tous par un seul perdrait
+// l'information la plus utile de cette étape — où en est la relance.
+const STATUT_DE_L_ETAPE = {
+  rdv: 'rdv_planifie',
+  devis_encours: 'devis_envoye',
+  devis_accepte: 'devis_accepte',
+  chantier_encours: 'chantier_en_cours',
+  chantier_termine: 'chantier_termine',
+  archives: 'perdu',
+};
+
 // L'ordre du cycle, pour départager deux réponses. « archives » n'y figure
 // pas : une affaire perdue l'emporte sur tout le reste, elle n'est pas
 // « plus avancée », elle est sortie.
@@ -445,6 +463,7 @@ export const rgdClientsPage = {
             genre: 'demande', ligne: d, cible: 'demande',
             provenance: provenanceDemande(d),
             etape: (d.statut === 'perdu' ? 'archives' : ETAPE_DU_STATUT[d.statut]) || 'demande',
+            statutBrut: d.statut || 'nouveau_prospect',
             recu: d.date_demande || '', nom, type: null,
             email: d.email, tel: d.telephone,
             ville: d.ville, adresse: [d.adresse, [d.code_postal, d.ville].filter(Boolean).join(' ')]
@@ -468,7 +487,13 @@ export const rgdClientsPage = {
               type: q?.type || null, email: q?.email, tel: q?.tel,
               ville: q?.ville, adresse: adresseDe(q),
               projet: f.meta_type_projet, budget: f.meta_budget,
-              statut: f.statut_suivi || 'nouveau_prospect',
+              // ⚠ LE STATUT AFFICHÉ EST CELUI DE L'ÉTAPE, pas la valeur brute.
+              // Quand les faits ont pris de l'avance — un chantier tourne, le
+              // suivi est resté à « nouveau prospect » — c'est l'étape qui dit
+              // vrai. Afficher la valeur brute mettrait « Nouveau prospect »
+              // dans l'onglet « Chantier en cours ». La base n'est pas touchée :
+              // elle se corrige au premier changement fait depuis ce menu.
+              statut: STATUT_DE_L_ETAPE[etapeDe(f)] || f.statut_suivi || 'nouveau_prospect',
             };
           }),
       ];
@@ -796,6 +821,27 @@ export const rgdClientsPage = {
             if (!natif) {
               const ligne = scope.rgd(table).find(x => String(x.d1_id) === m.dataset.id);
               if (ligne) ligne[champ] = apres;
+            }
+            // ⚠ LA LIGNE GLISSE VERS SON NOUVEL ONGLET, ET CE N'EST PAS
+            // DÉCORATIF. Sans cela, changer un statut fait disparaître la ligne
+            // d'un coup : on ne sait pas si elle est partie quelque part ou si
+            // elle s'est effacée. L'animation montre OÙ elle va, et l'onglet de
+            // destination clignote pour qu'on le retrouve.
+            const versEtape = ETAPE_DU_STATUT[apres];
+            const changeDOnglet = versEtape && versEtape !== state.vue;
+            if (changeDOnglet) {
+              const tr = m.closest('tr');
+              const cible = root.querySelector(`.rcl-etapes [data-vue="${versEtape}"]`);
+              // Le sens du glissement suit le sens de la frise : vers la droite
+              // si l'affaire avance, vers la gauche si elle recule.
+              const av = ORDRE_ETAPES.indexOf(state.vue);
+              const ap = ORDRE_ETAPES.indexOf(versEtape);
+              const versLaDroite = versEtape === 'archives' || ap > av;
+              if (tr) tr.classList.add(versLaDroite ? 'rcl-part-droite' : 'rcl-part-gauche');
+              cible?.classList.add('rcl-arrive');
+              // On redessine APRÈS l'animation : redessiner tout de suite
+              // effacerait la ligne avant qu'elle ait bougé.
+              setTimeout(draw, 420);
             }
             toast(natif ? 'Statut mis à jour'
               : 'Statut mis à jour dans le tableau de bord RGD');
