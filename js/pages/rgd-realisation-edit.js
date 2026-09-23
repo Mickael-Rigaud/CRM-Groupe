@@ -30,7 +30,7 @@
 // les deux, on s'arrête et on le dit.
 //
 // ⚠ L'ATELIER COMPLET EST REVENU LE 23/09/2026, à la demande de Mickael.
-// La première version ne portait que le titre, la ville, la gamme, la surface,
+// La première version ne portait que le titre, la ville, la surface,
 // la durée, la description et l'ordre des photos. Il manquait tout ce qui fait
 // la fiche publique : le **tag avant/après** de chaque photo, les **paires du
 // curseur**, l'**avis client**, les **notes** et le bouton qui en tire une
@@ -58,15 +58,20 @@ const MOIS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
               'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
 const ANNEES = [2026, 2025, 2024, 2023];
 
-// ⚠ LA GAMME N'EST PLUS SAISIE (23/09/2026, demandé par Mickael : « on ne
-// l'utilise plus du tout »). Elle n'est ni dans le formulaire ni dans
-// `champsEdites()` — donc la valeur déjà présente sur une réalisation reste
-// dans le document et sur le site, elle n'est simplement plus modifiable.
-// L'effacer d'office aurait changé trente et une fiches publiques sans que
-// personne l'ait demandé ; c'est un geste à faire une fois, en connaissance
-// de cause, pas un effet de bord d'un champ retiré d'un écran.
-// `genererDescription` continue de la lire quand elle existe : la phrase
-// « haut de gamme et raffiné » est déjà dans les descriptions publiées.
+// ⚠ LA GAMME N'EXISTE PLUS NULLE PART (23/09/2026, demandé par Mickael :
+// « on ne l'utilise plus du tout », puis « sur le site il n'y a pas de
+// gamme »). Elle a quitté le formulaire, la fiche en lecture, `champsEdites()`
+// ET `genererDescription` — ce dernier point n'est pas un détail : il était le
+// SEUL endroit où ce champ avait encore un effet visible, puisqu'il choisissait
+// entre « haut de gamme et raffiné » et « moderne et fonctionnel ». Le laisser
+// aurait fait décider du texte publié par une donnée qu'on ne peut plus régler
+// et qui ne s'affiche nulle part : deux brouillons différents pour deux
+// chantiers semblables, sans que rien à l'écran n'en donne la raison.
+// La valeur DORT dans le document (19 Essentielle, 12 Signature au 23/09) et
+// n'est pas effacée : le site ne l'affiche pas, elle ne coûte donc rien, et
+// réécrire trente et une fiches pour retirer un champ invisible serait un
+// risque pris pour rien. Les descriptions déjà publiées ne bougent pas non
+// plus — le générateur ne s'applique qu'au clic.
 
 // Le cadrage d'une photo dans le curseur : c'est `background-position` côté
 // site, d'où des valeurs qui ne se traduisent pas (« left top » est une paire
@@ -139,13 +144,14 @@ function trouver(doc, slug) {
   return null;
 }
 
-// ⚠ FONCTION LOCALE, AUCUNE IA, AUCUN APPEL RÉSEAU — reprise telle quelle de
-// l'application d'origine, à la virgule près. Elle assemble trois paragraphes
-// à partir des notes en vrac, du titre, de la ville, de la surface, de la
-// durée et de la gamme. Le résultat est un BROUILLON qui atterrit dans le
-// champ « Description publiée » : rien ne part sur le site tant qu'on n'a pas
-// relu et publié. La réécrire « en mieux » ferait diverger le texte du site
-// selon l'outil qui l'a produit.
+// ⚠ FONCTION LOCALE, AUCUNE IA, AUCUN APPEL RÉSEAU — reprise de l'application
+// d'origine, à la virgule près sauf sur un point : elle assemble trois
+// paragraphes à partir des notes en vrac, du titre, de la ville, de la surface
+// et de la durée, mais PLUS de la gamme (voir plus haut). Le résultat est un
+// BROUILLON qui atterrit dans le champ « Description publiée » : rien ne part
+// sur le site tant qu'on n'a pas relu et publié. Ne pas la réécrire « en
+// mieux » pour autant : le texte du site ne doit pas dépendre de l'outil qui
+// l'a produit.
 function genererDescription(p) {
   const notes = (p.notes || '').split(/\n+|[·•]/).map(s => s.trim()).filter(Boolean);
   const type = /cuisine/i.test(p.title) ? 'cuisine'
@@ -156,7 +162,6 @@ function genererDescription(p) {
   const surfaceTxt = p.surface ? `(${p.surface})` : '';
   const durTxt = p.duration ? `en ${p.duration}` : '';
   const cityTxt = p.city ? ` à ${p.city.replace(/\s*\(.+\)/, '')}` : '';
-  const gammeAdj = /signature/i.test(p.gamme || '') ? 'haut de gamme et raffiné' : 'moderne et fonctionnel';
   const p1 = `Cette ${type}${cityTxt} ${surfaceTxt} a été entièrement repensée par nos équipes RGD Renova${durTxt ? ' ' + durTxt : ''}. L'objectif : gagner en confort, en lumière et en esthétisme.`.replace(/ {2,}/g, ' ');
   let p2;
   if (notes.length === 1) {
@@ -168,7 +173,7 @@ function genererDescription(p) {
   } else {
     p2 = `Les travaux ont couvert l'ensemble des corps d'état nécessaires : dépose, plomberie, électricité, revêtements et finitions.`;
   }
-  const p3 = `Le résultat livre un espace ${gammeAdj}, où chaque détail a été pensé pour durer. Découvrez ci-dessous la transformation en images.`;
+  const p3 = `Le résultat livre un espace moderne et fonctionnel, où chaque détail a été pensé pour durer. Découvrez ci-dessous la transformation en images.`;
   return [p1, p2, p3].join('\n\n');
 }
 
