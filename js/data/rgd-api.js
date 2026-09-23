@@ -410,32 +410,31 @@ export const majFourniture = (d1Id, champs) =>
 // mauvais enregistrements de suite, et la bonne version n'existe plus nulle
 // part. L'écran doit le dire avant de proposer « restaurer ».
 
-// Le document complet, lu à la source. Route PUBLIQUE (le site s'en sert),
-// donc sans jeton — mais on coupe le cache : le worker répond avec un
-// `max-age=60`, et relire une version d'il y a une minute avant de la
-// réécrire ferait perdre la modification de quelqu'un d'autre.
-export async function lireRealisations() {
+// ⚠ DEUX DOCUMENTS, UNE SEULE MÉCANIQUE. `rgd_site_documents` porte
+// `realisations` (5 catégories, 31 projets) ET `carrousel` (les images du
+// haut de la page d'accueil). Mêmes RPC, même remplacement en entier, même
+// unique niveau de retour arrière — les trois fonctions ci-dessous sont donc
+// écrites une fois et paramétrées par la clé. Les dédoubler ferait deux
+// endroits où corriger le jour où la mécanique bouge.
+async function lireDoc(cle, valide) {
   try {
     // ⚠ On passe par `rgd_lire_site`, PAS par la fonction publique du site :
     // celle-ci sert un cache d'une minute aux visiteurs, et republier une
     // version vieille d'une minute annulerait la modification de quelqu'un
     // d'autre — exactement ce que la relecture avant publication protège.
-    const d = await db.rpc('rgd_lire_site', { p_cle: 'realisations' });
-    if (!Array.isArray(d?.categories)) return { ok: false, motif: 'document inattendu' };
+    const d = await db.rpc('rgd_lire_site', { p_cle: cle });
+    if (!valide(d)) return { ok: false, motif: 'document inattendu' };
     return { ok: true, donnees: d };
   } catch (e) {
     return { ok: false, motif: String(e.message || e).slice(0, 120) };
   }
 }
 
-// Publier le document. `doc` doit être le document ENTIER — le worker refuse
-// (400) tout ce qui n'a pas de `categories`, ce qui est le garde-fou minimal
-// contre un envoi tronqué.
-export async function enregistrerRealisations(doc) {
+async function publierDoc(cle, doc) {
   try {
     // L'auteur n'est pas passé : la fonction le lit dans le jeton, où
     // personne ne peut l'inventer.
-    const r = await db.rpc('rgd_publier_site', { p_cle: 'realisations', p_doc: doc });
+    const r = await db.rpc('rgd_publier_site', { p_cle: cle, p_doc: doc });
     if (r?.ok === false) return { ok: false, motif: r.error || 'refusé' };
     return { ok: true, donnees: r };
   } catch (e) {
@@ -443,16 +442,39 @@ export async function enregistrerRealisations(doc) {
   }
 }
 
-// Revenir à la version précédente. UNE seule, voir plus haut.
-export async function restaurerRealisations() {
+async function restaurerDoc(cle) {
   try {
-    const r = await db.rpc('rgd_restaurer_site', { p_cle: 'realisations' });
+    const r = await db.rpc('rgd_restaurer_site', { p_cle: cle });
     if (r?.ok === false) return { ok: false, motif: r.error || 'refusé' };
     return { ok: true, donnees: r };
   } catch (e) {
     return { ok: false, motif: String(e.message || e).slice(0, 160) };
   }
 }
+
+// Le document complet, lu à la source.
+export const lireRealisations = () =>
+  lireDoc('realisations', (d) => Array.isArray(d?.categories));
+
+// Publier le document. `doc` doit être le document ENTIER — la RPC ne redéplie
+// le reflet que si `categories` porte au moins une entrée, ce qui est le
+// garde-fou minimal contre un envoi tronqué.
+export const enregistrerRealisations = (doc) => publierDoc('realisations', doc);
+
+// Revenir à la version précédente. UNE seule, voir plus haut.
+export const restaurerRealisations = () => restaurerDoc('realisations');
+
+// ⚠ Le carrousel a la MÊME contrainte de remplacement entier : `POST` écrase
+// la liste des images de la page d'accueil. Une liste amputée retire du site
+// les photos manquantes, et le retour arrière ne remonte que d'un cran.
+// ⚠ Et une contrainte de plus, qui ne se voit pas : le reflet `rgd_carrousel`
+// a une clé unique sur `url` et un `on conflict do nothing`. Deux fois la même
+// photo dans la liste, et la seconde n'apparaît PAS dans le CRM alors qu'elle
+// est bien sur le site — d'où le refus des doublons côté écran.
+export const lireCarrousel = () =>
+  lireDoc('carrousel', (d) => Array.isArray(d?.images));
+export const enregistrerCarrousel = (images) => publierDoc('carrousel', { images });
+export const restaurerCarrousel = () => restaurerDoc('carrousel');
 
 // Déposer une ou plusieurs photos. Elles vont dans le KV de Cloudflare et le
 // worker rend leurs URL publiques — à poser ensuite dans `images` d'un projet,

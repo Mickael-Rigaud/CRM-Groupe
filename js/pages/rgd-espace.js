@@ -65,6 +65,19 @@ export const guard = (root) => {
   return true;
 };
 
+// Une photo du site peut être enregistrée en chemin relatif (`/medias/…`,
+// héritage WordPress) ou en adresse complète (Supabase Storage, Cloudflare).
+// La rendre telle quelle donnerait un cadre cassé dans le CRM, qui n'est pas
+// servi par le même domaine. Partagée par les trois écrans des réalisations :
+// la recopier ferait trois versions d'une règle qui doit être unique.
+// ⚠ On complète UNIQUEMENT ce qui commence par « / », c'est-à-dire un chemin
+// depuis la racine du site. Tester « ça ne commence pas par http » préfixerait
+// aussi une image en `data:`, et le cadre resterait vide sans rien dire.
+export const lienPhoto = (u) => {
+  const s = String(u || '');
+  return s.startsWith('/') ? 'https://rgdrenova.fr' + s : s;
+};
+
 // Le client d'une affaire, particulier ou entreprise. Rendu `null` quand
 // l'affaire n'en désigne aucun — ce qui arrive, et se dit à l'écran.
 export function clientDe(affaire, db) {

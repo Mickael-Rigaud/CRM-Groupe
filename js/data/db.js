@@ -3,6 +3,7 @@
 // passent par l'adaptateur puis mettent le cache à jour.
 import { CONFIG } from '../config.js';
 import { SEED, SEED_USERS } from './seed.js';
+import { SEED_SITE, deplierSite } from './seed-site.js';
 
 export const TABLES = ['profiles', 'organisations', 'contacts', 'deals', 'activities', 'events', 'settings',
   // module Patrimoine
@@ -32,6 +33,7 @@ export const TABLES = ['profiles', 'organisations', 'contacts', 'deals', 'activi
 const LS_FILES = 'crm_local_files';
 const LS_KEY = 'crm_local_v1';
 const LS_USER = 'crm_local_user';
+const LS_SITE = 'crm_local_site_v1';
 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : 'id-' + Math.random().toString(36).slice(2) + Date.now());
 
@@ -89,12 +91,55 @@ const localAdapter = {
     const col = CLE_PRIMAIRE[table] || 'id';
     this.data[table] = this.data[table].filter(r => r[col] !== id); this.save();
   },
-  reset() { localStorage.removeItem(LS_KEY); localStorage.removeItem(LS_USER); localStorage.removeItem(LS_FILES); },
-  // Mode démo : aucune fonction SQL n'est appelée depuis le navigateur aujourd'hui.
-  // Celles qui existent (push_agenda, push_structure_stats) sont appelées par
-  // l'outil qui pousse les données, pas par le CRM. Si une page venait à en
-  // appeler une, c'est ici qu'on rejouerait son effet à la main.
-  async rpc(nom) { throw new Error('Fonction inconnue en mode démo : ' + nom); },
+  reset() {
+    localStorage.removeItem(LS_KEY); localStorage.removeItem(LS_USER);
+    localStorage.removeItem(LS_FILES); localStorage.removeItem(LS_SITE);
+  },
+
+  // Les deux documents du site RGD Renova (réalisations, carrousel), rangés à
+  // part de `crm_local_v1` : ce ne sont pas des tables, et les mêler au cache
+  // des tables les ferait recharger comme telles.
+  docsSite() {
+    try { const d = JSON.parse(localStorage.getItem(LS_SITE)); if (d) return d; } catch { /* illisible */ }
+    return structuredClone(SEED_SITE);
+  },
+  ecrireDocsSite(d) { try { localStorage.setItem(LS_SITE, JSON.stringify(d)); } catch { /* quota */ } },
+
+  // ⚠ MODE DÉMO : LES FONCTIONS DE LA BASE SONT REJOUÉES ICI, PAS IGNORÉES.
+  // Celles qui reçoivent des données de l'extérieur (`push_agenda`,
+  // `push_structure_stats`) n'ont rien à faire dans le navigateur et restent
+  // inconnues. Mais les trois du SITE sont appelées PAR UN ÉCRAN : sans elles,
+  // l'atelier des réalisations — le seul endroit du CRM dont l'écriture sort
+  // vers le public — ne pouvait s'essayer qu'en production, sur le site d'une
+  // entreprise en activité. On rejoue donc leur effet : même document remplacé
+  // en entier, même unique niveau de retour arrière, même dépliage du reflet.
+  async rpc(nom, args = {}) {
+    const cle = args.p_cle;
+    if (nom === 'rgd_lire_site' || nom === 'rgd_publier_site' || nom === 'rgd_restaurer_site') {
+      if (cle !== 'realisations' && cle !== 'carrousel') throw new Error('document inconnu : ' + cle);
+      const docs = this.docsSite();
+      if (nom === 'rgd_lire_site') return structuredClone(docs[cle]);
+
+      if (nom === 'rgd_publier_site') {
+        docs[cle + '_precedent'] = docs[cle];
+        docs[cle] = structuredClone(args.p_doc);
+      } else {
+        const prec = docs[cle + '_precedent'];
+        if (!prec) return { ok: false, error: 'aucune version précédente' };
+        docs[cle + '_precedent'] = docs[cle];
+        docs[cle] = prec;
+      }
+      this.ecrireDocsSite(docs);
+      // Le dépliage dans le MÊME geste que l'écriture, comme la RPC : l'écran
+      // recharge la table juste après et doit y trouver la nouvelle version.
+      // Garde-fou identique : un document vide ne vide pas le reflet.
+      const table = cle === 'carrousel' ? 'rgd_carrousel' : 'rgd_realisations';
+      const lignes = deplierSite(cle, docs[cle]);
+      if (lignes.length) { this.data[table] = lignes; this.save(); }
+      return { ok: true, cle };
+    }
+    throw new Error('Fonction inconnue en mode démo : ' + nom);
+  },
   // fichiers (démo) : conservés dans le navigateur en base64, petits fichiers uniquement
   files() { try { return JSON.parse(localStorage.getItem(LS_FILES)) || {}; } catch { return {}; } },
   async uploadFile(path, file) {

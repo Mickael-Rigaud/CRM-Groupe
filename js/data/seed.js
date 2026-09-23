@@ -1,5 +1,6 @@
 // Jeu de données de démonstration (mode local uniquement).
 import { SEED_BROKERS } from './seed-vivier.js';
+import { SEED_SITE, deplierSite } from './seed-site.js';
 const d = (offsetDays, h = 9) => {
   const x = new Date(); x.setHours(h, 0, 0, 0); x.setDate(x.getDate() + offsetDays); return x.toISOString();
 };
@@ -180,4 +181,9 @@ export const SEED = {
     { id: 'x8', property_id: 'p2', category: 'Eau / électricité / gaz', label: 'Électricité parties communes', amount: 38, recurrence: 'monthly', date: null, created_at: d(-300) },
     { id: 'x9', property_id: 'p3', category: 'Taxe foncière', label: 'Taxe foncière parking', amount: 110, recurrence: 'yearly', date: '2026-10-15', created_at: d(-30) },
   ],
+  // Le reflet des deux documents du site, déplié exactement comme le fait la
+  // RPC en production : une seule source (`SEED_SITE`), deux vues. Les écrire
+  // à la main à côté du document, c'est signer une divergence.
+  rgd_realisations: deplierSite('realisations', SEED_SITE.realisations),
+  rgd_carrousel: deplierSite('carrousel', SEED_SITE.carrousel),
 };

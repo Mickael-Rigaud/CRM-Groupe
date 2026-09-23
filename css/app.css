@@ -2583,8 +2583,92 @@ button.tb-pp:hover { color: var(--text); text-decoration: underline; text-underl
 .rea-avis { margin: 0; padding: 10px 14px; border-left: 3px solid var(--accent);
   background: var(--card-2); border-radius: 0 8px 8px 0; }
 .rea-avis footer { margin-top: 6px; }
+/* Une photo taguée « avant » se repère dans la grille de lecture : c'est ce
+   qui explique qu'elle soit moche, et ce qui alimente les curseurs. */
+.rea-etiq { position: absolute; top: 6px; right: 6px; background: var(--text);
+  color: #fff; font-size: 10.5px; font-weight: 700; border-radius: 8px; padding: 1px 7px; opacity: .85; }
+.rea-duo { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; border-radius: 10px;
+  overflow: hidden; background: var(--card-2); }
+.rea-duo img { display: block; width: 100%; height: 118px; object-fit: cover; }
+
+/* ---- L'ATELIER (édition dans le panneau, pas dans une modale) ------------ */
+.rea-neuf { width: 100%; margin-bottom: 12px; }
+.rea-sec { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line); }
+.rea-sec:first-of-type { border-top: 0; padding-top: 0; }
+.rea-sec h3 { margin: 0 0 6px; font-size: 15px; }
+.rea-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 14px; margin: 12px 0 4px; }
+.rea-champ { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.rea-champ > span { font-size: 12.5px; font-weight: 600; color: var(--muted); }
+.rea-champ input, .rea-champ select, .rea-champ textarea { font: inherit; padding: 9px 11px;
+  border: 1px solid var(--line); border-radius: 9px; background: var(--card); width: 100%; }
+.rea-champ textarea { resize: vertical; line-height: 1.55; }
+.rea-large { grid-column: 1 / -1; }
+.rea-combo { display: flex; gap: 6px; align-items: stretch; }
+.rea-combo > * { flex: 1; min-width: 0; }
+.rea-unite { flex: 0 0 auto; display: grid; place-items: center; padding: 0 11px;
+  border: 1px solid var(--line); border-radius: 9px; background: var(--card-2); color: var(--muted); }
+.rea-url { font: inherit; padding: 8px 11px; border: 1px solid var(--line);
+  border-radius: 9px; background: var(--card); flex: 1; min-width: 180px; }
+
+.rea-photos-edit { display: grid; grid-template-columns: repeat(auto-fill, minmax(158px, 1fr)); gap: 10px; }
+.rea-pcarte { position: relative; margin: 0; border: 1px solid var(--line); border-radius: 10px;
+  overflow: hidden; background: var(--card-2); cursor: grab; }
+.rea-pcarte img { display: block; width: 100%; height: 108px; object-fit: cover; }
+.rea-pcarte.glisse { opacity: .4; }
+.rea-pcarte.cible { outline: 2px dashed var(--accent); outline-offset: -2px; }
+.rea-pcarte figcaption { display: flex; align-items: center; gap: 3px; padding: 5px 5px 6px; }
+.rea-psup { position: absolute; top: 5px; right: 5px; border: 0; border-radius: 8px;
+  background: rgba(17,21,28,.6); color: #fff; font-size: 12px; line-height: 1;
+  padding: 4px 6px; cursor: pointer; }
+.rea-psup:hover { background: var(--red); }
+.rea-tag { font: inherit; font-size: 11px; padding: 3px 7px; border: 1px solid var(--line);
+  border-radius: 7px; background: var(--card); color: var(--muted); cursor: pointer; }
+.rea-tag.on-avant { background: var(--text); border-color: var(--text); color: #fff; }
+.rea-tag.on-apres { background: var(--green); border-color: var(--green); color: #fff; }
+.rea-fleche { font: inherit; font-size: 13px; line-height: 1; padding: 4px 7px;
+  border: 1px solid var(--line); border-radius: 7px; background: var(--card); cursor: pointer; }
+.rea-fleche:disabled { opacity: .35; cursor: default; }
+
+.rea-paire { display: grid; grid-template-columns: 34px 1fr 26px 1fr 34px; gap: 10px;
+  align-items: start; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.rea-paire-num { font-size: 12px; color: var(--muted-2); padding-top: 24px; }
+.rea-paire-col { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.rea-paire-fleche { align-self: center; color: var(--muted-2); text-align: center; }
+/* Une <img> plutôt qu'un `background-image` : une adresse de photo peut porter
+   une parenthèse, une apostrophe ou être une image `data:`, et `url(...)` en
+   CSS ne s'en remet pas — le cadre restait vide sans rien dire. */
+.rea-paire-vue { display: block; width: 100%; height: 92px; border-radius: 9px;
+  object-fit: cover; background: var(--card-2); }
+.rea-etoiles { display: flex; gap: 2px; }
+.rea-etoiles button { font-size: 20px; line-height: 1; border: 0; background: none;
+  color: var(--line-strong); cursor: pointer; padding: 0 1px; }
+.rea-etoiles button.on { color: var(--amber); }
+.rea-pied { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); }
+/* La bulle de messagerie est fixée en bas à droite : sans cette réserve, elle
+   recouvre « Publier sur le site » quand le contenu se termine au ras de la
+   fenêtre — le bouton principal de l'écran, à moitié caché. */
+.rea-panneau:has(.rea-pied) { padding-bottom: 76px; }
+
+/* ---- Le carrousel : une liste, parce que l'ORDRE est l'information ------- */
+.car-liste { display: flex; flex-direction: column; }
+.car-ligne { display: flex; align-items: center; gap: 10px; padding: 9px 4px;
+  border-bottom: 1px solid var(--line); }
+.car-ligne.glisse { opacity: .4; }
+.car-ligne.cible { outline: 2px dashed var(--accent); outline-offset: -2px; border-radius: 8px; }
+.car-poignee { color: var(--muted-2); cursor: grab; user-select: none; }
+.car-rang { width: 22px; font-size: 12px; color: var(--muted-2); }
+.car-ligne img { width: 88px; height: 62px; object-fit: cover; border-radius: 7px;
+  background: var(--card-2); flex: 0 0 auto; }
+.car-legende { font: inherit; flex: 1; min-width: 0; padding: 8px 10px;
+  border: 1px solid var(--line); border-radius: 9px; background: var(--card); }
 
 @media (max-width: 900px) {
   .rea-atelier { grid-template-columns: 1fr; }
   .rea-cote { max-height: none; }
+  .rea-paire { grid-template-columns: 1fr; }
+  .rea-paire-num { padding-top: 0; }
+  .rea-paire-fleche { display: none; }
+  .car-ligne { flex-wrap: wrap; }
+  .car-legende { order: 9; flex-basis: 100%; }
 }
