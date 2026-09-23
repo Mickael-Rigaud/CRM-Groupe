@@ -187,12 +187,43 @@ const FILTRES_CONTACTS = [
 const ETAPES_CLES = ['demande', 'rdv', 'devis_encours', 'devis_accepte',
   'chantier_encours', 'chantier_termine', 'archives', 'contacts'];
 
-const SOURCES = [
-  { key: 'site', label: 'Prospect site' },
-  { key: 'partenaire', label: 'Prospect partenaire' },
-  { key: 'meta', label: 'Prospect Meta Ads' },
-  { key: 'autre', label: 'Autre prospect' },
+// D'OÙ VIENT UN PROSPECT — une colonne, plus quatre sous-onglets
+// Les sous-onglets « Prospect site / partenaire / Meta Ads / autre » ont été
+// retirés le 23/09/2026 : découper la liste par provenance obligeait à ouvrir
+// quatre onglets pour voir quinze personnes. La provenance est une PROPRIÉTÉ
+// d'un prospect, pas un endroit où le ranger — elle devient une colonne.
+//
+// ⚠ LA MEILLEURE SOURCE, C'EST LA PERSONNE ELLE-MÊME.
+// Le formulaire du site demande « comment nous avez-vous connus », et la
+// réponse est plus fiable que tout ce qu'on pourrait déduire : elle distingue
+// une recommandation d'un passage par les réseaux, ce qu'aucun champ technique
+// ne sait faire. Elle passe donc AVANT la déduction par `source`.
+//
+// L'ordre ci-dessous est celui de la décision, du plus sûr au plus vague, et
+// « Direct » est le dernier recours — jamais un défaut qu'on attribue vite.
+const PROVENANCES = [
+  { key: 'partenaire',  label: 'Partenaire',      ton: 'prov-partenaire' },
+  { key: 'meta',        label: 'Meta Ads',        ton: 'prov-meta' },
+  { key: 'reco',        label: 'Recommandation',  ton: 'prov-reco' },
+  { key: 'reseaux',     label: 'Réseaux sociaux', ton: 'prov-reseaux' },
+  { key: 'site',        label: 'Site',            ton: 'prov-site' },
+  { key: 'direct',      label: 'Direct',          ton: 'prov-direct' },
 ];
+const ditProvenance = (cle) => PROVENANCES.find(x => x.key === cle) || PROVENANCES[5];
+
+// Le « connu via » du formulaire, tel que la personne l'a coché.
+const VIA = (txt) => {
+  const t = String(txt || '').toLowerCase();
+  if (t.includes('recommand') || t.includes('bouche')) return 'reco';
+  if (t.includes('réseau') || t.includes('reseau') || t.includes('facebook')
+      || t.includes('instagram') || t.includes('linkedin')) return 'reseaux';
+  return null;   // « Recherche Google », « Publicité »… restent du site
+};
+
+const pastilleProvenance = (cle) => {
+  const p = ditProvenance(cle);
+  return `<span class="chip prov ${p.ton}">${esc(p.label)}</span>`;
+};
 
 export const rgdClientsPage = {
   title: () => 'RGD Renova — Clients & prospects',
@@ -227,7 +258,11 @@ export const rgdClientsPage = {
         : vueDemandee === 'clients' ? 'contacts'
         : 'demande',
       filtreContact: vueDemandee === 'clients' ? 'clients' : '',
-      sousVue: SOURCES.some(x => x.key === ongletDemande) ? ongletDemande : 'site',
+      // ⚠ L'ANCIEN PARAMÈTRE `onglet=meta` DOIT CONTINUER DE MARCHER : les
+      // mails de notification déjà partis le portent, et un lien reçu hier ne
+      // doit pas tomber sur une liste filtrée sur rien. Il devient un filtre
+      // de provenance au lieu d'un sous-onglet.
+      provenance: PROVENANCES.some(x => x.key === ongletDemande) ? ongletDemande : '',
       q: '', type: '', statut: '', focus: null, ecriture: false,
     };
 
@@ -337,18 +372,54 @@ export const rgdClientsPage = {
         : state.filtreContact === 'clients' ? estClient(f)
         : state.filtreContact === 'prospects' ? (!estClient(f) && !estPartenaire(f))
         : true);
-      const parSource = {
-        site: demandes,
-        partenaire: fiches.filter(f => f.apporteur_id),
-        meta: fiches.filter(f => f.source === 'meta_ads'),
-        // La définition du tableau de bord, mot pour mot : une fiche SAISIE À
-        // LA MAIN et sans apporteur. Ma première version prenait « tout ce qui
-        // n'est ni Costructor, ni Meta, ni le site », une négation qui ramassait
-        // les 18 fiches marquées `Costructor` sans identifiant et les 2 venues
-        // de Google Agenda — vingt lignes là où l'original en montre zéro.
-        autre: fiches.filter(f => f.source === 'manuel' && !f.apporteur_id),
-      };
-      const nProspects = SOURCES.reduce((t, s) => t + parSource[s.key].length, 0);
+      // ---------- les prospects, une seule liste venue de DEUX tables
+      // `rgd_demandes` porte les demandes du formulaire du site, `rgd_clients`
+      // les fiches. Une demande n'a pas forcément de fiche, et l'inverse est
+      // vrai aussi : il faut donc les deux, ramenées à une forme commune.
+      //
+      // ⚠ LA FICHE SAISIE À LA MAIN SE RECONNAÎT PAR `source === 'manuel'`,
+      // pas par la négation « ni Costructor, ni Meta, ni le site » : cette
+      // négation ramasse les 18 fiches marquées `Costructor` sans identifiant
+      // et celles venues de Google Agenda, soit vingt lignes là où le tableau
+      // de bord n'en montre aucune.
+      const provenanceFiche = (f) => f.apporteur_id ? 'partenaire'
+        : f.source === 'meta_ads' ? 'meta'
+        : f.source === 'Formulaire site' ? 'site'
+        : 'direct';
+      const provenanceDemande = (d) => VIA(d.comment_connu) || 'site';
+
+      const prospects = [
+        ...demandes.map(d => {
+          const nom = `${d.prenom || ''} ${d.nom || ''}`.trim();
+          return {
+            genre: 'demande', ligne: d, cible: 'demande',
+            provenance: provenanceDemande(d),
+            recu: d.date_demande || '', nom, type: null,
+            email: d.email, tel: d.telephone,
+            ville: d.ville, adresse: [d.adresse, [d.code_postal, d.ville].filter(Boolean).join(' ')]
+              .filter(Boolean).join(' '),
+            projet: d.type_projet || d.projet_description, budget: d.budget,
+            statut: d.statut || 'nouveau_prospect',
+          };
+        }),
+        ...fiches
+          .filter(f => f.apporteur_id || f.source === 'meta_ads'
+            || f.source === 'Formulaire site' || f.source === 'manuel')
+          .filter(f => etapeDe(f) === null)   // un prospect n'a ni devis ni chantier
+          .map(f => {
+            const q = qui(f);
+            return {
+              genre: 'fiche', ligne: f, cible: 'client',
+              provenance: provenanceFiche(f),
+              recu: f.meta_received_at || q?.cree || '', nom: q?.nom || '(fiche sans contact)',
+              type: q?.type || null, email: q?.email, tel: q?.tel,
+              ville: q?.ville, adresse: adresseDe(q),
+              projet: f.meta_type_projet, budget: f.meta_budget,
+              statut: f.statut_suivi || 'nouveau_prospect',
+            };
+          }),
+      ];
+      const nProspects = prospects.length;
 
       // L'ordre est celui du dossier, pas celui des volumes : on lit l'écran
       // de gauche à droite comme une affaire avance.
@@ -375,10 +446,8 @@ export const rgdClientsPage = {
 
       const ts = terms(state.q);
       const surDemande = state.vue === 'demande';
-      const surDemandes = surDemande && state.sousVue === 'site';
-      const surMeta = surDemande && state.sousVue === 'meta';
 
-      const listeBrute = surDemande ? parSource[state.sousVue]
+      const listeBrute = surDemande ? []
         : state.vue === 'contacts' ? contactsVus
         : state.vue === 'rdv' ? []
         : parEtape(state.vue);
@@ -389,15 +458,20 @@ export const rgdClientsPage = {
       // n'est pas encore présente : c'est ainsi qu'on voit qu'aucune affaire
       // n'est au stade « devis envoyé », ce qu'une liste réduite cacherait.
       const surProspects = surDemande;
-      const champStatut = (x) => surProspects
-        ? (state.sousVue === 'site' ? x.statut : (x.statut_suivi || 'nouveau_prospect'))
-        : x.statut;
+      // Le plus récent en haut : c'est celui qu'on n'a pas encore rappelé.
+      const lignesProspects = (surDemande ? prospects : [])
+        .filter(x => (!state.provenance || x.provenance === state.provenance)
+          && (!state.statut || x.statut === state.statut)
+          && hit([x.nom, x.email, x.tel, x.ville, x.adresse, x.projet], ts))
+        .sort((a, b) => String(b.recu || '').localeCompare(String(a.recu || '')));
+      // Les prospects filtrent leur `statut` dans `lignesProspects` ; ici il ne
+      // reste que les fiches des étapes suivantes, qui portent `statut`.
+      const champStatut = (x) => x.statut;
       const statuts = surProspects ? STATUTS_SUIVI : STATUTS_FICHE;
 
       const recuLe = ({ f, p }) => f.meta_received_at || p?.cree || '';
 
       const lignesFiches = listeBrute
-        .filter(f => !surDemandes)
         .map(f => ({ f, p: qui(f) }))
         .filter(({ f, p }) => (!state.type || p?.type === state.type)
           && (!state.statut || champStatut(f) === state.statut)
@@ -417,13 +491,7 @@ export const rgdClientsPage = {
           ? (a, b) => String(recuLe(b) || '').localeCompare(String(recuLe(a) || ''))
           : (a, b) => String(a.p?.famille || '').localeCompare(String(b.p?.famille || ''), 'fr'));
 
-      const lignesDemandes = (surDemandes ? demandes : [])
-        .filter(d => (!state.statut || (d.statut || 'nouveau_prospect') === state.statut)
-          && hit([`${d.prenom || ''} ${d.nom || ''}`, d.email, d.telephone, d.ville,
-                  d.adresse, d.type_projet, d.projet_description], ts))
-        .sort((a, b) => String(b.date_demande || '').localeCompare(String(a.date_demande || '')));
-
-      const affichees = surDemandes ? lignesDemandes.length : lignesFiches.length;
+      const affichees = surDemande ? lignesProspects.length : lignesFiches.length;
 
       // ---------- les deux tableaux ----------
       const tableauFiches = () => `<section class="card table-wrap">
@@ -451,65 +519,38 @@ export const rgdClientsPage = {
         </table>
       </section>`;
 
-      const tableauDemandes = () => `<section class="card table-wrap">
+      // UN SEUL TABLEAU POUR LES DEUX TABLES. Les colonnes sont celles que les
+      // deux populations savent remplir ; « Projet » et « Budget » lisent la
+      // demande du site OU les réponses au formulaire Meta, pour ne rien
+      // perdre de ce que la personne a écrit elle-même.
+      const tableauProspects = () => `<section class="card table-wrap">
         <table>
-          <thead><tr><th>Date</th><th>Nom</th><th>Email</th><th>Téléphone</th><th>Projet</th>
-            <th>Budget</th><th>Adresse</th><th>Connu via</th><th>Statut</th><th>Commentaire</th><th></th></tr></thead>
-          <tbody>${lignesDemandes.map(d => `<tr>
-            <td class="small">${d.date_demande ? esc(fmtDateTime(d.date_demande)) : '<span class="muted">—</span>'}</td>
-            <td><b>${esc(`${d.prenom || ''} ${d.nom || ''}`.trim() || '—')}</b></td>
-            <td>${d.email ? `<a href="mailto:${esc(d.email)}">${esc(d.email)}</a>` : '<span class="muted">—</span>'}</td>
-            <td>${esc(d.telephone || '—')}</td>
-            <td class="muted">${esc(d.type_projet || d.projet_description || '—')}</td>
-            <td class="muted">${esc(String(d.budget || '—').trim())}</td>
-            <td class="muted">${esc([d.adresse, [d.code_postal, d.ville].filter(Boolean).join(' ')].filter(Boolean).join(' ') || '—')}</td>
-            <td class="muted">${esc(d.comment_connu || '—')}</td>
-            <td>${state.ecriture ? menuStatut(d.statut, 'demande', d.d1_id, d.id) : pastilleSuivi(d.statut)}</td>
-            <td class="rcl-note">${champNote(d, 'demande', state.ecriture)}</td>
-            <td>${boutonSuppression(d)}</td>
-          </tr>`).join('') || `<tr><td colspan="11"><div class="empty">${esc(vide())}</div></td></tr>`}</tbody>
-        </table>
-        <p class="small muted">${state.ecriture
-          ? 'Le statut se change ici et part directement dans le tableau de bord RGD. Le commentaire, lui, se saisit dans l’<a href="#/rgd/app">application RGD</a>.'
-          : 'Le statut et le commentaire se modifient dans l’<a href="#/rgd/app">application RGD</a> : ici ils sont lus, pas saisis.'}</p>
-      </section>`;
-
-      // LES LEADS META ONT LEURS PROPRES COLONNES, et pour une raison : ce
-      // sont LES QUESTIONS DU FORMULAIRE Facebook. Projet, type de bien,
-      // ville, budget — la personne y a répondu elle-même. Les ranger dans le
-      // tableau générique des fiches reviendrait à jeter ce qu'elle a dit pour
-      // afficher ce que la base en a fait.
-      const tableauMeta = () => `<p class="small muted rcl-intro">Leads reçus depuis les campagnes
-        Facebook et Instagram (webhook Zapier). Chaque prospect a reçu un email de
-        confirmation automatique.</p>
-        <section class="card table-wrap">
-        <table>
-          <thead><tr><th>Reçu</th><th>Nom</th><th>Contact</th><th>Projet</th><th>Bien</th>
-            <th>Ville</th><th>Budget</th><th>Statut</th><th>Note</th><th></th></tr></thead>
-          <tbody>${lignesFiches.map(({ f, p }) => `<tr>
-            <td class="small">${f.meta_received_at
-              ? esc(new Date(f.meta_received_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' }))
-              : '<span class="muted">—</span>'}</td>
-            <td><b>${esc(p?.nom || '—')}</b></td>
-            <td>${p?.email ? `<a href="mailto:${esc(p.email)}">${esc(p.email)}</a>` : ''}
-                ${p?.tel ? `<div class="s">${esc(p.tel)}</div>` : ''}
-                ${!p?.email && !p?.tel ? '<span class="muted">—</span>' : ''}</td>
-            <td>${esc(f.meta_type_projet || '—')}</td>
-            <td class="muted">${esc(f.meta_type_bien || '—')}</td>
-            <td class="muted">${esc(p?.ville || '—')}</td>
-            <td class="muted">${esc(f.meta_budget || '—')}</td>
-            <td>${state.ecriture ? menuStatut(f.statut_suivi, 'client', f.d1_id, f.id) : pastilleSuivi(f.statut_suivi)}</td>
-            <td class="rcl-note">${champNote(f, 'client', state.ecriture)}</td>
-            <td>${boutonSuppression(f)}</td>
+          <thead><tr><th>Reçu</th><th>Provenance</th><th>Nom</th><th>Contact</th>
+            <th>Projet</th><th>Budget</th><th>Ville</th><th>Statut</th>
+            <th>Commentaire</th><th></th></tr></thead>
+          <tbody>${lignesProspects.map(x => `<tr>
+            <td class="small">${x.recu ? esc(fmtDate(x.recu)) : '<span class="muted">—</span>'}</td>
+            <td>${pastilleProvenance(x.provenance)}</td>
+            <td><b>${esc(x.nom || '—')}</b>
+                ${x.type ? `<div class="s muted">${esc(x.type)}</div>` : ''}</td>
+            <td>${x.email ? `<a href="mailto:${esc(x.email)}">${esc(x.email)}</a>` : ''}
+                ${x.tel ? `<div class="s">${esc(x.tel)}</div>` : ''}
+                ${!x.email && !x.tel ? '<span class="muted">—</span>' : ''}</td>
+            <td class="muted">${esc(x.projet || '—')}</td>
+            <td class="muted">${esc(String(x.budget || '—').trim())}</td>
+            <td class="muted">${esc(x.ville || '—')}</td>
+            <td>${state.ecriture
+              ? menuStatut(x.statut, x.cible, x.ligne.d1_id, x.ligne.id)
+              : pastilleSuivi(x.statut)}</td>
+            <td class="rcl-note">${champNote(x.ligne, x.cible, state.ecriture)}</td>
+            <td>${boutonSuppression(x.ligne)}</td>
           </tr>`).join('') || `<tr><td colspan="10"><div class="empty">${esc(vide())}</div></td></tr>`}</tbody>
         </table>
         <p class="small muted">${state.ecriture
-          ? 'Le statut se change ici et part directement dans le tableau de bord RGD — et, si le lead a un apporteur, celui-ci en est averti par email. La note se saisit dans l’<a href="#/rgd/app">application RGD</a>.'
-          : 'Le statut et la note se modifient dans l’<a href="#/rgd/app">application RGD</a> : ici ils sont lus, pas saisis.'}</p>
+          ? 'Le statut se change ici et part directement dans le tableau de bord RGD — et, si le prospect a un apporteur, celui-ci en est averti par email. Le commentaire se saisit dans l’<a href="#/rgd/app">application RGD</a>.'
+          : 'Le statut et le commentaire se modifient dans l’<a href="#/rgd/app">application RGD</a> : ici ils sont lus, pas saisis.'}</p>
       </section>`;
 
-      // Une liste vide doit dire POURQUOI. « Aucune fiche » laisse croire à une
-      // panne là où il n'y a, le plus souvent, personne à cette étape.
       function vide() {
         if (state.q || state.type || state.statut) return 'Aucune fiche ne correspond aux filtres.';
         if (state.vue === 'contacts') return ({
@@ -536,8 +577,12 @@ export const rgdClientsPage = {
         </div>
 
         ${surDemande ? `<div class="pill-tabs sous">
-          ${SOURCES.map(s => `<button type="button" data-sous="${s.key}"
-            class="${state.sousVue === s.key ? 'on' : ''}">${s.label}<span>${parSource[s.key].length}</span></button>`).join('')}
+          <button type="button" data-prov="" class="${!state.provenance ? 'on' : ''}">Toutes<span>${prospects.length}</span></button>
+          ${PROVENANCES.map(pr => {
+            const n = prospects.filter(x => x.provenance === pr.key).length;
+            return `<button type="button" data-prov="${pr.key}"
+              class="${state.provenance === pr.key ? 'on' : ''}">${esc(pr.label)}<span>${n}</span></button>`;
+          }).join('')}
         </div>` : ''}
 
         ${state.vue === 'contacts' ? `<div class="pill-tabs sous">
@@ -559,9 +604,9 @@ export const rgdClientsPage = {
           téléphone. Rien n’est supprimé — les fiches existent toujours dans l’<a href="#/rgd/app">application RGD</a>.</p>` : ''}
 
         <div class="toolbar">
-          ${searchInput('rcl-q', state, surDemandes || surMeta
-            ? 'Recherche nom, email, ville…' : 'Rechercher nom, email, téléphone…')}
-          ${surDemandes || surMeta ? '' : `<select id="rcl-type" aria-label="Type">
+          ${searchInput('rcl-q', state, surDemande
+            ? 'Recherche nom, email, ville, projet…' : 'Rechercher nom, email, téléphone…')}
+          ${surDemande ? '' : `<select id="rcl-type" aria-label="Type">
             <option value="">Tous types</option>
             <option value="particulier" ${state.type === 'particulier' ? 'selected' : ''}>Particulier</option>
             <option value="professionnel" ${state.type === 'professionnel' ? 'selected' : ''}>Professionnel</option>
@@ -576,9 +621,7 @@ export const rgdClientsPage = {
             ? '<button class="btn" id="rcl-nouveau">+ Nouveau prospect</button>' : ''}
         </div>
 
-        ${surDemandes ? tableauDemandes()
-          : surMeta ? tableauMeta()
-          : tableauFiches()}`;
+        ${surDemande ? tableauProspects() : tableauFiches()}`;
 
       root.innerHTML = cadre('#/rgd/clients', 'Clients & prospects', corps);
       bindSearch(root, 'rcl-q', state, draw);
@@ -589,8 +632,8 @@ export const rgdClientsPage = {
         // sans qu'on comprenne pourquoi.
         state.vue = b.dataset.vue; state.q = ''; state.type = ''; state.statut = ''; draw();
       });
-      root.querySelectorAll('[data-sous]').forEach(b => b.onclick = () => {
-        state.sousVue = b.dataset.sous; state.q = ''; state.type = ''; state.statut = ''; draw();
+      root.querySelectorAll('[data-prov]').forEach(b => b.onclick = () => {
+        state.provenance = b.dataset.prov; state.q = ''; state.statut = ''; draw();
       });
       root.querySelectorAll('[data-filtre]').forEach(b => b.onclick = () => {
         state.filtreContact = b.dataset.filtre; state.q = ''; state.type = ''; state.statut = ''; draw();
@@ -599,15 +642,20 @@ export const rgdClientsPage = {
       // Cloudflare ne la verra jamais. `draw` suffit a la faire apparaitre —
       // `db.insert` a deja pousse la ligne dans le cache local.
       const nouveau = root.querySelector('#rcl-nouveau');
-      if (nouveau) nouveau.onclick = () => formulaireProspect(state.sousVue, apporteurs, draw);
+      // La saisie à la main crée une fiche « manuel », donc une provenance
+      // « Direct » — c'est ce que le formulaire produisait déjà sous l'onglet
+      // « Autre prospect ».
+      if (nouveau) nouveau.onclick = () => formulaireProspect('autre', apporteurs, draw);
 
       // Supprimer : le bouton n'existe que sur les fiches nees dans le CRM
       // (`boutonSuppression` ne rend rien autrement), et `supprimerProspect`
       // reverifie — un ecran est un garde-fou, pas une garantie.
       root.querySelectorAll('[data-suppr]').forEach(b => b.onclick = () => {
-        const table = surDemandes ? demandes : fiches;
-        const ligne = table.find(x => x.id === b.dataset.suppr);
-        if (ligne) supprimerFiche(surDemande ? state.sousVue : 'client', ligne, draw);
+        const ligne = [...demandes, ...fiches].find(x => x.id === b.dataset.suppr);
+        if (!ligne) return;
+        // Une demande du site et une fiche ne se suppriment pas au même
+        // endroit : on prend le genre de la ligne, pas celui de l'onglet.
+        supprimerFiche(demandes.includes(ligne) ? 'site' : 'client', ligne, draw);
       });
 
       // L'écriture du commentaire, sur le même principe que le statut : deux
