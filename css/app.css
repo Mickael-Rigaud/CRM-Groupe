@@ -434,6 +434,39 @@ select.cell-in { text-align: left; }
 }
 .pill-tabs.rcl-etapes button { position: relative; margin-right: 6px; }
 .pill-tabs.rcl-etapes button.on::after { border-color: transparent; }
+
+/* LE GLISSEMENT D'UNE LIGNE VERS SON NOUVEL ONGLET.
+   Changer un statut fait sortir la personne de la liste ouverte. Sans
+   animation, la ligne disparait d'un coup et on ne sait pas si elle est
+   partie quelque part ou si elle s'est effacee — le doute est pire que
+   l'attente. Elle glisse donc dans le sens de la frise, et l'onglet
+   d'arrivee clignote pour qu'on le retrouve.
+   ⚠ `prefers-reduced-motion` coupe tout : le mouvement est un confort, pas
+   une information — la ligne part quand meme, sans glisser. */
+@keyframes rcl-sortie-droite {
+  to { transform: translateX(46px); opacity: 0; background: var(--accent-soft); }
+}
+@keyframes rcl-sortie-gauche {
+  to { transform: translateX(-46px); opacity: 0; background: var(--card-2); }
+}
+.rcl-part-droite td, .rcl-part-gauche td { transition: none; }
+.rcl-part-droite { animation: rcl-sortie-droite .4s cubic-bezier(.4, 0, .6, 1) forwards; }
+.rcl-part-gauche { animation: rcl-sortie-gauche .4s cubic-bezier(.4, 0, .6, 1) forwards; }
+
+@keyframes rcl-arrivee {
+  0%, 100% { transform: none; }
+  30% { transform: translateY(-3px) scale(1.06); }
+}
+.pill-tabs.rcl-etapes button.rcl-arrive {
+  animation: rcl-arrivee .45s ease-out;
+  border-color: var(--accent); color: var(--accent-ink); background: var(--accent-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rcl-part-droite, .rcl-part-gauche { animation: none; opacity: .35; }
+  .pill-tabs.rcl-etapes button.rcl-arrive { animation: none; }
+  .pill-tabs.rcl-etapes button:hover:not(.on) { transform: none; }
+}
 @media (max-width: 1400px) { .pill-tabs.rcl-etapes button { font-size: 13px; padding-left: 11px; padding-right: 11px; } }
 
 .pill-tabs.sous { margin-top: -6px; }
@@ -2063,11 +2096,33 @@ button.tb-pp:hover { color: var(--text); text-decoration: underline; text-underl
 .rgd-ca-frais.ko { border-color: var(--red); background: var(--red-soft); color: var(--text); }
 .rgd-ca-frais a { margin-left: auto; }
 .rgd-courbe { width: 100%; height: auto; display: block; overflow: visible; margin-bottom: 4px; }
-.rgd-barre { fill: var(--accent); opacity: .18; }
-.rgd-trait { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; }
-.rgd-point { fill: var(--accent); }
+.rgd-barre { fill: var(--accent); opacity: .16; transition: opacity .12s; }
+.rgd-trait { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-linejoin: round;
+  stroke-linecap: round; }
+.rgd-point { fill: var(--card); stroke: var(--accent); stroke-width: 2.5; transition: r .12s; }
 .rgd-grille { stroke: var(--line); stroke-width: 1; }
 .rgd-axe { fill: var(--muted); font-size: 11px; }
+
+/* Le survol d'un mois. Tout est en CSS : la zone de capture couvre la HAUTEUR
+   ENTIÈRE de la colonne, sinon les mois creux — août fait 4 518 € contre
+   67 000 € en mai — seraient les plus durs à atteindre alors que ce sont ceux
+   qu'on cherche. */
+.rgd-zone { fill: transparent; }
+.rgd-info { opacity: 0; transition: opacity .12s; pointer-events: none; }
+.rgd-mois:hover .rgd-info { opacity: 1; }
+.rgd-mois:hover .rgd-barre { opacity: .42; }
+.rgd-mois:hover .rgd-point { r: 6; }
+.rgd-bulle { fill: var(--ink); }
+.rgd-bulle-mois { fill: #fff; opacity: .7; font-size: 11px; }
+.rgd-bulle-ca { fill: #fff; font-size: 14px; font-weight: 700; }
+
+/* Le graphique et la journée côte à côte, le graphique d'abord — c'est ce
+   qu'on vient voir le matin. Sous 1100 px la colonne de droite passe dessous :
+   une courbe de douze mois écrasée à 300 px ne se lit plus. */
+.rgd-duo { display: grid; grid-template-columns: minmax(0, 2.1fr) minmax(0, 1fr);
+  gap: 16px; align-items: start; margin-bottom: 16px; }
+.rgd-jour { align-self: stretch; }
+@media (max-width: 1100px) { .rgd-duo { grid-template-columns: minmax(0, 1fr); } }
 
 .rgd-pipe-table { width: 100%; border-collapse: collapse; }
 .rgd-pipe-table tr + tr th, .rgd-pipe-table tr + tr td { border-top: 1px solid var(--line); }

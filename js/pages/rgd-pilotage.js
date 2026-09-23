@@ -100,29 +100,74 @@ function caParMois(paiements, d = new Date()) {
 }
 
 /**
- * La courbe du CA : une barre par mois, une ligne pour le suivre.
+ * La courbe du CA : une barre par mois, une ligne pour la suivre, et le montant
+ * du mois au survol.
+ *
  * ⚠ PAS DE BIBLIOTHÈQUE. Chart.js est vendu dans le CRM, mais douze valeurs ne
- * justifient pas de le charger sur l'écran qui s'ouvre le matin.
+ * justifient pas de le charger sur l'écran qu'on ouvre le matin.
+ *
+ * ⚠ LE SURVOL EST EN CSS, PAS EN JAVASCRIPT. Chaque mois est un `<g>` qui
+ * porte une zone de capture invisible sur TOUTE la hauteur : on n'a pas à
+ * viser la barre, qui est minuscule les mois creux — août fait 4 518 € contre
+ * 67 000 € en mai. Sans cette zone, le mois le plus intéressant à survoler
+ * serait le plus difficile à atteindre.
+ *
+ * ⚠ LA BULLE EST RECADRÉE AUX BORDS. Centrée sur le premier ou le dernier
+ * mois, elle sortirait du cadre et serait coupée — un SVG ne déborde pas.
  */
 function courbeCa(mois) {
   if (!mois.length) return '<div class="empty">Aucune facture sur cet exercice.</div>';
-  const L = 960, H = 210, bas = H - 26, gauche = 54, droite = 12;
+  const L = 960, H = 260, bas = H - 34, gauche = 56, droite = 14;
   const large = L - gauche - droite, pas = large / mois.length;
   const max = Math.max(1, ...mois.map(m => m.ht));
-  const y = (v) => bas - (v / max) * (bas - 14);
+  const y = (v) => bas - (v / max) * (bas - 30);
   const x = (i) => gauche + pas * i + pas / 2;
+
   const graduations = [0, 0.25, 0.5, 0.75, 1].map(f => `<g>
     <line x1="${gauche}" x2="${L - droite}" y1="${y(max * f)}" y2="${y(max * f)}" class="rgd-grille"></line>
-    <text x="${gauche - 8}" y="${y(max * f) + 4}" class="rgd-axe" text-anchor="end">${Math.round(max * f / 1000)}k€</text></g>`).join('');
-  const barres = mois.map((m, i) => `<rect x="${gauche + pas * i + pas * 0.22}" y="${y(m.ht)}"
-    width="${pas * 0.56}" height="${Math.max(0, bas - y(m.ht))}" rx="3" class="rgd-barre"></rect>`).join('');
+    <text x="${gauche - 10}" y="${y(max * f) + 4}" class="rgd-axe" text-anchor="end">${Math.round(max * f / 1000)}k€</text></g>`).join('');
+
+  // L'aire sous la courbe, en dégradé : elle donne le volume que douze barres
+  // seules ne montrent pas, et se referme sur la ligne du zéro.
+  const aire = `M${x(0).toFixed(1)},${bas} `
+    + mois.map((m, i) => `L${x(i).toFixed(1)},${y(m.ht).toFixed(1)}`).join(' ')
+    + ` L${x(mois.length - 1).toFixed(1)},${bas} Z`;
   const trait = mois.map((m, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(m.ht).toFixed(1)}`).join(' ');
-  const points = mois.map((m, i) => `<circle cx="${x(i).toFixed(1)}" cy="${y(m.ht).toFixed(1)}" r="4" class="rgd-point">
-    <title>${esc(m.label)} · ${esc(eur(m.ht))} HT</title></circle>`).join('');
-  const legendes = mois.map((m, i) => `<text x="${x(i).toFixed(1)}" y="${H - 6}" class="rgd-axe" text-anchor="middle">${esc(m.label)}</text>`).join('');
+
+  const LARGE_BULLE = 108, HAUT_BULLE = 40;
+  const colonnes = mois.map((m, i) => {
+    const cx = x(i);
+    // Recadrage : la bulle reste entière dans le cadre.
+    const bx = Math.min(Math.max(cx - LARGE_BULLE / 2, 2), L - LARGE_BULLE - 2);
+    // Au-dessus du point, sauf quand le point est trop haut : elle passe dessous.
+    const haut = y(m.ht) - HAUT_BULLE - 10;
+    const by = haut < 2 ? y(m.ht) + 12 : haut;
+    return `<g class="rgd-mois">
+      <rect class="rgd-zone" x="${(gauche + pas * i).toFixed(1)}" y="0" width="${pas.toFixed(1)}" height="${bas}"></rect>
+      <rect class="rgd-barre" x="${(gauche + pas * i + pas * 0.24).toFixed(1)}" y="${y(m.ht).toFixed(1)}"
+        width="${(pas * 0.52).toFixed(1)}" height="${Math.max(0, bas - y(m.ht)).toFixed(1)}" rx="4"></rect>
+      <circle class="rgd-point" cx="${cx.toFixed(1)}" cy="${y(m.ht).toFixed(1)}" r="4.5"></circle>
+      <g class="rgd-info" transform="translate(${bx.toFixed(1)},${by.toFixed(1)})">
+        <rect width="${LARGE_BULLE}" height="${HAUT_BULLE}" rx="8" class="rgd-bulle"></rect>
+        <text x="${LARGE_BULLE / 2}" y="16" text-anchor="middle" class="rgd-bulle-mois">${esc(m.label)}</text>
+        <text x="${LARGE_BULLE / 2}" y="32" text-anchor="middle" class="rgd-bulle-ca">${esc(eur(m.ht))}</text>
+      </g>
+      <title>${esc(m.label)} · ${esc(eur(m.ht))} HT</title>
+    </g>`;
+  }).join('');
+
+  const legendes = mois.map((m, i) => `<text x="${x(i).toFixed(1)}" y="${H - 8}" class="rgd-axe" text-anchor="middle">${esc(m.label)}</text>`).join('');
+
   return `<svg class="rgd-courbe" viewBox="0 0 ${L} ${H}" role="img"
     aria-label="Chiffre d'affaires HT facturé mois par mois sur l'exercice">
-    ${graduations}${barres}<path d="${trait}" class="rgd-trait"></path>${points}${legendes}</svg>`;
+    <defs><linearGradient id="rgd-aire" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="var(--accent)" stop-opacity=".28"></stop>
+      <stop offset="100%" stop-color="var(--accent)" stop-opacity="0"></stop>
+    </linearGradient></defs>
+    ${graduations}
+    <path d="${aire}" fill="url(#rgd-aire)"></path>
+    <path d="${trait}" class="rgd-trait"></path>
+    ${colonnes}${legendes}</svg>`;
 }
 
 export const rgdPilotagePage = {
@@ -242,6 +287,8 @@ export const rgdPilotagePage = {
       // journée et les alertes ferment l'écran.
       const corps = `
 
+        <div class="rgd-duo">
+
         <section class="card rgd-ca">
           <div class="card-head"><h2>Chiffre d’affaires ${esc(ex.label)}</h2>
             <span class="grow"></span>
@@ -281,6 +328,25 @@ export const rgdPilotagePage = {
           </p>
         </section>
 
+        <section class="card rgd-jour">
+          <div class="card-head"><h2>Aujourd’hui</h2>
+            <span class="grow"></span>
+            <span class="muted small">${fmtDate(aujourdhui)}</span></div>
+          ${rdv.length ? `<ul class="pil-liste">${rdv
+            .sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at))
+            .map(e => `<li>
+              <b>${e.all_day ? 'journée' : esc(new Date(e.starts_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }))}</b>
+              <span>${esc(e.title || '(sans titre)')}</span>
+              ${e.location ? `<span class="muted small">${esc(e.location)}</span>` : ''}
+            </li>`).join('')}</ul>`
+            : '<div class="empty">Aucun rendez-vous relevé aujourd’hui.</div>'}
+          <p class="small muted">Relevé depuis Google Agenda. Les notes Google Keep du
+          tableau de bord ne sont pas reprises : elles vivent chez Google et le CRM
+          ne les lit pas.</p>
+        </section>
+
+        </div>
+
         <div class="esp-kpis">
           ${kpiEspace({ label: 'Rentabilité moyenne',
             valeur: marge === null ? '—' : pct(marge),
@@ -317,22 +383,6 @@ export const rgdPilotagePage = {
               aucun état renseigné et ne compte${chantiers.filter(c => !c.etat).length > 1 ? 'nt' : ''} dans aucune étape.` : ''}</p>
         </section>
 
-        <section class="card">
-          <div class="card-head"><h2>Aujourd’hui</h2>
-            <span class="grow"></span>
-            <span class="muted small">${fmtDate(aujourdhui)}</span></div>
-          ${rdv.length ? `<ul class="pil-liste">${rdv
-            .sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at))
-            .map(e => `<li>
-              <b>${e.all_day ? 'journée' : esc(new Date(e.starts_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }))}</b>
-              <span>${esc(e.title || '(sans titre)')}</span>
-              ${e.location ? `<span class="muted small">${esc(e.location)}</span>` : ''}
-            </li>`).join('')}</ul>`
-            : '<div class="empty">Aucun rendez-vous relevé aujourd’hui.</div>'}
-          <p class="small muted">Relevé depuis Google Agenda. Les notes Google Keep du
-          tableau de bord ne sont pas reprises : elles vivent chez Google et le CRM
-          ne les lit pas.</p>
-        </section>
 
         ${docsSt.length || leads.length ? `<div class="pil-alertes">
           ${leads.length ? `<a class="pil-alerte" href="#/rgd/clients">
