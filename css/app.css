@@ -2025,8 +2025,31 @@ button.tb-pp:hover { color: var(--text); text-decoration: underline; text-underl
 .rgd-pipe-n { text-align: right; font-family: var(--font-display); font-weight: 700;
   font-size: 15px; min-width: 44px; }
 .rgd-pipe-pied { margin: 12px 0 0; border-top: 1px solid var(--line); padding-top: 10px; }
+
+/* Les sections de l'écran Partenaires, reprises du tableau de bord d'origine :
+   un liseré de couleur à gauche, un titre en capitales, un compteur en pastille.
+   La couleur arrive par `--pa-trait`, posé en style inline par la page — c'est
+   la seule façon de la faire varier d'une section à l'autre sans écrire une
+   règle par catégorie, et elle vient elle-même des variables du thème. */
+.pa-sect { border-left: 4px solid var(--pa-trait, var(--accent)); padding: 16px 18px; }
+.pa-sect + .pa-sect { margin-top: 18px; }
+.pa-head { display: flex; align-items: center; gap: 10px; padding-bottom: 12px;
+  margin-bottom: 4px; border-bottom: 1px solid var(--line); }
+.pa-head h3 { margin: 0; font-size: 14px; letter-spacing: .8px; text-transform: uppercase; }
+.pa-head .grow { flex: 1; }
+.pa-compte { color: #fff; font-size: 12px; font-weight: 700; line-height: 1.6;
+  padding: 1px 10px; border-radius: 12px; min-width: 24px; text-align: center; }
+/* Société, métier et email en bleu, comme dans le tableau de bord d'origine :
+   ce sont les trois colonnes qu'on parcourt du regard pour retrouver
+   quelqu'un, le nom servant surtout d'ancre une fois la ligne trouvée. */
+.pa-sect td.pa-bleu { color: var(--blue); }
+/* La ligne entière ouvre la fiche : sans le curseur, rien ne le laisse deviner. */
+.pa-sect tbody tr[data-partenaire] { cursor: pointer; }
+.pa-sect tbody tr[data-partenaire]:hover { background: var(--card-2); }
+
 @media (max-width: 720px) {
   .rgd-ca-montant { font-size: 26px; }
+  .pa-sect { padding: 14px; }
   .rgd-pipe-table th { font-size: 12px; padding-right: 8px; }
   .rgd-pipe-barre { padding-right: 8px !important; }
   .rgd-pipe-n { min-width: 34px; font-size: 14px; }

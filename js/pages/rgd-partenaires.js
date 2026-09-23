@@ -42,7 +42,7 @@
 import { scope } from '../data/scope.js';
 import { db } from '../data/db.js';
 import { esc, eur, fmtDate, terms, hit, searchInput, bindSearch, restoreFocus } from '../ui.js';
-import { poserEspace, kpiEspace } from './espace.js';
+import { poserEspace } from './espace.js';
 import { cadre, guard } from './rgd-espace.js';
 import { peutEcrire, creerFourniture, majFourniture } from '../data/rgd-api.js';
 import { toast, openModal, closeModal } from '../ui.js';
@@ -56,14 +56,47 @@ const ROLES = {
 };
 const role = (k) => ROLES[k] || { label: k || 'Non précisé', ton: 'muted' };
 
+// LES TROIS SECTIONS, reprises du tableau de bord d'origine (demandé par
+// Mickael le 23/09/2026). Une liste unique avec une colonne « Rôle » disait la
+// même chose, mais on ne lit pas une colonne comme on lit un titre : cherchez
+// « qui me vend le carrelage » et vous parcourez cinq lignes au lieu d'aller
+// droit à « Fournisseurs ».
+//
+// ⚠ `apporteur` ATTRAPE AUSSI LES FICHES SANS RÔLE (`|| 'apporteur'`, comme
+// l'original). C'est volontaire : une fiche sans type n'est pas une fiche sans
+// intérêt, et la laisser hors des trois sections la ferait disparaître de
+// l'écran — le pire résultat possible pour un annuaire.
+//
+// `autre` rejoint `commercial` : deux valeurs, une seule section, parce que
+// personne ne saurait dire ce qui les distingue.
+//
+// Les couleurs passent par les variables du CRM et non par les codes en dur de
+// l'original : `--accent` EST déjà l'orange RGD sur cet écran (applyBrand).
+// Le vert et le bleu servent ici de repère de catégorie, pas d'état — c'est la
+// seule entorse à la règle, et elle est celle du tableau de bord d'origine.
+const SECTIONS = [
+  { cle: 'apporteur', titre: 'Apporteurs d’affaires', bouton: '+ Nouvel apporteur',
+    couleur: 'var(--accent)', prospects: true,
+    prend: (t) => (t || 'apporteur') === 'apporteur' },
+  { cle: 'fournisseur', titre: 'Fournisseurs', bouton: '+ Nouveau fournisseur',
+    couleur: 'var(--blue)', prospects: false,
+    prend: (t) => t === 'fournisseur' },
+  { cle: 'commercial', titre: 'Autres partenaires', bouton: '+ Nouveau partenaire',
+    couleur: 'var(--green)', prospects: false,
+    prend: (t) => t === 'commercial' || t === 'autre' },
+];
+
 const nomDe = (a) => [a.prenom, a.nom].filter(Boolean).join(' ').trim() || a.societe || '—';
 
 // Le formulaire d'un partenaire. Il sert à créer comme à modifier : le worker
 // a deux routes mais les mêmes champs, et deux formulaires jumeaux finissent
 // toujours par diverger sur un détail.
-function formulairePartenaire(a, apres) {
+// `typeDefaut` vient de la section depuis laquelle on a cliqué : créer un
+// fournisseur depuis la section « Fournisseurs » ne doit pas demander de
+// re-choisir le rôle qu'on vient d'indiquer en cliquant.
+function formulairePartenaire(a, apres, typeDefaut = 'apporteur') {
   const creation = !a;
-  const v = a || {};
+  const v = a || (creation ? { type_partenaire: typeDefaut } : {});
   const corps = `
     <form id="pa-form" class="reg-grille" style="grid-template-columns:1fr 1fr">
       <label class="reg-champ"><span>Nom *</span><input name="nom" required value="${esc(v.nom || '')}"></label>
@@ -319,29 +352,64 @@ export const rgdPartenairesPage = {
           || (Number(b.apports_declares) || 0) - (Number(a.apports_declares) || 0)
           || String(nomDe(a)).localeCompare(String(nomDe(b)), 'fr'));
 
-      const corps = `
-        <div class="esp-kpis">
-          ${kpiEspace({ label: 'Partenaires actifs', valeur: actifs.length,
-            sous: tous.length > actifs.length ? `${tous.length - actifs.length} inactif${tous.length - actifs.length > 1 ? 's' : ''}` : 'tous actifs',
-            icone: '🤝', href: '#/rgd/partenaires' })}
-          ${kpiEspace({ label: 'Clients apportés', valeur: tous.reduce((t, a) => t + rattaches(a), 0),
-            sous: `${declares} déclaré${declares > 1 ? 's' : ''} à la main côté RGD`, icone: '↗',
-            ton: 'accent', href: '#/rgd/partenaires' })}
-          ${kpiEspace({ label: 'Partenariats signés', valeur: signes,
-            sous: signes < tous.length ? `${tous.length - signes} sans convention` : 'tous signés',
-            icone: '✍', ton: signes ? 'green' : 'amber', href: '#/rgd/partenaires' })}
-          ${kpiEspace({ label: 'Achats fournisseurs', valeur: eur(totalAchats),
-            sous: `${achats.length} achat${achats.length > 1 ? 's' : ''} enregistré${achats.length > 1 ? 's' : ''}`,
-            icone: '🧾', href: '#/rgd/partenaires' })}
-        </div>
+      // Une ligne de partenaire. Les colonnes sont celles du tableau de bord
+      // d'origine — Nom · Prénom · Société · Profession · Email · Téléphone —
+      // et rien de plus : ville, convention et notes vivent dans la fiche, que
+      // le clic sur la ligne ouvre. Un annuaire qu'on élargit à chaque champ
+      // utile finit illisible.
+      const ligne = (a, sec) => `<tr class="${a.actif === false ? 'muted' : ''}"
+          ${state.ecritureLocale ? `data-partenaire="${esc(String(a.id))}"` : ''}>
+        <td><b>${esc(a.nom || nomDe(a))}</b>
+            ${a.actif === false ? ' <span class="chip">Inactif</span>' : ''}</td>
+        <td>${esc(a.prenom || '—')}</td>
+        <td class="pa-bleu">${esc(a.societe || a.raison_sociale || '—')}</td>
+        <td class="pa-bleu">${esc(a.profession || '—')}</td>
+        <td class="pa-bleu">${a.email ? esc(a.email) : '<span class="muted">—</span>'}</td>
+        <td>${a.telephone ? esc(a.telephone) : '<span class="muted">—</span>'}</td>
+        ${sec.prospects ? `<td class="num"><b>${Number(a.apports_declares) || 0}</b>${
+          // Le rattaché ne s'affiche QUE s'il existe. Les deux comptes ne
+          // mesurent pas la même chose (l'un est saisi, l'autre constaté) et
+          // leur écart est une information — mais une colonne de plus pour
+          // afficher zéro partout n'en est pas une.
+          rattaches(a) ? `<div class="s muted" title="Fiches clients qui désignent ce partenaire">${rattaches(a)} rattaché${rattaches(a) > 1 ? 's' : ''}</div>` : ''
+        }</td>` : ''}
+      </tr>`;
 
+      const section = (sec) => {
+        const lignes = vus.filter(a => sec.prend(a.type_partenaire));
+        const cols = sec.prospects ? 7 : 6;
+        return `
+        <section class="card pa-sect" style="--pa-trait:${sec.couleur}">
+          <div class="pa-head">
+            <h3>${esc(sec.titre)}</h3>
+            <span class="pa-compte" style="background:${sec.couleur}">${lignes.length}</span>
+            <span class="grow"></span>
+            ${state.ecritureLocale
+              ? `<button type="button" class="btn primary" data-nouveau="${esc(sec.cle)}">${esc(sec.bouton)}</button>`
+              : ''}
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Nom</th><th>Prénom</th><th>Société</th><th>Profession</th>
+                <th>Email</th><th>Téléphone</th>
+                ${sec.prospects ? '<th class="num" title="Apports comptés à la main">Prospects</th>' : ''}</tr></thead>
+              <tbody>${lignes.map(a => ligne(a, sec)).join('')
+                || `<tr><td colspan="${cols}"><div class="empty">${
+                  state.q ? 'Aucun résultat dans cette catégorie.'
+                    : `Aucun ${sec.titre.toLowerCase().replace(/s$/, '')} pour le moment.`}</div></td></tr>`}</tbody>
+            </table>
+          </div>
+        </section>`;
+      };
+
+      const corps = `
         ${signes === 0 && tous.length ? `<div class="alert">
           <b>!</b>
           <div><b>Aucun partenariat n’est signé.</b> Les ${tous.length} partenaires
           travaillent sans convention enregistrée — ce qui ne les empêche pas
           d’apporter des affaires, mais ne fixe rien sur la rémunération de
           l’apport. ${state.ecritureLocale
-            ? 'La convention se note sur la fiche du partenaire, bouton <b>Modifier</b> au bout de la ligne.'
+            ? 'La convention se note sur la fiche du partenaire : cliquez sur sa ligne.'
             : 'Les conventions se saisissent dans l’<a href="#/rgd/app">application RGD</a>.'}</div>
         </div>` : ''}
 
@@ -354,42 +422,12 @@ export const rgdPartenairesPage = {
         <div class="toolbar">
           ${searchInput('rpa-q', state, 'Rechercher un partenaire, un métier, une ville…')}
           <span class="grow"></span>
-          <span class="muted small">ceux qui apportent le plus en premier</span>
-          ${state.ecritureLocale ? '<button type="button" class="btn primary" id="rpa-nouveau">+ Nouveau partenaire</button>' : ''}
+          <span class="muted small">${state.ecritureLocale
+            ? 'Cliquez sur une ligne pour ouvrir la fiche'
+            : `${actifs.length} actif${actifs.length > 1 ? 's' : ''} · ${declares} apport${declares > 1 ? 's' : ''} déclaré${declares > 1 ? 's' : ''}`}</span>
         </div>
 
-        <section class="card table-wrap">
-          <table>
-            <thead><tr><th>Partenaire</th><th>Rôle</th><th>Métier</th><th>Ville</th>
-              <th>Contact</th><th>Convention</th>
-              <th class="num" title="Fiches clients qui désignent ce partenaire">Rattachés</th>
-              <th class="num" title="Compté à la main dans l’application RGD">Déclarés</th>
-              ${state.ecritureLocale ? '<th></th>' : ''}</tr></thead>
-            <tbody>${vus.map(a => { const r = role(a.type_partenaire); return `<tr class="${a.actif === false ? 'muted' : ''}">
-              <td><b>${esc(nomDe(a))}</b>
-                  ${a.actif === false ? '<span class="chip">Inactif</span>' : ''}
-                  ${a.societe ? `<div class="s muted">${esc(a.societe)}</div>` : ''}</td>
-              <td><span class="chip ${r.ton}">${esc(r.label)}</span></td>
-              <td class="muted">${esc(a.profession || '—')}</td>
-              <td class="muted">${esc([a.ville, a.code_postal].filter(Boolean).join(' · ') || '—')}</td>
-              <td>${a.telephone ? esc(a.telephone) : '<span class="muted">—</span>'}
-                  ${a.email ? `<div class="s muted">${esc(a.email)}</div>` : ''}</td>
-              <td>${a.partenariat_signe
-                ? `<span class="chip green">Signée${a.date_signature ? ' · ' + esc(fmtDate(a.date_signature)) : ''}</span>`
-                : '<span class="chip amber">Non signée</span>'}</td>
-              <td class="num">${rattaches(a) || '<span class="muted">—</span>'}</td>
-              <td class="num muted">${Number(a.apports_declares) ? esc(String(a.apports_declares)) : '—'}</td>
-              ${state.ecritureLocale ? `<td class="num">
-                <button type="button" class="btn ghost sm" data-partenaire="${esc(String(a.id))}">Modifier</button>
-              </td>` : ''}
-            </tr>`; }).join('') || `<tr><td colspan="${state.ecritureLocale ? 9 : 8}"><div class="empty">Aucun partenaire ne correspond.</div></td></tr>`}</tbody>
-          </table>
-          <p class="small muted"><b>Rattachés</b> compte les fiches clients qui désignent
-          vraiment ce partenaire ; <b>Déclarés</b> est le compte tenu à la main dans
-          l&rsquo;application RGD. Un écart entre les deux n&rsquo;est pas une erreur du CRM :
-          c&rsquo;est soit une saisie optimiste, soit un rattachement oublié à la création
-          du client.</p>
-        </section>` : `
+        ${SECTIONS.map(section).join('')}` : `
         <div class="toolbar">
           <span class="muted small">${achats.length} achat${achats.length > 1 ? 's' : ''}
           pour ${eur(totalAchats)} HT</span>
@@ -429,15 +467,20 @@ export const rgdPartenairesPage = {
       if (state.vue === 'partenaires') { bindSearch(root, 'rpa-q', state, draw); restoreFocus(root, state); }
       root.querySelectorAll('[data-vue]').forEach(b => b.onclick = () => { state.vue = b.dataset.vue; draw(); });
 
-      const nouveau = root.querySelector('#rpa-nouveau');
-      if (nouveau) nouveau.onclick = () => formulairePartenaire(null, draw);
+      // Un bouton par section, qui porte déjà le rôle à créer.
+      root.querySelectorAll('[data-nouveau]').forEach(b => b.onclick = () =>
+        formulairePartenaire(null, draw, b.dataset.nouveau));
       const achat = root.querySelector('#rpa-achat');
       if (achat) achat.onclick = () => formulaireAchat(null, chantiers, draw);
 
+      // C'est la LIGNE ENTIÈRE qui ouvre la fiche, comme dans le tableau de
+      // bord d'origine : la colonne de boutons « Modifier » a disparu avec les
+      // colonnes d'origine, et un bouton par ligne pour une seule action ne
+      // valait pas la largeur qu'il prenait.
       // La clé est `id`, l'uuid du CRM — plus `d1_id`, qui n'existe pas sur une
       // fiche créée ici et n'est donc plus un identifiant utilisable.
-      root.querySelectorAll('[data-partenaire]').forEach(b => b.onclick = () => {
-        const a = tous.find(x => String(x.id) === b.dataset.partenaire);
+      root.querySelectorAll('[data-partenaire]').forEach(tr => tr.onclick = () => {
+        const a = tous.find(x => String(x.id) === tr.dataset.partenaire);
         if (a) formulairePartenaire(a, draw);
       });
       root.querySelectorAll('[data-achat]').forEach(b => b.onclick = () => {
