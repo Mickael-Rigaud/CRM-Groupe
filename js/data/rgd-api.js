@@ -293,6 +293,21 @@ export const creerSousTraitant = (champs) => envoyer('/api/sous-traitants', {
   ...(champs.actif === undefined ? {} : { actif: champs.actif ? 1 : 0 }),
 }, 'POST');
 
+// ------------------------------------------------------------------ agenda
+//
+// Créer un rendez-vous (23/09/2026). `POST /api/evenements` écrit dans D1 PUIS
+// pousse vers Google (`syncEventToGoogle` côté worker) : le rendez-vous part
+// donc bien dans l'agenda.
+//
+// ⚠ MAIS IL NE REVIENT PAS TOUT DE SUITE DANS LE CRM, et ce n'est pas un défaut :
+// `#/rgd/agenda` lit `agenda_events`, c'est-à-dire **Google relu**, pas `evenements`
+// de D1. Le nouveau rendez-vous n'apparaît donc qu'au relevé suivant — trente
+// minutes pour aujourd'hui, le lendemain pour un autre jour. La modale le dit.
+//
+// Le worker exige `titre`, `date_debut` et `date_fin` : un 400 sans l'une des
+// trois. Les noms sont ceux de D1 (`titre`, `lieu`), pas ceux du CRM.
+export const creerEvenement = (champs) => envoyer('/api/evenements', champs, 'POST');
+
 // Les trois bascules de l'écran (23/09/2026). Elles passent toutes par le même
 // `PATCH`, mais chacune a son nom : `majSousTraitant(id, { actif: false })`
 // écrirait un booléen que D1 ne sait pas lier, et un appel écrit une fois par

@@ -2102,3 +2102,87 @@ button.tb-pp:hover { color: var(--text); text-decoration: underline; text-underl
 /* Pendant l'enregistrement le champ est désactivé : le dire, sinon une saisie
    qui ne répond plus ressemble à une application figée. */
 .rcl-note input:disabled { opacity: .5; cursor: progress; }
+
+/* ===== Agenda RGD — le hub deux colonnes du tableau de bord ===============
+   Mini-calendrier et prochains rendez-vous à gauche, la grille horaire à
+   droite. Les rendez-vous sont posés EN ABSOLU sur une échelle de minutes,
+   comme dans un vrai calendrier : empilés dans l'ordre, ils masqueraient les
+   chevauchements, qui sont justement ce qu'on vient vérifier. */
+.ag-hub { display: grid; grid-template-columns: 268px 1fr; gap: 16px; align-items: start; }
+.ag-cote { display: flex; flex-direction: column; gap: 14px; }
+.ag-principal { min-width: 0; }
+
+.ag-mini { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: var(--shadow); padding: 12px; }
+.ag-mini-tete { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.ag-mini-grille { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.ag-mini-j { font-size: 11px; color: var(--muted-2); text-align: center; padding-bottom: 4px; }
+.ag-case { position: relative; border: 0; background: none; border-radius: 8px; cursor: pointer;
+  padding: 6px 0; font-size: 12px; color: var(--text); font-family: inherit; }
+.ag-case:hover:not(:disabled) { background: var(--card-2); }
+.ag-case.hors { color: var(--muted-2); }
+.ag-case.auj { font-weight: 700; color: var(--accent-ink); }
+.ag-case.on { background: var(--accent); color: var(--on-accent); }
+/* Un jour hors de la fenêtre relevée n'est pas cliquable : proposer un jour
+   dont on ne sait rien promettrait une réponse qu'on n'a pas. */
+.ag-case:disabled { opacity: .3; cursor: default; }
+.ag-pt { position: absolute; left: 50%; bottom: 3px; width: 4px; height: 4px; margin-left: -2px;
+  border-radius: 50%; background: var(--accent); }
+.ag-case.on .ag-pt { background: var(--on-accent); }
+
+.ag-prochains .card-head { padding-bottom: 8px; }
+.ag-prochain { display: block; padding: 8px 10px; border-left: 3px solid var(--ag-teinte, var(--accent));
+  border-radius: 0 8px 8px 0; text-decoration: none; color: inherit; }
+.ag-prochain + .ag-prochain { margin-top: 6px; }
+.ag-prochain:hover { background: var(--card-2); }
+.ag-prochain b, .ag-prochain span { display: block; }
+.ag-prochain-q { font-size: 11px; text-transform: uppercase; letter-spacing: .4px; color: var(--muted-2); }
+.ag-fenetre { margin: 0; line-height: 1.5; }
+
+.ag-barre { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.ag-barre .pill-tabs { margin: 0; }
+.ag-titre { font-family: var(--font-display); font-size: 16px; }
+/* Le padding du bas laisse respirer le DERNIER trait horaire : sans lui, la
+   ligne des 19 h et son libellé sont coupés par le bord de la carte. */
+.ag-cadre { padding: 0 0 14px; overflow: hidden; }
+
+.ag-grille { display: flex; }
+.ag-heures { position: relative; width: 54px; flex: none; border-right: 1px solid var(--line);
+  margin-top: 46px; }
+.ag-heure { position: absolute; right: 8px; transform: translateY(-50%);
+  font-size: 11px; color: var(--muted-2); }
+.ag-cols { display: flex; flex: 1; min-width: 0; }
+.ag-col { flex: 1; min-width: 0; border-left: 1px solid var(--line); }
+.ag-col:first-child { border-left: 0; }
+.ag-col.auj { background: color-mix(in srgb, var(--accent) 4%, transparent); }
+.ag-col-tete { height: 46px; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; border-bottom: 1px solid var(--line); }
+.ag-col-j { font-size: 11px; text-transform: uppercase; color: var(--muted-2); }
+.ag-col-tete b { font-family: var(--font-display); font-size: 15px; }
+.ag-col.auj .ag-col-tete b { color: var(--accent-ink); }
+.ag-journee { font-size: 10px; color: var(--accent-ink); background: var(--accent-soft);
+  border-radius: 8px; padding: 0 6px; margin-top: 2px; }
+.ag-piste { position: relative; }
+.ag-ligne { position: absolute; left: 0; right: 0; height: 1px; background: var(--line); }
+/* L'heure courante, comme dans « Ma journée » du tableau de bord du groupe. */
+.ag-now { position: absolute; left: 0; right: 0; height: 2px; background: var(--red); z-index: 3; }
+.ag-now::before { content: ''; position: absolute; left: -3px; top: -3px; width: 8px; height: 8px;
+  border-radius: 50%; background: var(--red); }
+.ag-evt { position: absolute; left: 3px; right: 3px; z-index: 2; overflow: hidden;
+  border-radius: 6px; padding: 3px 6px; text-decoration: none; line-height: 1.25;
+  border-left: 3px solid var(--ag-teinte, var(--accent));
+  background: color-mix(in srgb, var(--ag-teinte, var(--accent)) 14%, var(--card));
+  color: var(--text); }
+.ag-evt:hover { background: color-mix(in srgb, var(--ag-teinte, var(--accent)) 26%, var(--card)); }
+/* Un rendez-vous d'une heure fait 52 px : le texte doit se COUPER PROPREMENT
+   plutôt que déborder. Sans l'ellipse, la deuxième ligne s'affiche à moitié,
+   tranchée en plein milieu des lettres — on croit à un défaut d'affichage. */
+.ag-evt b, .ag-evt span { display: block; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; }
+.ag-evt b { font-size: 12px; }
+.ag-evt span { font-size: 11px; color: var(--muted); }
+
+@media (max-width: 900px) {
+  .ag-hub { grid-template-columns: 1fr; }
+  .ag-heures { width: 42px; }
+}
