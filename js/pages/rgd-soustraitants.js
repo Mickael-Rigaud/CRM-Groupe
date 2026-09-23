@@ -108,8 +108,8 @@ function formulaireConversion(st, apres) {
       <label class="reg-champ" style="grid-column:1/-1">
         <span>Spécialités</span><input name="specialites" value="${esc(st.specialites || '')}"></label>
     </form>
-    <p class="small muted">Sans email, aucune relance de documents ne pourra partir —
-    le worker la refuse. La fiche reste modifiable ensuite.</p>
+    <p class="small muted">Sans email, aucune relance de documents ne pourra partir :
+    l’envoi est refusé faute d’adresse. La fiche reste modifiable ensuite.</p>
     <div class="toolbar" style="margin-top:12px">
       <button type="button" class="btn primary" id="cv-ok">Convertir en actif</button>
       <button type="button" class="btn ghost" data-close>Annuler</button>
@@ -391,8 +391,8 @@ export const rgdSousTraitantsPage = {
           <b>i</b>
           <div><b>Le relevé n&rsquo;envoie pas encore la distinction actif / prospect.</b>
           Les ${tous.length} fiches sont donc toutes présentées comme des sous-traitants.
-          Le champ <code>statut_relation</code> existe côté Cloudflare ; il sera relayé
-          au prochain déploiement du worker.</div>
+          L’information existe dans l’application RGD ; elle sera reprise dès que le
+          relevé la transmettra.</div>
         </div>` : ''}
 
         <div class="toolbar">
@@ -542,7 +542,7 @@ export const rgdSousTraitantsPage = {
               }).join('') || '<tr><td colspan="7"><div class="empty">Aucun règlement enregistré.</div></td></tr>'}</tbody>
           </table>
           ${paiements.every(p => !p.deal_id) && paiements.length ? `<p class="small muted">
-            Aucun de ces règlements n&rsquo;est rattaché à un chantier côté Cloudflare — la colonne reste donc vide.</p>` : ''}
+            Aucun de ces règlements n&rsquo;est rattaché à un chantier dans l&rsquo;application RGD — la colonne reste donc vide.</p>` : ''}
         </section>
 
         ${missions.length ? `<section class="card">

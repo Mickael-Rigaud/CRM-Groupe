@@ -97,7 +97,7 @@ function apercuDansCadre(html) {
 
 export function ouvrirPiecesSt(st, apresDepot) {
   const titre = `Pièces administratives — ${st.raison_sociale || 'sans nom'}`;
-  openModal(titre, '<div class="empty">Lecture de la fiche chez Cloudflare…</div>', { wide: true,
+  openModal(titre, '<div class="empty">Lecture de la fiche…</div>', { wide: true,
     onOpen: async (m) => {
       const r = await ficheSousTraitant(st.d1_id);
       const corps = m.querySelector('.modal-body');
@@ -119,8 +119,8 @@ export function ouvrirPiecesSt(st, apresDepot) {
             <tbody>${rangees(fiche)}</tbody>
           </table></div>
           <input type="file" id="rst-fichier" accept="application/pdf" hidden>
-          <p class="small muted">Les fichiers restent hébergés chez Cloudflare — seul le dépôt
-          passe par le CRM. PDF uniquement, 24 Mo au plus. La date saisie à côté d&rsquo;une pièce
+          <p class="small muted">Les fichiers restent rangés dans l&rsquo;application RGD — seul
+          le dépôt passe par le CRM. PDF uniquement, 24 Mo au plus. La date saisie à côté d&rsquo;une pièce
           part <b>avec</b> le dépôt ; la changer seule ne l&rsquo;enregistre pas.</p>
           <div class="form-actions">
             ${fiche.email

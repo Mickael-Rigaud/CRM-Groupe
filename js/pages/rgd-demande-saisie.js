@@ -191,8 +191,8 @@ export function formulaireDemande(apporteurs, apresEnregistrement) {
     </div>
 
     <div class="ndf-pied">
-      <span class="ndf-note">Créée <b>dans le CRM</b> : elle apparaît tout de suite
-        et la synchronisation Cloudflare ne l’écrasera jamais.</span>
+      <span class="ndf-note">Créée <b>dans le CRM</b> : elle apparaît tout de suite,
+        et aucune synchronisation ne l’écrasera.</span>
       <span class="grow"></span>
       <button type="button" class="btn ghost" data-close>Annuler</button>
       <button type="submit" class="btn" id="ndf-creer">Créer la demande</button>

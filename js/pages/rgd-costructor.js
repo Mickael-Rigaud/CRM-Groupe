@@ -157,9 +157,8 @@ export const rgdCostructorPage = {
               <td class="muted">${esc(l.declenche_par || '—')}</td>
             </tr>`).join('') || '<tr><td colspan="8"><div class="empty">Aucun passage relevé.</div></td></tr>'}</tbody>
           </table>
-          <p class="small muted">Les <b>cent derniers</b> passages seulement. Cloudflare en
-          garde davantage : cet écran est une fenêtre sur la santé de la synchronisation,
-          pas son archive.</p>
+          <p class="small muted">Les <b>cent derniers</b> passages seulement : cet écran est
+          une fenêtre sur la santé de la synchronisation, pas son archive.</p>
         </section>`}`;
 
       root.innerHTML = cadre('#/rgd/costructor', 'Synchronisation Costructor', corps);

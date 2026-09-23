@@ -470,11 +470,10 @@ export const rgdPilotagePage = {
             <b>${docsSt.length}</b><span>document${docsSt.length > 1 ? 's' : ''} sous-traitants à renouveler</span></a>` : ''}
         </div>` : ''}
 
-        <p class="small muted">Deux indicateurs du tableau de bord RGD manquent ici :
-        les <b>relances à envoyer</b> et les <b>formations à recycler</b>. Leurs tables
-        (<code>relances</code>, <code>competences</code>) sont vides côté Cloudflare, donc
-        rien n’a été repris — afficher zéro laisserait croire qu’il n’y a rien à faire,
-        alors que le CRM n’en sait rien.</p>`;
+        <p class="small muted">Deux indicateurs de l’application RGD manquent ici :
+        les <b>relances à envoyer</b> et les <b>formations à recycler</b>. Ces deux listes
+        y sont vides, donc rien n’a été repris — afficher zéro laisserait croire qu’il n’y
+        a rien à faire, alors que le CRM n’en sait rien.</p>`;
 
       root.innerHTML = cadre('#/rgd', 'Vue d’ensemble', corps);
     };

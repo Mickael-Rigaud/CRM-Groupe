@@ -127,9 +127,9 @@ export function formulaireProspect(sousVue, apporteurs, apresEnregistrement) {
 
   const m = openModal(forme.titre, `<form id="pf">
     <div class="form-grid">${renderForm(spec)}</div>
-    <p class="small muted">Cette fiche est créée <b>dans le CRM</b>, pas dans le tableau de bord
-      RGD. Elle apparaît tout de suite et ne sera jamais écrasée par la synchronisation
-      Cloudflare — c'est aussi pour ça qu'elle pourra être supprimée d'un clic.</p>
+    <p class="small muted">Cette fiche est créée <b>dans le CRM</b>, pas dans l'application
+      RGD. Elle apparaît tout de suite et aucune synchronisation ne l'écrasera — c'est
+      aussi pour ça qu'elle pourra être supprimée d'un clic.</p>
     <div class="form-actions">
       <button type="button" class="btn ghost" data-close>Annuler</button>
       <button type="submit" class="btn">Créer le prospect</button>
@@ -236,15 +236,15 @@ export async function supprimerFiche(sousVue, ligne, apresSuppression) {
       + `supprimée sans les orpheliner. Retirez-les d'abord.`, 'warn');
   }
 
-  const venuDeCloudflare = ligne.d1_id != null;
-  if (!await confirm(venuDeCloudflare
+  const venuDeLApplication = ligne.d1_id != null;
+  if (!await confirm(venuDeLApplication
     ? `Supprimer ${nom} ? Elle sera retirée du tableau de bord RGD ET du CRM. C'est définitif.`
     : `Supprimer ${nom} ? La fiche est retirée définitivement. Le contact, lui, est `
       + `archivé et reste récupérable.`)) return;
 
   try {
     // 1. La source, quand il y en a une. On s'arrête net si ça échoue.
-    if (venuDeCloudflare) {
+    if (venuDeLApplication) {
       const r = surDemande
         ? await supprimerDemandeSource(ligne.d1_id)
         : await supprimerClientSource(ligne.d1_id);
@@ -264,7 +264,7 @@ export async function supprimerFiche(sousVue, ligne, apresSuppression) {
       try { await db.update('contacts', ligne.contact_id, { archived_at: new Date().toISOString() }); }
       catch { /* L'archivage est un confort : son échec n'annule pas la suppression. */ }
     }
-    toast(venuDeCloudflare ? 'Fiche supprimée des deux côtés' : 'Fiche supprimée');
+    toast(venuDeLApplication ? 'Fiche supprimée des deux côtés' : 'Fiche supprimée');
     apresSuppression?.();
   } catch (err) {
     toast(`Suppression impossible : ${String(err.message || err).slice(0, 120)}`, 'warn');
