@@ -69,6 +69,18 @@ const CONNU = ['Recommandation', 'Recherche Google', 'Réseaux sociaux',
   'Publicité (flyer, affichage, panneaux...)', 'Chantier vu sur place',
   'BNI ou réseau professionnel'];
 
+// ⚠ EN SVG, PAS EN ÉMOJI. Un émoji change de dessin et de couleur selon le
+// système : deux postes n'afficheraient pas le même formulaire, et aucun ne
+// prendrait la teinte qu'on lui demande. Ceux-ci héritent de celle du rond
+// qui les porte.
+const ICONES = {
+  prospect: 'M10 10a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Zm-6 7.5a6 6 0 0 1 12 0',
+  projet: 'M3 17h14M5 17V9l5-4 5 4v8M8 17v-4h4v4',
+};
+const titre = (cle, texte) => `<h3><span class="ndf-rond">
+  <svg viewBox="0 0 20 20" aria-hidden="true"><path d="${ICONES[cle]}"/></svg>
+</span>${esc(texte)}</h3>`;
+
 const champ = (cle, libelle, dedans, { large = false } = {}) =>
   `<div class="ndf-champ ${large ? 'est-large' : ''}" data-champ="${cle}">
      <label for="ndf-${cle}">${esc(libelle)}</label>${dedans}
@@ -125,8 +137,8 @@ export function formulaireDemande(apporteurs, apresEnregistrement) {
   // premier, et ce sont eux qu'on perd si l'appel coupe.
   const m = openModal('Nouvelle demande', `<form id="ndf" class="ndf" novalidate>
     <div class="ndf-colonnes">
-      <section class="ndf-bloc">
-        <h3>La personne</h3>
+      <section class="ndf-bloc est-prospect">
+        ${titre('prospect', 'Le prospect')}
         <div class="ndf-grille">
           ${texte('prenom', 'Prénom')}
           ${texte('nom', 'Nom')}
@@ -148,11 +160,22 @@ export function formulaireDemande(apporteurs, apresEnregistrement) {
             <input id="ndf-recommandation" name="recommandation" type="text"
               placeholder="Nom de la personne ou du partenaire">
           </div>
+          <!-- ⚠ CE COMMENTAIRE-LA PARLE DE LA PERSONNE, pas du projet : ce
+               qu'on retient d'elle, son humeur, l'heure a laquelle la
+               rappeler. Le projet a deja le sien, juste en face. Il part dans
+               commentaire_admin, la meme colonne que lit la fiche. Et SURTOUT
+               PAS d'accent grave dans ce commentaire : il refermerait le
+               gabarit. Refait le coup le 23/09/2026 — node --check passe et
+               l'ecran reste sur « Chargement ». -->
+          ${champ('commentaire_admin', 'Commentaire',
+            `<textarea id="ndf-commentaire_admin" name="commentaire_admin" rows="3"
+               placeholder="Ce qu'il faut savoir sur elle : disponibilités, ton de l'échange, à rappeler quand…"></textarea>`,
+            { large: true })}
         </div>
       </section>
 
-      <section class="ndf-bloc">
-        <h3>Le projet</h3>
+      <section class="ndf-bloc est-projet">
+        ${titre('projet', 'Le projet')}
         <div class="ndf-grille">
           ${liste('type_projet', 'Type de bien', BIEN)}
           ${liste('type_intervention', 'Usage du bien', RESIDENCE)}
@@ -276,6 +299,7 @@ export function formulaireDemande(apporteurs, apresEnregistrement) {
         projet_description: lire('projet_description'),
         comment_connu: lire('comment_connu'), recommandation: lire('recommandation'),
         apporteur_id: lire('apporteur_id') || null,
+        commentaire_admin: lire('commentaire_admin'),
       }));
 
       closeModal();

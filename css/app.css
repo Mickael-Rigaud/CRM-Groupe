@@ -611,13 +611,35 @@ select.cell-in { text-align: left; }
 /* ---- les deux colonnes ---- */
 .ndf-colonnes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 18px; align-items: start; }
-.ndf-bloc { background: var(--card-2); border: 1px solid var(--line);
-  border-radius: 13px; padding: 16px 18px 18px; min-width: 0; }
+/* ⚠ UNE TEINTE PAR BLOC, ET C'EST TOUT. Premiere version : deux cartes grises
+   sur fond blanc, seize champs blancs dedans — « un peu triste », a raison.
+   Mais la correction n'est pas de tout colorer : ce qu'on veut, c'est
+   DISTINGUER LES DEUX MOITIES d'un coup d'oeil, pour retrouver son champ sans
+   relire les intitules. Chaque bloc porte donc une teinte, une seule, qui
+   tient son filet du haut, son rond de titre et son degrade de fond — et les
+   champs restent blancs, parce que c'est dedans qu'on ecrit. */
+.ndf-bloc { --teinte: var(--accent); background: #fff;
+  border: 1px solid var(--line); border-top: 3px solid var(--teinte);
+  border-radius: 13px; padding: 15px 18px 18px; min-width: 0;
+  background-image: linear-gradient(180deg,
+    color-mix(in srgb, var(--teinte) 7%, #fff), #fff 110px); }
+.ndf-bloc.est-prospect { --teinte: var(--accent); }
+/* Le projet prend le bleu : c'est la couleur que la fiche donne deja au bien
+   et a la superficie, et deux ecrans qui parlent de la meme chose ont interet
+   a la dire de la meme facon. */
+.ndf-bloc.est-projet { --teinte: var(--blue); }
+
 /* ⚠ LE `h3` GLOBAL EST EN PETITES CAPITALES GRISES (voir plus haut). Sans
-   cette remise a zero, « La personne » et « Le projet » se liraient comme des
+   cette remise a zero, « Le prospect » et « Le projet » se liraient comme des
    etiquettes de champ et non comme des titres de bloc. */
-.ndf-bloc > h3 { margin: 0 0 14px; font-size: 15px; letter-spacing: -.01em;
-  text-transform: none; color: var(--text); }
+.ndf-bloc > h3 { margin: 0 0 15px; font-size: 15px; letter-spacing: -.01em;
+  text-transform: none; color: var(--text);
+  display: flex; align-items: center; gap: 9px; }
+.ndf-rond { width: 28px; height: 28px; flex: 0 0 auto; border-radius: 50%;
+  display: grid; place-items: center;
+  background: color-mix(in srgb, var(--teinte) 14%, #fff); color: var(--teinte); }
+.ndf-rond svg { width: 16px; height: 16px; fill: none; stroke: currentColor;
+  stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 
 /* `minmax(0, 1fr)` et non `1fr` : sans le zero, une liste deroulante dont une
    option est longue refuse de se reduire et deborde la colonne. */
@@ -631,9 +653,11 @@ select.cell-in { text-align: left; }
   background: #fff; width: 100%; font: inherit; font-size: 14px;
   transition: border-color .15s ease, box-shadow .15s ease; }
 .ndf-champ textarea { resize: vertical; }
+/* Le champ qu'on remplit s'allume de la teinte de SON bloc : l'oeil sait dans
+   quelle moitie il est sans quitter le champ des yeux. */
 .ndf-champ input:focus, .ndf-champ select:focus, .ndf-champ textarea:focus {
-  outline: none; border-color: var(--accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
+  outline: none; border-color: var(--teinte, var(--accent));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--teinte, var(--accent)) 18%, transparent); }
 /* Un manque se signale LA OU IL EST. Un message en bas de page oblige a
    chercher le champ dont il parle. */
 .ndf-champ.est-manquant > label { color: var(--red); }
@@ -652,12 +676,18 @@ select.cell-in { text-align: left; }
   border: 1px solid var(--line-strong); background: #fff; font-size: 13px;
   font-weight: 500; color: var(--muted); cursor: pointer;
   transition: all .18s cubic-bezier(.4,0,.2,1); }
-.ndf-puce:hover span { border-color: var(--accent); color: var(--text); }
-.ndf-puce input:checked + span { background: var(--accent); border-color: var(--accent);
-  color: var(--on-accent, #fff); font-weight: 600; transform: translateY(-1px);
-  box-shadow: 0 3px 10px -3px color-mix(in srgb, var(--accent) 55%, transparent); }
+.ndf-puce:hover span { border-color: var(--puce, var(--teinte)); color: var(--text); }
+.ndf-puce input:checked + span { background: var(--puce, var(--teinte));
+  border-color: var(--puce, var(--teinte)); color: #fff; font-weight: 600;
+  transform: translateY(-1px);
+  box-shadow: 0 3px 10px -3px color-mix(in srgb, var(--puce, var(--teinte)) 55%, transparent); }
 .ndf-puce input:focus-visible + span {
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent); }
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--puce, var(--teinte)) 25%, transparent); }
+/* ⚠ LE BUDGET EST VERT, PAS BLEU, et ce n'est pas de la decoration : c'est de
+   l'argent, et l'argent est vert partout ailleurs dans le CRM. Une seule puce
+   cochee sur cette ligne, alors que les travaux en portent plusieurs — deux
+   teintes disent que ce ne sont pas deux questions du meme genre. */
+[data-champ="budget"] { --puce: var(--green); }
 
 /* ---- le pied ---- */
 .ndf-pied { display: flex; align-items: center; gap: 12px; margin-top: 18px;

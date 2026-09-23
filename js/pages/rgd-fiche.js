@@ -113,6 +113,11 @@ export function ouvrirFicheRgd(x, onChange) {
     const i = ORDRE_ETAPES.indexOf(etapeCourante);
     const perdu = etapeCourante === 'archives';
     const evs = historique();
+    // ⚠ LA MENTION « SAISI DANS L'APPLICATION RGD » NE VAUT QUE POUR LES
+    // LIGNES RELEVÉES. Une demande créée ici porte le commentaire noté pendant
+    // l'appel, dans la même colonne : renvoyer vers l'application RGD pour le
+    // corriger enverrait chercher une fiche qui n'y existe pas. On reconnaît
+    // les deux à `d1_id` — nul, la ligne est née dans le CRM.
     const commentaireSource = (x.genre === 'demande' ? f.commentaire_admin : f.notes) || '';
     const jours = x.recu ? daysSince(x.recu) : null;
     const signes = devis.filter(v => v.statut === 'signe');
@@ -287,7 +292,8 @@ export function ouvrirFicheRgd(x, onChange) {
           ${commentaireSource ? `<section class="rgdf-bloc rgdf-commentaire">
             <h3>Commentaire</h3>
             <p class="rgdf-texte">${esc(commentaireSource)}</p>
-            <p class="rgdf-source">Saisi dans l’<a href="#/rgd/app">application RGD</a>, qui en reste la source.</p>
+            ${f.d1_id != null ? `<p class="rgdf-source">Saisi dans l’<a href="#/rgd/app">application RGD</a>,
+              qui en reste la source.</p>` : ''}
           </section>` : ''}
 
           <section class="rgdf-bloc rgdf-suivi">
