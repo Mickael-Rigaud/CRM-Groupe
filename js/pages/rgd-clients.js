@@ -576,14 +576,7 @@ export const rgdClientsPage = {
             r.label}<span>${r.n}</span></button>`).join('')}
         </div>
 
-        ${surDemande ? `<div class="pill-tabs sous">
-          <button type="button" data-prov="" class="${!state.provenance ? 'on' : ''}">Toutes<span>${prospects.length}</span></button>
-          ${PROVENANCES.map(pr => {
-            const n = prospects.filter(x => x.provenance === pr.key).length;
-            return `<button type="button" data-prov="${pr.key}"
-              class="${state.provenance === pr.key ? 'on' : ''}">${esc(pr.label)}<span>${n}</span></button>`;
-          }).join('')}
-        </div>` : ''}
+
 
         ${state.vue === 'contacts' ? `<div class="pill-tabs sous">
           ${FILTRES_CONTACTS.map(f => `<button type="button" data-filtre="${f.key}"
@@ -606,7 +599,13 @@ export const rgdClientsPage = {
         <div class="toolbar">
           ${searchInput('rcl-q', state, surDemande
             ? 'Recherche nom, email, ville, projet…' : 'Rechercher nom, email, téléphone…')}
-          ${surDemande ? '' : `<select id="rcl-type" aria-label="Type">
+          ${surDemande ? `<select id="rcl-prov" aria-label="Provenance">
+            <option value="">Toutes provenances (${prospects.length})</option>
+            ${PROVENANCES.map(pr => {
+              const n = prospects.filter(x => x.provenance === pr.key).length;
+              return `<option value="${pr.key}" ${state.provenance === pr.key ? 'selected' : ''}>${esc(pr.label)} (${n})</option>`;
+            }).join('')}
+          </select>` : `<select id="rcl-type" aria-label="Type">
             <option value="">Tous types</option>
             <option value="particulier" ${state.type === 'particulier' ? 'selected' : ''}>Particulier</option>
             <option value="professionnel" ${state.type === 'professionnel' ? 'selected' : ''}>Professionnel</option>
@@ -632,9 +631,8 @@ export const rgdClientsPage = {
         // sans qu'on comprenne pourquoi.
         state.vue = b.dataset.vue; state.q = ''; state.type = ''; state.statut = ''; draw();
       });
-      root.querySelectorAll('[data-prov]').forEach(b => b.onclick = () => {
-        state.provenance = b.dataset.prov; state.q = ''; state.statut = ''; draw();
-      });
+      const selProv = root.querySelector('#rcl-prov');
+      if (selProv) selProv.onchange = () => { state.provenance = selProv.value; draw(); };
       root.querySelectorAll('[data-filtre]').forEach(b => b.onclick = () => {
         state.filtreContact = b.dataset.filtre; state.q = ''; state.type = ''; state.statut = ''; draw();
       });
