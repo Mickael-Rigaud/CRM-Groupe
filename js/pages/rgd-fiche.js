@@ -92,6 +92,7 @@ export function ouvrirFicheRgd(x, onChange) {
     const i = ORDRE_ETAPES.indexOf(etapeCourante);
     const perdu = etapeCourante === 'archives';
     const evs = historique();
+    const commentaireSource = (x.genre === 'demande' ? f.commentaire_admin : f.notes) || '';
 
     // ⚠ UNE LIGNE VIDE NE S'AFFICHE PAS. Un « — » en face de six intitulés
     // donne une fiche qui a l'air pleine et ne dit rien ; mieux vaut trois
@@ -188,6 +189,21 @@ export function ouvrirFicheRgd(x, onChange) {
         </div>
 
         <div class="rgdf-colonne">
+          <!-- ⚠ LE COMMENTAIRE DE CLOUDFLARE, EN LECTURE SEULE, ET À PART.
+               Il vient du tableau de bord RGD, qui en est la source ; le
+               modifier ici serait écrasé au relevé suivant. Il est distinct de
+               l'historique en dessous : celui-ci porte ce qu'on écrit depuis le
+               CRM, celui-là ce qui a été saisi dans l'application. Les fondre
+               ferait croire qu'on peut répondre à l'un depuis l'autre.
+               Les champs s'appellent commentaire_admin et notes, pas
+               commentaire et note : la premiere version lisait les mauvais et
+               affichait un commentaire vide sur des lignes qui en ont un. -->
+          ${commentaireSource ? `<section class="rgdf-carte rgdf-commentaire">
+            <h3><span class="rgdf-pict">📝</span> Commentaire</h3>
+            <p class="rgdf-texte">${esc(commentaireSource)}</p>
+            <p class="small muted">Saisi dans l’<a href="#/rgd/app">application RGD</a>, qui en reste la source.</p>
+          </section>` : ''}
+
           <section class="rgdf-carte rgdf-suivi">
             <h3><span class="rgdf-pict">🕑</span> Historique</h3>
             ${aUneAncre ? `

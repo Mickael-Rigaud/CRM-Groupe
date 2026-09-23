@@ -472,6 +472,11 @@ select.cell-in { text-align: left; }
   color: var(--muted); margin-bottom: 2px; }
 .rgdf-info dd { margin: 0; font-size: 14.5px; font-weight: 500; }
 
+/* Le commentaire venu de Cloudflare : un texte, pas un champ. Le fond le
+   distingue des cartes d'information, et rien n'y ressemble a une saisie. */
+.rgdf-commentaire .rgdf-texte { margin: 0 0 8px; white-space: pre-wrap;
+  background: var(--card-2); border-radius: 9px; padding: 11px 13px; font-size: 14px; }
+
 .rgdf-suivi { position: sticky; top: 0; }
 .rgdf-ajout { display: flex; gap: 8px; margin-bottom: 12px; }
 .rgdf-ajout input { flex: 1; min-width: 0; }
