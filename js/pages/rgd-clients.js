@@ -110,6 +110,30 @@ const STATUTS_SUIVI = [
   { key: 'perdu',             label: 'Perdu',               ton: 'red' },
 ];
 
+// ⚠ LE STATUT DE SUIVI EST DÉJÀ LA FRISE — constaté le 23/09/2026
+// Les onze valeurs ci-dessus se rangent une à une sur les sept étapes de
+// l'écran. Ce n'est pas une coïncidence : le tableau de bord RGD décrit le
+// même cycle, il le nommait simplement autrement. On s'en sert donc comme
+// source de l'étape, et **changer le statut déplace la personne d'un onglet à
+// l'autre** — c'est ce qui rend ce champ vivant, là où il dormait à
+// « nouveau_prospect » sur 190 fiches sur 194 faute de servir à quelque chose.
+const ETAPE_DU_STATUT = {
+  nouveau_prospect: 'demande', relance_1: 'demande', relance_2: 'demande',
+  relance_3: 'demande', a_contacter: 'demande',
+  rdv_planifie: 'rdv',
+  devis_envoye: 'devis_encours',
+  devis_accepte: 'devis_accepte',
+  chantier_en_cours: 'chantier_encours',
+  chantier_termine: 'chantier_termine',
+  perdu: 'archives',
+};
+
+// L'ordre du cycle, pour départager deux réponses. « archives » n'y figure
+// pas : une affaire perdue l'emporte sur tout le reste, elle n'est pas
+// « plus avancée », elle est sortie.
+const ORDRE_ETAPES = ['demande', 'rdv', 'devis_encours', 'devis_accepte',
+  'chantier_encours', 'chantier_termine'];
+
 // Les statuts de FICHE, qui sont autre chose : ils disent ce qu'est la
 // personne, pas où en est l'affaire. Deux vocabulaires, deux colonnes
 // (`statut` et `statut_suivi`), et les confondre ferait un filtre qui ne rend
@@ -312,8 +336,10 @@ export const rgdClientsPage = {
       const estUnChantier = (c) => !!c.etat || !!c.date_debut_prevue || !!c.work_start_at;
       const ouvert = (v) => !['signe', 'refuse', 'expire'].includes(v.statut);
 
-      const etapeDe = (f) => {
-        if (f.statut === 'perdu') return 'archives';
+      // L'étape lue sur les FAITS : devis et chantiers. Elle ne dépend d'aucune
+      // saisie, donc elle ne ment pas — mais elle ne sait rien avant le
+      // premier devis.
+      const etapeParLesFaits = (f) => {
         const ch = chantiers.filter(c => estUnChantier(c) && memeQue(c, f));
         // Le chantier le plus vivant l'emporte : quelqu'un chez qui on
         // travaille aujourd'hui est « en cours », même s'il a d'anciens
@@ -324,9 +350,25 @@ export const rgdClientsPage = {
         const dv = devis.filter(v => memeQue(v, f));
         if (ch.some(c => c.etat === 'demarrage') || dv.some(v => v.statut === 'signe')) return 'devis_accepte';
         if (dv.some(ouvert)) return 'devis_encours';
-        return null;   // ni devis ni chantier : prospect, ou simple contact
+        return null;
       };
-      const parEtape = (cle) => fiches.filter(f => etapeDe(f) === cle);
+
+      // ⚠ DEUX SOURCES, ET C'EST LA PLUS AVANCÉE QUI GAGNE.
+      // Le statut bouge dès qu'on le change — c'est lui qui fait passer une
+      // personne de « Nouvelle demande » à « RDV » d'un clic. Les faits, eux,
+      // rattrapent un statut oublié : quelqu'un dont le chantier tourne reste
+      // en « Chantier en cours » même si son suivi est resté à « nouveau
+      // prospect ». Prendre le minimum ferait disparaître un vrai chantier
+      // derrière une case jamais cochée ; prendre le maximum ne perd rien.
+      const etapeDe = (f) => {
+        if (f.statut === 'perdu' || f.statut_suivi === 'perdu') return 'archives';
+        const parStatut = ETAPE_DU_STATUT[f.statut_suivi] || null;
+        const parFaits = etapeParLesFaits(f);
+        if (!parStatut) return parFaits;
+        if (!parFaits) return parStatut;
+        return ORDRE_ETAPES.indexOf(parFaits) > ORDRE_ETAPES.indexOf(parStatut)
+          ? parFaits : parStatut;
+      };
 
       const contacts = fiches.filter(f => f.costructor_id);
 
@@ -388,12 +430,21 @@ export const rgdClientsPage = {
         : 'direct';
       const provenanceDemande = (d) => VIA(d.comment_connu) || 'site';
 
+      // ⚠ UN PROSPECT PAR LA SOURCE, MAIS UNE ÉTAPE PAR LE STATUT.
+      // Les 158 fiches Costructor dorment à « nouveau_prospect » : sans ce
+      // garde, elles rempliraient « Nouvelle demande » de gens qui ne sont pas
+      // des demandes. Une fiche entre donc dans la frise si elle vient d'une
+      // source de prospection, OU si elle a dépassé la première étape.
+      const estProspectParSource = (f) => !!f.apporteur_id || f.source === 'meta_ads'
+        || f.source === 'Formulaire site' || f.source === 'manuel';
+
       const prospects = [
         ...demandes.map(d => {
           const nom = `${d.prenom || ''} ${d.nom || ''}`.trim();
           return {
             genre: 'demande', ligne: d, cible: 'demande',
             provenance: provenanceDemande(d),
+            etape: (d.statut === 'perdu' ? 'archives' : ETAPE_DU_STATUT[d.statut]) || 'demande',
             recu: d.date_demande || '', nom, type: null,
             email: d.email, tel: d.telephone,
             ville: d.ville, adresse: [d.adresse, [d.code_postal, d.ville].filter(Boolean).join(' ')]
@@ -403,14 +454,16 @@ export const rgdClientsPage = {
           };
         }),
         ...fiches
-          .filter(f => f.apporteur_id || f.source === 'meta_ads'
-            || f.source === 'Formulaire site' || f.source === 'manuel')
-          .filter(f => etapeDe(f) === null)   // un prospect n'a ni devis ni chantier
+          .filter(f => {
+            const e = etapeDe(f);
+            return e !== null && (e !== 'demande' || estProspectParSource(f));
+          })
           .map(f => {
             const q = qui(f);
             return {
               genre: 'fiche', ligne: f, cible: 'client',
               provenance: provenanceFiche(f),
+              etape: etapeDe(f),
               recu: f.meta_received_at || q?.cree || '', nom: q?.nom || '(fiche sans contact)',
               type: q?.type || null, email: q?.email, tel: q?.tel,
               ville: q?.ville, adresse: adresseDe(q),
@@ -419,24 +472,25 @@ export const rgdClientsPage = {
             };
           }),
       ];
-      const nProspects = prospects.length;
+      const aEtape = (cle) => prospects.filter(x => x.etape === cle);
 
       // L'ordre est celui du dossier, pas celui des volumes : on lit l'écran
       // de gauche à droite comme une affaire avance.
       const ETAPES = [
-        { key: 'demande', label: 'Nouvelle demande', n: nProspects,
-          titre: 'Prospects : site, apport, Meta Ads, saisie — aucun devis établi' },
-        { key: 'rdv', label: 'RDV', n: 0, titre: 'À brancher sur Google Agenda' },
-        { key: 'devis_encours', label: 'Devis en cours', n: parEtape('devis_encours').length,
-          titre: 'Un devis établi, ni signé ni refusé' },
-        { key: 'devis_accepte', label: 'Devis accepté', n: parEtape('devis_accepte').length,
+        { key: 'demande', label: 'Nouvelle demande', n: aEtape('demande').length,
+          titre: 'Statut « nouveau prospect », relance ou « contacté »' },
+        { key: 'rdv', label: 'RDV', n: aEtape('rdv').length,
+          titre: 'Statut « rendez-vous planifié »' },
+        { key: 'devis_encours', label: 'Devis en cours', n: aEtape('devis_encours').length,
+          titre: 'Devis envoyé, ni signé ni refusé' },
+        { key: 'devis_accepte', label: 'Devis accepté', n: aEtape('devis_accepte').length,
           titre: 'Devis signé, ou chantier préparé mais pas commencé' },
-        { key: 'chantier_encours', label: 'Chantier en cours', n: parEtape('chantier_encours').length,
+        { key: 'chantier_encours', label: 'Chantier en cours', n: aEtape('chantier_encours').length,
           titre: 'Chantier commencé, pas encore terminé' },
-        { key: 'chantier_termine', label: 'Chantier terminé', n: parEtape('chantier_termine').length,
+        { key: 'chantier_termine', label: 'Chantier terminé', n: aEtape('chantier_termine').length,
           titre: 'Plus aucun chantier en cours chez cette personne' },
-        { key: 'archives', label: 'Archivés', n: parEtape('archives').length,
-          titre: 'Contacts perdus' },
+        { key: 'archives', label: 'Archivés', n: aEtape('archives').length,
+          titre: 'Perdus et mis de côté' },
         // ⚠ Le compteur de l'onglet compte l'ANNUAIRE ENTIER, pas la liste
         // filtrée : sinon cliquer « Prospects » ferait changer le nombre de
         // l'onglet lui-même, et on ne saurait plus ce qu'il annonce.
@@ -446,22 +500,24 @@ export const rgdClientsPage = {
 
       const ts = terms(state.q);
       const surDemande = state.vue === 'demande';
+      // La frise, c'est tout sauf l'annuaire : sept étapes, un seul tableau.
+      const surFrise = state.vue !== 'contacts';
 
-      const listeBrute = surDemande ? []
-        : state.vue === 'contacts' ? contactsVus
-        : state.vue === 'rdv' ? []
-        : parEtape(state.vue);
+      const listeBrute = surFrise ? [] : contactsVus;
 
       // Sur les prospects on filtre l'AVANCEMENT (`statut_suivi`, onze valeurs) ;
       // sur les clients et les contacts, la NATURE de la fiche (`statut`). Le
       // menu propose la liste complète du tableau de bord même quand une valeur
       // n'est pas encore présente : c'est ainsi qu'on voit qu'aucune affaire
       // n'est au stade « devis envoyé », ce qu'une liste réduite cacherait.
-      const surProspects = surDemande;
+      // ⚠ PLUS DE FILTRE DE STATUT SUR LA FRISE, et c'est une conséquence, pas
+      // un choix d'ergonomie : depuis que le statut décide de l'onglet, chaque
+      // onglet EST un groupe de statuts. Un menu « Tous statuts » par-dessus
+      // ne pourrait que vider la liste qu'on vient d'ouvrir.
+      const surProspects = false;
       // Le plus récent en haut : c'est celui qu'on n'a pas encore rappelé.
-      const lignesProspects = (surDemande ? prospects : [])
+      const lignesProspects = (surFrise ? aEtape(state.vue) : [])
         .filter(x => (!state.provenance || x.provenance === state.provenance)
-          && (!state.statut || x.statut === state.statut)
           && hit([x.nom, x.email, x.tel, x.ville, x.adresse, x.projet], ts))
         .sort((a, b) => String(b.recu || '').localeCompare(String(a.recu || '')));
       // Les prospects filtrent leur `statut` dans `lignesProspects` ; ici il ne
@@ -491,7 +547,7 @@ export const rgdClientsPage = {
           ? (a, b) => String(recuLe(b) || '').localeCompare(String(recuLe(a) || ''))
           : (a, b) => String(a.p?.famille || '').localeCompare(String(b.p?.famille || ''), 'fr'));
 
-      const affichees = surDemande ? lignesProspects.length : lignesFiches.length;
+      const affichees = surFrise ? lignesProspects.length : lignesFiches.length;
 
       // ---------- les deux tableaux ----------
       const tableauFiches = () => `<section class="card table-wrap">
@@ -558,7 +614,7 @@ export const rgdClientsPage = {
           clients: 'Aucun client : personne n’a de chantier démarré.',
           prospects: 'Aucun prospect dans l’annuaire.',
         })[state.filtreContact] || 'Aucun contact Costructor.';
-        if (surDemande) return 'Aucun prospect de cette provenance.';
+        if (state.provenance) return 'Aucun prospect de cette provenance à cette étape.';
         return ({
           devis_encours: 'Aucun devis en attente de réponse.',
           devis_accepte: 'Aucun devis signé dont le chantier n’a pas commencé.',
@@ -599,28 +655,28 @@ export const rgdClientsPage = {
         <div class="toolbar">
           ${searchInput('rcl-q', state, surDemande
             ? 'Recherche nom, email, ville, projet…' : 'Rechercher nom, email, téléphone…')}
-          ${surDemande ? `<select id="rcl-prov" aria-label="Provenance">
+          ${surFrise ? `<select id="rcl-prov" aria-label="Provenance" class="${state.provenance ? 'actif' : ''}">
             <option value="">Toutes provenances (${prospects.length})</option>
             ${PROVENANCES.map(pr => {
-              const n = prospects.filter(x => x.provenance === pr.key).length;
+              const n = aEtape(state.vue).filter(x => x.provenance === pr.key).length;
               return `<option value="${pr.key}" ${state.provenance === pr.key ? 'selected' : ''}>${esc(pr.label)} (${n})</option>`;
             }).join('')}
-          </select>` : `<select id="rcl-type" aria-label="Type">
+          </select>` : `<select id="rcl-type" aria-label="Type" class="${state.type ? 'actif' : ''}">
             <option value="">Tous types</option>
             <option value="particulier" ${state.type === 'particulier' ? 'selected' : ''}>Particulier</option>
             <option value="professionnel" ${state.type === 'professionnel' ? 'selected' : ''}>Professionnel</option>
-          </select>`}
-          <select id="rcl-statut" aria-label="Statut">
+          </select>
+          <select id="rcl-statut" aria-label="Statut" class="${state.statut ? 'actif' : ''}">
             <option value="">Tous statuts</option>
             ${statuts.map(st => `<option value="${esc(st.key)}" ${state.statut === st.key ? 'selected' : ''}>${esc(st.label)}</option>`).join('')}
-          </select>
+          </select>`}
           <span class="grow"></span>
           <span class="muted small">${affichees} ligne${s_(affichees)}</span>
           ${surProspects && scope.canRgd
             ? '<button class="btn" id="rcl-nouveau">+ Nouveau prospect</button>' : ''}
         </div>
 
-        ${surDemande ? tableauProspects() : tableauFiches()}`;
+        ${surFrise ? tableauProspects() : tableauFiches()}`;
 
       root.innerHTML = cadre('#/rgd/clients', 'Clients & prospects', corps);
       bindSearch(root, 'rcl-q', state, draw);
