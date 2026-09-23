@@ -93,7 +93,8 @@ import { cadre, guard } from './rgd-espace.js';
 import { peutEcrire, majStatutClient, majStatutDemande,
          majNoteClient, majCommentaireDemande } from '../data/rgd-api.js';
 import { toast } from '../ui.js';
-import { formulaireProspect, supprimerFiche, boutonSuppression } from './rgd-prospect-saisie.js';
+import { supprimerFiche, boutonSuppression } from './rgd-prospect-saisie.js';
+import { formulaireDemande } from './rgd-demande-saisie.js';
 import { ouvrirFicheRgd } from './rgd-fiche.js';
 
 const s_ = (n) => (n > 1 ? 's' : '');
@@ -390,7 +391,28 @@ export const rgdClientsPage = {
         : f.source === 'meta_ads' ? 'meta'
         : f.source === 'Formulaire site' ? 'site'
         : 'direct';
-      const provenanceDemande = (d) => VIA(d.comment_connu) || 'site';
+      // ⚠ LE DERNIER RECOURS DÉPEND DE L'ORIGINE DE LA LIGNE. Une demande
+      // venue du formulaire est du site, forcément. Une demande SAISIE à la
+      // main ne l'est pas : la personne a appelé, croisé un chantier, été
+      // adressée par quelqu'un. La ranger en « Site » gonflerait d'autant le
+      // seul chiffre qui dit ce que le site rapporte.
+      // ⚠ « PROJET » VEUT DIRE LES TRAVAUX, PAS LE BIEN. `type_projet` du
+      // formulaire du site vaut « Une maison » : mis dans cette colonne, il
+      // répondait à une autre question que celle du titre, et le budget d'à
+      // côté semblait porter sur l'achat de la maison. Les travaux d'abord,
+      // la description ensuite, le bien en dernier recours.
+      //
+      // Deux formes cohabitent dans `types_travaux` : un tableau JSON pour les
+      // lignes relevées de D1, du texte séparé par des virgules pour celles
+      // qu'écrivent l'Edge Function et la saisie à la main.
+      const travauxDe = (d) => {
+        const brut = String(d.types_travaux || '').trim();
+        if (!brut) return '';
+        if (!brut.startsWith('[')) return brut;
+        try { return JSON.parse(brut).join(', '); } catch { return brut; }
+      };
+      const provenanceDemande = (d) => VIA(d.comment_connu)
+        || (d.source === 'manuel' ? 'direct' : 'site');
 
       const prospects = [
         ...demandes.map(d => {
@@ -405,7 +427,7 @@ export const rgdClientsPage = {
             email: d.email, tel: d.telephone,
             ville: d.ville, adresse: [d.adresse, [d.code_postal, d.ville].filter(Boolean).join(' ')]
               .filter(Boolean).join(' '),
-            projet: d.type_projet || d.projet_description, budget: d.budget,
+            projet: travauxDe(d) || d.projet_description || d.type_projet, budget: d.budget,
             statut: d.statut || 'nouveau_prospect',
           };
         }),
@@ -621,7 +643,12 @@ export const rgdClientsPage = {
           ${searchInput('rcl-q', state, surDemande
             ? 'Recherche nom, email, ville, projet…' : 'Rechercher nom, email, téléphone…')}
           ${surFrise ? `<select id="rcl-prov" aria-label="Provenance" class="${state.provenance ? 'actif' : ''}">
-            <option value="">Toutes provenances (${prospects.length})</option>
+            <!-- ⚠ TOUS LES COMPTES PORTENT SUR L'ONGLET OUVERT, y compris
+                 celui de « Toutes ». Il comptait la frise ENTIÈRE pendant que
+                 les autres comptaient l'étape : 51 en face de six lignes dont
+                 la somme faisait 16. Un total qui ne fait pas la somme de ce
+                 qu'il chapeaute se lit comme une erreur, et c'en était une. -->
+            <option value="">Toutes provenances (${aEtape(state.vue).length})</option>
             ${PROVENANCES.map(pr => {
               const n = aEtape(state.vue).filter(x => x.provenance === pr.key).length;
               return `<option value="${pr.key}" ${state.provenance === pr.key ? 'selected' : ''}>${esc(pr.label)} (${n})</option>`;
@@ -677,7 +704,7 @@ export const rgdClientsPage = {
       // « Direct », et elle naît à la première étape. Le bouton ne s'affiche
       // donc que là : créé depuis « Chantier terminé », le prospect
       // apparaîtrait dans un autre onglet que celui qu'on regarde.
-      if (nouveau) nouveau.onclick = () => formulaireProspect('autre', apporteurs, draw);
+      if (nouveau) nouveau.onclick = () => formulaireDemande(draw);
 
       // Supprimer : le bouton n'existe que sur les fiches nees dans le CRM
       // (`boutonSuppression` ne rend rien autrement), et `supprimerProspect`

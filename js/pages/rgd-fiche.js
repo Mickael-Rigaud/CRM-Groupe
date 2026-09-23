@@ -83,6 +83,9 @@ const ICONES = {
   euro: 'M13 5.5A5 5 0 0 0 5.5 10 5 5 0 0 0 13 14.5M3.5 8.5h6M3.5 11.5h6',
   source: 'M10 2.5 12.4 7l5 .7-3.6 3.5.9 5-4.7-2.5L5.3 16l.9-5L2.6 7.7l5-.7L10 2.5Z',
   personne: 'M10 10a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Zm-6 7.5a6 6 0 0 1 12 0',
+  maison: 'M2.5 9 10 3l7.5 6M4.5 8v9h11V8M8.5 17v-5h3v5',
+  regle: 'M2.5 12.5 12.5 2.5l5 5-10 10-5-5Zm3 3 1.5-1.5m1 4 1.5-1.5m1 4 1.5-1.5',
+  texte: 'M4 4h12M4 8h12M4 12h8M4 16h5',
 };
 const pict = (cle) => `<svg viewBox="0 0 20 20" aria-hidden="true"><path d="${ICONES[cle]}"/></svg>`;
 
@@ -120,6 +123,47 @@ export function ouvrirFicheRgd(x, onChange) {
     const montant = signes.length
       ? { valeur: eur(signes.reduce((t, v) => t + (Number(v.montant_ht) || 0), 0)), quoi: 'Signé HT' }
       : { valeur: String(x.budget || '').trim() || '—', quoi: 'Budget annoncé' };
+
+    // ⚠ CES CHAMPS N'EXISTENT QUE SUR UNE DEMANDE. Une fiche `rgd_clients` a
+    // ses équivalents Meta et rien d'autre ; `d` vaut alors un objet vide, et
+    // `info()` n'affiche pas une ligne vide — la fiche ne montre donc que ce
+    // qu'elle a.
+    const d = x.genre === 'demande' ? f : {};
+    // Le bien : « Une maison · Une résidence principale » du formulaire du
+    // site, ou le `meta_type_bien` d'un lead Meta. C'est la colonne « Bien »
+    // que la refonte du 23/09/2026 avait laissée en route en fusionnant les
+    // trois tableaux en un seul.
+    const bien = [d.type_projet, d.type_intervention].filter(Boolean).join(' · ')
+      || f.meta_type_bien || f.type_bien || '';
+    // ⚠ DEUX FORMES COHABITENT DANS `types_travaux` : un tableau JSON pour les
+    // lignes venues de D1, du texte séparé par des virgules pour celles
+    // qu'écrivent l'Edge Function et la saisie à la main. Afficher la première
+    // telle quelle donnerait `["Peinture","Plomberie"]` à l'écran.
+    const listeTravaux = (() => {
+      const brut = String(d.types_travaux || '').trim();
+      if (!brut) return [];
+      if (brut.startsWith('[')) { try { return JSON.parse(brut); } catch { return [brut]; } }
+      return brut.split(',').map(t => t.trim()).filter(Boolean);
+    })();
+    // ⚠ PAS DE REPLI SUR `x.projet` POUR UNE DEMANDE. Là, `x.projet` vaut
+    // `type_projet` — « Une maison » — qui est le BIEN et non les travaux.
+    // L'afficher ici mettrait « Une maison » en face de « Nature des travaux »
+    // et la même valeur deux lignes plus bas.
+    const travaux = listeTravaux.length
+      ? listeTravaux.map(t => `<span class="chip">${esc(t)}</span>`).join(' ')
+      : (x.genre === 'demande' ? '' : esc(x.projet || ''));
+
+    // ⚠ NE PAS REPETER LE MEME MOT DEUX FOIS. La provenance est DEDUITE du
+    // « comment nous avez-vous connus », donc quand la personne a repondu
+    // « Recommandation » les deux valeurs sont le meme mot — la ligne
+    // affichait « Recommandation · Recommandation · par Mme Perrot ».
+    const provenance = (() => {
+      const deduite = x.provenanceLabel || x.provenance;
+      const dite = String(d.comment_connu || '').trim();
+      const memeMot = dite.toLowerCase() === String(deduite).toLowerCase();
+      return [deduite, memeMot ? '' : dite, d.recommandation && `par ${d.recommandation}`]
+        .filter(Boolean).join(' · ');
+    })();
 
     const tuile = (valeur, quoi) => `<div class="rgdf-tuile">
       <b>${esc(String(valeur))}</b><span>${esc(quoi)}</span></div>`;
@@ -183,10 +227,14 @@ export function ouvrirFicheRgd(x, onChange) {
 
           <section class="rgdf-bloc">
             <h3>Le projet</h3>
-            ${info('travaux', 'Nature des travaux', esc(x.projet || ''), 'est-orange')}
+            ${info('travaux', 'Nature des travaux', travaux, 'est-orange')}
             ${info('euro', 'Budget annoncé', esc(String(x.budget || '').trim()), 'est-orange')}
-            ${info('source', 'Provenance', esc(x.provenanceLabel || x.provenance), 'est-violet')}
-            ${!x.projet && !x.budget ? '<p class="rgdf-rien">Le projet n’a pas encore été décrit.</p>' : ''}
+            ${info('maison', 'Le bien', esc(bien), 'est-bleu')}
+            ${info('regle', 'Superficie', d.superficie ? esc(d.superficie) + ' m²' : '', 'est-bleu')}
+            ${info('personne', 'Le demandeur', esc(d.type_demandeur || ''), 'est-gris')}
+            ${info('texte', 'Ce qui est demandé', esc(d.projet_description || ''), 'est-gris')}
+            ${info('source', 'Provenance', esc(provenance), 'est-violet')}
+            ${!x.projet && !x.budget && !bien ? '<p class="rgdf-rien">Le projet n’a pas encore été décrit.</p>' : ''}
           </section>
 
           ${devis.length ? `<section class="rgdf-bloc">
