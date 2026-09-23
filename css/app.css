@@ -435,6 +435,41 @@ select.cell-in { text-align: left; }
 .pill-tabs.rcl-etapes button { position: relative; margin-right: 6px; }
 .pill-tabs.rcl-etapes button.on::after { border-color: transparent; }
 
+/* La fiche d'un contact RGD : en-tete, frise d'etapes cliquable, deux
+   colonnes. Elle emprunte `.detail`, `.section` et `.stage-steps` a la fiche
+   d'affaire de BTP — deux fiches qui se ressemblent s'apprennent une fois. */
+.rgdf-tete { display: flex; justify-content: space-between; gap: 12px;
+  align-items: flex-start; flex-wrap: wrap; margin-bottom: 14px; }
+.rgdf-tete .chip { margin-right: 6px; }
+.rgdf-etapes { margin-bottom: 18px; }
+/* « Perdu » n'est pas la huitieme etape du cycle : il en sort. Un filet le
+   separe, et il se colore en rouge une fois atteint. */
+.rgdf-etapes .rgdf-perdu { margin-left: 10px; padding-left: 14px;
+  border-left: 1px solid var(--line); }
+.rgdf-etapes .rgdf-perdu.cur { background: var(--red-soft); border-color: var(--red); color: var(--red); }
+.rgdf-etapes button:disabled { opacity: .5; cursor: progress; }
+
+/* LA FRISE ET L'ANNUAIRE SONT DEUX CHOSES, ET LA BARRE DOIT LE DIRE.
+   Mis au bout de la frise, « Contacts » se lisait comme la huitieme etape
+   d'un dossier. Il est desormais pousse a droite, separe par un filet, et
+   dessine autrement : pas de chevron, pas la meme forme. Sous 1100 px il
+   passe a la ligne plutot que de serrer les etapes. */
+.rcl-barres { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.rcl-barres .rcl-etapes { flex: 1 1 auto; min-width: 0; }
+.rcl-annuaire { flex: 0 0 auto; padding-left: 14px; border-left: 1px solid var(--line); }
+.rcl-onglet-annuaire { display: inline-flex; align-items: center; gap: 7px;
+  border: 1px solid var(--line-strong); background: var(--card-2); color: var(--ink);
+  border-radius: 999px; padding: 7px 14px; font-size: 13.5px; font-weight: 600;
+  cursor: pointer; white-space: nowrap; transition: background .15s, border-color .15s, color .15s; }
+.rcl-onglet-annuaire span { font-weight: 700; color: var(--muted); }
+.rcl-onglet-annuaire:hover { border-color: var(--accent); color: var(--accent-ink); }
+.rcl-onglet-annuaire.on { background: var(--accent-ink); border-color: var(--accent-ink); color: #fff; }
+.rcl-onglet-annuaire.on span { color: rgba(255,255,255,.75); }
+@media (max-width: 1100px) {
+  .rcl-annuaire { padding-left: 0; border-left: none; border-top: 1px solid var(--line);
+    padding-top: 10px; width: 100%; }
+}
+
 /* Avancer / reculer d'une etape, a cote du menu de statut. Discretes au
    repos, elles prennent l'accent au survol : ce sont des commandes d'usage
    courant, pas des boutons a mettre en avant. La place vide d'une fleche
@@ -2311,4 +2346,39 @@ button.tb-pp:hover { color: var(--text); text-decoration: underline; text-underl
 @media (max-width: 900px) {
   .ag-hub { grid-template-columns: 1fr; }
   .ag-heures { width: 42px; }
+}
+
+/* La frise du pipeline : une colonne par étape, cliquable vers son onglet.
+   ⚠ TOUTES DE MÊME LARGEUR, et surtout pas un entonnoir qui rétrécit : chaque
+   étape compte ce qui s'y trouve AUJOURD'HUI, les nombres ne décroissent donc
+   pas forcément. Une forme en entonnoir raconterait ce que les chiffres
+   démentent. */
+.rgd-frise { display: flex; align-items: stretch; gap: 8px; margin: 4px 0 12px; }
+.rgd-et { flex: 1 1 0; min-width: 0; display: grid; gap: 6px;
+  grid-template-rows: auto auto 1fr auto; justify-items: center;
+  padding: 12px 6px 10px; border-radius: 12px; text-decoration: none;
+  border: 1px solid var(--line); background: var(--card);
+  transition: transform .12s, border-color .12s, box-shadow .12s; }
+.rgd-et:hover { transform: translateY(-3px); border-color: var(--c);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .09); }
+.rgd-et-n { font-size: 26px; font-weight: 800; color: var(--c); line-height: 1; }
+.rgd-et-label { font-size: 11.5px; color: var(--muted); text-align: center;
+  line-height: 1.25; }
+/* La piste se remplit par le BAS : une colonne qui monte se lit comme une
+   quantité, là où une barre horizontale se lirait comme une progression. */
+.rgd-et-piste { width: 8px; min-height: 48px; border-radius: 99px;
+  background: var(--line); align-self: stretch; justify-self: center;
+  display: flex; flex-direction: column; justify-content: flex-end; }
+.rgd-et-piste i { display: block; width: 100%; border-radius: 99px;
+  background: var(--c); transition: height .2s; }
+.rgd-et-part { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+/* « Archivés » est hors du cycle : on n'y avance pas, on en sort. Le trait le
+   sépare, et la carte reste en retrait tant qu'on ne la survole pas. */
+.rgd-frise-sep { width: 1px; background: var(--line); margin: 6px 4px; flex: 0 0 1px; }
+.rgd-et.hors { opacity: .72; }
+.rgd-et.hors:hover { opacity: 1; }
+@media (max-width: 900px) {
+  .rgd-frise { flex-wrap: wrap; }
+  .rgd-et { flex: 1 1 28%; }
+  .rgd-frise-sep { display: none; }
 }

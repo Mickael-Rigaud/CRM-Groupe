@@ -80,6 +80,12 @@
 // Le champ « Note » du tableau de bord reste du texte ici. Il n'a pas été
 // demandé, et chaque champ ouvert est un chemin d'écriture de plus à tenir.
 import { scope } from '../data/scope.js';
+// ⚠ LES DÉFINITIONS D'ÉTAPE VIVENT DANS `rgd-etapes.js`, PAS ICI.
+// Le pipeline de la vue d'ensemble les lit aussi : les garder dans cet écran
+// obligerait l'autre à les recopier, et deux copies dérivent toujours. Ce
+// fichier n'en garde que l'usage.
+import { ORDRE_ETAPES, ETAPES_RGD, ETAPES_CLES, ETAPE_DU_STATUT, STATUT_DE_L_ETAPE,
+         etapeDeFiche, etapeDeDemande, estProspectParSource } from '../data/rgd-etapes.js';
 import { db } from '../data/db.js';
 import { esc, fmtDate, fmtDateTime, relDay, terms, hit, searchInput, bindSearch, restoreFocus } from '../ui.js';
 import { poserEspace } from './espace.js';
@@ -88,6 +94,7 @@ import { peutEcrire, majStatutClient, majStatutDemande,
          majNoteClient, majCommentaireDemande } from '../data/rgd-api.js';
 import { toast } from '../ui.js';
 import { formulaireProspect, supprimerFiche, boutonSuppression } from './rgd-prospect-saisie.js';
+import { ouvrirFicheRgd } from './rgd-fiche.js';
 
 const s_ = (n) => (n > 1 ? 's' : '');
 
@@ -109,48 +116,6 @@ const STATUTS_SUIVI = [
   { key: 'chantier_termine',  label: 'Chantier terminé',    ton: 'green' },
   { key: 'perdu',             label: 'Perdu',               ton: 'red' },
 ];
-
-// ⚠ LE STATUT DE SUIVI EST DÉJÀ LA FRISE — constaté le 23/09/2026
-// Les onze valeurs ci-dessus se rangent une à une sur les sept étapes de
-// l'écran. Ce n'est pas une coïncidence : le tableau de bord RGD décrit le
-// même cycle, il le nommait simplement autrement. On s'en sert donc comme
-// source de l'étape, et **changer le statut déplace la personne d'un onglet à
-// l'autre** — c'est ce qui rend ce champ vivant, là où il dormait à
-// « nouveau_prospect » sur 190 fiches sur 194 faute de servir à quelque chose.
-const ETAPE_DU_STATUT = {
-  nouveau_prospect: 'demande', relance_1: 'demande', relance_2: 'demande',
-  relance_3: 'demande', a_contacter: 'demande',
-  rdv_planifie: 'rdv',
-  devis_envoye: 'devis_encours',
-  devis_accepte: 'devis_accepte',
-  chantier_en_cours: 'chantier_encours',
-  chantier_termine: 'chantier_termine',
-  perdu: 'archives',
-};
-
-// ⚠ L'INVERSE DE LA TABLE CI-DESSUS : le statut que porte une étape.
-// Il sert à tenir la promesse « le statut affiché correspond toujours à
-// l'onglet ». Mesuré le 23/09/2026 : 27 fiches affichaient « Nouveau
-// prospect » alors qu'elles avaient un chantier — la pastille contredisait
-// l'onglet, et c'est le genre d'incohérence qui fait douter de tout l'écran.
-//
-// « demande » n'y figure pas, et c'est voulu : cinq statuts y mènent (nouveau,
-// trois relances, contacté), et les écraser tous par un seul perdrait
-// l'information la plus utile de cette étape — où en est la relance.
-const STATUT_DE_L_ETAPE = {
-  rdv: 'rdv_planifie',
-  devis_encours: 'devis_envoye',
-  devis_accepte: 'devis_accepte',
-  chantier_encours: 'chantier_en_cours',
-  chantier_termine: 'chantier_termine',
-  archives: 'perdu',
-};
-
-// L'ordre du cycle, pour départager deux réponses. « archives » n'y figure
-// pas : une affaire perdue l'emporte sur tout le reste, elle n'est pas
-// « plus avancée », elle est sortie.
-const ORDRE_ETAPES = ['demande', 'rdv', 'devis_encours', 'devis_accepte',
-  'chantier_encours', 'chantier_termine'];
 
 // Les statuts de FICHE, qui sont autre chose : ils disent ce qu'est la
 // personne, pas où en est l'affaire. Deux vocabulaires, deux colonnes
@@ -226,8 +191,9 @@ const FILTRES_CONTACTS = [
   { key: 'prospects', label: 'Prospects' },
 ];
 
-const ETAPES_CLES = ['demande', 'rdv', 'devis_encours', 'devis_accepte',
-  'chantier_encours', 'chantier_termine', 'archives', 'contacts'];
+// Les huit onglets de l'ecran : les sept etapes du module, plus l'annuaire,
+// qui n'est PAS une etape — d'ou la separation visuelle dans la barre.
+const ONGLETS_CLES = [...ETAPES_CLES, 'contacts'];
 
 // D'OÙ VIENT UN PROSPECT — une colonne, plus quatre sous-onglets
 // Les sous-onglets « Prospect site / partenaire / Meta Ads / autre » ont été
@@ -316,7 +282,7 @@ export const rgdClientsPage = {
       // que portent les mails de notification déjà partis, et un lien reçu
       // hier ne doit pas tomber sur un écran vide. Ils mènent respectivement à
       // « Nouvelle demande » et à l'annuaire filtré sur les clients.
-      vue: ETAPES_CLES.includes(vueDemandee) ? vueDemandee
+      vue: ONGLETS_CLES.includes(vueDemandee) ? vueDemandee
         : vueDemandee === 'prospects' ? 'demande'
         : vueDemandee === 'clients' ? 'contacts'
         : 'demande',
@@ -365,56 +331,7 @@ export const rgdClientsPage = {
       // chantier portent désormais le contact ou l'organisation de leur
       // affaire. Un professionnel se rattache par l'organisation — six affaires
       // sur vingt-sept n'ont que celle-là.
-      const memeQue = (x, f) => (!!x.contact_id && x.contact_id === f.contact_id)
-        || (!!x.organisation_id && x.organisation_id === f.organisation_id);
-      // ⚠ UNE VISITE TECHNIQUE N'EST PAS UN CHANTIER. D1 les marque
-      // `visite_technique`, mais le relevé ne transmet pas cette valeur : elles
-      // arrivent ici sans état ET sans aucune date. C'est à ça qu'on les
-      // reconnaît, faute de mieux — le jour où le relevé passera la valeur,
-      // ce test tombera.
-      const estUnChantier = (c) => !!c.etat || !!c.date_debut_prevue || !!c.work_start_at;
-      const ouvert = (v) => !['signe', 'refuse', 'expire'].includes(v.statut);
-
-      // L'étape lue sur les FAITS : devis et chantiers. Elle ne dépend d'aucune
-      // saisie, donc elle ne ment pas — mais elle ne sait rien avant le
-      // premier devis.
-      const etapeParLesFaits = (f) => {
-        const ch = chantiers.filter(c => estUnChantier(c) && memeQue(c, f));
-        // Le chantier le plus vivant l'emporte : quelqu'un chez qui on
-        // travaille aujourd'hui est « en cours », même s'il a d'anciens
-        // chantiers finis. Il ne passe en « terminé » que quand plus rien ne
-        // tourne chez lui.
-        if (ch.some(c => c.etat === 'en_cours')) return 'chantier_encours';
-        if (ch.some(c => c.etat === 'termine')) return 'chantier_termine';
-        const dv = devis.filter(v => memeQue(v, f));
-        if (ch.some(c => c.etat === 'demarrage') || dv.some(v => v.statut === 'signe')) return 'devis_accepte';
-        if (dv.some(ouvert)) return 'devis_encours';
-        return null;
-      };
-
-      // ⚠ UNE SAISIE DÉLIBÉRÉE L'EMPORTE TOUJOURS SUR LES FAITS.
-      // C'est la règle qui a changé le 23/09/2026, et voici pourquoi.
-      //
-      // Au départ, la plus avancée des deux sources gagnait : les faits
-      // rattrapaient ainsi les 27 fiches dont le chantier tourne alors que le
-      // suivi est resté à « nouveau prospect ». Mais cela rendait ces
-      // 27 personnes IMMOBILES — changer leur statut ne les déplaçait pas,
-      // puisque le chantier les retenait. « Le basculement ne fonctionne pas
-      // pour tout le monde », et c'était vrai.
-      //
-      // `nouveau_prospect` est la valeur par défaut : elle ne dit pas « cette
-      // personne est un nouveau prospect », elle dit « personne n'a rien
-      // renseigné ». C'est là, et là seulement, que les faits parlent à la
-      // place du statut. Toute autre valeur est une décision de quelqu'un, et
-      // une décision ne se fait pas contredire par une table.
-      const JAMAIS_RENSEIGNE = ['nouveau_prospect', '', null, undefined];
-      const etapeDe = (f) => {
-        if (f.statut === 'perdu' || f.statut_suivi === 'perdu') return 'archives';
-        const brut = f.statut_suivi;
-        if (!JAMAIS_RENSEIGNE.includes(brut)) return ETAPE_DU_STATUT[brut] || 'demande';
-        return etapeParLesFaits(f) || 'demande';
-      };
-
+      const etapeDe = (f) => etapeDeFiche(f, chantiers, devis);
       const contacts = fiches.filter(f => f.costructor_id);
 
       // ⚠ ON DÉDOUBLONNE À L'AFFICHAGE, JAMAIS EN BASE. Costructor lui-même
@@ -475,21 +392,14 @@ export const rgdClientsPage = {
         : 'direct';
       const provenanceDemande = (d) => VIA(d.comment_connu) || 'site';
 
-      // ⚠ UN PROSPECT PAR LA SOURCE, MAIS UNE ÉTAPE PAR LE STATUT.
-      // Les 158 fiches Costructor dorment à « nouveau_prospect » : sans ce
-      // garde, elles rempliraient « Nouvelle demande » de gens qui ne sont pas
-      // des demandes. Une fiche entre donc dans la frise si elle vient d'une
-      // source de prospection, OU si elle a dépassé la première étape.
-      const estProspectParSource = (f) => !!f.apporteur_id || f.source === 'meta_ads'
-        || f.source === 'Formulaire site' || f.source === 'manuel';
-
       const prospects = [
         ...demandes.map(d => {
           const nom = `${d.prenom || ''} ${d.nom || ''}`.trim();
           return {
             genre: 'demande', ligne: d, cible: 'demande',
             provenance: provenanceDemande(d),
-            etape: (d.statut === 'perdu' ? 'archives' : ETAPE_DU_STATUT[d.statut]) || 'demande',
+            provenanceLabel: ditProvenance(provenanceDemande(d)).label,
+            etape: etapeDeDemande(d),
             statutBrut: d.statut || 'nouveau_prospect',
             recu: d.date_demande || '', nom, type: null,
             email: d.email, tel: d.telephone,
@@ -509,6 +419,7 @@ export const rgdClientsPage = {
             return {
               genre: 'fiche', ligne: f, cible: 'client',
               provenance: provenanceFiche(f),
+              provenanceLabel: ditProvenance(provenanceFiche(f)).label,
               etape: etapeDe(f),
               recu: f.meta_received_at || q?.cree || '', nom: q?.nom || '(fiche sans contact)',
               type: q?.type || null, email: q?.email, tel: q?.tel,
@@ -528,27 +439,16 @@ export const rgdClientsPage = {
 
       // L'ordre est celui du dossier, pas celui des volumes : on lit l'écran
       // de gauche à droite comme une affaire avance.
-      const ETAPES = [
-        { key: 'demande', label: 'Nouvelle demande', n: aEtape('demande').length,
-          titre: 'Statut « nouveau prospect », relance ou « contacté »' },
-        { key: 'rdv', label: 'RDV', n: aEtape('rdv').length,
-          titre: 'Statut « rendez-vous planifié »' },
-        { key: 'devis_encours', label: 'Devis en cours', n: aEtape('devis_encours').length,
-          titre: 'Devis envoyé, ni signé ni refusé' },
-        { key: 'devis_accepte', label: 'Devis accepté', n: aEtape('devis_accepte').length,
-          titre: 'Devis signé, ou chantier préparé mais pas commencé' },
-        { key: 'chantier_encours', label: 'Chantier en cours', n: aEtape('chantier_encours').length,
-          titre: 'Chantier commencé, pas encore terminé' },
-        { key: 'chantier_termine', label: 'Chantier terminé', n: aEtape('chantier_termine').length,
-          titre: 'Plus aucun chantier en cours chez cette personne' },
-        { key: 'archives', label: 'Archivés', n: aEtape('archives').length,
-          titre: 'Perdus et mis de côté' },
-        // ⚠ Le compteur de l'onglet compte l'ANNUAIRE ENTIER, pas la liste
-        // filtrée : sinon cliquer « Prospects » ferait changer le nombre de
-        // l'onglet lui-même, et on ne saurait plus ce qu'il annonce.
-        { key: 'contacts', label: 'Contacts', n: contactsUniques.length,
-          titre: badge != null ? `Annuaire Costructor — il en compte ${badge} distinct${s_(Number(badge))}` : 'Annuaire Costructor' },
-      ];
+      const ETAPES = ETAPES_RGD.map(e => ({ ...e, n: aEtape(e.key).length }));
+      // ⚠ L'ANNUAIRE N'EST PAS UNE ÉTAPE, et il ne doit pas en avoir l'air.
+      // Mis au bout de la frise, il se lisait comme le huitième moment d'un
+      // dossier — « après chantier terminé vient contacts », ce qui ne veut
+      // rien dire. Il a sa propre barre, à part.
+      // Son compteur compte l'annuaire ENTIER, pas la liste filtrée : sinon
+      // cliquer « Prospects » ferait changer le nombre de l'onglet lui-même.
+      const ONGLET_ANNUAIRE = { key: 'contacts', label: 'Tous les contacts',
+        n: contactsUniques.length,
+        titre: badge != null ? `Annuaire Costructor — il en compte ${badge} distinct${s_(Number(badge))}` : 'Annuaire Costructor' };
 
       const ts = terms(state.q);
       const surDemande = state.vue === 'demande';
@@ -636,7 +536,7 @@ export const rgdClientsPage = {
           <thead><tr><th>Reçu</th><th>Provenance</th><th>Nom</th><th>Contact</th>
             <th>Projet</th><th>Budget</th><th>Ville</th><th>Statut</th>
             <th>Commentaire</th><th></th></tr></thead>
-          <tbody>${lignesProspects.map(x => `<tr>
+          <tbody>${lignesProspects.map((x, n) => `<tr class="click" data-fiche="${n}">
             <td class="small">${x.recu ? esc(fmtDate(x.recu)) : '<span class="muted">—</span>'}</td>
             <td>${pastilleProvenance(x.provenance)}</td>
             <td><b>${esc(x.nom || '—')}</b>
@@ -678,10 +578,17 @@ export const rgdClientsPage = {
 
       const corps = `
 
-        <div class="pill-tabs rcl-etapes">
-          ${ETAPES.map(r => `<button type="button" data-vue="${r.key}"
-            class="${state.vue === r.key ? 'on' : ''}"${r.titre ? ` title="${esc(r.titre)}"` : ''}>${
-            r.label}<span>${r.n}</span></button>`).join('')}
+        <div class="rcl-barres">
+          <div class="pill-tabs rcl-etapes" role="tablist" aria-label="Suivi du dossier">
+            ${ETAPES.map(r => `<button type="button" data-vue="${r.key}"
+              class="${state.vue === r.key ? 'on' : ''}"${r.titre ? ` title="${esc(r.titre)}"` : ''}>${
+              r.label}<span>${r.n}</span></button>`).join('')}
+          </div>
+          <div class="rcl-annuaire">
+            <button type="button" data-vue="${ONGLET_ANNUAIRE.key}"
+              class="rcl-onglet-annuaire ${state.vue === 'contacts' ? 'on' : ''}"
+              title="${esc(ONGLET_ANNUAIRE.titre)}">${ONGLET_ANNUAIRE.label}<span>${ONGLET_ANNUAIRE.n}</span></button>
+          </div>
         </div>
 
 
@@ -739,6 +646,15 @@ export const rgdClientsPage = {
         // sans qu'on comprenne pourquoi.
         state.vue = b.dataset.vue; state.q = ''; state.type = ''; state.statut = ''; draw();
       });
+      // ⚠ La ligne entière ouvre la fiche, MAIS PAS SES COMMANDES : un clic sur
+      // le menu de statut, une flèche, un lien ou la corbeille doit faire ce
+      // qu'il annonce, pas ouvrir une modale par-dessus.
+      root.querySelectorAll('tr[data-fiche]').forEach(tr => tr.onclick = (e) => {
+        if (e.target.closest('select, button, a, input, textarea')) return;
+        const x = lignesProspects[Number(tr.dataset.fiche)];
+        if (x) ouvrirFicheRgd(x, draw);
+      });
+
       const selProv = root.querySelector('#rcl-prov');
       if (selProv) selProv.onchange = () => { state.provenance = selProv.value; draw(); };
       root.querySelectorAll('[data-filtre]').forEach(b => b.onclick = () => {
