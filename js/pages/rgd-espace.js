@@ -78,6 +78,38 @@ export const lienPhoto = (u) => {
   return s.startsWith('/') ? 'https://rgdrenova.fr' + s : s;
 };
 
+// ⚠ UNE PHOTO QUI NE CHARGE PAS DOIT SE VOIR (23/09/2026).
+// Les adresses des photos du site viennent de trois endroits — WordPress via
+// i0.wp.com, Supabase Storage, et cinq reliquats en `/uploads/…` qui ne sont
+// servis par PERSONNE (ni WordPress, qui sert sous `/wp-content/uploads/`, ni
+// le worker, qui sert sous `/api/realisations/photo/`). Le CRM ne peut pas
+// savoir d'avance laquelle répond : il ne l'apprend qu'au chargement. Sans ce
+// signalement, une photo morte donne un cadre vide, qui se lit comme « le CRM
+// n'a pas repris la photo » alors que l'adresse est bien là et que c'est le
+// FICHIER qui manque. Deux causes opposées, une seule apparence : d'où le
+// compteur, qui nomme le vrai problème et dit combien de fois il se pose.
+export function signalerPhotosCassees(hote) {
+  const compteur = hote.querySelector('[data-photos-ko]');
+  let n = 0;
+  const marquer = (img) => {
+    if (img.classList.contains('photo-ko')) return;
+    img.classList.add('photo-ko');
+    img.title = 'Fichier introuvable à l’adresse enregistrée : ' + img.getAttribute('src');
+    n++;
+    if (compteur) {
+      compteur.hidden = false;
+      compteur.textContent = `⚠ ${n} photo${n > 1 ? 's' : ''} ne se charge${n > 1 ? 'nt' : ''} pas : `
+        + 'l’adresse est bien enregistrée, mais le fichier ne répond pas. '
+        + 'Survolez une vignette barrée pour voir l’adresse ; il faut redéposer la photo.';
+    }
+  };
+  for (const img of hote.querySelectorAll('img[src]')) {
+    // Une image déjà chargée n'émettra plus d'événement : on lit son état.
+    if (img.complete) { if (img.naturalWidth === 0) marquer(img); }
+    else img.addEventListener('error', () => marquer(img), { once: true });
+  }
+}
+
 // Le client d'une affaire, particulier ou entreprise. Rendu `null` quand
 // l'affaire n'en désigne aucun — ce qui arrive, et se dit à l'écran.
 export function clientDe(affaire, db) {

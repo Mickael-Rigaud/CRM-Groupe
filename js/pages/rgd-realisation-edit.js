@@ -57,7 +57,16 @@ const FORMATS = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/av
 const MOIS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
               'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
 const ANNEES = [2026, 2025, 2024, 2023];
-const GAMMES = ['Essentielle', 'Signature'];
+
+// ⚠ LA GAMME N'EST PLUS SAISIE (23/09/2026, demandé par Mickael : « on ne
+// l'utilise plus du tout »). Elle n'est ni dans le formulaire ni dans
+// `champsEdites()` — donc la valeur déjà présente sur une réalisation reste
+// dans le document et sur le site, elle n'est simplement plus modifiable.
+// L'effacer d'office aurait changé trente et une fiches publiques sans que
+// personne l'ait demandé ; c'est un geste à faire une fois, en connaissance
+// de cause, pas un effet de bord d'un champ retiré d'un écran.
+// `genererDescription` continue de la lire quand elle existe : la phrase
+// « haut de gamme et raffiné » est déjà dans les descriptions publiées.
 
 // Le cadrage d'une photo dans le curseur : c'est `background-position` côté
 // site, d'où des valeurs qui ne se traduisent pas (« left top » est une paire
@@ -198,7 +207,7 @@ export async function chargerEditeur(cible) {
   if (nouveau) {
     catSlug = cible.catSlug || categories[0].slug;
     projet = normaliser({ slug: '', title: '', city: '', surface: '', duration: '',
-                          gamme: GAMMES[0], description: '', notes: '', images: [] });
+                          description: '', notes: '', images: [] });
   } else {
     const slug = typeof cible === 'string' ? cible : cible.slug;
     const trouve = trouver(lu.donnees, slug);
@@ -246,10 +255,6 @@ function editeur(etat) {
           </select></label>
         <label class="rea-champ"><span>Ville</span>
           <input id="re-city" value="${esc(p.city || '')}" placeholder="Chantilly (60)"></label>
-        <label class="rea-champ"><span>Gamme</span>
-          <select id="re-gamme">${GAMMES.map(g =>
-            `<option ${g === (p.gamme || '') ? 'selected' : ''}>${esc(g)}</option>`).join('')}
-          </select></label>
         <label class="rea-champ"><span>Surface</span>
           <span class="rea-combo">
             <input id="re-surface" type="number" min="0" step="0.5" value="${esc(lireSurface(p.surface))}" placeholder="8">
@@ -320,6 +325,7 @@ function editeur(etat) {
         </figure>`;
       }).join('')}</div>`
         : '<div class="empty">Aucune photo — cette référence n’est qu’un titre tant qu’elle n’en a pas.</div>'}
+      <p class="small photos-ko" data-photos-ko hidden></p>
       <p class="small muted">JPEG, PNG, WebP, GIF ou AVIF, 20 Mo par image. Une photo
       déposée est rangée tout de suite, mais elle n’apparaît sur le site qu’une fois
       la réalisation <b>publiée</b>. La retirer ici la retire de la réalisation, pas du stockage.</p>
@@ -414,13 +420,6 @@ function editeur(etat) {
         etat.armeSuppr ? 'Confirmer le retrait du site' : 'Retirer du site…'}</button>` : ''}
     </div>
 
-    <div class="alert">
-      <b>!</b>
-      <div><b>Publier écrit sur rgdrenova.fr.</b> Il n’y a pas de brouillon : la page
-      change dans la minute. Le retour arrière ne remonte que d’<b>une seule</b>
-      publication, et il porte sur <b>toutes</b> les réalisations.</div>
-    </div>
-
     ${sectionInfos()}
     ${sectionDescription()}
     ${sectionPhotos()}
@@ -450,7 +449,6 @@ function editeur(etat) {
       const v = (s) => $(s)?.value ?? '';
       p.title = v('#re-title').trim();
       p.city = v('#re-city').trim();
-      p.gamme = v('#re-gamme');
       p.surface = ecrireSurface(v('#re-surface'));
       p.duration = ecrireDuree(v('#re-duree'), v('#re-duree-unite'));
       p.description = v('#re-desc').trim();
@@ -728,7 +726,7 @@ function editeur(etat) {
     // une adresse WordPress que le CRM ne fabrique pas.
     function champsEdites() {
       return {
-        title: p.title, city: p.city, gamme: p.gamme, surface: p.surface,
+        title: p.title, city: p.city, surface: p.surface,
         duration: p.duration, description: p.description, notes: p.notes,
         images: p.images.slice(),
         // Un tag orphelin (photo retirée entre-temps) n'a plus de sens : le

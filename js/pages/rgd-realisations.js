@@ -7,8 +7,8 @@
 // stockage en tête de ces fichiers avant d'y toucher.
 //
 // CE QUE CET ÉCRAN MONTRE, ET À QUI IL SERT
-// Les 31 chantiers publiés sur rgdrenova.fr, avec leur ville, leur surface, leur
-// durée et leur gamme. C'est à la fois la bibliothèque de références — quelqu'un
+// Les 31 chantiers publiés sur rgdrenova.fr, avec leur ville, leur surface et
+// leur durée. C'est à la fois la bibliothèque de références — quelqu'un
 // au téléphone avec un prospect de Chantilly doit trouver en dix secondes une
 // salle de bain faite à Chantilly — et l'endroit d'où l'on met une nouvelle
 // réalisation en ligne.
@@ -25,17 +25,19 @@
 // d'un reflet qui a perdu les descriptions de catégories. Il relit la source à
 // l'ouverture, et une seconde fois au moment de publier.
 //
-// ⚠ LE BANDEAU « Ces réalisations sont celles publiées sur rgdrenova.fr » A ÉTÉ
-// RETIRÉ LE 23/09/2026, sur demande. Il disait deux choses : d'où viennent ces
-// fiches — le titre de l'écran et le lien « Voir sur le site » le disent déjà —
-// et que les modifier publie sur le site. Cette seconde phrase, elle, n'a pas
-// disparu : elle est passée DANS l'atelier, juste au-dessus du bouton qui
-// publie, où elle se lit au moment où elle compte. Un avertissement posé sur
-// un écran de consultation se lit une fois puis ne se lit plus.
+// ⚠ LES AVERTISSEMENTS « CECI PUBLIE SUR rgdrenova.fr » ONT TOUS ÉTÉ RETIRÉS
+// LE 23/09/2026, sur demande — le bandeau de cet écran d'abord, puis ceux des
+// deux ateliers. Ne pas les remettre. Ce que le bouton dit suffit : il
+// s'appelle « Publier sur le site », pas « Enregistrer ». Un avertissement
+// qu'on voit à chaque ouverture cesse d'être lu, et il finissait par occuper
+// le haut de l'écran pour répéter ce que l'intitulé du bouton annonce.
+// Ce qui ne se devine PAS reste écrit, à l'endroit concerné : le retour
+// arrière dit qu'il ne remonte que d'un cran, et il le dit au moment où on
+// l'arme, pas avant.
 import { scope } from '../data/scope.js';
 import { esc, toast, confirm as demander } from '../ui.js';
 import { poserEspace } from './espace.js';
-import { cadre, guard, lienPhoto } from './rgd-espace.js';
+import { cadre, guard, lienPhoto, signalerPhotosCassees } from './rgd-espace.js';
 import { chargerEditeur } from './rgd-realisation-edit.js';
 import { chargerCarrousel } from './rgd-carrousel-edit.js';
 
@@ -93,7 +95,6 @@ function fiche(p, ecriture) {
     </div>
 
     <div class="rea-faits">
-      ${p.gamme ? `<span class="chip accent">${esc(p.gamme)}</span>` : ''}
       ${p.surface ? `<span class="chip">${esc(p.surface)}</span>` : ''}
       ${p.duree ? `<span class="chip">${esc(p.duree)}</span>` : ''}
       ${paires.length ? `<span class="chip green">${paires.length} curseur${paires.length > 1 ? 's' : ''} avant / après</span>` : ''}
@@ -110,6 +111,7 @@ function fiche(p, ecriture) {
           ${tags[u] === 'avant' ? '<span class="rea-etiq">avant</span>' : ''}
         </a>`).join('')}</div>`
         : '<div class="empty">Aucune photo — cette référence n’est qu’un titre tant qu’elle n’en a pas.</div>'}
+      <p class="small photos-ko" data-photos-ko hidden></p>
     </div>
 
     ${paires.length ? `<div class="rea-bloc"><h3>Curseurs avant / après</h3>
@@ -145,6 +147,7 @@ const carrousel = (images, ecriture) => `
     <a class="btn ghost sm" href="https://rgdrenova.fr/" target="_blank" rel="noopener">↗ Voir le site</a>
     ${ecriture ? '<button type="button" class="btn primary" data-modif-carrousel>Modifier</button>' : ''}
   </div>
+  <p class="small photos-ko" data-photos-ko hidden></p>
   ${images.length ? `<div class="rea-photos">${images.map(i => `
     <figure class="rea-vignette rea-vignette-num">
       <img src="${esc(lienPhoto(i.url))}" alt="" loading="lazy" referrerpolicy="no-referrer">
@@ -245,6 +248,9 @@ export const rgdRealisationsPage = {
     };
 
     const brancherPanneau = (panneau) => {
+      // Une photo morte se signale d'elle-même : on ne peut le savoir qu'au
+      // chargement, donc après chaque rendu, atelier compris.
+      signalerPhotosCassees(panneau);
       if (state.editeur) {
         // Rien à faire après publication : l'atelier a déjà rechargé la table
         // et appelle `fermer`, qui redessine la page entière sur le frais.

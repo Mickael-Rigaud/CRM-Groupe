@@ -2741,6 +2741,12 @@ button.tb-pp:hover { color: var(--text); text-decoration: underline; text-underl
    fenêtre — le bouton principal de l'écran, à moitié caché. */
 .rea-panneau:has(.rea-pied) { padding-bottom: 76px; }
 
+/* Une photo dont le FICHIER ne répond pas. Le cadre vide du navigateur se lit
+   comme « le CRM n'a pas repris la photo » ; l'adresse, elle, est bien là. */
+img.photo-ko { border: 1px dashed var(--red); box-sizing: border-box;
+  background: var(--red-soft); opacity: .75; }
+.photos-ko { color: var(--red); margin: 8px 0 0; }
+
 /* ---- Le carrousel : une liste, parce que l'ORDRE est l'information ------- */
 .car-liste { display: flex; flex-direction: column; }
 .car-ligne { display: flex; align-items: center; gap: 10px; padding: 9px 4px;

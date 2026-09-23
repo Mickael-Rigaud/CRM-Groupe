@@ -66,14 +66,6 @@ function editeur(etat) {
       <a class="btn ghost sm" href="https://rgdrenova.fr/" target="_blank" rel="noopener">↗ Voir le site</a>
     </div>
 
-    <div class="alert">
-      <b>!</b>
-      <div><b>Publier écrit sur la page d’accueil.</b> Il n’y a pas de brouillon, et le
-      retour arrière ne remonte que d’<b>une seule</b> publication.
-      La légende décrit la photo pour Google et les lecteurs d’écran — c’est elle
-      qui sert d’<code>alt</code>, pas une décoration.</div>
-    </div>
-
     ${doublons > 0 ? `<div class="alert"><b>!</b><div>${doublons} image${doublons > 1 ? 's apparaissent' : ' apparaît'}
       deux fois dans la liste. Le site les affichera, mais le CRM n’en montrera
       qu’une : retirez le doublon pour que les deux vues concordent.</div></div>` : ''}
@@ -101,9 +93,11 @@ function editeur(etat) {
       </div>`).join('')}</div>`
       : '<div class="empty">Aucune image dans le carrousel.</div>'}
 
+    <p class="small photos-ko" data-photos-ko hidden></p>
     <p class="small muted">Glissez une ligne pour changer l’ordre, ou utilisez les
     flèches. ${MAX_IMAGES} images au maximum. Une photo retirée d’ici reste dans le
-    stockage et sur les réalisations où elle figure.</p>
+    stockage et sur les réalisations où elle figure. La légende sert d’attribut
+    <code>alt</code> : c’est elle que lisent Google et les lecteurs d’écran.</p>
 
     <div class="form-actions rea-pied">
       <button type="button" class="btn ghost" id="ca-annuler">Annuler</button>
