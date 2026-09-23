@@ -57,6 +57,7 @@ import { poserEspace } from './espace.js';
 import { cadre, guard } from './rgd-espace.js';
 import { peutEcrire, majStatutClient, majStatutDemande } from '../data/rgd-api.js';
 import { toast } from '../ui.js';
+import { formulaireProspect, supprimerProspect, boutonSuppression } from './rgd-prospect-saisie.js';
 
 const s_ = (n) => (n > 1 ? 's' : '');
 
@@ -106,10 +107,16 @@ const pastilleSuivi = (cle) => {
 // bord, où la couleur se lit sans ouvrir la liste. `data-cible` dit quelle
 // table écrire, `data-id` l'identifiant CÔTÉ CLOUDFLARE : le worker ne connaît
 // pas les uuid du CRM.
-const menuStatut = (cle, cible, d1Id) => {
+// ⚠ IL PORTE LES DEUX IDENTIFIANTS, et ce n'est pas une ceinture de plus.
+// Depuis le 23/09/2026 une fiche peut naître dans le CRM : elle n'a alors
+// AUCUN `d1_id`, et l'envoyer au worker reviendrait à lui demander de modifier
+// une fiche qu'il n'a jamais vue. `data-uuid` sert à ces fiches-là, qui
+// s'écrivent directement dans Supabase.
+const menuStatut = (cle, cible, d1Id, uuid) => {
   const courant = cle || 'nouveau_prospect';
   return `<select class="statut-menu st-${esc(courant)}" data-cible="${esc(cible)}"
-    data-id="${esc(String(d1Id))}" data-avant="${esc(courant)}" aria-label="Statut">
+    data-id="${esc(String(d1Id ?? ''))}" data-uuid="${esc(String(uuid ?? ''))}"
+    data-avant="${esc(courant)}" aria-label="Statut">
     ${STATUTS_SUIVI.map(st => `<option value="${esc(st.key)}" ${st.key === courant ? 'selected' : ''}>${esc(st.label)}</option>`).join('')}
   </select>`;
 };
@@ -241,7 +248,7 @@ export const rgdClientsPage = {
       const tableauFiches = () => `<section class="card table-wrap">
         <table>
           <thead><tr><th>Nom</th><th>Type</th><th>Statut</th><th>Email</th>
-            <th>Téléphone</th><th>Adresse</th><th>Maj</th></tr></thead>
+            <th>Téléphone</th><th>Adresse</th><th>Maj</th>${surProspects ? '<th></th>' : ''}</tr></thead>
           <tbody>${lignesFiches.map(({ f, p }) => {
             const ap = f.apporteur_id && apporteurs.find(a => a.id === f.apporteur_id);
             return `<tr>
@@ -250,21 +257,22 @@ export const rgdClientsPage = {
                   ${ap ? `<div class="s muted">apporté par ${esc(ap.societe || [ap.prenom, ap.nom].filter(Boolean).join(' '))}</div>` : ''}</td>
               <td class="muted">${esc(p?.type || '—')}</td>
               <td>${!surProspects ? pastilleFiche(f.statut)
-                : state.ecriture ? menuStatut(f.statut_suivi, 'client', f.d1_id)
+                : state.ecriture ? menuStatut(f.statut_suivi, 'client', f.d1_id, f.id)
                 : pastilleSuivi(f.statut_suivi)}</td>
               <td>${p?.email ? `<a href="mailto:${esc(p.email)}">${esc(p.email)}</a>` : '<span class="muted">—</span>'}</td>
               <td>${esc(p?.tel || '—')}</td>
               <td class="muted">${esc(adresseDe(p))}</td>
               <td class="muted small">${f.maj ? esc(relDay(f.maj)) : '—'}</td>
+              ${surProspects ? `<td>${boutonSuppression(f)}</td>` : ''}
             </tr>`;
-          }).join('') || `<tr><td colspan="7"><div class="empty">${esc(vide())}</div></td></tr>`}</tbody>
+          }).join('') || `<tr><td colspan="${surProspects ? 8 : 7}"><div class="empty">${esc(vide())}</div></td></tr>`}</tbody>
         </table>
       </section>`;
 
       const tableauDemandes = () => `<section class="card table-wrap">
         <table>
           <thead><tr><th>Date</th><th>Nom</th><th>Email</th><th>Téléphone</th><th>Projet</th>
-            <th>Budget</th><th>Adresse</th><th>Connu via</th><th>Statut</th><th>Commentaire</th></tr></thead>
+            <th>Budget</th><th>Adresse</th><th>Connu via</th><th>Statut</th><th>Commentaire</th><th></th></tr></thead>
           <tbody>${lignesDemandes.map(d => `<tr>
             <td class="small">${d.date_demande ? esc(fmtDateTime(d.date_demande)) : '<span class="muted">—</span>'}</td>
             <td><b>${esc(`${d.prenom || ''} ${d.nom || ''}`.trim() || '—')}</b></td>
@@ -274,9 +282,10 @@ export const rgdClientsPage = {
             <td class="muted">${esc(String(d.budget || '—').trim())}</td>
             <td class="muted">${esc([d.adresse, [d.code_postal, d.ville].filter(Boolean).join(' ')].filter(Boolean).join(' ') || '—')}</td>
             <td class="muted">${esc(d.comment_connu || '—')}</td>
-            <td>${state.ecriture ? menuStatut(d.statut, 'demande', d.d1_id) : pastilleSuivi(d.statut)}</td>
+            <td>${state.ecriture ? menuStatut(d.statut, 'demande', d.d1_id, d.id) : pastilleSuivi(d.statut)}</td>
             <td class="muted small">${esc(d.commentaire_admin || '—')}</td>
-          </tr>`).join('') || `<tr><td colspan="10"><div class="empty">${esc(vide())}</div></td></tr>`}</tbody>
+            <td>${boutonSuppression(d)}</td>
+          </tr>`).join('') || `<tr><td colspan="11"><div class="empty">${esc(vide())}</div></td></tr>`}</tbody>
         </table>
         <p class="small muted">${state.ecriture
           ? 'Le statut se change ici et part directement dans le tableau de bord RGD. Le commentaire, lui, se saisit dans l’<a href="#/rgd/app">application RGD</a>.'
@@ -294,7 +303,7 @@ export const rgdClientsPage = {
         <section class="card table-wrap">
         <table>
           <thead><tr><th>Reçu</th><th>Nom</th><th>Contact</th><th>Projet</th><th>Bien</th>
-            <th>Ville</th><th>Budget</th><th>Statut</th><th>Note</th></tr></thead>
+            <th>Ville</th><th>Budget</th><th>Statut</th><th>Note</th><th></th></tr></thead>
           <tbody>${lignesFiches.map(({ f, p }) => `<tr>
             <td class="small">${f.meta_received_at
               ? esc(new Date(f.meta_received_at).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' }))
@@ -307,9 +316,10 @@ export const rgdClientsPage = {
             <td class="muted">${esc(f.meta_type_bien || '—')}</td>
             <td class="muted">${esc(p?.ville || '—')}</td>
             <td class="muted">${esc(f.meta_budget || '—')}</td>
-            <td>${state.ecriture ? menuStatut(f.statut_suivi, 'client', f.d1_id) : pastilleSuivi(f.statut_suivi)}</td>
+            <td>${state.ecriture ? menuStatut(f.statut_suivi, 'client', f.d1_id, f.id) : pastilleSuivi(f.statut_suivi)}</td>
             <td class="muted small">${esc(f.notes || '—')}</td>
-          </tr>`).join('') || `<tr><td colspan="9"><div class="empty">${esc(vide())}</div></td></tr>`}</tbody>
+            <td>${boutonSuppression(f)}</td>
+          </tr>`).join('') || `<tr><td colspan="10"><div class="empty">${esc(vide())}</div></td></tr>`}</tbody>
         </table>
         <p class="small muted">${state.ecriture
           ? 'Le statut se change ici et part directement dans le tableau de bord RGD — et, si le lead a un apporteur, celui-ci en est averti par email. La note se saisit dans l’<a href="#/rgd/app">application RGD</a>.'
@@ -350,6 +360,8 @@ export const rgdClientsPage = {
           </select>
           <span class="grow"></span>
           <span class="muted small">${affichees} ligne${s_(affichees)}</span>
+          ${surProspects && scope.canRgd
+            ? '<button class="btn" id="rcl-nouveau">+ Nouveau prospect</button>' : ''}
         </div>
 
         ${surDemandes ? tableauDemandes()
@@ -368,6 +380,21 @@ export const rgdClientsPage = {
       root.querySelectorAll('[data-sous]').forEach(b => b.onclick = () => {
         state.sousVue = b.dataset.sous; state.q = ''; state.type = ''; state.statut = ''; draw();
       });
+      // Creer une fiche : elle nait dans le CRM, sans `d1_id`, donc le releve
+      // Cloudflare ne la verra jamais. `draw` suffit a la faire apparaitre —
+      // `db.insert` a deja pousse la ligne dans le cache local.
+      const nouveau = root.querySelector('#rcl-nouveau');
+      if (nouveau) nouveau.onclick = () => formulaireProspect(state.sousVue, apporteurs, draw);
+
+      // Supprimer : le bouton n'existe que sur les fiches nees dans le CRM
+      // (`boutonSuppression` ne rend rien autrement), et `supprimerProspect`
+      // reverifie — un ecran est un garde-fou, pas une garantie.
+      root.querySelectorAll('[data-suppr]').forEach(b => b.onclick = () => {
+        const table = surDemandes ? demandes : fiches;
+        const ligne = table.find(x => x.id === b.dataset.suppr);
+        if (ligne) supprimerProspect(state.sousVue, ligne, draw);
+      });
+
       const t = root.querySelector('#rcl-type');
       if (t) t.onchange = () => { state.type = t.value; draw(); };
       const st = root.querySelector('#rcl-statut');
@@ -384,20 +411,36 @@ export const rgdClientsPage = {
           if (avant === apres) return;
           m.disabled = true;
           m.className = `statut-menu st-${apres} en-cours`;
-          const r = m.dataset.cible === 'demande'
-            ? await majStatutDemande(m.dataset.id, apres)
-            : await majStatutClient(m.dataset.id, apres);
+          const table = m.dataset.cible === 'demande' ? 'rgd_demandes' : 'rgd_clients';
+          const champ = m.dataset.cible === 'demande' ? 'statut' : 'statut_suivi';
+          // ⚠ DEUX CHEMINS D'ÉCRITURE, ET LE BON DÉPEND DE L'ORIGINE DE LA FICHE.
+          // Une fiche venue de Cloudflare s'écrit À LA SOURCE : l'écrire ici ne
+          // servirait à rien, le relevé suivant rétablirait l'ancienne valeur.
+          // Une fiche née dans le CRM, elle, n'existe pas chez le worker — lui
+          // envoyer un `d1_id` vide donnerait une erreur, et Supabase est sa
+          // seule adresse. `data-id` vide dit laquelle des deux on tient.
+          const natif = !m.dataset.id;
+          const r = natif
+            ? await db.update(table, m.dataset.uuid, { [champ]: apres })
+                .then(() => ({ ok: true }))
+                .catch(e => ({ ok: false, motif: String(e.message || e).slice(0, 80) }))
+            : m.dataset.cible === 'demande'
+              ? await majStatutDemande(m.dataset.id, apres)
+              : await majStatutClient(m.dataset.id, apres);
           m.disabled = false;
           if (r.ok) {
             m.dataset.avant = apres;
             m.className = `statut-menu st-${apres}`;
             // On avance le reflet local : le relevé confirmera dans la
             // demi-heure, mais l'écran ne doit pas revenir en arrière entre-temps.
-            const table = m.dataset.cible === 'demande' ? 'rgd_demandes' : 'rgd_clients';
-            const champ = m.dataset.cible === 'demande' ? 'statut' : 'statut_suivi';
-            const ligne = scope.rgd(table).find(x => String(x.d1_id) === m.dataset.id);
-            if (ligne) ligne[champ] = apres;
-            toast('Statut mis à jour dans le tableau de bord RGD');
+            // Sur une fiche native il n'y a rien à avancer : `db.update` a déjà
+            // remplacé la ligne dans le cache.
+            if (!natif) {
+              const ligne = scope.rgd(table).find(x => String(x.d1_id) === m.dataset.id);
+              if (ligne) ligne[champ] = apres;
+            }
+            toast(natif ? 'Statut mis à jour'
+              : 'Statut mis à jour dans le tableau de bord RGD');
           } else {
             m.value = avant;
             m.className = `statut-menu st-${avant}`;
