@@ -10,13 +10,25 @@
 // qui affichent deux vérités différentes sur le même chiffre, c'est pire que
 // pas d'écran du tout : personne ne sait plus lequel croire.
 //
-// LE CA AFFICHÉ EST SAISI À LA MAIN, ET C'EST VOULU
+// LE CA AFFICHÉ EST CELUI QUE LE CRM CALCULE — depuis le 23/09/2026
 // `manual_ca_ht_exercice` et `manual_ca_ttc_exercice` (table `rgd_reglages`)
-// l'emportent sur le calcul automatique, exactement comme côté RGD. La
-// correction existe parce que la reprise Costructor est incomplète : le calcul
-// sous-estime. L'écran affiche donc le chiffre corrigé ET dit qu'il l'est,
-// avec le calculé en regard — cacher l'écart reviendrait à faire croire que le
-// CRM a compté ce qu'il n'a pas compté.
+// l'emportent TOUJOURS sur le calcul quand elles portent une valeur, mais
+// elles sont désormais VIDES, et c'est délibéré.
+//
+// ⚠ POURQUOI ON A COUPÉ CETTE CORRECTION, ET CE QU'ELLE A COÛTÉ.
+// Elle existait parce que le calcul sous-estimait : la reprise Costructor
+// était incomplète. Ce n'est plus vrai — la synchronisation a été réparée le
+// 23/09/2026 et le calcul donne exactement le chiffre de Costructor.
+//
+// Mais elle a coûté cher avant d'être coupée. La synchronisation était en
+// panne depuis le 27/07 ; le calcul était donc figé, et la valeur saisie
+// aussi, puisqu'elle datait du même moment. **Les deux coïncidaient au
+// centime**, ce qui donnait l'air d'une donnée saine — alors qu'il manquait
+// 21 000 € et deux mois de factures. Une correction manuelle ne masque pas
+// seulement un écart : elle masque le SIGNAL qu'un écart apparaîtrait.
+//
+// Si quelqu'un en repose une, l'écran le dit et rappelle de vérifier la date
+// du dernier relevé avant de se rassurer. Ne pas retirer cet avertissement.
 //
 // CE QUE CET ÉCRAN NE SAIT PAS
 // Les notes Google Keep (jamais reprises, elles vivent chez Google), les
@@ -243,10 +255,14 @@ export const rgdPilotagePage = {
             ${mois.length} mois écoulé${mois.length > 1 ? 's' : ''}.</p>
           ${courbeCa(mois)}
           ${corrige ? `<p class="small">
-            Le calcul automatique du CRM donne <b>${eur(calculeHt)}</b> : la reprise
-            Costructor est incomplète, et le tableau de bord RGD retient donc une
-            valeur saisie. C’est elle qui est affichée ici, pour que les deux
-            écrans disent la même chose.
+            <b>Ce chiffre est saisi à la main</b> et masque le calcul, qui donne
+            ${eur(calculeHt)}. Tant qu’une correction existe, l’écran ne peut plus
+            signaler que la synchronisation Costructor est en retard : c’est
+            exactement ce qui a caché deux mois de factures absentes jusqu’au
+            23/09/2026. Si les deux valeurs se ressemblent, vérifiez la date du
+            dernier relevé avant de conclure que tout va bien.
+            Pour rendre la main au calcul : saisir <b>0</b> dans les
+            <a href="#/rgd/reglages">réglages</a>.
             <b>La courbe, elle, montre le calculé</b> — mois par mois, il n’existe pas
             de saisie manuelle, et lisser la correction sur douze mois inventerait
             une répartition que personne n’a constatée.</p>`
