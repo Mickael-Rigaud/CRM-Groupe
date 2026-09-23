@@ -2372,6 +2372,20 @@ button.tb-pp:hover { color: var(--text); text-decoration: underline; text-underl
 .rgd-et-piste i { display: block; width: 100%; border-radius: 99px;
   background: var(--c); transition: height .2s; }
 .rgd-et-part { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* Ce qui pèse à l'étape : le montant, ce qu'il compte, et ce qui dort.
+   ⚠ Le montant est GROS et ce qu'il compte est écrit dessous en toutes
+   lettres — « 41 devis » —, parce que la colonne compte des PERSONNES et le
+   montant des DEVIS. Sans ce mot on lirait la somme comme celle des personnes. */
+.rgd-et-poids { display: grid; gap: 1px; justify-items: center; min-height: 34px;
+  font-variant-numeric: tabular-nums; }
+.rgd-et-poids b { font-size: 13px; font-weight: 700; color: var(--ink); }
+.rgd-et-poids em { font-style: normal; font-size: 10.5px; color: var(--muted); }
+/* « Dormant » : rien n'a bougé depuis le seuil de l'étape. C'est la seule
+   chose de cette frise sur laquelle on peut agir aujourd'hui, elle est donc
+   la seule en rouge. */
+.rgd-et-poids u { text-decoration: none; font-size: 10.5px; font-weight: 700;
+  color: var(--red, #B91C1C); }
 /* « Archivés » est hors du cycle : on n'y avance pas, on en sort. Le trait le
    sépare, et la carte reste en retrait tant qu'on ne la survole pas. */
 .rgd-frise-sep { width: 1px; background: var(--line); margin: 6px 4px; flex: 0 0 1px; }
@@ -2382,3 +2396,5 @@ button.tb-pp:hover { color: var(--text); text-decoration: underline; text-underl
   .rgd-et { flex: 1 1 28%; }
   .rgd-frise-sep { display: none; }
 }
+
+.rgd-dormant { color: var(--red, #B91C1C); }

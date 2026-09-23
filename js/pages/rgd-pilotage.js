@@ -76,18 +76,74 @@ const COULEURS = {
 };
 
 /**
+ * Ce qui PÈSE à chaque étape : l'argent, et ce qui ne bouge plus.
+ *
+ * ⚠ SANS ÇA, LA FRISE NE SERT À RIEN. Sept compteurs répètent exactement les
+ * onglets de « Clients & prospects » — on les a déjà. Un pipeline répond à
+ * deux questions qu'un compteur ne pose pas : OÙ EST L'ARGENT, et QU'EST-CE
+ * QUI NE BOUGE PLUS. Mesuré le 23/09/2026 : 41 devis signés pour 721 365 €,
+ * dont 39 datent de plus d'un mois, et UN SEUL chantier en cours. Un écran
+ * qui affichait « 6 » au lieu de ça taisait l'essentiel.
+ *
+ * ⚠ LE MONTANT NE COMPTE PAS LES MÊMES OBJETS QUE LA COLONNE, et c'est dit à
+ * l'écran. La colonne compte des PERSONNES — la même population que la base ;
+ * le montant compte des DEVIS ou des CHANTIERS, dont une personne peut avoir
+ * plusieurs. Écrire « 721 365 € » sous un « 6 » sans le préciser laisserait
+ * croire que six dossiers pèsent cette somme.
+ */
+const VIEUX_JOURS = { devis_encours: 30, devis_accepte: 30, chantier_encours: 90 };
+
+function poidsDesEtapes(devis, chantiers, aujourdhui) {
+  const jours = (d) => d ? Math.floor((new Date(aujourdhui) - new Date(String(d).slice(0, 10))) / 86400000) : null;
+  const bilan = (liste, dateDe, nom, seuil) => {
+    if (!liste.length) return null;
+    const ages = liste.map(x => jours(dateDe(x))).filter(n => n !== null);
+    return {
+      n: liste.length, nom,
+      montant: liste.reduce((t, x) => t + (Number(x.montant_ht) || 0), 0),
+      vieux: seuil ? ages.filter(a => a > seuil).length : 0,
+      seuil,
+      plusVieux: ages.length ? Math.max(...ages) : null,
+    };
+  };
+  const ouvert = (d) => ['envoye', 'en_cours', 'brouillon'].includes(d.statut);
+  const signe = (d) => ['signe', 'accepte'].includes(d.statut);
+  return {
+    devis_encours: bilan(devis.filter(ouvert), d => d.date_envoi || d.date_creation,
+      'devis', VIEUX_JOURS.devis_encours),
+    devis_accepte: bilan(devis.filter(signe), d => d.date_signature || d.date_creation,
+      'devis', VIEUX_JOURS.devis_accepte),
+    chantier_encours: bilan(chantiers.filter(c => c.etat === 'en_cours'),
+      c => c.work_start_at || c.date_debut_reelle || c.created_at, 'chantier',
+      VIEUX_JOURS.chantier_encours),
+    chantier_termine: bilan(chantiers.filter(c => c.etat === 'termine'),
+      c => c.date_fin_reelle || c.updated_at, 'chantier', null),
+  };
+}
+
+/**
  * La frise du pipeline : une colonne par étape, cliquable vers son onglet.
  * ⚠ MÊME LARGEUR POUR TOUTES — voir plus haut : ce n'est pas un entonnoir.
  */
-function frisePipeline(etapes) {
+function frisePipeline(etapes, poids) {
   const max = Math.max(1, ...etapes.map(e => e.n));
   const total = etapes.filter(e => !e.hors).reduce((t, e) => t + e.n, 0);
+  // ⚠ Le pluriel ne s’ajoute pas aveuglément : « devis » est invariable, on
+  // avait « 3 deviss ». Seuls les mots qui ne finissent pas par s le prennent.
+  // ⚠ « 3 devis » est écrit en toutes lettres à côté du montant : sans ce mot,
+  // on lirait le montant comme celui des personnes comptées au-dessus.
+  const poidsCarte = (p) => !p ? '<span class="rgd-et-poids"></span>' : `<span class="rgd-et-poids">
+    <b>${esc(eur(p.montant))}</b>
+    <em>${p.n} ${esc(p.nom)}${p.n > 1 && !p.nom.endsWith('s') ? 's' : ''}</em>
+    ${p.vieux ? `<u title="Rien n'a bougé depuis plus de ${p.seuil} jours">${p.vieux} dormant${p.vieux > 1 ? 's' : ''}</u>` : ''}
+  </span>`;
   const carte = (e) => `<a class="rgd-et${e.hors ? ' hors' : ''}"
       href="#/rgd/clients?vue=${esc(e.cle)}" style="--c:${esc(e.couleur)}"
       title="${esc(e.titre || e.label)} — ouvrir dans Clients &amp; prospects">
     <span class="rgd-et-n">${e.n}</span>
     <span class="rgd-et-label">${esc(e.label)}</span>
     <span class="rgd-et-piste"><i style="height:${Math.round((e.n / max) * 100)}%"></i></span>
+    ${poidsCarte(poids?.[e.cle])}
     <span class="rgd-et-part">${total && !e.hors ? Math.round((e.n / total) * 100) + ' %' : ''}</span>
   </a>`;
   return `<div class="rgd-frise">
@@ -391,7 +447,7 @@ export const rgdPilotagePage = {
           <div class="card-head"><h2>Pipeline</h2>
             <span class="grow"></span>
             <a class="btn ghost sm" href="#/rgd/clients">Ouvrir la base →</a></div>
-          ${frisePipeline(etapes)}
+          ${frisePipeline(etapes, poidsDesEtapes(devis, chantiers, aujourdhui))}
           <p class="small muted rgd-pipe-pied">${totalEtapes
             ? `${totalEtapes} affaire${totalEtapes > 1 ? 's' : ''} suivie${totalEtapes > 1 ? 's' : ''}, toutes étapes confondues.`
             : 'Aucune affaire à suivre pour le moment.'}
@@ -399,7 +455,11 @@ export const rgdPilotagePage = {
             cohorte, les nombres ne décroissent donc pas forcément et il n’y a pas de
             taux de passage à en tirer.
             Chaque colonne mène à son onglet dans <a href="#/rgd/clients">Clients &amp; prospects</a>,
-            où l’on retrouve exactement les mêmes personnes.</p>
+            où l’on retrouve exactement les mêmes personnes.
+            Le montant sous chaque étape compte les <b>devis</b> ou les <b>chantiers</b>
+            qui s’y trouvent — pas les personnes, dont une seule peut en avoir plusieurs.
+            <b class="rgd-dormant">Dormant</b> veut dire que rien n’a bougé depuis plus de
+            30 jours sur un devis, 90 sur un chantier.</p>
         </section>
 
 
