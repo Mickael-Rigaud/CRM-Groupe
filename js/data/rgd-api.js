@@ -278,6 +278,21 @@ export const convertirSt = (d1Id, champs = {}) =>
 export const majSousTraitant = (d1Id, champs) =>
   envoyer(`/api/sous-traitants/${encodeURIComponent(d1Id)}`, champs);
 
+// Créer un sous-traitant, actif ou en prospection (23/09/2026).
+//
+// ⚠ RIEN À TRADUIRE ICI, et c'est l'exception : `sous_traitants` porte les
+// MÊMES noms des deux côtés — `raison_sociale`, `specialites`, `telephone`,
+// `email`, `adresse`, `notes`, `actif`, `statut_relation`. Vérifié contre la
+// liste `FIELDS` du worker, qui ignore en silence tout champ qu'il ne connaît
+// pas et répond quand même `{ ok: true }` : un nom inventé ne se verrait pas.
+// Seuls les booléens se convertissent, D1 ne liant pas un `true` JavaScript.
+//
+// Le worker exige `raison_sociale` (400 sans elle) et rien d'autre.
+export const creerSousTraitant = (champs) => envoyer('/api/sous-traitants', {
+  ...champs,
+  ...(champs.actif === undefined ? {} : { actif: champs.actif ? 1 : 0 }),
+}, 'POST');
+
 // ------------------------------------------------- partenaires et achats
 //
 // ⚠ LE CRM ET D1 N'EMPLOIENT PAS LES MÊMES NOMS, ET LE RELEVÉ TRADUIT.

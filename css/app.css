@@ -2026,6 +2026,29 @@ button.tb-pp:hover { color: var(--text); text-decoration: underline; text-underl
   font-size: 15px; min-width: 44px; }
 .rgd-pipe-pied { margin: 12px 0 0; border-top: 1px solid var(--line); padding-top: 10px; }
 
+/* Les deux bandeaux de l'écran Sous-traitants, repris du tableau de bord :
+   vert pour les partenaires signés, orange pour ceux qu'on prospecte. Le
+   liseré et la pastille disent la même chose deux fois, et c'est voulu — la
+   couleur se voit de loin, le mot se lit. */
+.st-tete { display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: var(--shadow); padding: 14px 18px; margin-bottom: 14px;
+  border-left: 4px solid var(--st-trait, var(--accent)); }
+.st-tete > div:first-child { flex: 1; min-width: 220px; }
+.st-tete h2 { margin: 0; font-size: 19px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.st-tete p { margin: 3px 0 0; }
+.st-tete-actifs { --st-trait: var(--green); }
+.st-tete-potentiels { --st-trait: var(--accent); }
+/* Le trait qui sépare les deux blocs. L'original en pose un : sans lui, les
+   cartes des métiers se lisent comme la suite du tableau des actifs. */
+.st-separation { height: 1px; background: var(--line); margin: 26px 0 20px; }
+.st-metier + .st-metier { margin-top: 14px; }
+.st-compte { font-size: 12px; font-weight: 600; color: var(--muted);
+  background: var(--card-2); border-radius: 12px; padding: 2px 10px; }
+.st-actions { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
+.st-filtre { min-width: 120px; }
+.st-argent { margin-top: 14px; }
+
 /* Les sections de l'écran Partenaires, reprises du tableau de bord d'origine :
    un liseré de couleur à gauche, un titre en capitales, un compteur en pastille.
    La couleur arrive par `--pa-trait`, posé en style inline par la page — c'est

@@ -56,7 +56,7 @@ import { db } from '../data/db.js';
 import { esc, eur, fmtDate, fmtDateTime, daysSince, terms, hit, searchInput, bindSearch, restoreFocus } from '../ui.js';
 import { poserEspace, kpiEspace } from './espace.js';
 import { cadre, guard } from './rgd-espace.js';
-import { peutEcrire, convertirSt } from '../data/rgd-api.js';
+import { peutEcrire, convertirSt, creerSousTraitant, majSousTraitant } from '../data/rgd-api.js';
 import { toast, openModal, closeModal } from '../ui.js';
 import { ouvrirPiecesSt, ouvrirRelanceSt } from './rgd-st-pieces.js';
 
@@ -151,12 +151,106 @@ function formulaireConversion(st, apres) {
   } });
 }
 
+// Le formulaire d'un sous-traitant — création et modification, actif comme en
+// prospection. Les champs sont ceux du formulaire « potentiel » d'origine :
+// corps de métier, nom, téléphone, mail, adresse, commentaires. Pas les huit
+// dates de pièces, qui se déposent par le panneau « Pièces » et se datent
+// depuis le document lui-même : les retaper ici ouvrirait la porte à une date
+// sans document derrière, exactement l'état que l'écran passe son temps à
+// dénoncer.
+//
+// ⚠ Les noms des champs sont les mêmes de part et d'autre (`raison_sociale`,
+// `specialites`, `telephone`, `email`, `adresse`, `notes`, `statut_relation`) :
+// c'est l'exception dans cet espace, et `rgd-api.js` le dit. Le worker ignore
+// en silence un champ qu'il ne connaît pas et répond quand même `{ ok: true }`,
+// donc une faute de frappe se lirait « enregistré » sans rien enregistrer.
+function formulaireSousTraitant(st, apres, statutDefaut) {
+  const creation = !st;
+  const v = st || {};
+  const statut = statutDefaut || v.statut_relation || 'actif';
+  const potentiel = statut === 'potentiel';
+  const corps = `
+    <form id="st-form" class="reg-grille" style="grid-template-columns:1fr 1fr">
+      <label class="reg-champ"><span>Corps de métier</span>
+        <input name="specialites" value="${esc(v.specialites || '')}"
+               placeholder="Couverture, Maçonnerie, Fenêtres…"></label>
+      <label class="reg-champ"><span>Nom de l’artisan / société *</span>
+        <input name="raison_sociale" required value="${esc(v.raison_sociale || '')}"></label>
+      <label class="reg-champ"><span>Téléphone</span>
+        <input name="telephone" value="${esc(v.telephone || '')}"></label>
+      <label class="reg-champ"><span>Email</span>
+        <input name="email" type="email" value="${esc(v.email || '')}"></label>
+      <label class="reg-champ" style="grid-column:1/-1"><span>Adresse complète</span>
+        <input name="adresse" value="${esc(v.adresse || '')}"></label>
+      <label class="reg-champ" style="grid-column:1/-1"><span>Commentaires</span>
+        <textarea name="notes" rows="2">${esc(v.notes || '')}</textarea></label>
+    </form>
+    <p class="small muted">${potentiel
+      ? 'Un artisan en prospection n’a aucune pièce à fournir : on ne demande une attestation qu’à quelqu’un qu’on fait travailler. Le bouton <b>Convertir en actif</b> s’en charge le moment venu.'
+      : 'Les attestations se déposent ensuite par le bouton <b>Pièces</b>, au bout de sa ligne.'}</p>
+    <div class="toolbar" style="margin-top:12px">
+      <button type="button" class="btn primary" id="st-ok">${creation ? 'Ajouter' : 'Enregistrer'}</button>
+      <button type="button" class="btn ghost" data-close>Annuler</button>
+      <span class="grow"></span><span class="muted small" id="st-etat"></span>
+    </div>`;
+
+  const titre = creation
+    ? (potentiel ? 'Ajouter un artisan en prospection' : 'Nouveau sous-traitant')
+    : `Modifier — ${v.raison_sociale || 'artisan'}`;
+
+  openModal(titre, corps, { onOpen: (m) => {
+    m.querySelector('#st-ok').onclick = async () => {
+      const f = m.querySelector('#st-form');
+      if (!f.reportValidity()) return;
+      const d = Object.fromEntries(new FormData(f).entries());
+      const champs = { raison_sociale: d.raison_sociale.trim() };
+      // Même règle que partout : à la création un champ vide n'est pas envoyé,
+      // à la modification il part à `null` — c'est ainsi qu'on efface un
+      // numéro saisi par erreur, et ne pas l'envoyer rendrait l'effacement
+      // impossible.
+      for (const k of ['specialites', 'telephone', 'email', 'adresse', 'notes']) {
+        if (d[k] && d[k].trim()) champs[k] = d[k].trim();
+        else if (!creation) champs[k] = null;
+      }
+      // Le statut ne se change QUE par « Convertir en actif », jamais par ce
+      // formulaire : la conversion a ses propres effets côté worker, et deux
+      // chemins vers le même changement finissent par diverger.
+      if (creation) champs.statut_relation = statut;
+
+      const b = m.querySelector('#st-ok');
+      b.disabled = true;
+      m.querySelector('#st-etat').textContent = 'Envoi au tableau de bord…';
+      const r = creation ? await creerSousTraitant(champs) : await majSousTraitant(v.d1_id, champs);
+      b.disabled = false;
+      m.querySelector('#st-etat').textContent = '';
+      if (!r.ok) {
+        toast(r.motif === 'pas-de-compte'
+          ? 'Aucun compte RGD à votre adresse : rien n’a été enregistré.'
+          : `Non enregistré — ${r.motif}`, 'err');
+        return;
+      }
+      // Une modification avance à l'écran ; une création ne le peut pas — le
+      // CRM ne connaît pas le `d1_id` que le worker vient d'attribuer, et une
+      // ligne sans lui n'aurait ni bouton Pièces ni bouton Convertir.
+      if (!creation) Object.assign(v, champs);
+      closeModal();
+      toast(creation
+        ? 'Artisan ajouté — visible ici au prochain relevé'
+        : 'Artisan enregistré dans le tableau de bord');
+      apres?.();
+    };
+  } });
+}
+
 export const rgdSousTraitantsPage = {
   title: () => 'RGD Renova — Sous-traitants',
   render(root) {
     if (guard(root)) return {};
     const coquille = poserEspace(root);
-    const state = { vue: 'conformite', q: '', focus: null, ecriture: false };
+    // `actif` est le filtre de l'original : Actifs (défaut) · Inactifs · Tous.
+    // Il ne porte que sur le tableau des actifs — un artisan en prospection
+    // n'est ni actif ni inactif chez nous, il n'a pas encore travaillé.
+    const state = { q: '', actif: '1', focus: null, ecriture: false };
     peutEcrire().then(ok => { if (ok !== state.ecriture) { state.ecriture = ok; draw(); } });
 
     const draw = () => {
@@ -220,27 +314,34 @@ export const rgdSousTraitantsPage = {
         // inactif à qui il manque tout remonterait sinon en tête d'une liste
         // qui sert à savoir qui relancer — or on ne relance pas quelqu'un
         // avec qui on ne travaille plus.
+        .filter(st => state.actif === '' || (state.actif === '1') === (st.actif !== false))
         .sort((a, b) => (a.actif === false) - (b.actif === false)
           || defautsDe(b) - defautsDe(a)
           || String(a.raison_sociale || '').localeCompare(String(b.raison_sociale || ''), 'fr'));
 
+      // LA PRÉSENTATION EST CELLE DU TABLEAU DE BORD D'ORIGINE (23/09/2026,
+      // demandée par Mickael) : deux blocs annoncés par un bandeau de couleur
+      // — les actifs en vert « Signés », les potentiels en orange « En
+      // prospection » —, un séparateur entre eux, et les prospects rangés en
+      // une carte par corps de métier. Les onglets « Conformité / Règlements »
+      // ont disparu : l'original n'en a pas, et ils cachaient la moitié de
+      // l'écran derrière un clic. Les règlements ferment la page.
+      //
+      // ⚠ LES CHIFFRES CLÉS EN TÊTE SONT PARTIS, comme sur Clients et
+      // Partenaires : sur un écran qui sert à retrouver quelqu'un, quatre
+      // grandes cartes repoussent la liste sous la ligne de flottaison.
+      // L'alarme de conformité, elle, RESTE — et ce n'est pas un oubli : elle
+      // ne décore pas, elle dit qui peut engager la responsabilité de RGD
+      // Renova. Elle est seulement passée SOUS le bandeau des actifs, qui est
+      // la population qu'elle concerne.
       const corps = `
-        <div class="esp-kpis">
-          ${kpiEspace({ label: 'Sous-traitants actifs', valeur: actifs.length,
-            sous: `${surLesquels.length - actifs.length} inactif${surLesquels.length - actifs.length > 1 ? 's' : ''}`, icone: '🔧', href: '#/rgd/soustraitants' })}
-          ${kpiEspace({ label: 'Artisans en prospection', valeur: potentiels.length,
-            sous: potentiels.length ? `${parMetier().length} corps de métier` : 'aucun artisan repéré',
-            icone: '🔎', href: '#/rgd/soustraitants' })}
-          ${kpiEspace({ label: 'Dossiers incomplets', valeur: enDefaut.length,
-            sous: sansAucun.length ? `dont ${sansAucun.length} sans aucune pièce` : 'pièces manquantes ou expirées',
-            icone: '⚠', ton: enDefaut.length ? 'red' : 'green', href: '#/rgd/soustraitants' })}
-          ${kpiEspace({ label: 'À renouveler sous 30 j', valeur: bientot.length,
-            sous: bientot.length ? 'à relancer maintenant' : 'rien à relancer', icone: '⏰',
-            ton: bientot.length ? 'amber' : 'green', href: '#/rgd/soustraitants' })}
-          ${kpiEspace({ label: 'Versé aux sous-traitants', valeur: eur(somme(paiements)),
-            sous: `${paiements.length} règlement${paiements.length > 1 ? 's' : ''} · ${eur(somme(commissions))} de commissions`,
-            icone: '💶', href: '#/rgd/soustraitants' })}
-        </div>
+        <section class="st-tete st-tete-actifs">
+          <div>
+            <h2>Sous-traitants actifs <span class="chip green">✓ Signés</span></h2>
+            <p class="muted small">Partenaires signés — attestations, chantiers, paiements</p>
+          </div>
+          ${state.ecriture ? '<button type="button" class="btn primary" id="rst-nouveau">+ Nouveau sous-traitant</button>' : ''}
+        </section>
 
         ${sansAucun.length ? `<div class="alert">
           <b>!</b>
@@ -262,21 +363,20 @@ export const rgdSousTraitantsPage = {
           au prochain déploiement du worker.</div>
         </div>` : ''}
 
-        <div class="pill-tabs">
-          <button type="button" data-vue="conformite" class="${state.vue === 'conformite' ? 'on' : ''}">Conformité<span>${surLesquels.length}</span></button>
-          <button type="button" data-vue="argent" class="${state.vue === 'argent' ? 'on' : ''}">Règlements<span>${paiements.length + commissions.length}</span></button>
-        </div>
-
-        ${state.vue === 'conformite' ? `
         <div class="toolbar">
-          ${searchInput('rst-q', state, 'Rechercher un sous-traitant, une spécialité…')}
+          ${searchInput('rst-q', state, 'Recherche raison sociale, spécialité…')}
+          <select id="rst-actif" class="st-filtre">
+            <option value="1" ${state.actif === '1' ? 'selected' : ''}>Actifs</option>
+            <option value="0" ${state.actif === '0' ? 'selected' : ''}>Inactifs</option>
+            <option value="" ${state.actif === '' ? 'selected' : ''}>Tous</option>
+          </select>
           <span class="grow"></span>
           <span class="muted small">les dossiers incomplets en premier</span>
         </div>
 
         <section class="card table-wrap">
           <table>
-            <thead><tr><th>Sous-traitant</th><th>Contact</th><th>Spécialités</th>
+            <thead><tr><th>Raison sociale</th><th>Contact</th><th>Spécialités</th>
               ${PIECES.map(p => `<th title="${esc(p.label)}">${esc(p.court)}</th>`).join('')}
               <th class="num">Versé</th>${state.ecriture ? '<th></th>' : ''}</tr></thead>
             <tbody>${vus.map(st => {
@@ -296,55 +396,60 @@ export const rgdSousTraitantsPage = {
                   ${st.email ? `<button type="button" class="btn ghost sm" data-relance="${esc(String(st.d1_id))}">Relancer</button>` : ''}
                 </td>` : ''}
               </tr>`;
-            }).join('') || `<tr><td colspan="${state.ecriture ? 9 : 8}"><div class="empty">Aucun sous-traitant ne correspond.</div></td></tr>`}</tbody>
+            }).join('') || `<tr><td colspan="${state.ecriture ? 9 : 8}"><div class="empty">
+              <b>Aucun résultat</b><br>Modifiez les filtres ou créez un nouvel élément.</div></td></tr>`}</tbody>
           </table>
         </section>
 
-        ${!potentiels.length && !relaisMuet ? `<p class="small muted" style="margin-top:14px">
-          Aucun artisan en prospection dans le dernier relevé${dernierReleve ? ' (' + fmtDateTime(dernierReleve) + ')' : ''}.
-          Ils se saisissent dans l&rsquo;<a href="#/rgd/app">application RGD</a> et apparaissent ici au relevé suivant.</p>` : ''}
+        <div class="st-separation"></div>
 
-        ${potentiels.length ? `
-        <section class="rst-potentiels">
-          <div class="rst-tete">
-            <div>
-              <h2>Sous-traitants potentiels <span class="chip amber">En prospection</span></h2>
-              <p class="muted small">${potentiels.length} artisan${potentiels.length > 1 ? 's' : ''} à qualifier —
-              prospection, salons, recommandations. Aucune pièce n&rsquo;est demandée à ce stade.</p>
+        <section class="st-tete st-tete-potentiels">
+          <div>
+            <h2>Sous-traitants potentiels <span class="chip amber">○ En prospection</span></h2>
+            <p class="muted small">${potentiels.length} artisan${potentiels.length > 1 ? 's' : ''} à qualifier —
+            prospection, salons, recommandations</p>
+          </div>
+          ${state.ecriture ? '<button type="button" class="btn primary" id="rst-potentiel">+ Ajouter un potentiel</button>' : ''}
+        </section>
+
+        ${potentiels.length ? parMetier().map(g => `
+          <section class="card table-wrap st-metier">
+            <div class="card-head">
+              <h2>${esc(g.titre)}</h2>
+              <span class="grow"></span>
+              <span class="st-compte">${g.lignes.length} artisan${g.lignes.length > 1 ? 's' : ''}</span>
             </div>
-            <a class="btn ghost sm" href="#/rgd/app">Ajouter un artisan dans l&rsquo;application RGD</a>
-          </div>
+            <table>
+              <thead><tr><th>Nom</th><th>Téléphone</th><th>Mail</th><th>Adresse</th><th>Commentaires</th>
+                ${state.ecriture ? '<th></th>' : ''}</tr></thead>
+              <tbody>${g.lignes.map(st => `<tr>
+                <td><b>${esc(st.raison_sociale || '—')}</b></td>
+                <td>${st.telephone ? esc(st.telephone) : '<span class="muted">—</span>'}</td>
+                <td>${st.email ? `<a href="mailto:${esc(st.email)}">${esc(st.email)}</a>` : '<span class="muted">—</span>'}</td>
+                <td class="s">${st.adresse ? esc(st.adresse) : '<span class="muted">—</span>'}</td>
+                <td class="s muted">${st.notes ? esc(st.notes) : '—'}</td>
+                ${state.ecriture ? `<td class="num st-actions">
+                  <button type="button" class="btn primary sm" data-convertir="${esc(String(st.d1_id))}">Convertir en actif</button>
+                  <button type="button" class="btn ghost sm" data-modifier="${esc(String(st.d1_id))}">Modifier</button>
+                </td>` : ''}
+              </tr>`).join('')}</tbody>
+            </table>
+          </section>`).join('') : `<section class="card"><div class="empty">
+            <b>Aucun sous-traitant potentiel</b><br>
+            ${state.ecriture
+              ? 'Ajoutez les artisans repérés en salon, en recommandation ou en annuaire.'
+              : `Ils se saisissent dans l’<a href="#/rgd/app">application RGD</a>${dernierReleve ? ' — dernier relevé ' + fmtDateTime(dernierReleve) : ''}.`}
+          </div></section>`}
 
-          <div class="rst-metiers">
-            ${parMetier().map(g => `
-              <section class="card table-wrap">
-                <div class="card-head">
-                  <h2>${esc(g.titre)}</h2>
-                  <span class="muted small">${g.lignes.length} artisan${g.lignes.length > 1 ? 's' : ''}</span>
-                </div>
-                <table>
-                  <thead><tr><th>Nom</th><th>Téléphone</th><th>Mail</th><th>Adresse</th><th>Commentaires</th>
-                    ${state.ecriture ? '<th></th>' : ''}</tr></thead>
-                  <tbody>${g.lignes.map(st => `<tr>
-                    <td><b>${esc(st.raison_sociale || '—')}</b></td>
-                    <td>${st.telephone ? esc(st.telephone) : '<span class="muted">—</span>'}</td>
-                    <td>${st.email ? `<a href="mailto:${esc(st.email)}">${esc(st.email)}</a>` : '<span class="muted">—</span>'}</td>
-                    <td class="s">${st.adresse ? esc(st.adresse) : '<span class="muted">—</span>'}</td>
-                    <td class="s muted">${st.notes ? esc(st.notes) : '—'}</td>
-                    ${state.ecriture ? `<td class="num">
-                      <button type="button" class="btn ghost sm" data-convertir="${esc(String(st.d1_id))}">Convertir en actif</button>
-                    </td>` : ''}
-                  </tr>`).join('')}</tbody>
-                </table>
-              </section>`).join('')}
-          </div>
-        </section>` : ''}` : `
-        <div class="toolbar">
-          <span class="muted small">${paiements.length} règlement${paiements.length > 1 ? 's' : ''} (${eur(somme(paiements))})
-          et ${commissions.length} commission${commissions.length > 1 ? 's' : ''} (${eur(somme(commissions))})</span>
-        </div>
+        <div class="st-separation"></div>
 
-        <section class="card table-wrap">
+        <section class="card table-wrap st-argent">
+          <div class="card-head">
+            <h2>Règlements et commissions</h2>
+            <span class="grow"></span>
+            <span class="muted small">${paiements.length} règlement${paiements.length > 1 ? 's' : ''} (${eur(somme(paiements))})
+            et ${commissions.length} commission${commissions.length > 1 ? 's' : ''} (${eur(somme(commissions))})</span>
+          </div>
           <table>
             <thead><tr><th>Date</th><th>Nature</th><th>Sous-traitant</th><th>Chantier</th>
               <th>Libellé</th><th class="num">Taux</th><th class="num">Montant HT</th></tr></thead>
@@ -368,8 +473,10 @@ export const rgdSousTraitantsPage = {
           ${paiements.every(p => !p.deal_id) && paiements.length ? `<p class="small muted">
             Aucun de ces règlements n&rsquo;est rattaché à un chantier côté Cloudflare — la colonne reste donc vide.</p>` : ''}
         </section>
+
         ${missions.length ? `<section class="card">
-          <div class="card-head"><h2>Missions confiées</h2><span class="muted small">${missions.length} mission${missions.length > 1 ? 's' : ''}</span></div>
+          <div class="card-head"><h2>Missions confiées</h2><span class="grow"></span>
+            <span class="muted small">${missions.length} mission${missions.length > 1 ? 's' : ''}</span></div>
           <div class="table-wrap"><table>
             <thead><tr><th>Sous-traitant</th><th>Chantier</th><th>Description</th><th>Statut</th>
               <th class="num">Dû</th><th class="num">Payé</th></tr></thead>
@@ -386,13 +493,26 @@ export const rgdSousTraitantsPage = {
               </tr>`;
             }).join('')}</tbody>
           </table></div>
-        </section>` : ''}`}`;
+        </section>` : ''}`;
 
       root.innerHTML = cadre('#/rgd/soustraitants', 'Sous-traitants', corps);
-      if (state.vue === 'conformite') { bindSearch(root, 'rst-q', state, draw); restoreFocus(root, state); }
-      root.querySelectorAll('[data-vue]').forEach(b => b.onclick = () => { state.vue = b.dataset.vue; draw(); });
+      bindSearch(root, 'rst-q', state, draw);
+      restoreFocus(root, state);
+
+      const filtre = root.querySelector('#rst-actif');
+      if (filtre) filtre.onchange = () => { state.actif = filtre.value; draw(); };
+
+      const nouveau = root.querySelector('#rst-nouveau');
+      if (nouveau) nouveau.onclick = () => formulaireSousTraitant(null, draw, 'actif');
+      const potentiel = root.querySelector('#rst-potentiel');
+      if (potentiel) potentiel.onclick = () => formulaireSousTraitant(null, draw, 'potentiel');
 
       const parD1 = (id) => tous.find(x => String(x.d1_id) === String(id));
+
+      root.querySelectorAll('[data-modifier]').forEach(b => b.onclick = () => {
+        const st = parD1(b.dataset.modifier);
+        if (st) formulaireSousTraitant(st, draw);
+      });
 
       root.querySelectorAll('[data-pieces]').forEach(b => b.onclick = () => {
         const st = parD1(b.dataset.pieces);
