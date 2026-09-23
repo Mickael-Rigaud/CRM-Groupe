@@ -56,7 +56,8 @@ import { db } from '../data/db.js';
 import { esc, eur, fmtDate, fmtDateTime, daysSince, terms, hit, searchInput, bindSearch, restoreFocus } from '../ui.js';
 import { poserEspace, kpiEspace } from './espace.js';
 import { cadre, guard } from './rgd-espace.js';
-import { peutEcrire, convertirSt, creerSousTraitant, majSousTraitant } from '../data/rgd-api.js';
+import { peutEcrire, convertirSt, creerSousTraitant, majSousTraitant,
+         activerSousTraitant, remettreEnProspection, supprimerSousTraitant } from '../data/rgd-api.js';
 import { toast, openModal, closeModal } from '../ui.js';
 import { ouvrirPiecesSt, ouvrirRelanceSt } from './rgd-st-pieces.js';
 
@@ -242,6 +243,30 @@ function formulaireSousTraitant(st, apres, statutDefaut) {
   } });
 }
 
+// Une confirmation qui nomme son bouton. `confirm()` de `ui.js` ne prend qu'une
+// chaîne et répond toujours « Confirmer » : sur cet écran, trois gestes très
+// différents se suivent — désactiver, remettre en prospection, supprimer — et
+// c'est le libellé du bouton qui dit lequel on est en train de faire.
+//
+// ⚠ Pas de seconde modale par-dessus une première : `closeModal(true)` remplace
+// la modale courante, comme le rappelle déjà le panneau des pièces. Ces
+// confirmations partent donc toutes d'un écran nu, jamais d'un formulaire ouvert.
+function confirmerGeste({ titre, texte, ok, danger = false }) {
+  return new Promise(res => {
+    let repondu = false;
+    const rendre = (v) => { if (!repondu) { repondu = true; res(v); } };
+    const m = openModal(titre, `${texte}
+      <div class="toolbar" style="margin-top:14px">
+        <button type="button" class="btn ${danger ? 'danger' : 'primary'}" id="cg-ok">${esc(ok)}</button>
+        <button type="button" class="btn ghost" data-close>Annuler</button>
+      </div>`, { onClose: () => rendre(false) });
+    // ⚠ RÉPONDRE AVANT DE FERMER : closeModal() déclenche onClose, qui
+    // répondrait "false" en premier. Le garde \`repondu\` fait que le premier
+    // appel gagne — dans le mauvais ordre, le bouton OK annulerait.
+    m.querySelector('#cg-ok').onclick = () => { rendre(true); closeModal(); };
+  });
+}
+
 export const rgdSousTraitantsPage = {
   title: () => 'RGD Renova — Sous-traitants',
   render(root) {
@@ -250,7 +275,7 @@ export const rgdSousTraitantsPage = {
     // `actif` est le filtre de l'original : Actifs (défaut) · Inactifs · Tous.
     // Il ne porte que sur le tableau des actifs — un artisan en prospection
     // n'est ni actif ni inactif chez nous, il n'a pas encore travaillé.
-    const state = { q: '', actif: '1', focus: null, ecriture: false };
+    const state = { q: '', focus: null, ecriture: false };
     peutEcrire().then(ok => { if (ok !== state.ecriture) { state.ecriture = ok; draw(); } });
 
     const draw = () => {
@@ -278,7 +303,15 @@ export const rgdSousTraitantsPage = {
       const dernierReleve = tous.reduce((m, st) =>
         st.updated_at && st.updated_at > m ? st.updated_at : m, '');
 
+      // TROIS POPULATIONS, et un écran par bloc (23/09/2026). `statut_relation`
+      // dit si on travaille avec lui ; `actif` dit s'il est encore en service.
+      // Les croiser donne trois cas qui n'appellent pas les mêmes gestes :
+      // un ACTIF qu'on relance, un POTENTIEL qu'on qualifie, un INACTIF qu'on
+      // garde en mémoire sans plus rien lui demander. Le menu « Actifs /
+      // Inactifs / Tous » de l'original est parti avec : il cachait derrière un
+      // choix ce que trois blocs montrent d'un coup.
       const actifs = surLesquels.filter(st => st.actif !== false);
+      const inactifs = surLesquels.filter(st => st.actif === false);
       const enDefaut = actifs.filter(st => defautsDe(st) > 0);
       const sansAucun = actifs.filter(st => PIECES.every(p => !st[p.key]));
       const bientot = actifs.filter(st => PIECES.some(p => etatPiece(st[p.key]).key === 'bientot'));
@@ -307,14 +340,13 @@ export const rgdSousTraitantsPage = {
       const ts = terms(state.q);
       // Les plus en défaut d'abord : c'est la liste d'un travail à faire, pas
       // un annuaire.
-      const vus = surLesquels
+      const vus = actifs
         .filter(st => hit([st.raison_sociale, st.contact_nom, st.email, st.specialites], ts))
         .slice()
         // Les actifs d'abord, et parmi eux les plus en défaut. Un sous-traitant
         // inactif à qui il manque tout remonterait sinon en tête d'une liste
         // qui sert à savoir qui relancer — or on ne relance pas quelqu'un
         // avec qui on ne travaille plus.
-        .filter(st => state.actif === '' || (state.actif === '1') === (st.actif !== false))
         .sort((a, b) => (a.actif === false) - (b.actif === false)
           || defautsDe(b) - defautsDe(a)
           || String(a.raison_sociale || '').localeCompare(String(b.raison_sociale || ''), 'fr'));
@@ -365,11 +397,6 @@ export const rgdSousTraitantsPage = {
 
         <div class="toolbar">
           ${searchInput('rst-q', state, 'Recherche raison sociale, spécialité…')}
-          <select id="rst-actif" class="st-filtre">
-            <option value="1" ${state.actif === '1' ? 'selected' : ''}>Actifs</option>
-            <option value="0" ${state.actif === '0' ? 'selected' : ''}>Inactifs</option>
-            <option value="" ${state.actif === '' ? 'selected' : ''}>Tous</option>
-          </select>
           <span class="grow"></span>
           <span class="muted small">les dossiers incomplets en premier</span>
         </div>
@@ -391,9 +418,13 @@ export const rgdSousTraitantsPage = {
                 ${PIECES.map(p => { const e = etatPiece(st[p.key]);
                   return `<td><span class="chip ${e.ton}" title="${esc(p.label)}">${esc(e.label)}</span></td>`; }).join('')}
                 <td class="num">${verse ? eur(verse) : '<span class="muted">—</span>'}</td>
-                ${state.ecriture ? `<td class="num">
+                ${state.ecriture ? `<td class="num st-actions">
                   <button type="button" class="btn ghost sm" data-pieces="${esc(String(st.d1_id))}">Pièces</button>
                   ${st.email ? `<button type="button" class="btn ghost sm" data-relance="${esc(String(st.d1_id))}">Relancer</button>` : ''}
+                  <button type="button" class="btn ghost sm" data-prospection="${esc(String(st.d1_id))}"
+                          title="Le remettre parmi les artisans en prospection">En prospection</button>
+                  <button type="button" class="btn ghost sm danger" data-desactiver="${esc(String(st.d1_id))}"
+                          title="On ne travaille plus avec lui">Désactiver</button>
                 </td>` : ''}
               </tr>`;
             }).join('') || `<tr><td colspan="${state.ecriture ? 9 : 8}"><div class="empty">
@@ -431,6 +462,8 @@ export const rgdSousTraitantsPage = {
                 ${state.ecriture ? `<td class="num st-actions">
                   <button type="button" class="btn primary sm" data-convertir="${esc(String(st.d1_id))}">Convertir en actif</button>
                   <button type="button" class="btn ghost sm" data-modifier="${esc(String(st.d1_id))}">Modifier</button>
+                  <button type="button" class="btn ghost sm danger" data-supprimer="${esc(String(st.d1_id))}"
+                          title="Supprimer définitivement">🗑</button>
                 </td>` : ''}
               </tr>`).join('')}</tbody>
             </table>
@@ -440,6 +473,44 @@ export const rgdSousTraitantsPage = {
               ? 'Ajoutez les artisans repérés en salon, en recommandation ou en annuaire.'
               : `Ils se saisissent dans l’<a href="#/rgd/app">application RGD</a>${dernierReleve ? ' — dernier relevé ' + fmtDateTime(dernierReleve) : ''}.`}
           </div></section>`}
+
+        <div class="st-separation"></div>
+
+        <section class="st-tete st-tete-inactifs">
+          <div>
+            <h2>Sous-traitants inactifs <span class="chip red">■ Hors service</span></h2>
+            <p class="muted small">${inactifs.length} artisan${inactifs.length > 1 ? 's' : ''} avec qui on ne travaille plus —
+            gardés en mémoire, plus rien ne leur est demandé</p>
+          </div>
+        </section>
+
+        ${inactifs.length ? `
+        <section class="card table-wrap">
+          <table>
+            <thead><tr><th>Raison sociale</th><th>Contact</th><th>Spécialités</th>
+              <th class="num">Versé</th>${state.ecriture ? '<th></th>' : ''}</tr></thead>
+            <tbody>${inactifs.slice()
+              .sort((a, b) => String(a.raison_sociale || '').localeCompare(String(b.raison_sociale || ''), 'fr'))
+              .map(st => {
+                const verse = somme(paiements.filter(p => p.sous_traitant_id === st.id));
+                return `<tr class="muted">
+                  <td><b>${esc(st.raison_sociale || '—')}</b>
+                      ${st.siret ? `<div class="s muted">SIRET ${esc(st.siret)}</div>` : ''}</td>
+                  <td>${esc(st.contact_nom || '—')}
+                      ${st.telephone ? `<div class="s muted">${esc(st.telephone)}</div>` : ''}</td>
+                  <td class="muted">${esc(st.specialites || '—')}</td>
+                  <td class="num">${verse ? eur(verse) : '<span class="muted">—</span>'}</td>
+                  ${state.ecriture ? `<td class="num st-actions">
+                    <button type="button" class="btn ghost sm" data-reactiver="${esc(String(st.d1_id))}">Réactiver</button>
+                  </td>` : ''}
+                </tr>`;
+              }).join('')}</tbody>
+          </table>
+          <p class="small muted">Les pièces de conformité ne sont pas montrées ici, et ce n’est pas un oubli :
+          on ne réclame pas une attestation à jour à quelqu’un qu’on ne fait plus travailler. Elles
+          réapparaissent dès qu’il est réactivé.</p>
+        </section>` : `<section class="card"><div class="empty">
+          Aucun sous-traitant désactivé.</div></section>`}
 
         <div class="st-separation"></div>
 
@@ -499,9 +570,6 @@ export const rgdSousTraitantsPage = {
       bindSearch(root, 'rst-q', state, draw);
       restoreFocus(root, state);
 
-      const filtre = root.querySelector('#rst-actif');
-      if (filtre) filtre.onchange = () => { state.actif = filtre.value; draw(); };
-
       const nouveau = root.querySelector('#rst-nouveau');
       if (nouveau) nouveau.onclick = () => formulaireSousTraitant(null, draw, 'actif');
       const potentiel = root.querySelector('#rst-potentiel');
@@ -535,6 +603,92 @@ export const rgdSousTraitantsPage = {
       root.querySelectorAll('[data-convertir]').forEach(b => b.onclick = () => {
         const st = parD1(b.dataset.convertir);
         if (st) formulaireConversion(st, draw);
+      });
+
+      // LES TROIS BASCULES. Chacune avance à l'écran avant que le relevé ne
+      // passe — sinon la ligne resterait au même endroit trente minutes après
+      // le clic, et on cliquerait une seconde fois. Si l'écriture échoue, la
+      // valeur revient, avec le motif : c'est la règle de tout l'espace.
+      const basculer = async (st, champ, valeur, appel, message) => {
+        const avant = st[champ];
+        st[champ] = valeur;
+        draw();
+        const r = await appel();
+        if (!r.ok) {
+          st[champ] = avant;
+          draw();
+          toast(r.motif === 'pas-de-compte'
+            ? 'Aucun compte RGD à votre adresse : rien n’a été enregistré.'
+            : `Non enregistré — ${r.motif}`, 'err');
+          return;
+        }
+        toast(message);
+      };
+
+      root.querySelectorAll('[data-desactiver]').forEach(b => b.onclick = async () => {
+        const st = parD1(b.dataset.desactiver);
+        if (!st) return;
+        if (!await confirmerGeste({
+          titre: 'Désactiver ce sous-traitant ?',
+          texte: `<p><b>${esc(st.raison_sociale || 'Cet artisan')}</b> passera dans les inactifs.
+            Rien n’est effacé — ses règlements, ses missions et ses pièces restent en place, et
+            il se réactive d’un clic. On cesse simplement de lui réclamer ses attestations.</p>`,
+          ok: 'Désactiver', danger: true,
+        })) return;
+        basculer(st, 'actif', false, () => activerSousTraitant(st.d1_id, false),
+          `${st.raison_sociale || 'L’artisan'} est désactivé`);
+      });
+
+      root.querySelectorAll('[data-reactiver]').forEach(b => b.onclick = () => {
+        const st = parD1(b.dataset.reactiver);
+        if (st) basculer(st, 'actif', true, () => activerSousTraitant(st.d1_id, true),
+          `${st.raison_sociale || 'L’artisan'} est de nouveau actif`);
+      });
+
+      root.querySelectorAll('[data-prospection]').forEach(b => b.onclick = async () => {
+        const st = parD1(b.dataset.prospection);
+        if (!st) return;
+        if (!await confirmerGeste({
+          titre: 'Remettre en prospection ?',
+          texte: `<p><b>${esc(st.raison_sociale || 'Cet artisan')}</b> rejoindra les sous-traitants
+            potentiels, rangé sous son corps de métier. <b>Il sortira du suivi de conformité</b> :
+            ses attestations ne seront plus réclamées ni comptées dans l’alerte, parce qu’on ne
+            demande rien à quelqu’un qu’on n’a pas encore fait travailler. Ses dates restent
+            enregistrées et reviennent s’il est reconverti en actif.</p>`,
+          ok: 'Remettre en prospection',
+        })) return;
+        basculer(st, 'statut_relation', 'potentiel', () => remettreEnProspection(st.d1_id),
+          `${st.raison_sociale || 'L’artisan'} est repassé en prospection`);
+      });
+
+      // ⚠ LA SUPPRESSION EST DÉFINITIVE ET SE FAIT DES DEUX CÔTÉS — voir
+      // `supprimerSousTraitant`. Elle n'est offerte que sur un POTENTIEL : un
+      // actif porte des règlements, des missions et des pièces de conformité,
+      // et « désactiver » est la bonne réponse pour lui.
+      root.querySelectorAll('[data-supprimer]').forEach(b => b.onclick = async () => {
+        const st = parD1(b.dataset.supprimer);
+        if (!st) return;
+        if (!await confirmerGeste({
+          titre: 'Supprimer définitivement ?',
+          texte: `<p><b>${esc(st.raison_sociale || 'Cet artisan')}</b> sera effacé du tableau de bord
+            ET du CRM. <b>C’est irréversible</b> — il n’y a pas de corbeille.</p>
+            <p class="small muted">Pour le mettre simplement de côté sans le perdre, convertissez-le
+            en actif puis désactivez-le : il restera dans le bloc des inactifs.</p>`,
+          ok: 'Supprimer définitivement', danger: true,
+        })) return;
+        const r = await supprimerSousTraitant(st.d1_id, st.id);
+        if (!r.ok) {
+          toast(r.motif === 'pas-de-compte'
+            ? 'Aucun compte RGD à votre adresse : rien n’a été supprimé.'
+            : `Non supprimé — ${r.motif}`, 'err');
+          return;
+        }
+        // La ligne est retirée de la liste en mémoire : le relevé n'efface
+        // jamais rien, donc rien ne la ferait disparaître d'ici autrement.
+        const i = tous.indexOf(st);
+        if (i >= 0) tous.splice(i, 1);
+        toast(`${st.raison_sociale || 'L’artisan'} a été supprimé`);
+        draw();
       });
     };
 

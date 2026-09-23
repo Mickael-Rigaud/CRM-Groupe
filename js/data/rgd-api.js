@@ -293,6 +293,44 @@ export const creerSousTraitant = (champs) => envoyer('/api/sous-traitants', {
   ...(champs.actif === undefined ? {} : { actif: champs.actif ? 1 : 0 }),
 }, 'POST');
 
+// Les trois bascules de l'écran (23/09/2026). Elles passent toutes par le même
+// `PATCH`, mais chacune a son nom : `majSousTraitant(id, { actif: false })`
+// écrirait un booléen que D1 ne sait pas lier, et un appel écrit une fois par
+// écran finit toujours par oublier la conversion quelque part.
+export const activerSousTraitant = (d1Id, actif) =>
+  majSousTraitant(d1Id, { actif: actif ? 1 : 0 });
+
+// ⚠ RETOUR EN PROSPECTION, et ce n'est PAS l'inverse d'un bouton manquant :
+// la montée passe par `/convertir`, qui refuse une fiche déjà active et trace
+// l'événement ; la descente n'a pas de route à elle. Ce n'est pas gênant parce
+// que `convertir` ne fait rien d'autre qu'écrire `statut_relation = 'actif'`
+// (vérifié dans le worker) — aucun email, aucune poussée. Les deux sens sont
+// donc bien symétriques ; si `convertir` gagne un effet un jour, il faudra une
+// route de descente plutôt que ce PATCH.
+export const remettreEnProspection = (d1Id) =>
+  majSousTraitant(d1Id, { statut_relation: 'potentiel' });
+
+// ⚠ SUPPRIMER SE FAIT DES DEUX CÔTÉS, et l'ordre compte.
+//
+// Le relevé n'efface jamais rien : `push_rgd_st` ne fait que des `insert … on
+// conflict do update`. Une ligne supprimée dans D1 resterait donc dans le CRM
+// POUR TOUJOURS, sans plus jamais être rafraîchie. À l'inverse, effacer la
+// seule ligne du CRM la ferait revenir au relevé suivant.
+//
+// D1 d'abord — c'est la source, et c'est l'appel qui peut refuser —, Supabase
+// ensuite. Le retour dit lequel des deux a échoué : « supprimé à moitié » est
+// un état qu'il faut pouvoir nommer, pas une erreur générique.
+export async function supprimerSousTraitant(d1Id, idCrm) {
+  const r = await envoyer(`/api/sous-traitants/${encodeURIComponent(d1Id)}`, {}, 'DELETE');
+  if (!r.ok) return r;
+  try {
+    await db.remove('rgd_sous_traitants', idCrm);
+  } catch (e) {
+    return { ok: false, motif: `supprimé dans le tableau de bord, mais pas dans le CRM (${e.message})` };
+  }
+  return { ok: true };
+}
+
 // ------------------------------------------------- partenaires et achats
 //
 // ⚠ LE CRM ET D1 N'EMPLOIENT PAS LES MÊMES NOMS, ET LE RELEVÉ TRADUIT.

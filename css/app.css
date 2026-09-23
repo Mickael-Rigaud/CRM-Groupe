@@ -2039,6 +2039,13 @@ button.tb-pp:hover { color: var(--text); text-decoration: underline; text-underl
 .st-tete p { margin: 3px 0 0; }
 .st-tete-actifs { --st-trait: var(--green); }
 .st-tete-potentiels { --st-trait: var(--accent); }
+.st-tete-inactifs { --st-trait: var(--red); }
+/* Un geste qui retire quelque chose s'annonce en rouge, mais reste un bouton
+   discret dans une ligne de tableau : `.btn.danger` seul poserait un pavé
+   rouge plein à côté de « Pièces » et de « Relancer », ce qui ferait lire la
+   ligne entière comme une alerte. */
+.btn.ghost.danger { color: var(--red); border-color: color-mix(in srgb, var(--red) 35%, var(--line-strong)); background: var(--card); }
+.btn.ghost.danger:hover { background: var(--red-soft); border-color: var(--red); }
 /* Le trait qui sépare les deux blocs. L'original en pose un : sans lui, les
    cartes des métiers se lisent comme la suite du tableau des actifs. */
 .st-separation { height: 1px; background: var(--line); margin: 26px 0 20px; }
