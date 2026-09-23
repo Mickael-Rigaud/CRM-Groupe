@@ -379,6 +379,17 @@ select.cell-in { text-align: left; }
 /* Une seconde rangee d'onglets, sous la premiere : les provenances de
    prospect. Plus petite et sans trait de separation, pour qu'on voie d'un coup
    d'oeil laquelle des deux commande l'autre. */
+/* Huit onglets pour les etapes de RGD Renova : ils doivent tenir sur une
+   ligne, sinon la frise ne se lit plus comme une frise. On serre le texte
+   plutot que de les faire passer a la ligne, et on defile sous 1100 px. */
+/* ⚠ Deux classes, pas une : `.pill-tabs` pose `flex-wrap: wrap` plus bas dans
+   ce fichier, et a specificite egale c'est la derniere regle qui gagne. Ecrite
+   sur `.rcl-etapes` seule, celle-ci etait ignoree et les huit onglets
+   passaient a la ligne. */
+.pill-tabs.rcl-etapes { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; -webkit-overflow-scrolling: touch; }
+.pill-tabs.rcl-etapes button { white-space: nowrap; flex: 0 0 auto; }
+@media (max-width: 1400px) { .pill-tabs.rcl-etapes button { font-size: 13px; padding-left: 11px; padding-right: 11px; } }
+
 .pill-tabs.sous { margin-top: -6px; }
 .pill-tabs.sous button { font-size: 12.5px; padding: 6px 12px 9px; }
 /* La sous-rubrique active se SOULIGNE au lieu de se remplir. Deux pastilles
