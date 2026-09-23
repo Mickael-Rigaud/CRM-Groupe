@@ -2398,3 +2398,57 @@ button.tb-pp:hover { color: var(--text); text-decoration: underline; text-underl
 }
 
 .rgd-dormant { color: var(--red, #B91C1C); }
+
+/* ===== Réalisations — l'atelier deux colonnes du tableau de bord ==========
+   La liste rangée par catégorie à gauche, le projet ouvert à droite. Une
+   galerie de cartes répond à « montre-moi tout » ; cet écran sert à « ouvre-moi
+   celui-là », et c'est la sidebar qui le permet. */
+.rea-atelier { display: grid; grid-template-columns: 268px 1fr; gap: 16px; align-items: start; }
+.rea-cote { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: var(--shadow); padding: 12px; max-height: 76vh; overflow: auto; }
+.rea-cote-tete { display: flex; align-items: baseline; justify-content: space-between;
+  padding: 0 6px 10px; border-bottom: 1px solid var(--line); margin-bottom: 8px; }
+.rea-groupe + .rea-groupe { margin-top: 12px; }
+.rea-groupe-titre { font-size: 11px; text-transform: uppercase; letter-spacing: .6px;
+  color: var(--muted-2); padding: 6px; display: flex; gap: 6px; align-items: center; }
+.rea-groupe-titre span { background: var(--card-2); border-radius: 8px; padding: 0 6px; }
+.rea-item { display: flex; align-items: center; gap: 6px; width: 100%; text-align: left;
+  border: 0; background: none; border-radius: 8px; padding: 7px 8px; cursor: pointer;
+  font: inherit; font-size: 13px; color: var(--text); }
+.rea-item:hover { background: var(--card-2); }
+.rea-item.on { background: var(--accent); color: var(--on-accent); }
+.rea-item-nom { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Le nombre de photos, et l'étoile d'un avis : deux signaux qu'on lit en
+   parcourant la liste, sans avoir à ouvrir chaque fiche. */
+.rea-item-n { font-size: 11px; color: var(--muted-2); }
+.rea-item.on .rea-item-n, .rea-item.on .rea-item-avis { color: var(--on-accent); }
+.rea-item-avis { font-size: 11px; color: var(--amber); }
+
+.rea-panneau { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: var(--shadow); padding: 18px 20px; min-width: 0; }
+.rea-vide { padding: 30px 10px; max-width: 620px; }
+.rea-vide h2 { margin: 0 0 8px; }
+.rea-vide ul { margin: 12px 0 0; padding-left: 18px; line-height: 1.7; }
+.rea-fiche-tete { display: flex; align-items: flex-start; gap: 10px; flex-wrap: wrap;
+  padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.rea-fiche-tete h2 { margin: 0; }
+.rea-fiche-tete p { margin: 3px 0 0; }
+.rea-faits { display: flex; gap: 6px; flex-wrap: wrap; margin: 12px 0; }
+.rea-bloc { margin-top: 18px; }
+.rea-bloc h3 { margin: 0 0 8px; font-size: 14px; }
+.rea-desc { margin: 0; white-space: pre-line; line-height: 1.6; }
+.rea-photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.rea-vignette { display: block; position: relative; margin: 0; border-radius: 10px;
+  overflow: hidden; background: var(--card-2); }
+.rea-vignette img { display: block; width: 100%; height: 118px; object-fit: cover; }
+.rea-rang { position: absolute; top: 6px; left: 6px; background: var(--accent);
+  color: var(--on-accent); font-size: 11px; font-weight: 700; border-radius: 8px; padding: 1px 7px; }
+.rea-vignette figcaption { padding: 6px 8px; }
+.rea-avis { margin: 0; padding: 10px 14px; border-left: 3px solid var(--accent);
+  background: var(--card-2); border-radius: 0 8px 8px 0; }
+.rea-avis footer { margin-top: 6px; }
+
+@media (max-width: 900px) {
+  .rea-atelier { grid-template-columns: 1fr; }
+  .rea-cote { max-height: none; }
+}
