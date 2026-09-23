@@ -1,50 +1,40 @@
-// Espace RGD Renova — partenaires et achats
+// Espace RGD Renova — partenaires
 //
 // ÉTAPE 4 DE LA MIGRATION, RANG 5 — en écriture depuis le 22/09/2026.
 //
-// ⚠ LES DEUX MOITIÉS DE CET ÉCRAN N'ÉCRIVENT PLUS AU MÊME ENDROIT.
-//
-// **Les apporteurs sont passés à Supabase** le 22/09/2026 — première table de
-// la phase 2. L'écran les crée et les modifie EN DIRECT, avec `db.insert` et
+// Les apporteurs sont passés à Supabase le 22/09/2026, première table de la
+// phase 2. L'écran les crée et les modifie EN DIRECT, avec `db.insert` et
 // `db.update`, sans traverser le worker et sans traduire un seul nom de champ.
 // Le relevé ne les envoie plus, et `d1_id` est devenu nullable : une fiche née
 // ici n'a pas d'origine Cloudflare, et n'en a pas besoin.
 //
-// **Les achats, eux, passent encore par le worker** (`PATCH /api/fournitures/:id`),
-// parce que `rgd_fournitures` porte un `chantier_id` qui désigne un chantier de
-// D1 : la basculer avant les chantiers laisserait un achat rattaché à une
-// référence que Supabase ne saurait pas résoudre. Ils suivront.
+// ⚠ LES ACHATS DE FOURNITURES ONT QUITTÉ CET ÉCRAN le 23/09/2026, sur demande.
+// Ils y vivaient sous un onglet parce qu'ils tenaient en une ligne et ne
+// remplissaient pas une page à eux. `rgd_fournitures` est vide depuis que ses
+// lignes ont été reconnues comme des essais, et ils se saisissent dans
+// l'application RGD. **Ils n'ont donc plus aucune porte dans le CRM** : le jour
+// où ils reviennent, c'est un écran à eux qu'il leur faut, pas un onglet sur un
+// annuaire de contacts. Le formulaire d'achat est parti avec — il vit dans
+// l'historique git si on le cherche.
 //
-// D'où deux styles dans le même fichier. Ce n'est pas une incohérence, c'est
-// une bascule en cours — et la retenir vaut mieux que de l'uniformiser trop
-// tôt dans un sens ou dans l'autre.
-//
-// POURQUOI LES DEUX SUR LE MÊME ÉCRAN
-// Un apporteur envoie du travail, un fournisseur en vend la matière : ce sont
-// deux faces de la même question, « avec qui on travaille ». Et surtout, les
-// achats tiennent aujourd'hui en UNE ligne — leur consacrer un écran entier
-// ferait une page vide avec un titre dessus.
+// TROIS SECTIONS, CELLES DU TABLEAU DE BORD D'ORIGINE
+// Apporteurs d'affaires · Fournisseurs · Autres partenaires, déclarées une
+// fois dans `SECTIONS`. Une liste unique avec une colonne « Rôle » disait la
+// même chose, mais on ne lit pas une colonne comme on lit un titre.
 //
 // DEUX COMPTES D'APPORTS, ET C'EST VOULU
 // `apports_declares` vient de `nb_prospects_manuel` : quelqu'un l'a saisi à la
 // main. « Rattachés » est le nombre de fiches clients qui désignent vraiment ce
-// partenaire (`rgd_clients.apporteur_id`), repris au rang 6.
-//
-// Jusqu'au rang 6, cet écran affichait « le CRM ne sait pas rattacher une
-// affaire à son apporteur ». C'était vrai, mais la raison n'était pas celle
-// qu'on croyait : le lien existait dans D1 depuis le début, il n'était
-// simplement pas relevé. La phrase est tombée avec la colonne.
-//
-// Les deux comptes peuvent diverger, et c'est une information : un apporteur
-// crédité à la main sans aucune fiche rattachée, c'est soit une saisie
-// optimiste, soit un rattachement oublié. L'écran montre les deux plutôt que
-// d'en choisir un.
+// partenaire (`rgd_clients.apporteur_id`), repris au rang 6. Les deux peuvent
+// diverger, et c'est une information : un apporteur crédité à la main sans
+// aucune fiche rattachée, c'est soit une saisie optimiste, soit un rattachement
+// oublié. La colonne « Prospects » porte le déclaré, comme l'original, et
+// n'ajoute le rattaché que s'il existe.
 import { scope } from '../data/scope.js';
 import { db } from '../data/db.js';
-import { esc, eur, fmtDate, terms, hit, searchInput, bindSearch, restoreFocus } from '../ui.js';
+import { esc, terms, hit, searchInput, bindSearch, restoreFocus } from '../ui.js';
 import { poserEspace } from './espace.js';
 import { cadre, guard } from './rgd-espace.js';
-import { peutEcrire, creerFourniture, majFourniture } from '../data/rgd-api.js';
 import { toast, openModal, closeModal } from '../ui.js';
 
 // Les trois rôles que D1 range dans la même table. L'ordre est celui de
@@ -206,106 +196,6 @@ function formulairePartenaire(a, apres, typeDefaut = 'apporteur') {
   } });
 }
 
-// Le formulaire d'un achat. ⚠ `chantier_id` est EXIGÉ par le worker à la
-// création (400 sans lui), alors que le relevé accepte une fourniture sans
-// chantier : on ne peut donc pas créer ici un achat non rattaché, et la modale
-// le dit plutôt que de le laisser découvrir.
-function formulaireAchat(f0, chantiers, apres) {
-  const creation = !f0;
-  const v = f0 || {};
-  const mats = Array.isArray(v.materiau) ? v.materiau : [];
-  const corps = `
-    <form id="ac-form" class="reg-grille" style="grid-template-columns:1fr 1fr">
-      <label class="reg-champ" style="grid-column:1/-1">
-        <span>Chantier ${creation ? '*' : ''}</span>
-        <select name="chantier" ${creation ? 'required' : ''}>
-          <option value="">${creation ? 'Choisir un chantier…' : 'Ne pas changer'}</option>
-          ${chantiers.map(c => `<option value="${esc(String(c.d1_id))}" ${
-            !creation && c.deal_id && c.deal_id === v.deal_id ? 'selected' : ''}>${esc(c.nom)}</option>`).join('')}
-        </select>
-      </label>
-      <label class="reg-champ" style="grid-column:1/-1"><span>Libellé *</span>
-        <input name="libelle" required value="${esc(v.libelle || '')}"></label>
-      <label class="reg-champ"><span>Fournisseur</span>
-        <input name="fournisseur" value="${esc(v.fournisseur || '')}"></label>
-      <label class="reg-champ"><span>Date d’achat</span>
-        <input name="date_achat" type="date" value="${esc(v.date_achat || '')}"></label>
-      <label class="reg-champ"><span>Montant HT (€)</span>
-        <input name="montant_ht" inputmode="decimal" value="${v.montant_ht != null ? esc(String(v.montant_ht)) : ''}"></label>
-      <label class="reg-champ"><span>Montant TTC (€)</span>
-        <input name="montant_ttc" inputmode="decimal" value="${v.montant_ttc != null ? esc(String(v.montant_ttc)) : ''}"></label>
-      <label class="reg-champ" style="grid-column:1/-1"><span>Matériaux</span>
-        <input name="materiau" value="${esc(mats.join(', '))}" placeholder="Béton, Charpente bois"></label>
-      <label class="reg-champ" style="grid-column:1/-1"><span>Référence facture</span>
-        <input name="reference_facture" value="${esc(v.reference_facture || '')}"></label>
-      <label class="reg-champ" style="grid-column:1/-1"><span>Notes</span>
-        <textarea name="notes" rows="2">${esc(v.notes || '')}</textarea></label>
-    </form>
-    <p class="small muted">Les <b>matériaux</b> se séparent par des virgules.
-    ${creation ? 'Un achat créé ici doit être rattaché à un chantier : le tableau de bord le refuse sans. ' : ''}
-    La ligne apparaîtra dans cette liste au prochain relevé.</p>
-    <div class="toolbar" style="margin-top:12px">
-      <button type="button" class="btn primary" id="ac-ok">${creation ? 'Créer l’achat' : 'Enregistrer'}</button>
-      <button type="button" class="btn ghost" data-close>Annuler</button>
-      <span class="grow"></span><span class="muted small" id="ac-etat"></span>
-    </div>`;
-
-  openModal(creation ? 'Nouvel achat' : `Modifier — ${v.libelle || 'achat'}`, corps, { onOpen: (m) => {
-    m.querySelector('#ac-ok').onclick = async () => {
-      const form = m.querySelector('#ac-form');
-      if (!form.reportValidity()) return;
-      const d = Object.fromEntries(new FormData(form).entries());
-      const champs = { libelle: d.libelle.trim() };
-      if (d.chantier) champs.chantier_id = Number(d.chantier);
-      for (const k of ['fournisseur', 'reference_facture', 'notes']) {
-        if (d[k] && d[k].trim()) champs[k] = d[k].trim();
-        else if (!creation) champs[k] = null;
-      }
-      if (d.date_achat) champs.date_achat = d.date_achat;
-      else if (!creation) champs.date_achat = null;
-      // Une liste vide s'envoie comme une liste vide — c'est ainsi qu'on RETIRE
-      // les matériaux d'un achat. Mais il n'y a rien à retirer d'un achat qui
-      // n'existe pas encore : à la création, un champ vide ne part pas.
-      const mats = d.materiau.split(',').map(x => x.trim()).filter(Boolean);
-      if (mats.length || !creation) champs.materiau = mats;
-      for (const k of ['montant_ht', 'montant_ttc']) {
-        const brut = String(d[k] || '').trim();
-        if (!brut) { if (!creation) champs[k] = null; continue; }
-        const n = Number(brut.replace(/\s/g, '').replace(',', '.'));
-        if (!Number.isFinite(n)) {
-          toast(`Le ${k === 'montant_ht' ? 'montant HT' : 'montant TTC'} n’est pas un nombre`, 'err');
-          return;
-        }
-        champs[k] = n;
-      }
-
-      const b = m.querySelector('#ac-ok');
-      b.disabled = true;
-      m.querySelector('#ac-etat').textContent = 'Envoi au tableau de bord…';
-      const r = creation ? await creerFourniture(champs) : await majFourniture(v.d1_id, champs);
-      b.disabled = false;
-      m.querySelector('#ac-etat').textContent = '';
-      if (!r.ok) {
-        toast(r.motif === 'pas-de-compte'
-          ? 'Aucun compte RGD à votre adresse : rien n’a été enregistré.'
-          : `Non enregistré — ${r.motif}`, 'err');
-        return;
-      }
-      if (!creation) {
-        Object.assign(v, champs);
-        // `chantier_id` est le nom de D1 ; la ligne du CRM porte `deal_id`.
-        // Le laisser là afficherait un chantier faux jusqu'au relevé.
-        delete v.chantier_id;
-      }
-      closeModal();
-      toast(creation
-        ? 'Achat créé — visible ici au prochain relevé'
-        : 'Achat enregistré dans le tableau de bord');
-      apres?.();
-    };
-  } });
-}
-
 export const rgdPartenairesPage = {
   title: () => 'RGD Renova — Partenaires',
   render(root) {
@@ -319,27 +209,18 @@ export const rgdPartenairesPage = {
     // s'écrivent maintenant en direct.
     // Les confondre priverait d'un droit qu'on a : quelqu'un de l'équipe RGD
     // sans compte sur le tableau de bord peut modifier un partenaire.
-    const state = { vue: 'partenaires', q: '', focus: null,
-                    ecriture: false, ecritureLocale: scope.canRgd };
-    peutEcrire().then(ok => { if (ok !== state.ecriture) { state.ecriture = ok; draw(); } });
+    // Une seule porte depuis que les achats sont partis : les apporteurs
+    // s'écrivent en direct dans Supabase, ce qu'autorise la policy
+    // `rgd_apporteurs_acces`. Plus besoin de demander au worker s'il existe un
+    // compte RGD au même email — c'était la clé des achats, pas la nôtre.
+    const state = { q: '', focus: null, ecritureLocale: scope.canRgd };
 
     const draw = () => {
       const tous = scope.rgd('rgd_apporteurs');
-      const achats = scope.rgd('rgd_fournitures');
-      // Les chantiers, pour rattacher un achat. On envoie le `d1_id` — celui
-      // de Cloudflare —, jamais l'uuid de l'affaire, que le worker ne connaît
-      // pas. Un chantier sans `d1_id` ne peut donc pas être proposé.
-      const chantiers = scope.rgd('rgd_chantiers')
-        .filter(c => c.d1_id)
-        .map(c => ({ d1_id: c.d1_id, deal_id: c.deal_id,
-                     nom: (c.deal_id && db.byId('deals', c.deal_id)?.title) || `Chantier ${c.d1_id}` }))
-        .sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
       const fiches = scope.rgd('rgd_clients');
       const rattaches = (a) => fiches.filter(c => c.apporteur_id === a.id).length;
       const actifs = tous.filter(a => a.actif !== false);
       const declares = tous.reduce((t, a) => t + (Number(a.apports_declares) || 0), 0);
-      const signes = tous.filter(a => a.partenariat_signe).length;
-      const totalAchats = achats.reduce((t, f) => t + (Number(f.montant_ht) || 0), 0);
 
       const ts = terms(state.q);
       const vus = tous
@@ -402,23 +283,16 @@ export const rgdPartenairesPage = {
         </section>`;
       };
 
+      // Ni alerte de convention, ni onglet « Achats » : retirés le 23/09/2026
+      // à la demande de Mickael. L'alerte disait qu'aucun partenariat n'était
+      // signé — vrai des cinq fiches, donc permanente, et une alerte qui ne
+      // s'éteint jamais cesse d'être lue ; la convention reste dans la fiche.
+      // ⚠ LES ACHATS DE FOURNITURES N'ONT PLUS DE PORTE DANS LE CRM. La table
+      // `rgd_fournitures` est vide (vérifié le 23/09/2026 — ses lignes étaient
+      // des essais, effacées) et ils se saisissent dans l'application RGD. Le
+      // jour où ils reviennent, c'est un écran à eux qu'il leur faut, pas un
+      // onglet sur l'annuaire des partenaires.
       const corps = `
-        ${signes === 0 && tous.length ? `<div class="alert">
-          <b>!</b>
-          <div><b>Aucun partenariat n’est signé.</b> Les ${tous.length} partenaires
-          travaillent sans convention enregistrée — ce qui ne les empêche pas
-          d’apporter des affaires, mais ne fixe rien sur la rémunération de
-          l’apport. ${state.ecritureLocale
-            ? 'La convention se note sur la fiche du partenaire : cliquez sur sa ligne.'
-            : 'Les conventions se saisissent dans l’<a href="#/rgd/app">application RGD</a>.'}</div>
-        </div>` : ''}
-
-        <div class="pill-tabs">
-          <button type="button" data-vue="partenaires" class="${state.vue === 'partenaires' ? 'on' : ''}">Partenaires<span>${tous.length}</span></button>
-          <button type="button" data-vue="achats" class="${state.vue === 'achats' ? 'on' : ''}">Achats<span>${achats.length}</span></button>
-        </div>
-
-        ${state.vue === 'partenaires' ? `
         <div class="toolbar">
           ${searchInput('rpa-q', state, 'Rechercher un partenaire, un métier, une ville…')}
           <span class="grow"></span>
@@ -427,51 +301,15 @@ export const rgdPartenairesPage = {
             : `${actifs.length} actif${actifs.length > 1 ? 's' : ''} · ${declares} apport${declares > 1 ? 's' : ''} déclaré${declares > 1 ? 's' : ''}`}</span>
         </div>
 
-        ${SECTIONS.map(section).join('')}` : `
-        <div class="toolbar">
-          <span class="muted small">${achats.length} achat${achats.length > 1 ? 's' : ''}
-          pour ${eur(totalAchats)} HT</span>
-          <span class="grow"></span>
-          ${state.ecriture && chantiers.length ? '<button type="button" class="btn primary" id="rpa-achat">+ Nouvel achat</button>' : ''}
-        </div>
-
-        <section class="card table-wrap">
-          <table>
-            <thead><tr><th>Date</th><th>Achat</th><th>Fournisseur</th><th>Chantier</th>
-              <th>Matériaux</th><th class="num">Montant HT</th>
-              ${state.ecriture ? '<th></th>' : ''}</tr></thead>
-            <tbody>${achats.slice()
-              .sort((a, b) => String(b.date_achat || '').localeCompare(String(a.date_achat || '')))
-              .map(f => {
-                const affaire = f.deal_id ? db.byId('deals', f.deal_id) : null;
-                // `materiau` est la liste que D1 stocke en JSON. Une liste vide
-                // et une liste absente se disent pareil à l'écran : rien.
-                const mats = Array.isArray(f.materiau) ? f.materiau : [];
-                return `<tr>
-                  <td>${f.date_achat ? fmtDate(f.date_achat) : '<span class="muted">—</span>'}</td>
-                  <td><b>${esc(f.libelle || '—')}</b>
-                      ${f.reference_facture ? `<div class="s muted">Facture ${esc(f.reference_facture)}</div>` : ''}</td>
-                  <td>${esc(f.fournisseur || '—')}</td>
-                  <td>${affaire ? esc(affaire.title) : '<span class="muted small">sans chantier</span>'}</td>
-                  <td>${mats.length ? mats.map(m => `<span class="chip">${esc(m)}</span>`).join(' ') : '<span class="muted">—</span>'}</td>
-                  <td class="num">${eur(f.montant_ht)}</td>
-                  ${state.ecriture ? `<td class="num">${f.d1_id
-                    ? `<button type="button" class="btn ghost sm" data-achat="${esc(String(f.d1_id))}">Modifier</button>`
-                    : ''}</td>` : ''}
-                </tr>`;
-              }).join('') || `<tr><td colspan="${state.ecriture ? 7 : 6}"><div class="empty">Aucun achat enregistré.</div></td></tr>`}</tbody>
-          </table>
-        </section>`}`;
+        ${SECTIONS.map(section).join('')}`;
 
       root.innerHTML = cadre('#/rgd/partenaires', 'Partenaires', corps);
-      if (state.vue === 'partenaires') { bindSearch(root, 'rpa-q', state, draw); restoreFocus(root, state); }
-      root.querySelectorAll('[data-vue]').forEach(b => b.onclick = () => { state.vue = b.dataset.vue; draw(); });
+      bindSearch(root, 'rpa-q', state, draw);
+      restoreFocus(root, state);
 
       // Un bouton par section, qui porte déjà le rôle à créer.
       root.querySelectorAll('[data-nouveau]').forEach(b => b.onclick = () =>
         formulairePartenaire(null, draw, b.dataset.nouveau));
-      const achat = root.querySelector('#rpa-achat');
-      if (achat) achat.onclick = () => formulaireAchat(null, chantiers, draw);
 
       // C'est la LIGNE ENTIÈRE qui ouvre la fiche, comme dans le tableau de
       // bord d'origine : la colonne de boutons « Modifier » a disparu avec les
@@ -482,10 +320,6 @@ export const rgdPartenairesPage = {
       root.querySelectorAll('[data-partenaire]').forEach(tr => tr.onclick = () => {
         const a = tous.find(x => String(x.id) === tr.dataset.partenaire);
         if (a) formulairePartenaire(a, draw);
-      });
-      root.querySelectorAll('[data-achat]').forEach(b => b.onclick = () => {
-        const f = achats.find(x => String(x.d1_id) === b.dataset.achat);
-        if (f) formulaireAchat(f, chantiers, draw);
       });
     };
 
