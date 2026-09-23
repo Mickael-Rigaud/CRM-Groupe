@@ -435,6 +435,20 @@ select.cell-in { text-align: left; }
 .pill-tabs.rcl-etapes button { position: relative; margin-right: 6px; }
 .pill-tabs.rcl-etapes button.on::after { border-color: transparent; }
 
+/* Avancer / reculer d'une etape, a cote du menu de statut. Discretes au
+   repos, elles prennent l'accent au survol : ce sont des commandes d'usage
+   courant, pas des boutons a mettre en avant. La place vide d'une fleche
+   impossible est CONSERVEE, sinon les colonnes dansent d'une ligne a l'autre. */
+.rcl-statut-cell { white-space: nowrap; }
+.rcl-fleches { display: inline-flex; gap: 2px; margin-left: 6px; vertical-align: middle; }
+.rcl-fleche { width: 22px; height: 22px; display: inline-flex; align-items: center;
+  justify-content: center; border: 1px solid var(--line); background: #fff;
+  border-radius: 6px; color: var(--muted); font-size: 14px; line-height: 1;
+  cursor: pointer; padding: 0; transition: background .12s, color .12s, border-color .12s; }
+.rcl-fleche:hover { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-ink); }
+.rcl-fleche:active { transform: scale(.92); }
+.rcl-fleche.vide { visibility: hidden; cursor: default; }
+
 /* LE GLISSEMENT D'UNE LIGNE VERS SON NOUVEL ONGLET.
    Changer un statut fait sortir la personne de la liste ouverte. Sans
    animation, la ligne disparait d'un coup et on ne sait pas si elle est

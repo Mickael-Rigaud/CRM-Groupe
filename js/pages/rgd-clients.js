@@ -262,6 +262,27 @@ const VIA = (txt) => {
   return null;   // « Recherche Google », « Publicité »… restent du site
 };
 
+// Avancer ou reculer une personne dans le cycle, sans ouvrir le menu.
+// ⚠ LES DEUX BOUTONS ÉCRIVENT UN STATUT, ils ne déplacent pas une ligne :
+// c'est le statut qui décide de l'onglet, donc tout passe par lui. Un bouton
+// qui bougerait l'affichage sans écrire mentirait dès le prochain relevé.
+const flechesEtape = (etape, ecriture) => {
+  if (!ecriture) return '';
+  const i = ORDRE_ETAPES.indexOf(etape);
+  // « Archivés » est hors du cycle : on n'y avance pas, on y sort. Depuis là,
+  // seul le retour en arrière a un sens, et il ramène au début.
+  const avant = etape === 'archives' ? 'a_contacter'
+    : i > 0 ? STATUT_DE_L_ETAPE[ORDRE_ETAPES[i - 1]] || 'a_contacter' : null;
+  const apres = etape === 'archives' ? null
+    : i >= 0 && i < ORDRE_ETAPES.length - 1 ? STATUT_DE_L_ETAPE[ORDRE_ETAPES[i + 1]] : null;
+  const bouton = (vers, signe, titre) => vers
+    ? `<button type="button" class="rcl-fleche" data-vers="${vers}" title="${esc(titre)}">${signe}</button>`
+    : `<span class="rcl-fleche vide" aria-hidden="true">${signe}</span>`;
+  return `<span class="rcl-fleches">
+    ${bouton(avant, '‹', 'Reculer d’une étape')}${bouton(apres, '›', 'Avancer d’une étape')}
+  </span>`;
+};
+
 const pastilleProvenance = (cle) => {
   const p = ditProvenance(cle);
   return `<span class="chip prov ${p.ton}">${esc(p.label)}</span>`;
@@ -371,21 +392,27 @@ export const rgdClientsPage = {
         return null;
       };
 
-      // ⚠ DEUX SOURCES, ET C'EST LA PLUS AVANCÉE QUI GAGNE.
-      // Le statut bouge dès qu'on le change — c'est lui qui fait passer une
-      // personne de « Nouvelle demande » à « RDV » d'un clic. Les faits, eux,
-      // rattrapent un statut oublié : quelqu'un dont le chantier tourne reste
-      // en « Chantier en cours » même si son suivi est resté à « nouveau
-      // prospect ». Prendre le minimum ferait disparaître un vrai chantier
-      // derrière une case jamais cochée ; prendre le maximum ne perd rien.
+      // ⚠ UNE SAISIE DÉLIBÉRÉE L'EMPORTE TOUJOURS SUR LES FAITS.
+      // C'est la règle qui a changé le 23/09/2026, et voici pourquoi.
+      //
+      // Au départ, la plus avancée des deux sources gagnait : les faits
+      // rattrapaient ainsi les 27 fiches dont le chantier tourne alors que le
+      // suivi est resté à « nouveau prospect ». Mais cela rendait ces
+      // 27 personnes IMMOBILES — changer leur statut ne les déplaçait pas,
+      // puisque le chantier les retenait. « Le basculement ne fonctionne pas
+      // pour tout le monde », et c'était vrai.
+      //
+      // `nouveau_prospect` est la valeur par défaut : elle ne dit pas « cette
+      // personne est un nouveau prospect », elle dit « personne n'a rien
+      // renseigné ». C'est là, et là seulement, que les faits parlent à la
+      // place du statut. Toute autre valeur est une décision de quelqu'un, et
+      // une décision ne se fait pas contredire par une table.
+      const JAMAIS_RENSEIGNE = ['nouveau_prospect', '', null, undefined];
       const etapeDe = (f) => {
         if (f.statut === 'perdu' || f.statut_suivi === 'perdu') return 'archives';
-        const parStatut = ETAPE_DU_STATUT[f.statut_suivi] || null;
-        const parFaits = etapeParLesFaits(f);
-        if (!parStatut) return parFaits;
-        if (!parFaits) return parStatut;
-        return ORDRE_ETAPES.indexOf(parFaits) > ORDRE_ETAPES.indexOf(parStatut)
-          ? parFaits : parStatut;
+        const brut = f.statut_suivi;
+        if (!JAMAIS_RENSEIGNE.includes(brut)) return ETAPE_DU_STATUT[brut] || 'demande';
+        return etapeParLesFaits(f) || 'demande';
       };
 
       const contacts = fiches.filter(f => f.costructor_id);
@@ -620,8 +647,8 @@ export const rgdClientsPage = {
             <td class="muted">${esc(x.projet || '—')}</td>
             <td class="muted">${esc(String(x.budget || '—').trim())}</td>
             <td class="muted">${esc(x.ville || '—')}</td>
-            <td>${state.ecriture
-              ? menuStatut(x.statut, x.cible, x.ligne.d1_id, x.ligne.id)
+            <td class="rcl-statut-cell">${state.ecriture
+              ? menuStatut(x.statut, x.cible, x.ligne.d1_id, x.ligne.id) + flechesEtape(x.etape, true)
               : pastilleSuivi(x.statut)}</td>
             <td class="rcl-note">${champNote(x.ligne, x.cible, state.ecriture)}</td>
             <td>${boutonSuppression(x.ligne)}</td>
@@ -787,6 +814,18 @@ export const rgdClientsPage = {
       // remplacerait le menu que la personne vient d'ouvrir, et lui ferait
       // perdre le fil. On repeint la seule pastille concernée, et on attend le
       // prochain rendu naturel pour le reste.
+      // ⚠ LES FLÈCHES PASSENT PAR LE MENU, elles ne dupliquent pas son code.
+      // Poser la valeur puis déclencher `change` rejoue exactement le même
+      // chemin : même écriture, même avance du reflet local, même retour en
+      // arrière si le worker refuse, même glissement. Un second chemin
+      // d'écriture aurait dérivé du premier à la première correction.
+      root.querySelectorAll('.rcl-fleche[data-vers]').forEach(b => b.onclick = () => {
+        const menu = b.closest('.rcl-statut-cell')?.querySelector('.statut-menu');
+        if (!menu || menu.disabled) return;
+        menu.value = b.dataset.vers;
+        menu.dispatchEvent(new Event('change'));
+      });
+
       root.querySelectorAll('.statut-menu').forEach(m => {
         m.onchange = async () => {
           const avant = m.dataset.avant;
@@ -827,8 +866,14 @@ export const rgdClientsPage = {
             // d'un coup : on ne sait pas si elle est partie quelque part ou si
             // elle s'est effacée. L'animation montre OÙ elle va, et l'onglet de
             // destination clignote pour qu'on le retrouve.
-            const versEtape = ETAPE_DU_STATUT[apres];
-            const changeDOnglet = versEtape && versEtape !== state.vue;
+            // ⚠ L'ÉTAPE D'ARRIVÉE SE RECALCULE, elle ne se lit pas dans la
+            // table. Prendre `ETAPE_DU_STATUT[apres]` faisait glisser la ligne
+            // puis la ramenait : le redessin, lui, repassait par `etapeDe` et
+            // pouvait rendre autre chose. Une ligne qui part et revient est
+            // pire que pas d'animation du tout.
+            const versEtape = apres === 'perdu' ? 'archives'
+              : (ETAPE_DU_STATUT[apres] || 'demande');
+            const changeDOnglet = versEtape !== state.vue;
             if (changeDOnglet) {
               const tr = m.closest('tr');
               const cible = root.querySelector(`.rcl-etapes [data-vue="${versEtape}"]`);
