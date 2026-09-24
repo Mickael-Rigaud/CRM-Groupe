@@ -397,7 +397,27 @@ select.cell-in { text-align: left; }
    structure. L'accent vient de applyBrand() : ACTIVITIES est la seule source. */
 .content.flush { padding: 0; gap: 0; display: flex; }
 .esp-app { flex: 1; display: flex; min-width: 0; background: var(--bg); }
-.esp-side { width: 224px; flex-shrink: 0; background: var(--accent-ink); color: #fff; display: flex; flex-direction: column; }
+/* ---------- Le menu d'espace reste en place quand la page defile ----------
+   Demande de Mickael le 24/09/2026 : sur une longue liste, le menu partait
+   vers le haut et il fallait remonter toute la page pour changer d'ecran.
+
+   ⚠ `align-self: flex-start` N'EST PAS DECORATIF. `.esp-app` est un conteneur
+   flex, donc ses enfants sont etires sur toute la hauteur par defaut. Un
+   element colle aussi haut que son conteneur n'a nulle part ou coller : la
+   regle `sticky` est alors sans aucun effet, et sans erreur pour le dire.
+
+   ⚠ LE DECALAGE VIENT DU JAVASCRIPT, et c'est voulu. `.topnav` est deja
+   collante : sans decalage le menu se glisserait dessous. Mais sa hauteur
+   depend du nombre d'onglets, donc du profil — `js/app.js` la mesure et la
+   publie dans `--h-topnav`. Le repli de 116 px ne sert qu'a l'instant qui
+   precede la premiere mesure.
+
+   `overflow-y: auto` est le garde-fou de l'autre bout : un menu plus haut
+   que l'ecran doit pouvoir defiler pour lui-meme, sinon ses dernieres
+   entrees deviennent inatteignables. */
+.esp-side { width: 224px; flex-shrink: 0; background: var(--accent-ink); color: #fff; display: flex; flex-direction: column;
+  position: sticky; top: var(--h-topnav, 116px); align-self: flex-start;
+  max-height: calc(100vh - var(--h-topnav, 116px)); overflow-y: auto; }
 .esp-side-brand { display: flex; align-items: center; gap: 10px; padding: 20px 18px; border-bottom: 1px solid rgba(255,255,255,.1); font-family: var(--font-display); font-weight: 700; font-size: 15px; letter-spacing: -.01em; }
 .esp-side-brand img { width: 30px; height: 30px; object-fit: contain; background: #fff; border-radius: 8px; padding: 3px; }
 .esp-side-nav { flex: 1; padding: 14px 12px; display: flex; flex-direction: column; gap: 3px; }
@@ -1073,7 +1093,18 @@ body:has(.esp-app) .subnav .datepill { display: none; }
      haut ou l'ecran ouvert prenait un carre entier : illisible, et le contenu
      commencait sous la ligne de flottaison. */
   .esp-app { flex-direction: column; }
-  .esp-side { width: 100%; position: relative; }
+  /* La bande horizontale reste elle aussi en place, sous la barre du haut.
+     ⚠ `sticky` ne casse PAS le lisere de droite : `.esp-side::after` est en
+     `absolute` et lui demande un ancetre positionne — `sticky` en est un,
+     comme `relative` qu'il remplace.
+     ⚠ ET ON REND LA HAUTEUR : la regle de base borne le menu vertical a la
+     hauteur de l'ecran et le fait defiler pour lui-meme. Sur une bande
+     horizontale de 50 px, ce reglage n'a plus d'objet, et un `overflow-y`
+     pose sur le parent force le navigateur a gerer aussi l'axe horizontal —
+     donc a rogner le defilement lateral de la bande, qui est tout son
+     interet ici. */
+  .esp-side { width: 100%; position: sticky; top: var(--h-topnav, 116px);
+    max-height: none; overflow: visible; }
   .esp-side-brand { display: none; }   /* la structure est deja dite par la bande du dessus */
   .esp-side-nav { flex-direction: row; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none;
                   gap: 4px; padding: 8px 12px; }

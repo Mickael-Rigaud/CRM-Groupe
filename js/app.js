@@ -118,18 +118,21 @@ const groupOf = (hash) => groups().find(g => g.hash ? isOn(g, hash) : itemsOf(g)
 // ⚠ ELLE NE PEUT PAS ETRE ECRITE EN DUR DANS LE CSS. Le menu d'espace se cale
 // dessous pour rester en place quand la page defile, et il lui faut donc un
 // decalage exact. Or cette barre change de hauteur : deux rangees sur poste,
-// une seule en mode formulaire imprimable, et `.subnav` passe a la ligne
-// quand les onglets ne tiennent plus — ce qui depend du nombre d'activites du
-// profil, pas seulement de la largeur de l'ecran. Une constante serait juste
-// sur le poste ou on l'a mesuree et fausse ailleurs, avec un menu qui glisse
-// sous la barre ou qui flotte en dessous.
+// une seule en mode formulaire imprimable, et `.subnav` passe a la ligne quand
+// les onglets ne tiennent plus — ce qui depend du nombre d'activites du profil,
+// pas seulement de la largeur de l'ecran. Mesure en direct : 116 px a 1280,
+// 98 a 700. Une constante serait juste sur le poste ou on l'a prise et fausse
+// ailleurs, avec un menu glisse sous la barre ou flottant en dessous.
 //
-// On mesure, et on republie a chaque changement de taille — y compris ceux
-// qu'un `resize` ne signale pas, d'ou le `ResizeObserver`.
+// ⚠ ON MESURE A CHAQUE RENDU DE LA BARRE, ET PAS SEULEMENT SUR EVENEMENT.
+// `renderNav` s'execute a chaque navigation et a chaque changement de donnees :
+// c'est le moment sur, celui qui ne depend de rien. Les trois autres declencheurs
+// rattrapent ce qui bouge SANS nouveau rendu — les logos qui finissent de
+// charger et grandissent la barre, et le redimensionnement de la fenetre.
 let observateurBarre = null;
 function mesurerBarre() {
   const barre = document.getElementById('topnav');
-  if (!barre) return;
+  if (!barre || !barre.offsetHeight) return;
   document.documentElement.style.setProperty('--h-topnav', barre.offsetHeight + 'px');
 }
 function suivreBarre() {
@@ -139,6 +142,8 @@ function suivreBarre() {
   observateurBarre?.disconnect();
   observateurBarre = new ResizeObserver(mesurerBarre);
   observateurBarre.observe(barre);
+  window.addEventListener('resize', mesurerBarre);
+  window.addEventListener('load', mesurerBarre);
 }
 
 function renderLayout() {
@@ -242,6 +247,7 @@ function applyBrand(hash) {
 
 function renderNav() {
   const univ = document.getElementById('univ'); if (!univ) return;
+  queueMicrotask(mesurerBarre);   // apres que le navigateur ait pose la barre
   const hash = location.hash || '#/home';
   const u = scope.user;
   const gs = groups();
