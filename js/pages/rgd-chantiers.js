@@ -109,10 +109,10 @@ const ETAPE_LABEL = Object.fromEntries(ETAPES_RGD.map(e => [e.key, e.label]));
 //
 // ⚠ CETTE BORNE VAUT POUR LES QUATRE COLONNES, et c'est une correction du
 // 24/09/2026. Elle ne s'appliquait d'abord qu'aux chantiers terminés, ce qui
-// laissait dormir indéfiniment ceux d'avant : un chantier de 229 470 € restait
-// en « Démarrage » quatre mois et demi après son dernier mouvement, un autre
-// de 5 390 € y était depuis **quinze mois**. Une pipeline qui garde les vieux
-// cesse d'être une liste de travail.
+// laissait dormir indéfiniment ceux d'avant : le plus gros du portefeuille
+// restait en « Démarrage » quatre mois et demi après son dernier mouvement, un
+// autre y était depuis **quinze mois**. Une pipeline qui garde les vieux cesse
+// d'être une liste de travail.
 const JOURS_SANS_MOUVEMENT = 90;
 
 // Ce que le tableau de bord calculait côté serveur et renvoyait tout mâché
@@ -144,7 +144,8 @@ function mesure(c) {
     // Corrigé le 24/09/2026. La première version comptait « devis signés moins
     // encaissé », ce qui inventait une créance là où il n'y en a pas : un
     // chantier de 2025 dont TOUTES les factures ont été annulées ou remboursées
-    // affichait 3 100 € « à encaisser » — une opération annulée, pas un impayé.
+    // réclamait le montant entier de son devis — une opération annulée, pas un
+    // impayé.
     // Ce qu'on réclame à un client, c'est une facture qu'il n'a pas payée. Du
     // signé pas encore facturé n'est dû par personne.
     resteADevoir: somme(reelles, 'montant_ht') - somme(recues, 'montant_ht'),
