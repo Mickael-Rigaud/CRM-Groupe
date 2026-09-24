@@ -262,4 +262,26 @@ export const SEED = {
     { id: 'rc7', contact_id: 'c8', statut: 'client', statut_suivi: 'devis_envoye',
       source: 'manuel', notes: '', maj: d(-8) },
   ],
+
+  // Les demandes du formulaire du site — une table à part des fiches.
+  //
+  // ⚠ LA DEUXIÈME PORTE `rejetee`, ET C'EST TOUT SON INTÉRÊT. Ce statut existe
+  // en base mais pas dans le vocabulaire des sept étapes. Sans un exemple ici,
+  // le cas ne se reproduit que sur la production : la valeur retombe dans
+  // « Nouvelle demande », le menu de saisie n'a aucune option qui corresponde
+  // et affiche silencieusement la première, et le filtre de statut la fait
+  // apparaître comme une étape à part entière. Signalé par Mickael le
+  // 24/09/2026. Elle se lit désormais « nouveau prospect » ; cette ligne est là
+  // pour que la prochaine régression se voie sans ouvrir la production.
+  rgd_demandes: [
+    { id: 'rd1', prenom: 'Camille', nom: 'Vasseur', email: 'camille.vasseur@example.com',
+      telephone: '06 39 98 00 21', ville: 'Tours', code_postal: '37000',
+      adresse: '4 rue des Tanneurs', types_travaux: '["Isolation","Menuiseries"]',
+      budget: '15 000 €', statut: 'nouveau_prospect', date_demande: d(-5),
+      commentaire_admin: '' },
+    { id: 'rd2', prenom: 'Bruno', nom: 'Tessier', email: 'bruno.tessier@example.com',
+      telephone: '06 39 98 00 22', ville: 'Amboise', code_postal: '37400',
+      types_travaux: 'Véranda', statut: 'rejetee', date_demande: d(-160),
+      commentaire_admin: 'Hors zone d’intervention.' },
+  ],
 };

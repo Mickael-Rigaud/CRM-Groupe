@@ -93,6 +93,31 @@ export const STATUT_DE_L_ETAPE = {
   archives: 'perdu',
 };
 
+// ⚠ « REJETÉE » N'EST PAS UN STATUT DE LA FRISE, ET IL SE LIT « NOUVEAU PROSPECT ».
+// `rgd_demandes.statut` peut valoir `rejetee` — deux demandes d'avril 2026 le
+// portent. Cette valeur n'a jamais figuré dans le vocabulaire des sept étapes,
+// donc elle retombait dans « Nouvelle demande » par le repli, sans que rien ne
+// la nomme. Tant qu'aucun menu ne listait les statuts, ça ne se voyait pas ;
+// depuis qu'il y en a un, elle y apparaissait comme une étape à part entière.
+//
+// Règle posée par Mickael le 24/09/2026 : ces demandes SONT des nouveaux
+// prospects. On les lit donc comme telles partout — pastille, menu, compte —
+// au lieu de les écarter du menu en les laissant dans la liste, ce qui aurait
+// donné un total qui ne fait pas la somme de ses parts.
+//
+// ⚠ LA BASE N'EST PAS TOUCHÉE. C'est une lecture, pas une écriture : les deux
+// demandes gardent `rejetee`. Traduire à l'affichage n'autorise pas à réécrire
+// une saisie qu'on n'a pas faite. Elle se corrigera d'elle-même au premier
+// changement de statut depuis l'écran, qui envoie l'option choisie.
+//
+// ⚠ ET LE MENU DE SAISIE MENTAIT DÉJÀ, avant tout filtre. `menuStatut` est un
+// `<select>` dont les options sont les onze statuts connus : sur une valeur
+// absente de la liste, aucune option n'est sélectionnée et le navigateur
+// affiche la PREMIÈRE — donc « Nouveau prospect », sans le dire. L'alias rend
+// vrai ce que l'écran montrait déjà.
+export const ALIAS_STATUT_SUIVI = { rejetee: 'nouveau_prospect' };
+export const statutSuiviLu = (v) => ALIAS_STATUT_SUIVI[v] || v;
+
 // Tous les statuts qui mènent à une étape — la relation complète, là où
 // `STATUT_DE_L_ETAPE` ne garde que le représentant unique.
 //
@@ -260,7 +285,9 @@ function visiteEnCours(c, joursVisite) {
 // ligne — `etapesRgd()` ci-dessous les lit une fois pour toutes.
 export function etapeDeFiche(f, chantiers, devis, joursVisite) {
   if (f.statut === 'perdu' || f.statut_suivi === 'perdu') return 'archives';
-  const brut = f.statut_suivi;
+  // Lu, pas brut : « rejetee » se lit « nouveau_prospect », donc il passe par
+  // `etapeParLesFaits` comme lui au lieu de tomber dans le repli « demande ».
+  const brut = statutSuiviLu(f.statut_suivi);
   const e = !JAMAIS_RENSEIGNE.includes(brut)
     ? (ETAPE_DU_STATUT[brut] || 'demande')
     : (etapeParLesFaits(f, chantiers, devis, joursVisite) || 'demande');

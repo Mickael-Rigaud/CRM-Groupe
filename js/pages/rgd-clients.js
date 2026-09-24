@@ -86,7 +86,7 @@ import { scope } from '../data/scope.js';
 // fichier n'en garde que l'usage.
 import { ORDRE_ETAPES, ETAPES_RGD, ETAPES_CLES, ETAPE_DU_STATUT, STATUT_DE_L_ETAPE,
          etapeDeFiche, etapeDeDemande, estProspectParSource,
-         joursDeVisite, statutsDeLEtape } from '../data/rgd-etapes.js';
+         joursDeVisite, statutsDeLEtape, statutSuiviLu } from '../data/rgd-etapes.js';
 import { db } from '../data/db.js';
 import { esc, fmtDate, fmtDateTime, relDay, terms, hit, searchInput, bindSearch, restoreFocus } from '../ui.js';
 import { poserEspace } from './espace.js';
@@ -321,7 +321,7 @@ export function ficheDe(f, etapeDe) {
     // valeur brute mettrait « Nouveau prospect » dans l'onglet « Chantier en
     // cours ». La base n'est pas touchée : elle se corrige au premier
     // changement fait depuis ce menu.
-    statut: STATUT_DE_L_ETAPE[etapeDe(f)] || f.statut_suivi || 'nouveau_prospect',
+    statut: STATUT_DE_L_ETAPE[etapeDe(f)] || statutSuiviLu(f.statut_suivi) || 'nouveau_prospect',
   };
 }
 
@@ -497,7 +497,7 @@ export const rgdClientsPage = {
             ville: d.ville, adresse: [d.adresse, [d.code_postal, d.ville].filter(Boolean).join(' ')]
               .filter(Boolean).join(' '),
             projet: travauxDe(d) || d.projet_description || d.type_projet, budget: d.budget,
-            statut: d.statut || 'nouveau_prospect',
+            statut: statutSuiviLu(d.statut) || 'nouveau_prospect',
           };
         }),
         ...fiches
