@@ -125,6 +125,37 @@ export const majNoteClient = (d1Id, notes) =>
 export const majCommentaireDemande = (d1Id, commentaire) =>
   envoyer(`/api/demandes/${encodeURIComponent(d1Id)}`, { commentaire_admin: commentaire });
 
+// ⚠ LES CHAMPS QU'UNE FICHE CLIENT ACCEPTE, ET PAS UN DE PLUS.
+// Relevé dans `worker/src/routes/clients.js` le 24/09/2026 : la route PATCH
+// n'écrit que ce que sa liste `FIELDS` contient, et **ignore le reste sans un
+// mot** avant de répondre `{ok: true}`. Envoyer un nom inconnu, c'est croire
+// avoir enregistré. Cette liste-ci est donc le sous-ensemble vérifié, pas une
+// copie de l'écran.
+//
+// ⚠ ET ELLE DOIT PASSER PAR LE WORKER, PAS PAR SUPABASE, dès que la fiche a un
+// `d1_id`. `push_rgd_clients` réécrit `nature_travaux`, `budget_travaux`,
+// `adresse_chantier` et l'identité depuis D1 à chaque relevé, SANS coalesce :
+// une valeur posée dans le CRM seul serait effacée dans la demi-heure. C'est
+// exactement la perte que Mickael a signalée le 24/09 — « quand je refresh, les
+// modifications sont perdues ». Le sens unique est donc : on écrit à la source,
+// le relevé ramène.
+//
+// Les cinq premiers repartent aussi vers Costructor (`COSTRUCTOR_SYNCED_FIELDS`
+// du même fichier) : modifier un téléphone ici le change là-bas aussi. C'est
+// voulu, et ça mérite d'être su.
+export const CHAMPS_FICHE_CLIENT = [
+  'nom', 'prenom', 'raison_sociale', 'email', 'telephone',
+  'adresse', 'code_postal', 'ville',
+  'nature_travaux', 'budget_travaux', 'adresse_chantier', 'type_bien',
+];
+
+export const majChampsClient = (d1Id, champs) => {
+  const propre = {};
+  for (const c of CHAMPS_FICHE_CLIENT) if (champs[c] !== undefined) propre[c] = champs[c];
+  if (!Object.keys(propre).length) return Promise.resolve({ ok: true, donnees: {} });
+  return envoyer(`/api/clients/${encodeURIComponent(d1Id)}`, propre);
+};
+
 // ⚠ SUPPRIMER À LA SOURCE, ET C'EST LA MOITIÉ DU GESTE.
 // Le relevé ne fait que des `insert … on conflict do update`, sans aucun
 // `delete` : une ligne effacée dans le CRM seul reviendrait au passage suivant.

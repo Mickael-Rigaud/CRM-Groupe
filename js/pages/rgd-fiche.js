@@ -47,6 +47,8 @@ import { db } from '../data/db.js';
 import { esc, eur, fmtDate, fmtDateTime, openModal, toast, userName, daysSince } from '../ui.js';
 import { ETAPES_RGD, ORDRE_ETAPES, STATUT_DE_L_ETAPE, ecrireStatut } from '../data/rgd-etapes.js';
 import { scope } from '../data/scope.js';
+import { formulaireModif, enregistrerModif, lireModif, refusDeModifier }
+  from './rgd-fiche-modif.js';
 
 const ETAT_CHANTIER = {
   demarrage: { label: 'Préparé', ton: 'amber' },
@@ -91,6 +93,12 @@ const pict = (cle) => `<svg viewBox="0 0 20 20" aria-hidden="true"><path d="${IC
 
 export function ouvrirFicheRgd(x, onChange) {
   let etapeCourante = x.etape;
+  // ⚠ LA MODIFICATION SE FAIT EN PLACE, PAS DANS UNE SECONDE FENÊTRE.
+  // `openModal` ferme celle qui est ouverte avant d'ouvrir la suivante : un
+  // formulaire en fenêtre par-dessus la fiche aurait fait disparaître la fiche,
+  // et l'annulation n'aurait eu nulle part où revenir. Les deux blocs
+  // d'information cèdent donc la place au formulaire, et la reprennent après.
+  let enModification = false;
   const f = x.ligne;
 
   const clefs = { contact_id: f.contact_id || null, organisation_id: f.organisation_id || null };
@@ -161,9 +169,14 @@ export function ouvrirFicheRgd(x, onChange) {
     // `type_projet` — « Une maison » — qui est le BIEN et non les travaux.
     // L'afficher ici mettrait « Une maison » en face de « Nature des travaux »
     // et la même valeur deux lignes plus bas.
+    // ⚠ `nature_travaux` PASSE AVANT `meta_type_projet`, pour la meme raison
+    // que le budget saisi passe avant le budget annonce : c'est le seul des
+    // deux qu'on puisse corriger soi-meme. Sans cet ordre, une nature saisie
+    // dans le formulaire de modification ne s'affichait nulle part et la fiche
+    // paraissait n'avoir rien enregistre.
     const travaux = listeTravaux.length
       ? listeTravaux.map(t => `<span class="chip">${esc(t)}</span>`).join(' ')
-      : (x.genre === 'demande' ? '' : esc(x.projet || ''));
+      : (x.genre === 'demande' ? '' : esc(f.nature_travaux || x.projet || ''));
 
     // ⚠ NE PAS REPETER LE MEME MOT DEUX FOIS. La provenance est DEDUITE du
     // « comment nous avez-vous connus », donc quand la personne a repondu
@@ -246,6 +259,10 @@ export function ouvrirFicheRgd(x, onChange) {
             </div>
           </div>
         </div>
+        ${!enModification && !refusDeModifier(x)
+          ? '<button type="button" class="btn ghost sm rgdf-modifier" id="rgdf-modifier">Modifier les informations</button>'
+          : refusDeModifier(x)
+            ? `<p class="rgdf-origine" title="${esc(refusDeModifier(x))}">Lecture seule</p>` : ''}
         <div class="rgdf-tuiles">
           ${tuile(montant.valeur, montant.quoi)}
           ${tuile(devis.length, 'Devis')}
@@ -273,6 +290,7 @@ export function ouvrirFicheRgd(x, onChange) {
 
       <div class="rgdf-corps">
         <div class="rgdf-colonne">
+          ${enModification ? formulaireModif(x) : `
           <section class="rgdf-bloc">
             <h3>Le prospect</h3>
             ${info('tel', 'Téléphone', x.tel ? `<a href="tel:${esc(x.tel)}">${esc(x.tel)}</a>` : '', 'est-vert')}
@@ -285,7 +303,7 @@ export function ouvrirFicheRgd(x, onChange) {
           <section class="rgdf-bloc">
             <h3>Le projet</h3>
             ${info('travaux', 'Nature des travaux', travaux, 'est-orange')}
-            ${info('euro', 'Budget annoncé', esc(String(x.budget || '').trim()), 'est-orange')}
+            ${info('euro', 'Budget annoncé', esc(budgetSaisi || String(x.budget || '').trim()), 'est-orange')}
             ${info('maison', 'Le bien', esc(bien), 'est-bleu')}
             ${info('lieu', 'Adresse du chantier', esc(f.adresse_chantier || ''), 'est-bleu')}
             ${info('regle', 'Superficie', d.superficie ? esc(d.superficie) + ' m²' : '', 'est-bleu')}
@@ -297,8 +315,9 @@ export function ouvrirFicheRgd(x, onChange) {
               <b>Cette fiche a été créée depuis Google Agenda</b>${dateDeCreation ? `, le ${fmtDate(dateDeCreation)}` : ''} —
               un rendez-vous « Visite technique » l'a fait naître, avec son chantier.
             </p>` : ''}
-            ${!x.projet && !x.budget && !bien ? '<p class="rgdf-rien">Le projet n’a pas encore été décrit.</p>' : ''}
-          </section>
+            ${!travaux && !budgetSaisi && !x.budget && !bien && !f.adresse_chantier
+              ? '<p class="rgdf-rien">Le projet n’a pas encore été décrit.</p>' : ''}
+          </section>`}
 
           ${rendezVous && String(rendezVous.description || '').trim() ? `<section class="rgdf-bloc">
             <h3>Ce qui a été noté au rendez-vous</h3>
@@ -373,6 +392,33 @@ export function ouvrirFicheRgd(x, onChange) {
 
     const m = openModal('', html, { wide: true, onClose: () => onChange?.() });
     m.classList.add('rgdf');
+
+    const bModifier = m.querySelector('#rgdf-modifier');
+    if (bModifier) bModifier.onclick = () => { enModification = true; dessine(); };
+
+    const formModif = m.querySelector('#rgdm');
+    if (formModif) {
+      m.querySelector('#rgdm-annuler').onclick = () => { enModification = false; dessine(); };
+      formModif.onsubmit = async (ev) => {
+        ev.preventDefault();
+        const ok = m.querySelector('#rgdm-ok');
+        ok.disabled = true; ok.textContent = 'Enregistrement…';
+        const r = await enregistrerModif(x, lireModif(formModif));
+        if (!r.ok) {
+          ok.disabled = false; ok.textContent = 'Enregistrer';
+          toast(`Non enregistré — ${r.motif}`, 'err');
+          return;
+        }
+        // ⚠ L'HISTORIQUE DIT QU'ON A TOUCHÉ, PAS CE QU'ON A ÉCRIT. Recopier les
+        // valeurs y mettrait des téléphones et des adresses, dans un fil que
+        // tout l'espace RGD peut lire — et la fiche les montre déjà.
+        await inscrire('note', 'Informations de la fiche modifiées');
+        enModification = false;
+        toast('Informations enregistrées');
+        dessine();
+        onChange?.();
+      };
+    }
 
     m.querySelectorAll('[data-etape]').forEach(b => b.onclick = async () => {
       const vers = b.dataset.etape;

@@ -581,6 +581,26 @@ select.cell-in { text-align: left; }
   background: var(--card-2); border-left: 3px solid var(--line-strong);
   border-radius: 0 9px 9px 0; padding: 11px 13px; }
 
+/* ---- modifier les informations ---- */
+/* Le formulaire prend la place des deux blocs d'information, pas celle de la
+   fiche : ouvrir une fenetre par-dessus aurait ferme la fiche, et l'annulation
+   n'aurait eu nulle part ou revenir. Il reprend donc leur habillage — meme
+   carte, meme titre — pour qu'on voie qu'on modifie CES blocs-la. */
+.rgdm { display: flex; flex-direction: column; gap: 14px; }
+.rgdm-grille { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 14px; }
+.rgdm-champ { min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.rgdm-champ.est-large { grid-column: 1 / -1; }
+.rgdm-champ > label { font-size: 12px; font-weight: 600; color: var(--muted); }
+.rgdm-champ input { border: 1px solid var(--line-strong); border-radius: 9px;
+  padding: 8px 11px; background: #fff; width: 100%; font: inherit; font-size: 14px; }
+.rgdm-champ input:focus { outline: none; border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
+.rgdm-pied { display: flex; justify-content: flex-end; gap: 10px; }
+/* Le bouton d'entree se tient dans l'en-tete, au-dessus des chiffres : c'est
+   la premiere chose qu'on cherche quand on vient corriger quelque chose. */
+.rgdf-modifier { align-self: flex-start; margin-bottom: 12px; }
+@media (max-width: 560px) { .rgdm-grille { grid-template-columns: 1fr; } }
+
 /* ---- l'historique ---- */
 .rgdf-ajout { display: flex; gap: 8px; margin-bottom: 14px; }
 .rgdf-ajout input { flex: 1; min-width: 0; border: 1px solid var(--line-strong);
