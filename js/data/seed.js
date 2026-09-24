@@ -281,6 +281,15 @@ export const SEED = {
       statut_suivi: 'chantier_en_cours', source: 'costructor', notes: '', maj: d(-12) },
     { id: 'rc10', contact_id: 'c16', costructor_id: 'cli_demo_03', statut: 'client',
       statut_suivi: 'chantier_termine', source: 'costructor', notes: '', maj: d(-150) },
+    // ⚠ LES TROIS NATURES DE L'ANNUAIRE, et pas une seule repetee. Le menu de
+    // statut ne s'affiche que s'il y a un choix a faire : avec trois fiches
+    // toutes « client », il disparaissait et la regle n'etait pas verifiable.
+    // La production en porte trois — prospect, client, partenaire — et c'est ce
+    // que la demo doit reproduire.
+    { id: 'rc11', contact_id: 'c7', costructor_id: 'cli_demo_04', statut: 'prospect',
+      statut_suivi: 'devis_envoye', source: 'costructor', notes: '', maj: d(-20) },
+    { id: 'rc12', organisation_id: 'o1', costructor_id: 'cli_demo_05', statut: 'partenaire',
+      statut_suivi: 'nouveau_prospect', source: 'costructor', notes: '', maj: d(-12) },
   ],
 
   // Les demandes du formulaire du site — une table à part des fiches.

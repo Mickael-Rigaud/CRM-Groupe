@@ -192,12 +192,15 @@ const pastilleFiche = (cle) => cle
 // L'annuaire n'est pas une étape : on n'y cherche pas « où en est le dossier »
 // mais « qui est cette personne ». Ses filtres sont donc des natures, pas des
 // moments — et « Client » y vaut CHANTIER DÉMARRÉ, la définition de Mickael.
-const FILTRES_CONTACTS = [
-  { key: '', label: 'Tous' },
-  { key: 'partenaires', label: 'Partenaires' },
-  { key: 'clients', label: 'Clients' },
-  { key: 'prospects', label: 'Prospects' },
-];
+// ⚠ LES SOUS-ONGLETS « Tous / Partenaires / Clients / Prospects » ONT ETE
+// RETIRES le 24/09/2026, a la demande de Mickael. Ils faisaient une seconde
+// rangee d'onglets sous les sept etapes, pour dire la meme chose que le menu
+// de statut d'a cote — deux commandes pour un seul choix, et aucune des deux
+// ne montrait ce que l'autre avait retenu.
+//
+// Le choix vit desormais dans le menu deroulant. Il n'est pas perdu :
+// `?vue=clients`, que portent des mails de notification deja partis, y arrive
+// toujours (voir l'etat initial).
 
 // Les huit onglets de l'ecran : les sept etapes du module, plus l'annuaire,
 // qui n'est PAS une etape — d'ou la separation visuelle dans la barre.
@@ -395,13 +398,17 @@ export const rgdClientsPage = {
         : vueDemandee === 'prospects' ? 'demande'
         : vueDemandee === 'clients' ? 'contacts'
         : 'demande',
-      filtreContact: vueDemandee === 'clients' ? 'clients' : '',
+
       // ⚠ L'ANCIEN PARAMÈTRE `onglet=meta` DOIT CONTINUER DE MARCHER : les
       // mails de notification déjà partis le portent, et un lien reçu hier ne
       // doit pas tomber sur une liste filtrée sur rien. Il devient un filtre
       // de provenance au lieu d'un sous-onglet.
       provenance: PROVENANCES.some(x => x.key === ongletDemande) ? ongletDemande : '',
-      q: '', type: '', statut: '', focus: null, ecriture: false,
+      q: '', type: '',
+      // ⚠ `?vue=clients` DOIT CONTINUER D'OUVRIR LES CLIENTS. Des mails de
+      // notification deja partis le portent. Il visait le sous-onglet retire ;
+      // il vise maintenant le menu, ou il se voit et se defait.
+      statut: vueDemandee === 'clients' ? 'client' : '', focus: null, ecriture: false,
       page: 1, signature: null,
     };
 
@@ -446,8 +453,6 @@ export const rgdClientsPage = {
         const q = qui(f);
         return propre(q?.email) || propre(q?.tel) || propre(q?.nom) || `fiche:${f.id}`;
       };
-      const estClient = (f) => ['chantier_encours', 'chantier_termine'].includes(etapeDe(f));
-      const estPartenaire = (f) => f.statut === 'partenaire' || !!f.apporteur_id;
 
       // ⚠ ON DÉDOUBLONNE AVANT DE FILTRER, ET ON GARDE LA FICHE LA PLUS
       // AVANCÉE. Filtrer d'abord faisait apparaître la même personne en
@@ -467,11 +472,8 @@ export const rgdClientsPage = {
       const contactsUniques = [...meilleures.values()];
       const doublons = contacts.length - contactsUniques.length;
 
-      const contactsVus = contactsUniques.filter(f =>
-        state.filtreContact === 'partenaires' ? estPartenaire(f)
-        : state.filtreContact === 'clients' ? estClient(f)
-        : state.filtreContact === 'prospects' ? (!estClient(f) && !estPartenaire(f))
-        : true);
+      // L'annuaire entier : c'est le menu de statut, plus bas, qui le reduit.
+      const contactsVus = contactsUniques;
       // ---------- les prospects, une seule liste venue de DEUX tables
       // `rgd_demandes` porte les demandes du formulaire du site, `rgd_clients`
       // les fiches. Une demande n'a pas forcément de fiche, et l'inverse est
@@ -617,7 +619,26 @@ export const rgdClientsPage = {
       // Les prospects filtrent leur `statut` dans `lignesProspects` ; ici il ne
       // reste que les fiches des étapes suivantes, qui portent `statut`.
       const champStatut = (x) => x.statut;
-      const statuts = surProspects ? STATUTS_SUIVI : STATUTS_FICHE;
+      // ⚠ LE MENU NE PROPOSE QUE DES STATUTS QUI EXISTENT DANS L'ANNUAIRE.
+      // Il en listait six. Or les 158 fiches connues de Costructor n'en portent
+      // que trois — prospect, client, partenaire. « Qualifie », « Inactif » et
+      // « Perdu » etaient donc trois entrees qui ne pouvaient rien rendre, et
+      // c'est ce que Mickael a signale le 24/09/2026 : un choix qui ne mene
+      // nulle part se lit comme une liste cassee.
+      //
+      // ⚠ ET ON GARDE CELUI QUI EST CHOISI, meme s'il vient de disparaitre.
+      // Le filtre survit a un changement de donnees : sans cette precaution le
+      // menu retomberait sur « Tous » en affichant une liste vide, sans rien
+      // pour dire pourquoi.
+      //
+      // C'est la meme regle que sur la frise, appliquee a l'autre vocabulaire :
+      // proposer ce qui est la, plutot qu'un catalogue theorique.
+      const statutsPresents = new Set(listeBrute.map(f => f.statut).filter(Boolean));
+      const statuts = (surProspects ? STATUTS_SUIVI : STATUTS_FICHE)
+        .filter(st => statutsPresents.has(st.key) || state.statut === st.key);
+      // Le compte de chaque statut porte sur ce que le filtre de type laisse
+      // passer : le nombre qu'on clique doit etre celui qu'on obtient.
+      const baseFiches = listeBrute.filter(f => !state.type || qui(f)?.type === state.type);
 
       const recuLe = ({ f, p }) => f.meta_received_at || p?.cree || '';
 
@@ -654,7 +675,7 @@ export const rgdClientsPage = {
       // pagination. Un oubli ne se voit pas a la relecture : il se voit en
       // production, sous la forme d'une liste vide sur une page qui n'existe
       // plus. On compare donc ce qui DEFINIT la liste, une fois, ici.
-      const signature = JSON.stringify([state.vue, state.filtreContact, state.provenance,
+      const signature = JSON.stringify([state.vue, state.provenance,
                          state.statut, state.type, state.q]);
       if (signature !== state.signature) { state.signature = signature; state.page = 1; }
 
@@ -747,11 +768,7 @@ export const rgdClientsPage = {
 
       function vide() {
         if (state.q || state.type || state.statut) return 'Aucune fiche ne correspond aux filtres.';
-        if (state.vue === 'contacts') return ({
-          partenaires: 'Aucun partenaire dans l’annuaire.',
-          clients: 'Aucun client : personne n’a de chantier démarré.',
-          prospects: 'Aucun prospect dans l’annuaire.',
-        })[state.filtreContact] || 'Aucun contact Costructor.';
+        if (state.vue === 'contacts') return 'Aucun contact Costructor.';
         if (state.provenance) return 'Aucun prospect de cette provenance à cette étape.';
         return ({
           devis_encours: 'Aucun devis en attente de réponse.',
@@ -779,10 +796,7 @@ export const rgdClientsPage = {
 
 
 
-        ${state.vue === 'contacts' ? `<div class="pill-tabs sous">
-          ${FILTRES_CONTACTS.map(f => `<button type="button" data-filtre="${f.key}"
-            class="${state.filtreContact === f.key ? 'on' : ''}">${f.label}</button>`).join('')}
-        </div>` : ''}
+
 
         <!-- Le message ne s'affiche QUE si l'etape est vide. Il annoncait
              « pas encore alimentee » y compris au-dessus d'une liste remplie,
@@ -835,10 +849,13 @@ export const rgdClientsPage = {
             <option value="particulier" ${state.type === 'particulier' ? 'selected' : ''}>Particulier</option>
             <option value="professionnel" ${state.type === 'professionnel' ? 'selected' : ''}>Professionnel</option>
           </select>
-          <select id="rcl-statut" aria-label="Statut" class="${state.statut ? 'actif' : ''}">
-            <option value="">Tous statuts</option>
-            ${statuts.map(st => `<option value="${esc(st.key)}" ${state.statut === st.key ? 'selected' : ''}>${esc(st.label)}</option>`).join('')}
-          </select>`}
+          ${statuts.length > 1 ? `<select id="rcl-statut" aria-label="Statut" class="${state.statut ? 'actif' : ''}">
+            <option value="">Tous statuts (${baseFiches.length})</option>
+            ${statuts.map(st => {
+              const n = baseFiches.filter(f => champStatut(f) === st.key).length;
+              return `<option value="${esc(st.key)}" ${state.statut === st.key ? 'selected' : ''}>${esc(st.label)} (${n})</option>`;
+            }).join('')}
+          </select>` : ''}`}
           <span class="grow"></span>
           <span class="muted small">${affichees} ligne${s_(affichees)}</span>
           ${surDemande && scope.canRgd
@@ -882,9 +899,7 @@ export const rgdClientsPage = {
 
       const selProv = root.querySelector('#rcl-prov');
       if (selProv) selProv.onchange = () => { state.provenance = selProv.value; draw(); };
-      root.querySelectorAll('[data-filtre]').forEach(b => b.onclick = () => {
-        state.filtreContact = b.dataset.filtre; state.q = ''; state.type = ''; state.statut = ''; draw();
-      });
+
       // Creer une fiche : elle nait dans le CRM, sans `d1_id`, donc le releve
       // Cloudflare ne la verra jamais. `draw` suffit a la faire apparaitre —
       // `db.insert` a deja pousse la ligne dans le cache local.
