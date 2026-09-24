@@ -2563,6 +2563,12 @@ button.tb-pp:hover { color: var(--text); text-decoration: underline; text-underl
 /* Le padding du bas laisse respirer le DERNIER trait horaire : sans lui, la
    ligne des 19 h et son libellé sont coupés par le bord de la carte. */
 .ag-cadre { padding: 0 0 14px; overflow: hidden; }
+/* Une semaine sans rendez-vous garde sa grille — on y lit les jours, les dates
+   et ou on en est, ce qu'un pave « Aucun rendez-vous » faisait perdre. La
+   phrase se contente donc d'une ligne au-dessus, discrete : c'est la grille
+   vide qui porte l'information, pas elle. */
+.ag-libre { margin: 0; padding: 11px 16px; font-size: 13px; color: var(--muted);
+  border-bottom: 1px solid var(--line); background: var(--card-2); }
 
 .ag-grille { display: flex; }
 .ag-heures { position: relative; width: 54px; flex: none; border-right: 1px solid var(--line);

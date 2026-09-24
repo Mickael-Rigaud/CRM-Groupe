@@ -1,11 +1,24 @@
 // Espace RGD Renova — agenda
 //
-// LA PRÉSENTATION EST CELLE DU TABLEAU DE BORD (23/09/2026, demandée par
-// Mickael) : un hub en deux colonnes — mini-calendrier et prochains rendez-vous
-// à gauche, la journée ou la semaine en grille horaire à droite —, la bascule
-// Jour / Semaine, les flèches ‹ ›, et « + Événement ». La liste « À venir /
-// Passés » qu'il y avait ici est remplacée : elle disait les mêmes rendez-vous,
-// mais on ne lit pas une journée dans un tableau de lignes.
+// LA PRÉSENTATION EST CELLE DU TABLEAU DE BORD (23/09/2026) : un hub en deux
+// colonnes — mini-calendrier et prochains rendez-vous à gauche, la semaine en
+// grille horaire à droite —, les flèches ‹ ›, et « + Événement ». La liste
+// « À venir / Passés » qu'il y avait ici est remplacée : elle disait les mêmes
+// rendez-vous, mais on ne lit pas une semaine dans un tableau de lignes.
+//
+// ⚠ LA SEMAINE, ET RIEN QUE LA SEMAINE (demandé le 24/09/2026). La bascule
+// Jour / Semaine est retirée. Deux raisons, et la seconde est la vraie : avec
+// deux rendez-vous à venir sur sept, la vue Jour montrait une colonne vide
+// neuf fois sur dix ; et une bascule qui garde son choix en mémoire fait
+// qu'on rouvre l'écran dans une échelle qu'on n'a pas demandée, sans
+// comprendre pourquoi il est vide. Une seule échelle, toujours la même.
+//
+// ⚠ LA GRILLE S'AFFICHE MÊME SANS UN SEUL RENDEZ-VOUS (même demande). Elle
+// était remplacée par un pavé « Aucun rendez-vous », ce qui coûtait deux
+// choses : on perdait les repères — quel jour, quelle date, où en est-on dans
+// la semaine — et l'écran changeait de forme d'une semaine à l'autre. Une
+// semaine libre EST une information, et elle se lit dans une grille vide, pas
+// dans une phrase. La phrase reste, en petit, au-dessus.
 //
 // D'OÙ VIENNENT CES RENDEZ-VOUS, ET PAS D'OÙ ON CROYAIT
 // Le tableau de bord RGD a une table `evenements` (232 lignes), et j'avais écrit
@@ -298,10 +311,11 @@ export const rgdAgendaPage = {
   render(root) {
     if (guard(root)) return {};
     const coquille = poserEspace(root);
-    // L'échelle et le jour choisis sont une préférence d'écran, pas une donnée :
-    // localStorage, comme l'original (`rgd_agenda_view` / `rgd_agenda_day`).
+    // Le jour courant n'est PAS retenu d'une visite à l'autre : on ouvre un
+    // agenda pour savoir où on en est, pas pour retrouver la semaine qu'on
+    // regardait la dernière fois. (L'échelle ne se retient plus non plus —
+    // il n'y en a qu'une.)
     const state = {
-      vue: localStorage.getItem('crm_rgd_agenda_vue') || 'jour',
       jour: isoDay(),
       mois: isoDay().slice(0, 7),
       ecriture: false,
@@ -329,12 +343,10 @@ export const rgdAgendaPage = {
       const vu = tous.map(e => e.synced_at).filter(Boolean)
         .reduce((m, s) => Math.max(m, new Date(s).getTime()), 0);
 
-      const affiches = state.vue === 'jour'
-        ? [state.jour]
-        : Array.from({ length: 7 }, (_, i) => decale(lundiDe(state.jour), i));
-      const pas = state.vue === 'jour' ? 1 : 7;
-      const precedent = decale(state.jour, -pas);
-      const suivant = decale(state.jour, pas);
+      const affiches = Array.from({ length: 7 }, (_, i) => decale(lundiDe(state.jour), i));
+      const precedent = decale(state.jour, -7);
+      const suivant = decale(state.jour, 7);
+      const vide = !affiches.some(j => (parJour.get(j) || []).length);
 
       // Les prochains rendez-vous, toutes dates confondues : c'est ce qu'on
       // vient chercher quand on ouvre un agenda sans savoir quel jour regarder.
@@ -345,9 +357,7 @@ export const rgdAgendaPage = {
           || (a.all_day === b.all_day ? new Date(a.starts_at) - new Date(b.starts_at) : a.all_day ? -1 : 1))
         .slice(0, 6);
 
-      const titre = majuscule(state.vue === 'jour'
-        ? jourLongAn(state.jour)
-        : `semaine du ${jourLongAn(lundiDe(state.jour))}`);
+      const titre = majuscule(`semaine du ${jourLongAn(lundiDe(state.jour))}`);
 
       const corps = `
         <div class="ag-hub">
@@ -379,36 +389,31 @@ export const rgdAgendaPage = {
 
           <section class="ag-principal">
             <div class="ag-barre">
-              <div class="pill-tabs">
-                <button type="button" data-vue="jour" class="${state.vue === 'jour' ? 'on' : ''}">Jour</button>
-                <button type="button" data-vue="semaine" class="${state.vue === 'semaine' ? 'on' : ''}">Semaine</button>
-              </div>
               <button type="button" class="icon-btn" data-aller="${precedent}"
                 ${precedent >= min ? '' : 'disabled'} title="Précédent">‹</button>
               <b class="ag-titre">${esc(titre)}</b>
               <button type="button" class="icon-btn" data-aller="${suivant}"
                 ${suivant <= max ? '' : 'disabled'} title="Suivant">›</button>
-              ${state.jour !== aujourdhui ? `<button type="button" class="btn ghost sm" data-aller="${aujourdhui}">Aujourd’hui</button>` : ''}
+              <!-- ⚠ LE BOUTON SE COMPARE A LA SEMAINE, PAS AU JOUR. En se
+                   comparant au jour il restait affiche des qu'on cliquait une
+                   case du mini-calendrier dans la semaine en cours, et
+                   proposait de revenir la ou on etait deja. (Aucun accent
+                   grave ici : il refermerait le gabarit.) -->
+              ${lundiDe(state.jour) !== lundiDe(aujourdhui)
+                ? `<button type="button" class="btn ghost sm" data-aller="${aujourdhui}">Cette semaine</button>` : ''}
               <span class="grow"></span>
               ${state.ecriture ? '<button type="button" class="btn primary" id="ag-nouveau">+ Événement</button>' : ''}
             </div>
 
             <section class="card ag-cadre">
-              ${affiches.some(j => (parJour.get(j) || []).length)
-                ? grille(affiches, parJour, calendriers)
-                : `<div class="empty"><b>Aucun rendez-vous</b><br>${
-                    state.vue === 'jour' ? 'Journée libre' : 'Semaine libre'} dans le relevé.</div>`}
+              ${vide ? '<p class="ag-libre">Aucun rendez-vous cette semaine.</p>' : ''}
+              ${grille(affiches, parJour, calendriers)}
             </section>
           </section>
         </div>`;
 
       root.innerHTML = cadre('#/rgd/agenda', 'Agenda', corps);
 
-      root.querySelectorAll('[data-vue]').forEach(b => b.onclick = () => {
-        state.vue = b.dataset.vue;
-        localStorage.setItem('crm_rgd_agenda_vue', state.vue);
-        draw();
-      });
       root.querySelectorAll('[data-aller]').forEach(b => b.onclick = () => {
         state.jour = b.dataset.aller;
         state.mois = state.jour.slice(0, 7);
