@@ -331,7 +331,37 @@ function route() {
   // Ce titre est lu par les lecteurs d'écran, et la bulle de messagerie s'en
   // sert pour nommer l'écran d'où part un message.
   document.getElementById('page-title').textContent = page.title(param);
-  current = page.render(content, param);
+  // ⚠ UN ÉCRAN QUI ÉCHOUE DOIT LE DIRE, PAS DISPARAÎTRE (24/09/2026).
+  // `render` commence par vider `content` : s'il lève ensuite, la zone reste
+  // blanche et rien ne l'explique — ni message, ni trace visible. Mickael a
+  // signalé « l'écran est blanc » sans que rien ne permette d'aller plus loin,
+  // et c'est cette absence-là qu'on corrige : la cause change à chaque fois,
+  // le silence était constant.
+  //
+  // ⚠ LA CAUSE LA PLUS FRÉQUENTE N'EST PAS UN BOGUE DE L'ÉCRAN. Les pages sont
+  // toutes importées d'un bloc par `pages/index.js`, et le navigateur garde
+  // les modules en cache : après une mise en ligne, un module neuf peut se
+  // retrouver à côté d'un module périmé qui ne fournit plus ce qu'il demande.
+  // Un seul suffit à éteindre l'application entière. D'où le conseil donné en
+  // premier, avant même le détail technique.
+  try {
+    current = page.render(content, param);
+  } catch (e) {
+    console.error('Écran en échec —', e);
+    current = null;
+    content.innerHTML = `<section class="card">
+      <div class="card-head"><h2>Cet écran n’a pas pu s’afficher</h2></div>
+      <p>Le plus souvent, une version du logiciel vient d’être mise en ligne et
+      votre navigateur en garde une partie de l’ancienne. Un rechargement complet
+      suffit : <b>Ctrl + Maj + R</b> (ou <b>Cmd + Maj + R</b> sur Mac).</p>
+      <p class="small muted">Si le message revient après le rechargement, ce n’est pas
+      le cache — envoyez la ligne ci-dessous, elle nomme la cause :</p>
+      <pre class="small">${esc(String(e && e.message || e))}</pre>
+      <div class="toolbar"><button type="button" class="btn" id="ecran-recharger">Recharger la page</button></div>
+    </section>`;
+    const b = document.getElementById('ecran-recharger');
+    if (b) b.onclick = () => location.reload();
+  }
   window.scrollTo(0, 0);
 }
 
