@@ -24,8 +24,14 @@
 // quatre seulement le porte. Le repli compare le nom du contact au titre de
 // l'événement, ce qui marche parce que le robot fabrique l'un à partir de
 // l'autre — « Visite technique: Mme herlin / RGD Renova » donne un contact
-// nommé « herlin / RGD Renova ». Il ne s'applique QU'aux fiches nées de
-// l'agenda : ailleurs, un homonyme accrocherait le mauvais rendez-vous.
+// nommé « herlin », qui se retrouve donc dans le titre. Il ne s'applique
+// QU'aux fiches nées de l'agenda : ailleurs, un homonyme accrocherait le
+// mauvais rendez-vous.
+//
+// Le suffixe « / RGD Renova » du titre nomme l'entreprise chez qui le
+// rendez-vous est pris ; il a été retiré des contacts le 24/09/2026 (migration
+// `rgd_visites_nom_sans_rgd_renova`), donc la recherche porte sur un nom PLUS
+// COURT que le titre — c'est bien le titre qui contient le nom, pas l'inverse.
 const sansAccent = (s) => String(s || '').normalize('NFD')
   .replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
 
@@ -44,8 +50,12 @@ export function rendezVousDeLaFiche(f, chantiers, evenements, nom) {
   }
   if (f?.source !== 'google_calendar') return null;
 
+  // ⚠ TROIS LETTRES, PAS QUATRE. Depuis le 24/09/2026 le contact ne porte plus
+  // que son nom — le suffixe « / RGD Renova » a été retiré —, et des noms de
+  // trois lettres existent (Roy, Gay, Fay). Le garde ne sert qu'à empêcher une
+  // chaîne vide ou une initiale d'attraper n'importe quel rendez-vous.
   const cherche = sansAccent(nom);
-  if (cherche.length < 4) return null;
+  if (cherche.length < 3) return null;
   // Le plus récent d'abord : une personne peut avoir été revue.
   return (evenements || [])
     .filter(e => /visite technique/i.test(String(e.title || ''))
