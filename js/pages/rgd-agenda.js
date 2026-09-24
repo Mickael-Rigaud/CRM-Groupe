@@ -91,18 +91,23 @@ import { poserEspace } from './espace.js';
 import { cadre, guard, KEY } from './rgd-espace.js';
 import { peutEcrire, creerEvenement } from '../data/rgd-api.js';
 
-// LE MIROIR DE LA FENÊTRE DU RELEVÉ QUI TOURNE — `PASSE` et `AVENIR` de
-// l'Edge Function `relever-agenda` (CRM-Groupe-Backend). Voir l'encadré
-// ci-dessus : ces deux nombres disent jusqu'où l'écran a le droit de naviguer.
+// JUSQU'OÙ ON A LE DROIT DE NAVIGUER.
 //
-// ⚠ ILS ÉTAIENT À 90 / 365, recopiés de `worker/src/agenda_crm.js`. C'était
-// le bon chiffre pour le mauvais relevé : le worker Cloudflare n'écrit plus
-// rien depuis le 23/09/2026, et c'est le cron Supabase — sept jours en
-// arrière, trente en avant — qui remplit la table. L'écran promettait donc
-// quinze mois de relevé et laissait naviguer dans des mois qui ne seraient
-// jamais remplis : un agenda vide qu'on prend pour un agenda libre, ce que
-// tout le reste de ce fichier s'emploie à éviter.
-const FENETRE = { passe: 7, avenir: 30 };
+// Ces deux nombres ont changé trois fois en deux jours, et l'histoire dit
+// pourquoi ils sont si larges aujourd'hui.
+//
+// Ils valaient 90 / 365, recopiés de `worker/src/agenda_crm.js` : le bon
+// chiffre pour le mauvais relevé, puisque ce worker n'écrivait plus rien.
+// Ils sont passés à 7 / 30, la fenêtre du cron Supabase — honnête, mais
+// étouffant : au-delà d'un mois, l'écran refusait d'avancer.
+//
+// ⚠ DEPUIS LE 24/09/2026, L'ÉCRAN RELÈVE LA SEMAINE QU'IL AFFICHE. Le cron ne
+// décide donc plus de ce qu'on a le droit de regarder : n'importe quelle
+// semaine se remplit en allant la chercher. Ces bornes ne sont plus la limite
+// des DONNÉES, seulement celle du bon sens — deux ans de part et d'autre, ce
+// qu'aucun chantier ne dépasse. Demandé par Mickael : « je voudrais tous les
+// rendez-vous de toutes les semaines, exactement comme le Google Agenda. »
+const FENETRE = { passe: 730, avenir: 730 };
 
 const MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet',
   'août', 'septembre', 'octobre', 'novembre', 'décembre'];
@@ -285,9 +290,8 @@ function formulaireEvenement(jour, apres) {
         <textarea name="description" rows="2"></textarea></label>
     </form>
     <p class="small muted">Le rendez-vous est créé dans le tableau de bord, qui le pousse
-    dans <b>Google Agenda</b>. Cet écran relit Google juste après : il apparaît en quelques
-    secondes s’il est <b>pour aujourd’hui</b>. Pour un autre jour, touchez « ↻ Actualiser »
-    après avoir ouvert la semaine concernée.</p>
+    dans <b>Google Agenda</b>. Cet écran relit ensuite la semaine affichée : il apparaît en
+    quelques secondes. Pour une autre semaine, ouvrez-la — elle est relue en arrivant.</p>
     <div class="toolbar" style="margin-top:12px">
       <button type="button" class="btn primary" id="ev-ok">Créer le rendez-vous</button>
       <button type="button" class="btn ghost" data-close>Annuler</button>
@@ -361,13 +365,29 @@ export const rgdAgendaPage = {
     // dans un `root` que l'application a déjà remplacé.
     let vivant = true;
 
-    const rafraichir = async () => {
+    // ⚠ UNE SEMAINE DÉJÀ RELEVÉE NE SE RELÈVE PAS DEUX FOIS DE SUITE. Sans ce
+    // registre, faire l'aller-retour ‹ › entre deux semaines rappelait Google
+    // à chaque clic — sept requêtes par pression sur une flèche. On garde donc
+    // l'heure du dernier relevé de chaque lundi ; « ↻ Actualiser » passe
+    // outre, c'est à ça qu'il sert.
+    const releveLe = new Map();
+    const FRAIS = 60000;
+
+    const rafraichir = async ({ force = false } = {}) => {
       // Le mode démo n'a ni Edge Function ni Google : la fonction n'existe pas
       // et l'appel lèverait. On garde l'écran lisible sans elle.
       if (db.demo) return;
+      const lundi = lundiDe(state.jour);
+      if (!force && Date.now() - (releveLe.get(lundi) || 0) < FRAIS) return;
+      releveLe.set(lundi, Date.now());
       state.releve = 'en-cours'; peindreEtat();
       try {
-        await db.rpc('declencher_releve_agenda', { large: false });
+        // ⚠ LA SEMAINE AFFICHÉE, PAS LA JOURNÉE EN COURS. C'était
+        // `declencher_releve_agenda({ large: false })`, qui ne relève
+        // qu'aujourd'hui : naviguer d'une semaine à l'autre ne montrait que ce
+        // que le passage de 8 h avait attrapé, et rien au-delà de trente jours.
+        await db.rpc('declencher_releve_agenda_fenetre',
+          { du: lundi, au: decale(lundi, 6) });
         for (const attente of [2500, 4000]) {
           await new Promise(r => setTimeout(r, attente));
           if (!vivant) return;
@@ -381,6 +401,9 @@ export const rgdAgendaPage = {
         if (!vivant) return;
         // Un relevé qui échoue n'efface rien : l'écran garde le reflet
         // précédent et le dit, plutôt que de faire croire à un agenda vide.
+        // Un relevé raté ne doit pas être considéré comme fait : on retire
+        // la semaine du registre pour que le prochain passage la retente.
+        releveLe.delete(lundi);
         state.releve = 'echec'; state.motif = String(e.message || e).slice(0, 80);
         peindreEtat();
       }
@@ -457,10 +480,9 @@ export const rgdAgendaPage = {
             <p class="small muted ag-fenetre">
               Relevé du <b>${esc(jourLongAn(min))}</b> au <b>${esc(jourLongAn(max))}</b>${
                 vu ? `, ${esc(depuis(new Date(vu)))}` : ''}.
-              Au-delà, l’écran ne sait rien : ce n’est pas un agenda vide, c’est la fin de
-              la fenêtre. <b>Google est relu à chaque ouverture de cet écran</b> pour la
-              journée en cours ; les jours suivants sont relevés une fois par jour, et
-              « ↻ Actualiser » va les rechercher tout de suite.
+              <b>Google est relu pour chaque semaine que vous ouvrez</b> — ces bornes ne
+              limitent que la navigation, pas ce qu’on sait. « ↻ Actualiser » relit la
+              semaine affichée sur-le-champ.
               ${calendriers.length ? `<br>Agendas lus : ${esc(calendriers.join(' · '))}.` : ''}
             </p>
           </aside>
@@ -495,14 +517,17 @@ export const rgdAgendaPage = {
 
       root.innerHTML = cadre('#/rgd/agenda', 'Agenda', corps);
 
+      // ⚠ CHANGER DE SEMAINE, C'EST ALLER LA CHERCHER. Dessiner d'abord —
+      // l'écran répond tout de suite, avec ce qu'on a — puis relever : la
+      // grille se complète une seconde plus tard si Google en sait plus.
       root.querySelectorAll('[data-aller]').forEach(b => b.onclick = () => {
         state.jour = b.dataset.aller;
         state.mois = state.jour.slice(0, 7);
-        draw();
+        draw(); rafraichir();
       });
       root.querySelectorAll('[data-jour]').forEach(b => b.onclick = () => {
         state.jour = b.dataset.jour;
-        draw();
+        draw(); rafraichir();
       });
       root.querySelectorAll('[data-mois]').forEach(b => b.onclick = () => {
         state.mois = b.dataset.mois;
@@ -512,8 +537,8 @@ export const rgdAgendaPage = {
       // ⚠ APRÈS UNE CRÉATION, ON RELÈVE — on ne redessine pas. Le rendez-vous
       // vient de partir dans Google par le tableau de bord ; c'est de Google
       // qu'il doit revenir, sinon l'écran ne le montrerait qu'au cron suivant.
-      if (nouveau) nouveau.onclick = () => formulaireEvenement(state.jour, rafraichir);
-      root.querySelector('#ag-relever').onclick = rafraichir;
+      if (nouveau) nouveau.onclick = () => formulaireEvenement(state.jour, () => rafraichir({ force: true }));
+      root.querySelector('#ag-relever').onclick = () => rafraichir({ force: true });
     };
 
     draw();
