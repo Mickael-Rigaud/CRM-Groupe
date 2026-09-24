@@ -3129,3 +3129,41 @@ img.photo-ko { border: 1px dashed var(--red); box-sizing: border-box;
   .pager .btn { flex: 1; justify-content: center; }
   .pager span { order: -1; width: 100%; }
 }
+
+/* ---------- Vivier Experts & AMO (BTP Expertise) ---------- */
+/* Isolé sous le préfixe .vb- : rien d'autre ne l'utilise, tout peut se retirer d'un bloc. */
+.vb-kpis { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
+.vb-kpi { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.vb-kpi .lbl { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--muted-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vb-kpi .val { font-family: var(--font-display); font-size: 24px; font-weight: 700; margin-top: 4px; letter-spacing: -.03em; color: var(--kpi-c, var(--accent-ink)); font-variant-numeric: tabular-nums; }
+.vb-kpi .sub { font-size: 11.5px; color: var(--muted); }
+.vb-perf { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; font-size: 12.5px; margin-bottom: 14px; }
+.vb-perf b { font-variant-numeric: tabular-nums; }
+.vb-tete { display: flex; justify-content: space-between; gap: 14px; flex-wrap: wrap; align-items: flex-start; margin-bottom: 14px; }
+.vb-scores3 { display: flex; gap: 8px; }
+.vb-scores3 > div { text-align: center; background: var(--card-2); border-radius: 10px; padding: 6px 14px; min-width: 76px; }
+.vb-scores3 span { display: block; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--muted-2); }
+.vb-score { font-family: var(--font-display); font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.vb-score.exp { color: #6A1B7D; } .vb-score.amo { color: #9A5E00; } .vb-score.glo { color: var(--accent-ink); }
+.vb-crit { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px 12px; }
+.vb-crit label { display: flex; align-items: center; gap: 6px; font-size: 12.5px; }
+.vb-crit label span { flex: 1; }
+.vb-crit input { width: 54px; border: 1px solid var(--line-strong); border-radius: 7px; padding: 4px 6px; text-align: right; }
+.vb-crit em { font-style: normal; color: var(--muted); font-size: 11.5px; width: 24px; }
+.vb-comp-groupe { flex: 1 1 100%; margin-top: 6px; }
+.vb-comp-titre { font-size: 11px; font-weight: 700; color: var(--muted-2); text-transform: uppercase; letter-spacing: .06em; margin: 6px 0 4px; }
+.vb-comp-grille { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px 12px; }
+.vb-comp { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12.5px; padding: 2px 0; }
+.vb-niv { display: inline-flex; border: 1px solid var(--line-strong); border-radius: 7px; overflow: hidden; }
+.vb-niv button { border: 0; background: #fff; width: 26px; height: 24px; font-size: 11.5px; font-weight: 700; color: var(--muted); cursor: pointer; }
+.vb-niv button + button { border-left: 1px solid var(--line); }
+.vb-niv button.on { background: var(--accent); color: #fff; }
+.vb-certs { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12.5px; align-items: center; }
+.vb-certs select { border: 1px solid var(--line-strong); border-radius: 7px; padding: 3px 6px; width: auto; }
+.vb-comp-lecture { display: flex; flex-wrap: wrap; gap: 4px; }
+.vb-journal { max-height: 320px; overflow: auto; display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.vb-ev { border-left: 3px solid var(--line-strong); padding: 2px 10px; font-size: 13px; }
+.vb-retard { color: var(--red); font-weight: 700; }
+.vb-table td { vertical-align: top; }
+@media (max-width: 1200px) { .vb-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (max-width: 720px) { .vb-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .vb-crit, .vb-comp-grille { grid-template-columns: 1fr; } }

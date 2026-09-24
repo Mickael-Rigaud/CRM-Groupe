@@ -17,7 +17,7 @@ import { rgdPilotagePage } from './rgd-pilotage.js';
 import { rgdCostructorPage } from './rgd-costructor.js';
 import { rgdFormationsPage } from './rgd-formations.js';
 import { rgdReglagesPage } from './rgd-reglages.js';
-import { btpHomePage, btpExpertisePage, btpAmoPage, btpChargesPage, btpBasePage, btpDtuPage, btpMailsPage, btpFacturationPage } from './btp.js';
+import { btpHomePage, btpExpertisePage, btpAmoPage, btpChargesPage, btpBasePage, btpDtuPage, btpMailsPage, btpFacturationPage, btpVivierPage } from './btp.js';
 import { courtageHomePage, courtageBasePage, courtageVivierPage } from './courtage.js';
 import { messageriePage } from './messagerie.js';
 
@@ -59,6 +59,7 @@ export const pages = {
   btp_expertise: btpExpertisePage,
   btp_amo: btpAmoPage,
   btp_charges: btpChargesPage,
+  btp_vivier: btpVivierPage,
   btp_base: btpBasePage,
   btp_dtu: btpDtuPage,
   btp_mails: btpMailsPage,

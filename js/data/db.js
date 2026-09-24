@@ -18,6 +18,8 @@ export const TABLES = ['profiles', 'organisations', 'contacts', 'deals', 'activi
   'structure_stats',
   // réseau de chargés d'affaires de BTP Expertise
   'btp_charges_affaires',
+  // vivier Experts & AMO de BTP Expertise (recrutement de l'équipe terrain)
+  'btp_vivier', 'btp_vivier_evenements',
   // espace RGD Renova : le relevé déposé toutes les 30 min par son worker.
   // Cloudflare D1 reste la source ; ces tables en sont le reflet, personne
   // n'y écrit depuis le CRM tant que la migration n'est pas terminée.

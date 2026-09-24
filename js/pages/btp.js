@@ -33,6 +33,7 @@ import {
 } from '../data/chiffres.js';
 import { ficheDecouverteExpertise } from './btp-expertise.js';
 import { imprimerFicheDeal } from './btp-fiche.js';
+import { vivierBtpPage } from './btp-vivier.js';
 
 const KEY = 'btp';
 const act = () => ACTIVITIES[KEY];
@@ -55,6 +56,7 @@ const ONGLETS = [
     { hash: '#/btp/amo', label: 'AMO' },
   ] },
   { hash: '#/btp/charges', label: "Chargés d'affaires" },
+  { hash: '#/btp/vivier', label: 'Vivier Experts & AMO' },
   { hash: '#/btp/base', label: 'Base de données' },
   { hash: '#/btp/dtu', label: 'DTU' },
   { hash: '#/btp/facturation', label: 'Facturation' },
@@ -2636,5 +2638,23 @@ export const btpFacturationPage = {
 
     draw();
     return { refresh: draw, destroy: coquille.retirer };
+  },
+};
+
+// ---------------------------------------------------------------- Vivier Experts & AMO
+// Le recrutement de l'équipe terrain : l'écran est celui du module `btp-vivier.js`,
+// rendu dans la coquille du cabinet, comme le vivier courtiers dans son espace.
+// Ce n'est pas la base des apporteurs d'affaires (module distinct à venir).
+export const btpVivierPage = {
+  title: () => 'BTP Expertise — Vivier Experts & AMO',
+  render(root) {
+    if (guard(root)) return {};
+    const coquille = poser(root);
+    root.innerHTML = cadre('#/btp/vivier', 'Vivier Experts & AMO', '');
+    const vue = vivierBtpPage.render(root.querySelector('.esp-body'));
+    return {
+      refresh: () => vue.refresh?.(),
+      destroy: () => { vue.destroy?.(); coquille.retirer(); },
+    };
   },
 };

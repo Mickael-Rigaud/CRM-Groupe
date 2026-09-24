@@ -1,5 +1,6 @@
 // Jeu de données de démonstration (mode local uniquement).
 import { SEED_BROKERS } from './seed-vivier.js';
+import { SEED_VIVIER_BTP, SEED_VIVIER_BTP_EVENEMENTS } from './seed-vivier-btp.js';
 import { SEED_SITE, deplierSite } from './seed-site.js';
 const d = (offsetDays, h = 9) => {
   const x = new Date(); x.setHours(h, 0, 0, 0); x.setDate(x.getDate() + offsetDays); return x.toISOString();
@@ -107,6 +108,8 @@ export const SEED = {
   ],
   message_reads: [],
   broker_profiles: SEED_BROKERS,
+  btp_vivier: SEED_VIVIER_BTP,
+  btp_vivier_evenements: SEED_VIVIER_BTP_EVENEMENTS,
   dtu_sheets: [
     { id: 'dtu-20-1', code: 'NF DTU 20.1', title: 'Maçonnerie de petits éléments', domain: 'Maçonnerie', essential: true, position: 10,
       summary: 'Cadre la maçonnerie de petits éléments pour murs porteurs, refends et chaînages.',
