@@ -85,7 +85,8 @@ import { scope } from '../data/scope.js';
 // obligerait l'autre à les recopier, et deux copies dérivent toujours. Ce
 // fichier n'en garde que l'usage.
 import { ORDRE_ETAPES, ETAPES_RGD, ETAPES_CLES, ETAPE_DU_STATUT, STATUT_DE_L_ETAPE,
-         etapeDeFiche, etapeDeDemande, estProspectParSource } from '../data/rgd-etapes.js';
+         etapeDeFiche, etapeDeDemande, estProspectParSource,
+         joursDeVisite } from '../data/rgd-etapes.js';
 import { db } from '../data/db.js';
 import { esc, fmtDate, fmtDateTime, relDay, terms, hit, searchInput, bindSearch, restoreFocus } from '../ui.js';
 import { poserEspace } from './espace.js';
@@ -332,7 +333,10 @@ export const rgdClientsPage = {
       // chantier portent désormais le contact ou l'organisation de leur
       // affaire. Un professionnel se rattache par l'organisation — six affaires
       // sur vingt-sept n'ont que celle-là.
-      const etapeDe = (f) => etapeDeFiche(f, chantiers, devis);
+      // Les jours où l'agenda porte une visite technique, calculés une fois
+      // pour toute la liste : c'est l'agenda qui dit si le rendez-vous tient.
+      const joursVisite = joursDeVisite(scope.rgd('agenda_events'));
+      const etapeDe = (f) => etapeDeFiche(f, chantiers, devis, joursVisite);
       const contacts = fiches.filter(f => f.costructor_id);
 
       // ⚠ ON DÉDOUBLONNE À L'AFFICHAGE, JAMAIS EN BASE. Costructor lui-même

@@ -88,33 +88,102 @@ const JAMAIS_RENSEIGNE = ['nouveau_prospect', '', null, undefined];
 const memeQue = (x, f) => (!!x.contact_id && x.contact_id === f.contact_id)
   || (!!x.organisation_id && x.organisation_id === f.organisation_id);
 
-// ⚠ UNE VISITE TECHNIQUE N'EST PAS UN CHANTIER. D1 les marque
-// `visite_technique`, mais le relevé ne transmet pas cette valeur : elles
-// arrivent sans état ET sans aucune date. C'est à ça qu'on les reconnaît,
-// faute de mieux ; le jour où le relevé passera la valeur, ce test tombera.
-const estUnChantier = (c) => !!c.etat || !!c.date_debut_prevue || !!c.work_start_at;
+// ⚠ UNE VISITE TECHNIQUE N'EST PAS UN CHANTIER, et on la reconnaît enfin.
+// Le commentaire précédent disait qu'elles arrivaient « sans état ET sans
+// aucune date », faute de mieux — il annonçait que le test tomberait le jour
+// où le relevé passerait la valeur. Ce jour est venu : `statut_d1` est
+// transmis depuis le 22/09/2026, et les trois visites techniques portent bien
+// une `date_debut_prevue`. L'ancien test les comptait donc comme des
+// chantiers ; il ne se voyait pas, aucune n'ayant d'`etat`.
+export const estVisiteTechnique = (c) => c.statut_d1 === 'visite_technique';
+const estUnChantier = (c) => !estVisiteTechnique(c)
+  && (!!c.etat || !!c.date_debut_prevue || !!c.work_start_at);
 const devisOuvert = (v) => !['signe', 'refuse', 'expire'].includes(v.statut);
+
+// ⚠ C'EST L'AGENDA QUI DIT SI LE RENDEZ-VOUS EXISTE ENCORE, pas le CRM.
+// Une visite technique naît d'un événement Google intitulé « Visite technique :
+// … » ; le rendez-vous vit là-bas, et il peut y être déplacé ou annulé sans que
+// personne ne vienne le dire ici. On relit donc l'agenda plutôt que de faire
+// confiance à une date recopiée.
+//
+// Le rapprochement se fait par le JOUR, pas par le titre : le chantier reprend
+// la date de l'événement au moment où il est créé, alors que les deux libellés
+// divergent dès la première correction — l'agenda dit « murs humides » là où le
+// chantier a gardé « mur humides ».
+//
+// ⚠ LA FENÊTRE RELEVÉE EST J-7 → J+30. Au-delà, l'absence d'événement ne prouve
+// rien : une visite prévue dans deux mois n'est pas encore relevée. D'où le
+// second terme de la règle — une visite à venir compte, même sans événement.
+const VISITE = /^\s*visite\s+technique/i;
+export function joursDeVisite(agenda) {
+  const jours = new Set();
+  for (const e of agenda || []) {
+    if (e.activity !== 'rgd' || !e.day) continue;
+    if (VISITE.test(String(e.title || ''))) jours.add(String(e.day).slice(0, 10));
+  }
+  return jours;
+}
 
 // L'étape lue sur les FAITS seuls. Elle ne dépend d'aucune saisie, donc elle
 // ne ment pas — mais elle ne sait rien avant le premier devis.
-export function etapeParLesFaits(f, chantiers, devis) {
-  const ch = chantiers.filter(c => estUnChantier(c) && memeQue(c, f));
+export function etapeParLesFaits(f, chantiers, devis, joursVisite) {
+  const miens = chantiers.filter(c => memeQue(c, f));
+  const ch = miens.filter(estUnChantier);
   if (ch.some(c => c.etat === 'en_cours')) return 'chantier_encours';
   if (ch.some(c => c.etat === 'termine')) return 'chantier_termine';
   const dv = devis.filter(v => memeQue(v, f));
   if (ch.some(c => c.etat === 'demarrage') || dv.some(v => v.statut === 'signe')) return 'devis_accepte';
   if (dv.some(devisOuvert)) return 'devis_encours';
+  // ⚠ LE RENDEZ-VOUS EST LE DERNIER FAIT, et il vient après les devis à dessein :
+  // quelqu'un chez qui on a déjà signé n'est plus « en rendez-vous », même si
+  // une visite reste au calendrier.
+  if (miens.filter(estVisiteTechnique).some(c => visiteEnCours(c, joursVisite))) return 'rdv';
   return null;
+}
+
+// ⚠ LA FENÊTRE QUE LE RELEVÉ COUVRE : J-7 → J+30. Elle est écrite ici parce
+// que c'est elle qui décide quand l'agenda fait autorité — si elle change côté
+// relevé, elle doit changer ici, sinon un rendez-vous annulé continuerait de
+// compter (ou l'inverse, pire encore).
+const FENETRE_RELEVEE = { avant: 7, apres: 30 };
+
+const decalerDeJours = (n) =>
+  new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
+
+// Une visite technique tient-elle encore ?
+//
+// ⚠ DANS LA FENÊTRE RELEVÉE, L'AGENDA A LE DERNIER MOT — y compris quand il
+// ne dit rien. Un rendez-vous supprimé dans Google disparaît de `agenda_events`
+// au relevé suivant : son absence VAUT annulation, et le dossier quitte
+// « Visite technique » sans que personne ait à le déplacer à la main. C'est
+// tout l'objet de la synchronisation ; se contenter de la date recopiée dans
+// le chantier ferait survivre des rendez-vous annulés depuis des semaines.
+//
+// ⚠ HORS FENÊTRE, L'ABSENCE NE PROUVE RIEN : une visite prévue dans deux mois
+// n'est pas encore relevée. C'est la date qui décide alors, et elle seule.
+//
+// Une visite passée reste comptée tant que l'agenda la porte — Google garde les
+// événements passés, donc environ une semaine. C'est la fenêtre pendant
+// laquelle on a encore le rendez-vous en tête et un devis à envoyer.
+function visiteEnCours(c, joursVisite) {
+  const jour = String(c.date_debut_prevue || c.work_start_at || '').slice(0, 10);
+  if (!jour) return false;
+  if (joursVisite) {
+    if (joursVisite.has(jour)) return true;
+    if (jour >= decalerDeJours(-FENETRE_RELEVEE.avant)
+      && jour <= decalerDeJours(FENETRE_RELEVEE.apres)) return false;
+  }
+  return jour >= decalerDeJours(0);
 }
 
 // L'étape d'une fiche `rgd_clients`. Les deux tables sont passées en argument
 // pour que l'appelant qui en tient déjà une copie ne la relise pas à chaque
 // ligne — `etapesRgd()` ci-dessous les lit une fois pour toutes.
-export function etapeDeFiche(f, chantiers, devis) {
+export function etapeDeFiche(f, chantiers, devis, joursVisite) {
   if (f.statut === 'perdu' || f.statut_suivi === 'perdu') return 'archives';
   const brut = f.statut_suivi;
   if (!JAMAIS_RENSEIGNE.includes(brut)) return ETAPE_DU_STATUT[brut] || 'demande';
-  return etapeParLesFaits(f, chantiers, devis) || 'demande';
+  return etapeParLesFaits(f, chantiers, devis, joursVisite) || 'demande';
 }
 
 // L'étape d'une demande du formulaire du site. Elle n'a ni devis ni chantier
@@ -138,11 +207,14 @@ export function etapesRgd() {
   const demandes = scope.rgd('rgd_demandes');
   const chantiers = scope.rgd('rgd_chantiers');
   const devis = scope.rgd('rgd_devis');
+  // Les jours de visite se calculent UNE FOIS : le faire par fiche relirait
+  // l'agenda deux cents fois pour le même résultat.
+  const joursVisite = joursDeVisite(scope.rgd('agenda_events'));
 
   const comptes = Object.fromEntries(ETAPES_CLES.map(k => [k, 0]));
   for (const d of demandes) comptes[etapeDeDemande(d)] += 1;
   for (const f of fiches) {
-    const e = etapeDeFiche(f, chantiers, devis);
+    const e = etapeDeFiche(f, chantiers, devis, joursVisite);
     if (e === 'demande' && !estProspectParSource(f)) continue;
     comptes[e] += 1;
   }

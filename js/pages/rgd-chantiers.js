@@ -32,7 +32,8 @@ import { peutEcrire, majStatutChantier, creerChantier } from '../data/rgd-api.js
 import { toast, openModal, closeModal } from '../ui.js';
 // La source unique des étapes, partagée avec « Clients & prospects ». Cet
 // écran la LIT et l'ÉCRIT : il n'a pas de vocabulaire à lui.
-import { etapeDeFiche, STATUT_DE_L_ETAPE, ETAPES_RGD, ecrireStatut } from '../data/rgd-etapes.js';
+import { etapeDeFiche, STATUT_DE_L_ETAPE, ETAPES_RGD, joursDeVisite,
+         ecrireStatut } from '../data/rgd-etapes.js';
 
 // LES DIX STATUTS DU TABLEAU DE BORD, dans son ordre — de la préparation à la
 // réception. Ils ne se confondent pas avec `etat`, qui n'en est qu'une
@@ -173,6 +174,9 @@ function rangerEnPipeline(tous) {
   const fiches = scope.rgd('rgd_clients');
   const chantiers = scope.rgd('rgd_chantiers');
   const devis = scope.rgd('rgd_devis');
+  // L'agenda a son mot à dire : une visite technique tient tant que le
+  // rendez-vous y figure. Calculé une fois pour tout le lot.
+  const joursVisite = joursDeVisite(scope.rgd('agenda_events'));
   const parContact = new Map(fiches.filter(f => f.contact_id).map(f => [f.contact_id, f]));
   const parOrganisation = new Map(fiches.filter(f => f.organisation_id).map(f => [f.organisation_id, f]));
 
@@ -186,7 +190,7 @@ function rangerEnPipeline(tous) {
       || (c.organisation_id && parOrganisation.get(c.organisation_id));
     // Sans fiche, on ne sait pas où en est le dossier : on n'invente pas.
     if (!f) continue;
-    const colonne = COLONNE_DE_L_ETAPE[etapeDeFiche(f, chantiers, devis)];
+    const colonne = COLONNE_DE_L_ETAPE[etapeDeFiche(f, chantiers, devis, joursVisite)];
     // Nouvelle demande, devis en cours, archivé : ce n'est pas du chantier.
     if (!colonne) continue;
 
