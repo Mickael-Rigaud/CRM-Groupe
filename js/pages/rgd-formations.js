@@ -170,10 +170,21 @@ const fiche = (r, i) => {
     </footer>
   </article>
 
-  <nav class="fo-suivant">
-    ${prec ? `<a class="btn ghost" href="${lien(r.key, i - 1)}">← ${esc(prec.titre)}</a>` : '<span></span>'}
-    <span class="grow"></span>
-    ${suiv ? `<a class="btn ghost" href="${lien(r.key, i + 1)}">${esc(suiv.titre)} →</a>` : ''}
+  <nav class="fo-nav" style="--tint:${esc(r.tint)}">
+    ${prec ? `<a class="fo-nav-carte" href="${lien(r.key, i - 1)}">
+      <span class="fo-nav-fleche">←</span>
+      <span class="fo-nav-txt">
+        <span class="fo-etape">Étape ${i} · précédente</span>
+        <b>${esc(prec.titre)}</b>
+      </span>
+    </a>` : '<span></span>'}
+    ${suiv ? `<a class="fo-nav-carte fo-nav-droite" href="${lien(r.key, i + 1)}">
+      <span class="fo-nav-txt">
+        <span class="fo-etape">Étape ${i + 2} · suivante</span>
+        <b>${esc(suiv.titre)}</b>
+      </span>
+      <span class="fo-nav-fleche">→</span>
+    </a>` : '<span></span>'}
   </nav>`;
 };
 
