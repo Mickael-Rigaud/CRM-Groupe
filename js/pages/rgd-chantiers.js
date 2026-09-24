@@ -75,8 +75,15 @@ const PIPELINE_ETAPES = [
   { key: 'termine',          label: 'Chantier terminé',  couleur: '#FF8A00' },
 ];
 
-// Trois mois sans le moindre mouvement de facturation : on ne relance plus, le
-// chantier quitte la pipeline. Il reste entier dans la liste et dans la fiche.
+// Trois mois sans rien qui bouge : le chantier quitte la pipeline. Il reste
+// entier dans la liste et dans la fiche.
+//
+// ⚠ CETTE BORNE VAUT POUR LES QUATRE COLONNES, et c'est une correction du
+// 24/09/2026. Elle ne s'appliquait d'abord qu'aux chantiers terminés, ce qui
+// laissait dormir indéfiniment ceux d'avant : un chantier de 229 470 € restait
+// en « Démarrage » quatre mois et demi après son dernier mouvement, un autre
+// de 5 390 € y était depuis **quinze mois**. Une pipeline qui garde les vieux
+// cesse d'être une liste de travail.
 const JOURS_SANS_MOUVEMENT = 90;
 
 // Ce que le tableau de bord calculait côté serveur et renvoyait tout mâché
@@ -92,15 +99,27 @@ function mesure(c) {
   const reelles = factures.filter(p => p.type !== 'remboursement' && p.statut !== 'annule');
   const recues = reelles.filter(p => p.statut === 'recu');
   const somme = (l, ch) => l.reduce((t, x) => t + (Number(x[ch]) || 0), 0);
-  const dates = factures.map(p => p.date_reception || p.date_facturation).filter(Boolean).sort();
+  // ⚠ LE DERNIER SIGNE DE VIE, et il ne se lit pas que dans la facturation.
+  // Un chantier peut avoir un devis signé récent sans facture encore émise, ou
+  // des travaux qui viennent de finir : trois repères, on garde le plus récent.
+  const reperes = [
+    ...factures.map(p => p.date_reception || p.date_facturation),
+    ...signes.map(d => d.date_signature),
+    c.work_end_at || c.date_fin_prevue,
+  ].filter(Boolean).sort();
   return {
     signes: signes.length,
     factures: reelles.length,
     soldesRecus: reelles.filter(p => p.type === 'solde' && p.statut === 'recu').length,
-    // Ce qui reste dû : le signé moins l'encaissé. Pas « les factures en
-    // attente » — il peut rester du signé pas encore facturé du tout.
-    resteADevoir: somme(signes, 'montant_ht') - somme(recues, 'montant_ht'),
-    dernierMouvement: dates.length ? dates[dates.length - 1] : null,
+    // ⚠ CE QUI RESTE DÛ SE MESURE SUR LE FACTURÉ, PAS SUR LE SIGNÉ.
+    // Corrigé le 24/09/2026. La première version comptait « devis signés moins
+    // encaissé », ce qui inventait une créance là où il n'y en a pas : un
+    // chantier de 2025 dont TOUTES les factures ont été annulées ou remboursées
+    // affichait 3 100 € « à encaisser » — une opération annulée, pas un impayé.
+    // Ce qu'on réclame à un client, c'est une facture qu'il n'a pas payée. Du
+    // signé pas encore facturé n'est dû par personne.
+    resteADevoir: somme(reelles, 'montant_ht') - somme(recues, 'montant_ht'),
+    dernierSigne: reperes.length ? reperes[reperes.length - 1] : null,
   };
 }
 
@@ -109,10 +128,10 @@ function mesure(c) {
 // un statut a été posé à la main, qui l'emporte.
 //
 // ⚠ UN CHANTIER EN SORT, ET C'EST VOULU. Trois cas :
-//   · entièrement encaissé — il n'y a plus rien à suivre ;
-//   · plus aucun mouvement depuis trois mois — le recouvrement est abandonné ;
-//   · « démarrage » sans la moindre facture — fantôme d'un vieux devis
-//     Costructor signé il y a longtemps, que personne ne considère plus actif.
+//   · plus rien ne bouge depuis trois mois — quelle que soit sa colonne ;
+//   · tout ce qui a été facturé est encaissé — il n'y a plus rien à suivre ;
+//   · « démarrage » sans la moindre facture — fantôme d'un vieux devis signé
+//     il y a longtemps, que personne ne considère plus actif.
 // « Chantier terminé » ne veut donc pas dire « archivé » : cette colonne
 // montre les travaux finis dont il RESTE DE L'ARGENT À ENCAISSER. C'est une
 // colonne de relance, pas un cimetière — d'où le zéro qu'on y voit souvent.
@@ -125,16 +144,22 @@ function rangerEnPipeline(tous) {
   for (const c of tous) {
     const m = mesure(c);
     const fiche = { ...c, m };
-    // Fantôme Costructor : annoncé démarré, jamais facturé.
+    // Fantôme de la synchronisation : annoncé démarré, jamais facturé.
     if (c.statut_d1 === 'demarrage' && m.factures === 0) continue;
-    const abandonne = m.dernierMouvement && m.dernierMouvement < limite;
 
-    if (c.statut_d1 === 'termine') {
-      if (m.resteADevoir <= 0 || abandonne) continue;
-      paniers.termine.push(fiche); continue;
-    }
-    if (m.soldesRecus > 0) {
-      if (m.resteADevoir <= 0 || abandonne) continue;
+    // ⚠ LA BORNE D'ÂGE PASSE AVANT TOUT LE RESTE, ET POUR LES QUATRE COLONNES.
+    // Elle ne s'appliquait qu'aux chantiers terminés : un chantier de 2025
+    // restait donc en « Démarrage » indéfiniment. Un chantier dont plus rien
+    // n'a bougé depuis trois mois n'est plus du travail en cours.
+    //
+    // ⚠ MAIS SEULEMENT S'IL EXISTE UN REPÈRE. Une fiche toute neuve — visite
+    // technique posée ce matin, aucun devis, aucune facture — n'a aucune date
+    // à comparer ; l'écarter la ferait disparaître le jour de sa création.
+    if (m.dernierSigne && m.dernierSigne < limite) continue;
+
+    if (c.statut_d1 === 'termine' || m.soldesRecus > 0) {
+      // Plus rien à réclamer : le chantier est clos pour de bon.
+      if (m.resteADevoir <= 0) continue;
       paniers.termine.push(fiche); continue;
     }
     // Posé à la main : il l'emporte sur les faits, c'est une décision.
@@ -228,16 +253,18 @@ function pipeline(tous, state) {
       <div>Aucun de ces ${tous.length} chantiers n'est suivi ici, et ce n'est pas
       une panne : la pipeline ne montre que ceux où il reste quelque chose à
       faire. Un chantier sans devis signé n'y entre pas encore ; un chantier
-      entièrement encaissé en est sorti. <b>Ils sont tous dans la liste.</b></div>
+      entièrement encaissé, ou dont plus rien n'a bougé depuis trois mois, en est
+      sorti. <b>Ils sont tous dans la liste.</b></div>
     </div>` : ''}
     <p class="small muted rch-note">
       ${dedans} chantier${dedans > 1 ? 's' : ''} suivi${dedans > 1 ? 's' : ''} sur ${tous.length}.
       Les étapes suivent les faits : un devis signé met le chantier en
       <b>Démarrage</b>, la date de début atteinte le passe <b>En cours</b>.
       <b>Chantier terminé</b> ne veut pas dire archivé — cette colonne montre les
-      travaux finis dont il <b>reste de l'argent à encaisser</b>. Un chantier
-      entièrement réglé, ou sans le moindre mouvement depuis trois mois, sort de
-      la pipeline ; il reste entier dans la liste.
+      travaux finis dont il <b>reste une facture à encaisser</b>.
+      <b>Un chantier dont plus rien n'a bougé depuis trois mois sort de la
+      pipeline</b>, quelle que soit sa colonne, comme celui qui est entièrement
+      réglé. Les uns et les autres restent entiers dans la liste.
       ${state.ecriture ? '' : ' <i>Lecture seule : le statut se change depuis la liste.</i>'}
     </p>`;
 }
@@ -434,17 +461,6 @@ export const rgdChantiersPage = {
       const aVendre = tous.filter(c => !c.etat);
 
       const corps = `
-        <div class="esp-kpis">
-          ${kpiEspace({ label: 'Chantiers en cours', valeur: enCours.length,
-            sous: `${eur(somme(enCours))} HT engagés`, icone: '🏗', href: '#/rgd' })}
-          ${kpiEspace({ label: 'Terminés', valeur: tous.filter(c => c.etat === 'termine').length,
-            sous: `${eur(somme(tous.filter(c => c.etat === 'termine')))} HT réalisés`, icone: '✅', ton: 'green', href: '#/rgd' })}
-          ${kpiEspace({ label: 'En discussion', valeur: aVendre.length,
-            sous: aVendre.length ? 'affaires pas encore signées' : 'aucune affaire ouverte', icone: '💬', ton: 'amber', href: '#/rgd' })}
-          ${kpiEspace({ label: 'Total suivi', valeur: tous.length,
-            sous: `${eur(somme(tous))} HT tous chantiers`, icone: '📋', href: '#/rgd' })}
-        </div>
-
         <div class="pill-tabs">
           <button type="button" data-vue="pipeline" class="${state.vue === 'pipeline' ? 'on' : ''}">Pipeline</button>
           <button type="button" data-vue="liste" class="${state.vue === 'liste' ? 'on' : ''}">Liste<span>${tous.length}</span></button>
