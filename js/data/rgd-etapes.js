@@ -266,11 +266,25 @@ export function etapeDeDemande(d) {
 }
 
 // ⚠ UNE FICHE N'ENTRE DANS LA FRISE QUE SI ELLE VIENT D'UNE PROSPECTION, OU
-// SI ELLE A DÉPASSÉ LA PREMIÈRE ÉTAPE. Les 158 fiches Costructor dorment à
+// SI ELLE A DÉPASSÉ LA PREMIÈRE ÉTAPE. Les 147 fiches Costructor dorment à
 // « nouveau_prospect » : sans ce garde, elles rempliraient « Nouvelle demande »
 // de gens qui ne sont pas des demandes.
+//
+// ⚠ `google_calendar` A ÉTÉ AJOUTÉ LE 24/09/2026, et son absence coûtait cher.
+// Une fiche née d'une visite technique posée dans l'agenda EST une demande —
+// c'en est même la forme la plus nette. Tant qu'elle restait hors de cette
+// liste, elle ne se voyait qu'à partir de l'étape « RDV » : la ramener à
+// « Nouvelle demande » la faisait DISPARAÎTRE de l'écran, sans message et sans
+// trace. Mickael l'a signalé en croyant l'avoir supprimée — « il s'est
+// supprimé, remets-le-moi » —, et il n'avait aucune raison de penser autre
+// chose : la ligne s'évanouissait.
+//
+// Ce garde protège des fiches QUI N'ONT JAMAIS ÉTÉ DES DEMANDES — l'annuaire
+// Costructor repris en bloc. Il n'a jamais eu pour but d'écarter une personne
+// dont on a noté le rendez-vous.
 export const estProspectParSource = (f) => !!f.apporteur_id || f.source === 'meta_ads'
-  || f.source === 'Formulaire site' || f.source === 'manuel';
+  || f.source === 'Formulaire site' || f.source === 'manuel'
+  || f.source === 'google_calendar';
 
 // Les sept étapes avec leur compte, sur la même population que l'écran
 // « Clients & prospects ». C'est ce que lit le pipeline de la vue d'ensemble.
