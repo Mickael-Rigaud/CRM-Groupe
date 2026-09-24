@@ -45,7 +45,7 @@
 // par la page, donc l'état de saisie vit ICI, dans `etat`, et jamais dans le
 // DOM — un redessin repart de `etat`, sans quoi la moindre photo déplacée
 // effacerait le texte en cours de frappe.
-import { esc, toast } from '../ui.js';
+import { esc, toast, confirm } from '../ui.js';
 import { db } from '../data/db.js';
 import { lienPhoto } from './rgd-espace.js';
 import { lireRealisations, enregistrerRealisations, restaurerRealisations,
@@ -331,6 +331,7 @@ function editeur(etat) {
       }).join('')}</div>`
         : '<div class="empty">Aucune photo — cette référence n’est qu’un titre tant qu’elle n’en a pas.</div>'}
       <p class="small photos-ko" data-photos-ko hidden></p>
+      <button type="button" class="btn ghost sm danger rea-purger" data-photos-purger hidden></button>
       <p class="small muted">JPEG, PNG, WebP, GIF ou AVIF, 20 Mo par image. Une photo
       déposée est rangée tout de suite, mais elle n’apparaît sur le site qu’une fois
       la réalisation <b>publiée</b>. La retirer ici la retire de la réalisation, pas du stockage.</p>
@@ -495,6 +496,43 @@ function editeur(etat) {
       }
       redessiner();
     });
+    // ⚠ ON RETIRE PAR ADRESSE, PAS PAR RANG. Les `data-i` des vignettes sont
+    // les rangs du DERNIER rendu ; retirer plusieurs photos en s'y fiant
+    // décalerait tout après la première et emporterait les mauvaises. Les
+    // adresses, elles, ne bougent pas pendant qu'on les retire.
+    //
+    // ⚠ ET RIEN N'EST PUBLIÉ. Comme le ✕ d'une vignette, ce bouton ne touche
+    // que le brouillon ouvert : tant qu'on n'a pas cliqué « Publier », le site
+    // et la base gardent leurs photos. C'est ce qui permet de proposer un
+    // retrait en bloc sans filet — la confirmation dit ce qu'on enlève, et
+    // fermer sans publier annule tout.
+    const purger = hote.querySelector('[data-photos-purger]');
+    if (purger) purger.onclick = async () => {
+      relire();
+      const mortes = [...hote.querySelectorAll('.rea-pcarte')]
+        .filter(f => f.querySelector('img.photo-ko'))
+        .map(f => p.images[Number(f.dataset.i)])
+        .filter(Boolean);
+      if (!mortes.length) return;
+      const pluriel = mortes.length > 1;
+      if (!await confirm(`Retirer ${pluriel ? `ces ${mortes.length} photos` : 'cette photo'} de la `
+        + `réalisation ? ${pluriel ? 'Elles ne seront enlevées' : 'Elle ne sera enlevée'} du site `
+        + 'qu’à la publication.')) return;
+      const aRetirer = new Set(mortes);
+      p.images = p.images.filter(u => !aRetirer.has(u));
+      for (const u of aRetirer) delete p.photo_tags[u];
+      // Une paire qui pointait sur une de ces photos garderait une adresse
+      // morte : le curseur afficherait un cadre vide sur le site sans rien
+      // dire ici.
+      for (const paire of p.ba_pairs) {
+        if (aRetirer.has(paire.before)) paire.before = '';
+        if (aRetirer.has(paire.after)) paire.after = '';
+      }
+      toast(`${mortes.length} photo${mortes.length > 1 ? 's retirées' : ' retirée'} — `
+        + 'publiez pour que le site suive');
+      redessiner();
+    };
+
     const bouger = (de, vers) => {
       relire();
       if (vers < 0 || vers >= p.images.length) return;

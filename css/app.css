@@ -2943,6 +2943,12 @@ button.tb-pp:hover { color: var(--text); text-decoration: underline; text-underl
 img.photo-ko { border: 1px dashed var(--red); box-sizing: border-box;
   background: var(--red-soft); opacity: .75; }
 .photos-ko { color: var(--red); margin: 8px 0 0; }
+/* Le bouton qui retire les photos mortes se tient SOUS le constat, pas dans la
+   barre d'outils du haut : on le lit apres avoir compris ce qu'il enleve. Il
+   reste cache tant qu'aucune photo n'a echoue — `signalerPhotosCassees` le
+   revele et ecrit son libelle avec le compte. */
+.rea-purger { margin-top: 8px; }
+.rea-purger[hidden] { display: none; }
 
 /* ---- Le carrousel : une liste, parce que l'ORDRE est l'information ------- */
 .car-liste { display: flex; flex-direction: column; }

@@ -96,8 +96,17 @@ export const lienPhoto = (u) => {
 // n'a pas repris la photo » alors que l'adresse est bien là et que c'est le
 // FICHIER qui manque. Deux causes opposées, une seule apparence : d'où le
 // compteur, qui nomme le vrai problème et dit combien de fois il se pose.
+//
+// ⚠ ELLE RÉVÈLE AUSSI LE BOUTON DE RETRAIT, quand l'hôte en propose un
+// (24/09/2026). Signaler un défaut sans donner le moyen de le corriger oblige
+// à retirer les vignettes barrées une par une — sur une fiche où les six sont
+// mortes, c'est six gestes pour un seul constat. Le bouton porte
+// `data-photos-purger` ; ce qu'il FAIT appartient à l'écran qui l'affiche,
+// parce qu'une photo ne se retire pas de la même façon d'une réalisation et
+// du carrousel. Ici on ne fait que le montrer et le compter.
 export function signalerPhotosCassees(hote) {
   const compteur = hote.querySelector('[data-photos-ko]');
+  const purger = hote.querySelector('[data-photos-purger]');
   let n = 0;
   const marquer = (img) => {
     if (img.classList.contains('photo-ko')) return;
@@ -108,7 +117,11 @@ export function signalerPhotosCassees(hote) {
       compteur.hidden = false;
       compteur.textContent = `⚠ ${n} photo${n > 1 ? 's' : ''} ne se charge${n > 1 ? 'nt' : ''} pas : `
         + 'l’adresse est bien enregistrée, mais le fichier ne répond pas. '
-        + 'Survolez une vignette barrée pour voir l’adresse ; il faut redéposer la photo.';
+        + 'Survolez une vignette barrée pour voir l’adresse.';
+    }
+    if (purger) {
+      purger.hidden = false;
+      purger.textContent = `✕ Retirer ${n === 1 ? 'la photo' : `les ${n} photos`} qui ne charge${n > 1 ? 'nt' : ''} pas`;
     }
   };
   for (const img of hote.querySelectorAll('img[src]')) {
