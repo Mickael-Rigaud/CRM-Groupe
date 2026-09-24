@@ -100,9 +100,11 @@ import { ouvrirFicheRgd } from './rgd-fiche.js';
 
 const s_ = (n) => (n > 1 ? 's' : '');
 
-// Combien de lignes par page. Vingt-cinq tient dans un ecran et demi ; c'est
-// le seul chiffre a changer si l'on veut des pages plus longues.
-const PAR_PAGE = 25;
+// Combien de lignes par page. Quinze, arbitre par Mickael le 24/09/2026 apres
+// avoir essaye vingt-cinq : ca tient dans un ecran sans faire defiler, et une
+// liste qu'on parcourt du regard vaut mieux qu'une page de moins a tourner.
+// C'est le seul chiffre a changer.
+const PAR_PAGE = 15;
 
 // LES STATUTS DE SUIVI, dans l'ordre du tableau de bord (`STATUTS_DEMANDE`).
 // Ils décrivent l'avancement d'un prospect, du premier contact au chantier.
