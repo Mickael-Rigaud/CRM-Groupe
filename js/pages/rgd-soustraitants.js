@@ -37,51 +37,44 @@
 // tableau de bord d'origine : on les consulte pour trouver un couvreur, pas
 // pour relancer un dossier.
 //
-// CE QUE LA LISTE NE PEUT PAS SAVOIR
-// Le relevé ne rapatrie que les DATES d'expiration — pas les `*_url`, qui
-// disent si la pièce a été déposée. La liste ne distingue donc pas « attestation
-// déposée, valable jusqu'au… » d'« une date saisie, aucun document derrière ».
-// Le panneau des pièces, lui, lit la fiche à la source et fait la différence :
-// c'est la raison pour laquelle il fait un appel au lieu de se servir du reflet.
-// Les fichiers restent hébergés chez Cloudflare (KV) ; les déplacer vers
-// Storage est la phase 3 du plan de sortie, pas ce chantier-ci.
+// CE QUE LA PASTILLE DIT MAINTENANT (24/09/2026)
+// Les pièces vivent dans le CRM depuis que le dépôt y est passé : la liste
+// sait donc enfin distinguer une attestation déposée d'une simple DATE venue
+// de la synchronisation, qui n'a aucun document derrière. Les deux se
+// ressemblaient et ne valent pas la même chose — c'est un document qu'on
+// présente en cas de contrôle, pas une date saisie dans un logiciel. D'où la
+// pastille « Sans doc. », rouge comme « Absent ».
 //
 // CE QUI N'EST PAS OUVERT ICI, ET POURQUOI
-// Créer un artisan en prospection, et supprimer une pièce déposée. Le premier
-// est une saisie d'annuaire qui n'a rien d'urgent ; le second retire une preuve
-// de conformité, et ce geste-là reste dans l'application d'origine tant que
-// personne n'a dit qui doit pouvoir le faire.
+// Supprimer une pièce déposée : ce geste retire une preuve de conformité, et
+// il reste fermé tant que personne n'a dit qui doit pouvoir le faire.
 import { scope } from '../data/scope.js';
 import { db } from '../data/db.js';
-import { esc, eur, fmtDate, fmtDateTime, daysSince, terms, hit, searchInput, bindSearch, restoreFocus } from '../ui.js';
+import { esc, eur, fmtDate, fmtDateTime, terms, hit, searchInput, bindSearch, restoreFocus } from '../ui.js';
 import { poserEspace, kpiEspace } from './espace.js';
 import { cadre, guard } from './rgd-espace.js';
 import { peutEcrire, convertirSt, creerSousTraitant, majSousTraitant,
          activerSousTraitant, remettreEnProspection, supprimerSousTraitant } from '../data/rgd-api.js';
 import { toast, openModal, closeModal } from '../ui.js';
 import { ouvrirPiecesSt, ouvrirRelanceSt } from './rgd-st-pieces.js';
+import { PIECES_ST, piecesDe, etatPiece } from '../data/rgd-pieces.js';
 
-// Les quatre pièces qu'un sous-traitant doit tenir à jour. L'ordre est celui
-// du risque : le travail dissimulé et la décennale d'abord.
-// `doc` est la clé du worker (`DOC_MAP`), celle que le panneau de dépôt
-// renvoie. La déduire de `key` par une comparaison de chaînes marchait, mais
-// se serait tue le jour où une colonne change de nom — et une pastille qui ne
-// s'actualise pas ressemble à un dépôt qui a échoué.
-const PIECES = [
-  { key: 'attestation_vigilance_expire', doc: 'vigilance', label: 'Vigilance', court: 'Vig.' },
-  { key: 'assurance_decennale_expire', doc: 'decennale', label: 'Décennale', court: 'Déc.' },
-  { key: 'attestation_urssaf_expire', doc: 'urssaf', label: 'URSSAF', court: 'URSSAF' },
-  { key: 'kbis_expire', doc: 'kbis', label: 'Kbis', court: 'Kbis' },
-];
+// Les quatre pièces qu'un sous-traitant doit tenir à jour, prises dans la
+// liste des huit — une seule déclaration, dans `js/data/rgd-pieces.js`, pour
+// que la liste, le panneau et le mail de relance parlent des mêmes documents.
+// L'ordre est celui du risque : le travail dissimulé et la décennale d'abord.
+const COURT = { vigilance: 'Vig.', decennale: 'Déc.', urssaf: 'URSSAF', kbis: 'Kbis' };
+const PIECES = PIECES_ST.filter(p => COURT[p.key]).map(p => ({ ...p, court: COURT[p.key] }));
 
-// L'état d'une pièce. `null` n'est pas « à jour » : c'est « on ne sait pas »,
-// ce qui est pire qu'expiré puisque personne ne l'a jamais demandée.
-const etatPiece = (valeur) => {
-  if (!valeur) return { key: 'absent', label: 'Absent', ton: 'red', poids: 0 };
-  const j = daysSince(valeur);      // positif = la date est passée
-  if (j > 0) return { key: 'expire', label: 'Expiré', ton: 'red', poids: 1 };
-  if (j > -30) return { key: 'bientot', label: `Expire dans ${-j} j`, ton: 'amber', poids: 2 };
-  return { key: 'ok', label: fmtDate(valeur), ton: 'green', poids: 3 };
+// L'état d'une pastille. ⚠ IL NE SE LIT PLUS SUR LA SEULE DATE : une date sans
+// document derrière n'est pas une attestation, et c'est un document qu'on
+// présente en cas de contrôle. `etatPiece` croise donc les deux, et le libellé
+// court dit lequel des deux manque.
+const COURT_ETAT = { absent: 'Absent', 'sans-doc': 'Sans doc.', expire: 'Expiré',
+  'sans-date': 'Sans date', bientot: null, ok: null };
+const pastille = (st, pieces, p) => {
+  const e = etatPiece(st, pieces, p);
+  return { ...e, label: COURT_ETAT[e.cle] || e.texte };
 };
 
 // Faire passer un artisan repéré en prospection au rang de sous-traitant.
@@ -285,7 +278,10 @@ export const rgdSousTraitantsPage = {
       const missions = scope.rgd('rgd_missions');
 
       // Un sous-traitant est en défaut dès qu'une pièce manque ou est expirée.
-      const defautsDe = (st) => PIECES.map(p => etatPiece(st[p.key])).filter(e => e.poids <= 1).length;
+      // ⚠ « Une date connue sans document » COMPTE comme un défaut (poids 1) :
+      // c'est le cas le plus trompeur, il a l'air d'une attestation valide.
+      const defautsDe = (st) => PIECES.map(p => etatPiece(st, piecesDe(st.id), p))
+        .filter(e => e.poids <= 1).length;
 
       // Le partage. `statut_relation` vaut 'actif' par défaut côté D1 : une
       // fiche qui ne le porte pas est donc un sous-traitant, jamais un
@@ -313,8 +309,9 @@ export const rgdSousTraitantsPage = {
       const actifs = surLesquels.filter(st => st.actif !== false);
       const inactifs = surLesquels.filter(st => st.actif === false);
       const enDefaut = actifs.filter(st => defautsDe(st) > 0);
-      const sansAucun = actifs.filter(st => PIECES.every(p => !st[p.key]));
-      const bientot = actifs.filter(st => PIECES.some(p => etatPiece(st[p.key]).key === 'bientot'));
+      const sansAucun = actifs.filter(st => !Object.keys(piecesDe(st.id)).length);
+      const bientot = actifs.filter(st =>
+        PIECES.some(p => etatPiece(st, piecesDe(st.id), p).cle === 'bientot'));
 
       // Les potentiels, rangés par corps de métier. La clé est comparée sans
       // casse ni accents pour que « couverture » et « Couverture » ne fassent
@@ -380,9 +377,7 @@ export const rgdSousTraitantsPage = {
           <div><b>${sansAucun.length} sous-traitant${sansAucun.length > 1 ? 's actifs n’ont' : ' actif n’a'}
           aucune pièce enregistrée.</b> Sans attestation de vigilance à jour, le donneur d&rsquo;ordre
           répond du travail dissimulé ; sans décennale, c&rsquo;est RGD Renova qui porte le sinistre.
-          ${state.ecriture
-            ? 'Les pièces se déposent ici, bouton <b>Pièces</b> au bout de la ligne.'
-            : 'Les pièces se déposent dans l&rsquo;<a href="#/rgd/app">application RGD</a>.'}
+          Les pièces se déposent ici, bouton <b>Pièces</b> au bout de la ligne.
           Les artisans en prospection ne sont pas comptés ici : on ne leur demande rien
           tant qu&rsquo;on ne les a pas fait travailler.</div>
         </div>` : ''}
@@ -405,7 +400,7 @@ export const rgdSousTraitantsPage = {
           <table>
             <thead><tr><th>Raison sociale</th><th>Contact</th><th>Spécialités</th>
               ${PIECES.map(p => `<th title="${esc(p.label)}">${esc(p.court)}</th>`).join('')}
-              <th class="num">Versé</th>${state.ecriture ? '<th></th>' : ''}</tr></thead>
+              <th class="num">Versé</th><th></th></tr></thead>
             <tbody>${vus.map(st => {
               const verse = somme(paiements.filter(p => p.sous_traitant_id === st.id));
               return `<tr class="${st.actif === false ? 'muted' : ''}">
@@ -415,19 +410,20 @@ export const rgdSousTraitantsPage = {
                 <td>${esc(st.contact_nom || '—')}
                     ${st.telephone ? `<div class="s muted">${esc(st.telephone)}</div>` : ''}</td>
                 <td class="muted">${esc(st.specialites || '—')}</td>
-                ${PIECES.map(p => { const e = etatPiece(st[p.key]);
-                  return `<td><span class="chip ${e.ton}" title="${esc(p.label)}">${esc(e.label)}</span></td>`; }).join('')}
+                ${PIECES.map(p => { const e = pastille(st, piecesDe(st.id), p);
+                  return `<td><span class="chip ${e.ton}" title="${esc(p.label)} — ${esc(e.texte)}">${esc(e.label)}</span></td>`; }).join('')}
                 <td class="num">${verse ? eur(verse) : '<span class="muted">—</span>'}</td>
-                ${state.ecriture ? `<td class="num st-actions">
-                  <button type="button" class="btn ghost sm" data-pieces="${esc(String(st.d1_id))}">Pièces</button>
-                  ${st.email ? `<button type="button" class="btn ghost sm" data-relance="${esc(String(st.d1_id))}">Relancer</button>` : ''}
+                <td class="num st-actions">
+                  <button type="button" class="btn ghost sm" data-pieces="${esc(st.id)}">Pièces</button>
+                  ${st.email ? `<button type="button" class="btn ghost sm" data-relance="${esc(st.id)}">Relancer</button>` : ''}
+                  ${state.ecriture ? `
                   <button type="button" class="btn ghost sm" data-prospection="${esc(String(st.d1_id))}"
                           title="Le remettre parmi les artisans en prospection">En prospection</button>
                   <button type="button" class="btn ghost sm danger" data-desactiver="${esc(String(st.d1_id))}"
-                          title="On ne travaille plus avec lui">Désactiver</button>
-                </td>` : ''}
+                          title="On ne travaille plus avec lui">Désactiver</button>` : ''}
+                </td>
               </tr>`;
-            }).join('') || `<tr><td colspan="${state.ecriture ? 9 : 8}"><div class="empty">
+            }).join('') || `<tr><td colspan="9"><div class="empty">
               <b>Aucun résultat</b><br>Modifiez les filtres ou créez un nouvel élément.</div></td></tr>`}</tbody>
           </table>
         </section>
@@ -582,21 +578,22 @@ export const rgdSousTraitantsPage = {
         if (st) formulaireSousTraitant(st, draw);
       });
 
+      // ⚠ CES DEUX-LÀ SONT DÉSIGNÉS PAR L'UUID DU CRM, pas par l'identifiant de
+      // l'application RGD : depuis le 24/09/2026 le dépôt et la relance vivent
+      // ici, et ils s'adressent à la fiche du CRM. Ils ne dépendent donc plus
+      // du droit d'écrire là-bas (`state.ecriture`) — les cacher pour cette
+      // raison fermerait la conformité à quelqu'un à qui la base l'ouvre.
+      const parId = (id) => tous.find(x => x.id === id);
+
       root.querySelectorAll('[data-pieces]').forEach(b => b.onclick = () => {
-        const st = parD1(b.dataset.pieces);
-        if (!st) return;
-        // Le dépôt écrit dans D1 ; le reflet du CRM mettra jusqu'à trente
-        // minutes à le rapatrier. On avance donc la ligne à l'écran, sinon la
-        // pastille resterait rouge juste après le dépôt et on déposerait deux
-        // fois la même attestation.
-        ouvrirPiecesSt(st, (cle, quand) => {
-          const p = PIECES.find(x => x.doc === cle);
-          if (p && quand) { st[p.key] = quand; draw(); }
-        });
+        const st = parId(b.dataset.pieces);
+        // Le dépôt s'écrit dans le CRM : `draw()` relit la table et la pastille
+        // suit dans la seconde. Rien à avancer à la main.
+        if (st) ouvrirPiecesSt(st, () => draw());
       });
 
       root.querySelectorAll('[data-relance]').forEach(b => b.onclick = () => {
-        const st = parD1(b.dataset.relance);
+        const st = parId(b.dataset.relance);
         if (st) ouvrirRelanceSt(st);
       });
 

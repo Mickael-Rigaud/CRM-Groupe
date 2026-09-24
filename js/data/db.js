@@ -23,6 +23,9 @@ export const TABLES = ['profiles', 'organisations', 'contacts', 'deals', 'activi
   // n'y écrit depuis le CRM tant que la migration n'est pas terminée.
   'rgd_chantiers', 'rgd_devis', 'rgd_paiements', 'rgd_demandes',
   'rgd_sous_traitants', 'rgd_missions', 'rgd_st_paiements', 'rgd_st_commissions',
+  // ⚠ `rgd_st_pieces` n'est PAS un reflet : c'est du Supabase pur, écrit par le
+  // CRM et par personne d'autre. Le relevé ne l'envoie pas et ne l'écrasera pas.
+  'rgd_st_pieces',
   'rgd_apporteurs', 'rgd_fournitures', 'rgd_realisations', 'rgd_carrousel',
   'rgd_reglages', 'rgd_clients', 'rgd_costructor_etat',
   'rgd_costructor_journal', 'rgd_costructor_ignores',
@@ -153,14 +156,19 @@ const localAdapter = {
       r.readAsDataURL(fichier);
     });
   },
-  async uploadFile(path, file) {
+  // Le seau fait partie de la clé : deux seaux peuvent porter le même chemin,
+  // et les confondre ici ferait passer la démo là où la production échoue.
+  async uploadFile(path, file, { bucket = 'documents', upsert = false } = {}) {
     if (file.size > 3 * 1048576) throw new Error('En mode démo, 3 Mo max par fichier (sans limite en production)');
+    const cle = `${bucket}/${path}`;
+    const all = this.files();
+    if (all[cle] && !upsert) throw new Error('Un fichier porte déjà ce nom');
     const dataUrl = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(file); });
-    const all = this.files(); all[path] = dataUrl;
+    all[cle] = dataUrl;
     try { localStorage.setItem(LS_FILES, JSON.stringify(all)); } catch { throw new Error('Espace du navigateur saturé (mode démo)'); }
   },
-  async fileUrl(path) { const u = this.files()[path]; if (!u) throw new Error('Fichier introuvable'); return u; },
-  async deleteFile(path) { const all = this.files(); delete all[path]; localStorage.setItem(LS_FILES, JSON.stringify(all)); },
+  async fileUrl(path, { bucket = 'documents' } = {}) { const u = this.files()[`${bucket}/${path}`]; if (!u) throw new Error('Fichier introuvable'); return u; },
+  async deleteFile(path, { bucket = 'documents' } = {}) { const all = this.files(); delete all[`${bucket}/${path}`]; localStorage.setItem(LS_FILES, JSON.stringify(all)); },
   // auth
   async currentUser() { const id = localStorage.getItem(LS_USER); return this.data.profiles.find(u => u.id === id) || null; },
   async signIn(userId) { localStorage.setItem(LS_USER, userId); return this.data.profiles.find(u => u.id === userId); },
@@ -248,17 +256,19 @@ const supabaseAdapter = {
     if (error) throw new Error(error.message);
   },
   isRecovery() { return /type=recovery/.test(location.hash) || /type=recovery/.test(location.search); },
-  // fichiers : bucket privé « documents », accès par lien signé (1 h)
-  async uploadFile(path, file) {
-    const { error } = await this.client.storage.from('documents').upload(path, file, { upsert: false, contentType: file.type || undefined });
+  // fichiers : seaux privés, accès par lien signé (1 h). « documents » est le
+  // seau par défaut — celui des pièces jointes de fiches ; « sous-traitants »
+  // porte les attestations, avec ses propres policies.
+  async uploadFile(path, file, { bucket = 'documents', upsert = false } = {}) {
+    const { error } = await this.client.storage.from(bucket).upload(path, file, { upsert, contentType: file.type || undefined });
     if (error) throw new Error(error.message);
   },
-  async fileUrl(path) {
-    const { data, error } = await this.client.storage.from('documents').createSignedUrl(path, 3600);
+  async fileUrl(path, { bucket = 'documents' } = {}) {
+    const { data, error } = await this.client.storage.from(bucket).createSignedUrl(path, 3600);
     if (error) throw new Error(error.message); return data.signedUrl;
   },
-  async deleteFile(path) {
-    const { error } = await this.client.storage.from('documents').remove([path]);
+  async deleteFile(path, { bucket = 'documents' } = {}) {
+    const { error } = await this.client.storage.from(bucket).remove([path]);
     if (error) throw new Error(error.message);
   },
   // ⚠ UN SECOND BUCKET, ET IL N'A RIEN À VOIR AVEC LE PREMIER.
@@ -334,11 +344,13 @@ export const db = {
   onChange(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); },
   emit() { for (const fn of this.listeners) { try { fn(); } catch (e) { console.error(e); } } },
 
-  // fichiers
-  uploadFile(path, file) { return this.adapter.uploadFile(path, file); },
+  // fichiers. `options` porte le seau (`bucket`) et le remplacement (`upsert`) :
+  // les pièces jointes des fiches vivent dans « documents », les attestations
+  // des sous-traitants dans « sous-traitants », qui n'a pas les mêmes droits.
+  uploadFile(path, file, options) { return this.adapter.uploadFile(path, file, options); },
   deposerPhotoPublique(chemin, fichier) { return this.adapter.deposerPhotoPublique(chemin, fichier); },
-  fileUrl(path) { return this.adapter.fileUrl(path); },
-  deleteFile(path) { return this.adapter.deleteFile(path); },
+  fileUrl(path, options) { return this.adapter.fileUrl(path, options); },
+  deleteFile(path, options) { return this.adapter.deleteFile(path, options); },
   // auth
   currentUser() { return this.adapter.currentUser(); },
   signIn(a, b) { return this.adapter.signIn(a, b); },

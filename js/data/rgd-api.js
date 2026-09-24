@@ -84,20 +84,6 @@ async function envoyer(chemin, corps, methode = 'PATCH') {
   return { ok: false, motif: d.error || `HTTP ${r.status}` };
 }
 
-// Lire à la SOURCE, pas dans le reflet. Le reflet a jusqu'à trente minutes de
-// retard et, pour les sous-traitants, il ne porte que les DATES d'expiration —
-// pas les `*_url` qui disent si la pièce a vraiment été déposée. Un écran de
-// conformité qui affiche « à jour » sans savoir si le document existe ment.
-async function lire(chemin) {
-  const t = await obtenirJeton();
-  if (!t) return { ok: false, motif: 'pas-de-compte' };
-  const r = await fetch(`${API}${chemin}`, { headers: { Authorization: `Bearer ${t}` } });
-  if (r.ok) return { ok: true, donnees: await r.json() };
-  if (r.status === 401) { jeton = null; expire = 0; }
-  const d = await r.json().catch(() => ({}));
-  return { ok: false, motif: d.error || `HTTP ${r.status}` };
-}
-
 // Envoyer un fichier. ⚠ NE JAMAIS POSER `Content-Type` ICI : c'est le
 // navigateur qui doit l'écrire, parce que lui seul connaît la frontière
 // (`boundary`) qu'il vient de tirer au sort. L'imposer à la main donne un
@@ -115,22 +101,6 @@ async function televerser(chemin, formulaire) {
   if (r.status === 401) { jeton = null; expire = 0; }
   const d = await r.json().catch(() => ({}));
   return { ok: false, motif: d.error || `HTTP ${r.status}` };
-}
-
-// Récupérer le PDF d'une pièce. Il faut le jeton, donc un `<a href>` ne suffit
-// pas : on rapatrie le corps et on fabrique une URL d'objet, que l'appelant
-// révoque. Le lien direct renverrait un 401 dans un onglet vide.
-export async function pieceStFichier(d1Id, type) {
-  const t = await obtenirJeton();
-  if (!t) return { ok: false, motif: 'pas-de-compte' };
-  const r = await fetch(`${API}/api/sous-traitants/${encodeURIComponent(d1Id)}/documents/${encodeURIComponent(type)}`,
-    { headers: { Authorization: `Bearer ${t}` } });
-  if (!r.ok) {
-    if (r.status === 401) { jeton = null; expire = 0; }
-    const d = await r.json().catch(() => ({}));
-    return { ok: false, motif: d.error || `HTTP ${r.status}` };
-  }
-  return { ok: true, url: URL.createObjectURL(await r.blob()) };
 }
 
 // Le statut de suivi d'un client. `d1Id` est `rgd_clients.d1_id`, l'identifiant
@@ -227,43 +197,24 @@ export const signerDevis = (d1Id) =>
 
 // ---------------------------------------------------------------- sous-traitants
 //
-// POURQUOI CET ÉCRAN ÉCRIT PLUS QUE LES AUTRES
-// Les pièces administratives d'un sous-traitant ne se déposent nulle part
-// ailleurs que dans le tableau de bord. Tant que c'était vrai, couper Surge
-// aurait coupé le seul endroit où l'on peut prouver qu'un artisan est en règle.
-// Le CRM reprend donc le dépôt lui-même ; les fichiers, eux, restent chez
-// Cloudflare (KV) jusqu'à la phase 3 du plan de sortie.
-
-// La fiche complète, à la source. Donne les `*_url` que le relevé ne porte pas,
-// et donc la seule réponse honnête à « la pièce existe-t-elle ? ».
-export const ficheSousTraitant = (d1Id) =>
-  lire(`/api/sous-traitants/${encodeURIComponent(d1Id)}`);
-
-// Déposer une pièce. `type` est une clé du worker (kbis, urssaf, vigilance,
-// decennale, rc_pro, regularite_fiscale, contrat_st, rib), `fichier` un PDF de
-// 24 Mo au plus — le worker refuse tout le reste, et l'écran le dit avant.
-// `dateExpire` est facultative : le RIB et le contrat n'expirent pas.
-export function deposerPieceSt(d1Id, type, fichier, dateExpire) {
-  const f = new FormData();
-  f.append('file', fichier);
-  // Une chaîne vide n'est pas une date : la laisser passer écrirait '' dans une
-  // colonne qui doit rester nulle, et la pastille deviendrait « expiré » au
-  // lieu d'« absent ».
-  if (dateExpire) f.append('expire_date', dateExpire);
-  return televerser(`/api/sous-traitants/${encodeURIComponent(d1Id)}/documents/${encodeURIComponent(type)}`, f);
-}
-
-// L'aperçu de la relance : le worker rend le HTML du mail SANS l'envoyer.
-// On le montre toujours avant l'envoi — un mail part chez un artisan, il n'y a
-// pas de retour en arrière.
-export const apercuRelanceSt = (d1Id) =>
-  envoyer(`/api/sous-traitants/${encodeURIComponent(d1Id)}/relance-documents`, { preview: true }, 'POST');
-
-// ⚠ CELLE-CI ENVOIE VRAIMENT UN EMAIL, via Brevo, au sous-traitant.
-// Le worker refuse (400) s'il n'y a rien à relancer ou si la fiche n'a pas
-// d'email, et note la date d'envoi dans `date_dernier_email_relance_docs`.
-export const envoyerRelanceSt = (d1Id) =>
-  envoyer(`/api/sous-traitants/${encodeURIComponent(d1Id)}/relance-documents`, {}, 'POST');
+// ⚠ LES PIÈCES ADMINISTRATIVES NE PASSENT PLUS PAR ICI — 24/09/2026, étape 1
+// de la sortie. Déposer une attestation et relancer un artisan par email
+// étaient les deux derniers gestes de l'espace RGD à ne vivre que dans
+// l'application d'origine : le fichier partait dans son stockage, l'email de
+// son serveur. Tant que c'était vrai, l'éteindre éteignait le seul endroit où
+// l'on peut prouver qu'un artisan est en règle.
+//
+// Tout cela vit désormais dans `js/data/rgd-pieces.js` : le fichier dans le
+// stockage privé du CRM, la ligne dans `rgd_st_pieces`, le mail par la
+// fonction d'envoi du CRM. Cinq fonctions ont disparu d'ici avec ce
+// déménagement — `ficheSousTraitant`, `deposerPieceSt`, `pieceStFichier`,
+// `apercuRelanceSt` et `envoyerRelanceSt` — et avec elles deux des quinze
+// chemins que ce module appelait encore. Il en reste treize.
+//
+// ⚠ LES FICHIERS DÉJÀ DÉPOSÉS LÀ-BAS NE SONT PAS REPRIS (décision du
+// 24/09/2026 : ce sont des essais). Les DATES, elles, continuent d'arriver par
+// la synchronisation — d'où l'état « date connue, aucun document », que
+// l'écran nomme au lieu de le laisser passer pour une attestation valide.
 
 // Faire passer un artisan repéré en prospection au rang de sous-traitant.
 // ⚠ CE GESTE OUVRE LES OBLIGATIONS DE CONFORMITÉ : à partir de là, l'absence

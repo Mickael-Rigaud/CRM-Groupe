@@ -186,4 +186,36 @@ export const SEED = {
   // à la main à côté du document, c'est signer une divergence.
   rgd_realisations: deplierSite('realisations', SEED_SITE.realisations),
   rgd_carrousel: deplierSite('carrousel', SEED_SITE.carrousel),
+
+  // Quelques sous-traitants, pour que l'écran de conformité soit essayable
+  // sans toucher à la production. ⚠ NOMS ET COORDONNÉES INVENTÉS : le dépôt
+  // est public, et un jeu de démo qui recopie la réalité finit par la publier.
+  // Les trois cas qui comptent sont représentés : un dossier tenu, un dossier
+  // en défaut, un artisan repéré en prospection.
+  rgd_sous_traitants: [
+    { id: 'st1', d1_id: 9001, raison_sociale: 'Élec Démo SARL', contact_nom: 'Paul Martin',
+      email: 'paul@example.com', telephone: '02 61 91 00 21', siret: '00000000000001',
+      specialites: 'Électricité', adresse: '4 rue de la Démo, 37000 Tours',
+      actif: true, statut_relation: 'actif', updated_at: d(-1) },
+    { id: 'st2', d1_id: 9002, raison_sociale: 'Plomberie Exemple', contact_nom: 'Sonia Blanc',
+      email: 'sonia@example.com', telephone: '02 61 91 00 22', siret: '00000000000002',
+      specialites: 'Plomberie', adresse: '12 avenue du Test, 37100 Tours',
+      // Une date venue de la synchronisation SANS document derrière : c'est le
+      // cas que l'écran doit dénoncer, et il faut pouvoir le voir en démo.
+      attestation_vigilance_expire: day(120),
+      actif: true, statut_relation: 'actif', updated_at: d(-1) },
+    { id: 'st3', d1_id: 9003, raison_sociale: 'Couverture du Val', contact_nom: 'Karim Lefèvre',
+      telephone: '02 61 91 00 23', specialites: 'Couverture',
+      actif: true, statut_relation: 'potentiel', updated_at: d(-1) },
+    { id: 'st4', d1_id: 9004, raison_sociale: 'Peinture Ancienne', contact_nom: 'Yves Roux',
+      email: 'yves@example.com', specialites: 'Peinture',
+      actif: false, statut_relation: 'actif', updated_at: d(-30) },
+  ],
+  // Une seule pièce déposée, chez le premier : assez pour voir la pastille
+  // verte, le téléchargement et la relance qui ne réclame que ce qui manque.
+  rgd_st_pieces: [
+    { id: 'stp1', sous_traitant_id: 'st1', type: 'vigilance',
+      chemin: 'st1/vigilance.pdf', nom_fichier: 'vigilance-demo.pdf',
+      taille_octets: 12345, expire_le: day(90), deposee_le: d(-5) },
+  ],
 };

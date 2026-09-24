@@ -106,6 +106,11 @@ export const scope = {
   // seulement. `rgd_apporteurs` est la première à avoir basculé. Pour savoir
   // où en est une table, chercher `d1_id` : `not null` = encore un reflet,
   // nullable = Supabase fait foi.
+  //
+  // ⚠ `rgd_st_pieces` (24/09/2026) N'A AUCUN `d1_id` et n'en aura jamais :
+  // elle n'est le reflet de rien. Les attestations des sous-traitants sont
+  // nées dans le CRM, avec leurs fichiers dans le seau privé du même nom —
+  // dont les quatre policies disent, elles aussi, `has_activity('rgd')`.
   get canRgd() { return this.activityKeys.includes('rgd'); },
   rgd(table) { return this.canRgd ? db.t(table) : []; },
 
