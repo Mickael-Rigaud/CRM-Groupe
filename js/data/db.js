@@ -142,6 +142,17 @@ const localAdapter = {
   },
   // fichiers (démo) : conservés dans le navigateur en base64, petits fichiers uniquement
   files() { try { return JSON.parse(localStorage.getItem(LS_FILES)) || {}; } catch { return {}; } },
+  // En démo il n'y a pas de bucket : la photo devient son propre contenu. Une
+  // adresse `data:` s'affiche dans une vignette exactement comme une autre, ce
+  // qui permet d'éprouver l'atelier sans rien déposer nulle part.
+  async deposerPhotoPublique(chemin, fichier) {
+    if (fichier.size > 3 * 1048576) throw new Error('En mode démo, 3 Mo max par photo (sans limite en production)');
+    return new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(String(r.result)); r.onerror = rej;
+      r.readAsDataURL(fichier);
+    });
+  },
   async uploadFile(path, file) {
     if (file.size > 3 * 1048576) throw new Error('En mode démo, 3 Mo max par fichier (sans limite en production)');
     const dataUrl = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(file); });
@@ -250,6 +261,20 @@ const supabaseAdapter = {
     const { error } = await this.client.storage.from('documents').remove([path]);
     if (error) throw new Error(error.message);
   },
+  // ⚠ UN SECOND BUCKET, ET IL N'A RIEN À VOIR AVEC LE PREMIER.
+  // « documents » est PRIVÉ : on en sort par un lien signé d'une heure.
+  // « realisations » est PUBLIC, parce que ses photos s'affichent sur
+  // rgdrenova.fr sans que personne ne soit connecté. Les confondre donnerait
+  // soit des documents lisibles par tous, soit des photos que le site ne peut
+  // pas afficher. D'où deux méthodes plutôt qu'un paramètre : un nom de bucket
+  // qui se passe en argument finit par se tromper d'appelant.
+  async deposerPhotoPublique(chemin, fichier) {
+    const { error } = await this.client.storage.from('realisations')
+      .upload(chemin, fichier, { upsert: false, contentType: fichier.type || undefined });
+    if (error) throw new Error(error.message);
+    const { data } = this.client.storage.from('realisations').getPublicUrl(chemin);
+    return data.publicUrl;
+  },
 };
 
 // ---------- Façade ----------
@@ -311,6 +336,7 @@ export const db = {
 
   // fichiers
   uploadFile(path, file) { return this.adapter.uploadFile(path, file); },
+  deposerPhotoPublique(chemin, fichier) { return this.adapter.deposerPhotoPublique(chemin, fichier); },
   fileUrl(path) { return this.adapter.fileUrl(path); },
   deleteFile(path) { return this.adapter.deleteFile(path); },
   // auth

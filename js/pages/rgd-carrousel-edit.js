@@ -26,7 +26,7 @@ import { esc, toast } from '../ui.js';
 import { db } from '../data/db.js';
 import { lienPhoto } from './rgd-espace.js';
 import { lireCarrousel, enregistrerCarrousel, restaurerCarrousel,
-         deposerPhotosRealisations, peutEcrire } from '../data/rgd-api.js';
+         deposerPhotosRealisations } from '../data/rgd-api.js';
 
 const MAX_OCTETS = 20 * 1024 * 1024;
 const FORMATS = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif'];
@@ -42,11 +42,12 @@ export async function chargerCarrousel() {
     .filter(i => i && typeof i.url === 'string' && i.url.trim())
     .map(i => ({ url: i.url.trim(), legende: String(i.legende || '') }));
 
-  // Le dépôt d'une photo passe encore par le worker Cloudflare, qui exige un
-  // compte de l'application RGD au même email — pas le même droit que publier,
-  // gardé lui par `has_activity('rgd')` côté base.
-  const peutDeposer = await peutEcrire();
-  return { ok: true, editeur: editeur({ images, peutDeposer, ligne: '', armeRestaure: false, occupe: false }) };
+  // ⚠ DÉPOSER ET PUBLIER SONT LE MÊME DROIT DEPUIS LE 24/09/2026. Le dépôt
+  // passait par le worker Cloudflare, qui exigeait un compte de l'application
+  // RGD au même email ; il passe maintenant par le bucket Supabase, gardé par
+  // `has_activity('rgd')` — comme publier. Le bouton n'a donc plus de raison
+  // de se cacher, et le garde reste posé en base.
+  return { ok: true, editeur: editeur({ images, ligne: '', armeRestaure: false, occupe: false }) };
 }
 
 function editeur(etat) {
@@ -71,9 +72,7 @@ function editeur(etat) {
       qu’une : retirez le doublon pour que les deux vues concordent.</div></div>` : ''}
 
     <div class="toolbar" style="margin:12px 0">
-      ${etat.peutDeposer
-        ? `<button type="button" class="btn ghost" id="ca-ajouter">Ajouter des photos…</button>`
-        : `<span class="chip muted" title="Le dépôt passe par l’application RGD, qui demande un compte au même email">Dépôt indisponible</span>`}
+      <button type="button" class="btn ghost" id="ca-ajouter">Ajouter des photos…</button>
       <input type="file" id="ca-fichiers" accept="image/*" multiple hidden>
       <input id="ca-url" class="rea-url" placeholder="…ou coller l’adresse d’une image">
       <button type="button" class="btn ghost" id="ca-url-ok">+ Ajouter l’adresse</button>
@@ -183,9 +182,7 @@ function editeur(etat) {
       const r = await deposerPhotosRealisations(lot);
       ligne('');
       if (!r.ok) {
-        toast(r.motif === 'pas-de-compte'
-          ? 'Aucun compte RGD à votre adresse : rien n’a été déposé.'
-          : `Dépôt refusé — ${r.motif}`, 'err');
+        toast(`Dépôt refusé — ${r.motif}`, 'err');
         return;
       }
       for (const u of (r.donnees?.urls || [])) ajouter(u);

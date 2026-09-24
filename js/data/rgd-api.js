@@ -476,14 +476,61 @@ export const lireCarrousel = () =>
 export const enregistrerCarrousel = (images) => publierDoc('carrousel', { images });
 export const restaurerCarrousel = () => restaurerDoc('carrousel');
 
-// Déposer une ou plusieurs photos. Elles vont dans le KV de Cloudflare et le
-// worker rend leurs URL publiques — à poser ensuite dans `images` d'un projet,
-// puis à enregistrer : le dépôt seul ne publie rien.
-// 20 Mo par image, formats jpeg/png/webp/gif/avif. Le worker refuse TOUT LE
-// LOT si une seule image cloche, pour qu'on voie ce qui ne va pas au lieu de
-// chercher la photo manquante.
-export function deposerPhotosRealisations(fichiers) {
-  const f = new FormData();
-  for (const x of fichiers) f.append('file', x);
-  return televerser('/api/realisations/upload', f);
+// Déposer une ou plusieurs photos. Elles vont dans le bucket public
+// `realisations` de Supabase, qui rend leurs adresses — à poser ensuite dans
+// `images` d'un projet, puis à enregistrer : le dépôt seul ne publie rien.
+//
+// ⚠ ELLES ALLAIENT DANS LE KV DE CLOUDFLARE JUSQU'AU 24/09/2026, et c'était le
+// dernier morceau des réalisations resté là-bas. Les 63 anciennes photos
+// avaient bien été recopiées vers Supabase, mais tout NOUVEAU dépôt repartait
+// chez le worker : cinq photos redéposées ce jour-là ont atterri dans le KV,
+// et elles seraient mortes le jour où il s'éteindra. On ne répare pas une
+// migration en recopiant à chaque fois ce qui vient d'arriver — on déplace la
+// porte.
+//
+// ⚠ LE NOM DE FICHIER GARDE LA CONVENTION DU WORKER :
+// `horodatage-hasard-nom_assaini`. Les 63 photos déjà en place le portent ;
+// en changer ferait deux familles de noms dans un même bucket, sans que rien
+// ne dise laquelle vient d'où.
+//
+// ⚠ ON REFUSE TOUT LE LOT si une seule image cloche, comme le faisait le
+// worker : on voit ce qui ne va pas au lieu de chercher la photo manquante.
+// La vérification est faite ICI et pas seulement par le bucket, parce qu'un
+// refus du bucket arrive photo par photo, à moitié du dépôt, avec un message
+// en anglais.
+const PHOTO_MAX = 20 * 1024 * 1024;
+const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif'];
+
+export async function deposerPhotosRealisations(fichiers) {
+  const liste = [...fichiers];
+  if (!liste.length) return { ok: false, motif: 'aucun fichier' };
+
+  for (const f of liste) {
+    const type = String(f.type || '').toLowerCase();
+    if (type && !PHOTO_TYPES.includes(type)) {
+      return { ok: false, motif: `« ${f.name} » n’est pas une image (${type})` };
+    }
+    if (f.size > PHOTO_MAX) {
+      return { ok: false, motif: `« ${f.name} » dépasse ${Math.round(PHOTO_MAX / 1048576)} Mo` };
+    }
+  }
+
+  const { db } = await import('./db.js');
+  const urls = [];
+  try {
+    for (const f of liste) {
+      const propre = String(f.name || 'photo').replace(/[^A-Za-z0-9._-]/g, '_');
+      const nom = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${propre}`;
+      urls.push(await db.deposerPhotoPublique(nom, f));
+    }
+  } catch (e) {
+    const motif = String(e.message || e);
+    // La politique d'écriture du bucket est gardée par `has_activity('rgd')` :
+    // un compte d'une autre structure se voit refuser, et le message brut ne
+    // le dirait pas.
+    return { ok: false, motif: /row-level security|not authorized|403/i.test(motif)
+      ? 'Réservé à l’équipe RGD : aucune photo n’a été déposée.'
+      : motif.slice(0, 120) };
+  }
+  return { ok: true, donnees: { urls } };
 }

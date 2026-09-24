@@ -49,9 +49,12 @@ import { esc, toast, confirm } from '../ui.js';
 import { db } from '../data/db.js';
 import { lienPhoto } from './rgd-espace.js';
 import { lireRealisations, enregistrerRealisations, restaurerRealisations,
-         deposerPhotosRealisations, peutEcrire } from '../data/rgd-api.js';
+         deposerPhotosRealisations } from '../data/rgd-api.js';
 
-const MAX_OCTETS = 20 * 1024 * 1024;   // la limite du worker, dite avant l'envoi
+// Dite AVANT l'envoi, pour ne pas faire monter vingt mégaoctets qui seront
+// refusés à l'arrivée. `deposerPhotosRealisations` revérifie, et le bucket
+// aussi : trois filets, parce que seul le dernier protège vraiment.
+const MAX_OCTETS = 20 * 1024 * 1024;
 const FORMATS = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif'];
 
 const MOIS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
@@ -223,19 +226,22 @@ export async function chargerEditeur(cible) {
     catSlug = trouve.cat.slug;
   }
 
-  // ⚠ DEUX DROITS DIFFÉRENTS, ET ILS NE SE CONFONDENT PAS. Publier passe par
-  // `rgd_publier_site`, gardée par `has_activity('rgd')` côté base : quiconque
-  // voit cet écran peut publier. DÉPOSER une photo passe encore par le worker
-  // Cloudflare, qui exige un compte de l'application RGD au même email. On ne
-  // ferme donc pas l'atelier à qui n'a pas ce compte — on lui cache le seul
-  // bouton qui échouerait.
-  const peutDeposer = await peutEcrire();
+  // ⚠ LES DEUX DROITS N'EN FONT PLUS QU'UN (24/09/2026). Publier et déposer
+  // étaient gardés différemment : publier par `has_activity('rgd')` côté base,
+  // déposer par un compte de l'application RGD au même email, puisque le dépôt
+  // passait par le worker Cloudflare. Il passe maintenant par le bucket
+  // Supabase, dont la politique d'écriture est gardée par `has_activity('rgd')`
+  // — le même garde que publier. Qui voit cet écran peut donc déposer, et le
+  // bouton n'a plus de raison de se cacher.
+  //
+  // Le garde reste posé en BASE : l'écran ne fait que ne pas proposer
+  // l'impossible, il ne protège rien.
 
   const etat = {
     nouveau, projet, catSlug,
     catOrigine: nouveau ? null : catSlug,
     slug: nouveau ? null : projet.slug,
-    categories, peutDeposer,
+    categories,
     ligne: '', armeSuppr: false, armeRestaure: false, occupe: false,
   };
   return { ok: true, editeur: editeur(etat) };
@@ -307,9 +313,7 @@ function editeur(etat) {
       affiche dans celui-ci. Le tag <b>Avant</b> / <b>Après</b> sert aux curseurs
       plus bas et au tri de la fiche publique.</p>
       <div class="toolbar" style="margin-bottom:10px">
-        ${etat.peutDeposer
-          ? `<button type="button" class="btn ghost" id="re-ajouter">Ajouter des photos…</button>`
-          : `<span class="chip muted" title="Le dépôt passe par l’application RGD, qui demande un compte au même email">Dépôt indisponible</span>`}
+        <button type="button" class="btn ghost" id="re-ajouter">Ajouter des photos…</button>
         <input type="file" id="re-fichiers" accept="image/*" multiple hidden>
         <input id="re-url" class="rea-url" placeholder="…ou coller l’adresse d’une image">
         <button type="button" class="btn ghost" id="re-url-ok">+ Ajouter l’adresse</button>
@@ -588,9 +592,7 @@ function editeur(etat) {
       const r = await deposerPhotosRealisations(liste);
       ligne('');
       if (!r.ok) {
-        toast(r.motif === 'pas-de-compte'
-          ? 'Aucun compte RGD à votre adresse : rien n’a été déposé.'
-          : `Dépôt refusé — ${r.motif}`, 'err');
+        toast(`Dépôt refusé — ${r.motif}`, 'err');
         return;
       }
       for (const u of (r.donnees?.urls || [])) {
