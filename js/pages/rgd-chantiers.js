@@ -32,6 +32,22 @@ import { openDeal } from './deal.js';
 // même personne, qui divergeraient à la première colonne ajoutée.
 import { ouvrirFicheDuClient } from './rgd-clients.js';
 
+// ⚠ UN SEUL PANNEAU DEPUIS CET ÉCRAN, ET C'EST LA FICHE DE LA PERSONNE.
+// La liste ouvrait l'AFFAIRE sur l'intitulé du chantier et la fiche sur le nom
+// du client : deux présentations pour un même dossier, depuis le même tableau.
+// Signalé par Mickael le 24/09/2026, captures à l'appui — il n'avait pas tort,
+// personne ne distingue « l'affaire » de « la fiche » en regardant un chantier.
+//
+// `openDeal` ne reste qu'en DERNIER RECOURS, quand le chantier n'a aucune
+// fiche client rattachée : mieux vaut le panneau générique que rien du tout.
+function ouvrirLaPersonne(cleContact, affaire, apres) {
+  const f = cleContact && scope.rgd('rgd_clients')
+    .find(x => x.contact_id === cleContact || x.organisation_id === cleContact);
+  if (f) ouvrirFicheDuClient(f, apres);
+  else if (affaire) openDeal(affaire, apres);
+  else toast('Aucune fiche client rattachée à ce chantier');
+}
+
 import { KEY, act, cadre, guard, clientDe as clientDeAffaire } from './rgd-espace.js';
 import { peutEcrire, majStatutChantier, creerChantier } from '../data/rgd-api.js';
 import { toast, openModal, closeModal } from '../ui.js';
@@ -252,6 +268,7 @@ function carteChantier(c, colonne, ecriture) {
   const ton = PIPELINE_ETAPES.find(e => e.key === colonne)?.couleur || '#FF9A3D';
   return `<article class="dcard rch-carte" data-chantier-id="${esc(String(c.id))}"
       data-affaire="${esc(String(c.affaire.id))}"
+      data-contact="${esc(String(c.contact_id || c.organisation_id || ''))}"
       ${c.fiche ? `data-fiche="${esc(String(c.fiche.id))}"` : ''}
       ${ecriture && c.fiche ? 'draggable="true"' : ''}
       style="--c:${esc(ton)}">
@@ -330,10 +347,7 @@ function brancherPipeline(root, state, draw) {
       // La carte ouvre la fiche de la PERSONNE, pas l'affaire : c'est d'elle
       // qu'on a besoin quand on regarde un chantier — ses coordonnées, ses
       // devis, son historique. L'affaire reste joignable depuis la liste.
-      const f = carte.dataset.fiche
-        && scope.rgd('rgd_clients').find(x => x.id === carte.dataset.fiche);
-      if (f) ouvrirFicheDuClient(f, draw);
-      else openDeal(carte.dataset.affaire, draw);
+      ouvrirLaPersonne(carte.dataset.contact, carte.dataset.affaire, draw);
     };
     if (!carte.draggable) return;
     carte.addEventListener('dragstart', (e) => {
@@ -563,9 +577,11 @@ export const rgdChantiersPage = {
               const cl = clientDe(c.affaire);
               const e = etatDe(c);
               return `<tr>
-                <td><a href="#" data-affaire="${c.affaire.id}"><b>${esc(c.affaire.title)}</b></a>
+                <td><a href="#" data-personne="${esc(String(c.contact_id || c.organisation_id || ''))}"
+                       data-affaire="${esc(String(c.affaire.id))}"><b>${esc(c.affaire.title)}</b></a>
                     ${c.reference ? `<div class="s muted">${esc(c.reference)}</div>` : ''}</td>
-                <td>${cl ? `<a href="#" data-fiche-client="${esc(String(c.contact_id || c.organisation_id || ''))}">${esc(cl.nom)}</a>`
+                <td>${cl ? `<a href="#" data-personne="${esc(String(c.contact_id || c.organisation_id || ''))}"
+                       data-affaire="${esc(String(c.affaire.id))}">${esc(cl.nom)}</a>`
                   : '<span class="muted">—</span>'}</td>
                 <td>${esc(c.ville || '—')}</td>
                 <td>${e ? `<span class="chip ${e.ton}">${esc(e.label)}</span>` : '<span class="muted small">pas encore vendu</span>'}</td>
@@ -619,19 +635,11 @@ export const rgdChantiersPage = {
           }
         };
       });
-      root.querySelectorAll('[data-affaire]').forEach(a => a.onclick = (e) => {
-        e.preventDefault(); openDeal(a.dataset.affaire, draw);
-      });
-      // Le nom du client ouvre SA fiche, la même que dans « Clients &
-      // prospects ». Le chantier, lui, garde son lien vers l'affaire : ce sont
-      // deux choses différentes et la ligne en porte les deux.
-      root.querySelectorAll('[data-fiche-client]').forEach(a => a.onclick = (e) => {
+      // Les deux colonnes cliquables de la ligne — l'intitulé du chantier et
+      // le nom du client — ouvrent LA MÊME fiche. Voir `ouvrirLaPersonne`.
+      root.querySelectorAll('[data-personne]').forEach(a => a.onclick = (e) => {
         e.preventDefault();
-        const cle = a.dataset.ficheClient;
-        const f = scope.rgd('rgd_clients')
-          .find(x => x.contact_id === cle || x.organisation_id === cle);
-        if (f) ouvrirFicheDuClient(f, draw);
-        else toast('Aucune fiche client rattachée à ce chantier');
+        ouvrirLaPersonne(a.dataset.personne, a.dataset.affaire, draw);
       });
     };
 
