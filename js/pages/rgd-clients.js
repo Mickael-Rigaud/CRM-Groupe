@@ -86,7 +86,7 @@ import { scope } from '../data/scope.js';
 // fichier n'en garde que l'usage.
 import { ORDRE_ETAPES, ETAPES_RGD, ETAPES_CLES, ETAPE_DU_STATUT, STATUT_DE_L_ETAPE,
          etapeDeFiche, etapeDeDemande, estProspectParSource,
-         joursDeVisite } from '../data/rgd-etapes.js';
+         joursDeVisite, statutsDeLEtape } from '../data/rgd-etapes.js';
 import { db } from '../data/db.js';
 import { esc, fmtDate, fmtDateTime, relDay, terms, hit, searchInput, bindSearch, restoreFocus } from '../ui.js';
 import { poserEspace } from './espace.js';
@@ -545,9 +545,45 @@ export const rgdClientsPage = {
       // disparu de l'écran — signalé par Mickael le 23/09/2026. Deux réglages
       // qui n'ont rien à voir ne partagent pas un drapeau.
       const surProspects = false;
+
+      // ⚠ ET POURTANT UN FILTRE DE STATUT REVIENT SUR LA FRISE — la règle
+      // ci-dessus n'est pas contredite, elle est lue jusqu'au bout.
+      // Elle dit qu'un menu de statut par-dessus un onglet qui EST un statut ne
+      // peut que vider la liste. Vrai pour six onglets sur sept. Le septième,
+      // « Nouvelle demande », en réunit CINQ : nouveau prospect, trois relances,
+      // à contacter. C'est justement là qu'on ne voit pas la différence entre
+      // quelqu'un qui vient d'arriver et quelqu'un qu'on a relancé trois fois,
+      // et c'est la seule liste de l'écran qu'on travaille au téléphone.
+      //
+      // Le menu n'apparaît donc que là où il y a un choix à faire. Demandé par
+      // Mickael le 24/09/2026.
+      const dansOnglet = surFrise ? aEtape(state.vue) : [];
+      // Les statuts du menu : ceux que l'étape appelle, PLUS ceux réellement
+      // présents. Le second terme n'est pas de la prudence gratuite —
+      // `etapeDeFiche` range ici tout statut qu'elle ne reconnaît pas, et une
+      // ligne hors menu ferait un total qui ne fait pas la somme de ses parts.
+      const statutsFrise = (() => {
+        if (!surFrise) return [];
+        const cles = [...new Set([...statutsDeLEtape(state.vue),
+                                  ...dansOnglet.map(x => x.statut)])];
+        return cles.length > 1 ? cles.map(k => dit(STATUTS_SUIVI, k)) : [];
+      })();
+      // Sans menu, pas de filtre : un `state.statut` resté d'un autre onglet
+      // retirerait des lignes sans que rien à l'écran ne dise pourquoi.
+      const statutFrise = statutsFrise.length ? state.statut : '';
+
+      // ⚠ CHAQUE MENU COMPTE SUR CE QUE L'AUTRE LAISSE PASSER.
+      // Les deux filtres se croisent : compter chacun sur l'onglet entier
+      // afficherait « Relance 2 (3) » et rendrait une liste vide dès qu'une
+      // provenance est choisie. Un compte qu'on clique doit être le nombre
+      // qu'on obtient.
+      const baseProv = dansOnglet.filter(x => !statutFrise || x.statut === statutFrise);
+      const baseStatut = dansOnglet.filter(x => !state.provenance || x.provenance === state.provenance);
+
       // Le plus récent en haut : c'est celui qu'on n'a pas encore rappelé.
-      const lignesProspects = (surFrise ? aEtape(state.vue) : [])
+      const lignesProspects = (surFrise ? dansOnglet : [])
         .filter(x => (!state.provenance || x.provenance === state.provenance)
+          && (!statutFrise || x.statut === statutFrise)
           && hit([x.nom, x.email, x.tel, x.ville, x.adresse, x.projet], ts))
         .sort((a, b) => String(b.recu || '').localeCompare(String(a.recu || '')));
       // Les prospects filtrent leur `statut` dans `lignesProspects` ; ici il ne
@@ -676,12 +712,19 @@ export const rgdClientsPage = {
             class="${state.filtreContact === f.key ? 'on' : ''}">${f.label}</button>`).join('')}
         </div>` : ''}
 
-        ${state.vue === 'rdv' ? `<div class="alert">
+        <!-- Le message ne s'affiche QUE si l'etape est vide. Il annoncait
+             « pas encore alimentee » y compris au-dessus d'une liste remplie,
+             ce qui revenait a dementir ce que la page montrait juste en
+             dessous. Son contenu etait faux depuis le 24/09/2026 : le releve
+             transmet desormais les adresses des invites, et un rendez-vous de
+             visite technique cree sa fiche tout seul. -->
+        ${state.vue === 'rdv' && !dansOnglet.length ? `<div class="alert">
           <b>i</b>
-          <div><b>Cette étape n’est pas encore alimentée.</b> Les rendez-vous viendront de
-          Google Agenda : le relevé transmet aujourd’hui le <i>nombre</i> de participants, pas
-          leurs adresses, et c’est l’adresse qui permet de rattacher un rendez-vous à une
-          personne. Il faudra aussi que le client soit réellement invité au rendez-vous.</div>
+          <div><b>Aucun rendez-vous à cette étape.</b> Ils arrivent tout seuls de
+          Google Agenda, à deux conditions : le titre de l’événement doit commencer par
+          « Visite technique : », et le client doit être invité au rendez-vous — c’est son
+          adresse email qui permet de le reconnaître. Sans invité identifiable, le
+          rendez-vous est signalé plutôt que rattaché au hasard.</div>
         </div>` : ''}
 
         ${state.vue === 'contacts' && doublons ? `<p class="small muted rcl-intro">
@@ -693,17 +736,29 @@ export const rgdClientsPage = {
           ${searchInput('rcl-q', state, surDemande
             ? 'Recherche nom, email, ville, projet…' : 'Rechercher nom, email, téléphone…')}
           ${surFrise ? `<select id="rcl-prov" aria-label="Provenance" class="${state.provenance ? 'actif' : ''}">
-            <!-- ⚠ TOUS LES COMPTES PORTENT SUR L'ONGLET OUVERT, y compris
+            <!-- ⚠ TOUS LES COMPTES PORTENT SUR LA MÊME POPULATION, y compris
                  celui de « Toutes ». Il comptait la frise ENTIÈRE pendant que
                  les autres comptaient l'étape : 51 en face de six lignes dont
                  la somme faisait 16. Un total qui ne fait pas la somme de ce
-                 qu'il chapeaute se lit comme une erreur, et c'en était une. -->
-            <option value="">Toutes provenances (${aEtape(state.vue).length})</option>
+                 qu'il chapeaute se lit comme une erreur, et c'en était une.
+                 Cette population, c'est baseProv : l'onglet ouvert, moins ce
+                 que le filtre de statut écarte déjà.
+                 ⚠ PAS D'ACCENT GRAVE DANS CE COMMENTAIRE. Il est DANS un
+                 littéral de gabarit : un seul le referme, et l'écran reste
+                 sur « Chargement… » sans que node --check y voie rien. -->
+            <option value="">Toutes provenances (${baseProv.length})</option>
             ${PROVENANCES.map(pr => {
-              const n = aEtape(state.vue).filter(x => x.provenance === pr.key).length;
+              const n = baseProv.filter(x => x.provenance === pr.key).length;
               return `<option value="${pr.key}" ${state.provenance === pr.key ? 'selected' : ''}>${esc(pr.label)} (${n})</option>`;
             }).join('')}
-          </select>` : `<select id="rcl-type" aria-label="Type" class="${state.type ? 'actif' : ''}">
+          </select>
+          ${statutsFrise.length ? `<select id="rcl-statut" aria-label="Statut" class="${statutFrise ? 'actif' : ''}">
+            <option value="">Tous statuts (${baseStatut.length})</option>
+            ${statutsFrise.map(st => {
+              const n = baseStatut.filter(x => x.statut === st.key).length;
+              return `<option value="${esc(st.key)}" ${statutFrise === st.key ? 'selected' : ''}>${esc(st.label)} (${n})</option>`;
+            }).join('')}
+          </select>` : ''}` : `<select id="rcl-type" aria-label="Type" class="${state.type ? 'actif' : ''}">
             <option value="">Tous types</option>
             <option value="particulier" ${state.type === 'particulier' ? 'selected' : ''}>Particulier</option>
             <option value="professionnel" ${state.type === 'professionnel' ? 'selected' : ''}>Professionnel</option>

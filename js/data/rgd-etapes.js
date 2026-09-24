@@ -93,6 +93,22 @@ export const STATUT_DE_L_ETAPE = {
   archives: 'perdu',
 };
 
+// Tous les statuts qui mènent à une étape — la relation complète, là où
+// `STATUT_DE_L_ETAPE` ne garde que le représentant unique.
+//
+// ⚠ UNE SEULE ÉTAPE EN RENVOIE PLUS D'UN : « Nouvelle demande », avec ses cinq
+// (nouveau, trois relances, à contacter). C'est exactement ce qui justifie un
+// filtre de statut là-bas et nulle part ailleurs — sur les six autres onglets
+// le menu n'aurait qu'une entrée, c'est-à-dire aucun choix.
+//
+// ⚠ ELLE NE SUFFIT PAS À CONSTRUIRE UN MENU. `etapeDeFiche` range dans
+// « demande » TOUT statut qu'elle ne reconnaît pas (`ETAPE_DU_STATUT[brut] ||
+// 'demande'`). Une valeur inattendue en base apparaîtrait donc dans la liste
+// sans figurer au menu, et les comptes ne feraient plus la somme de l'onglet.
+// L'appelant complète avec les statuts réellement présents.
+export const statutsDeLEtape = (etape) =>
+  Object.keys(ETAPE_DU_STATUT).filter(k => ETAPE_DU_STATUT[k] === etape);
+
 const JAMAIS_RENSEIGNE = ['nouveau_prospect', '', null, undefined];
 
 // ⚠ UN DEVIS ACCEPTÉ QUI NE DÉMARRE PAS FINIT PAR NE PLUS EN ÊTRE UN.

@@ -34,6 +34,12 @@ export const SEED = {
     { id: 'c9', first_name: 'Antoine', last_name: 'Roux', phone: '06 39 98 00 09', email: 'antoine.roux@example.com', city: 'Chambray-lès-Tours', postal_code: '37170', activities: ['rgd'], type: 'Prospect', owner_id: 'u-charge', channel: 'Meta Ads', campaign: 'RGD-Renov-Sept26', consent: true, created_at: d(-2) },
     { id: 'c10', first_name: 'Isabelle', last_name: 'Marchand', phone: '06 39 98 00 10', email: 'i.marchand@example.com', city: 'Tours', postal_code: '37000', activities: ['btp'], type: 'Client', owner_id: 'u-mickael', channel: 'Partenaire / apporteur', referrer_org_id: 'o2', consent: true, created_at: d(-60) },
     { id: 'c11', first_name: 'Hugo', last_name: 'Blanc', phone: '06 39 98 00 11', email: 'hugo.blanc@example.com', city: 'La Riche', postal_code: '37520', activities: ['courtage'], type: 'Prospect', owner_id: 'u-mickael', channel: 'Meta Ads', campaign: 'RAC-Regroupement-Sept26', consent: true, created_at: d(-1) },
+    // Les quatre suivants ne servent qu'aux fiches RGD ci-dessous : une fiche
+    // sans contact s'affiche « (fiche sans contact) » et ne prouve rien.
+    { id: 'c12', first_name: 'Léa', last_name: 'Chevalier', phone: '06 39 98 00 12', email: 'lea.chevalier@example.com', city: 'Ballan-Miré', postal_code: '37510', activities: ['rgd'], type: 'Prospect', owner_id: 'u-mickael', channel: 'Site internet direct', consent: true, created_at: d(-4) },
+    { id: 'c13', first_name: 'Olivier', last_name: 'Barre', phone: '06 39 98 00 13', email: 'o.barre@example.com', city: 'Tours', postal_code: '37100', activities: ['rgd'], type: 'Prospect', owner_id: 'u-charge', channel: 'Recommandation client', consent: true, created_at: d(-30) },
+    { id: 'c14', first_name: 'Sonia', last_name: 'Aubert', phone: '06 39 98 00 14', email: 'sonia.aubert@example.com', city: 'Joué-lès-Tours', postal_code: '37300', activities: ['rgd'], type: 'Prospect', owner_id: 'u-mickael', channel: 'Site internet direct', consent: true, created_at: d(-1) },
+    { id: 'c15', first_name: 'Damien', last_name: 'Rey', phone: '06 39 98 00 15', email: 'damien.rey@example.com', city: 'Tours', postal_code: '37200', activities: ['rgd'], type: 'Prospect', owner_id: 'u-mickael', channel: 'Site internet direct', consent: true, created_at: d(-2) },
   ],
   deals: [
     { id: 'd1', title: 'Rénovation appartement — Bernard', activity: 'rgd', stage: 'visite', status: 'open', contact_id: 'c1', owner_id: 'u-mickael', amount: 28000, channel: 'Meta Ads', campaign: 'RGD-Renov-Sept26', fields: { type_travaux: 'Rénovation complète', adresse_chantier: '12 rue Nationale, Tours', budget_annonce: 30000, date_visite: day(1) }, stage_history: [{ stage: 'lead', at: d(-6) }, { stage: 'qualifie', at: d(-5) }, { stage: 'visite', at: d(-3) }], created_at: d(-6), stage_changed_at: d(-3) },
@@ -217,5 +223,43 @@ export const SEED = {
     { id: 'stp1', sous_traitant_id: 'st1', type: 'vigilance',
       chemin: 'st1/vigilance.pdf', nom_fichier: 'vigilance-demo.pdf',
       taille_octets: 12345, expire_le: day(90), deposee_le: d(-5) },
+  ],
+
+  // ⚠ LA DÉMO N'AVAIT AUCUNE FICHE RGD, ET ÇA A COÛTÉ UN ÉCRAN BLANC.
+  // Le 24/09/2026, `ficheDe` a été sortie de `render` en laissant trois
+  // fonctions derrière elle. Le défaut ne pouvait se voir qu'en ouvrant une
+  // fiche — donc jamais en démo, puisqu'il n'y en avait pas une seule. Il est
+  // parti en production et c'est Mickael qui l'a trouvé. Un jeu d'essai qui ne
+  // couvre pas un écran ne le teste pas : il donne seulement l'impression de
+  // l'avoir testé.
+  //
+  // Les cinq premières couvrent les cinq statuts de « Nouvelle demande », qui
+  // est le seul onglet de la frise à en réunir plusieurs — et donc le seul qui
+  // porte un filtre de statut. Les provenances sont volontairement croisées :
+  // c'est ce qui permet de vérifier que les deux menus comptent l'un sur
+  // l'autre au lieu de s'ignorer.
+  //
+  // `source` n'est pas décoratif : une fiche n'entre dans la frise que si elle
+  // vient d'une prospection (`estProspectParSource`). Sans lui, ces lignes
+  // seraient invisibles et la démo serait à nouveau vide sans le dire.
+  rgd_clients: [
+    { id: 'rc1', contact_id: 'c1', statut: 'prospect', statut_suivi: 'nouveau_prospect',
+      source: 'meta_ads', meta_received_at: d(-6), meta_type_projet: 'Rénovation complète',
+      meta_budget: '30 000 €', notes: '', maj: d(-6) },
+    { id: 'rc2', contact_id: 'c9', statut: 'prospect', statut_suivi: 'relance_1',
+      source: 'meta_ads', meta_received_at: d(-2), meta_type_projet: 'Isolation',
+      notes: 'Message laissé sur répondeur.', maj: d(-1) },
+    { id: 'rc3', contact_id: 'c12', statut: 'prospect', statut_suivi: 'relance_2',
+      source: 'Formulaire site', notes: '', maj: d(-4) },
+    { id: 'rc4', contact_id: 'c13', statut: 'prospect', statut_suivi: 'relance_3',
+      source: 'manuel', notes: 'Ne répond plus depuis trois semaines.', maj: d(-9) },
+    { id: 'rc5', contact_id: 'c14', statut: 'qualifie', statut_suivi: 'a_contacter',
+      source: 'google_calendar', notes: 'Fiche créée depuis le rendez-vous.', maj: d(-1) },
+    // Deux étapes plus loin, pour vérifier qu'aucun filtre de statut
+    // n'apparaît là où l'onglet est déjà le statut.
+    { id: 'rc6', contact_id: 'c15', statut: 'qualifie', statut_suivi: 'rdv_planifie',
+      source: 'google_calendar', notes: '', maj: d(-1) },
+    { id: 'rc7', contact_id: 'c8', statut: 'client', statut_suivi: 'devis_envoye',
+      source: 'manuel', notes: '', maj: d(-8) },
   ],
 };
