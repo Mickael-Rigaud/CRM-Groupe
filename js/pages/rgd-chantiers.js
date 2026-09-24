@@ -30,6 +30,9 @@ import { openDeal } from './deal.js';
 import { KEY, act, cadre, guard, clientDe as clientDeAffaire } from './rgd-espace.js';
 import { peutEcrire, majStatutChantier, creerChantier } from '../data/rgd-api.js';
 import { toast, openModal, closeModal } from '../ui.js';
+// La source unique des étapes, partagée avec « Clients & prospects ». Cet
+// écran la LIT et l'ÉCRIT : il n'a pas de vocabulaire à lui.
+import { etapeDeFiche, STATUT_DE_L_ETAPE, ETAPES_RGD, ecrireStatut } from '../data/rgd-etapes.js';
 
 // LES DIX STATUTS DU TABLEAU DE BORD, dans son ordre — de la préparation à la
 // réception. Ils ne se confondent pas avec `etat`, qui n'en est qu'une
@@ -68,12 +71,37 @@ const etatDe = (c) => ETATS.find(e => e.key === c.etat) || null;
 // LES QUATRE COLONNES, reprises du tableau de bord RGD à l'identique, couleurs
 // comprises. Ce n'est pas l'inventaire des chantiers : c'est ceux sur lesquels
 // il reste quelque chose à faire. Voir `rangerEnPipeline` pour ce qui en sort.
+//
+// ⚠ CHAQUE COLONNE EST UNE ÉTAPE DU CYCLE COMMUN, et c'est tout le sujet du
+// 24/09/2026. Cet écran s'était fabriqué ses propres règles à partir de
+// `statut_d1`, donc sa propre vérité : un dossier pouvait être en
+// « Nouvelle demande » dans « Clients & prospects » et en « Visite technique »
+// ici, au même instant. Deux écrans qui montrent deux états d'un même dossier
+// valent moins qu'un seul écran.
+//
+// La correspondance n'est donc PAS une table de traduction posée à côté : le
+// champ `etape` nomme la clé de `js/data/rgd-etapes.js`, qui est la source
+// unique. Changer une étape là-bas change cet écran, sans rien à recopier.
+//
+//   Visite technique  = RDV planifié
+//   Démarrage         = Devis accepté   (préparé, pas encore commencé)
+//   Chantier en cours = Chantier en cours
+//   Chantier terminé  = Chantier terminé
+//
+// Les trois étapes qui manquent — Nouvelle demande, Devis en cours, Archivés —
+// ne sont pas des oublis : il n'y a pas de chantier à suivre avant qu'un devis
+// soit accepté, et un dossier perdu n'est plus du travail.
 const PIPELINE_ETAPES = [
-  { key: 'visite_technique', label: 'Visite technique',  couleur: '#93C5FD' },
-  { key: 'demarrage',        label: 'Démarrage',         couleur: '#FFB877' },
-  { key: 'en_cours',         label: 'Chantier en cours', couleur: '#FF9A3D' },
-  { key: 'termine',          label: 'Chantier terminé',  couleur: '#FF8A00' },
+  { key: 'visite_technique', etape: 'rdv',              label: 'Visite technique',  couleur: '#93C5FD' },
+  { key: 'demarrage',        etape: 'devis_accepte',    label: 'Démarrage',         couleur: '#FFB877' },
+  { key: 'en_cours',         etape: 'chantier_encours', label: 'Chantier en cours', couleur: '#FF9A3D' },
+  { key: 'termine',          etape: 'chantier_termine', label: 'Chantier terminé',  couleur: '#FF8A00' },
 ];
+const COLONNE_DE_L_ETAPE = Object.fromEntries(PIPELINE_ETAPES.map(e => [e.etape, e.key]));
+// Le nom que « Clients & prospects » donne à l'étape, pris à la source : on
+// l'affiche sous le titre de la colonne pour que la correspondance se lise
+// sans avoir à la connaître.
+const ETAPE_LABEL = Object.fromEntries(ETAPES_RGD.map(e => [e.key, e.label]));
 
 // Trois mois sans rien qui bouge : le chantier quitte la pipeline. Il reste
 // entier dans la liste et dans la fiche.
@@ -136,38 +164,42 @@ function mesure(c) {
 // montre les travaux finis dont il RESTE DE L'ARGENT À ENCAISSER. C'est une
 // colonne de relance, pas un cimetière — d'où le zéro qu'on y voit souvent.
 function rangerEnPipeline(tous) {
-  const aujourdhui = new Date().toISOString().slice(0, 10);
   const limite = new Date(Date.now() - JOURS_SANS_MOUVEMENT * 86400000)
     .toISOString().slice(0, 10);
   const paniers = Object.fromEntries(PIPELINE_ETAPES.map(e => [e.key, []]));
 
+  // Les tables lues UNE FOIS pour tout le lot : `etapeDeFiche` les reçoit en
+  // argument justement pour ne pas les relire à chaque ligne.
+  const fiches = scope.rgd('rgd_clients');
+  const chantiers = scope.rgd('rgd_chantiers');
+  const devis = scope.rgd('rgd_devis');
+  const parContact = new Map(fiches.filter(f => f.contact_id).map(f => [f.contact_id, f]));
+  const parOrganisation = new Map(fiches.filter(f => f.organisation_id).map(f => [f.organisation_id, f]));
+
   for (const c of tous) {
+    // ⚠ L'ÉTAPE VIENT DE LA FICHE DE LA PERSONNE, PAS DU CHANTIER.
+    // C'est ce qui rend les deux écrans solidaires : le statut de suivi que
+    // l'on pose dans « Clients & prospects » décide de la colonne ici, et
+    // déplacer une carte ici écrit ce même statut là-bas. Il n'y a qu'un
+    // curseur, vu de deux endroits.
+    const f = (c.contact_id && parContact.get(c.contact_id))
+      || (c.organisation_id && parOrganisation.get(c.organisation_id));
+    // Sans fiche, on ne sait pas où en est le dossier : on n'invente pas.
+    if (!f) continue;
+    const colonne = COLONNE_DE_L_ETAPE[etapeDeFiche(f, chantiers, devis)];
+    // Nouvelle demande, devis en cours, archivé : ce n'est pas du chantier.
+    if (!colonne) continue;
+
     const m = mesure(c);
-    const fiche = { ...c, m };
-    // Fantôme de la synchronisation : annoncé démarré, jamais facturé.
-    if (c.statut_d1 === 'demarrage' && m.factures === 0) continue;
 
-    // ⚠ LA BORNE D'ÂGE PASSE AVANT TOUT LE RESTE, ET POUR LES QUATRE COLONNES.
-    // Elle ne s'appliquait qu'aux chantiers terminés : un chantier de 2025
-    // restait donc en « Démarrage » indéfiniment. Un chantier dont plus rien
-    // n'a bougé depuis trois mois n'est plus du travail en cours.
-    //
-    // ⚠ MAIS SEULEMENT S'IL EXISTE UN REPÈRE. Une fiche toute neuve — visite
-    // technique posée ce matin, aucun devis, aucune facture — n'a aucune date
-    // à comparer ; l'écarter la ferait disparaître le jour de sa création.
+    // ⚠ LA BORNE D'ÂGE VAUT POUR LES QUATRE COLONNES, mais seulement s'il
+    // existe une date à comparer : une visite technique posée ce matin n'a ni
+    // devis ni facture, l'écarter la ferait disparaître le jour même.
     if (m.dernierSigne && m.dernierSigne < limite) continue;
+    // Terminé et tout encaissé : il n'y a plus rien à réclamer.
+    if (colonne === 'termine' && m.resteADevoir <= 0) continue;
 
-    if (c.statut_d1 === 'termine' || m.soldesRecus > 0) {
-      // Plus rien à réclamer : le chantier est clos pour de bon.
-      if (m.resteADevoir <= 0) continue;
-      paniers.termine.push(fiche); continue;
-    }
-    // Posé à la main : il l'emporte sur les faits, c'est une décision.
-    if (c.statut_d1 === 'visite_technique') { paniers.visite_technique.push(fiche); continue; }
-    // Sans devis signé il n'y a pas de chantier, seulement une affaire.
-    if (m.signes === 0) continue;
-    const debut = c.work_start_at || c.date_debut_prevue;
-    (debut && debut <= aujourdhui ? paniers.en_cours : paniers.demarrage).push(fiche);
+    paniers[colonne].push({ ...c, m, fiche: f });
   }
   return paniers;
 }
@@ -196,7 +228,7 @@ function barreAvancement(debut, fin) {
   </div>`;
 }
 
-function carteChantier(c, ecriture) {
+function carteChantier(c, colonne, ecriture) {
   const cl = clientDe(c.affaire);
   const debut = c.work_start_at || c.date_debut_prevue;
   const fin = c.work_end_at || c.date_fin_prevue;
@@ -205,14 +237,17 @@ function carteChantier(c, ecriture) {
   // montrent le même nombre, dont l'une étiquetée « HT ». Corrigé ici.
   const ttc = Number(c.montant_ttc) || Number(c.montant_ht) || 0;
   const ht = Number(c.montant_ht) || 0;
+  // La couleur vient de la COLONNE, pas du statut brut du chantier : c'est
+  // l'étape qui range la carte, elle doit aussi la teinter.
+  const ton = PIPELINE_ETAPES.find(e => e.key === colonne)?.couleur || '#FF9A3D';
   return `<article class="dcard rch-carte" data-chantier-id="${esc(String(c.id))}"
       data-affaire="${esc(String(c.affaire.id))}"
-      ${ecriture && c.d1_id ? `draggable="true" data-d1="${esc(String(c.d1_id))}"` : ''}
-      style="--c:${esc(PIPELINE_ETAPES.find(e => e.key === c.statut_d1)?.couleur || '#FF9A3D')}">
+      ${ecriture && c.fiche ? `draggable="true" data-fiche="${esc(String(c.fiche.id))}"` : ''}
+      style="--c:${esc(ton)}">
     <div class="rch-client">${esc(cl ? cl.nom : '—')}</div>
     <div class="t">${esc(c.affaire.title || c.reference || 'Chantier')}</div>
     ${c.ville ? `<div class="p">${esc(c.ville)}</div>` : ''}
-    ${c.statut_d1 === 'en_cours' && debut && fin ? barreAvancement(debut, fin) : ''}
+    ${colonne === 'en_cours' && debut && fin ? barreAvancement(debut, fin) : ''}
     <div class="rch-sous">
       <div class="rch-ttc">${eur(ttc)}</div>
       ${ht ? `<div class="rch-ht">${eur(ht)} HT</div>` : ''}
@@ -236,13 +271,15 @@ function pipeline(tous, state) {
             style="border-top:3px solid ${esc(e.couleur)}">
           <div class="rch-tete">
             <b>${esc(e.label)}</b>
+            <a class="rch-renvoi" href="#/rgd/clients"
+               title="Voir ces dossiers dans Clients &amp; prospects">${esc(ETAPE_LABEL[e.etape] || e.etape)}</a>
             <div class="rch-tete-bas">
               <span class="rch-n">${cartes.length}</span>
               <span class="rch-total">${eur(total)}</span>
             </div>
           </div>
           <div class="rch-cartes">
-            ${cartes.map(c => carteChantier(c, state.ecriture)).join('')
+            ${cartes.map(c => carteChantier(c, e.key, state.ecriture)).join('')
               || '<div class="empty s">—</div>'}
           </div>
         </div>`;
@@ -251,21 +288,25 @@ function pipeline(tous, state) {
     ${dedans === 0 && tous.length ? `<div class="alert amber rch-note">
       <b>i</b>
       <div>Aucun de ces ${tous.length} chantiers n'est suivi ici, et ce n'est pas
-      une panne : la pipeline ne montre que ceux où il reste quelque chose à
-      faire. Un chantier sans devis signé n'y entre pas encore ; un chantier
-      entièrement encaissé, ou dont plus rien n'a bougé depuis trois mois, en est
-      sorti. <b>Ils sont tous dans la liste.</b></div>
+      une panne : <b>la colonne d'un chantier est l'étape de son dossier</b>. Tant
+      qu'un dossier est en « Nouvelle demande » ou « Devis en cours », il n'y a
+      pas encore de chantier à suivre — il est dans <b>Clients &amp; prospects</b>,
+      à son étape. Un chantier entièrement encaissé, ou dont plus rien n'a bougé
+      depuis trois mois, en est sorti. <b>Ils sont tous dans la liste.</b></div>
     </div>` : ''}
     <p class="small muted rch-note">
       ${dedans} chantier${dedans > 1 ? 's' : ''} suivi${dedans > 1 ? 's' : ''} sur ${tous.length}.
-      Les étapes suivent les faits : un devis signé met le chantier en
-      <b>Démarrage</b>, la date de début atteinte le passe <b>En cours</b>.
+      <b>Chaque colonne est une étape de « Clients &amp; prospects »</b> — Visite
+      technique = RDV planifié, Démarrage = Devis accepté, et les deux dernières
+      portent le même nom des deux côtés. Changer l'étape d'un dossier le déplace
+      ici, et déplacer une carte change son étape là-bas : c'est le même curseur.
+      Un dossier revenu en <b>Nouvelle demande</b> quitte donc la pipeline.
       <b>Chantier terminé</b> ne veut pas dire archivé — cette colonne montre les
       travaux finis dont il <b>reste une facture à encaisser</b>.
-      <b>Un chantier dont plus rien n'a bougé depuis trois mois sort de la
-      pipeline</b>, quelle que soit sa colonne, comme celui qui est entièrement
-      réglé. Les uns et les autres restent entiers dans la liste.
-      ${state.ecriture ? '' : ' <i>Lecture seule : le statut se change depuis la liste.</i>'}
+      <b>Un chantier dont plus rien n'a bougé depuis trois mois en sort</b>,
+      quelle que soit sa colonne, comme celui qui est entièrement réglé. Les uns
+      et les autres restent entiers dans la liste.
+      ${state.ecriture ? '' : ' <i>Lecture seule : l’étape se change depuis la fiche.</i>'}
     </p>`;
 }
 
@@ -279,35 +320,50 @@ function brancherPipeline(root, state, draw) {
     };
     if (!carte.draggable) return;
     carte.addEventListener('dragstart', (e) => {
-      e.dataTransfer.setData('text/plain', carte.dataset.d1);
+      // C'est la FICHE qu'on déplace, pas le chantier : son statut de suivi
+      // est le curseur commun aux deux écrans.
+      e.dataTransfer.setData('text/plain', carte.dataset.fiche);
       carte.classList.add('dragging');
     });
     carte.addEventListener('dragend', () => carte.classList.remove('dragging'));
   });
 
   if (!state.ecriture) return;
+  // Une même fiche ne se déplace qu'une fois par rendu : deux cartes peuvent
+  // appartenir à la même personne, et le second dépôt écrirait par-dessus le
+  // premier sans que rien ne le dise.
+  const dejaBouge = new Set();
   root.querySelectorAll('.rch-col').forEach(col => {
     col.addEventListener('dragover', (e) => { e.preventDefault(); col.classList.add('over'); });
     col.addEventListener('dragleave', () => col.classList.remove('over'));
     col.addEventListener('drop', async (e) => {
       e.preventDefault();
       col.classList.remove('over');
-      const d1 = e.dataTransfer.getData('text/plain');
-      const cible = col.dataset.cible;
-      if (!d1 || !cible) return;
-      const ligne = scope.rgd('rgd_chantiers').find(x => String(x.d1_id) === d1);
-      if (!ligne || ligne.statut_d1 === cible) return;
-      // ⚠ ON REDESSINE AVANT LA RÉPONSE, et on revient en arrière si elle est
-      // mauvaise. Une carte qui reste sous le doigt pendant l'aller-retour
-      // réseau donne l'impression que le geste n'a pas pris, et on le refait.
-      const avant = ligne.statut_d1;
-      ligne.statut_d1 = cible;
+      const uuid = e.dataTransfer.getData('text/plain');
+      const colonne = PIPELINE_ETAPES.find(x => x.key === col.dataset.cible);
+      if (!uuid || !colonne || dejaBouge.has(uuid)) return;
+      const f = scope.rgd('rgd_clients').find(x => x.id === uuid);
+      if (!f) return;
+      // ⚠ DÉPLACER UNE CARTE ÉCRIT LE STATUT DE SUIVI DE LA PERSONNE, celui
+      // que « Clients & prospects » affiche. C'est ce qui tient les deux
+      // écrans ensemble : la pipeline n'a aucun état à elle, donc rien qui
+      // puisse diverger. `ecrireStatut` est la seule porte — elle choisit
+      // seule entre la source et le reflet selon l'origine de la fiche.
+      const statut = STATUT_DE_L_ETAPE[colonne.etape];
+      if (!statut || f.statut_suivi === statut) return;
+
+      // On avance l'affichage avant la réponse, et on revient si elle est
+      // mauvaise : une carte qui reste sous le doigt pendant l'aller-retour
+      // donne l'impression que le geste n'a pas pris, et on le refait.
+      const avant = f.statut_suivi;
+      f.statut_suivi = statut;
+      dejaBouge.add(uuid);
       draw();
-      const r = await majStatutChantier(d1, cible);
+      const r = await ecrireStatut({ d1Id: f.d1_id, uuid: f.id, cible: 'client', statut });
       if (r.ok) {
-        toast(`Déplacé vers « ${PIPELINE_ETAPES.find(x => x.key === cible)?.label || cible} »`);
+        toast(`Déplacé vers « ${colonne.label} » — le dossier suit dans Clients & prospects`);
       } else {
-        ligne.statut_d1 = avant;
+        f.statut_suivi = avant;
         draw();
         toast(r.motif === 'pas-de-compte'
           ? 'Aucun compte RGD à votre adresse : le statut n’a pas été changé.'
