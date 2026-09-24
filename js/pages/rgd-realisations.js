@@ -239,6 +239,31 @@ export const rgdRealisationsPage = {
     // remonterait la vue en haut et repeindrait une liste qui n'a pas bougé —
     // et la liste, elle, montre le PUBLIÉ : elle n'a aucune raison de suivre
     // une saisie qui n'est pas partie.
+    // ⚠ CHOISIR UN PROJET NE REDESSINE PAS LA PAGE — signalé le 24/09/2026 :
+    // « le menu à gauche repart à 0 à chaque fois que je clique sur un projet ».
+    // `draw()` remplace tout le `root`, donc la colonne de gauche est
+    // reconstruite et son défilement revient en haut. Avec trente et un projets
+    // rangés en cinq catégories, on remonte chercher celui qu'on regardait
+    // juste avant — à chaque clic.
+    //
+    // Or rien à GAUCHE ne change quand on choisit : ni les projets, ni leurs
+    // compteurs, ni les catégories. Seuls le panneau de droite et la pastille
+    // active bougent. On ne refait donc que ça, et la colonne ne bouge pas
+    // d'un pixel — ce qui est aussi plus rapide que de tout refaire.
+    const choisir = (vue, slug) => {
+      state.vue = vue; state.slug = slug;
+      const cote = root.querySelector('.rea-cote');
+      cote?.querySelectorAll('.rea-item.on').forEach(b => b.classList.remove('on'));
+      const actif = vue === 'carrousel'
+        ? cote?.querySelector('[data-carrousel]')
+        // `CSS.escape` parce qu'un slug est du texte libre : un point ou un
+        // deux-points casserait le sélecteur, et le projet resterait sans
+        // marque alors qu'il est bien ouvert.
+        : cote?.querySelector(`[data-projet="${(window.CSS && CSS.escape) ? CSS.escape(slug || '') : slug}"]`);
+      actif?.classList.add('on');
+      dessinerPanneau();
+    };
+
     const dessinerPanneau = () => {
       const panneau = root.querySelector('.rea-panneau');
       if (!panneau) return;
@@ -321,19 +346,28 @@ export const rgdRealisationsPage = {
           <section class="rea-panneau">${corpsPanneau(tous, images)}</section>
         </div>`;
 
+      // ⚠ ET QUAND `draw` TOURNE VRAIMENT — après une publication, après un
+      // relevé — il garde la place où on en était. Ces passages-là sont rares,
+      // mais ils tombent au pire moment : juste après avoir publié le projet
+      // qu'on venait de trouver.
+      const defilement = root.querySelector('.rea-cote')?.scrollTop || 0;
       root.innerHTML = cadre('#/rgd/realisations', 'Réalisations', corps);
+      if (defilement) {
+        const cote = root.querySelector('.rea-cote');
+        if (cote) cote.scrollTop = defilement;
+      }
 
       // ⚠ La liste de gauche montre le PUBLIÉ. Un clic dessus quitte l'atelier,
       // donc on demande avant : une description qu'on vient d'écrire ne doit
       // pas partir sur un clic distrait.
       root.querySelectorAll('[data-projet]').forEach(b => b.onclick = async () => {
         if (!await quitterAtelier()) return;
-        state.vue = 'projet'; state.slug = b.dataset.projet; draw();
+        choisir('projet', b.dataset.projet);
       });
       const carr = root.querySelector('[data-carrousel]');
       if (carr) carr.onclick = async () => {
         if (!await quitterAtelier()) return;
-        state.vue = 'carrousel'; state.slug = null; draw();
+        choisir('carrousel', null);
       };
       const neuf = root.querySelector('[data-neuf]');
       if (neuf) neuf.onclick = async () => {
