@@ -74,5 +74,41 @@ Colonnes : `role` (direction | propulsion | **charge_affaires**), `activities` (
 - Tester en mode démo (servir le dossier avec `python3 -m http.server`, vider `SUPABASE_URL` dans une copie de `config.js`) avant de pousser ; ne pas casser le mode démo.
 - Un commit par sujet, message en français à l'impératif court (ex. « Fiche bien : baux en cours uniquement »).
 
+## Sortie de Cloudflare — ce que Mickael a DÉCIDÉ (ne pas rouvrir)
+
+**Le but du CRM est de sortir de Cloudflare.** Ces quatre décisions ont dû être
+répétées plusieurs fois avant d'être écrites ici : les reproposer fait perdre un
+échange à chaque fois. Elles sont datées du 24/09/2026.
+
+1. ⚠ **LES CONTACTS COSTRUCTOR NE SERONT JAMAIS PORTÉS.** « J'ai déjà ma base de
+   données qui a été corrigée, celle de Costructor était un peu fausse finalement. »
+   La base de référence est celle du CRM. Vérifié le 24/09 : `push_rgd` **ne fait
+   aucun `update` sur `contacts`** — il n'insère que les fiches jamais reprises
+   (`where not exists … rgd_reprise`), donc les corrections faites à la main ne
+   sont pas écrasées, ni par le relevé ni par Costructor. Rien à porter, rien à
+   protéger.
+2. ⚠ **LES FICHIERS NE SE MIGRENT PAS.** Les PDF des sous-traitants sont des
+   essais : pas de reprise du stockage Cloudflare vers Storage, ni pour eux ni
+   comme préalable à autre chose.
+3. ⚠ **LES RELANCES DEVIS SONT SUPPRIMÉES** — « on ne fait plus ». Le cron de 8 h
+   du worker ne sera pas porté ; il s'éteindra avec lui.
+4. ⚠ **LES PHOTOS, MICKAEL LES REMET LUI-MÊME** depuis l'écran Réalisations.
+   Aucune reprise automatique des photos du stockage Cloudflare à prévoir.
+
+**Ce qui reste donc à porter, et rien d'autre** (état vérifié le 24/09/2026) :
+la synchro **Costructor des chantiers** (la fonction est déployée, il manque le
+cron), les **écritures du CRM** (les 15 routes que `rgd-api.js` appelle sur le
+worker), puis le **relevé D1 → Supabase**, qui tombe de lui-même quand D1 cesse
+d'être la source. Restent enfin deux réglages qui ne vivent que dans
+l'application RGD : la **clé d'API Costructor** et la **connexion Google Agenda**
+(compte de service, renouvellement du *watch*). **Déjà sortis et actifs** :
+Google Agenda, le formulaire du site, le formulaire partenaire, les leads Meta
+Ads, les emails, les réalisations et le carrousel, Costructor factures et devis —
+15 Edge Functions et 4 tâches planifiées, sans un échec sur 24 h au 24/09.
+⚠ **Les encaissements Costructor sont un sujet CLOS** : leur API ne donne aucun
+lien entre un encaissement et sa facture, le code Cloudflare tournait depuis juin
+avec 1 135 lignes lues et zéro effet (`docs/COSTRUCTOR-ENCAISSEMENTS.md` du dépôt
+backend). À ne rouvrir que si l'API gagne un champ `invoice`.
+
 ## Ce que Mickael attend
 Direct, sans flatterie, une recommandation finale claire. Si une demande est floue mais réalisable sans inventer, avancer avec une hypothèse signalée. Livrer complet en une fois plutôt qu'en versions successives. Ne jamais présenter La Référence Courtage comme appartenant à Pretto.
