@@ -149,6 +149,15 @@ const devisOuvert = (v) => !['signe', 'refuse', 'expire'].includes(v.statut);
 // ⚠ LA FENÊTRE RELEVÉE EST J-7 → J+30. Au-delà, l'absence d'événement ne prouve
 // rien : une visite prévue dans deux mois n'est pas encore relevée. D'où le
 // second terme de la règle — une visite à venir compte, même sans événement.
+// ⚠ CE MOTIF EXISTE EN DEUX EXEMPLAIRES ET NE PEUT PAS ÊTRE PARTAGÉ.
+// L'autre vit dans `supabase/functions/relever-agenda/index.ts` du dépôt
+// backend, sous le nom `MOTIF_VISITE` : ce fichier-ci est un module de
+// navigateur, celui-là du Deno côté serveur, aucun ne peut importer l'autre.
+//
+// Là-bas il décide si l'événement laisse son e-mail et sa description dans la
+// base ; ici, si le dossier compte comme un rendez-vous. Élargir l'un sans
+// l'autre fait remonter des visites que l'écran ne reconnaît pas, ou l'inverse
+// — et dans les deux cas le défaut est SILENCIEUX. Les changer ensemble.
 const VISITE = /^\s*visite\s+technique/i;
 export function joursDeVisite(agenda) {
   const jours = new Set();
