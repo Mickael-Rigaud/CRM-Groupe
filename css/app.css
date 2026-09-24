@@ -829,29 +829,138 @@ select.cell-in { text-align: left; }
 .statut-menu.st-perdu { background: var(--red-soft);
   border-color: color-mix(in srgb, var(--red) 35%, transparent); color: var(--red); }
 
-/* ---------- Formations : des fiches en accordeon ----------
-   Un <details> natif plutot qu'un accordeon maison : il s'ouvre au clavier, se
-   cherche avec Ctrl+F du navigateur meme replie sur les navigateurs recents, et
-   ne demande pas une ligne de JavaScript. */
-.fo-rubrique .card-head h2 { display: flex; align-items: center; gap: 9px; }
-.fo-ico { font-size: 19px; line-height: 1; }
-.fo-fiche { border-top: 1px solid var(--line); padding: 2px 0; }
-.fo-fiche > summary { cursor: pointer; padding: 11px 2px; list-style: none;
-  display: flex; flex-direction: column; gap: 2px; border-radius: 8px; }
-.fo-fiche > summary::-webkit-details-marker { display: none; }
-.fo-fiche > summary:hover { background: var(--card-2); }
-/* Le chevron est dessine plutot qu'ecrit : un caractere varie d'une police a
-   l'autre et se copie avec le texte quand on selectionne la fiche. */
-.fo-fiche > summary b::before { content: ""; display: inline-block; width: 6px; height: 6px;
-  margin-right: 9px; vertical-align: 2px; border-right: 1.5px solid var(--muted);
-  border-bottom: 1.5px solid var(--muted); transform: rotate(-45deg); transition: transform .15s; }
-.fo-fiche[open] > summary b::before { transform: rotate(45deg); }
-.fo-fiche[open] > summary { color: var(--accent-ink); }
-.fo-section { padding: 2px 2px 14px 17px; }
-.fo-section b { display: block; font-size: 13px; margin-bottom: 3px; }
-.fo-section p { margin: 0; color: var(--muted); line-height: 1.55; }
-.fo-puces { margin: 4px 0 0; padding-left: 18px; color: var(--muted); line-height: 1.55; }
-.fo-puces li { margin-bottom: 3px; }
+/* ---------- Formations : un parcours en trois niveaux ----------
+   Refait le 24/09/2026 sur la maquette de Mickael. L'accordéon d'avant cachait
+   le texte derrière un clic et ne disait jamais dans quel ordre lire ; une
+   fiche de poste se lit en entier et se remet à quelqu'un.
+   ⚠ CHAQUE NIVEAU PORTE `--tint`, la couleur du métier, posée en style inline
+   depuis les données (`RUBRIQUES[].tint`). Tous les fonds en dérivent par
+   `color-mix` : une seule valeur à changer pour reteinter un poste, et aucune
+   couleur en dur dans la feuille. */
+.fo-intro { margin-bottom: 22px; }
+.fo-intro h1 { margin: 2px 0 8px; font-size: 30px; letter-spacing: -.02em; }
+.fo-chapo { margin: 0 0 16px; max-width: 62ch; color: var(--muted); line-height: 1.6; }
+/* Hors d'une barre d'outils, `searchInput` rend un champ à la largeur du
+   navigateur — soit une fente de 190 px. */
+.fo-intro input[type="search"] { width: 100%; max-width: 420px; }
+.fo-surtitre { margin: 0; font-size: 11px; font-weight: 700; letter-spacing: .09em;
+  text-transform: uppercase; color: var(--tint, var(--accent-ink)); }
+.fo-desc { margin: 0; color: var(--muted); line-height: 1.55; }
+.fo-compte { margin: 0 0 12px; }
+
+/* Niveau 1 — les quatre métiers. */
+.fo-metiers { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+.fo-metier { display: flex; flex-direction: column; gap: 7px; padding: 20px;
+  border: 1px solid color-mix(in srgb, var(--tint) 22%, var(--line));
+  border-radius: 16px; color: inherit; text-decoration: none;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--tint) 9%, #fff), var(--card) 65%);
+  transition: transform .12s, box-shadow .12s; }
+.fo-metier:hover { transform: translateY(-2px); box-shadow: var(--shadow-lift); }
+.fo-metier h2 { margin: 0; font-size: 19px; }
+.fo-metier footer { display: flex; align-items: center; gap: 8px; margin-top: auto;
+  padding-top: 14px; border-top: 1px solid color-mix(in srgb, var(--tint) 20%, var(--line)); }
+.fo-ico { display: grid; place-items: center; width: 46px; height: 46px; font-size: 22px;
+  border-radius: 13px; background: color-mix(in srgb, var(--tint) 16%, #fff); }
+.fo-ico-s { font-size: 17px; }
+.fo-pastille { font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px;
+  color: var(--tint); background: color-mix(in srgb, var(--tint) 13%, #fff); }
+.fo-suite { font-size: 13px; font-weight: 600; color: var(--tint); }
+
+/* Niveau 2 — la rubrique et ses étapes. */
+/* ⚠ `align-self` et pas seulement `inline-block` : `.esp-body` est un flex
+   column, qui blockifie ses enfants ET les étire sur toute la largeur — le
+   bouton de retour faisait une barre de 1160 px. */
+.fo-retour { align-self: flex-start; display: inline-block; font-size: 13px;
+  text-decoration: none; color: var(--muted); padding: 5px 11px;
+  border: 1px solid var(--line); border-radius: 999px; background: var(--card); }
+.fo-retour:hover { background: var(--card-2); color: var(--text); }
+.fo-banniere { display: flex; gap: 16px; align-items: center; margin: 14px 0 18px;
+  padding: 20px 22px; border-radius: 16px;
+  background: linear-gradient(120deg, color-mix(in srgb, var(--tint) 13%, #fff), var(--card) 70%); }
+.fo-banniere h1 { margin: 0 0 4px; font-size: 26px; letter-spacing: -.02em; }
+.fo-banniere .fo-surtitre { margin-top: 8px; }
+.fo-groupe { margin-bottom: 22px; }
+.fo-groupe h2 { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-size: 16px; }
+.fo-fiches { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+.fo-carte { display: flex; flex-direction: column; gap: 7px; padding: 17px 18px;
+  border: 1px solid var(--line); border-radius: 14px; background: var(--card);
+  color: inherit; text-decoration: none; transition: transform .12s, box-shadow .12s; }
+.fo-carte:hover { transform: translateY(-2px); box-shadow: var(--shadow-lift);
+  border-color: color-mix(in srgb, var(--tint) 35%, var(--line)); }
+/* ⚠ Le `h3` du CRM est un intertitre de tableau : 11 px, gris, MAJUSCULES.
+   Ici c'est le titre d'une fiche, il se lit comme une phrase. */
+.fo-carte h3 { margin: 0; font-size: 15.5px; line-height: 1.35; color: var(--text);
+  text-transform: none; letter-spacing: normal; }
+.fo-carte .fo-suite { margin-top: auto; padding-top: 6px; }
+.fo-etape { align-self: flex-start; font-size: 10.5px; font-weight: 700; letter-spacing: .08em;
+  text-transform: uppercase; padding: 3px 9px; border-radius: 999px;
+  color: var(--tint); background: color-mix(in srgb, var(--tint) 13%, #fff); }
+
+/* Niveau 3 — la fiche, lue en entier. */
+.fo-barre { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.fo-doc { border: 1px solid var(--line); border-radius: 16px; overflow: hidden; background: var(--card); }
+.fo-doc-tete { display: flex; gap: 16px; align-items: flex-start; padding: 22px 26px;
+  border-bottom: 2px solid var(--tint);
+  background: linear-gradient(120deg, color-mix(in srgb, var(--tint) 13%, #fff), var(--card) 75%); }
+.fo-doc-tete h1 { margin: 3px 0 6px; font-size: 25px; letter-spacing: -.02em; }
+.fo-doc-corps { padding: 6px 26px 22px; }
+.fo-sec { padding-top: 20px; }
+.fo-sec h2 { display: flex; align-items: center; gap: 11px; margin: 0 0 10px; font-size: 17px;
+  padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+.fo-num { display: grid; place-items: center; flex: 0 0 auto; width: 28px; height: 28px;
+  font-size: 13px; font-weight: 700; border-radius: 9px;
+  color: var(--tint); background: color-mix(in srgb, var(--tint) 14%, #fff); }
+.fo-sec p { margin: 0; color: var(--muted); line-height: 1.7; }
+/* Les puces en blocs : 177 puces en liste à la suite forment un mur de texte,
+   et ce sont justement les points qu'on relit un par un sur un chantier. */
+.fo-puces { list-style: none; margin: 10px 0 0; padding: 0; display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 8px; }
+.fo-puces li { position: relative; padding: 11px 13px 11px 28px; border-radius: 10px;
+  background: var(--card-2); color: var(--text); font-size: 13.5px; line-height: 1.5; }
+.fo-puces li::before { content: ""; position: absolute; left: 13px; top: 17px;
+  width: 6px; height: 6px; border-radius: 50%; background: var(--tint); }
+.fo-doc-pied { display: flex; align-items: center; gap: 10px; padding: 12px 26px;
+  border-top: 1px solid var(--line); background: var(--card-2);
+  font-size: 11.5px; color: var(--muted-2); }
+.fo-suivant { display: flex; align-items: center; gap: 10px; margin-top: 16px; }
+
+@media (max-width: 720px) {
+  .fo-intro h1 { font-size: 24px; }
+  .fo-banniere { flex-direction: column; align-items: flex-start; }
+  .fo-doc-tete { flex-direction: column; padding: 18px; }
+  .fo-doc-corps { padding: 4px 18px 18px; }
+  .fo-doc-pied { padding: 12px 18px; flex-direction: column; align-items: flex-start; gap: 2px; }
+  .fo-suivant { flex-direction: column; align-items: stretch; }
+}
+
+/* ⚠ L'IMPRESSION EST UNE FONCTION DE L'ÉCRAN, pas un accident du navigateur :
+   c'est ainsi qu'on remet une fiche à quelqu'un qui arrive, sans lui ouvrir le
+   CRM. On retire donc TOUT ce qui n'est pas la fiche — la barre du CRM, le menu
+   de l'espace, l'en-tête de la structure, les boutons, la navigation entre
+   fiches —, on remet les puces en liste (une grille de blocs gaspille la page)
+   et on empêche une section de se couper en deux entre deux feuilles. */
+@page { margin: 14mm; }
+/* ⚠ TOUT EST PORTÉ PAR `body:has(.fo-doc)`, c'est-à-dire « une fiche est
+   ouverte ». Sans ce garde, ces règles changeraient l'impression des trente
+   autres écrans du CRM, ce que personne n'a demandé — et un tableau de bord
+   imprimé sans sa barre de navigation n'est pas forcément un progrès. */
+@media print {
+  body:has(.fo-doc) :is(.topnav, .topbar, .tir, .esp-side, .esp-head,
+    .fo-barre, .fo-suivant, .fo-retour, #modal, .toast, .msg-bulle-zone) { display: none !important; }
+  body:has(.fo-doc), body:has(.fo-doc) :is(.content, .esp-app, .esp-main, .esp-body, .card) { background: #fff !important; }
+  body:has(.fo-doc) :is(.content, .esp-body, .esp-main) { padding: 0 !important; margin: 0 !important; }
+  .fo-doc { border: 0; border-radius: 0; }
+  .fo-doc-tete { padding: 0 0 12px; border-bottom: 2px solid var(--tint); }
+  .fo-doc-corps { padding: 0; }
+  .fo-doc-pied { padding: 10px 0 0; background: none; }
+  .fo-sec { break-inside: avoid; page-break-inside: avoid; padding-top: 16px; }
+  .fo-puces { display: block; }
+  .fo-puces li { background: none; padding: 3px 0 3px 18px; border-bottom: 1px solid #eee; }
+  .fo-puces li::before { left: 4px; top: 11px; }
+  /* Sans les fonds (la case « Graphiques d'arrière-plan » est décochée par
+     défaut dans Chrome), le numéro de section doit rester lisible. */
+  .fo-num { border: 1px solid var(--tint); }
+}
 
 /* Reglages : deux champs cote a cote, qui passent l'un sous l'autre des que
    la place manque. Pas de grille fixe — un libelle qui s'allonge ne doit pas
