@@ -59,22 +59,50 @@
 //    Ce n'est pas ce qui compte ici — ce qui compte, c'est la date du dernier
 //    relevé arrivé dans le CRM, et c'est elle qui est affichée.
 //
+// ⚠ L'ÉCRAN RELÈVE GOOGLE LUI-MÊME EN S'OUVRANT (24/09/2026).
+// Avant, il se contentait de lire le reflet, rafraîchi par un cron toutes les
+// trente minutes : on pouvait donc tomber sur un agenda vieux d'une demi-heure
+// — ou vide, quand l'autre relevé venait d'effacer la journée. Demandé par
+// Mickael le 24/09 : « on ne peut pas faire une synchronisation en temps réel,
+// ce sera beaucoup plus simple ». Oui, et c'est même plus simple que d'y
+// arriver par le cron : quelqu'un qui regarde son agenda est précisément le
+// moment où il faut aller voir Google.
+//
+// `declencher_releve_agenda` est une fonction SECURITY DEFINER déjà ouverte
+// aux comptes connectés : elle lit le jeton partagé côté base et appelle
+// l'Edge Function. Le jeton ne descend jamais dans le navigateur.
+//
+// ⚠ ELLE REND LA MAIN AVANT QUE LE RELEVÉ SOIT FAIT. `net.http_post` est
+// asynchrone : la fonction rend un numéro de requête, pas un résultat. On
+// recharge donc la table DEUX FOIS, à quelques secondes — un seul essai
+// tombait trop tôt une fois sur deux. Rien ne clignote entre les deux : on ne
+// redessine que si les lignes ont changé.
+//
 // CRÉER UN RENDEZ-VOUS
 // `POST /api/evenements` écrit dans D1 **puis pousse vers Google**
 // (`syncEventToGoogle`). Le rendez-vous part donc bien dans l'agenda. ⚠ Mais il
 // ne revient dans cet écran qu'au relevé suivant, puisqu'on lit Google et non
 // D1 : trente minutes pour aujourd'hui, demain pour un autre jour. La modale le
 // dit, sinon on le chercherait en vain dans la grille.
+import { db } from '../data/db.js';
 import { scope } from '../data/scope.js';
 import { esc, isoDay, relDay, toast, openModal, closeModal } from '../ui.js';
 import { poserEspace } from './espace.js';
 import { cadre, guard, KEY } from './rgd-espace.js';
 import { peutEcrire, creerEvenement } from '../data/rgd-api.js';
 
-// LE MIROIR DE LA FENÊTRE DU WORKER — `PASSE` et `AVENIR` de
-// `worker/src/agenda_crm.js`, élargis à 90 / 365 le 23/09/2026. Voir l'encadré
+// LE MIROIR DE LA FENÊTRE DU RELEVÉ QUI TOURNE — `PASSE` et `AVENIR` de
+// l'Edge Function `relever-agenda` (CRM-Groupe-Backend). Voir l'encadré
 // ci-dessus : ces deux nombres disent jusqu'où l'écran a le droit de naviguer.
-const FENETRE = { passe: 90, avenir: 365 };
+//
+// ⚠ ILS ÉTAIENT À 90 / 365, recopiés de `worker/src/agenda_crm.js`. C'était
+// le bon chiffre pour le mauvais relevé : le worker Cloudflare n'écrit plus
+// rien depuis le 23/09/2026, et c'est le cron Supabase — sept jours en
+// arrière, trente en avant — qui remplit la table. L'écran promettait donc
+// quinze mois de relevé et laissait naviguer dans des mois qui ne seraient
+// jamais remplis : un agenda vide qu'on prend pour un agenda libre, ce que
+// tout le reste de ce fichier s'emploie à éviter.
+const FENETRE = { passe: 7, avenir: 30 };
 
 const MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet',
   'août', 'septembre', 'octobre', 'novembre', 'décembre'];
@@ -257,8 +285,9 @@ function formulaireEvenement(jour, apres) {
         <textarea name="description" rows="2"></textarea></label>
     </form>
     <p class="small muted">Le rendez-vous est créé dans le tableau de bord, qui le pousse
-    dans <b>Google Agenda</b>. ⚠ Il <b>n’apparaîtra pas tout de suite ici</b> : cet écran lit
-    un relevé de Google — trente minutes pour aujourd’hui, demain pour un autre jour.</p>
+    dans <b>Google Agenda</b>. Cet écran relit Google juste après : il apparaît en quelques
+    secondes s’il est <b>pour aujourd’hui</b>. Pour un autre jour, touchez « ↻ Actualiser »
+    après avoir ouvert la semaine concernée.</p>
     <div class="toolbar" style="margin-top:12px">
       <button type="button" class="btn primary" id="ev-ok">Créer le rendez-vous</button>
       <button type="button" class="btn ghost" data-close>Annuler</button>
@@ -319,8 +348,57 @@ export const rgdAgendaPage = {
       jour: isoDay(),
       mois: isoDay().slice(0, 7),
       ecriture: false,
+      // ⚠ AU REPOS AU DÉPART, et pas « en cours ». Mis à « en-cours » ici,
+      // le mot restait affiché pour toujours en mode démo, où `rafraichir`
+      // renonce avant de l'éteindre.
+      releve: 'repos',
+      motif: '',
     };
     peutEcrire().then(ok => { if (ok !== state.ecriture) { state.ecriture = ok; draw(); } });
+
+    // ⚠ NE RIEN TENTER APRÈS LA FERMETURE DE L'ÉCRAN. Les deux rechargements
+    // arrivent plusieurs secondes après ; sans ce drapeau ils redessineraient
+    // dans un `root` que l'application a déjà remplacé.
+    let vivant = true;
+
+    const rafraichir = async () => {
+      // Le mode démo n'a ni Edge Function ni Google : la fonction n'existe pas
+      // et l'appel lèverait. On garde l'écran lisible sans elle.
+      if (db.demo) return;
+      state.releve = 'en-cours'; peindreEtat();
+      try {
+        await db.rpc('declencher_releve_agenda', { large: false });
+        for (const attente of [2500, 4000]) {
+          await new Promise(r => setTimeout(r, attente));
+          if (!vivant) return;
+          // `refresh` ne prévient que si les lignes ont VRAIMENT changé : un
+          // relevé qui ne trouve rien de neuf ne fait pas sauter l'écran.
+          if (await db.recharger('agenda_events')) break;
+        }
+        if (!vivant) return;
+        state.releve = 'fait'; draw();
+      } catch (e) {
+        if (!vivant) return;
+        // Un relevé qui échoue n'efface rien : l'écran garde le reflet
+        // précédent et le dit, plutôt que de faire croire à un agenda vide.
+        state.releve = 'echec'; state.motif = String(e.message || e).slice(0, 80);
+        peindreEtat();
+      }
+    };
+
+    // Repeindre le seul mot qui change, sans refaire l'écran : un `draw()`
+    // complet à chaque étape ferait clignoter la grille pour rien.
+    const peindreEtat = () => {
+      const el = root.querySelector('#ag-etat');
+      if (el) el.outerHTML = etatHtml();
+    };
+    const etatHtml = () => {
+      const t = state.releve === 'en-cours' ? 'Mise à jour depuis Google…'
+        : state.releve === 'echec' ? `Google injoignable — ${state.motif || ''}`
+        : '';
+      return `<span class="small muted" id="ag-etat"${
+        state.releve === 'echec' ? ' style="color:var(--red)"' : ''}>${esc(t)}</span>`;
+    };
 
     const draw = () => {
       const aujourdhui = isoDay();
@@ -380,9 +458,9 @@ export const rgdAgendaPage = {
               Relevé du <b>${esc(jourLongAn(min))}</b> au <b>${esc(jourLongAn(max))}</b>${
                 vu ? `, ${esc(depuis(new Date(vu)))}` : ''}.
               Au-delà, l’écran ne sait rien : ce n’est pas un agenda vide, c’est la fin de
-              la fenêtre. La journée en cours est relevée toutes les 30 minutes, les jours
-              suivants une fois par jour — <b>un rendez-vous pris aujourd’hui pour plus tard
-              n’apparaît que demain</b>.
+              la fenêtre. <b>Google est relu à chaque ouverture de cet écran</b> pour la
+              journée en cours ; les jours suivants sont relevés une fois par jour, et
+              « ↻ Actualiser » va les rechercher tout de suite.
               ${calendriers.length ? `<br>Agendas lus : ${esc(calendriers.join(' · '))}.` : ''}
             </p>
           </aside>
@@ -402,6 +480,9 @@ export const rgdAgendaPage = {
               ${lundiDe(state.jour) !== lundiDe(aujourdhui)
                 ? `<button type="button" class="btn ghost sm" data-aller="${aujourdhui}">Cette semaine</button>` : ''}
               <span class="grow"></span>
+              ${etatHtml()}
+              <button type="button" class="btn ghost sm" id="ag-relever"
+                title="Relire Google maintenant">↻ Actualiser</button>
               ${state.ecriture ? '<button type="button" class="btn primary" id="ag-nouveau">+ Événement</button>' : ''}
             </div>
 
@@ -428,10 +509,18 @@ export const rgdAgendaPage = {
         draw();
       });
       const nouveau = root.querySelector('#ag-nouveau');
-      if (nouveau) nouveau.onclick = () => formulaireEvenement(state.jour, draw);
+      // ⚠ APRÈS UNE CRÉATION, ON RELÈVE — on ne redessine pas. Le rendez-vous
+      // vient de partir dans Google par le tableau de bord ; c'est de Google
+      // qu'il doit revenir, sinon l'écran ne le montrerait qu'au cron suivant.
+      if (nouveau) nouveau.onclick = () => formulaireEvenement(state.jour, rafraichir);
+      root.querySelector('#ag-relever').onclick = rafraichir;
     };
 
     draw();
-    return { refresh: draw, destroy() { coquille.retirer(); } };
+    rafraichir();
+    return {
+      refresh: draw,
+      destroy() { vivant = false; coquille.retirer(); },
+    };
   },
 };
