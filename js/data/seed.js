@@ -39,6 +39,10 @@ export const SEED = {
     { id: 'c12', first_name: 'Léa', last_name: 'Chevalier', phone: '06 39 98 00 12', email: 'lea.chevalier@example.com', city: 'Ballan-Miré', postal_code: '37510', activities: ['rgd'], type: 'Prospect', owner_id: 'u-mickael', channel: 'Site internet direct', consent: true, created_at: d(-4) },
     { id: 'c13', first_name: 'Olivier', last_name: 'Barre', phone: '06 39 98 00 13', email: 'o.barre@example.com', city: 'Tours', postal_code: '37100', activities: ['rgd'], type: 'Prospect', owner_id: 'u-charge', channel: 'Recommandation client', consent: true, created_at: d(-30) },
     { id: 'c14', first_name: 'Sonia', last_name: 'Aubert', phone: '06 39 98 00 14', email: 'sonia.aubert@example.com', city: 'Joué-lès-Tours', postal_code: '37300', activities: ['rgd'], type: 'Prospect', owner_id: 'u-mickael', channel: 'Site internet direct', consent: true, created_at: d(-1) },
+    // ⚠ UN CONTACT SANS NOM DE FAMILLE — le cas que l'annuaire doit survivre.
+    // La colonne y affiche « nom, prenom » ; quand le nom manque, `famille`
+    // retombe sur le prenom et l'inversion ecrirait deux fois le meme mot.
+    { id: 'c16', first_name: 'Farid', phone: '06 39 98 00 16', email: 'farid@example.com', city: 'Tours', postal_code: '37000', activities: ['rgd'], type: 'Client', owner_id: 'u-mickael', channel: 'Recommandation client', consent: true, created_at: d(-200) },
     { id: 'c15', first_name: 'Damien', last_name: 'Rey', phone: '06 39 98 00 15', email: 'damien.rey@example.com', city: 'Tours', postal_code: '37200', activities: ['rgd'], type: 'Prospect', owner_id: 'u-mickael', channel: 'Site internet direct', consent: true, created_at: d(-2) },
   ],
   deals: [
@@ -261,6 +265,22 @@ export const SEED = {
       source: 'google_calendar', notes: '', maj: d(-1) },
     { id: 'rc7', contact_id: 'c8', statut: 'client', statut_suivi: 'devis_envoye',
       source: 'manuel', notes: '', maj: d(-8) },
+
+    // ⚠ CELLES-CI PORTENT UN `costructor_id`, ET C'EST CE QUI LES FAIT ENTRER
+    // DANS « TOUS LES CONTACTS ». L'annuaire ne montre que les fiches connues
+    // de Costructor (`fiches.filter(f => f.costructor_id)`) : sans cette clef,
+    // l'onglet restait a zero en demo et son tri comme sa colonne de nom ne
+    // pouvaient pas s'y verifier.
+    //
+    // Les trois couvrent les trois formes que la colonne doit savoir ecrire :
+    // un particulier avec nom et prenom, un professionnel qui n'a qu'une
+    // raison sociale, et une personne sans nom de famille.
+    { id: 'rc8', contact_id: 'c2', costructor_id: 'cli_demo_01', statut: 'client',
+      statut_suivi: 'chantier_termine', source: 'costructor', notes: '', maj: d(-40) },
+    { id: 'rc9', organisation_id: 'o4', costructor_id: 'cli_demo_02', statut: 'client',
+      statut_suivi: 'chantier_en_cours', source: 'costructor', notes: '', maj: d(-12) },
+    { id: 'rc10', contact_id: 'c16', costructor_id: 'cli_demo_03', statut: 'client',
+      statut_suivi: 'chantier_termine', source: 'costructor', notes: '', maj: d(-150) },
   ],
 
   // Les demandes du formulaire du site — une table à part des fiches.

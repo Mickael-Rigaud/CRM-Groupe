@@ -282,18 +282,39 @@ const pastilleProvenance = (cle) => {
 const qui = (f) => {
   const c = f.contact_id && db.byId('contacts', f.contact_id);
   if (c) return { nom: `${c.first_name || ''} ${c.last_name || ''}`.trim(),
-                  famille: c.last_name || c.first_name || '', cree: c.created_at,
+                  famille: c.last_name || c.first_name || '',
+                  prenom: c.first_name || '', cree: c.created_at,
                   email: c.email,
                   tel: c.phone, adresse: c.address, cp: c.postal_code, ville: c.city,
                   type: 'particulier' };
   const o = f.organisation_id && db.byId('organisations', f.organisation_id);
-  if (o) return { nom: o.name, famille: o.name || '', cree: o.created_at,
+  if (o) return { nom: o.name, famille: o.name || '', prenom: '', cree: o.created_at,
                   email: o.email, tel: o.phone, adresse: o.address,
                   cp: o.postal_code, ville: o.city, type: 'professionnel' };
   return null;
 };
 const adresseDe = (p) => [p?.adresse, [p?.cp, p?.ville].filter(Boolean).join(' ')]
   .filter(Boolean).join(' ') || '—';
+
+// Dans l'annuaire, le nom de famille passe devant. Demande de Mickael le
+// 24/09/2026, et c'est la suite logique du tri : la colonne est rangee par nom
+// de famille, donc lire « Mickael Rigaud » dans une liste classee a R oblige a
+// sauter du debut a la fin de chaque ligne pour suivre l'ordre.
+//
+// ⚠ AILLEURS ON NE TOUCHE A RIEN. La frise se lit par date d'arrivee, pas par
+// nom, et la fiche ouverte porte un titre, pas une entree d'index. Inverser
+// partout ferait un « Rigaud Mickael » en en-tete de fiche, ce qui ne se dit
+// pas.
+//
+// ⚠ DEUX CAS OU L'ON N'INVERSE PAS, et ils ne sont pas theoriques :
+//   · une organisation n'a pas de prenom, son nom s'ecrit tel quel ;
+//   · un contact sans nom de famille voit `famille` retomber sur son prenom,
+//     et l'inversion ecrirait deux fois le meme mot.
+const nomIndexe = (p) => {
+  if (!p) return '';
+  if (!p.prenom || p.famille === p.prenom) return p.nom || '';
+  return `${p.famille} ${p.prenom}`;
+};
 
 // ⚠ LA FICHE SAISIE À LA MAIN SE RECONNAÎT PAR `source === 'manuel'`, pas par
 // la négation « ni Costructor, ni Meta, ni le site » : cette négation ramasse
@@ -618,12 +639,12 @@ export const rgdClientsPage = {
       // ---------- les deux tableaux ----------
       const tableauFiches = () => `<section class="card table-wrap">
         <table>
-          <thead><tr><th>Nom</th><th>Type</th><th>Statut</th><th>Email</th>
+          <thead><tr><th>Nom, prénom</th><th>Type</th><th>Statut</th><th>Email</th>
             <th>Téléphone</th><th>Adresse</th><th>Maj</th><th>Commentaire</th><th></th></tr></thead>
           <tbody>${lignesFiches.map(({ f, p }) => {
             const ap = f.apporteur_id && apporteurs.find(a => a.id === f.apporteur_id);
             return `<tr>
-              <td><b>${esc(p?.nom || '(fiche sans contact)')}</b>
+              <td><b>${esc(nomIndexe(p) || '(fiche sans contact)')}</b>
                   ${f.source === 'meta_ads' ? '<span class="chip accent" title="Lead Facebook ou Instagram">Meta</span>' : ''}
                   ${ap ? `<div class="s muted">apporté par ${esc(ap.societe || [ap.prenom, ap.nom].filter(Boolean).join(' '))}</div>` : ''}</td>
               <td class="muted">${esc(p?.type || '—')}</td>
