@@ -33,8 +33,20 @@
 //    ne passe en « terminé » que quand plus rien ne tourne chez lui.
 //
 // ⚠ `demarrage` NE VEUT PAS DIRE « DÉMARRÉ » : il veut dire préparé, pas
-// encore commencé. Il va donc en « Devis accepté ». Les avoir confondus
-// donnait six chantiers en cours là où il y en a un.
+// encore commencé. Le confondre avec « en cours » donnait six chantiers en
+// cours là où il y en a un — c'est pourquoi il n'y va pas.
+//
+// ⚠ MAIS IL NE PROUVE PAS NON PLUS QU'UN DEVIS A ÉTÉ ACCEPTÉ, et c'est une
+// correction du 24/09/2026. Cet état vient de Cloudflare, qui le pose parfois
+// sans qu'aucun devis ne soit signé ni aucune facture émise. Un dossier dont
+// le devis venait seulement d'être ENVOYÉ s'affichait « Devis accepté » dans
+// la base et « Démarrage » dans la pipeline — signalé par Mickael, vérifié :
+// devis en brouillon, jamais signé, zéro facture.
+//
+// Le devis signé est donc le SEUL fait qui vaut acceptation. Mesuré avant le
+// changement : sur les six dossiers qui portaient un chantier « demarrage »,
+// quatre avaient bien un devis signé et ne bougent pas ; les deux autres
+// passent en « Devis en cours », ce qu'ils sont.
 import { scope } from './scope.js';
 
 // L'ordre du cycle. « archives » n'y figure pas : on n'y avance pas, on en sort.
@@ -132,7 +144,10 @@ export function etapeParLesFaits(f, chantiers, devis, joursVisite) {
   if (ch.some(c => c.etat === 'en_cours')) return 'chantier_encours';
   if (ch.some(c => c.etat === 'termine')) return 'chantier_termine';
   const dv = devis.filter(v => memeQue(v, f));
-  if (ch.some(c => c.etat === 'demarrage') || dv.some(v => v.statut === 'signe')) return 'devis_accepte';
+  // ⚠ SEUL UN DEVIS SIGNÉ VAUT ACCEPTATION. Voir l'en-tête : l'état
+  // `demarrage` d'un chantier ne le prouve pas, il vient de l'ancien système
+  // et peut précéder toute signature.
+  if (dv.some(v => v.statut === 'signe')) return 'devis_accepte';
   if (dv.some(devisOuvert)) return 'devis_encours';
   // ⚠ LE RENDEZ-VOUS EST LE DERNIER FAIT, et il vient après les devis à dessein :
   // quelqu'un chez qui on a déjà signé n'est plus « en rendez-vous », même si
