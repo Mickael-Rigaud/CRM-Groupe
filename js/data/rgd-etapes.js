@@ -141,10 +141,26 @@ export function etapeParLesFaits(f, chantiers, devis, joursVisite) {
   return null;
 }
 
-// ⚠ LA FENÊTRE QUE LE RELEVÉ COUVRE : J-7 → J+30. Elle est écrite ici parce
-// que c'est elle qui décide quand l'agenda fait autorité — si elle change côté
-// relevé, elle doit changer ici, sinon un rendez-vous annulé continuerait de
-// compter (ou l'inverse, pire encore).
+// ⚠ LA FENÊTRE GARANTIE RELEVÉE : J-7 → J+30. C'est un PLANCHER, pas la
+// couverture réelle — et la nuance décide du sens de l'erreur.
+//
+// Le cron relève ces jours-là, toujours. L'écran Agenda en relève d'autres au
+// passage, ceux de la semaine qu'on ouvre : la couverture réelle est donc plus
+// large, mais elle dépend de ce que quelqu'un a consulté, ce qu'aucun code ne
+// peut savoir.
+//
+// ⚠ NE PAS L'ÉLARGIR À CE QUE L'ÉCRAN *PEUT* COUVRIR. Au-delà de ce plancher,
+// l'absence d'événement ne prouve rien, et c'est la date qui décide — lecture
+// prudente. Élargir la constante ferait l'erreur inverse, la seule qui coûte :
+// une visite supprimée dans Google, un jour que personne n'a ouvert, passerait
+// pour encore présente.
+//
+// Le défaut qui reste est une imprécision, pas une faute : une visite à J+45
+// relevée par l'écran sera traitée par sa date alors qu'on sait ce que l'agenda
+// en dit. La forme propre n'est pas d'agrandir ce nombre mais de tenir un
+// registre des jours relevés — un jour relevé et vide ne laisse aucune trace
+// dans `agenda_events`, donc il ne peut pas se déduire des données. Personne ne
+// le réclame aujourd'hui.
 const FENETRE_RELEVEE = { avant: 7, apres: 30 };
 
 const decalerDeJours = (n) =>
