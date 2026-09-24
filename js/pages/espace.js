@@ -18,6 +18,11 @@ const DATE_DU_JOUR = () => new Date().toLocaleDateString('fr-FR', { weekday: 'lo
 // Un onglet peut porter `sous: [{ hash, label }]` : il devient alors un intitulé de
 // groupe, et ses écrans s'affichent en retrait sous lui. Toujours dépliés — le menu
 // d'une structure tient en quelques lignes, un accordéon n'y apporterait qu'un clic.
+//
+// Un groupe peut aussi porter `bas: true` : il est alors POUSSÉ EN BAS du menu et
+// séparé par un trait. Ce n'est pas de la décoration — c'est ce qui distingue les
+// écrans qu'on ouvre tous les jours de ceux qu'on ouvre quand quelque chose cloche.
+// Mélangés dans la même colonne, les seconds se lisent comme du travail quotidien.
 // Un onglet sans `sous` s'affiche exactement comme avant : l'espace La Référence
 // Courtage n'en utilise pas et ne change pas.
 //
@@ -49,7 +54,7 @@ export function coquilleEspace({ cle, marque, baseline = '', onglets, actif, tit
       <div class="esp-side-brand"><img src="assets/logos/${esc(cle)}.png" alt="" onerror="this.remove()"><span>${esc(marque)}</span></div>
       <nav class="esp-side-nav" aria-label="Écrans ${esc(marque)}">
         ${onglets.map(o => o.sous
-          ? `<div class="esp-side-groupe">
+          ? `<div class="esp-side-groupe${o.bas ? ' esp-side-bas' : ''}">
                <span class="esp-side-titre">${esc(o.label)}</span>
                ${o.sous.map(x => lienOnglet(x, actif)).join('')}
              </div>`

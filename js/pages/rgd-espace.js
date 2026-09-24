@@ -35,15 +35,23 @@ export const ONGLETS = [
   ] },
   { hash: '#/rgd/agenda', label: 'Agenda' },
   { hash: '#/rgd/formations', label: 'Formations' },
-  // Les deux derniers ne sont pas dans l'arborescence demandee, et sont gardes
-  // pour une raison chacun. Costructor n'a aucune autre porte : sans ce lien,
-  // l'ecran qui dit pourquoi un devis n'arrive pas devient introuvable.
-  // « Application RGD » mene au tableau de bord d'origine, qui reste l'outil de
-  // SAISIE tant que l'etape 5 n'est pas faite — le CRM ne sait que lire.
-  // Les deux disparaitront quand le CRM ecrira et que Surge sera debranche.
-  { hash: '#/rgd/costructor', label: 'Costructor' },
-  { hash: '#/rgd/reglages', label: 'Réglages' },
-  { hash: '#/rgd/app', label: 'Application RGD' },
+  // ⚠ LES COULISSES DESCENDENT EN BAS, ENSEMBLE ET SÉPARÉES (24/09/2026, demandé
+  // par Mickael). Ces trois écrans ne se ressemblent pas mais ils ont en commun
+  // l'essentiel : on ne les ouvre pas pour travailler, on les ouvre quand quelque
+  // chose cloche ou qu'il faut régler l'outil. Au milieu des chantiers et des
+  // devis, ils se lisaient comme du travail quotidien.
+  // Ils sont gardés pour une raison chacun : Costructor n'a aucune autre porte —
+  // sans ce lien, l'écran qui dit pourquoi un devis n'arrive pas devient
+  // introuvable ; Réglages porte les corrections manuelles du CA ; et
+  // « Application RGD » mène au tableau de bord d'origine, seul endroit où se
+  // saisissent encore la clé Costructor et la connexion Google Agenda.
+  // ⚠ « Application RGD » DISPARAÎTRA — c'est l'étape 5 — et cette ligne partira
+  // avec, sans que le reste du menu bouge : c'est aussi pour ça qu'elle est ici.
+  { label: 'Administration', bas: true, sous: [
+    { hash: '#/rgd/costructor', label: 'Costructor' },
+    { hash: '#/rgd/reglages', label: 'Réglages' },
+    { hash: '#/rgd/app', label: 'Application RGD' },
+  ] },
 ];
 
 export const cadre = (actif, titre, corps) => coquilleEspace({
