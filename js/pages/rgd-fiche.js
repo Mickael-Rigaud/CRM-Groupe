@@ -10,9 +10,11 @@
 //   autre : deux boutons qui écriraient la même chose que la frise se
 //   contrediraient tôt ou tard.
 //
-//   « Modifier » — l'espace RGD est en lecture seule sauf le statut. Le reste
-//   se saisit dans l'application RGD, qui reste la source ; un formulaire ici
-//   serait écrasé au relevé suivant.
+//   « Gagnée » / « Perdue » seulement : « Modifier » EXISTE depuis le
+//   24/09/2026 (voir `rgd-fiche-modif.js`). L'en-tête disait ici que l'espace
+//   RGD était en lecture seule et qu'un formulaire serait écrasé au relevé
+//   suivant — c'était exact, et c'est pourquoi le formulaire écrit à la source
+//   plutôt que dans le reflet.
 //
 //   Les documents — ils appartiennent aux affaires du CRM, pas aux fiches
 //   relevées de Cloudflare, qui n'en ont pas.
@@ -49,6 +51,7 @@ import { ETAPES_RGD, ORDRE_ETAPES, STATUT_DE_L_ETAPE, ecrireStatut } from '../da
 import { scope } from '../data/scope.js';
 import { formulaireModif, enregistrerModif, lireModif, refusDeModifier }
   from './rgd-fiche-modif.js';
+import { rendezVousDeLaFiche, coordonneesDuRendezVous } from '../data/rgd-rdv.js';
 
 const ETAT_CHANTIER = {
   demarrage: { label: 'Préparé', ton: 'amber' },
@@ -121,12 +124,32 @@ export function ouvrirFicheRgd(x, onChange) {
     const i = ORDRE_ETAPES.indexOf(etapeCourante);
     const perdu = etapeCourante === 'archives';
     const evs = historique();
+    // ⚠ LE RENDEZ-VOUS GOOGLE PORTE CE QUE PERSONNE N'A RESAISI. Sa description
+    // contient le téléphone et le détail du projet, tels que Mickael les a notés
+    // en prenant l'appel. Jusqu'ici ça vivait dans l'agenda et nulle part
+    // ailleurs : la fiche ouvrait sur une personne dont on ne savait rien.
+    //
+    // ⚠ LE NUMÉRO VA DANS LE CHAMP TÉLÉPHONE, LE RESTE DANS LE COMMENTAIRE,
+    // et il n'y a PAS de bloc à part (demandé le 24/09/2026 : « je veux pas que
+    // tu recrées un encadré »). Un encadré de plus obligeait à lire la fiche à
+    // deux endroits pour connaître un numéro, alors que la ligne qui l'attend
+    // était juste au-dessus, vide.
+    const rdv = rendezVousDeLaFiche(f, chantiers, scope.rgd('agenda_events'), x.nom);
+    const duRdv = coordonneesDuRendezVous(rdv?.description, x.nom);
+
     // ⚠ LA MENTION « SAISI DANS L'APPLICATION RGD » NE VAUT QUE POUR LES
     // LIGNES RELEVÉES. Une demande créée ici porte le commentaire noté pendant
     // l'appel, dans la même colonne : renvoyer vers l'application RGD pour le
     // corriger enverrait chercher une fiche qui n'y existe pas. On reconnaît
     // les deux à `d1_id` — nul, la ligne est née dans le CRM.
-    const commentaireSource = (x.genre === 'demande' ? f.commentaire_admin : f.notes) || '';
+    // ⚠ LA NOTE AUTOMATIQUE N'EST PAS UN COMMENTAIRE. « Créé automatiquement
+    // depuis Google Agenda le … » est déjà dit en toutes lettres dans le bloc
+    // du projet : la répéter sous le titre « Commentaire » ferait passer pour un
+    // mot de Mickael une phrase écrite par un robot.
+    const noteBrute = (x.genre === 'demande' ? f.commentaire_admin : f.notes) || '';
+    const noteEcrite = /^\s*Créé automatiquement depuis Google Agenda/i.test(noteBrute)
+      ? '' : noteBrute;
+    const commentaireSource = [duRdv.commentaire, noteEcrite].filter(Boolean).join('\n\n');
     const jours = x.recu ? daysSince(x.recu) : null;
     const signes = devis.filter(v => v.statut === 'signe');
     // ⚠ LE MONTANT QUI COMPTE EST CELUI DES DEVIS SIGNÉS ; à défaut seulement,
@@ -207,23 +230,6 @@ export function ouvrirFicheRgd(x, onChange) {
       ? (String(f.notes || '').match(/(\d{4}-\d{2}-\d{2})/) || [])[1] || null
       : null;
 
-    // ⚠ LE RENDEZ-VOUS GOOGLE PORTE CE QUE PERSONNE N'A RESAISI. Sa description
-    // contient les coordonnées et le détail du projet, tels que Mickael les a
-    // notés en prenant l'appel — « coordonnées : 06… », « transformation d'un
-    // garage en dépendance », « création sdb, dressing, un étage, deux velux ».
-    // Jusqu'ici ça vivait dans l'agenda et nulle part ailleurs : la fiche
-    // ouvrait sur une personne dont on ne savait rien.
-    //
-    // Le lien passe par le CHANTIER, pas par la fiche : c'est lui qui porte
-    // `source_event_id` depuis la reprise des visites techniques. Une fiche
-    // peut avoir plusieurs chantiers ; on prend le premier qui vient d'un
-    // événement, et à défaut rien du tout.
-    const rendezVous = (() => {
-      const id = chantiers.map(c => c.source_event_id).find(Boolean);
-      if (!id) return null;
-      return scope.rgd('agenda_events').find(e => e.google_id === id) || null;
-    })();
-
     const provenance = (() => {
       const deduite = x.provenanceLabel || x.provenance;
       const dite = String(d.comment_connu || '').trim();
@@ -290,14 +296,15 @@ export function ouvrirFicheRgd(x, onChange) {
 
       <div class="rgdf-corps">
         <div class="rgdf-colonne">
-          ${enModification ? formulaireModif(x) : `
+          ${enModification ? formulaireModif(x, { telephone: duRdv.telephone }) : `
           <section class="rgdf-bloc">
             <h3>Le prospect</h3>
-            ${info('tel', 'Téléphone', x.tel ? `<a href="tel:${esc(x.tel)}">${esc(x.tel)}</a>` : '', 'est-vert')}
+            ${(() => { const t = x.tel || duRdv.telephone;
+              return info('tel', 'Téléphone', t ? `<a href="tel:${esc(t)}">${esc(t)}</a>` : '', 'est-vert'); })()}
             ${info('mail', 'Email', x.email ? `<a href="mailto:${esc(x.email)}">${esc(x.email)}</a>` : '', 'est-bleu')}
             ${info('lieu', 'Adresse', esc(x.adresse || x.ville || ''), 'est-gris')}
             ${info('personne', 'Nature', esc(x.type || ''), 'est-gris')}
-            ${!x.tel && !x.email ? '<p class="rgdf-rien">Aucun moyen de contact renseigné.</p>' : ''}
+            ${!x.tel && !duRdv.telephone && !x.email ? '<p class="rgdf-rien">Aucun moyen de contact renseigné.</p>' : ''}
           </section>
 
           <section class="rgdf-bloc">
@@ -318,18 +325,6 @@ export function ouvrirFicheRgd(x, onChange) {
             ${!travaux && !budgetSaisi && !x.budget && !bien && !f.adresse_chantier
               ? '<p class="rgdf-rien">Le projet n’a pas encore été décrit.</p>' : ''}
           </section>`}
-
-          ${rendezVous && String(rendezVous.description || '').trim() ? `<section class="rgdf-bloc">
-            <h3>Ce qui a été noté au rendez-vous</h3>
-            <!-- La description vient de Google telle quelle : elle porte ses
-                 propres retours a la ligne, d'ou la classe rgdf-texte qui les
-                 respecte. On ne la decoupe pas en champs — sa forme change d'un
-                 appel a l'autre, et decouper au petit bonheur perdrait ce qui
-                 compte. (Aucun accent grave ici : il refermerait le gabarit.) -->
-            <p class="rgdf-texte">${esc(String(rendezVous.description).trim())}</p>
-            <p class="rgdf-source">Depuis le rendez-vous « ${esc(rendezVous.title || '')} »
-              du ${esc(fmtDate(rendezVous.day))}, dans Google Agenda.</p>
-          </section>` : ''}
 
           ${devis.length ? `<section class="rgdf-bloc">
             <h3>Devis <span class="rgdf-compte">${devis.length}</span></h3>
@@ -367,7 +362,10 @@ export function ouvrirFicheRgd(x, onChange) {
           ${commentaireSource ? `<section class="rgdf-bloc rgdf-commentaire">
             <h3>Commentaire</h3>
             <p class="rgdf-texte">${esc(commentaireSource)}</p>
-            ${f.d1_id != null ? `<p class="rgdf-source">Saisi dans l’<a href="#/rgd/app">application RGD</a>,
+            ${duRdv.commentaire ? `<p class="rgdf-source">Noté dans le rendez-vous
+              « ${esc(rdv?.title || '')} »${rdv?.day ? ' du ' + esc(fmtDate(rdv.day)) : ''} —
+              il se corrige dans Google Agenda.</p>`
+              : f.d1_id != null ? `<p class="rgdf-source">Saisi dans l’<a href="#/rgd/app">application RGD</a>,
               qui en reste la source.</p>` : ''}
           </section>` : ''}
 

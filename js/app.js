@@ -113,6 +113,34 @@ const groups = () => NAV.filter(g => !g.show || g.show()).filter(g => !g.items |
 const isOn = (i, hash) => i.exact ? hash === i.hash : hash.startsWith(i.hash);
 const groupOf = (hash) => groups().find(g => g.hash ? isOn(g, hash) : itemsOf(g).some(i => isOn(i, hash)));
 
+// La hauteur de la barre du haut, publiee en variable CSS
+//
+// ⚠ ELLE NE PEUT PAS ETRE ECRITE EN DUR DANS LE CSS. Le menu d'espace se cale
+// dessous pour rester en place quand la page defile, et il lui faut donc un
+// decalage exact. Or cette barre change de hauteur : deux rangees sur poste,
+// une seule en mode formulaire imprimable, et `.subnav` passe a la ligne
+// quand les onglets ne tiennent plus — ce qui depend du nombre d'activites du
+// profil, pas seulement de la largeur de l'ecran. Une constante serait juste
+// sur le poste ou on l'a mesuree et fausse ailleurs, avec un menu qui glisse
+// sous la barre ou qui flotte en dessous.
+//
+// On mesure, et on republie a chaque changement de taille — y compris ceux
+// qu'un `resize` ne signale pas, d'ou le `ResizeObserver`.
+let observateurBarre = null;
+function mesurerBarre() {
+  const barre = document.getElementById('topnav');
+  if (!barre) return;
+  document.documentElement.style.setProperty('--h-topnav', barre.offsetHeight + 'px');
+}
+function suivreBarre() {
+  const barre = document.getElementById('topnav');
+  if (!barre) return;
+  mesurerBarre();
+  observateurBarre?.disconnect();
+  observateurBarre = new ResizeObserver(mesurerBarre);
+  observateurBarre.observe(barre);
+}
+
 function renderLayout() {
   app.innerHTML = `
     <header class="topnav" id="topnav">
@@ -130,6 +158,7 @@ function renderLayout() {
     if (navState.open && !e.target.closest('#acct')) closeMenu();
   }, { capture: true });
   renderNav();
+  suivreBarre();
 }
 
 function closeMenu() { navState.open = null; renderNav(); }

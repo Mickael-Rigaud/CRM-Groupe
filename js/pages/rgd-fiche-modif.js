@@ -67,8 +67,17 @@ const champ = (cle, libelle, valeur, opts = {}) => `
       value="${esc(valeur ?? '')}">
   </div>`;
 
-/** Le formulaire, en remplacement des deux blocs d'information. */
-export function formulaireModif(x) {
+/**
+ * Le formulaire, en remplacement des deux blocs d'information.
+ *
+ * ⚠ `propose` PRÉ-REMPLIT SANS AVOIR RIEN ENREGISTRÉ. Le téléphone lu dans la
+ * description du rendez-vous n'existe nulle part en base : l'afficher en
+ * lecture seule obligerait à le recopier à la main pour qu'il devienne une
+ * coordonnée. Posé dans le champ, un seul « Enregistrer » suffit — et il reste
+ * modifiable, ce qui compte : la lecture d'un numéro écrit à la main peut se
+ * tromper, et c'est à l'humain de trancher, pas à une expression régulière.
+ */
+export function formulaireModif(x, propose = {}) {
   const f = x.ligne;
   const p = personneDe(f);
   const l = p?.ligne || {};
@@ -87,7 +96,8 @@ export function formulaireModif(x) {
         ${p?.pro
           ? champ('raison_sociale', 'Raison sociale', l.name, { large: true })
           : champ('prenom', 'Prénom', prenom) + champ('nom', 'Nom', nom)}
-        ${champ('telephone', 'Téléphone', l.phone ?? f.telephone, { type: 'tel' })}
+        ${champ('telephone', 'Téléphone',
+          l.phone || f.telephone || propose.telephone || '', { type: 'tel' })}
         ${champ('email', 'E-mail', l.email ?? f.email, { type: 'email' })}
         ${champ('adresse', 'Adresse', l.address ?? f.adresse, { large: true })}
         ${champ('code_postal', 'Code postal', l.postal_code ?? f.code_postal)}
