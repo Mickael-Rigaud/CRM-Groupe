@@ -125,9 +125,16 @@ export function ouvrirFicheRgd(x, onChange) {
     // le budget annoncé par la personne. Les additionner mélangerait un
     // engagement et une intention, et la tuile dit laquelle des deux elle
     // montre.
+    // ⚠ TROIS SOURCES POUR UN SEUL CHIFFRE, ET L'ORDRE EST CELUI DE LA
+    // CERTITUDE. `budget_travaux` est le budget SAISI dans le CRM : il n'existe
+    // que sur une fiche `rgd_clients`, et c'est le seul des trois qu'on puisse
+    // renseigner soi-même. Il passe donc avant `x.budget`, qui vient du
+    // formulaire Meta ou du site — une déclaration de la personne, pas une
+    // estimation faite après l'avoir eue au téléphone.
+    const budgetSaisi = Number(f.budget_travaux) > 0 ? eur(Number(f.budget_travaux)) : '';
     const montant = signes.length
       ? { valeur: eur(signes.reduce((t, v) => t + (Number(v.montant_ht) || 0), 0)), quoi: 'Signé HT' }
-      : { valeur: String(x.budget || '').trim() || '—', quoi: 'Budget annoncé' };
+      : { valeur: budgetSaisi || String(x.budget || '').trim() || '—', quoi: 'Budget annoncé' };
 
     // ⚠ CES CHAMPS N'EXISTENT QUE SUR UNE DEMANDE. Une fiche `rgd_clients` a
     // ses équivalents Meta et rien d'autre ; `d` vaut alors un objet vide, et
@@ -186,6 +193,23 @@ export function ouvrirFicheRgd(x, onChange) {
     const dateDeCreation = neeDuCalendrier
       ? (String(f.notes || '').match(/(\d{4}-\d{2}-\d{2})/) || [])[1] || null
       : null;
+
+    // ⚠ LE RENDEZ-VOUS GOOGLE PORTE CE QUE PERSONNE N'A RESAISI. Sa description
+    // contient les coordonnées et le détail du projet, tels que Mickael les a
+    // notés en prenant l'appel — « coordonnées : 06… », « transformation d'un
+    // garage en dépendance », « création sdb, dressing, un étage, deux velux ».
+    // Jusqu'ici ça vivait dans l'agenda et nulle part ailleurs : la fiche
+    // ouvrait sur une personne dont on ne savait rien.
+    //
+    // Le lien passe par le CHANTIER, pas par la fiche : c'est lui qui porte
+    // `source_event_id` depuis la reprise des visites techniques. Une fiche
+    // peut avoir plusieurs chantiers ; on prend le premier qui vient d'un
+    // événement, et à défaut rien du tout.
+    const rendezVous = (() => {
+      const id = chantiers.map(c => c.source_event_id).find(Boolean);
+      if (!id) return null;
+      return scope.rgd('agenda_events').find(e => e.google_id === id) || null;
+    })();
 
     const provenance = (() => {
       const deduite = x.provenanceLabel || x.provenance;
@@ -263,6 +287,7 @@ export function ouvrirFicheRgd(x, onChange) {
             ${info('travaux', 'Nature des travaux', travaux, 'est-orange')}
             ${info('euro', 'Budget annoncé', esc(String(x.budget || '').trim()), 'est-orange')}
             ${info('maison', 'Le bien', esc(bien), 'est-bleu')}
+            ${info('lieu', 'Adresse du chantier', esc(f.adresse_chantier || ''), 'est-bleu')}
             ${info('regle', 'Superficie', d.superficie ? esc(d.superficie) + ' m²' : '', 'est-bleu')}
             ${info('personne', 'Le demandeur', esc(d.type_demandeur || ''), 'est-gris')}
             ${info('texte', 'Ce qui est demandé', esc(d.projet_description || ''), 'est-gris')}
@@ -274,6 +299,18 @@ export function ouvrirFicheRgd(x, onChange) {
             </p>` : ''}
             ${!x.projet && !x.budget && !bien ? '<p class="rgdf-rien">Le projet n’a pas encore été décrit.</p>' : ''}
           </section>
+
+          ${rendezVous && String(rendezVous.description || '').trim() ? `<section class="rgdf-bloc">
+            <h3>Ce qui a été noté au rendez-vous</h3>
+            <!-- La description vient de Google telle quelle : elle porte ses
+                 propres retours a la ligne, d'ou la classe rgdf-texte qui les
+                 respecte. On ne la decoupe pas en champs — sa forme change d'un
+                 appel a l'autre, et decouper au petit bonheur perdrait ce qui
+                 compte. (Aucun accent grave ici : il refermerait le gabarit.) -->
+            <p class="rgdf-texte">${esc(String(rendezVous.description).trim())}</p>
+            <p class="rgdf-source">Depuis le rendez-vous « ${esc(rendezVous.title || '')} »
+              du ${esc(fmtDate(rendezVous.day))}, dans Google Agenda.</p>
+          </section>` : ''}
 
           ${devis.length ? `<section class="rgdf-bloc">
             <h3>Devis <span class="rgdf-compte">${devis.length}</span></h3>
