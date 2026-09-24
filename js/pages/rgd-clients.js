@@ -100,6 +100,10 @@ import { ouvrirFicheRgd } from './rgd-fiche.js';
 
 const s_ = (n) => (n > 1 ? 's' : '');
 
+// Combien de lignes par page. Vingt-cinq tient dans un ecran et demi ; c'est
+// le seul chiffre a changer si l'on veut des pages plus longues.
+const PAR_PAGE = 25;
+
 // LES STATUTS DE SUIVI, dans l'ordre du tableau de bord (`STATUTS_DEMANDE`).
 // Ils décrivent l'avancement d'un prospect, du premier contact au chantier.
 // Les tons suivent ceux de l'original : gris au départ, ambre quand on a
@@ -396,6 +400,7 @@ export const rgdClientsPage = {
       // de provenance au lieu d'un sous-onglet.
       provenance: PROVENANCES.some(x => x.key === ongletDemande) ? ongletDemande : '',
       q: '', type: '', statut: '', focus: null, ecriture: false,
+      page: 1, signature: null,
     };
 
     // On demande une fois si l'écriture est possible, puis on redessine. Sans
@@ -636,12 +641,46 @@ export const rgdClientsPage = {
 
       const affichees = surFrise ? lignesProspects.length : lignesFiches.length;
 
+      // ---------- la liste se lit par pages
+      // 183 contacts sur une seule page, c'est une page dont on ne voit jamais
+      // le bas. Demande de Mickael le 24/09/2026.
+      //
+      // ⚠ LA PAGE SE REMET A 1 DES QUE LA LISTE CHANGE, ET CE N'EST PAS AU
+      // BOUTON DE LE FAIRE. Poser le rappel sur chaque menu marche jusqu'au
+      // jour ou l'on en ajoute un — et la recherche, elle, passe par
+      // `bindSearch` dans `ui.js`, qui ecrit `state.q` sans rien savoir d'une
+      // pagination. Un oubli ne se voit pas a la relecture : il se voit en
+      // production, sous la forme d'une liste vide sur une page qui n'existe
+      // plus. On compare donc ce qui DEFINIT la liste, une fois, ici.
+      const signature = JSON.stringify([state.vue, state.filtreContact, state.provenance,
+                         state.statut, state.type, state.q]);
+      if (signature !== state.signature) { state.signature = signature; state.page = 1; }
+
+      const pages = Math.max(1, Math.ceil(affichees / PAR_PAGE));
+      // ⚠ ON BORNE AU LIEU DE FAIRE CONFIANCE. La signature couvre les filtres,
+      // pas la donnee : une fiche supprimee ou un releve qui passe peut raccourcir
+      // la liste sans qu'aucun filtre ne bouge.
+      state.page = Math.min(Math.max(1, state.page), pages);
+      const debut = (state.page - 1) * PAR_PAGE;
+      const tranche = (liste) => liste.slice(debut, debut + PAR_PAGE);
+
+      // Rien a afficher quand tout tient sur une page : un pied de liste qui
+      // annonce « 1-3 sur 3 » entre deux boutons eteints n'apprend rien.
+      const pagination = () => pages <= 1 ? '' : `<div class="pager">
+        <button type="button" class="btn ghost sm" id="rcl-prec"
+          ${state.page === 1 ? 'disabled' : ''}>Précédent</button>
+        <span class="muted small">${debut + 1}–${Math.min(debut + PAR_PAGE, affichees)}
+          sur ${affichees}</span>
+        <button type="button" class="btn ghost sm" id="rcl-suiv"
+          ${state.page === pages ? 'disabled' : ''}>Suivant</button>
+      </div>`;
+
       // ---------- les deux tableaux ----------
       const tableauFiches = () => `<section class="card table-wrap">
         <table>
           <thead><tr><th>Nom, prénom</th><th>Type</th><th>Statut</th><th>Email</th>
             <th>Téléphone</th><th>Adresse</th><th>Maj</th><th>Commentaire</th><th></th></tr></thead>
-          <tbody>${lignesFiches.map(({ f, p }) => {
+          <tbody>${tranche(lignesFiches).map(({ f, p }) => {
             const ap = f.apporteur_id && apporteurs.find(a => a.id === f.apporteur_id);
             return `<tr>
               <td><b>${esc(nomIndexe(p) || '(fiche sans contact)')}</b>
@@ -660,6 +699,7 @@ export const rgdClientsPage = {
             </tr>`;
           }).join('') || `<tr><td colspan="9"><div class="empty">${esc(vide())}</div></td></tr>`}</tbody>
         </table>
+        ${pagination()}
       </section>`;
 
       // UN SEUL TABLEAU POUR LES DEUX TABLES. Les colonnes sont celles que les
@@ -671,7 +711,15 @@ export const rgdClientsPage = {
           <thead><tr><th>Reçu</th><th>Provenance</th><th>Nom</th><th>Contact</th>
             <th>Projet</th><th>Budget</th><th>Ville</th><th>Statut</th>
             <th>Commentaire</th><th></th></tr></thead>
-          <tbody>${lignesProspects.map((x, n) => `<tr class="click" data-fiche="${n}">
+          <!-- ⚠ L'INDEX EST CELUI DE LA LISTE ENTIERE, PAS DE LA PAGE.
+               L'attribut data-fiche sert au clic, qui relit la liste entiere.
+               Numeroter la tranche a partir de zero ferait ouvrir, en page 2,
+               la fiche de la personne qui occupe le meme rang en page 1 —
+               une erreur muette, qui montre un vrai dossier, celui de
+               quelqu'un d'autre. D'ou le decalage ajoute ici.
+               ⚠ PAS D'ACCENT GRAVE ICI : ce commentaire est DANS un litteral
+               de gabarit, un seul le referme et l'ecran reste sur Chargement. -->
+          <tbody>${tranche(lignesProspects).map((x, i) => { const n = debut + i; return `<tr class="click" data-fiche="${n}">
             <td class="small">${x.recu ? esc(fmtDate(x.recu)) : '<span class="muted">—</span>'}</td>
             <td>${pastilleProvenance(x.provenance)}</td>
             <td><b>${esc(x.nom || '—')}</b>
@@ -687,8 +735,9 @@ export const rgdClientsPage = {
               : pastilleSuivi(x.statut)}</td>
             <td class="rcl-note">${champNote(x.ligne, x.cible, state.ecriture)}</td>
             <td>${boutonSuppression(x.ligne)}</td>
-          </tr>`).join('') || `<tr><td colspan="10"><div class="empty">${esc(vide())}</div></td></tr>`}</tbody>
+          </tr>`; }).join('') || `<tr><td colspan="10"><div class="empty">${esc(vide())}</div></td></tr>`}</tbody>
         </table>
+        ${pagination()}
         <p class="small muted">${state.ecriture
           ? 'Le statut se change ici et part directement dans le tableau de bord RGD — et, si le prospect a un apporteur, celui-ci en est averti par email. Le commentaire se saisit dans l’<a href="#/rgd/app">application RGD</a>.'
           : 'Le statut et le commentaire se modifient dans l’<a href="#/rgd/app">application RGD</a> : ici ils sont lus, pas saisis.'}</p>
@@ -813,6 +862,21 @@ export const rgdClientsPage = {
         const x = lignesProspects[Number(tr.dataset.fiche)];
         if (x) ouvrirFicheRgd(x, draw);
       });
+
+      // Changer de page fait remonter la liste. Sans ce geste on reste au bas
+      // de l'ecran, devant le milieu de la page suivante, et on croit que rien
+      // ne s'est passe. `scrollIntoView` sur le tableau vaut mieux qu'un
+      // `window.scrollTo` : c'est le conteneur de l'application qui defile, pas
+      // la fenetre.
+      const allerPage = (n) => {
+        state.page = n;
+        draw();
+        root.querySelector('.table-wrap')?.scrollIntoView({ block: 'start' });
+      };
+      const prec = root.querySelector('#rcl-prec');
+      if (prec) prec.onclick = () => allerPage(state.page - 1);
+      const suiv = root.querySelector('#rcl-suiv');
+      if (suiv) suiv.onclick = () => allerPage(state.page + 1);
 
       const selProv = root.querySelector('#rcl-prov');
       if (selProv) selProv.onchange = () => { state.provenance = selProv.value; draw(); };

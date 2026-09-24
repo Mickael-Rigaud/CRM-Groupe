@@ -3051,3 +3051,19 @@ img.photo-ko { border: 1px dashed var(--red); box-sizing: border-box;
      horizontalement, et le statut se change depuis la liste. */
   .rch-pipeline { grid-auto-columns: minmax(225px, 85vw); }
 }
+
+/* ---------- Pied de liste : les pages d'un tableau ----------
+   Il ne sort que si la liste deborde d'une page — voir `pagination()` dans
+   `js/pages/rgd-clients.js`. La bordure haute le rattache au tableau qu'il
+   chapeaute plutot qu'au texte qui suit. */
+.pager { display: flex; align-items: center; justify-content: center; gap: 14px;
+  padding: 12px 14px; border-top: 1px solid var(--line); flex-wrap: wrap; }
+.pager span { min-width: 9ch; text-align: center; }
+
+@media (max-width: 720px) {
+  /* Sur telephone les deux boutons prennent toute la largeur : viser une
+     cible de 60 px au pouce, a cote d'un compteur, rate une fois sur deux. */
+  .pager { gap: 8px; }
+  .pager .btn { flex: 1; justify-content: center; }
+  .pager span { order: -1; width: 100%; }
+}
