@@ -172,6 +172,21 @@ export function ouvrirFicheRgd(x, onChange) {
          || [apporteur.prenom, apporteur.nom].filter(Boolean).join(' ') || '')
       : '';
 
+    // ⚠ NÉE D'UN RENDEZ-VOUS, ET ÇA NE SE LIT NULLE PART AUTREMENT.
+    // La provenance reste « Direct » — c'est exact, personne n'a apporté ce
+    // prospect. Mais savoir que la fiche existe parce qu'un « Visite technique »
+    // a été posé dans l'agenda change la façon de la lire : rien n'a été saisi
+    // à la main, et le nom vient du titre de l'événement, pas d'un formulaire.
+    //
+    // L'information vivait dans le commentaire, noyée au milieu de ce que
+    // l'utilisateur y écrit lui-même. Elle a sa place ici.
+    const neeDuCalendrier = f.source === 'google_calendar';
+    // La date se lit dans la note que le worker dépose — la seule trace
+    // datée dont on dispose ; la fiche elle-même n'a pas de date de création.
+    const dateDeCreation = neeDuCalendrier
+      ? (String(f.notes || '').match(/(\d{4}-\d{2}-\d{2})/) || [])[1] || null
+      : null;
+
     const provenance = (() => {
       const deduite = x.provenanceLabel || x.provenance;
       const dite = String(d.comment_connu || '').trim();
@@ -253,6 +268,10 @@ export function ouvrirFicheRgd(x, onChange) {
             ${info('texte', 'Ce qui est demandé', esc(d.projet_description || ''), 'est-gris')}
             ${info('personne', 'Apporté par', esc(nomApporteur), 'est-vert')}
             ${info('source', 'Provenance', esc(provenance), 'est-violet')}
+            ${neeDuCalendrier ? `<p class="rgdf-origine">
+              <b>Cette fiche a été créée depuis Google Agenda</b>${dateDeCreation ? `, le ${fmtDate(dateDeCreation)}` : ''} —
+              un rendez-vous « Visite technique » l'a fait naître, avec son chantier.
+            </p>` : ''}
             ${!x.projet && !x.budget && !bien ? '<p class="rgdf-rien">Le projet n’a pas encore été décrit.</p>' : ''}
           </section>
 
