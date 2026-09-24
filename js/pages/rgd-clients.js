@@ -265,6 +265,45 @@ const pastilleProvenance = (cle) => {
 // `etapeDe` est passée en argument plutôt que recalculée : l'appelant tient
 // déjà les tables des devis, des chantiers et de l'agenda, et les relire par
 // fiche multiplierait le travail par deux cents.
+// ⚠ CES TROIS-LÀ VIVENT AU NIVEAU DU MODULE, ET C'EST UNE CORRECTION.
+// Elles étaient définies DANS `render`, alors que `ficheDe` — exportée, et
+// appelée depuis l'écran Chantiers — les utilise. Résultat : un
+// `ReferenceError: qui is not defined` à chaque ouverture de fiche, et comme
+// `render` vide sa zone avant de lever, un écran blanc sans un mot. Signalé
+// par Mickael le 24/09/2026 ; c'est le garde-fou posé le même jour dans
+// `app.js` qui a fini par nommer la cause.
+//
+// Aucune ne dépend de la portée qu'elle a quittée : `qui` et `adresseDe` ne
+// lisent que `db`, `provenanceFiche` que les champs de la fiche. Rien à
+// passer en argument, rien à recalculer.
+
+// La personne derrière la fiche : un particulier est un contact, un
+// professionnel une organisation. `push_rgd` range, on relit.
+const qui = (f) => {
+  const c = f.contact_id && db.byId('contacts', f.contact_id);
+  if (c) return { nom: `${c.first_name || ''} ${c.last_name || ''}`.trim(),
+                  famille: c.last_name || c.first_name || '', cree: c.created_at,
+                  email: c.email,
+                  tel: c.phone, adresse: c.address, cp: c.postal_code, ville: c.city,
+                  type: 'particulier' };
+  const o = f.organisation_id && db.byId('organisations', f.organisation_id);
+  if (o) return { nom: o.name, famille: o.name || '', cree: o.created_at,
+                  email: o.email, tel: o.phone, adresse: o.address,
+                  cp: o.postal_code, ville: o.city, type: 'professionnel' };
+  return null;
+};
+const adresseDe = (p) => [p?.adresse, [p?.cp, p?.ville].filter(Boolean).join(' ')]
+  .filter(Boolean).join(' ') || '—';
+
+// ⚠ LA FICHE SAISIE À LA MAIN SE RECONNAÎT PAR `source === 'manuel'`, pas par
+// la négation « ni Costructor, ni Meta, ni le site » : cette négation ramasse
+// les 18 fiches marquées `Costructor` sans identifiant et celles venues de
+// Google Agenda, soit vingt lignes là où le tableau de bord n'en montre aucune.
+const provenanceFiche = (f) => f.apporteur_id ? 'partenaire'
+  : f.source === 'meta_ads' ? 'meta'
+  : f.source === 'Formulaire site' ? 'site'
+  : 'direct';
+
 export function ficheDe(f, etapeDe) {
   const q = qui(f);
   return {
@@ -349,23 +388,6 @@ export const rgdClientsPage = {
       const demandes = scope.rgd('rgd_demandes');
       const badge = scope.rgd('rgd_reglages').find(r => r.cle === 'costructor_clients_uniques')?.valeur ?? null;
 
-      // La personne derrière la fiche : un particulier est un contact, un
-      // professionnel une organisation. `push_rgd` range, on relit.
-      const qui = (f) => {
-        const c = f.contact_id && db.byId('contacts', f.contact_id);
-        if (c) return { nom: `${c.first_name || ''} ${c.last_name || ''}`.trim(),
-                        famille: c.last_name || c.first_name || '', cree: c.created_at,
-                        email: c.email,
-                        tel: c.phone, adresse: c.address, cp: c.postal_code, ville: c.city,
-                        type: 'particulier' };
-        const o = f.organisation_id && db.byId('organisations', f.organisation_id);
-        if (o) return { nom: o.name, famille: o.name || '', cree: o.created_at,
-                        email: o.email, tel: o.phone, adresse: o.address,
-                        cp: o.postal_code, ville: o.city, type: 'professionnel' };
-        return null;
-      };
-      const adresseDe = (p) => [p?.adresse, [p?.cp, p?.ville].filter(Boolean).join(' ')]
-        .filter(Boolean).join(' ') || '—';
 
       // ---------- l'étape d'une personne, lue sur ses devis et ses chantiers
       const chantiers = scope.rgd('rgd_chantiers');
@@ -432,10 +454,6 @@ export const rgdClientsPage = {
       // négation ramasse les 18 fiches marquées `Costructor` sans identifiant
       // et celles venues de Google Agenda, soit vingt lignes là où le tableau
       // de bord n'en montre aucune.
-      const provenanceFiche = (f) => f.apporteur_id ? 'partenaire'
-        : f.source === 'meta_ads' ? 'meta'
-        : f.source === 'Formulaire site' ? 'site'
-        : 'direct';
       // ⚠ LE DERNIER RECOURS DÉPEND DE L'ORIGINE DE LA LIGNE. Une demande
       // venue du formulaire est du site, forcément. Une demande SAISIE à la
       // main ne l'est pas : la personne a appelé, croisé un chantier, été
