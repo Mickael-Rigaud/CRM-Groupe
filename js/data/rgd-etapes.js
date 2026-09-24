@@ -95,6 +95,29 @@ export const STATUT_DE_L_ETAPE = {
 
 const JAMAIS_RENSEIGNE = ['nouveau_prospect', '', null, undefined];
 
+// ⚠ UN DEVIS ACCEPTÉ QUI NE DÉMARRE PAS FINIT PAR NE PLUS EN ÊTRE UN.
+// Règle posée par Mickael le 24/09/2026 : passé six mois sans que les travaux
+// commencent, le dossier part en « Archivés ». Il ne disparaît pas — il quitte
+// la liste de travail, où il occupait une place qu'il ne méritait plus.
+//
+// « Pas démarré » se lit sur l'étape elle-même : `devis_accepte` veut dire
+// qu'aucun chantier de cette personne n'est `en_cours` ni `termine`. Une
+// facture d'acompte ne compte donc pas comme un démarrage, et c'est voulu —
+// les deux dossiers que la règle archive aujourd'hui en ont une chacun, émise
+// puis jamais suivie.
+const MOIS_AVANT_ARCHIVAGE = 6;
+
+const devisDormant = (f, devis) => {
+  const signatures = devis
+    .filter(v => memeQue(v, f) && v.statut === 'signe' && v.date_signature)
+    .map(v => String(v.date_signature).slice(0, 10));
+  if (!signatures.length) return false;
+  const derniere = signatures.sort()[signatures.length - 1];
+  const limite = new Date();
+  limite.setMonth(limite.getMonth() - MOIS_AVANT_ARCHIVAGE);
+  return derniere < limite.toISOString().slice(0, 10);
+};
+
 // Un devis ou un chantier se rattache à la personne par son contact OU par son
 // organisation — un professionnel n'a que la seconde (migration 20260923120000).
 const memeQue = (x, f) => (!!x.contact_id && x.contact_id === f.contact_id)
@@ -213,8 +236,17 @@ function visiteEnCours(c, joursVisite) {
 export function etapeDeFiche(f, chantiers, devis, joursVisite) {
   if (f.statut === 'perdu' || f.statut_suivi === 'perdu') return 'archives';
   const brut = f.statut_suivi;
-  if (!JAMAIS_RENSEIGNE.includes(brut)) return ETAPE_DU_STATUT[brut] || 'demande';
-  return etapeParLesFaits(f, chantiers, devis, joursVisite) || 'demande';
+  const e = !JAMAIS_RENSEIGNE.includes(brut)
+    ? (ETAPE_DU_STATUT[brut] || 'demande')
+    : (etapeParLesFaits(f, chantiers, devis, joursVisite) || 'demande');
+  // ⚠ LA SEULE RÈGLE OÙ UN FAIT DÉFAIT UNE SAISIE, et il faut le dire.
+  // Partout ailleurs une valeur posée à la main l'emporte. Ici c'est cette
+  // valeur même qui a expiré : quelqu'un a écrit « devis accepté » il y a plus
+  // de six mois, et depuis rien n'a commencé. Respecter la saisie garderait le
+  // dossier en tête de liste pour toujours, ce qui est précisément ce que la
+  // règle vient corriger.
+  if (e === 'devis_accepte' && devisDormant(f, devis)) return 'archives';
+  return e;
 }
 
 // L'étape d'une demande du formulaire du site. Elle n'a ni devis ni chantier

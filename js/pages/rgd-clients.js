@@ -256,6 +256,47 @@ const pastilleProvenance = (cle) => {
   return `<span class="chip prov ${p.ton}">${esc(p.label)}</span>`;
 };
 
+// ⚠ LA FICHE D'UNE PERSONNE SE FABRIQUE ICI, ET NULLE PART AILLEURS.
+// L'écran Chantiers ouvre la même (voir `ouvrirFicheDuClient` plus bas) : la
+// recopier là-bas donnerait deux fiches pour une même personne, qui
+// divergeraient à la première colonne ajoutée. C'est la règle du projet —
+// une définition, un endroit.
+//
+// `etapeDe` est passée en argument plutôt que recalculée : l'appelant tient
+// déjà les tables des devis, des chantiers et de l'agenda, et les relire par
+// fiche multiplierait le travail par deux cents.
+export function ficheDe(f, etapeDe) {
+  const q = qui(f);
+  return {
+    genre: 'fiche', ligne: f, cible: 'client',
+    provenance: provenanceFiche(f),
+    provenanceLabel: ditProvenance(provenanceFiche(f)).label,
+    etape: etapeDe(f),
+    recu: f.meta_received_at || q?.cree || '', nom: q?.nom || '(fiche sans contact)',
+    type: q?.type || null, email: q?.email, tel: q?.tel,
+    ville: q?.ville, adresse: adresseDe(q),
+    projet: f.meta_type_projet, budget: f.meta_budget,
+    // ⚠ LE STATUT AFFICHÉ EST CELUI DE L'ÉTAPE, pas la valeur brute.
+    // Quand les faits ont pris de l'avance — un chantier tourne, le suivi est
+    // resté à « nouveau prospect » — c'est l'étape qui dit vrai. Afficher la
+    // valeur brute mettrait « Nouveau prospect » dans l'onglet « Chantier en
+    // cours ». La base n'est pas touchée : elle se corrige au premier
+    // changement fait depuis ce menu.
+    statut: STATUT_DE_L_ETAPE[etapeDe(f)] || f.statut_suivi || 'nouveau_prospect',
+  };
+}
+
+// Ouvrir la fiche d'une personne depuis n'importe quel écran de l'espace.
+// Elle recalcule l'étape elle-même : l'appelant n'a qu'une fiche sous la main,
+// pas les quatre tables, et le coût d'une seule lecture est nul.
+export function ouvrirFicheDuClient(f, onChange) {
+  const chantiers = scope.rgd('rgd_chantiers');
+  const devis = scope.rgd('rgd_devis');
+  const joursVisite = joursDeVisite(scope.rgd('agenda_events'));
+  const etapeDe = (x) => etapeDeFiche(x, chantiers, devis, joursVisite);
+  ouvrirFicheRgd(ficheDe(f, etapeDe), onChange);
+}
+
 export const rgdClientsPage = {
   title: () => 'RGD Renova — Clients & prospects',
   render(root) {
@@ -446,26 +487,7 @@ export const rgdClientsPage = {
             const e = etapeDe(f);
             return e !== null && (e !== 'demande' || estProspectParSource(f));
           })
-          .map(f => {
-            const q = qui(f);
-            return {
-              genre: 'fiche', ligne: f, cible: 'client',
-              provenance: provenanceFiche(f),
-              provenanceLabel: ditProvenance(provenanceFiche(f)).label,
-              etape: etapeDe(f),
-              recu: f.meta_received_at || q?.cree || '', nom: q?.nom || '(fiche sans contact)',
-              type: q?.type || null, email: q?.email, tel: q?.tel,
-              ville: q?.ville, adresse: adresseDe(q),
-              projet: f.meta_type_projet, budget: f.meta_budget,
-              // ⚠ LE STATUT AFFICHÉ EST CELUI DE L'ÉTAPE, pas la valeur brute.
-              // Quand les faits ont pris de l'avance — un chantier tourne, le
-              // suivi est resté à « nouveau prospect » — c'est l'étape qui dit
-              // vrai. Afficher la valeur brute mettrait « Nouveau prospect »
-              // dans l'onglet « Chantier en cours ». La base n'est pas touchée :
-              // elle se corrige au premier changement fait depuis ce menu.
-              statut: STATUT_DE_L_ETAPE[etapeDe(f)] || f.statut_suivi || 'nouveau_prospect',
-            };
-          }),
+          .map(f => ficheDe(f, etapeDe)),
       ];
       const aEtape = (cle) => prospects.filter(x => x.etape === cle);
 
