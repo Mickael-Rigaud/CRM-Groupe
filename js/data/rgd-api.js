@@ -197,52 +197,27 @@ export const signerDevis = (d1Id) =>
 
 // ---------------------------------------------------------------- sous-traitants
 //
-// ⚠ LES PIÈCES ADMINISTRATIVES NE PASSENT PLUS PAR ICI — 24/09/2026, étape 1
-// de la sortie. Déposer une attestation et relancer un artisan par email
-// étaient les deux derniers gestes de l'espace RGD à ne vivre que dans
-// l'application d'origine : le fichier partait dans son stockage, l'email de
-// son serveur. Tant que c'était vrai, l'éteindre éteignait le seul endroit où
-// l'on peut prouver qu'un artisan est en règle.
+// ⚠ LES SOUS-TRAITANTS NE PASSENT PLUS PAR CE MODULE — 24/09/2026, étapes 1
+// à 3 de la sortie. Ils s'écrivent maintenant DANS le CRM :
 //
-// Tout cela vit désormais dans `js/data/rgd-pieces.js` : le fichier dans le
-// stockage privé du CRM, la ligne dans `rgd_st_pieces`, le mail par la
-// fonction d'envoi du CRM. Cinq fonctions ont disparu d'ici avec ce
-// déménagement — `ficheSousTraitant`, `deposerPieceSt`, `pieceStFichier`,
-// `apercuRelanceSt` et `envoyerRelanceSt` — et avec elles deux des quinze
-// chemins que ce module appelait encore. Il en reste treize.
+//   `js/data/rgd-pieces.js`  le dépôt d'une attestation et la relance par mail
+//   `js/data/rgd-st.js`      les six gestes de la fiche : créer, modifier,
+//                            activer, remettre en prospection, convertir,
+//                            supprimer
 //
-// ⚠ LES FICHIERS DÉJÀ DÉPOSÉS LÀ-BAS NE SONT PAS REPRIS (décision du
-// 24/09/2026 : ce sont des essais). Les DATES, elles, continuent d'arriver par
-// la synchronisation — d'où l'état « date connue, aucun document », que
-// l'écran nomme au lieu de le laisser passer pour une attestation valide.
-
-// Faire passer un artisan repéré en prospection au rang de sous-traitant.
-// ⚠ CE GESTE OUVRE LES OBLIGATIONS DE CONFORMITÉ : à partir de là, l'absence
-// d'attestation de vigilance engage le donneur d'ordre. L'écran doit le dire,
-// pas le faire glisser dans un menu.
-export const convertirSt = (d1Id, champs = {}) =>
-  envoyer(`/api/sous-traitants/${encodeURIComponent(d1Id)}/convertir`, champs, 'POST');
-
-// La fiche elle-même : coordonnées, spécialités, notes. Sans email, la relance
-// est impossible — le worker la refuse — et trois des onze artisans en
-// prospection n'en ont pas.
-export const majSousTraitant = (d1Id, champs) =>
-  envoyer(`/api/sous-traitants/${encodeURIComponent(d1Id)}`, champs);
-
-// Créer un sous-traitant, actif ou en prospection (23/09/2026).
+// Onze fonctions ont quitté ce fichier avec eux, et avec elles cinq des quinze
+// chemins qu'il appelait sur l'application RGD : les deux du dépôt et de la
+// relance (étape 1), puis `/api/sous-traitants`, `/api/sous-traitants/:id` et
+// `/api/sous-traitants/:id/convertir`. Le dépôt des photos en a emmené un
+// sixième de son côté le même jour. **Il en reste NEUF**, et ce sont eux le
+// travail qui reste : chantiers, clients, demandes, devis, évènements,
+// fournitures et la correction manuelle du CA.
 //
-// ⚠ RIEN À TRADUIRE ICI, et c'est l'exception : `sous_traitants` porte les
-// MÊMES noms des deux côtés — `raison_sociale`, `specialites`, `telephone`,
-// `email`, `adresse`, `notes`, `actif`, `statut_relation`. Vérifié contre la
-// liste `FIELDS` du worker, qui ignore en silence tout champ qu'il ne connaît
-// pas et répond quand même `{ ok: true }` : un nom inventé ne se verrait pas.
-// Seuls les booléens se convertissent, D1 ne liant pas un `true` JavaScript.
-//
-// Le worker exige `raison_sociale` (400 sans elle) et rien d'autre.
-export const creerSousTraitant = (champs) => envoyer('/api/sous-traitants', {
-  ...champs,
-  ...(champs.actif === undefined ? {} : { actif: champs.actif ? 1 : 0 }),
-}, 'POST');
+// ⚠ ET LA SYNCHRONISATION A CESSÉ DE DÉPOSER DANS CETTE TABLE, ce qui est
+// l'autre moitié du changement : sans cette coupure, chaque écriture aurait
+// été écrasée dans la demi-heure. Voir la migration
+// `20260924101553_rgd_st_supabase`, qui fait ignorer les charges
+// `sous_traitants` et `st_extra`.
 
 // ------------------------------------------------------------------ agenda
 //
@@ -258,44 +233,6 @@ export const creerSousTraitant = (champs) => envoyer('/api/sous-traitants', {
 // Le worker exige `titre`, `date_debut` et `date_fin` : un 400 sans l'une des
 // trois. Les noms sont ceux de D1 (`titre`, `lieu`), pas ceux du CRM.
 export const creerEvenement = (champs) => envoyer('/api/evenements', champs, 'POST');
-
-// Les trois bascules de l'écran (23/09/2026). Elles passent toutes par le même
-// `PATCH`, mais chacune a son nom : `majSousTraitant(id, { actif: false })`
-// écrirait un booléen que D1 ne sait pas lier, et un appel écrit une fois par
-// écran finit toujours par oublier la conversion quelque part.
-export const activerSousTraitant = (d1Id, actif) =>
-  majSousTraitant(d1Id, { actif: actif ? 1 : 0 });
-
-// ⚠ RETOUR EN PROSPECTION, et ce n'est PAS l'inverse d'un bouton manquant :
-// la montée passe par `/convertir`, qui refuse une fiche déjà active et trace
-// l'événement ; la descente n'a pas de route à elle. Ce n'est pas gênant parce
-// que `convertir` ne fait rien d'autre qu'écrire `statut_relation = 'actif'`
-// (vérifié dans le worker) — aucun email, aucune poussée. Les deux sens sont
-// donc bien symétriques ; si `convertir` gagne un effet un jour, il faudra une
-// route de descente plutôt que ce PATCH.
-export const remettreEnProspection = (d1Id) =>
-  majSousTraitant(d1Id, { statut_relation: 'potentiel' });
-
-// ⚠ SUPPRIMER SE FAIT DES DEUX CÔTÉS, et l'ordre compte.
-//
-// Le relevé n'efface jamais rien : `push_rgd_st` ne fait que des `insert … on
-// conflict do update`. Une ligne supprimée dans D1 resterait donc dans le CRM
-// POUR TOUJOURS, sans plus jamais être rafraîchie. À l'inverse, effacer la
-// seule ligne du CRM la ferait revenir au relevé suivant.
-//
-// D1 d'abord — c'est la source, et c'est l'appel qui peut refuser —, Supabase
-// ensuite. Le retour dit lequel des deux a échoué : « supprimé à moitié » est
-// un état qu'il faut pouvoir nommer, pas une erreur générique.
-export async function supprimerSousTraitant(d1Id, idCrm) {
-  const r = await envoyer(`/api/sous-traitants/${encodeURIComponent(d1Id)}`, {}, 'DELETE');
-  if (!r.ok) return r;
-  try {
-    await db.remove('rgd_sous_traitants', idCrm);
-  } catch (e) {
-    return { ok: false, motif: `supprimé dans le tableau de bord, mais pas dans le CRM (${e.message})` };
-  }
-  return { ok: true };
-}
 
 // ------------------------------------------------- partenaires et achats
 //

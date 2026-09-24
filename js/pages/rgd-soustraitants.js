@@ -1,12 +1,26 @@
 // Espace RGD Renova — sous-traitants
 //
-// ÉTAPE 4 DE LA MIGRATION, RANG 3 — puis, le 22/09/2026, LE DERNIER VERROU.
-// L'écran était en lecture seule. Il ne l'est plus, et pas par goût de
-// l'uniformité : les attestations ne se déposaient QUE dans le tableau de bord,
-// donc éteindre Surge éteignait le seul endroit où l'on peut prouver qu'un
-// artisan est en règle. Le dépôt, la relance et la conversion passent par
-// `js/pages/rgd-st-pieces.js`, qui écrit à la SOURCE — D1 — et jamais dans le
-// reflet, qu'un relevé de trente minutes écraserait sans un mot.
+// ⚠ CE N'EST PLUS UN REFLET DEPUIS LE 24/09/2026 — ÉTAPES 2 ET 3 DE LA SORTIE.
+// `rgd_sous_traitants` était recopiée depuis l'application RGD toutes les 30
+// minutes, et les six gestes de cet écran allaient écrire là-bas. Ils écrivent
+// désormais ici, en direct, et la synchronisation a cessé d'y déposer quoi que
+// ce soit (migration `20260924101553_rgd_st_supabase`, qui ignore les charges
+// `sous_traitants` et `st_extra`).
+//
+// ⚠ LES DEUX MOITIÉS DU CHANGEMENT SONT INDISSOCIABLES, dans un sens comme
+// dans l'autre : livrer ces écritures sans couper la porte les aurait fait
+// disparaître dans la demi-heure, sans erreur et sans un mot. C'est la raison
+// pour laquelle elles n'ont pas suivi le dépôt des pièces, qui, lui, écrivait
+// dans une table à part et pouvait partir seul.
+//
+// Ce que la bascule enlève de cet écran, et qu'il ne faut pas remettre :
+// le `d1_id` pour désigner une ligne (une fiche créée ici n'en a pas), la
+// conversion 0/1 des booléens, la suppression en deux temps, l'attente du
+// relevé après une création, et le garde `peutEcrire()` — le seul droit qui
+// compte est `has_activity('rgd')`, que `guard()` vérifie déjà.
+//
+// ⚠ CE QUI EST PERDU, ET C'EST LE BUT : une fiche modifiée désormais dans
+// l'application RGD n'arrivera plus jamais ici.
 //
 // POURQUOI LES ATTESTATIONS PASSENT AVANT L'ARGENT
 // Un sous-traitant sans attestation de vigilance à jour, c'est le donneur
@@ -17,8 +31,8 @@
 // de ce qu'on fait d'habitude, et c'est volontaire.
 //
 // ACTIFS ET POTENTIELS NE SE MÉLANGENT PAS — corrigé le 22/09/2026
-// `sous_traitants` de D1 porte DEUX drapeaux qui se ressemblent et ne disent
-// pas la même chose :
+// La fiche porte DEUX drapeaux qui se ressemblent et ne disent pas la même
+// chose :
 //
 //   `statut_relation`  'actif' = on travaille avec lui ; 'potentiel' = artisan
 //                      repéré en prospection, avec qui on n'a jamais rien fait
@@ -29,8 +43,7 @@
 // l'alarme de conformité annonçait « 11 sous-traitants actifs n'ont aucune
 // pièce enregistrée » — ce qui était vrai au mot près et faux sur le fond :
 // on ne demande pas une attestation de vigilance à quelqu'un qu'on n'a pas
-// encore fait travailler. Les deux vrais sous-traitants sont les seuls à
-// porter un SIRET, et ce sont des fiches d'essai.
+// encore fait travailler.
 //
 // L'écran sépare donc les deux populations, et **la conformité ne regarde que
 // les actifs**. Les potentiels sont rangés par corps de métier, comme dans le
@@ -50,11 +63,11 @@
 // il reste fermé tant que personne n'a dit qui doit pouvoir le faire.
 import { scope } from '../data/scope.js';
 import { db } from '../data/db.js';
-import { esc, eur, fmtDate, fmtDateTime, terms, hit, searchInput, bindSearch, restoreFocus } from '../ui.js';
+import { esc, eur, fmtDate, terms, hit, searchInput, bindSearch, restoreFocus } from '../ui.js';
 import { poserEspace, kpiEspace } from './espace.js';
 import { cadre, guard } from './rgd-espace.js';
-import { peutEcrire, convertirSt, creerSousTraitant, majSousTraitant,
-         activerSousTraitant, remettreEnProspection, supprimerSousTraitant } from '../data/rgd-api.js';
+import { convertirSt, creerSousTraitant, majSousTraitant, activerSousTraitant,
+         remettreEnProspection, supprimerSousTraitant } from '../data/rgd-st.js';
 import { toast, openModal, closeModal } from '../ui.js';
 import { ouvrirPiecesSt, ouvrirRelanceSt } from './rgd-st-pieces.js';
 import { PIECES_ST, piecesDe, etatPiece } from '../data/rgd-pieces.js';
@@ -112,35 +125,28 @@ function formulaireConversion(st, apres) {
   openModal(`Convertir — ${st.raison_sociale || 'sans nom'}`, corps, { onOpen: (m) => {
     m.querySelector('#cv-ok').onclick = async () => {
       const d = Object.fromEntries(new FormData(m.querySelector('#cv-form')).entries());
-      // Un champ vide n'est pas envoyé : le worker écrirait une chaîne vide là
-      // où l'absence de valeur veut dire « on ne sait pas encore ».
+      // Un champ vide n'est pas envoyé : écrire une chaîne vide là où l'absence
+      // de valeur veut dire « on ne sait pas encore » effacerait la nuance.
       const champs = {};
       for (const k of ['contact_nom', 'siret', 'email', 'telephone', 'specialites']) {
         if (d[k] && d[k].trim()) champs[k] = d[k].trim();
       }
       const b = m.querySelector('#cv-ok');
       b.disabled = true;
-      m.querySelector('#cv-etat').textContent = 'Envoi au tableau de bord…';
-      const r = await convertirSt(st.d1_id, champs);
+      m.querySelector('#cv-etat').textContent = 'Enregistrement…';
+      const r = await convertirSt(st.id, champs);
       b.disabled = false;
       m.querySelector('#cv-etat').textContent = '';
-      if (!r.ok) {
-        toast(r.motif === 'pas-de-compte'
-          ? 'Aucun compte RGD à votre adresse : rien n’a été converti.'
-          : `Non converti — ${r.motif}`, 'err');
-        return;
-      }
-      // On avance la fiche à l'écran : le relevé mettra jusqu'à trente minutes
-      // à la faire changer de table, et la voir rester « en prospection »
-      // donnerait envie de recommencer.
-      st.statut_relation = 'actif';
-      Object.assign(st, champs);
+      if (!r.ok) { toast(`Non converti — ${r.motif}`, 'err'); return; }
       closeModal();
       toast(`${st.raison_sociale || 'L’artisan'} est maintenant un sous-traitant actif`);
       apres?.();
       // Enchaîner sur les pièces : c'est la suite logique du geste, et le seul
       // moment où on est sûr que quelqu'un s'occupe de ce dossier.
-      ouvrirPiecesSt(st);
+      // ⚠ Avec la ligne RELUE, jamais celle qu'on avait en main : `db.update`
+      // remplace l'objet dans le cache, celui du clic porte encore l'ancien
+      // email — et c'est l'email qui décide si la relance est possible.
+      ouvrirPiecesSt(r.donnees || st);
     };
   } });
 }
@@ -153,11 +159,11 @@ function formulaireConversion(st, apres) {
 // sans document derrière, exactement l'état que l'écran passe son temps à
 // dénoncer.
 //
-// ⚠ Les noms des champs sont les mêmes de part et d'autre (`raison_sociale`,
-// `specialites`, `telephone`, `email`, `adresse`, `notes`, `statut_relation`) :
-// c'est l'exception dans cet espace, et `rgd-api.js` le dit. Le worker ignore
-// en silence un champ qu'il ne connaît pas et répond quand même `{ ok: true }`,
-// donc une faute de frappe se lirait « enregistré » sans rien enregistrer.
+// ⚠ LES CHAMPS PASSENT PAR UNE LISTE BLANCHE (`CHAMPS` dans `js/data/rgd-st.js`)
+// et c'est ce qui a remplacé le filtre du worker : il ignorait en silence un
+// champ qu'il ne connaissait pas, donc une faute de frappe se lisait
+// « enregistré » sans rien enregistrer. En écriture directe, elle ferait
+// échouer la requête entière — ou pire, écraserait une colonne du reflet.
 function formulaireSousTraitant(st, apres, statutDefaut) {
   const creation = !st;
   const v = st || {};
@@ -207,30 +213,23 @@ function formulaireSousTraitant(st, apres, statutDefaut) {
         else if (!creation) champs[k] = null;
       }
       // Le statut ne se change QUE par « Convertir en actif », jamais par ce
-      // formulaire : la conversion a ses propres effets côté worker, et deux
-      // chemins vers le même changement finissent par diverger.
+      // formulaire : la conversion ouvre les obligations de conformité, et
+      // deux chemins vers le même changement finissent par diverger.
       if (creation) champs.statut_relation = statut;
 
       const b = m.querySelector('#st-ok');
       b.disabled = true;
-      m.querySelector('#st-etat').textContent = 'Envoi au tableau de bord…';
-      const r = creation ? await creerSousTraitant(champs) : await majSousTraitant(v.d1_id, champs);
+      m.querySelector('#st-etat').textContent = 'Enregistrement…';
+      const r = creation ? await creerSousTraitant(champs) : await majSousTraitant(v.id, champs);
       b.disabled = false;
       m.querySelector('#st-etat').textContent = '';
-      if (!r.ok) {
-        toast(r.motif === 'pas-de-compte'
-          ? 'Aucun compte RGD à votre adresse : rien n’a été enregistré.'
-          : `Non enregistré — ${r.motif}`, 'err');
-        return;
-      }
-      // Une modification avance à l'écran ; une création ne le peut pas — le
-      // CRM ne connaît pas le `d1_id` que le worker vient d'attribuer, et une
-      // ligne sans lui n'aurait ni bouton Pièces ni bouton Convertir.
-      if (!creation) Object.assign(v, champs);
+      if (!r.ok) { toast(`Non enregistré — ${r.motif}`, 'err'); return; }
       closeModal();
-      toast(creation
-        ? 'Artisan ajouté — visible ici au prochain relevé'
-        : 'Artisan enregistré dans le tableau de bord');
+      // ⚠ UNE CRÉATION APPARAÎT MAINTENANT TOUT DE SUITE. Elle annonçait
+      // « visible au prochain relevé » tant que la fiche naissait ailleurs et
+      // qu'il fallait attendre trente minutes son identifiant : la ligne est
+      // désormais écrite ici, elle est dans la liste au redessin suivant.
+      toast(creation ? 'Artisan ajouté' : 'Artisan enregistré');
       apres?.();
     };
   } });
@@ -265,11 +264,13 @@ export const rgdSousTraitantsPage = {
   render(root) {
     if (guard(root)) return {};
     const coquille = poserEspace(root);
-    // `actif` est le filtre de l'original : Actifs (défaut) · Inactifs · Tous.
-    // Il ne porte que sur le tableau des actifs — un artisan en prospection
-    // n'est ni actif ni inactif chez nous, il n'a pas encore travaillé.
-    const state = { q: '', focus: null, ecriture: false };
-    peutEcrire().then(ok => { if (ok !== state.ecriture) { state.ecriture = ok; draw(); } });
+    // ⚠ PLUS DE `state.ecriture` DEPUIS LE 24/09/2026. Les six gestes de cet
+    // écran s'écrivaient dans l'application RGD : ils étaient donc masqués tant
+    // qu'on n'avait pas de compte là-bas, ce qui était honnête — un contrôle
+    // qui échoue au premier clic est pire qu'un texte. Ils écrivent maintenant
+    // dans le CRM, et le seul droit qui compte est `has_activity('rgd')`, que
+    // `guard()` a déjà vérifié en tête de `render`. Tout est donc visible.
+    const state = { q: '', focus: null };
 
     const draw = () => {
       const tous = scope.rgd('rgd_sous_traitants');
@@ -283,21 +284,13 @@ export const rgdSousTraitantsPage = {
       const defautsDe = (st) => PIECES.map(p => etatPiece(st, piecesDe(st.id), p))
         .filter(e => e.poids <= 1).length;
 
-      // Le partage. `statut_relation` vaut 'actif' par défaut côté D1 : une
-      // fiche qui ne le porte pas est donc un sous-traitant, jamais un
-      // prospect — c'est le bon défaut, il ne fabrique pas de prospects.
+      // Le partage. Une fiche sans `statut_relation` est un sous-traitant,
+      // jamais un prospect : c'était le défaut de l'ancienne base, et c'est le
+      // bon — il ne fabrique pas de prospects à partir d'une case vide. La
+      // création, elle, pose toujours l'une des deux valeurs.
       const estPotentiel = (st) => st.statut_relation === 'potentiel';
       const potentiels = tous.filter(estPotentiel);
       const surLesquels = tous.filter(st => !estPotentiel(st));
-      // Tant que le relevé n'envoie pas la colonne, AUCUNE fiche ne la porte :
-      // on le dit, plutôt que de laisser croire qu'il n'y a pas de prospects.
-      const relaisMuet = tous.length > 0 && tous.every(st => st.statut_relation == null);
-      // ZERO PROSPECT NE VEUT PAS DIRE LA MEME CHOSE SELON LE MOMENT : il peut
-      // n'y en avoir aucun, ou le relevé peut n'avoir pas encore tourné depuis
-      // que le worker sait les envoyer. Sans date, les deux se ressemblent —
-      // constaté le 22/09/2026, l'écran semblait n'avoir pas changé.
-      const dernierReleve = tous.reduce((m, st) =>
-        st.updated_at && st.updated_at > m ? st.updated_at : m, '');
 
       // TROIS POPULATIONS, et un écran par bloc (23/09/2026). `statut_relation`
       // dit si on travaille avec lui ; `actif` dit s'il est encore en service.
@@ -369,7 +362,7 @@ export const rgdSousTraitantsPage = {
             <h2>Sous-traitants actifs <span class="chip green">✓ Signés</span></h2>
             <p class="muted small">Partenaires signés — attestations, chantiers, paiements</p>
           </div>
-          ${state.ecriture ? '<button type="button" class="btn primary" id="rst-nouveau">+ Nouveau sous-traitant</button>' : ''}
+          <button type="button" class="btn primary" id="rst-nouveau">+ Nouveau sous-traitant</button>
         </section>
 
         ${sansAucun.length ? `<div class="alert">
@@ -380,14 +373,6 @@ export const rgdSousTraitantsPage = {
           Les pièces se déposent ici, bouton <b>Pièces</b> au bout de la ligne.
           Les artisans en prospection ne sont pas comptés ici : on ne leur demande rien
           tant qu&rsquo;on ne les a pas fait travailler.</div>
-        </div>` : ''}
-
-        ${relaisMuet ? `<div class="alert">
-          <b>i</b>
-          <div><b>Le relevé n&rsquo;envoie pas encore la distinction actif / prospect.</b>
-          Les ${tous.length} fiches sont donc toutes présentées comme des sous-traitants.
-          L’information existe dans l’application RGD ; elle sera reprise dès que le
-          relevé la transmettra.</div>
         </div>` : ''}
 
         <div class="toolbar">
@@ -416,11 +401,10 @@ export const rgdSousTraitantsPage = {
                 <td class="num st-actions">
                   <button type="button" class="btn ghost sm" data-pieces="${esc(st.id)}">Pièces</button>
                   ${st.email ? `<button type="button" class="btn ghost sm" data-relance="${esc(st.id)}">Relancer</button>` : ''}
-                  ${state.ecriture ? `
-                  <button type="button" class="btn ghost sm" data-prospection="${esc(String(st.d1_id))}"
+                  <button type="button" class="btn ghost sm" data-prospection="${esc(st.id)}"
                           title="Le remettre parmi les artisans en prospection">En prospection</button>
-                  <button type="button" class="btn ghost sm danger" data-desactiver="${esc(String(st.d1_id))}"
-                          title="On ne travaille plus avec lui">Désactiver</button>` : ''}
+                  <button type="button" class="btn ghost sm danger" data-desactiver="${esc(st.id)}"
+                          title="On ne travaille plus avec lui">Désactiver</button>
                 </td>
               </tr>`;
             }).join('') || `<tr><td colspan="9"><div class="empty">
@@ -436,7 +420,7 @@ export const rgdSousTraitantsPage = {
             <p class="muted small">${potentiels.length} artisan${potentiels.length > 1 ? 's' : ''} à qualifier —
             prospection, salons, recommandations</p>
           </div>
-          ${state.ecriture ? '<button type="button" class="btn primary" id="rst-potentiel">+ Ajouter un potentiel</button>' : ''}
+          <button type="button" class="btn primary" id="rst-potentiel">+ Ajouter un potentiel</button>
         </section>
 
         ${potentiels.length ? parMetier().map(g => `
@@ -448,26 +432,24 @@ export const rgdSousTraitantsPage = {
             </div>
             <table>
               <thead><tr><th>Nom</th><th>Téléphone</th><th>Mail</th><th>Adresse</th><th>Commentaires</th>
-                ${state.ecriture ? '<th></th>' : ''}</tr></thead>
+                <th></th></tr></thead>
               <tbody>${g.lignes.map(st => `<tr>
                 <td><b>${esc(st.raison_sociale || '—')}</b></td>
                 <td>${st.telephone ? esc(st.telephone) : '<span class="muted">—</span>'}</td>
                 <td>${st.email ? `<a href="mailto:${esc(st.email)}">${esc(st.email)}</a>` : '<span class="muted">—</span>'}</td>
                 <td class="s">${st.adresse ? esc(st.adresse) : '<span class="muted">—</span>'}</td>
                 <td class="s muted">${st.notes ? esc(st.notes) : '—'}</td>
-                ${state.ecriture ? `<td class="num st-actions">
-                  <button type="button" class="btn primary sm" data-convertir="${esc(String(st.d1_id))}">Convertir en actif</button>
-                  <button type="button" class="btn ghost sm" data-modifier="${esc(String(st.d1_id))}">Modifier</button>
-                  <button type="button" class="btn ghost sm danger" data-supprimer="${esc(String(st.d1_id))}"
+                <td class="num st-actions">
+                  <button type="button" class="btn primary sm" data-convertir="${esc(st.id)}">Convertir en actif</button>
+                  <button type="button" class="btn ghost sm" data-modifier="${esc(st.id)}">Modifier</button>
+                  <button type="button" class="btn ghost sm danger" data-supprimer="${esc(st.id)}"
                           title="Supprimer définitivement">🗑</button>
-                </td>` : ''}
+                </td>
               </tr>`).join('')}</tbody>
             </table>
           </section>`).join('') : `<section class="card"><div class="empty">
             <b>Aucun sous-traitant potentiel</b><br>
-            ${state.ecriture
-              ? 'Ajoutez les artisans repérés en salon, en recommandation ou en annuaire.'
-              : `Ils se saisissent dans l’<a href="#/rgd/app">application RGD</a>${dernierReleve ? ' — dernier relevé ' + fmtDateTime(dernierReleve) : ''}.`}
+            Ajoutez les artisans repérés en salon, en recommandation ou en annuaire.
           </div></section>`}
 
         <div class="st-separation"></div>
@@ -484,7 +466,7 @@ export const rgdSousTraitantsPage = {
         <section class="card table-wrap">
           <table>
             <thead><tr><th>Raison sociale</th><th>Contact</th><th>Spécialités</th>
-              <th class="num">Versé</th>${state.ecriture ? '<th></th>' : ''}</tr></thead>
+              <th class="num">Versé</th><th></th></tr></thead>
             <tbody>${inactifs.slice()
               .sort((a, b) => String(a.raison_sociale || '').localeCompare(String(b.raison_sociale || ''), 'fr'))
               .map(st => {
@@ -496,9 +478,9 @@ export const rgdSousTraitantsPage = {
                       ${st.telephone ? `<div class="s muted">${esc(st.telephone)}</div>` : ''}</td>
                   <td class="muted">${esc(st.specialites || '—')}</td>
                   <td class="num">${verse ? eur(verse) : '<span class="muted">—</span>'}</td>
-                  ${state.ecriture ? `<td class="num st-actions">
-                    <button type="button" class="btn ghost sm" data-reactiver="${esc(String(st.d1_id))}">Réactiver</button>
-                  </td>` : ''}
+                  <td class="num st-actions">
+                    <button type="button" class="btn ghost sm" data-reactiver="${esc(st.id)}">Réactiver</button>
+                  </td>
                 </tr>`;
               }).join('')}</tbody>
           </table>
@@ -571,19 +553,17 @@ export const rgdSousTraitantsPage = {
       const potentiel = root.querySelector('#rst-potentiel');
       if (potentiel) potentiel.onclick = () => formulaireSousTraitant(null, draw, 'potentiel');
 
-      const parD1 = (id) => tous.find(x => String(x.d1_id) === String(id));
+      // ⚠ TOUT SE DÉSIGNE PAR L'UUID DU CRM DEPUIS LE 24/09/2026, plus par
+      // l'identifiant de l'application RGD. Les six gestes écrivent ici, et une
+      // fiche créée ici n'a PAS de `d1_id` du tout : le chercher par ce numéro
+      // rendrait ses propres boutons inopérants — sans erreur, juste des clics
+      // qui ne font rien.
+      const parId = (id) => tous.find(x => x.id === id);
 
       root.querySelectorAll('[data-modifier]').forEach(b => b.onclick = () => {
-        const st = parD1(b.dataset.modifier);
+        const st = parId(b.dataset.modifier);
         if (st) formulaireSousTraitant(st, draw);
       });
-
-      // ⚠ CES DEUX-LÀ SONT DÉSIGNÉS PAR L'UUID DU CRM, pas par l'identifiant de
-      // l'application RGD : depuis le 24/09/2026 le dépôt et la relance vivent
-      // ici, et ils s'adressent à la fiche du CRM. Ils ne dépendent donc plus
-      // du droit d'écrire là-bas (`state.ecriture`) — les cacher pour cette
-      // raison fermerait la conformité à quelqu'un à qui la base l'ouvre.
-      const parId = (id) => tous.find(x => x.id === id);
 
       root.querySelectorAll('[data-pieces]').forEach(b => b.onclick = () => {
         const st = parId(b.dataset.pieces);
@@ -598,32 +578,28 @@ export const rgdSousTraitantsPage = {
       });
 
       root.querySelectorAll('[data-convertir]').forEach(b => b.onclick = () => {
-        const st = parD1(b.dataset.convertir);
+        const st = parId(b.dataset.convertir);
         if (st) formulaireConversion(st, draw);
       });
 
-      // LES TROIS BASCULES. Chacune avance à l'écran avant que le relevé ne
-      // passe — sinon la ligne resterait au même endroit trente minutes après
-      // le clic, et on cliquerait une seconde fois. Si l'écriture échoue, la
-      // valeur revient, avec le motif : c'est la règle de tout l'espace.
-      const basculer = async (st, champ, valeur, appel, message) => {
-        const avant = st[champ];
-        st[champ] = valeur;
-        draw();
+      // LES TROIS BASCULES.
+      //
+      // ⚠ ELLES N'AVANCENT PLUS LA LIGNE À LA MAIN, ET C'EST TOUT L'INTÉRÊT DE
+      // LA BASCULE. Elles posaient la valeur à l'écran AVANT l'appel, puis la
+      // remettaient en arrière si l'écriture échouait : sans ça, la ligne
+      // restait au même endroit pendant les trente minutes qui séparaient le
+      // clic du relevé suivant. L'écriture se fait maintenant ici, `db.update`
+      // remet la ligne dans le cache, et `draw()` la retrouve à sa place.
+      // Avancer en plus rendrait le retour en arrière nécessaire pour rien.
+      const basculer = async (st, appel, message) => {
         const r = await appel();
-        if (!r.ok) {
-          st[champ] = avant;
-          draw();
-          toast(r.motif === 'pas-de-compte'
-            ? 'Aucun compte RGD à votre adresse : rien n’a été enregistré.'
-            : `Non enregistré — ${r.motif}`, 'err');
-          return;
-        }
+        if (!r.ok) { toast(`Non enregistré — ${r.motif}`, 'err'); return; }
+        draw();
         toast(message);
       };
 
       root.querySelectorAll('[data-desactiver]').forEach(b => b.onclick = async () => {
-        const st = parD1(b.dataset.desactiver);
+        const st = parId(b.dataset.desactiver);
         if (!st) return;
         if (!await confirmerGeste({
           titre: 'Désactiver ce sous-traitant ?',
@@ -632,18 +608,18 @@ export const rgdSousTraitantsPage = {
             il se réactive d’un clic. On cesse simplement de lui réclamer ses attestations.</p>`,
           ok: 'Désactiver', danger: true,
         })) return;
-        basculer(st, 'actif', false, () => activerSousTraitant(st.d1_id, false),
+        basculer(st, () => activerSousTraitant(st.id, false),
           `${st.raison_sociale || 'L’artisan'} est désactivé`);
       });
 
       root.querySelectorAll('[data-reactiver]').forEach(b => b.onclick = () => {
-        const st = parD1(b.dataset.reactiver);
-        if (st) basculer(st, 'actif', true, () => activerSousTraitant(st.d1_id, true),
+        const st = parId(b.dataset.reactiver);
+        if (st) basculer(st, () => activerSousTraitant(st.id, true),
           `${st.raison_sociale || 'L’artisan'} est de nouveau actif`);
       });
 
       root.querySelectorAll('[data-prospection]').forEach(b => b.onclick = async () => {
-        const st = parD1(b.dataset.prospection);
+        const st = parId(b.dataset.prospection);
         if (!st) return;
         if (!await confirmerGeste({
           titre: 'Remettre en prospection ?',
@@ -654,36 +630,28 @@ export const rgdSousTraitantsPage = {
             enregistrées et reviennent s’il est reconverti en actif.</p>`,
           ok: 'Remettre en prospection',
         })) return;
-        basculer(st, 'statut_relation', 'potentiel', () => remettreEnProspection(st.d1_id),
+        basculer(st, () => remettreEnProspection(st.id),
           `${st.raison_sociale || 'L’artisan'} est repassé en prospection`);
       });
 
-      // ⚠ LA SUPPRESSION EST DÉFINITIVE ET SE FAIT DES DEUX CÔTÉS — voir
-      // `supprimerSousTraitant`. Elle n'est offerte que sur un POTENTIEL : un
-      // actif porte des règlements, des missions et des pièces de conformité,
-      // et « désactiver » est la bonne réponse pour lui.
+      // ⚠ LA SUPPRESSION EST DÉFINITIVE, et elle ne se fait plus que d'UN côté
+      // depuis la bascule — voir `supprimerSousTraitant`, qui emporte aussi les
+      // fichiers des pièces. Elle n'est offerte que sur un POTENTIEL : un actif
+      // porte des règlements, des missions et des pièces de conformité, et
+      // « désactiver » est la bonne réponse pour lui.
       root.querySelectorAll('[data-supprimer]').forEach(b => b.onclick = async () => {
-        const st = parD1(b.dataset.supprimer);
+        const st = parId(b.dataset.supprimer);
         if (!st) return;
         if (!await confirmerGeste({
           titre: 'Supprimer définitivement ?',
-          texte: `<p><b>${esc(st.raison_sociale || 'Cet artisan')}</b> sera effacé du tableau de bord
-            ET du CRM. <b>C’est irréversible</b> — il n’y a pas de corbeille.</p>
+          texte: `<p><b>${esc(st.raison_sociale || 'Cet artisan')}</b> sera effacé, avec ses
+            pièces et leurs fichiers. <b>C’est irréversible</b> — il n’y a pas de corbeille.</p>
             <p class="small muted">Pour le mettre simplement de côté sans le perdre, convertissez-le
             en actif puis désactivez-le : il restera dans le bloc des inactifs.</p>`,
           ok: 'Supprimer définitivement', danger: true,
         })) return;
-        const r = await supprimerSousTraitant(st.d1_id, st.id);
-        if (!r.ok) {
-          toast(r.motif === 'pas-de-compte'
-            ? 'Aucun compte RGD à votre adresse : rien n’a été supprimé.'
-            : `Non supprimé — ${r.motif}`, 'err');
-          return;
-        }
-        // La ligne est retirée de la liste en mémoire : le relevé n'efface
-        // jamais rien, donc rien ne la ferait disparaître d'ici autrement.
-        const i = tous.indexOf(st);
-        if (i >= 0) tous.splice(i, 1);
+        const r = await supprimerSousTraitant(st.id);
+        if (!r.ok) { toast(`Non supprimé — ${r.motif}`, 'err'); return; }
         toast(`${st.raison_sociale || 'L’artisan'} a été supprimé`);
         draw();
       });
