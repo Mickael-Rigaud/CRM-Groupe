@@ -611,10 +611,41 @@ select.cell-in { text-align: left; }
 .rgdm-champ { min-width: 0; display: flex; flex-direction: column; gap: 5px; }
 .rgdm-champ.est-large { grid-column: 1 / -1; }
 .rgdm-champ > label { font-size: 12px; font-weight: 600; color: var(--muted); }
-.rgdm-champ input { border: 1px solid var(--line-strong); border-radius: 9px;
+.rgdm-champ input, .rgdm-champ select, .rgdm-champ textarea {
+  border: 1px solid var(--line-strong); border-radius: 9px;
   padding: 8px 11px; background: #fff; width: 100%; font: inherit; font-size: 14px; }
-.rgdm-champ input:focus { outline: none; border-color: var(--accent);
+.rgdm-champ textarea { resize: vertical; min-height: 68px; line-height: 1.45; }
+.rgdm-champ input:focus, .rgdm-champ select:focus, .rgdm-champ textarea:focus {
+  outline: none; border-color: var(--accent);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
+/* ---- les puces du projet ----
+   Memes formes qu'a la saisie d'une demande (.ndf-puce) : deux ecrans qui
+   posent la meme question doivent l'offrir pareil. Le style est redit ici
+   plutot que partage parce que la modale de saisie pose sa propre teinte par
+   bloc (--teinte), que la fiche n'a pas.
+   ⚠ LA CASE EST POSEE PAR-DESSUS SON LIBELLE, transparente : sans ça le clic
+   ne porterait que sur le carre natif, une cible de 13 px au bord gauche. */
+.rgdm-puces { display: flex; flex-wrap: wrap; gap: 7px; }
+.rgdm-puce { position: relative; }
+.rgdm-puce input { position: absolute; opacity: 0; width: 100%; height: 100%;
+  margin: 0; inset: 0; cursor: pointer; }
+.rgdm-puce span { display: block; padding: 7px 13px; border-radius: 999px;
+  border: 1px solid var(--line-strong); background: #fff; font-size: 13px;
+  font-weight: 500; color: var(--muted); cursor: pointer;
+  transition: all .18s cubic-bezier(.4,0,.2,1); }
+.rgdm-puce:hover span { border-color: var(--puce, var(--accent)); color: var(--text); }
+.rgdm-puce input:checked + span { background: var(--puce, var(--accent));
+  border-color: var(--puce, var(--accent)); color: #fff; font-weight: 600; }
+.rgdm-puce input:focus-visible + span {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--puce, var(--accent)) 25%, transparent); }
+/* L'argent est vert partout ailleurs dans le CRM, et une seule puce se coche
+   sur cette ligne la ou les travaux en portent plusieurs : deux teintes disent
+   que ce ne sont pas deux questions du meme genre. */
+.rgdm-champ[data-champ="budget_annonce"] { --puce: var(--green); }
+/* Une valeur deja en base qui ne figure pas dans la liste standard : le trait
+   discontinu dit qu'elle vient d'ailleurs, sans la faire passer pour une
+   erreur — elle est vraie, c'est le vocabulaire qui a bouge. */
+.rgdm-puce.est-hors-liste span { border-style: dashed; }
 .rgdm-pied { display: flex; justify-content: flex-end; gap: 10px; }
 /* Le bouton d'entree se tient dans l'en-tete, au-dessus des chiffres : c'est
    la premiere chose qu'on cherche quand on vient corriger quelque chose. */

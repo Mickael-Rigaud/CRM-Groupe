@@ -52,22 +52,11 @@
 // La validation est donc faite à la main, écran par écran.
 import { db } from '../data/db.js';
 import { openModal, closeModal, toast, esc } from '../ui.js';
+import { DEMANDEUR, BIEN, RESIDENCE, TRAVAUX, BUDGETS, CONNU } from '../data/rgd-formulaire.js';
 
-// Les libellés viennent du formulaire du site, mot pour mot. Les reformuler
-// donnerait deux vocabulaires pour une même question, et le jour où on
-// comparera les réponses, personne ne saura si « Maison » et « Une maison »
-// sont la même chose.
-const DEMANDEUR = ['Propriétaire', 'Futur acquéreur', 'Je me renseigne'];
-const BIEN = ['Un appartement', 'Une maison', 'Un immeuble'];
-const RESIDENCE = ['Une résidence principale', 'Une résidence secondaire',
-  'Un investissement locatif'];
-const TRAVAUX = ['Électricité', 'Maçonnerie', 'Isolation', 'Peinture',
-  'Plomberie', 'Terrassement', 'Menuiserie PVC'];
-const BUDGETS = ['Moins de 20 000€', '20 000€ - 35 000€', '35 000€ - 50 000€',
-  '50 000€ - 80 000€', '80 000€ - 120 000€', 'Plus de 120 000€'];
-const CONNU = ['Recommandation', 'Recherche Google', 'Réseaux sociaux',
-  'Publicité (flyer, affichage, panneaux...)', 'Chantier vu sur place',
-  'BNI ou réseau professionnel'];
+// ⚠ LES LISTES DE RÉPONSES ONT DÉMÉNAGÉ dans `data/rgd-formulaire.js` le
+// 24/09/2026 : la fiche client pose désormais les mêmes questions, et deux
+// copies auraient divergé au premier ajout.
 
 // ⚠ EN SVG, PAS EN ÉMOJI. Un émoji change de dessin et de couleur selon le
 // système : deux postes n'afficheraient pas le même formulaire, et aucun ne

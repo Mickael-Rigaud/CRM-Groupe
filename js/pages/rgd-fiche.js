@@ -3,21 +3,21 @@
 // CE QU'ELLE REPREND DE BTP EXPERTISE, ET CE QU'ELLE LAISSE
 // La fiche d'affaire de BTP sert de modèle pour ce qu'elle CONTIENT — état,
 // frise d'étapes, informations, historique — et non pour sa mise en page.
-// Trois choses n'y sont pas, et leur absence est un choix :
+// Deux choses n'y sont pas, et leur absence est un choix :
 //
 //   « Gagnée » / « Perdue » — chez BTP, gagner est un GESTE indépendant de
 //   l'étape. Ici l'étape vient du statut, et « perdu » est une étape comme une
 //   autre : deux boutons qui écriraient la même chose que la frise se
 //   contrediraient tôt ou tard.
 //
-//   « Gagnée » / « Perdue » seulement : « Modifier » EXISTE depuis le
-//   24/09/2026 (voir `rgd-fiche-modif.js`). L'en-tête disait ici que l'espace
-//   RGD était en lecture seule et qu'un formulaire serait écrasé au relevé
-//   suivant — c'était exact, et c'est pourquoi le formulaire écrit à la source
-//   plutôt que dans le reflet.
-//
 //   Les documents — ils appartiennent aux affaires du CRM, pas aux fiches
 //   relevées de Cloudflare, qui n'en ont pas.
+//
+// ⚠ « MODIFIER » EXISTE DEPUIS LE 24/09/2026 (voir `rgd-fiche-modif.js`).
+// L'en-tête annonçait ici que l'espace RGD était en lecture seule et qu'un
+// formulaire serait écrasé au relevé suivant. C'était exact, et c'est
+// précisément pour ça que le formulaire écrit À LA SOURCE et non dans le
+// reflet — la phrase décrivait le piège, pas une interdiction.
 //
 // ⚠ L'HISTORIQUE S'ATTACHE AU CONTACT, PAS À UNE AFFAIRE — et c'est ce qui a
 // permis de le faire sans migration. `events` porte déjà `contact_id` et
@@ -49,8 +49,9 @@ import { db } from '../data/db.js';
 import { esc, eur, fmtDate, fmtDateTime, openModal, toast, userName, daysSince } from '../ui.js';
 import { ETAPES_RGD, ORDRE_ETAPES, STATUT_DE_L_ETAPE, ecrireStatut } from '../data/rgd-etapes.js';
 import { scope } from '../data/scope.js';
-import { formulaireModif, enregistrerModif, lireModif, refusDeModifier }
+import { formulaireModif, enregistrerModif, lireModif, refusDeModifier, valeursProjet }
   from './rgd-fiche-modif.js';
+import { listeTravaux } from '../data/rgd-formulaire.js';
 import { rendezVousDeLaFiche, coordonneesDuRendezVous } from '../data/rgd-rdv.js';
 
 const ETAT_CHANTIER = {
@@ -165,41 +166,30 @@ export function ouvrirFicheRgd(x, onChange) {
     const budgetSaisi = Number(f.budget_travaux) > 0 ? eur(Number(f.budget_travaux)) : '';
     const montant = signes.length
       ? { valeur: eur(signes.reduce((t, v) => t + (Number(v.montant_ht) || 0), 0)), quoi: 'Signé HT' }
-      : { valeur: budgetSaisi || String(x.budget || '').trim() || '—', quoi: 'Budget annoncé' };
+      : { valeur: valeursProjet(x).budget_annonce || budgetSaisi
+            || String(x.budget || '').trim() || '—', quoi: 'Budget annoncé' };
 
     // ⚠ CES CHAMPS N'EXISTENT QUE SUR UNE DEMANDE. Une fiche `rgd_clients` a
     // ses équivalents Meta et rien d'autre ; `d` vaut alors un objet vide, et
     // `info()` n'affiche pas une ligne vide — la fiche ne montre donc que ce
     // qu'elle a.
     const d = x.genre === 'demande' ? f : {};
-    // Le bien : « Une maison · Une résidence principale » du formulaire du
-    // site, ou le `meta_type_bien` d'un lead Meta. C'est la colonne « Bien »
-    // que la refonte du 23/09/2026 avait laissée en route en fusionnant les
-    // trois tableaux en un seul.
-    const bien = [d.type_projet, d.type_intervention].filter(Boolean).join(' · ')
-      || f.meta_type_bien || f.type_bien || '';
-    // ⚠ DEUX FORMES COHABITENT DANS `types_travaux` : un tableau JSON pour les
-    // lignes venues de D1, du texte séparé par des virgules pour celles
-    // qu'écrivent l'Edge Function et la saisie à la main. Afficher la première
-    // telle quelle donnerait `["Peinture","Plomberie"]` à l'écran.
-    const listeTravaux = (() => {
-      const brut = String(d.types_travaux || '').trim();
-      if (!brut) return [];
-      if (brut.startsWith('[')) { try { return JSON.parse(brut); } catch { return [brut]; } }
-      return brut.split(',').map(t => t.trim()).filter(Boolean);
-    })();
-    // ⚠ PAS DE REPLI SUR `x.projet` POUR UNE DEMANDE. Là, `x.projet` vaut
-    // `type_projet` — « Une maison » — qui est le BIEN et non les travaux.
-    // L'afficher ici mettrait « Une maison » en face de « Nature des travaux »
-    // et la même valeur deux lignes plus bas.
-    // ⚠ `nature_travaux` PASSE AVANT `meta_type_projet`, pour la meme raison
-    // que le budget saisi passe avant le budget annonce : c'est le seul des
-    // deux qu'on puisse corriger soi-meme. Sans cet ordre, une nature saisie
-    // dans le formulaire de modification ne s'affichait nulle part et la fiche
-    // paraissait n'avoir rien enregistre.
-    const travaux = listeTravaux.length
-      ? listeTravaux.map(t => `<span class="chip">${esc(t)}</span>`).join(' ')
-      : (x.genre === 'demande' ? '' : esc(f.nature_travaux || x.projet || ''));
+    // ⚠ LES RÉPONSES « PROJET » PASSENT PAR `valeursProjet`, la même traduction
+    // que le formulaire de modification. Deux lectures séparées auraient fini
+    // par ne plus dire la même chose, et l'écart ne se serait vu que sur un
+    // genre de fiche — une demande ou un client, jamais les deux.
+    const proj = valeursProjet(x);
+    // Le bien : « Une maison · Une résidence principale » du formulaire, ou le
+    // `meta_type_bien` d'un lead Meta, qui répond dans son propre vocabulaire.
+    const bien = [proj.type_projet, proj.type_intervention].filter(Boolean).join(' · ')
+      || f.meta_type_bien || '';
+    const travaux = listeTravaux(proj.types_travaux)
+      .map(t => `<span class="chip">${esc(t)}</span>`).join(' ');
+    // ⚠ LE BUDGET A TROIS SOURCES ET L'ORDRE EST CELUI DE LA CERTITUDE : la
+    // tranche choisie ici, puis le montant chiffré de l'application RGD, puis ce
+    // que la personne avait répondu à Facebook ou au site. Le premier est le
+    // seul qu'on puisse corriger soi-même, il passe donc devant.
+    const budgetDit = proj.budget_annonce || budgetSaisi || String(x.budget || '').trim();
 
     // ⚠ NE PAS REPETER LE MEME MOT DEUX FOIS. La provenance est DEDUITE du
     // « comment nous avez-vous connus », donc quand la personne a repondu
@@ -310,19 +300,20 @@ export function ouvrirFicheRgd(x, onChange) {
           <section class="rgdf-bloc">
             <h3>Le projet</h3>
             ${info('travaux', 'Nature des travaux', travaux, 'est-orange')}
-            ${info('euro', 'Budget annoncé', esc(budgetSaisi || String(x.budget || '').trim()), 'est-orange')}
+            ${info('euro', 'Budget annoncé', esc(budgetDit), 'est-orange')}
             ${info('maison', 'Le bien', esc(bien), 'est-bleu')}
-            ${info('lieu', 'Adresse du chantier', esc(f.adresse_chantier || ''), 'est-bleu')}
-            ${info('regle', 'Superficie', d.superficie ? esc(d.superficie) + ' m²' : '', 'est-bleu')}
+            ${info('lieu', 'Adresse du chantier', esc(proj.adresse_chantier), 'est-bleu')}
+            ${info('regle', 'Superficie', proj.superficie ? esc(proj.superficie) + ' m²' : '', 'est-bleu')}
             ${info('personne', 'Le demandeur', esc(d.type_demandeur || ''), 'est-gris')}
-            ${info('texte', 'Ce qui est demandé', esc(d.projet_description || ''), 'est-gris')}
+            ${info('texte', 'Ce qui est demandé', esc(proj.projet_description), 'est-gris')}
             ${info('personne', 'Apporté par', esc(nomApporteur), 'est-vert')}
             ${info('source', 'Provenance', esc(provenance), 'est-violet')}
             ${neeDuCalendrier ? `<p class="rgdf-origine">
               <b>Cette fiche a été créée depuis Google Agenda</b>${dateDeCreation ? `, le ${fmtDate(dateDeCreation)}` : ''} —
               un rendez-vous « Visite technique » l'a fait naître, avec son chantier.
             </p>` : ''}
-            ${!travaux && !budgetSaisi && !x.budget && !bien && !f.adresse_chantier
+            ${!travaux && !budgetDit && !bien && !proj.adresse_chantier
+              && !proj.superficie && !proj.projet_description
               ? '<p class="rgdf-rien">Le projet n’a pas encore été décrit.</p>' : ''}
           </section>`}
 
