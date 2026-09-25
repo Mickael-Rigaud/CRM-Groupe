@@ -49,7 +49,7 @@
 // se demander lequel est vrai.
 import { scope } from '../data/scope.js';
 import { esc, eur, fmtDate, terms, hit, searchInput, bindSearch, restoreFocus } from '../ui.js';
-import { toast, openModal, closeModal, confirm } from '../ui.js';
+import { toast, openModal, closeModal } from '../ui.js';
 import { poserEspace } from './espace.js';
 import { cadre, guard } from './rgd-espace.js';
 import { creerPartenaire, majPartenaire, supprimerPartenaire,
@@ -214,10 +214,25 @@ function brancherFormulaire(hote, a, apres, annuler) {
         apres?.(r.ligne);
       };
 
+      // ⚠ MÊME PIÈGE QUE DANS LE TABLEAU : `confirm()` remplacerait cette
+      // fenêtre, donc renoncer à supprimer ferait perdre la fiche et la saisie
+      // en cours. Deux clics sur le même bouton, qui dit ce qu'il emporte.
       const suppr = m.querySelector('#paf-suppr');
       if (suppr) suppr.onclick = async () => {
         const n = apportsDe(a.id).length;
-        if (!await confirm(`Supprimer ${nomDe(a)} ?${n ? ` Ses ${n} apport${n > 1 ? 's' : ''} partiront avec.` : ''}`)) return;
+        if (suppr.dataset.arme !== '1') {
+          suppr.dataset.arme = '1';
+          suppr.classList.add('danger-plein');
+          suppr.textContent = `Confirmer la suppression${n ? ` (${n} apport${n > 1 ? 's' : ''})` : ''}`;
+          clearTimeout(suppr._t);
+          suppr._t = setTimeout(() => {
+            suppr.dataset.arme = '';
+            suppr.classList.remove('danger-plein');
+            suppr.textContent = 'Supprimer';
+          }, 4000);
+          return;
+        }
+        clearTimeout(suppr._t);
         const r = await supprimerPartenaire(a.id);
         if (!r.ok) return toast(`Non supprimé — ${r.motif}`, 'err');
         closeModal();
@@ -248,24 +263,16 @@ function nouveauPartenaire(apres, typeDefaut = 'apporteur') {
 // la colonne DÉPLACE la ligne vers l'autre fiche, et l'écran le dit plutôt que
 // de la faire disparaître sans un mot.
 
-const optionsApporteurs = (tous, choisi) => tous
-  .filter(estApporteur)
-  .sort((x, y) => nomDe(x).localeCompare(nomDe(y), 'fr'))
-  .map(p => `<option value="${esc(String(p.id))}"${String(choisi) === String(p.id) ? ' selected' : ''}>${
-    esc(nomDe(p))}${estActif(p) ? '' : ' (inactif)'}</option>`).join('');
-
-// ⚠ DEUX CHAMPS DANS LA COLONNE « APPORTEUR », et ils ne disent pas la même
-// chose (25/09/2026). Le premier est le PARTENAIRE — c'est lui qui porte les
-// totaux et la fiche. Le second est la personne de SON ÉQUIPE qui a présenté
-// l'affaire : du texte libre, sans fiche à créer, avec les noms déjà employés
-// chez ce partenaire en suggestion. Un cabinet de cinq personnes reste un seul
-// partenaire, et on sait quand même qui a travaillé.
-const ligneApport = (x, tous) => `<tr data-ligne="${esc(String(x.id))}">
-  <td>
-    <select data-champ="apporteur_id">${optionsApporteurs(tous, x.apporteur_id)}</select>
-    <input class="pat-equipe" data-champ="apporte_par" list="pa-equipe"
-      value="${esc(x.apporte_par || '')}" placeholder="Qui, dans son équipe ?">
-  </td>
+// ⚠ PLUS DE LISTE D'APPORTEURS DANS LA LIGNE (corrigé le 25/09/2026 : « c'est
+// dans tous les cas l'apporteur de la fiche »). Elle proposait de déplacer un
+// apport vers un autre partenaire — un geste que personne ne fait, pour une
+// liste déroulante lue à chaque ligne. `apporteur_id` est posé à la création et
+// ne se change plus ici ; la colonne ne porte donc que la PERSONNE de l'équipe
+// qui a présenté l'affaire, en texte libre, avec les noms déjà employés chez ce
+// partenaire en suggestion.
+const ligneApport = (x) => `<tr data-ligne="${esc(String(x.id))}">
+  <td><input data-champ="apporte_par" list="pa-equipe"
+    value="${esc(x.apporte_par || '')}" placeholder="Qui a apporté ?"></td>
   <td><input type="date" data-champ="date_apport" value="${esc(x.date_apport || '')}"></td>
   <td><input data-champ="client" value="${esc(x.client || '')}" placeholder="Nom du client"></td>
   <td><select data-champ="issue">
@@ -280,7 +287,7 @@ const ligneApport = (x, tous) => `<tr data-ligne="${esc(String(x.id))}">
   <td><button type="button" class="pat-x" data-suppr title="Supprimer la ligne">✕</button></td>
 </tr>`;
 
-const corpsApports = (siens, tous) => siens.map(x => ligneApport(x, tous)).join('')
+const corpsApports = (siens) => siens.map(x => ligneApport(x)).join('')
   || '<tr class="pat-vide"><td colspan="7"><div class="empty">Aucun apport. Ajoutez une ligne pour commencer.</div></td></tr>';
 
 /**
@@ -370,9 +377,9 @@ function ouvrirFichePartenaire(id, apres) {
             <datalist id="pa-equipe">${equipeDe(a.id)
               .map(n => `<option value="${esc(n)}"></option>`).join('')}</datalist>
             <table class="pat">
-              <thead><tr><th>Apporteur</th><th>Date</th><th>Client</th><th>Issue</th>
+              <thead><tr><th>Apporté par</th><th>Date</th><th>Client</th><th>Issue</th>
                 <th class="num">Montant devis</th><th class="num">Commission</th><th></th></tr></thead>
-              <tbody id="pa-corps">${corpsApports(siens, tous)}</tbody>
+              <tbody id="pa-corps">${corpsApports(siens)}</tbody>
             </table>
           </div>
           ${ecriture ? `<div class="pat-pied">
@@ -440,7 +447,7 @@ function brancherTableau(m, a, apres) {
   };
 
   const redessinerCorps = () => {
-    corps.innerHTML = corpsApports(apportsDe(a.id), scope.rgd('rgd_apporteurs'));
+    corps.innerHTML = corpsApports(apportsDe(a.id));
     brancherLignes();
     majSuggestions();
     majChiffres();
@@ -462,13 +469,6 @@ function brancherTableau(m, a, apres) {
           if (!r.ok) return toast(`Non enregistré — ${r.motif}`, 'err');
           dire('Enregistré');
 
-          // ⚠ CHANGER L'APPORTEUR SORT LA LIGNE DE CETTE FICHE. On redessine
-          // alors le tableau — elle disparaît — et on le DIT, sinon on croirait
-          // l'avoir perdue.
-          if (cle === 'apporteur_id' && String(valeur) !== String(a.id)) {
-            toast('Apport déplacé vers l’autre fiche');
-            return redessinerCorps();
-          }
           // Un nom d'équipe neuf rejoint les suggestions des autres lignes,
           // sans redessiner le tableau : on est peut-être déjà dans la cellule
           // suivante.
@@ -478,9 +478,31 @@ function brancherTableau(m, a, apres) {
         };
       });
 
+      // ⚠ PAS DE `confirm()` ICI, ET C'EST UN BUG CORRIGÉ LE 25/09/2026 :
+      // « quand je supprime une ligne ça me ferme la fiche partenaire ». Le
+      // `confirm()` du CRM appelle `closeModal(true)` et REMPLACE la fenêtre
+      // courante par la sienne — la fiche partait donc avant même la réponse,
+      // et elle ne revenait pas. Le garde-fou tient en DEUX CLICS sur la même
+      // croix : le premier l'arme (elle devient rouge et dit « Confirmer »),
+      // le second supprime. Il se désarme tout seul au bout de quatre secondes,
+      // pour qu'une croix rouge oubliée ne piège pas le clic suivant.
       const x = tr.querySelector('[data-suppr]');
       if (x) x.onclick = async () => {
-        if (!await confirm('Supprimer cette ligne ?')) return;
+        if (x.dataset.arme !== '1') {
+          x.dataset.arme = '1';
+          x.classList.add('est-arme');
+          x.textContent = 'Confirmer';
+          x.title = 'Cliquez à nouveau pour supprimer';
+          clearTimeout(x._t);
+          x._t = setTimeout(() => {
+            x.dataset.arme = '';
+            x.classList.remove('est-arme');
+            x.textContent = '✕';
+            x.title = 'Supprimer la ligne';
+          }, 4000);
+          return;
+        }
+        clearTimeout(x._t);
         const r = await supprimerApport(ligneId);
         if (!r.ok) return toast(`Non supprimé — ${r.motif}`, 'err');
         redessinerCorps();

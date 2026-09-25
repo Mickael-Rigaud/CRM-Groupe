@@ -715,11 +715,7 @@ button.esp-side-titre { background: none; border: 0; font-family: inherit; color
 .pat td:nth-child(5) input, .pat td:nth-child(6) input { text-align: right; }
 /* Chaque colonne prend la largeur de ce qu'elle porte : sans ces bornes la
    grille repartit a parts egales et « Pas tranche » se lisait « Pas tran ». */
-.pat th:nth-child(1), .pat td:nth-child(1) { width: 22%; min-width: 175px; }
-/* Le nom d'equipe se tient SOUS le partenaire, plus petit : c'est une
-   precision sur lui, pas un second apporteur. Meme colonne, deux niveaux. */
-.pat-equipe { margin-top: 3px; font-size: 12.5px !important; color: var(--muted); }
-.pat-equipe:focus { color: var(--text); }
+.pat th:nth-child(1), .pat td:nth-child(1) { width: 20%; min-width: 155px; }
 .pat th:nth-child(2), .pat td:nth-child(2) { width: 130px; }
 .pat th:nth-child(4), .pat td:nth-child(4) { width: 132px; }
 .pat th:nth-child(5), .pat td:nth-child(5),
@@ -730,6 +726,11 @@ button.esp-side-titre { background: none; border: 0; font-family: inherit; color
 .pat-x { border: 0; background: none; color: var(--muted); cursor: pointer;
   font-size: 14px; line-height: 1; padding: 5px 7px; border-radius: 7px; }
 .pat-x:hover { color: var(--red); background: var(--red-soft); }
+/* Arme : elle dit ce qu'elle va faire, et se desarme seule au bout de quatre
+   secondes. Un `confirm()` ne peut pas servir ici — il remplace la fenetre. */
+.pat-x.est-arme { color: #fff; background: var(--red); font-size: 12px;
+  font-weight: 600; padding: 5px 9px; }
+.btn.danger-plein { background: var(--red); border-color: var(--red); color: #fff; }
 .pat-vide td { padding: 0; }
 .pat-pied { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
 
