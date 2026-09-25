@@ -339,6 +339,29 @@ function formulaireEvenement(jour, apres) {
   } });
 }
 
+// Le jour visé par l'adresse : `#/rgd/agenda?jour=2026-10-06`.
+//
+// ⚠ C'EST LA FICHE CLIENT QUI S'EN SERT (25/09/2026, demandé par Mickael :
+// « je voudrais plutôt voir le rendez-vous dans l'agenda du tableau de bord »).
+// Le bloc des rendez-vous y ouvrait Google Agenda, c'est-à-dire un autre outil
+// dans un autre onglet, pour une information que le CRM affiche déjà.
+//
+// ⚠ LE ROUTEUR RETIRE DÉJÀ LA CHAÎNE DE REQUÊTE du nom de page (`route()` dans
+// `app.js`), donc l'écran la relit lui-même — même mécanique que
+// `rgd-clients.js` et `rgd-formations.js`.
+//
+// ⚠ UNE DATE HORS FENÊTRE EST IGNORÉE plutôt que suivie : les flèches se
+// grisent aux bornes, s'y poser d'emblée donnerait un écran vide dont on ne
+// pourrait pas sortir vers l'avant. Une date illisible l'est aussi.
+function jourDemande() {
+  const brut = (location.hash.split('?')[1] || '');
+  const vise = new URLSearchParams(brut).get('jour') || '';
+  if (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(vise)) return isoDay();
+  const min = decale(isoDay(), -FENETRE.passe);
+  const max = decale(isoDay(), FENETRE.avenir);
+  return (vise >= min && vise <= max) ? vise : isoDay();
+}
+
 export const rgdAgendaPage = {
   title: () => 'RGD Renova — Agenda',
   render(root) {
@@ -348,9 +371,13 @@ export const rgdAgendaPage = {
     // agenda pour savoir où on en est, pas pour retrouver la semaine qu'on
     // regardait la dernière fois. (L'échelle ne se retient plus non plus —
     // il n'y en a qu'une.)
+    // ⚠ LE MINI-CALENDRIER SUIT LE JOUR VISÉ, pas le mois courant : arriver
+    // depuis une fiche sur la semaine du 5 octobre avec un mini-calendrier
+    // resté en septembre fait chercher à deux endroits où l'on est.
+    const jourOuvert = jourDemande();
     const state = {
-      jour: isoDay(),
-      mois: isoDay().slice(0, 7),
+      jour: jourOuvert,
+      mois: jourOuvert.slice(0, 7),
       ecriture: false,
       // ⚠ AU REPOS AU DÉPART, et pas « en cours ». Mis à « en-cours » ici,
       // le mot restait affiché pour toujours en mode démo, où `rafraichir`

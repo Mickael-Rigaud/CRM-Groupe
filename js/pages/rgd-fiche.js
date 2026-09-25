@@ -47,7 +47,8 @@
 //      on reconnaît une forme plus vite qu'on ne lit un mot.
 import { db } from '../data/db.js';
 import { esc, eur, fmtDate, fmtDateTime, openModal, toast, userName, daysSince } from '../ui.js';
-import { ETAPES_RGD, ORDRE_ETAPES, STATUT_DE_L_ETAPE, ecrireStatut } from '../data/rgd-etapes.js';
+import { ETAPES_RGD, ORDRE_ETAPES, STATUT_DE_L_ETAPE, ecrireStatut, montantSigneDe }
+  from '../data/rgd-etapes.js';
 import { scope } from '../data/scope.js';
 import { formulaireModif, enregistrerModif, lireModif, refusDeModifier, valeursProjet }
   from './rgd-fiche-modif.js';
@@ -108,6 +109,12 @@ const pict = (cle) => `<svg viewBox="0 0 20 20" aria-hidden="true"><path d="${IC
 //
 // ⚠ UNE JOURNÉE ENTIÈRE N'A PAS D'HEURE, et en inventer une (00:00) ferait
 // croire à un rendez-vous à minuit. `all_day` le dit, on affiche le jour seul.
+//
+// ⚠ « VOIR » MÈNE À L'AGENDA DU CRM, PAS À GOOGLE (25/09/2026, demandé par
+// Mickael). Le lien ouvrait `agenda_events.link`, c'est-à-dire un autre outil
+// dans un autre onglet, pour une information que l'écran Agenda affiche déjà —
+// avec les autres rendez-vous du jour autour, ce que Google seul ne donne pas
+// dans le contexte du dossier.
 function blocRendezVous(rdvs) {
   if (!rdvs.length) return '';
   const aujourdhui = new Date().toISOString().slice(0, 10);
@@ -118,7 +125,7 @@ function blocRendezVous(rdvs) {
       : fmtDateTime(e.starts_at);
     return `<li class="${passe ? 'est-passe' : ''}">
       <b>${esc(quand)}</b>
-      ${e.link ? `<a href="${esc(e.link)}" target="_blank" rel="noopener">Ouvrir</a>` : ''}
+      ${e.day ? `<a href="#/rgd/agenda?jour=${esc(e.day)}">Voir</a>` : ''}
     </li>`;
   }).join('');
   return `<div class="rgdf-rdv">
@@ -207,19 +214,16 @@ export function ouvrirFicheRgd(x, onChange) {
     const budgetTuile = valeursProjet(x).budget_annonce || budgetSaisi
       || String(x.budget || '').trim() || '—';
 
-    // ⚠ LE BUDGET ANNONCÉ ET LE DEVIS ACCEPTÉ SONT DEUX TUILES, plus une seule
-    // qui bascule (25/09/2026, demandé par Mickael : « rajouter le montant HT du
-    // devis accepté à partir de devis accepté »). L'ancienne version REMPLAÇAIT
-    // le budget par le signé dès qu'un devis était signé, donc l'écart entre ce
-    // que la personne annonçait et ce qu'elle a fini par signer ne se lisait
-    // nulle part — c'est pourtant le chiffre qu'on cherche après coup.
+    // ⚠ À PARTIR DE « DEVIS ACCEPTÉ », LE MONTANT HT REMPLACE LE BUDGET ANNONCÉ
+    // (25/09/2026, arbitré par Mickael après avoir vu les deux côte à côte). Une
+    // fois le devis signé, ce que la personne annonçait au téléphone n'a plus
+    // d'usage : c'est le montant engagé qu'on vient lire, et deux chiffres
+    // d'argent voisins se confondent au premier coup d'oeil.
     //
-    // ⚠ ELLE N'APPARAÎT QU'À PARTIR DE « DEVIS ACCEPTÉ », et elle dit « — »
-    // quand l'étape y est sans qu'aucun devis signé ne soit relevé : ne rien
-    // savoir et valoir zéro ne sont pas la même chose.
+    // ⚠ IL DIT « — » quand l'étape y est sans qu'aucun devis signé ne soit
+    // relevé : ne rien savoir et valoir zéro ne sont pas la même chose.
     const auDevisAccepte = i >= ORDRE_ETAPES.indexOf('devis_accepte');
-    const totalSigne = signes.reduce((t, v) => t + (Number(v.montant_ht) || 0), 0);
-    const montantSigne = signes.length ? eur(totalSigne) : '—';
+    const montantSigne = signes.length ? eur(montantSigneDe(f, devis)) : '—';
 
     // ⚠ CES CHAMPS N'EXISTENT QUE SUR UNE DEMANDE. Une fiche `rgd_clients` a
     // ses équivalents Meta et rien d'autre ; `d` vaut alors un objet vide, et
@@ -313,8 +317,9 @@ export function ouvrirFicheRgd(x, onChange) {
           : refusDeModifier(x)
             ? `<p class="rgdf-origine" title="${esc(refusDeModifier(x))}">Lecture seule</p>` : ''}
         <div class="rgdf-tuiles">
-          ${tuile(budgetTuile, 'Budget annoncé')}
-          ${auDevisAccepte ? tuile(montantSigne, 'Devis accepté HT') : ''}
+          ${auDevisAccepte
+            ? tuile(montantSigne, 'Montant HT')
+            : tuile(budgetTuile, 'Budget annoncé')}
           ${auDevis ? tuile(devis.length, 'Devis') : ''}
           ${auDevis ? tuile(chantiers.length, chantiers.length > 1 ? 'Chantiers' : 'Chantier') : ''}
           ${tuile(jours == null ? '—' : (jours <= 0 ? "Aujourd'hui" : jours + ' j'), 'Dans la base')}

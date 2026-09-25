@@ -225,6 +225,21 @@ export function joursDeVisite(agenda) {
   return jours;
 }
 
+/**
+ * Le montant HT engagé par cette personne : la somme de ses devis SIGNÉS.
+ *
+ * ⚠ UNE SEULE DÉFINITION, LUE PAR LA FICHE ET PAR LE TABLEAU (25/09/2026). Le
+ * montant s'affiche aux deux endroits à partir de « Devis accepté » ; deux
+ * calculs séparés auraient fini par ne plus dire la même chose, et l'écart se
+ * serait vu comme une erreur de l'un des deux écrans.
+ *
+ * ⚠ SEUL `signe` COMPTE, jamais `envoye` : un devis envoyé est une proposition,
+ * pas un engagement. C'est la même règle que `etapeParLesFaits`.
+ */
+export const montantSigneDe = (f, devis) => (devis || [])
+  .filter(v => memeQue(v, f) && v.statut === 'signe')
+  .reduce((t, v) => t + (Number(v.montant_ht) || 0), 0);
+
 // L'étape lue sur les FAITS seuls. Elle ne dépend d'aucune saisie, donc elle
 // ne ment pas — mais elle ne sait rien avant le premier devis.
 export function etapeParLesFaits(f, chantiers, devis, joursVisite) {

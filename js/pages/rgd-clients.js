@@ -86,9 +86,10 @@ import { scope } from '../data/scope.js';
 // fichier n'en garde que l'usage.
 import { ORDRE_ETAPES, ETAPES_RGD, ETAPES_CLES, ETAPE_DU_STATUT, STATUT_DE_L_ETAPE,
          etapeDeFiche, etapeDeDemande, estProspectParSource,
-         joursDeVisite, statutsDeLEtape, statutSuiviLu } from '../data/rgd-etapes.js';
+         joursDeVisite, statutsDeLEtape, statutSuiviLu, montantSigneDe }
+       from '../data/rgd-etapes.js';
 import { db } from '../data/db.js';
-import { esc, fmtDate, fmtDateTime, relDay, terms, hit, searchInput, bindSearch, restoreFocus } from '../ui.js';
+import { esc, eur, fmtDate, fmtDateTime, relDay, terms, hit, searchInput, bindSearch, restoreFocus } from '../ui.js';
 import { poserEspace } from './espace.js';
 import { cadre, guard } from './rgd-espace.js';
 import { peutEcrire, majStatutClient, majStatutDemande,
@@ -557,6 +558,18 @@ export const rgdClientsPage = {
       const surDemande = state.vue === 'demande';
       // La frise, c'est tout sauf l'annuaire : sept étapes, un seul tableau.
       const surFrise = state.vue !== 'contacts';
+      // ⚠ À PARTIR DE « DEVIS ACCEPTÉ », LA COLONNE « BUDGET » DEVIENT
+      // « MONTANT HT » (25/09/2026, demandé par Mickael : « je voudrais que le
+      // montant apparaisse aussi dans ce tableau à partir de devis accepté »).
+      // Une fois le devis signé, le budget annoncé au téléphone n'a plus d'usage :
+      // la colonne porte l'engagement, comme la tuile de la fiche.
+      //
+      // ⚠ LE TITRE SUIT L'ONGLET, PAS LA LIGNE. Les onglets ÉTANT les étapes,
+      // toutes les lignes d'un onglet sont au même stade : un en-tête qui dirait
+      // « Budget / Montant HT » ferait deviner, colonne par colonne, ce que la
+      // barre d'onglets dit déjà.
+      const surMontant = ORDRE_ETAPES.indexOf(state.vue)
+        >= ORDRE_ETAPES.indexOf('devis_accepte');
 
       const listeBrute = surFrise ? [] : contactsVus;
 
@@ -733,7 +746,7 @@ export const rgdClientsPage = {
       const tableauProspects = () => `<section class="card table-wrap">
         <table>
           <thead><tr><th>Reçu</th><th>Provenance</th><th>Nom</th><th>Contact</th>
-            <th>Projet</th><th>Budget</th><th>Ville</th><th>Statut</th>
+            <th>Projet</th><th>${surMontant ? 'Montant HT' : 'Budget'}</th><th>Ville</th><th>Statut</th>
             <th>Commentaire</th><th></th></tr></thead>
           <!-- ⚠ L'INDEX EST CELUI DE LA LISTE ENTIERE, PAS DE LA PAGE.
                L'attribut data-fiche sert au clic, qui relit la liste entiere.
@@ -752,7 +765,11 @@ export const rgdClientsPage = {
                 ${x.tel ? `<div class="s">${esc(x.tel)}</div>` : ''}
                 ${!x.email && !x.tel ? '<span class="muted">—</span>' : ''}</td>
             <td class="muted">${esc(x.projet || '—')}</td>
-            <td class="muted">${esc(String(x.budget || '—').trim())}</td>
+            <td class="${surMontant ? 'num' : 'muted'}">${surMontant
+              ? (montantSigneDe(x.ligne, devis) > 0
+                  ? esc(eur(montantSigneDe(x.ligne, devis)))
+                  : '<span class="muted">—</span>')
+              : esc(String(x.budget || '—').trim())}</td>
             <td class="muted">${esc(x.ville || '—')}</td>
             <td class="rcl-statut-cell">${state.ecriture
               ? menuStatut(x.statut, x.cible, x.ligne.d1_id, x.ligne.id) + flechesEtape(x.etape, true)
