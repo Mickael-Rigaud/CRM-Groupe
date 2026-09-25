@@ -1374,6 +1374,16 @@ body:has(.esp-app) .subnav .datepill { display: none; }
 /* Pipeline en colonnes, dans la vue d'ensemble */
 .esp-kanban { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(168px, 1fr); gap: 12px; overflow-x: auto; padding-bottom: 6px; }
 .esp-col { background: var(--card-2); border-radius: var(--radius); padding: 12px 11px; display: flex; flex-direction: column; min-width: 0; }
+/* ---------- Deplacer une mission a la souris (ecrans Expertise et AMO) ----------
+   La colonne survolee se marque, la carte saisie s'efface a moitie : sans ces
+   deux signaux on ne sait pas ou l'on depose, et le geste rate sans qu'on
+   comprenne pourquoi. Meme langage que le pipeline du groupe (`.col.over`). */
+.esp-col[data-cible].over { outline: 2px dashed var(--accent); outline-offset: -2px;
+  background: var(--accent-soft); }
+.esp-card-deal.dragging { opacity: .4; }
+/* Le curseur dit que la carte se prend, avant meme de l'avoir prise. */
+.esp-card-deal[draggable="true"] { cursor: grab; }
+.esp-card-deal[draggable="true"]:active { cursor: grabbing; }
 .esp-col-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .esp-col-head b { font-size: 12.5px; font-weight: 700; line-height: 1.25; }
 .esp-col-head span { font-family: var(--font-display); font-size: 16px; font-weight: 700; color: var(--accent-ink); }

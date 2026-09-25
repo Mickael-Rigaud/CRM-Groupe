@@ -76,8 +76,77 @@ const guard = (root) => {
 };
 
 // Ouvrir une affaire depuis n'importe quelle carte, ligne ou pastille de l'écran.
+// ⚠ UN GLISSEMENT NE DOIT PAS OUVRIR LA FICHE. Un depot reussi ne declenche pas
+// de clic, mais un glissement RELACHE A COTE en declenche un dans plusieurs
+// navigateurs : on relache une carte hors des colonnes et le panneau de
+// l'affaire s'ouvre, sans qu'on ait rien demande. Le drapeau retombe au tour
+// suivant de la boucle d'evenements, donc apres le clic parasite.
+let glisseEnCours = false;
+
 function lierAffaires(root, apres) {
-  root.querySelectorAll('[data-deal]').forEach(el => el.onclick = () => openDeal(el.dataset.deal, apres));
+  root.querySelectorAll('[data-deal]').forEach(el => el.onclick = () => {
+    if (glisseEnCours) return;
+    openDeal(el.dataset.deal, apres);
+  });
+}
+
+/**
+ * Deplacer une mission d'une etape a l'autre a la souris, sur les deux ecrans
+ * de metier. Demande de Mickael le 25/09/2026.
+ *
+ * ⚠ CE N'EST PAS LE SEUL CHEMIN, ET C'EST VOLONTAIRE. L'etape se change aussi
+ * depuis le panneau de l'affaire, qui reste le chemin au clavier — le
+ * glisser-deposer n'est atteignable ni au clavier ni au doigt sur une tablette.
+ * Le retirer du panneau ferait de cet ecran le seul moyen de travailler.
+ *
+ * ⚠ TOUT PASSE PAR `moveStage`, JAMAIS PAR UN `db.update` DIRECT : elle tient
+ * l'historique d'etapes, rouvre une affaire gagnee qu'on ramene en arriere,
+ * promeut le contact en client, inscrit l'evenement et previent a l'ecran. Un
+ * raccourci ici ferait diverger le glisser-deposer du reste de l'application.
+ */
+function lierGlisser(root, apres) {
+  root.querySelectorAll('.esp-card-deal[draggable="true"]').forEach(carte => {
+    carte.addEventListener('dragstart', (e) => {
+      glisseEnCours = true;
+      e.dataTransfer.setData('text/plain', carte.dataset.deal);
+      e.dataTransfer.effectAllowed = 'move';
+      carte.classList.add('dragging');
+    });
+    carte.addEventListener('dragend', () => {
+      carte.classList.remove('dragging');
+      setTimeout(() => { glisseEnCours = false; }, 0);
+    });
+  });
+
+  // Une meme mission ne se deplace qu'une fois par rendu : sans ce garde, deux
+  // depots rapides enverraient deux ecritures concurrentes sur la meme ligne.
+  const dejaBouge = new Set();
+  root.querySelectorAll('.esp-col[data-cible]').forEach(col => {
+    col.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      col.classList.add('over');
+    });
+    col.addEventListener('dragleave', (e) => {
+      // `dragleave` part aussi en survolant un enfant : on ne retire la marque
+      // que si le curseur a vraiment quitte la colonne.
+      if (!col.contains(e.relatedTarget)) col.classList.remove('over');
+    });
+    col.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      col.classList.remove('over');
+      const id = e.dataTransfer.getData('text/plain');
+      const vers = col.dataset.cible;
+      if (!id || !vers || dejaBouge.has(id)) return;
+      const d = db.byId('deals', id);
+      // Repose dans sa propre colonne : rien a faire, et surtout pas une trace
+      // dans l'historique pour un geste qui n'a rien change.
+      if (!d || d.stage === vers) return;
+      dejaBouge.add(id);
+      await moveStage(d, vers);
+      apres();
+    });
+  });
 }
 
 // Les commandes de l'agenda : choix de la vue, raccordement et détachement.
@@ -268,7 +337,12 @@ const pipelineDe = (mission) => {
 // listes, les pastilles et la repartition du CA.
 const carteAffaire = (d) => {
   const n = niveauDe(d);
-  return `<button type="button" class="esp-card-deal btp-mission" style="${teinteMission(missionDe(d))}" data-deal="${d.id}">
+  // ⚠ `draggable` ICI, MAIS LE DEPLACEMENT NE MARCHE QUE SUR LES DEUX ECRANS
+  // DE METIER : c'est leur kanban qui pose les zones de depot. Ailleurs, la
+  // carte se saisit sans que rien ne l'accueille — sans consequence, on la
+  // relache et elle revient.
+  return `<button type="button" class="esp-card-deal btp-mission" draggable="true"
+      style="${teinteMission(missionDe(d))}" data-deal="${d.id}" data-etape="${esc(d.stage || '')}">
     <b>${esc(d.title)}</b>
     <span class="muted">${esc(dealParty(d))}</span>
     ${n ? `<span class="btp-niveau">${esc(n.label)} · ${n.points} pt${n.points > 1 ? 's' : ''}</span>` : ''}
@@ -281,8 +355,13 @@ const marqueMission = (m) => `<i class="btp-puce" style="background:${couleurMis
 // Les couleurs d'un metier, posees en variables pour que le CSS s'en serve.
 const teinteMission = (m) => { const c = couleurMission(m); return `--m:${c.couleur};--m-clair:${c.clair};--m-encre:${c.encre}`; };
 
+// ⚠ `data-cible` EST CE QUI FAIT DU KANBAN AUTRE CHOSE QU'UN AFFICHAGE.
+// Sans lui la colonne ne sait pas quelle etape elle represente, et un depot
+// n'a nulle part ou aller. Demande de Mickael le 25/09/2026 : « je voudrais
+// aussi avoir la possibilite de glisser avec la souris le projet d'une etape a
+// une autre ».
 const kanbanHtml = (colonnes) => `<div class="esp-kanban">${colonnes.map(({ st, cartes, somme }) => `
-  <div class="esp-col">
+  <div class="esp-col" data-cible="${esc(st.key)}">
     <div class="esp-col-head"><b>${esc(st.label)}</b><span>${cartes.length}</span></div>
     <div class="esp-col-sum">${somme ? eur(somme) : '—'}</div>
     <div class="esp-col-body">${cartes.map(carteAffaire).join('') || '<div class="esp-col-vide">—</div>'}</div>
@@ -980,7 +1059,18 @@ function carteObjectifs(e) {
         <td class="obj-chiffres">${l.vise > 0
           ? `<b>${valeurJalon(l, l.realise)}</b> / ${valeurJalon(l, l.vise)}`
           : `<b>${valeurJalon(l, l.realise)}</b> <span class="muted">sans objectif</span>`}</td>
-        <td class="obj-part ${atteint ? 'ok' : avance ? '' : 'retard'}">${p == null ? '—' : pourcent(p) + ' %'}</td>
+        <!-- ⚠ UN SEUL POURCENTAGE PAR LIGNE (25/09/2026, demandé par Mickael :
+             « le fait d'avoir deux pourcentages ça porte à confusion »).
+             Les lignes « Qualifiés » et « RDV terrain » en portaient deux, qui ne
+             répondent pas à la même question : la part de l'OBJECTIF atteinte, et
+             le taux de passage depuis la ligne du dessus. Côte à côte, on ne sait
+             plus lequel on lit. C'est le taux de passage qui reste, parce que la
+             part de l'objectif se lit déjà sur la barre juste à gauche — et que
+             l'infobulle de la barre la donne au chiffre.
+             ⚠ La cellule reste, VIDE : c'est un tableau, la retirer décalerait la
+             colonne des taux sur les lignes qui n'en ont pas. -->
+        <td class="obj-part ${atteint ? 'ok' : avance ? '' : 'retard'}">${
+          l.taux ? '' : (p == null ? '—' : pourcent(p) + ' %')}</td>
         <td class="obj-taux">${l.taux ? tauxHtml(l.taux) : ''}</td>
       </tr>`;
     }).join('')}</tbody></table>
@@ -1176,6 +1266,7 @@ const pageMission = (mission) => ({
 
       bindSearch(root, 'm-q', state, draw); restoreFocus(root, state);
       lierAffaires(root, draw);
+      lierGlisser(root, draw);
       root.querySelectorAll('[data-op]').forEach(b => b.onclick = () => {
         state.periode = b.dataset.op;
         state.decalage = 0;                       // changer d'échelle remet sur la période courante

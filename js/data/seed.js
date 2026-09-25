@@ -54,6 +54,12 @@ export const SEED = {
     { id: 'd5', title: 'Isolation combles — SCI Les Tilleuls', activity: 'rgd', stage: 'devis_envoye', status: 'lost', lost_reason: 'Prix', organisation_id: 'o4', owner_id: 'u-mickael', amount: 9800, channel: 'Site internet direct', fields: { type_travaux: 'Plâtrerie / isolation' }, stage_history: [{ stage: 'lead', at: d(-90) }, { stage: 'devis_envoye', at: d(-75) }], created_at: d(-90), lost_at: d(-50), closed_at: d(-50), stage_changed_at: d(-75) },
     { id: 'd6', title: 'Fissures façade — Garnier', activity: 'btp', stage: 'proposition', status: 'open', contact_id: 'c3', owner_id: 'u-mickael', amount: 900, channel: 'Partenaire / apporteur', referrer_org_id: 'o1', fields: { problematique: 'Fissures', type_bien: 'Maison', contexte: 'Achat immobilier', adresse: 'Amboise' }, stage_history: [{ stage: 'lead', at: d(-15) }, { stage: 'rdv', at: d(-10) }, { stage: 'proposition', at: d(-7) }], created_at: d(-15), stage_changed_at: d(-7) },
     { id: 'd7', title: 'Humidité sous-sol — Petit', activity: 'btp', stage: 'qualifie', status: 'open', contact_id: 'c4', owner_id: 'u-mickael', amount: 750, channel: 'Google organique / SEO', fields: { problematique: 'Humidité', type_bien: 'Maison', contexte: 'Particulier', urgence: true }, stage_history: [{ stage: 'lead', at: d(-3) }, { stage: 'qualifie', at: d(-1) }], created_at: d(-3), stage_changed_at: d(-1) },
+    // ⚠ LA SEULE MISSION AMO DU JEU D'ESSAI, et elle y est pour une raison :
+    // sans elle l'écran AMO est vide, la pipeline du tableau de bord affiche huit
+    // colonnes à zéro et la répartition du CA donne 100 % à l'expertise. Rien de
+    // ce qui distingue les deux métiers n'était vérifiable hors production.
+    // `type_mission` est ce qui range une affaire dans l'un ou l'autre déroulé.
+    { id: 'd8b', title: 'Rénovation lourde — SCI Les Tilleuls', activity: 'btp', stage: 'amo_programme', status: 'open', organisation_id: 'o4', owner_id: 'u-mickael', amount: 14000, channel: 'Réseau professionnel', fields: { type_mission: 'amo', problematique: 'Assistance à maîtrise d’ouvrage', type_bien: 'Immeuble', contexte: 'Rénovation lourde' }, stage_history: [{ stage: 'lead', at: d(-70) }, { stage: 'rdv1', at: d(-62) }, { stage: 'amo_cadrage', at: d(-50) }, { stage: 'amo_contrat', at: d(-38) }, { stage: 'amo_programme', at: d(-20) }], created_at: d(-70), stage_changed_at: d(-20) },
     { id: 'd8', title: 'Malfaçons carrelage — Marchand', activity: 'btp', stage: 'rapport_remis', status: 'won', contact_id: 'c10', owner_id: 'u-mickael', amount: 1200, channel: 'Partenaire / apporteur', referrer_org_id: 'o2', fields: { problematique: 'Malfaçons', type_bien: 'Appartement', contexte: 'Litige', date_visite: day(-30), date_rapport: day(-20) }, stage_history: [{ stage: 'lead', at: d(-60) }, { stage: 'rdv', at: d(-50) }, { stage: 'proposition', at: d(-45) }, { stage: 'mission_planifiee', at: d(-40) }, { stage: 'rapport_remis', at: d(-20) }], created_at: d(-60), won_at: d(-40), closed_at: d(-40), stage_changed_at: d(-20) },
     { id: 'd9', title: 'Crédit immo — Lemaire', activity: 'courtage', stage: 'pieces', status: 'open', contact_id: 'c7', owner_id: 'u-mickael', amount: 2100, channel: 'Site internet direct', fields: { type_financement: 'Crédit immobilier', montant_projet: 240000, montant_financement: 210000, apport: 30000, objectif: 'Résidence principale', pieces_manquantes: 'Avis d\'imposition 2025, 3 derniers bulletins' }, stage_history: [{ stage: 'lead', at: d(-20) }, { stage: 'rdv', at: d(-12) }, { stage: 'pieces', at: d(-10) }], created_at: d(-20), stage_changed_at: d(-10) },
     { id: 'd10', title: 'Regroupement crédits — Blanc', activity: 'courtage', stage: 'lead', status: 'open', contact_id: 'c11', owner_id: 'u-mickael', amount: 1500, channel: 'Meta Ads', campaign: 'RAC-Regroupement-Sept26', fields: { type_financement: 'Regroupement de crédits' }, stage_history: [{ stage: 'lead', at: d(-1) }], created_at: d(-1), stage_changed_at: d(-1) },
@@ -82,6 +88,13 @@ export const SEED = {
   ],
   settings: [
     { key: 'intake_token', value: 'demo-token-a-changer' },
+    // ⚠ SANS OBJECTIFS, LE BLOC « OBJECTIFS » DES ECRANS BTP N'EST QU'UN MESSAGE
+    // VIDE — ni barres, ni pourcentages, ni taux de passage. Il n'etait donc
+    // essayable que sur la production, et une retouche s'y verifiait a l'aveugle.
+    // Les volumes se saisissent AU MOIS, le CA reste ANNUEL : deux conventions,
+    // une seule source par chiffre (voir `chiffres.js`).
+    { key: 'objectifs_volume', value: { btp: { leads: 10, qualifie: 6, rdv: 4 } } },
+    { key: 'objectifs_ca', value: { periode: 'annuel', btp: 180000 } },
   ],
   // Messagerie : les canaux existent d'office, un par structure plus le canal Groupe.
   // En production ils sont créés par supabase/lot12-messagerie.sql.
