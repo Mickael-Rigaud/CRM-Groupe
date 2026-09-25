@@ -424,15 +424,24 @@ export function openDeal(id, onChange) {
                colonne (demande du 25/09/2026). « Perdue » n'est plus un gros
                bouton rouge au milieu : il est discret, a sa place, et ne se
                clique plus par accident.
-               ⚠ « Gagnee » EST CONSERVE, volontairement. Mickael a demande de
-               le supprimer ; or chez BTP Expertise gagner est un GESTE et rien
-               d'autre ne le declenche — sans lui, plus aucune affaire ne peut
-               etre gagnee, et le CA encaisse cesse de compter. Il est donc
-               rendu discret comme les autres au lieu d'etre retire. -->
+
+               ⚠ « MARQUER GAGNEE » N'APPARAIT QU'A LA DERNIERE ETAPE, et c'est
+               la reponse a deux demandes qui se contredisaient. Mickael a
+               d'abord demande de supprimer le bouton, puis explique pourquoi :
+               « je considere que l'affaire est gagnee quand elle franchit
+               toutes les etapes ». Or le 19/09/2026 il avait tranche l'inverse
+               et la raison tient toujours : arriver a « Cloture facture » ne
+               veut pas dire que la facture est reglee, arriver a « Reception
+               chantiers » ne veut pas dire que la reception est faite. Un gain
+               automatique compterait du CA sur du travail non termine.
+               Le bouton disparait donc partout ou il ne sert a rien, et se
+               montre la ou il est l'action evidente. Le gain reste un GESTE. -->
           <div class="rgdf-coin">
             <div class="rgdf-actions">
-              ${d.status === 'open'
-                ? '<button class="btn ghost sm" id="d-won">✓ Gagnée</button><button class="btn ghost sm danger" id="d-lost">✕ Perdue</button>'
+              ${d.status === 'open' ? `
+                ${estEtapeFinale(d.activity, d.stage)
+                  ? '<button class="btn green sm" id="d-won">✓ Marquer gagnée</button>' : ''}
+                <button class="btn ghost sm danger" id="d-lost">✕ Perdue</button>`
                 : '<button class="btn ghost sm" id="d-reopen">Réouvrir</button>'}
               ${d.fields?.decouverte ? '<button class="btn ghost sm" id="d-fiche">🖨 Fiche</button>' : ''}
               ${scope.isDirection ? `<button class="btn ghost sm" id="d-attr">👤 ${d.owner_id ? 'Responsable' : 'Attribuer'}</button>` : ''}
