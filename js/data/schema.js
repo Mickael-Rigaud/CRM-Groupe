@@ -26,15 +26,15 @@ export const NIVEAUX_BTP = [
   { key: 'exp_complexe', label: 'Expertise complexe', mission: 'expertise', points: 3,
     contenu: 'Désordres multiples, litige, investigations et technicité renforcée.', tarif: 'à partir de 2 000 € HT' },
   { key: 'amo_ciblee', label: 'AMO ciblée', mission: 'amo', points: 3,
-    contenu: 'Périmètre limité, peu de lots, durée courte, accompagnement contenu.', tarif: '5 à 8 % des travaux HT' },
+    contenu: 'Périmètre limité, peu de lots, durée courte, accompagnement contenu.', tarif: '5 à 8 % des travaux TTC' },
   { key: 'amo_etendue', label: 'AMO étendue', mission: 'amo', points: 5,
-    contenu: 'Plusieurs lots, accompagnement régulier, durée intermédiaire.', tarif: '5 à 8 % des travaux HT' },
+    contenu: 'Plusieurs lots, accompagnement régulier, durée intermédiaire.', tarif: '5 à 8 % des travaux TTC' },
   { key: 'amo_importante', label: 'AMO importante', mission: 'amo', points: 7,
-    contenu: 'Nombreux lots, longue durée et/ou complexité élevée.', tarif: '5 à 8 % des travaux HT' },
+    contenu: 'Nombreux lots, longue durée et/ou complexité élevée.', tarif: '5 à 8 % des travaux TTC' },
 ];
 // Les honoraires d'AMO ne se lisent pas en euros mais en pourcentage des travaux,
 // avec un plancher. La formulation est celle que le manuel recommande au client.
-export const HONORAIRES_AMO = { taux: '5 à 8 % du montant HT des travaux', minimum: 3500 };
+export const HONORAIRES_AMO = { taux: '5 à 8 % du montant TTC des travaux', minimum: 3500 };
 // Plafonds au lancement. Le manuel les dit « à recalibrer sur données réelles » : ils
 // sont ici pour qu'une seule ligne suffise à les changer.
 export const CAPACITE_BTP = { points: 18, amoActives: 3 };
@@ -82,9 +82,24 @@ export const MATRICE_AMO = {
   reserve: "Le taux reste validé par BTP Expertise. Une dérogation sous 5 % demande une validation de la direction. La matrice devra être recalibrée sur les données réelles.",
 };
 // Les honoraires d'une AMO, de bout en bout :
-//   honoraires HT = montant des travaux HT × taux / 100
+//   honoraires HT = montant des travaux TTC × taux / 100
 //   TVA           = honoraires HT × 20 / 100
 //   honoraires TTC = honoraires HT + TVA
+//
+// ⚠ DEUX « TTC » QUI NE DÉSIGNENT PAS LA MÊME CHOSE, ET IL NE FAUT PAS LES
+// CONFONDRE. Le montant des TRAVAUX est en TTC depuis le 25/09/2026, décision de
+// Mickael : c'est ainsi qu'un client annonce son budget. NOS HONORAIRES, eux,
+// restent calculés et affichés en HT, puis la TVA s'ajoute — c'est une facture,
+// elle se fait comme ça. Renommer « Honoraires HT » en TTC casserait le calcul
+// affiché juste en dessous, qui ajoute 20 % à ce montant.
+//
+// ⚠ ET LA BASE DE CALCUL A CHANGÉ AVEC LE LIBELLÉ. Le taux s'applique désormais
+// au montant TTC : un chantier de 100 000 € HT, soit 120 000 € TTC à 20 %, donne
+// 7 200 € d'honoraires à 6 % au lieu de 6 000 €. C'est une conséquence
+// arithmétique du choix, pas un effet de bord à corriger — mais elle se voit sur
+// chaque devis, et `BAREME_AMO` ci-dessus n'a pas été retouché : ses paliers
+// (80 k€, 200 k€, et les honoraires en regard) ont été écrits pour des montants
+// HT.
 //
 // Le taux est libre : la matrice du §41 en suggère un, elle ne l'impose pas, et le
 // manuel prévoit lui-même un taux final distinct du taux suggéré.
@@ -295,17 +310,25 @@ export const FICHE_AMO = {
 // `coteBudget`, sans quoi la cotation automatique aurait contredit la case
 // cochée sans que rien ne le dise.
 //
-// ⚠ DEUX POINTS RESTENT À TRANCHER, SIGNALÉS PLUTÔT QUE DÉCIDÉS ICI :
+// ⚠ TOUTE LA CHAÎNE EST EN TTC DEPUIS LE 25/09/2026 (« mets TTC partout »).
+// L'aide, le champ de la fiche, le simulateur et le libellé du taux parlent du
+// montant TTC des travaux — celui qu'un client annonce. `coteBudget` lit ce
+// même montant, donc les seuils 40/120 s'appliquent bien à du TTC.
 //
-//   1. L'AIDE DIT « TTC », LE CHAMP SAISI EST HT. La fiche découverte demande
-//      un « Budget travaux HT estimé », `coteBudget` lit `budget_ht`, et le
-//      barème d'honoraires est en HT. Un même chantier annoncé 130 k€ TTC vaut
-//      environ 108 k€ HT : il se cote 2 points si l'on prend le TTC, 1 seul si
-//      l'on prend le HT. Le texte suit la demande ; le champ n'a pas bougé.
+// ⚠ `budget_ht` A GARDÉ SON NOM DE VARIABLE. Il porte désormais du TTC. Le
+// renommer toucherait les fiches déjà enregistrées, qui rangent la valeur sous
+// cette clé — un renommage sans reprise des données les viderait. Le libellé
+// affiché fait foi ; ce nom est une trace d'histoire, pas une unité.
 //
-//   2. `BAREME_AMO` GARDE SES PALIERS (80 k€ → 5 %, 200 k€ → 7 %). Il répond à
-//      une autre question — ce qu'on facture — que la matrice, qui mesure le
-//      temps demandé. Les deux ne sont plus articulés sur les mêmes montants.
+// ⚠ NOS HONORAIRES RESTENT EN HT, et ce n'est pas une exception oubliée : on
+// les calcule en HT puis on ajoute la TVA, comme sur une facture. Le montant
+// des travaux est ce que le CLIENT dépense, les honoraires ce que NOUS
+// facturons — deux choses, deux unités.
+//
+// ⚠ ET `BAREME_AMO` N'A PAS ÉTÉ RETOUCHÉ. Ses paliers (80 k€, 200 k€) et les
+// honoraires en regard ont été écrits pour des montants HT. Il n'est plus
+// articulé ni sur les seuils de la matrice ni sur la même unité : à reprendre
+// avec le manuel.
 export const CRITERES_V5 = [
   { key: 'budget', label: 'Budget travaux',
     aide: "Montant TTC estimé des travaux à piloter, selon l'estimation du chargé d'affaires (pas le budget annoncé par le client).",

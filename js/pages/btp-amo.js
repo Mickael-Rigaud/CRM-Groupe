@@ -33,7 +33,7 @@ const CANAUX_COURANTS = ['Recommandation client', 'Ancien client', 'Téléphone 
 const TYPES_BIEN = ['Maison', 'Appartement', 'Immeuble', 'Local pro', 'Autre'];
 
 // ------------------------------------------------------- Le calculateur d'honoraires
-// Deux saisies libres — le montant des travaux HT et le taux — et trois résultats :
+// Deux saisies libres — le montant des travaux TTC et le taux — et trois résultats :
 // honoraires HT, TVA, honoraires TTC. Le taux n'est pas enfermé dans les quatre
 // valeurs de la matrice : elle en suggère un, le manuel prévoit lui-même d'en retenir
 // un autre, et un devis peut se négocier à 6,5 %.
@@ -49,7 +49,7 @@ const euro = (n) => (Number.isInteger(n)
 
 export function champsHonoraires({ travaux, taux, idTravaux = 'hono-travaux', idTaux = 'hono-taux' }) {
   return `<div class="hono-saisie">
-    <label class="mail-champ"><span>Montant des travaux HT</span>
+    <label class="mail-champ"><span>Montant des travaux TTC</span>
       <!-- ⚠ PAS DE MONTANT D'EXEMPLE ICI (25/09/2026, demandé par Mickael :
            « on a l'impression que c'est déjà rempli »). Dans un champ de nombre,
            un texte d'exemple grisé se lit comme une valeur saisie — et celui-ci
@@ -191,7 +191,7 @@ export function ficheDecouverteAmo(apres) {
     <div class="mf-grille">
       <label class="mail-champ plein"><span>Description du projet</span>
         <textarea id="fa-description" rows="3" placeholder="Ce que le client veut obtenir, dans ses mots.">${esc(v.description)}</textarea></label>
-      <label class="mail-champ"><span>Budget travaux HT estimé *</span>
+      <label class="mail-champ"><span>Budget travaux TTC estimé *</span>
         <input type="number" id="fa-budget" min="0" step="1000" value="${esc(v.budget_ht)}" placeholder="200000"></label>
       <label class="mail-champ"><span>Budget maximum client</span>
         <input type="number" id="fa-budgetmax" min="0" step="1000" value="${esc(v.budget_max)}" placeholder="230000"></label>
@@ -336,7 +336,7 @@ export function ficheDecouverteAmo(apres) {
       poser('#fa-description', 'description'); poser('#fa-budget', 'budget_ht'); poser('#fa-budgetmax', 'budget_max');
       choisir('#fa-debut', 'date_debut'); choisir('#fa-fin', 'date_fin');
       corps.querySelector('#fa-suite').onclick = () => {
-        if (!Number(v.budget_ht)) return toast('Le budget travaux HT commande le taux : il est nécessaire', 'warn');
+        if (!Number(v.budget_ht)) return toast('Le budget travaux TTC commande le taux : il est nécessaire', 'warn');
         v.pas = 3; dessine();
       };
       return;
@@ -508,7 +508,7 @@ ${f.description ? `<h2>Description du projet</h2><div class="desc">${esc(f.descr
 
 <h2>Budget et calendrier</h2>
 <table class="i">
-  ${ligne('Budget travaux HT estimé', f.budget_ht ? eur(f.budget_ht) : '')}
+  ${ligne('Budget travaux TTC estimé', f.budget_ht ? eur(f.budget_ht) : '')}
   ${ligne('Budget maximum client', f.budget_max ? eur(f.budget_max) : '')}
   ${ligne('Démarrage souhaité', f.date_debut ? fmtDate(f.date_debut) : '')}
   ${ligne('Fin souhaitée', f.date_fin ? fmtDate(f.date_fin) : '')}
