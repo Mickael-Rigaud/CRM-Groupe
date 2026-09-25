@@ -230,10 +230,12 @@ export const SEED = {
   ],
 
   rgd_apports: [
+    // Deux collaborateurs du meme cabinet : l'apport reste sur la fiche du
+    // partenaire, et on sait quand meme qui a travaille.
     { id: 'apt1', apporteur_id: 'ap1', date_apport: '2026-06-12', client: 'Famille Renard',
-      issue: 'gagne', montant_devis: 48000, montant_commission: 2400 },
+      apporte_par: 'Lucie Berton', issue: 'gagne', montant_devis: 48000, montant_commission: 2400 },
     { id: 'apt2', apporteur_id: 'ap1', date_apport: '2026-08-03', client: 'M. Delaunay',
-      issue: 'perdu', montant_devis: 21000, montant_commission: 1050 },
+      apporte_par: 'Hugo Marchand', issue: 'perdu', montant_devis: 21000, montant_commission: 1050 },
     { id: 'apt3', apporteur_id: 'ap1', date_apport: '2026-09-18', client: 'Mme Chevalier',
       // Pas encore tranche : la commission ne doit PAS entrer dans le total.
       issue: null, montant_devis: 63500, montant_commission: 3175 },

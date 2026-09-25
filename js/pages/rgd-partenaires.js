@@ -53,7 +53,7 @@ import { toast, openModal, closeModal, confirm } from '../ui.js';
 import { poserEspace } from './espace.js';
 import { cadre, guard } from './rgd-espace.js';
 import { creerPartenaire, majPartenaire, supprimerPartenaire,
-         apportsDe, totauxDe, creerApport, majApport, supprimerApport }
+         apportsDe, equipeDe, totauxDe, creerApport, majApport, supprimerApport }
   from '../data/rgd-partenaires.js';
 // ⚠ LA PRÉSENTATION EST CELLE DE LA FICHE CLIENT, empruntée et non recopiée
 // (25/09/2026 : « ajoute de la couleur dans la fiche, c'est trop triste là »).
@@ -254,8 +254,18 @@ const optionsApporteurs = (tous, choisi) => tous
   .map(p => `<option value="${esc(String(p.id))}"${String(choisi) === String(p.id) ? ' selected' : ''}>${
     esc(nomDe(p))}${estActif(p) ? '' : ' (inactif)'}</option>`).join('');
 
+// ⚠ DEUX CHAMPS DANS LA COLONNE « APPORTEUR », et ils ne disent pas la même
+// chose (25/09/2026). Le premier est le PARTENAIRE — c'est lui qui porte les
+// totaux et la fiche. Le second est la personne de SON ÉQUIPE qui a présenté
+// l'affaire : du texte libre, sans fiche à créer, avec les noms déjà employés
+// chez ce partenaire en suggestion. Un cabinet de cinq personnes reste un seul
+// partenaire, et on sait quand même qui a travaillé.
 const ligneApport = (x, tous) => `<tr data-ligne="${esc(String(x.id))}">
-  <td><select data-champ="apporteur_id">${optionsApporteurs(tous, x.apporteur_id)}</select></td>
+  <td>
+    <select data-champ="apporteur_id">${optionsApporteurs(tous, x.apporteur_id)}</select>
+    <input class="pat-equipe" data-champ="apporte_par" list="pa-equipe"
+      value="${esc(x.apporte_par || '')}" placeholder="Qui, dans son équipe ?">
+  </td>
   <td><input type="date" data-champ="date_apport" value="${esc(x.date_apport || '')}"></td>
   <td><input data-champ="client" value="${esc(x.client || '')}" placeholder="Nom du client"></td>
   <td><select data-champ="issue">
@@ -357,6 +367,8 @@ function ouvrirFichePartenaire(id, apres) {
         <section class="rgdf-bloc rgdf-large">
           <h3>Ses apports <span class="rgdf-compte" id="pa-n">${siens.length}</span></h3>
           <div class="table-wrap pat-wrap">
+            <datalist id="pa-equipe">${equipeDe(a.id)
+              .map(n => `<option value="${esc(n)}"></option>`).join('')}</datalist>
             <table class="pat">
               <thead><tr><th>Apporteur</th><th>Date</th><th>Client</th><th>Issue</th>
                 <th class="num">Montant devis</th><th class="num">Commission</th><th></th></tr></thead>
@@ -409,6 +421,12 @@ function brancherTableau(m, a, apres) {
     setTimeout(() => { if (etat.textContent === mot) etat.textContent = ''; }, 2200);
   };
 
+  // La liste de suggestions de l'équipe, reconstruite en place.
+  const majSuggestions = () => {
+    const dl = m.querySelector('#pa-equipe');
+    if (dl) dl.innerHTML = equipeDe(a.id).map(n => `<option value="${esc(n)}"></option>`).join('');
+  };
+
   // Les tuiles, recalculées sans toucher au reste de la fenêtre.
   const majChiffres = () => {
     const t = totauxDe(a.id);
@@ -424,6 +442,7 @@ function brancherTableau(m, a, apres) {
   const redessinerCorps = () => {
     corps.innerHTML = corpsApports(apportsDe(a.id), scope.rgd('rgd_apporteurs'));
     brancherLignes();
+    majSuggestions();
     majChiffres();
     apres?.();
   };
@@ -450,6 +469,10 @@ function brancherTableau(m, a, apres) {
             toast('Apport déplacé vers l’autre fiche');
             return redessinerCorps();
           }
+          // Un nom d'équipe neuf rejoint les suggestions des autres lignes,
+          // sans redessiner le tableau : on est peut-être déjà dans la cellule
+          // suivante.
+          if (cle === 'apporte_par') majSuggestions();
           majChiffres();
           apres?.();
         };

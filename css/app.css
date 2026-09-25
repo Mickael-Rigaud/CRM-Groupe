@@ -715,7 +715,11 @@ button.esp-side-titre { background: none; border: 0; font-family: inherit; color
 .pat td:nth-child(5) input, .pat td:nth-child(6) input { text-align: right; }
 /* Chaque colonne prend la largeur de ce qu'elle porte : sans ces bornes la
    grille repartit a parts egales et « Pas tranche » se lisait « Pas tran ». */
-.pat th:nth-child(1), .pat td:nth-child(1) { width: 20%; min-width: 150px; }
+.pat th:nth-child(1), .pat td:nth-child(1) { width: 22%; min-width: 175px; }
+/* Le nom d'equipe se tient SOUS le partenaire, plus petit : c'est une
+   precision sur lui, pas un second apporteur. Meme colonne, deux niveaux. */
+.pat-equipe { margin-top: 3px; font-size: 12.5px !important; color: var(--muted); }
+.pat-equipe:focus { color: var(--text); }
 .pat th:nth-child(2), .pat td:nth-child(2) { width: 130px; }
 .pat th:nth-child(4), .pat td:nth-child(4) { width: 132px; }
 .pat th:nth-child(5), .pat td:nth-child(5),

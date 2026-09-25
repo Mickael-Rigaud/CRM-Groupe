@@ -31,8 +31,13 @@ const CHAMPS = ['nom', 'prenom', 'societe', 'raison_sociale', 'profession',
   'email', 'telephone', 'adresse', 'code_postal', 'ville',
   'type_partenaire', 'actif', 'partenariat_signe', 'date_signature', 'notes'];
 
-const CHAMPS_APPORT = ['apporteur_id', 'date_apport', 'client', 'issue',
-  'montant_devis', 'montant_commission', 'notes'];
+// ⚠ `apporte_par` N'EST PAS UN SECOND APPORTEUR : c'est un nom dans l'équipe du
+// partenaire, en texte libre. L'apport reste rattaché au PARTENAIRE, donc ses
+// totaux et sa place dans les sections ne bougent pas — créer une fiche par
+// collaborateur aurait éclaté un cabinet de cinq personnes en cinq partenaires,
+// avec des commissions qu'il aurait fallu ré-additionner à la main.
+const CHAMPS_APPORT = ['apporteur_id', 'apporte_par', 'date_apport', 'client',
+  'issue', 'montant_devis', 'montant_commission', 'notes'];
 
 const filtrer = (champs, liste) => {
   const out = {};
@@ -95,6 +100,14 @@ export async function supprimerPartenaire(id) {
 }
 
 // -------------------------------------------------------------------- apports
+
+/**
+ * Les noms déjà employés dans l'équipe d'un partenaire, pour ne pas les
+ * réécrire à chaque ligne. Rendus triés et sans doublon.
+ */
+export const equipeDe = (apporteurId) => [...new Set(
+  apportsDe(apporteurId).map(a => String(a.apporte_par || '').trim()).filter(Boolean),
+)].sort((a, b) => a.localeCompare(b, 'fr'));
 
 /** Les apports d'un partenaire, du plus récent au plus ancien. */
 export const apportsDe = (apporteurId) => db.t('rgd_apports')
