@@ -47,8 +47,8 @@
 //      on reconnaît une forme plus vite qu'on ne lit un mot.
 import { db } from '../data/db.js';
 import { esc, eur, fmtDate, fmtDateTime, openModal, toast, userName, daysSince } from '../ui.js';
-import { ETAPES_RGD, ORDRE_ETAPES, STATUT_DE_L_ETAPE, ecrireStatut, montantSigneDe }
-  from '../data/rgd-etapes.js';
+import { ETAPES_RGD, ORDRE_ETAPES, STATUT_DE_L_ETAPE, ecrireStatut,
+         montantDevisDe, etapeAvecMontant } from '../data/rgd-etapes.js';
 import { scope } from '../data/scope.js';
 import { formulaireModif, enregistrerModif, lireModif, refusDeModifier, valeursProjet }
   from './rgd-fiche-modif.js';
@@ -203,7 +203,6 @@ export function ouvrirFicheRgd(x, onChange) {
       ? '' : noteBrute;
     const commentaireSource = [duRdv.commentaire, noteEcrite].filter(Boolean).join('\n\n');
     const jours = x.recu ? daysSince(x.recu) : null;
-    const signes = devis.filter(v => v.statut === 'signe');
     // ⚠ TROIS SOURCES POUR LE BUDGET, ET L'ORDRE EST CELUI DE LA CERTITUDE.
     // `budget_travaux` est le budget SAISI dans le CRM : il n'existe que sur une
     // fiche `rgd_clients`, et c'est le seul des trois qu'on puisse renseigner
@@ -214,16 +213,22 @@ export function ouvrirFicheRgd(x, onChange) {
     const budgetTuile = valeursProjet(x).budget_annonce || budgetSaisi
       || String(x.budget || '').trim() || '—';
 
-    // ⚠ À PARTIR DE « DEVIS ACCEPTÉ », LE MONTANT HT REMPLACE LE BUDGET ANNONCÉ
-    // (25/09/2026, arbitré par Mickael après avoir vu les deux côte à côte). Une
-    // fois le devis signé, ce que la personne annonçait au téléphone n'a plus
-    // d'usage : c'est le montant engagé qu'on vient lire, et deux chiffres
-    // d'argent voisins se confondent au premier coup d'oeil.
+    // ⚠ À PARTIR DE « DEVIS EN COURS », LE MONTANT HT REMPLACE LE BUDGET ANNONCÉ.
+    // Arbitré par Mickael le 25/09/2026 après avoir vu les deux côte à côte :
+    // deux chiffres d'argent voisins se confondent au premier coup d'oeil, et
+    // dès qu'un devis existe c'est lui qu'on vient lire, pas ce que la personne
+    // annonçait au téléphone.
     //
-    // ⚠ IL DIT « — » quand l'étape y est sans qu'aucun devis signé ne soit
-    // relevé : ne rien savoir et valoir zéro ne sont pas la même chose.
-    const auDevisAccepte = i >= ORDRE_ETAPES.indexOf('devis_accepte');
-    const montantSigne = signes.length ? eur(montantSigneDe(f, devis)) : '—';
+    // ⚠ LE SEUIL EST CELUI DU TABLEAU DE `#/rgd/clients`, et il a été aligné
+    // dessus le même jour : la tuile basculait à « Devis accepté » quand la
+    // colonne commençait à « Devis en cours », donc le même dossier affichait
+    // son montant dans la liste et son budget dans la fiche. `etapeAvecMontant`
+    // décide pour les deux.
+    //
+    // ⚠ IL DIT « — » quand l'étape y est sans qu'aucun devis ne soit relevé :
+    // ne rien savoir et valoir zéro ne sont pas la même chose.
+    const surMontant = etapeAvecMontant(etapeCourante);
+    const montantEtape = montantDevisDe(f, devis, etapeCourante);
 
     // ⚠ CES CHAMPS N'EXISTENT QUE SUR UNE DEMANDE. Une fiche `rgd_clients` a
     // ses équivalents Meta et rien d'autre ; `d` vaut alors un objet vide, et
@@ -317,8 +322,8 @@ export function ouvrirFicheRgd(x, onChange) {
           : refusDeModifier(x)
             ? `<p class="rgdf-origine" title="${esc(refusDeModifier(x))}">Lecture seule</p>` : ''}
         <div class="rgdf-tuiles">
-          ${auDevisAccepte
-            ? tuile(montantSigne, 'Montant HT')
+          ${surMontant
+            ? tuile(montantEtape > 0 ? eur(montantEtape) : '—', 'Montant HT')
             : tuile(budgetTuile, 'Budget annoncé')}
           ${auDevis ? tuile(devis.length, 'Devis') : ''}
           ${auDevis ? tuile(chantiers.length, chantiers.length > 1 ? 'Chantiers' : 'Chantier') : ''}

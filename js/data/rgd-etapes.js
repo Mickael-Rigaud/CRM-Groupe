@@ -262,8 +262,6 @@ export function montantDevisDe(f, devis, etape) {
     .reduce((t, v) => t + (Number(v.montant_ht) || 0), 0);
 }
 
-/** Le montant signé, quelle que soit l'étape. Ce que lit la fiche. */
-export const montantSigneDe = (f, devis) => montantDevisDe(f, devis, 'devis_accepte');
 
 // L'étape lue sur les FAITS seuls. Elle ne dépend d'aucune saisie, donc elle
 // ne ment pas — mais elle ne sait rien avant le premier devis.
