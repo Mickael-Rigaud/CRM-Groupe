@@ -26,28 +26,38 @@ export const ONGLETS = [
     { hash: '#/rgd/soustraitants', label: 'Sous-traitants' },
   ] },
   { label: 'Travaux', sous: [
-    { hash: '#/rgd/chantiers', label: 'Chantiers' },
+    // ⚠ « Chantiers » S'APPELLE « PIPELINE » DEPUIS LE 25/09/2026, demandé par
+    // Mickael. L'adresse `#/rgd/chantiers` ne change PAS : elle est écrite dans
+    // des liens déjà partis et dans les deux CLAUDE.md. Un nom d'écran se
+    // renomme, une adresse se casse.
+    { hash: '#/rgd/chantiers', label: 'Pipeline' },
     { hash: '#/rgd/realisations', label: 'Réalisations' },
-  ] },
-  { label: 'Facturation', sous: [
-    { hash: '#/rgd/devis', label: 'Devis' },
-    { hash: '#/rgd/paiements', label: 'Encaissements' },
   ] },
   { hash: '#/rgd/agenda', label: 'Agenda' },
   { hash: '#/rgd/formations', label: 'Formations' },
-  // ⚠ LES COULISSES DESCENDENT EN BAS, ENSEMBLE ET SÉPARÉES (24/09/2026, demandé
-  // par Mickael). Ces trois écrans ne se ressemblent pas mais ils ont en commun
-  // l'essentiel : on ne les ouvre pas pour travailler, on les ouvre quand quelque
-  // chose cloche ou qu'il faut régler l'outil. Au milieu des chantiers et des
-  // devis, ils se lisaient comme du travail quotidien.
-  // Ils sont gardés pour une raison chacun : Costructor n'a aucune autre porte —
-  // sans ce lien, l'écran qui dit pourquoi un devis n'arrive pas devient
-  // introuvable ; Réglages porte les corrections manuelles du CA ; et
-  // « Application RGD » mène au tableau de bord d'origine, seul endroit où se
-  // saisissent encore la clé Costructor et la connexion Google Agenda.
+  // LES CINQ ÉCRANS DE L'ARGENT ET DE SA PLOMBERIE, EN UN SEUL GROUPE
+  // (25/09/2026, demandé par Mickael : « regroupe devis, encaissement,
+  // costructor, réglages, application rgd »).
+  //
+  // Ils se suivent vraiment : un devis naît dans l'application RGD, Costructor
+  // le rapatrie, il devient une facture puis un encaissement, et Réglages porte
+  // les corrections manuelles du chiffre d'affaires. Quand un devis « n'arrive
+  // jamais », la réponse est dans Costructor — deux entrées de menu plus bas.
+  //
+  // ⚠ CE GROUPE A ABSORBÉ « ADMINISTRATION », qui tenait Costructor, Réglages et
+  // Application RGD à part depuis le 24/09. La raison écrite alors — « on ne les
+  // ouvre pas pour travailler » — tenait tant qu'ils étaient seuls ; elle ne
+  // tient plus maintenant que Devis et Encaissements les rejoignent, et ce n'est
+  // pas une régression : c'est la facturation qui descend avec eux, pas les
+  // coulisses qui remontent. Le trait de séparation (`bas: true`) reste, il dit
+  // que ce bloc n'est pas la conduite des chantiers.
+  //
   // ⚠ « Application RGD » DISPARAÎTRA — c'est l'étape 5 — et cette ligne partira
-  // avec, sans que le reste du menu bouge : c'est aussi pour ça qu'elle est ici.
-  { label: 'Administration', bas: true, sous: [
+  // sans que le reste du menu bouge : c'est aussi pour ça qu'elle est ici, en
+  // dernier.
+  { label: 'Facturation', bas: true, sous: [
+    { hash: '#/rgd/devis', label: 'Devis' },
+    { hash: '#/rgd/paiements', label: 'Encaissements' },
     { hash: '#/rgd/costructor', label: 'Costructor' },
     { hash: '#/rgd/reglages', label: 'Réglages' },
     { hash: '#/rgd/app', label: 'Application RGD' },

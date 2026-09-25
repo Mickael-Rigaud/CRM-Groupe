@@ -525,7 +525,7 @@ function formulaireChantier(apresCreation) {
 }
 
 export const rgdChantiersPage = {
-  title: () => 'RGD Renova — Chantiers',
+  title: () => 'RGD Renova — Pipeline',
   render(root) {
     if (guard(root)) return {};
     const coquille = poserEspace(root);
@@ -598,7 +598,7 @@ export const rgdChantiersPage = {
           ils rattraperont dans la demi-heure.</p>` : ''}
         </section>`}`;
 
-      root.innerHTML = cadre('#/rgd/chantiers', 'Chantiers', corps);
+      root.innerHTML = cadre('#/rgd/chantiers', 'Pipeline', corps);
       bindSearch(root, 'rc-q', state, draw); restoreFocus(root, state);
       root.querySelectorAll('[data-vue]').forEach(b => b.onclick = () => {
         state.vue = b.dataset.vue;
