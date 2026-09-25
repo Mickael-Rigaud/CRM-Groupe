@@ -49,7 +49,7 @@ import { esc, toast, confirm } from '../ui.js';
 import { db } from '../data/db.js';
 import { lienPhoto } from './rgd-espace.js';
 import { lireRealisations, enregistrerRealisations, restaurerRealisations,
-         deposerPhotosRealisations } from '../data/rgd-api.js';
+         deposerPhotosRealisations } from '../data/rgd-site.js';
 
 // Dite AVANT l'envoi, pour ne pas faire monter vingt mégaoctets qui seront
 // refusés à l'arrivée. `deposerPhotosRealisations` revérifie, et le bucket

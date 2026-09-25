@@ -111,6 +111,17 @@ export const scope = {
   // elle n'est le reflet de rien. Les attestations des sous-traitants sont
   // nées dans le CRM, avec leurs fichiers dans le seau privé du même nom —
   // dont les quatre policies disent, elles aussi, `has_activity('rgd')`.
+  //
+  // ⚠ `rgd_suppressions` (25/09/2026) EST LA SEULE QUI N'A PAS SA PLACE ICI,
+  // et c'est voulu. Elle ne porte pas des données mais des PIERRES TOMBALES —
+  // le `d1_id` des fiches supprimées, que les portes de la synchronisation
+  // consultent avant d'insérer, faute de quoi une fiche effacée reviendrait au
+  // passage suivant. Aucun écran ne la lit, elle n'est donc pas chargée : la
+  // mettre dans le cache ferait une requête de plus à chaque ouverture pour
+  // une liste que personne n'affiche. Ses policies disent la même chose que
+  // les autres (`has_activity('rgd')` en lecture ET en insertion), avec une
+  // différence assumée : **ni UPDATE ni DELETE**. On ne retire pas une pierre
+  // tombale — la retirer ressusciterait la fiche au relevé suivant.
   get canRgd() { return this.activityKeys.includes('rgd'); },
   rgd(table) { return this.canRgd ? db.t(table) : []; },
 

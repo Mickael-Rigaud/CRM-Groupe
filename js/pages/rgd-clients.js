@@ -56,29 +56,34 @@
 // dans l'original — une demande a un projet et un budget annoncés, une fiche a
 // un statut et une adresse.
 //
-// LE STATUT S'ÉCRIT D'ICI — LE PREMIER CHAMP DE L'ESPACE RGD À LE FAIRE
-// Le reste de l'écran lit un reflet relevé toutes les 30 minutes ; le statut,
-// lui, part à la SOURCE. Écrire dans le reflet n'aurait servi à rien : le
-// relevé suivant l'écraserait sans un mot. Le menu appelle donc l'API du
-// tableau de bord (`js/data/rgd-api.js`), qui écrit dans Cloudflare D1 avec le
-// jeton de la connexion unique — personne ne gagne de droit au passage.
+// LE STATUT ET LE COMMENTAIRE S'ÉCRIVENT ICI, DANS LE CRM
+// ⚠ ET C'ÉTAIT L'INVERSE JUSQU'AU 25/09/2026, ce qui explique la forme de ce
+// fichier. L'écran lisait un reflet relevé toutes les 30 minutes, donc écrire
+// dedans n'aurait servi à rien : le relevé suivant l'aurait écrasé sans un
+// mot. Le menu partait à la SOURCE, dans l'application RGD, avec le jeton de
+// la connexion unique. La synchronisation a cessé de reposer `statut_suivi`,
+// `notes`, `statut` et `commentaire_admin`
+// (`rgd_clients_et_demandes_sortent_du_releve`) : le CRM est la source, et
+// une simple écriture tient.
 //
-// DEUX EFFETS DE BORD, ET CE SONT CEUX DU TABLEAU DE BORD
-// Changer le statut d'un client pousse les champs portables vers Costructor,
-// et **envoie un email à l'apporteur** quand le client en a un. Ce n'est pas
-// une invention d'ici, c'est ce que fait déjà le menu de l'application — mais
-// un écran qui ouvre ce menu doit le dire, et il le dit.
+// ⚠ CE QUI A DISPARU AVEC LE DÉTOUR, ET QU'IL NE FAUT PAS REMETTRE :
+//   · le second chemin d'écriture. Une fiche venue de l'application s'écrivait
+//     là-bas, une fiche née ici dans Supabase ; `data-id` disait laquelle on
+//     tenait. Il n'y a plus qu'une adresse, et `data-uuid` suffit.
+//   · les deux effets de bord — le renvoi des champs portables vers Costructor
+//     et l'email à l'apporteur. Le premier est une décision de Mickael : la
+//     base de référence est celle du CRM. Le second est inerte, `apporteur_id`
+//     étant nul sur les 192 fiches.
+//   · la condition « avoir un compte de l'application RGD ». Le seul droit qui
+//     compte est `has_activity('rgd')`, dont `scope.canRgd` est le miroir : le
+//     menu se ferme à qui la base le ferme, plus à qui n'a pas de second
+//     compte.
 //
-// L'AFFICHAGE AVANCE AVANT LE RELEVÉ, ET REVIENT SI ÇA ÉCHOUE
-// Une fois l'écriture acceptée, le reflet local est mis à jour tout de suite :
-// attendre le relevé ferait revenir l'ancienne valeur sous les yeux de qui
-// vient de la changer. En cas de refus, la ligne reprend sa valeur d'avant et
-// le motif s'affiche — un menu qui ne dit rien laisserait croire que c'est
-// passé.
-//
-// LE RESTE DE L'ÉCRAN NE S'ÉCRIT TOUJOURS PAS
-// Le champ « Note » du tableau de bord reste du texte ici. Il n'a pas été
-// demandé, et chaque champ ouvert est un chemin d'écriture de plus à tenir.
+// L'AFFICHAGE AVANCE, ET REVIENT SI ÇA ÉCHOUE
+// Il n'y a plus de reflet à avancer — `db.update` remet la ligne dans le
+// cache — mais la pastille, elle, est repeinte avant le redessin : redessiner
+// tout de suite remplacerait le menu que la personne vient d'ouvrir. En cas de
+// refus, la ligne reprend sa valeur d'avant et le motif s'affiche.
 import { scope } from '../data/scope.js';
 // ⚠ LES DÉFINITIONS D'ÉTAPE VIVENT DANS `rgd-etapes.js`, PAS ICI.
 // Le pipeline de la vue d'ensemble les lit aussi : les garder dans cet écran
@@ -87,13 +92,12 @@ import { scope } from '../data/scope.js';
 import { ORDRE_ETAPES, ETAPES_RGD, ETAPES_CLES, ETAPE_DU_STATUT, STATUT_DE_L_ETAPE,
          etapeDeFiche, etapeDeDemande, estProspectParSource,
          joursDeVisite, statutsDeLEtape, statutSuiviLu,
-         montantDevisDe, etapeAvecMontant } from '../data/rgd-etapes.js';
+         montantDevisDe, etapeAvecMontant, ecrireStatut } from '../data/rgd-etapes.js';
 import { db } from '../data/db.js';
 import { esc, eur, fmtDate, fmtDateTime, relDay, terms, hit, searchInput, bindSearch, restoreFocus } from '../ui.js';
 import { poserEspace } from './espace.js';
 import { cadre, guard } from './rgd-espace.js';
-import { peutEcrire, majStatutClient, majStatutDemande,
-         majNoteClient, majCommentaireDemande } from '../data/rgd-api.js';
+import { majNote } from '../data/rgd-clients.js';
 import { toast } from '../ui.js';
 import { supprimerFiche, boutonSuppression } from './rgd-prospect-saisie.js';
 import { formulaireDemande } from './rgd-demande-saisie.js';
@@ -152,37 +156,33 @@ const pastilleSuivi = (cle) => {
 
 // Le menu déroulant, aux couleurs du statut courant — comme dans le tableau de
 // bord, où la couleur se lit sans ouvrir la liste. `data-cible` dit quelle
-// table écrire, `data-id` l'identifiant CÔTÉ CLOUDFLARE : le worker ne connaît
-// pas les uuid du CRM.
-// ⚠ IL PORTE LES DEUX IDENTIFIANTS, et ce n'est pas une ceinture de plus.
-// Depuis le 23/09/2026 une fiche peut naître dans le CRM : elle n'a alors
-// AUCUN `d1_id`, et l'envoyer au worker reviendrait à lui demander de modifier
-// une fiche qu'il n'a jamais vue. `data-uuid` sert à ces fiches-là, qui
-// s'écrivent directement dans Supabase.
-const menuStatut = (cle, cible, d1Id, uuid) => {
+// table écrire, `data-uuid` quelle ligne.
+// ⚠ IL PORTAIT LES DEUX IDENTIFIANTS jusqu'au 25/09/2026 — celui du CRM et
+// celui de l'application RGD — parce que la destination dépendait de l'origine
+// de la fiche. Une seule adresse, un seul identifiant : `d1_id` n'a plus rien
+// à faire ici.
+const menuStatut = (cle, cible, uuid) => {
   const courant = cle || 'nouveau_prospect';
   return `<select class="statut-menu st-${esc(courant)}" data-cible="${esc(cible)}"
-    data-id="${esc(String(d1Id ?? ''))}" data-uuid="${esc(String(uuid ?? ''))}"
+    data-uuid="${esc(String(uuid ?? ''))}"
     data-avant="${esc(courant)}" aria-label="Statut">
     ${STATUTS_SUIVI.map(st => `<option value="${esc(st.key)}" ${st.key === courant ? 'selected' : ''}>${esc(st.label)}</option>`).join('')}
   </select>`;
 };
 // Le commentaire libre, modifiable sur place. Deux colonnes selon la table :
 // `notes` pour une fiche client, `commentaire_admin` pour une demande du site.
-// Ce sont les noms de D1, et le worker n'accepte que les champs de sa liste —
-// un nom hors liste serait ignoré SANS UN MOT, puis la route répondrait
-// « ok ». Les deux ont été vérifiés dans le worker le 23/09/2026.
+// Ce sont les noms d'origine ; les renommer aurait cassé la lecture pour rien.
 //
-// ⚠ QUI PEUT ÉCRIRE DÉPEND DE LA LIGNE, pas de l'écran. Une fiche née dans le
-// CRM s'écrit dans Supabase : il suffit de porter l'activité RGD. Une fiche
-// venue de Cloudflare doit s'écrire À LA SOURCE, ce qui exige un compte RGD au
-// même email — sans lui, mieux vaut un texte figé qu'un champ qui échouera.
-const champNote = (ligne, cible, ecritureWorker) => {
+// ⚠ QUI PEUT ÉCRIRE NE DÉPEND PLUS DE LA LIGNE mais de l'écran, depuis le
+// 25/09/2026. Il fallait auparavant un compte de l'application RGD pour
+// toucher à une fiche qui en venait, et rien de plus que l'activité RGD pour
+// une fiche née ici : deux droits sur la même colonne, selon d'où la ligne
+// arrivait. `scope.canRgd` décide pour les deux.
+const champNote = (ligne, cible) => {
   const v = (cible === 'demande' ? ligne.commentaire_admin : ligne.notes) || '';
-  const modifiable = scope.canRgd && (ligne.d1_id == null || ecritureWorker);
-  if (!modifiable) return v ? esc(v) : '<span class="muted">—</span>';
+  if (!scope.canRgd) return v ? esc(v) : '<span class="muted">—</span>';
   return `<input class="note-champ" data-cible="${esc(cible)}"
-    data-id="${esc(String(ligne.d1_id ?? ''))}" data-uuid="${esc(ligne.id)}"
+    data-uuid="${esc(ligne.id)}"
     value="${esc(v)}" placeholder="Commentaire…" aria-label="Commentaire">`;
 };
 
@@ -410,14 +410,14 @@ export const rgdClientsPage = {
       // ⚠ `?vue=clients` DOIT CONTINUER D'OUVRIR LES CLIENTS. Des mails de
       // notification deja partis le portent. Il visait le sous-onglet retire ;
       // il vise maintenant le menu, ou il se voit et se defait.
-      statut: vueDemandee === 'clients' ? 'client' : '', focus: null, ecriture: false,
+      statut: vueDemandee === 'clients' ? 'client' : '', focus: null,
+      // ⚠ PLUS DE QUESTION POSÉE AU DÉMARRAGE. L'écran demandait à
+      // l'application RGD si un compte y répondait au même email, puis
+      // redessinait sur la réponse. Le seul droit qui compte est celui de la
+      // base, que la session porte déjà — et que les fonctions revérifient.
+      ecriture: scope.canRgd,
       page: 1, signature: null,
     };
-
-    // On demande une fois si l'écriture est possible, puis on redessine. Sans
-    // compte RGD au même email — ou en mode démo — le menu reste une pastille :
-    // mieux vaut un texte figé qu'un contrôle qui échoue au premier clic.
-    peutEcrire().then(ok => { if (ok !== state.ecriture) { state.ecriture = ok; draw(); } });
 
     const draw = () => {
       const fiches = scope.rgd('rgd_clients');
@@ -748,13 +748,13 @@ export const rgdClientsPage = {
                   ${ap ? `<div class="s muted">apporté par ${esc(ap.societe || [ap.prenom, ap.nom].filter(Boolean).join(' '))}</div>` : ''}</td>
               <td class="muted">${esc(p?.type || '—')}</td>
               <td>${!surProspects ? pastilleFiche(f.statut)
-                : state.ecriture ? menuStatut(f.statut_suivi, 'client', f.d1_id, f.id)
+                : state.ecriture ? menuStatut(f.statut_suivi, 'client', f.id)
                 : pastilleSuivi(f.statut_suivi)}</td>
               <td>${p?.email ? `<a href="mailto:${esc(p.email)}">${esc(p.email)}</a>` : '<span class="muted">—</span>'}</td>
               <td>${esc(p?.tel || '—')}</td>
               <td class="muted">${esc(adresseDe(p))}</td>
               <td class="muted small">${f.maj ? esc(relDay(f.maj)) : '—'}</td>
-              <td class="rcl-note">${champNote(f, 'client', state.ecriture)}</td>
+              <td class="rcl-note">${champNote(f, 'client')}</td>
               <td>${boutonSuppression(f)}</td>
             </tr>`;
           }).join('') || `<tr><td colspan="9"><div class="empty">${esc(vide())}</div></td></tr>`}</tbody>
@@ -811,16 +811,16 @@ export const rgdClientsPage = {
               : esc(String(x.budget || '—').trim())}</td>
             <td class="muted">${esc(x.ville || '—')}</td>
             <td class="rcl-statut-cell">${state.ecriture
-              ? menuStatut(x.statut, x.cible, x.ligne.d1_id, x.ligne.id) + flechesEtape(x.etape, true)
+              ? menuStatut(x.statut, x.cible, x.ligne.id) + flechesEtape(x.etape, true)
               : pastilleSuivi(x.statut)}</td>
-            <td class="rcl-note">${champNote(x.ligne, x.cible, state.ecriture)}</td>
+            <td class="rcl-note">${champNote(x.ligne, x.cible)}</td>
             <td>${boutonSuppression(x.ligne)}</td>
           </tr>`; }).join('') || `<tr><td colspan="10"><div class="empty">${esc(vide())}</div></td></tr>`}</tbody>
         </table>
         ${pagination()}
         <p class="small muted">${state.ecriture
-          ? 'Le statut se change ici et part directement dans le tableau de bord RGD — et, si le prospect a un apporteur, celui-ci en est averti par email. Le commentaire se saisit dans l’<a href="#/rgd/app">application RGD</a>.'
-          : 'Le statut et le commentaire se modifient dans l’<a href="#/rgd/app">application RGD</a> : ici ils sont lus, pas saisis.'}</p>
+          ? 'Le statut et le commentaire se changent ici et sont enregistrés tout de suite. Ils ne repartent plus vers l’application RGD : le CRM en est la source.'
+          : 'Le statut et le commentaire sont lus, pas saisis : leur modification est réservée à l’équipe RGD.'}</p>
       </section>`;
 
       function vide() {
@@ -981,43 +981,30 @@ export const rgdClientsPage = {
         supprimerFiche(demandes.includes(ligne) ? 'site' : 'client', ligne, draw);
       });
 
-      // L'écriture du commentaire, sur le même principe que le statut : deux
-      // chemins selon l'origine de la ligne, et l'ancienne valeur revient si
-      // l'enregistrement échoue. On écrit au `change` (sortie du champ), pas à
-      // chaque frappe : un appel par lettre saturerait le worker pour rien.
+      // L'écriture du commentaire, sur le même principe que le statut :
+      // l'ancienne valeur revient si l'enregistrement échoue. On écrit au
+      // `change` (sortie du champ), pas à chaque frappe : un appel par lettre
+      // ferait une écriture par lettre.
       root.querySelectorAll('.note-champ').forEach(i => {
         i.dataset.avant = i.value;
         i.onchange = async () => {
           const avant = i.dataset.avant;
           const apres = i.value.trim();
           if (avant === apres) return;
-          const demande = i.dataset.cible === 'demande';
-          const table = demande ? 'rgd_demandes' : 'rgd_clients';
-          const champ = demande ? 'commentaire_admin' : 'notes';
           i.disabled = true;
-          const natif = !i.dataset.id;
           // Un champ vide efface : on envoie `null`, pas la chaîne vide, pour
           // pouvoir distinguer plus tard « effacé » de « jamais rempli ».
-          const valeur = apres === '' ? null : apres;
-          const r = natif
-            ? await db.update(table, i.dataset.uuid, { [champ]: valeur })
-                .then(() => ({ ok: true }))
-                .catch(e => ({ ok: false, motif: String(e.message || e).slice(0, 80) }))
-            : demande ? await majCommentaireDemande(i.dataset.id, valeur)
-                      : await majNoteClient(i.dataset.id, valeur);
+          const r = await majNote({
+            uuid: i.dataset.uuid, cible: i.dataset.cible,
+            valeur: apres === '' ? null : apres,
+          });
           i.disabled = false;
           if (r.ok) {
             i.dataset.avant = apres;
-            if (!natif) {
-              const ligne = scope.rgd(table).find(x => String(x.d1_id) === i.dataset.id);
-              if (ligne) ligne[champ] = valeur;
-            }
             toast('Commentaire enregistré');
           } else {
             i.value = avant;
-            toast(r.motif === 'pas-de-compte'
-              ? 'Aucun compte RGD à votre adresse : le commentaire n’a pas été enregistré.'
-              : `Commentaire non enregistré — ${r.motif}`, 'err');
+            toast(`Commentaire non enregistré — ${r.motif}`, 'err');
           }
         };
       });
@@ -1050,34 +1037,21 @@ export const rgdClientsPage = {
           if (avant === apres) return;
           m.disabled = true;
           m.className = `statut-menu st-${apres} en-cours`;
-          const table = m.dataset.cible === 'demande' ? 'rgd_demandes' : 'rgd_clients';
-          const champ = m.dataset.cible === 'demande' ? 'statut' : 'statut_suivi';
-          // ⚠ DEUX CHEMINS D'ÉCRITURE, ET LE BON DÉPEND DE L'ORIGINE DE LA FICHE.
-          // Une fiche venue de Cloudflare s'écrit À LA SOURCE : l'écrire ici ne
-          // servirait à rien, le relevé suivant rétablirait l'ancienne valeur.
-          // Une fiche née dans le CRM, elle, n'existe pas chez le worker — lui
-          // envoyer un `d1_id` vide donnerait une erreur, et Supabase est sa
-          // seule adresse. `data-id` vide dit laquelle des deux on tient.
-          const natif = !m.dataset.id;
-          const r = natif
-            ? await db.update(table, m.dataset.uuid, { [champ]: apres })
-                .then(() => ({ ok: true }))
-                .catch(e => ({ ok: false, motif: String(e.message || e).slice(0, 80) }))
-            : m.dataset.cible === 'demande'
-              ? await majStatutDemande(m.dataset.id, apres)
-              : await majStatutClient(m.dataset.id, apres);
+          // ⚠ UNE SEULE PORTE, ET ELLE N'EST PAS ICI. Cet écran s'était
+          // fabriqué son propre chemin d'écriture, à côté de celui que la
+          // fiche et le pipeline appellent ; ils ont vécu séparément trois
+          // jours. `ecrireStatut` est la seule — deux copies auraient dérivé
+          // à la première correction, et c'est exactement ce qui était en
+          // train d'arriver.
+          const r = await ecrireStatut({
+            uuid: m.dataset.uuid, cible: m.dataset.cible, statut: apres,
+          });
           m.disabled = false;
           if (r.ok) {
             m.dataset.avant = apres;
             m.className = `statut-menu st-${apres}`;
-            // On avance le reflet local : le relevé confirmera dans la
-            // demi-heure, mais l'écran ne doit pas revenir en arrière entre-temps.
-            // Sur une fiche native il n'y a rien à avancer : `db.update` a déjà
-            // remplacé la ligne dans le cache.
-            if (!natif) {
-              const ligne = scope.rgd(table).find(x => String(x.d1_id) === m.dataset.id);
-              if (ligne) ligne[champ] = apres;
-            }
+            // Rien à avancer à la main : `db.update` a remplacé la ligne dans
+            // le cache, et le redessin la retrouve à sa place.
             // ⚠ LA LIGNE GLISSE VERS SON NOUVEL ONGLET, ET CE N'EST PAS
             // DÉCORATIF. Sans cela, changer un statut fait disparaître la ligne
             // d'un coup : on ne sait pas si elle est partie quelque part ou si
@@ -1105,14 +1079,11 @@ export const rgdClientsPage = {
               // effacerait la ligne avant qu'elle ait bougé.
               setTimeout(draw, 420);
             }
-            toast(natif ? 'Statut mis à jour'
-              : 'Statut mis à jour dans le tableau de bord RGD');
+            toast('Statut mis à jour');
           } else {
             m.value = avant;
             m.className = `statut-menu st-${avant}`;
-            toast(r.motif === 'pas-de-compte'
-              ? 'Aucun compte RGD à votre adresse : le statut n’a pas été changé.'
-              : `Statut non enregistré — ${r.motif}`, 'err');
+            toast(`Statut non enregistré — ${r.motif}`, 'err');
           }
         };
       });

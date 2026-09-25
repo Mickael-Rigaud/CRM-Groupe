@@ -378,8 +378,7 @@ function brancherPipeline(root, state, draw) {
       // ⚠ DÉPLACER UNE CARTE ÉCRIT LE STATUT DE SUIVI DE LA PERSONNE, celui
       // que « Clients & prospects » affiche. C'est ce qui tient les deux
       // écrans ensemble : la pipeline n'a aucun état à elle, donc rien qui
-      // puisse diverger. `ecrireStatut` est la seule porte — elle choisit
-      // seule entre la source et le reflet selon l'origine de la fiche.
+      // puisse diverger. `ecrireStatut` est la seule porte.
       const statut = STATUT_DE_L_ETAPE[colonne.etape];
       if (!statut || f.statut_suivi === statut) return;
 
@@ -390,15 +389,13 @@ function brancherPipeline(root, state, draw) {
       f.statut_suivi = statut;
       dejaBouge.add(uuid);
       draw();
-      const r = await ecrireStatut({ d1Id: f.d1_id, uuid: f.id, cible: 'client', statut });
+      const r = await ecrireStatut({ uuid: f.id, cible: 'client', statut });
       if (r.ok) {
         toast(`Déplacé vers « ${colonne.label} » — le dossier suit dans Clients & prospects`);
       } else {
         f.statut_suivi = avant;
         draw();
-        toast(r.motif === 'pas-de-compte'
-          ? 'Aucun compte RGD à votre adresse : le statut n’a pas été changé.'
-          : `Statut non enregistré — ${r.motif}`, 'err');
+        toast(`Statut non enregistré — ${r.motif}`, 'err');
       }
     });
   });

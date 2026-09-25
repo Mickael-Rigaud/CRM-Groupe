@@ -410,35 +410,30 @@ export function etapesRgd() {
 // d'autre levier, et c'est voulu : un bouton qui déplacerait l'affichage sans
 // écrire mentirait dès le relevé suivant.
 //
-// ⚠ DEUX CHEMINS D'ÉCRITURE, ET LE BON DÉPEND DE L'ORIGINE DE LA FICHE.
-// Une fiche venue de Cloudflare s'écrit À LA SOURCE : l'écrire dans le reflet
-// ne servirait à rien, le relevé suivant rétablirait l'ancienne valeur. Une
-// fiche née dans le CRM n'existe pas chez le worker — lui envoyer un `d1_id`
-// vide donnerait une erreur, et Supabase est sa seule adresse.
+// ⚠ UN SEUL CHEMIN D'ÉCRITURE DEPUIS LE 25/09/2026, et c'est tout le lot 3.
+// Il y en avait deux : une fiche venue de l'application RGD s'écrivait là-bas,
+// une fiche née dans le CRM s'écrivait ici — parce que la synchronisation
+// reposait `statut_suivi` et `statut` à chaque passage, donc écrire dans le
+// reflet n'aurait pas tenu trente minutes. Elle a cessé de les reposer
+// (`rgd_clients_et_demandes_sortent_du_releve`) : le CRM est la source, et il
+// n'y a plus qu'une adresse.
 //
-// Cette fonction est la SEULE porte : la liste et la fiche l'appellent toutes
-// les deux. Deux chemins auraient dérivé l'un de l'autre à la première
-// correction.
-export async function ecrireStatut({ d1Id, uuid, cible, statut }) {
+// ⚠ CE QUI A DISPARU AVEC LE SECOND CHEMIN : le renvoi des champs portables
+// vers Costructor et l'email à l'apporteur. Le premier est une décision de
+// Mickael du 25/09 — le CRM est la base de référence ; le second est inerte,
+// `apporteur_id` étant nul sur les 192 fiches.
+//
+// Cette fonction est la SEULE porte : la liste, la fiche et le pipeline
+// l'appellent tous les trois. Deux chemins auraient dérivé l'un de l'autre à la
+// première correction — c'est déjà arrivé, l'écran Clients s'en était fabriqué
+// un second, replié ici le 25/09.
+export async function ecrireStatut({ uuid, cible, statut }) {
   const { db } = await import('./db.js');
-  const { majStatutClient, majStatutDemande } = await import('./rgd-api.js');
   const table = cible === 'demande' ? 'rgd_demandes' : 'rgd_clients';
   const champ = cible === 'demande' ? 'statut' : 'statut_suivi';
-
-  if (!d1Id) {
-    return db.update(table, uuid, { [champ]: statut })
-      .then(() => ({ ok: true, natif: true }))
-      .catch(e => ({ ok: false, motif: String(e.message || e).slice(0, 80) }));
-  }
-  const r = cible === 'demande'
-    ? await majStatutDemande(d1Id, statut)
-    : await majStatutClient(d1Id, statut);
-  // On avance le reflet local : le relevé confirmera dans la demi-heure, mais
-  // l'écran ne doit pas revenir en arrière sous les yeux de qui vient de
-  // changer la valeur.
-  if (r.ok) {
-    const ligne = scope.rgd(table).find(x => String(x.d1_id) === String(d1Id));
-    if (ligne) ligne[champ] = statut;
-  }
-  return { ...r, natif: false };
+  // `db.update` remet la ligne dans le cache : il n'y a rien à avancer à la
+  // main, et le redessin la retrouve à sa place.
+  return db.update(table, uuid, { [champ]: statut })
+    .then(() => ({ ok: true }))
+    .catch(e => ({ ok: false, motif: String(e.message || e).slice(0, 80) }));
 }

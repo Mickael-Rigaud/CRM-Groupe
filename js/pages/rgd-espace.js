@@ -84,7 +84,7 @@ export const cadre = (actif, titre, corps) => coquilleEspace({
 // phrase huit fois. Deux raisons de le supprimer plutôt que de le déplacer :
 // aucun écran n'offre de contrôle d'écriture là où l'écriture est impossible,
 // donc il n'y avait rien à empêcher ; et le statut, lui, s'écrit désormais
-// vraiment (voir `js/data/rgd-api.js`), ce qui rendait la phrase à moitié
+// vraiment (voir `js/data/rgd-clients.js`), ce qui rendait la phrase à moitié
 // fausse. Ce qui doit se dire se dit à l'endroit concerné, sous le tableau.
 
 export const guard = (root) => {

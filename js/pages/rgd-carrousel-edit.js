@@ -26,7 +26,7 @@ import { esc, toast } from '../ui.js';
 import { db } from '../data/db.js';
 import { lienPhoto } from './rgd-espace.js';
 import { lireCarrousel, enregistrerCarrousel, restaurerCarrousel,
-         deposerPhotosRealisations } from '../data/rgd-api.js';
+         deposerPhotosRealisations } from '../data/rgd-site.js';
 
 const MAX_OCTETS = 20 * 1024 * 1024;
 const FORMATS = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif'];

@@ -7,29 +7,34 @@
 // pas. Demandé le 24/09/2026 : « je voudrais avoir la possibilité de modifier
 // les informations ».
 //
-// ⚠ CE QUI REND LA CHOSE POSSIBLE, C'EST D'ÉCRIRE À LA SOURCE.
-// `push_rgd_clients` réécrit `nature_travaux`, `budget_travaux`,
-// `adresse_chantier` et l'identité depuis D1 à CHAQUE relevé, sans `coalesce`.
-// Une valeur posée dans Supabase seul survivrait moins d'une demi-heure — et
-// c'est très exactement la perte signalée le même jour : « quand je refresh,
-// les modifications sont perdues ». Le formulaire écrit donc chez Cloudflare
-// quand la fiche en vient, et le relevé ramène. Ailleurs, il écrit dans
-// Supabase, qui est alors la seule source.
+// ⚠ IL A FALLU ÉCRIRE À LA SOURCE JUSQU'AU 25/09/2026, et c'est ce qui
+// explique la forme qu'avait ce fichier. `push_rgd_clients` réécrivait
+// `nature_travaux`, `budget_travaux`, `adresse_chantier` et l'identité depuis
+// D1 à CHAQUE relevé, sans `coalesce` : une valeur posée dans Supabase seul
+// survivait moins d'une demi-heure — très exactement la perte signalée le
+// 24/09, « quand je refresh, les modifications sont perdues ». Le formulaire
+// avait donc DEUX destinations selon l'origine de la fiche.
 //
-// ⚠ LE PRIX DE CE SENS UNIQUE : la valeur saisie ne revient de D1 qu'au relevé
-// suivant, jusqu'à trente minutes. On met donc le reflet local à jour tout de
-// suite — sans quoi le champ reprendrait son ancienne valeur sous les yeux de
-// qui vient de le changer. Ce n'est pas un mensonge : la source a bien été
-// écrite, c'est la copie qui est en retard.
+// ⚠ IL N'EN A PLUS QU'UNE. La synchronisation a cessé de reposer ces colonnes
+// (`rgd_clients_et_demandes_sortent_du_releve`) : tout s'écrit dans le CRM, qui
+// en est la source. Ce qui disparaît avec le détour — le renvoi des champs
+// portables vers Costructor — est une décision de Mickael : la base de
+// référence est celle du CRM, celle de Costructor « était un peu fausse
+// finalement ».
 //
-// ⚠ UNE DEMANDE VENUE DU SITE NE SE MODIFIE PAS ICI, et ce n'est pas un oubli.
-// `routes/leads.js` du worker n'accepte que `statut`, `commentaire_admin` et
-// `traite_par_id` : aucun champ d'identité ni de projet. Proposer le
-// formulaire donnerait un enregistrement qui répond « ok » et ne change rien —
-// le pire des deux mondes. L'écran le dit au lieu de le cacher.
+// ⚠ UNE DEMANDE VENUE DU SITE SE MODIFIE MAINTENANT, ELLE AUSSI. Elle était
+// en lecture seule parce que `routes/leads.js` n'acceptait que `statut`,
+// `commentaire_admin` et `traite_par_id` : proposer le formulaire aurait donné
+// un enregistrement qui répond « ok » sans rien changer. Cette route n'est plus
+// dans la boucle, et `push_rgd_demandes` n'a jamais reposé l'identité ni le
+// projet — il ne les écrivait qu'à l'insertion. Le refus n'avait donc plus
+// d'objet.
+//
+// ⚠ LE REFLET LOCAL EST TOUJOURS AVANCÉ À LA MAIN, pour une autre raison que
+// le relevé : `db.update` REMPLACE la ligne du cache, et la fiche en garde une
+// référence orpheline. Voir `avancerVue` plus bas.
 import { db } from '../data/db.js';
 import { esc, toast } from '../ui.js';
-import { majChampsClient } from '../data/rgd-api.js';
 import { BIEN, RESIDENCE, TRAVAUX, BUDGETS, listeTravaux, texteTravaux }
   from '../data/rgd-formulaire.js';
 
@@ -49,10 +54,10 @@ const personneDe = (f) => {
  * possible, et la raison quand ça ne l'est pas — l'écran l'affiche telle quelle.
  */
 export function refusDeModifier(x) {
-  if (x.genre === 'demande' && x.ligne.d1_id != null) {
-    return 'Une demande venue du formulaire du site se modifie dans l’application RGD : '
-      + 'le tableau de bord n’accepte d’ici que son statut et son commentaire.';
-  }
+  // ⚠ IL Y AVAIT UN PREMIER REFUS ICI, RETIRÉ LE 25/09/2026 : une demande venue
+  // du formulaire du site était en lecture seule, parce que la route de
+  // l'application RGD n'acceptait que son statut et son commentaire. Elle
+  // n'est plus dans la boucle. Ne pas le remettre.
   if (!personneDe(x.ligne) && x.genre !== 'demande') {
     return 'Cette fiche n’est rattachée à aucun contact ni à aucune organisation : '
       + 'il n’y a rien à modifier tant que le rattachement n’est pas fait.';
@@ -255,38 +260,17 @@ export async function enregistrerModif(x, valeurs) {
         projet_description: texte(valeurs.projet_description),
         budget: texte(valeurs.budget_annonce),
       });
-    } else if (f.d1_id != null) {
-      // ⚠ DEUX DESTINATIONS POUR UNE SEULE FICHE, et ce n'est pas un doublon.
-      // `type_bien` et `adresse_chantier` sont reposés depuis l'application RGD
-      // à chaque relevé (`push_rgd_clients`, sans `coalesce`) : écrits ici seuls,
-      // ils disparaîtraient dans la demi-heure. Les cinq autres colonnes ne sont
-      // envoyées par aucune porte du relevé : le CRM en est la seule source, et
-      // les faire passer par là-bas les perdrait — la route n'en veut pas.
-      //
-      // ⚠ `nature_travaux` PART AUSSI, avec la même liste que `types_travaux` :
-      // c'est le champ que l'application RGD affiche, le laisser en arrière
-      // ferait dire deux choses différentes aux deux outils.
-      const r = await majChampsClient(f.d1_id, {
-        nom: texte(valeurs.nom), prenom: texte(valeurs.prenom),
-        raison_sociale: texte(valeurs.raison_sociale),
-        email: texte(valeurs.email), telephone: texte(valeurs.telephone),
-        adresse: texte(valeurs.adresse), code_postal: texte(valeurs.code_postal),
-        ville: texte(valeurs.ville),
-        nature_travaux: travaux,
-        adresse_chantier: texte(valeurs.adresse_chantier),
-        type_bien: texte(valeurs.type_projet),
-      });
-      if (!r.ok) {
-        return { ok: false, motif: r.motif === 'pas-de-compte'
-          ? 'Aucun compte RGD à votre adresse : rien n’a été enregistré.'
-          : r.motif };
-      }
-      await db.update('rgd_clients', f.id, auCrm);
-      if (p) majRefletPersonne(p, valeurs);
-      avancerVue(x, valeurs);
-      return { ok: true };
     } else {
-      // Née ici : Supabase est la seule source, tout s'y écrit.
+      // ⚠ UNE SEULE DESTINATION DEPUIS LE 25/09/2026. Il y en avait deux :
+      // `type_bien`, `adresse_chantier`, `nature_travaux` et l'identité
+      // partaient dans l'application RGD parce que le relevé les y reprenait
+      // à chaque passage, sans `coalesce` ; les cinq autres colonnes, qu'il ne
+      // connaît pas, restaient ici. Il ne repose plus rien de tout cela.
+      //
+      // ⚠ `nature_travaux` REÇOIT TOUJOURS LA MÊME LISTE QUE `types_travaux`,
+      // et ce n'est pas devenu inutile : c'est la colonne que lisent les
+      // écrans venus du tableau de bord, la laisser en arrière ferait dire deux
+      // choses différentes à deux endroits du CRM.
       await db.update('rgd_clients', f.id, {
         ...auCrm,
         nature_travaux: travaux,
@@ -351,17 +335,11 @@ function avancerVue(x, v) {
   if (nomComplet) x.nom = nomComplet;
 }
 
-// Le reflet de la personne, quand l'écriture est partie chez Cloudflare. Les
-// noms de colonnes sont ceux du CRM, pas ceux de D1 : c'est la copie locale
-// qu'on avance, pas la source.
-function majRefletPersonne(p, v) {
-  const t = (x) => { const s = String(x ?? '').trim(); return s === '' ? null : s; };
-  const l = p.ligne;
-  if (p.pro) { l.name = t(v.raison_sociale) ?? l.name; }
-  else { l.first_name = t(v.prenom); l.last_name = t(v.nom); }
-  l.email = t(v.email); l.phone = t(v.telephone);
-  l.address = t(v.adresse); l.postal_code = t(v.code_postal); l.city = t(v.ville);
-}
+// ⚠ `majRefletPersonne` A DISPARU LE 25/09/2026, et il n'y a rien à remettre.
+// Elle avançait la copie locale du contact quand l'écriture partait chez
+// Cloudflare sans passer par `db.update` — cas qui n'existe plus. Le contact
+// s'écrit maintenant par `db.update`, qui remet la ligne dans le cache, et la
+// fiche la relit par `db.byId` à chaque rendu.
 
 /**
  * Les valeurs saisies, lues sur le formulaire.

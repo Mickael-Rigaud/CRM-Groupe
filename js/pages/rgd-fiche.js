@@ -488,7 +488,7 @@ export function ouvrirFicheRgd(x, onChange) {
       const statut = vers === 'demande' ? 'a_contacter' : STATUT_DE_L_ETAPE[vers];
       m.querySelectorAll('[data-etape]').forEach(o => { o.disabled = true; });
       const avant = etapeCourante;
-      const r = await ecrireStatut({ d1Id: f.d1_id, uuid: f.id, cible: x.cible, statut });
+      const r = await ecrireStatut({ uuid: f.id, cible: x.cible, statut });
       if (r.ok) {
         etapeCourante = vers;
         x.etape = vers;
@@ -498,9 +498,7 @@ export function ouvrirFicheRgd(x, onChange) {
         onChange?.();
       } else {
         m.querySelectorAll('[data-etape]').forEach(o => { o.disabled = false; });
-        toast(r.motif === 'pas-de-compte'
-          ? 'Aucun compte RGD à votre adresse : l’étape n’a pas été changée.'
-          : `Étape non enregistrée — ${r.motif}`, 'err');
+        toast(`Étape non enregistrée — ${r.motif}`, 'err');
       }
     });
 

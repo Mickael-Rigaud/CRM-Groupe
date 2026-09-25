@@ -7,14 +7,22 @@
 // Depuis que `d1_id` est facultatif, une fiche peut naître et mourir dans le
 // CRM sans que Cloudflare ait son mot à dire.
 //
-// ⚠ DEUX POPULATIONS COHABITENT DANS LES MÊMES TABLEAUX, ET ELLES N'ONT PAS
-// LES MÊMES DROITS.
-//   · `d1_id` renseigné  → la fiche vient de Cloudflare. **On ne la supprime
-//     pas** : le relevé la réécrirait au passage suivant, et la corbeille
-//     donnerait l'illusion d'avoir agi. Le bouton n'apparaît donc pas, et la
-//     note sous le tableau dit pourquoi.
-//   · `d1_id` à NULL     → la fiche est née ici. Elle se supprime pour de bon.
-// C'est la SEULE règle à retenir de ce fichier.
+// ⚠ DEUX POPULATIONS COHABITENT DANS LES MÊMES TABLEAUX, ET ELLES NE SE
+// SUPPRIMENT PLUS DE LA MÊME FAÇON — mais les deux se suppriment, depuis le
+// 25/09/2026, et d'un seul côté.
+//   · `d1_id` à NULL     → la fiche est née ici. Rien ne peut la ramener.
+//   · `d1_id` renseigné  → elle venait de l'application RGD. L'effacer ne
+//     suffit pas : **le relevé n'efface jamais rien**, il ne fait que des
+//     `insert … on conflict do update`, donc la ligne reviendrait au passage
+//     suivant avec son ancien statut. On pose donc une PIERRE TOMBALE que les
+//     portes du relevé consultent avant d'insérer, dans la même transaction
+//     que l'effacement — `supprimerFicheRgd`, `js/data/rgd-clients.js`.
+//
+// ⚠ IL Y AVAIT UN TROISIÈME CAS, ET IL A DISPARU : jusqu'au 25/09 une fiche
+// venue de l'application se supprimait **des deux côtés**, ici et là-bas. Ce
+// n'est plus la peine, et ce n'est plus possible non plus : la synchronisation
+// n'apporte plus ces fiches. Ce que ça coûte est nommé — une fiche supprimée
+// ici reste dans l'application RGD, où plus personne ne va.
 //
 // ⚠ ON SUPPRIME LA FICHE RGD, ON ARCHIVE LE CONTACT.
 // Deux raisons, et la seconde compte plus que la première. D'abord la policy :
@@ -33,7 +41,7 @@
 // la liste montre produirait des lignes à moitié vides.
 import { db } from '../data/db.js';
 import { openModal, closeModal, confirm, renderForm, readForm, toast, esc } from '../ui.js';
-import { supprimerClientSource, supprimerDemandeSource } from '../data/rgd-api.js';
+import { supprimerFicheRgd } from '../data/rgd-clients.js';
 
 // Ce que chaque sous-onglet réclame, en plus de l'identité.
 // `table` dit où atterrit la fiche, `fixe` les colonnes imposées par la
@@ -182,15 +190,23 @@ export function formulaireProspect(sousVue, apporteurs, apresEnregistrement) {
 
 // ---------------------------------------------------------------- supprimer
 //
-// ⚠ UNE SUPPRESSION SE FAIT DES DEUX CÔTÉS, ET DANS CET ORDRE.
+// ⚠ UNE SUPPRESSION SE FAIT D'UN SEUL CÔTÉ DEPUIS LE 25/09/2026, ET LA PIERRE
+// TOMBALE EST CE QUI LE PERMET.
 // Le relevé Cloudflare ne fait que des `insert … on conflict do update`, sans
 // aucun `delete` : une ligne effacée dans le CRM seul **reviendrait** au
-// passage suivant. On efface donc à la SOURCE d'abord ; si cet appel échoue on
-// s'arrête, parce qu'une fiche toujours là vaut mieux qu'une fiche qui
-// disparaît puis réapparaît une demi-heure plus tard sans explication.
+// passage suivant. On effaçait donc à la SOURCE d'abord, et ici ensuite.
+// `rgd_supprimer_fiche` inscrit à la place le `d1_id` dans `rgd_suppressions`,
+// que `push_rgd_clients` et `push_rgd_demandes` consultent avant d'insérer :
+// la ligne peut rester chez Cloudflare, elle ne repassera plus la porte.
 //
-// Les fiches nées dans le CRM (`d1_id` à NULL) n'ont pas de source : pour
-// elles, la seule écriture Supabase suffit.
+// Deux raisons de préférer cela au double effacement, dans cet ordre. Le CRM
+// est désormais la base de référence, donc ce qui reste là-bas n'a plus de
+// lecteur ; et l'effacement à la source dépendait d'un compte de l'application
+// RGD, que tout le monde n'a pas — la suppression était fermée à des gens à
+// qui la base l'ouvrait.
+//
+// Une fiche née ici (`d1_id` à NULL) n'a rien à empêcher de revenir : la
+// fonction ne pose alors aucune pierre, et le dit (`marquee`).
 
 // Ce qui pend à une fiche. On compte AVANT de proposer quoi que ce soit : un
 // client qui porte des devis, des chantiers ou des paiements ne se supprime
@@ -236,44 +252,34 @@ export async function supprimerFiche(sousVue, ligne, apresSuppression) {
       + `supprimée sans les orpheliner. Retirez-les d'abord.`, 'warn');
   }
 
-  const venuDeLApplication = ligne.d1_id != null;
-  if (!await confirm(venuDeLApplication
-    ? `Supprimer ${nom} ? Elle sera retirée du tableau de bord RGD ET du CRM. C'est définitif.`
-    : `Supprimer ${nom} ? La fiche est retirée définitivement. Le contact, lui, est `
-      + `archivé et reste récupérable.`)) return;
+  if (!await confirm(`Supprimer ${nom} ? La fiche est retirée définitivement. `
+    + `Le contact, lui, est archivé et reste récupérable.`)) return;
 
-  try {
-    // 1. La source, quand il y en a une. On s'arrête net si ça échoue.
-    if (venuDeLApplication) {
-      const r = surDemande
-        ? await supprimerDemandeSource(ligne.d1_id)
-        : await supprimerClientSource(ligne.d1_id);
-      if (!r.ok) {
-        return toast(r.motif === 'pas-de-compte'
-          ? 'Aucun compte RGD à votre adresse : rien n’a été supprimé.'
-          : `Suppression refusée par le tableau de bord RGD — ${r.motif}. `
-            + `Rien n’a été touché dans le CRM.`, 'err');
-      }
-    }
+  // 1. La fiche et, s'il y a lieu, sa pierre tombale — une seule transaction.
+  //    ⚠ `db.remove` ne suffirait pas : sans la pierre, une fiche venue de
+  //    l'application reviendrait au relevé suivant, et la corbeille aurait
+  //    donné l'illusion d'avoir agi.
+  const r = await supprimerFicheRgd(surDemande ? 'demandes' : 'clients', ligne.id);
+  if (!r.ok) return toast(`Suppression impossible : ${r.motif}`, 'err');
 
-    // 2. Le reflet.
-    await db.remove(table, ligne.id);
+  // Le cache tient encore la ligne : la fonction a écrit en base sans passer
+  // par `db.remove`, le seul chemin qui retire du cache. On recharge la table
+  // plutôt que de la retirer à la main — un `filter` ici et la ligne
+  // reviendrait au premier rafraîchissement, la base ayant raison.
+  await db.recharger(table);
 
-    // 3. Le contact suit, mais ARCHIVÉ et non supprimé — voir l'en-tête.
-    if (ligne.contact_id) {
-      try { await db.update('contacts', ligne.contact_id, { archived_at: new Date().toISOString() }); }
-      catch { /* L'archivage est un confort : son échec n'annule pas la suppression. */ }
-    }
-    toast(venuDeLApplication ? 'Fiche supprimée des deux côtés' : 'Fiche supprimée');
-    apresSuppression?.();
-  } catch (err) {
-    toast(`Suppression impossible : ${String(err.message || err).slice(0, 120)}`, 'warn');
+  // 2. Le contact suit, mais ARCHIVÉ et non supprimé — voir l'en-tête.
+  if (ligne.contact_id) {
+    try { await db.update('contacts', ligne.contact_id, { archived_at: new Date().toISOString() }); }
+    catch { /* L'archivage est un confort : son échec n'annule pas la suppression. */ }
   }
+  toast('Fiche supprimée');
+  apresSuppression?.();
 }
 
-// La corbeille d'une ligne. Elle s'affiche partout désormais — l'infobulle dit
-// seulement si le geste ira aussi chercher la source.
+// La corbeille d'une ligne. Elle s'affiche partout, et son infobulle ne dit
+// plus d'où vient la fiche : depuis le 25/09/2026 le geste est le même pour
+// les deux populations, et distinguer deux cas identiques à l'usage ne sert
+// qu'à faire hésiter.
 export const boutonSuppression = (ligne) =>
-  `<button class="icon-btn" data-suppr="${esc(ligne.id)}" title="${
-    ligne.d1_id == null ? 'Supprimer cette fiche'
-      : 'Supprimer dans le tableau de bord RGD et dans le CRM'}">🗑</button>`;
+  `<button class="icon-btn" data-suppr="${esc(ligne.id)}" title="Supprimer cette fiche">🗑</button>`;

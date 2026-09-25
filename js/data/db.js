@@ -253,6 +253,39 @@ const localAdapter = {
       return { ok: true, id: d.id, ancien_statut: ancien, date_signature: d.date_signature };
     }
 
+    // ── La suppression d'une fiche, depuis le 25/09/2026 ──────────────────
+    // ⚠ DOUBLE DU SQL, même règle que les trois ci-dessus.
+    //
+    // ⚠ LA PIERRE TOMBALE EST REJOUÉE ICI ALORS QUE LA DÉMO N'A AUCUN RELEVÉ,
+    // et ce n'est pas du zèle : c'est la seule partie du geste qu'on puisse
+    // éprouver avant la production. En l'omettant, la démo montrerait une
+    // suppression qui marche là où la vraie ferait revenir la fiche une
+    // demi-heure plus tard — exactement le défaut silencieux que la fonction
+    // existe pour empêcher.
+    if (nom === 'rgd_supprimer_fiche') {
+      if (!['clients', 'demandes'].includes(args.p_source)) {
+        throw new Error('source inconnue : ' + args.p_source);
+      }
+      const table = 'rgd_' + args.p_source;
+      const lignes = this.data[table] || [];
+      const i = lignes.findIndex(x => x.id === args.p_id);
+      if (i < 0) return { ok: false, error: 'fiche introuvable' };
+      const d1 = lignes[i].d1_id ?? null;
+      lignes.splice(i, 1);
+      if (d1 != null) {
+        this.data.rgd_suppressions = this.data.rgd_suppressions || [];
+        const dejaLa = this.data.rgd_suppressions
+          .some(x => x.source === args.p_source && x.d1_id === d1);
+        if (!dejaLa) {
+          this.data.rgd_suppressions.push({
+            source: args.p_source, d1_id: d1, supprime_le: new Date().toISOString(), par: null,
+          });
+        }
+      }
+      this.save();
+      return { ok: true, d1_id: d1, marquee: d1 != null };
+    }
+
     throw new Error('Fonction inconnue en mode démo : ' + nom);
   },
   // fichiers (démo) : conservés dans le navigateur en base64, petits fichiers uniquement

@@ -379,6 +379,16 @@ export const SEED = {
   // `source` n'est pas décoratif : une fiche n'entre dans la frise que si elle
   // vient d'une prospection (`estProspectParSource`). Sans lui, ces lignes
   // seraient invisibles et la démo serait à nouveau vide sans le dire.
+  // ⚠ DEUX FICHES PORTENT UN `d1_id` (rc4 et rd1), et ce n'est pas du décor.
+  // En production, les 192 fiches en ont un : elles viennent de l'application
+  // RGD, et les supprimer exige une PIERRE TOMBALE, sans quoi la
+  // synchronisation les ramènerait au passage suivant. Sans une seule fiche de
+  // ce genre, la démo ne montrait que le cas facile — la fiche née ici, qui
+  // n'a rien à empêcher de revenir — et la moitié du geste ne s'essayait qu'en
+  // production. Les valeurs sont hors des plages réelles pour qu'on ne les
+  // prenne pas pour de vraies lignes. ⚠ Elles n'ont ni devis ni chantier : une
+  // fiche qui en porte est refusée à la suppression AVANT même la question, et
+  // la pierre tombale ne se serait jamais essayée.
   rgd_clients: [
     { id: 'rc1', contact_id: 'c1', statut: 'prospect', statut_suivi: 'nouveau_prospect',
       source: 'meta_ads', meta_received_at: d(-6), meta_type_projet: 'Rénovation complète',
@@ -388,7 +398,7 @@ export const SEED = {
       notes: 'Message laissé sur répondeur.', maj: d(-1) },
     { id: 'rc3', contact_id: 'c12', statut: 'prospect', statut_suivi: 'relance_2',
       source: 'Formulaire site', notes: '', maj: d(-4) },
-    { id: 'rc4', contact_id: 'c13', statut: 'prospect', statut_suivi: 'relance_3',
+    { id: 'rc4', contact_id: 'c13', d1_id: 7001, statut: 'prospect', statut_suivi: 'relance_3',
       source: 'manuel', notes: 'Ne répond plus depuis trois semaines.', maj: d(-9) },
     { id: 'rc5', contact_id: 'c14', statut: 'qualifie', statut_suivi: 'a_contacter',
       source: 'google_calendar', notes: 'Fiche créée depuis le rendez-vous.', maj: d(-1) },
@@ -436,7 +446,7 @@ export const SEED = {
   // 24/09/2026. Elle se lit désormais « nouveau prospect » ; cette ligne est là
   // pour que la prochaine régression se voie sans ouvrir la production.
   rgd_demandes: [
-    { id: 'rd1', prenom: 'Camille', nom: 'Vasseur', email: 'camille.vasseur@example.com',
+    { id: 'rd1', d1_id: 7101, prenom: 'Camille', nom: 'Vasseur', email: 'camille.vasseur@example.com',
       telephone: '06 39 98 00 21', ville: 'Tours', code_postal: '37000',
       adresse: '4 rue des Tanneurs', types_travaux: '["Isolation","Menuiseries"]',
       budget: '15 000 €', statut: 'nouveau_prospect', date_demande: d(-5),
