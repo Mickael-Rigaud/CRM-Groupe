@@ -1069,9 +1069,20 @@ function carteObjectifs(e) {
              l'infobulle de la barre la donne au chiffre.
              ⚠ La cellule reste, VIDE : c'est un tableau, la retirer décalerait la
              colonne des taux sur les lignes qui n'en ont pas. -->
-        <td class="obj-part ${atteint ? 'ok' : avance ? '' : 'retard'}">${
-          l.taux ? '' : (p == null ? '—' : pourcent(p) + ' %')}</td>
-        <td class="obj-taux">${l.taux ? tauxHtml(l.taux) : ''}</td>
+        <!-- ⚠ UNE SEULE COLONNE DE POURCENTAGES, ET C'EST LA SUITE DE LA MÊME
+             DEMANDE (25/09/2026, « aligne-les avec ceux du dessus »). Il y avait
+             deux cellules : la part de l'objectif, puis le taux de passage plus à
+             droite. En n'en gardant qu'un par ligne, les chiffres restants se
+             retrouvaient dans deux colonnes différentes selon la ligne — une
+             colonne en escalier, qu'on ne lit pas d'un regard.
+             ⚠ La couleur reste sur l'élément qui la mérite : le taux porte la
+             sienne (écart au visé) dans son propre span, la part de l'objectif
+             porte celle de la cellule (avance ou retard sur la période). Les
+             coller toutes deux sur la cellule donnerait une ligne verte parce que
+             l'objectif est tenu, avec dedans un taux rouge. -->
+        <td class="obj-part ${l.taux ? '' : (atteint ? 'ok' : avance ? '' : 'retard')}">${
+          l.taux ? tauxHtml(l.taux)
+            : `<span class="obj-pct">${p == null ? '—' : pourcent(p) + ' %'}</span>`}</td>
       </tr>`;
     }).join('')}</tbody></table>
     <p class="muted small obj-legende"><i></i><span>Le repère marque ${pourcent(part)} % de la période écoulée : à droite,
@@ -1089,8 +1100,12 @@ function tauxHtml(t) {
   if (t.reel == null && t.vise == null) return '';
   const ecart = t.reel != null && t.vise != null ? t.reel - t.vise : null;
   const ton = ecart == null ? '' : ecart >= -0.02 ? 'ok' : 'retard';
+  // ⚠ `obj-pct` SUR LE CHIFFRE PRINCIPAL, ET SUR LUI SEUL. C'est lui qui doit
+  // tomber dans la même colonne que les pourcentages des lignes sans taux ; le
+  // « visé » est une précision, elle suit. Sans cette distinction la cellule
+  // s'alignait en bloc et « 20 % » se retrouvait sous « visé 60 % ».
   return `<span class="obj-conv ${ton}" title="Taux de passage depuis « ${esc(t.depuis)} »">
-    ${t.reel == null ? '—' : pourcent(t.reel) + ' %'}
+    <span class="obj-pct">${t.reel == null ? '—' : pourcent(t.reel) + ' %'}</span>
     ${t.vise != null ? `<em>visé ${pourcent(t.vise)} %</em>` : ''}</span>`;
 }
 

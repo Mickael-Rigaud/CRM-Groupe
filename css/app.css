@@ -2772,10 +2772,20 @@ button.tb-pp:hover { color: var(--text); text-decoration: underline; text-underl
 .obj-piste b { position: absolute; top: -4px; bottom: -4px; width: 2px; border-radius: 2px; background: var(--text); opacity: .45; }
 .obj-chiffres { white-space: nowrap; text-align: right; padding-right: 14px !important; }
 .obj-chiffres b { font-family: var(--font-display); font-size: 15px; }
-.obj-part { font-family: var(--font-display); font-weight: 700; text-align: right; min-width: 52px; color: var(--muted); }
+/* Une seule colonne de pourcentages depuis le 25/09/2026 : elle porte soit la
+   part de l'objectif, soit le taux de passage, jamais les deux. `nowrap` parce
+   qu'un taux tient en deux morceaux (« 100 % visé 60 % ») qui ne doivent pas se
+   couper. */
+/* ⚠ LA CELLULE S'ALIGNE A GAUCHE, LE CHIFFRE A DROITE DANS SA BOITE.
+   Aligner la cellule entiere a droite mettait « 20 % » sous « vise 60 % » : ce
+   qui doit tomber en colonne, c'est le chiffre principal, pas la fin de la
+   ligne. `.obj-pct` lui donne une largeur fixe ou il se cale a droite, et le
+   « vise » suit derriere. */
+.obj-part { font-family: var(--font-display); font-weight: 700; text-align: left; padding-left: 10px !important; min-width: 52px; color: var(--muted); white-space: nowrap; }
+.obj-pct { display: inline-block; min-width: 46px; text-align: right; }
 .obj-part.ok { color: var(--green); }
 .obj-part.retard { color: var(--amber); }
-.obj-taux { text-align: right; padding-left: 16px !important; white-space: nowrap; }
+/* `.obj-taux` a disparu : son contenu vit dans `.obj-part`. */
 .obj-conv { font-size: 12.5px; color: var(--muted); }
 .obj-conv.ok { color: var(--green); }
 .obj-conv.retard { color: var(--amber); }
@@ -2788,7 +2798,10 @@ button.tb-pp:hover { color: var(--text); text-decoration: underline; text-underl
 @media (max-width: 720px) {
   /* Le taux de passage est la première chose qu'on sacrifie : les chiffres et le
      pourcentage d'atteinte portent l'essentiel, et une colonne rognée ne sert à rien. */
-  .obj-taux, .obj-legende i { display: none; }
+  /* ⚠ `.obj-taux` ETAIT MASQUE ICI. La regle a ete retiree avec la colonne : la
+     masquer aujourd'hui ferait disparaitre le SEUL pourcentage des lignes qui
+     portent un taux, puisqu'il n'y a plus de second chiffre pour le remplacer. */
+  .obj-legende i { display: none; }
   .obj-table th { font-size: 13px; padding-right: 8px; }
   .obj-piste { min-width: 40px; }
   .obj-barre { padding-right: 8px !important; }
