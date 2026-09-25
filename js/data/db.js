@@ -46,6 +46,23 @@ const LS_SITE = 'crm_local_site_v1';
 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : 'id-' + Math.random().toString(36).slice(2) + Date.now());
 
+// ⚠ DOUBLE DE `rgd_chantier_traduction` EN BASE, pour le mode démo. Les dix
+// statuts de chantier vers l'étape et le statut de l'affaire. La traduction
+// est LOSSY — `relance_1` et `relance_2` donnent la même étape —, c'est
+// précisément pourquoi `rgd_chantiers.statut_d1` porte le brut à côté.
+const TRADUCTION_CHANTIER = {
+  en_preparation:   { etape: 'lead',          statut: 'open' },
+  visite_technique: { etape: 'visite',        statut: 'open' },
+  devis_en_cours:   { etape: 'devis_encours', statut: 'open' },
+  devis_presente:   { etape: 'devis_envoye',  statut: 'open' },
+  relance_1:        { etape: 'nego',          statut: 'open' },
+  relance_2:        { etape: 'nego',          statut: 'open' },
+  devis_signe:      { etape: 'nego',          statut: 'won'  },
+  demarrage:        { etape: 'nego',          statut: 'won'  },
+  en_cours:         { etape: 'nego',          statut: 'won'  },
+  termine:          { etape: 'nego',          statut: 'won'  },
+};
+
 // Les tables qui ne sont pas clées sur `id`.
 //
 // C'était un ternaire (`table === 'settings' ? 'key' : 'id'`), ce qui allait
@@ -147,6 +164,72 @@ const localAdapter = {
       if (lignes.length) { this.data[table] = lignes; this.save(); }
       return { ok: true, cle };
     }
+
+    // ── Les chantiers, depuis le 25/09/2026 ───────────────────────────────
+    // ⚠ CE SONT DES DOUBLES DU SQL, comme `deplierSite` : si
+    // `rgd_chantier_statut` ou `rgd_chantier_creer` changent en base, il faut
+    // les changer ici aussi, sinon la démo montre autre chose que la
+    // production. Les deux sont écrits pour se ressembler ligne à ligne.
+    if (nom === 'rgd_chantier_statut') {
+      const trad = TRADUCTION_CHANTIER[args.p_statut];
+      if (!trad) throw new Error('statut de chantier inconnu : ' + args.p_statut);
+      const c = (this.data.rgd_chantiers || []).find(x => x.id === args.p_id);
+      if (!c) return { ok: false, error: 'chantier introuvable' };
+
+      c.statut_d1 = args.p_statut;
+      // Symétrique : posée au premier passage à « terminé », retirée à la
+      // descente — sans quoi un chantier rouvert resterait hors des
+      // « chantiers en cours » pour toujours.
+      c.date_passage_termine = args.p_statut === 'termine'
+        ? (c.date_passage_termine || new Date().toISOString()) : null;
+      c.updated_at = new Date().toISOString();
+
+      const d = (this.data.deals || []).find(x => x.id === c.deal_id);
+      if (d) {
+        d.stage = trad.etape;
+        d.status = trad.statut;
+        d.won_at = trad.statut === 'won' ? (d.won_at || new Date().toISOString()) : null;
+        d.updated_at = c.updated_at;
+      }
+      // La propagation vers `statut_suivi` n'est pas rejouée : elle est gardée
+      // par `apporteur_id`, nul partout, donc inerte des deux côtés.
+      this.save();
+      return { ok: true, statut: args.p_statut, etape: trad.etape,
+        statut_affaire: trad.statut, notifier: false };
+    }
+
+    if (nom === 'rgd_chantier_creer') {
+      const trad = TRADUCTION_CHANTIER[args.p_statut || 'en_preparation'];
+      if (!trad) throw new Error('statut de chantier inconnu : ' + args.p_statut);
+      if (!args.p_contact || !String(args.p_nom || '').trim()) {
+        throw new Error('le client et le nom du chantier sont obligatoires');
+      }
+      const nom_ = String(args.p_nom).trim();
+      const fiche = (this.data.rgd_clients || []).find(x => x.contact_id === args.p_contact);
+      // ⚠ L'AFFAIRE PUIS LE CHANTIER, jamais l'inverse : `deal_id` est
+      // obligatoire, et une affaire sans son chantier n'apparaît nulle part.
+      const deal = {
+        id: uid(), title: nom_, activity: 'rgd', stage: trad.etape,
+        status: trad.statut, contact_id: args.p_contact,
+        organisation_id: fiche?.organisation_id || null, channel: 'En direct',
+        amount: args.p_montant_ht ?? null,
+        fields: { ne_ici: true }, created_at: new Date().toISOString(),
+      };
+      const chantier = {
+        id: uid(), deal_id: deal.id, contact_id: args.p_contact, reference: nom_,
+        adresse: args.p_adresse || null, code_postal: args.p_code_postal || null,
+        ville: args.p_ville || null, description: args.p_description || null,
+        statut_d1: args.p_statut || 'en_preparation',
+        montant_ht: args.p_montant_ht ?? null,
+        date_debut_prevue: args.p_date_debut_prevue || null,
+        created_at: deal.created_at, updated_at: deal.created_at,
+      };
+      (this.data.deals ||= []).push(deal);
+      (this.data.rgd_chantiers ||= []).push(chantier);
+      this.save();
+      return { ok: true, id: chantier.id, deal_id: deal.id };
+    }
+
     throw new Error('Fonction inconnue en mode démo : ' + nom);
   },
   // fichiers (démo) : conservés dans le navigateur en base64, petits fichiers uniquement

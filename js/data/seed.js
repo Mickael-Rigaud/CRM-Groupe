@@ -264,6 +264,40 @@ export const SEED = {
       email: 'yves@example.com', specialites: 'Peinture',
       actif: false, statut_relation: 'actif', updated_at: d(-30) },
   ],
+  // Les chantiers de l'espace RGD.
+  //
+  // ⚠ SANS EUX L'ÉCRAN EST VIDE EN DÉMO, donc inessayable : le statut et la
+  // création s'y écrivent depuis le 25/09/2026 dans Supabase, et c'était le
+  // dernier écran d'écriture de l'espace qu'on ne pouvait éprouver qu'en
+  // production. ⚠ NOMS INVENTÉS, comme pour les sous-traitants : le dépôt est
+  // public.
+  //
+  // ⚠ CHAQUE CHANTIER PORTE SON AFFAIRE, et c'est obligatoire : le filtre
+  // `.filter(c => c.affaire)` écarte tout chantier dont le `deal_id` ne
+  // retrouve pas son affaire, donc un chantier semé seul laisserait la liste
+  // vide sans rien dire. Le `contact_id` compte lui aussi : c'est par lui que
+  // l'écriture retrouve la fiche du prospect à faire avancer.
+  //
+  // Les quatre cas qui ne se lisent pas pareil à l'écran : une visite
+  // technique (la première colonne de la pipeline), un devis présenté, un
+  // chantier en cours, et un terminé — celui-là porte `date_passage_termine`,
+  // qui doit DISPARAÎTRE si on le fait reculer.
+  rgd_chantiers: [
+    { id: 'rch1', deal_id: 'd1', contact_id: 'c1', reference: 'Rénovation appartement — Bernard',
+      adresse: '12 rue Nationale', code_postal: '37000', ville: 'Tours',
+      statut_d1: 'visite_technique', date_debut_prevue: day(1),
+      created_at: d(-6), updated_at: d(-3) },
+    { id: 'rch2', deal_id: 'd2', contact_id: 'c8', reference: 'Salle de bain — Fontaine',
+      ville: 'Tours', statut_d1: 'devis_presente', montant_ht: 11500,
+      created_at: d(-20), updated_at: d(-8) },
+    { id: 'rch3', deal_id: 'd3', contact_id: 'c2', reference: 'Réaménagement maison — Haddad',
+      ville: 'Joué-lès-Tours', statut_d1: 'en_cours', etat: 'en_cours',
+      montant_ht: 42000, work_start_at: day(-40),
+      created_at: d(-120), updated_at: d(-40) },
+    { id: 'rch4', deal_id: 'd4', contact_id: 'c9', reference: 'Cuisine — Roux',
+      ville: 'Tours', statut_d1: 'termine', etat: 'termine',
+      date_passage_termine: d(-10), created_at: d(-2), updated_at: d(-10) },
+  ],
   // Une seule pièce déposée, chez le premier : assez pour voir la pastille
   // verte, le téléchargement et la relance qui ne réclame que ce qui manque.
   rgd_st_pieces: [

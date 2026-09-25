@@ -49,7 +49,7 @@ function ouvrirLaPersonne(cleContact, affaire, apres) {
 }
 
 import { KEY, act, cadre, guard, clientDe as clientDeAffaire } from './rgd-espace.js';
-import { peutEcrire, majStatutChantier, creerChantier } from '../data/rgd-api.js';
+import { majStatutChantier, creerChantier } from '../data/rgd-chantiers.js';
 import { toast, openModal, closeModal } from '../ui.js';
 // La source unique des étapes, partagée avec « Clients & prospects ». Cet
 // écran la LIT et l'ÉCRIT : il n'a pas de vocabulaire à lui.
@@ -417,17 +417,22 @@ function chantiers() {
 }
 
 // ---------------------------------------------------------------- Chantiers
-// La cellule « Statut ». Un menu quand l'écriture est possible ET que le
-// statut brut est connu : sans lui, on ne saurait pas quoi présélectionner, et
-// un menu qui s'ouvre sur la mauvaise valeur est pire qu'un texte.
+// La cellule « Statut ». Un menu dès que l'écriture est possible.
+//
+// ⚠ LE GARDE « statut brut connu » A DISPARU le 25/09/2026, avec le passage à
+// Supabase : il servait quand le statut ne pouvait venir que du relevé et
+// qu'un chantier non relevé n'avait rien à présélectionner. Un chantier né
+// dans le CRM porte son statut dès sa création, et un chantier sans statut
+// doit justement pouvoir en recevoir un.
 function statutCellule(c, ecriture) {
   const st = STATUTS_CHANTIER.find(x => x.key === c.statut_d1);
-  if (!ecriture || !c.statut_d1) {
+  if (!ecriture) {
     return st ? `<span class="chip">${esc(st.label)}</span>`
       : `<span class="muted">${esc(etapeLabel(c.affaire))}</span>`;
   }
-  return `<select class="statut-menu" data-chantier="${esc(String(c.d1_id))}"
-    data-avant="${esc(c.statut_d1)}" aria-label="Statut du chantier">
+  return `<select class="statut-menu" data-chantier="${esc(String(c.id))}"
+    data-avant="${esc(c.statut_d1 || '')}" aria-label="Statut du chantier">
+    ${c.statut_d1 ? '' : '<option value="">—</option>'}
     ${STATUTS_CHANTIER.map(x => `<option value="${esc(x.key)}" ${x.key === c.statut_d1 ? 'selected' : ''}>${esc(x.label)}</option>`).join('')}
   </select>`;
 }
@@ -442,7 +447,11 @@ function formulaireChantier(apresCreation) {
       const c = f.contact_id && db.byId('contacts', f.contact_id);
       const o = f.organisation_id && db.byId('organisations', f.organisation_id);
       const nom = c ? `${c.first_name || ''} ${c.last_name || ''}`.trim() : (o ? o.name : null);
-      return nom && f.d1_id ? { d1_id: f.d1_id, nom, ville: c?.city || o?.city || '' } : null;
+      // ⚠ PAR L'UUID DU CONTACT depuis le 25/09/2026, plus par `d1_id` : le
+      // chantier se crée dans Supabase. Le filtre sur `d1_id` écartait les
+      // fiches nées dans le CRM, qui sont justement celles pour lesquelles on
+      // ouvre un chantier.
+      return nom && f.contact_id ? { contact: f.contact_id, nom, ville: c?.city || o?.city || '' } : null;
     })
     .filter(Boolean)
     .sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
@@ -451,9 +460,9 @@ function formulaireChantier(apresCreation) {
     <form id="ch-form" class="reg-grille" style="grid-template-columns:1fr 1fr">
       <label class="reg-champ" style="grid-column:1/-1">
         <span>Client *</span>
-        <select name="client_id" required>
+        <select name="contact" required>
           <option value="">Choisir un client…</option>
-          ${clients.map(c => `<option value="${esc(String(c.d1_id))}">${esc(c.nom)}${c.ville ? ` — ${esc(c.ville)}` : ''}</option>`).join('')}
+          ${clients.map(c => `<option value="${esc(String(c.contact))}">${esc(c.nom)}${c.ville ? ` — ${esc(c.ville)}` : ''}</option>`).join('')}
         </select>
       </label>
       <label class="reg-champ" style="grid-column:1/-1">
@@ -476,10 +485,9 @@ function formulaireChantier(apresCreation) {
     </form>
     <div class="alert" style="margin-top:14px">
       <b>i</b>
-      <div>Le chantier est créé <b>dans le tableau de bord RGD</b>, pas ici : il
-      apparaîtra dans cette liste au prochain relevé, d&rsquo;ici trente minutes.
-      Si le client a été apporté par un partenaire, <b>celui-ci sera averti par
-      email</b> que son dossier passe en chantier.</div>
+      <div>Le chantier est créé <b>ici, tout de suite</b> : il apparaît dans la
+      liste dès la fermeture de cette fenêtre. Il ne sera pas visible dans
+      l&rsquo;application RGD.</div>
     </div>
     <div class="toolbar" style="margin-top:12px">
       <button type="button" class="btn primary" id="ch-ok">Créer le chantier</button>
@@ -492,9 +500,9 @@ function formulaireChantier(apresCreation) {
       const f = m.querySelector('#ch-form');
       if (!f.reportValidity()) return;
       const d = Object.fromEntries(new FormData(f).entries());
-      // Un champ vide n'est pas envoyé : le worker écrirait une chaîne vide là
-      // où l'absence de valeur veut dire « on ne sait pas encore ».
-      const champs = { client_id: Number(d.client_id), nom: d.nom.trim() };
+      // Un champ vide n'est pas envoyé : il partirait en chaîne vide là où
+      // l'absence de valeur veut dire « on ne sait pas encore ».
+      const champs = { contact: d.contact, nom: d.nom.trim() };
       for (const k of ['adresse', 'code_postal', 'ville', 'date_debut_prevue', 'statut']) {
         if (d[k]) champs[k] = d[k];
       }
@@ -506,19 +514,23 @@ function formulaireChantier(apresCreation) {
 
       const b = m.querySelector('#ch-ok');
       b.disabled = true;
-      m.querySelector('#ch-etat').textContent = 'Envoi au tableau de bord…';
+      m.querySelector('#ch-etat').textContent = 'Création…';
       const r = await creerChantier(champs);
       b.disabled = false;
       m.querySelector('#ch-etat').textContent = '';
 
       if (!r.ok) {
-        toast(r.motif === 'pas-de-compte'
-          ? 'Aucun compte RGD à votre adresse : le chantier n’a pas été créé.'
+        toast(r.motif.includes('42501') || /RGD/.test(r.motif)
+          ? 'Réservé à l’équipe RGD : le chantier n’a pas été créé.'
           : `Non créé — ${r.motif}`, 'err');
         return;
       }
+      // La ligne est écrite, pas le cache : on le recharge avant de redessiner,
+      // sinon le chantier qu'on vient de créer n'apparaîtrait pas.
+      await db.recharger('rgd_chantiers');
+      await db.recharger('deals');
       closeModal();
-      toast('Chantier créé dans le tableau de bord — visible ici au prochain relevé');
+      toast('Chantier créé');
       apresCreation?.();
     };
   } });
@@ -533,8 +545,13 @@ export const rgdChantiersPage = {
     // avait quitté, pas sur celui que le code préfère.
     let vue = 'liste';
     try { vue = localStorage.getItem('rgd_chantiers_vue') || 'pipeline'; } catch { vue = 'pipeline'; }
-    const state = { etat: '', q: '', focus: null, ecriture: false, vue };
-    peutEcrire().then(ok => { if (ok !== state.ecriture) { state.ecriture = ok; draw(); } });
+    // ⚠ LE DROIT D'ÉCRIRE EST `scope.canRgd`, PLUS LE JETON DE L'APPLICATION
+    // RGD (25/09/2026). Les deux gestes de cet écran passent par des fonctions
+    // gardées en base par `has_activity('rgd')`, dont `scope.canRgd` est le
+    // miroir exact. Exiger en plus un compte du tableau de bord fermerait
+    // l'écran à quelqu'un que la base laisse écrire — et ce droit-là est
+    // connu tout de suite, donc plus de redessin en différé.
+    const state = { etat: '', q: '', focus: null, ecriture: scope.canRgd, vue };
 
     const draw = () => {
       const tous = chantiers();
@@ -591,11 +608,10 @@ export const rgdChantiersPage = {
               </tr>`;
             }).join('') || '<tr><td colspan="7"><div class="empty">Aucun chantier ne correspond.</div></td></tr>'}</tbody>
           </table>
-          ${state.ecriture ? `<p class="small muted">Le statut se change ici et part
-          directement dans le tableau de bord RGD. <b>Si le chantier vient d'un prospect
-          apporté, son apporteur en est averti par email.</b> L'état et l'étape
-          commerciale ci-contre sont des traductions recalculées au relevé suivant :
-          ils rattraperont dans la demi-heure.</p>` : ''}
+          ${state.ecriture ? `<p class="small muted">Le statut se change ici, et il est
+          enregistré tout de suite. L'état et l'étape commerciale ci-contre en
+          découlent&nbsp;: ils se recalculent dans le même geste, à partir des devis et
+          des factures. Le chantier ne sera pas visible dans l'application RGD.</p>` : ''}
         </section>`}`;
 
       root.innerHTML = cadre('#/rgd/chantiers', 'Pipeline', corps);
@@ -610,8 +626,6 @@ export const rgdChantiersPage = {
         state.etat = state.etat === b.dataset.etat ? '' : b.dataset.etat; draw();
       });
 
-      // On ne redessine pas après coup : le menu qu'on vient d'ouvrir
-      // disparaîtrait sous la main. Seule la cellule concernée est reprise.
       const nouveau = root.querySelector('#rc-nouveau');
       if (nouveau) nouveau.onclick = () => formulaireChantier(draw);
 
@@ -624,13 +638,21 @@ export const rgdChantiersPage = {
           m.disabled = false;
           if (r.ok) {
             m.dataset.avant = apres;
-            const ligne = scope.rgd('rgd_chantiers').find(x => String(x.d1_id) === m.dataset.chantier);
-            if (ligne) ligne.statut_d1 = apres;
-            toast('Statut envoyé au tableau de bord RGD');
+            // ⚠ ON RECHARGE ET ON REDESSINE, on n'avance plus la ligne à la
+            // main : l'écriture recalcule aussi l'état, les montants et les
+            // dates de travaux dans la même transaction, et l'étape de
+            // l'affaire avec. Poser le seul `statut_d1` laisserait quatre
+            // colonnes en retard sous les yeux de qui vient de changer le
+            // statut. Le menu est déjà refermé quand `change` se déclenche :
+            // le redessin ne le fait pas disparaître sous la main.
+            await db.recharger('rgd_chantiers');
+            await db.recharger('deals');
+            toast('Statut enregistré');
+            draw();
           } else {
             m.value = avant;
-            toast(r.motif === 'pas-de-compte'
-              ? 'Aucun compte RGD à votre adresse : le statut n’a pas été changé.'
+            toast(r.motif.includes('42501') || /RGD/.test(r.motif)
+              ? 'Réservé à l’équipe RGD : le statut n’a pas été changé.'
               : `Statut non enregistré — ${r.motif}`, 'err');
           }
         };

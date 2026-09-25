@@ -188,30 +188,9 @@ export const majCaManuel = ({ ht, ttc }) => {
   return envoyer('/api/stats/manual-ca', corps);
 };
 
-// Le statut d'un chantier, aux dix valeurs du tableau de bord. `d1Id` est
-// `rgd_chantiers.d1_id`.
-//
-// ⚠ EFFET DE BORD : le worker propage vers le `statut_suivi` du prospect, ce
-// qui peut déclencher un email à son apporteur. C'est le comportement du
-// tableau de bord ; l'écran le dit.
-//
-// ⚠ ET LE CRM NE VOIT PAS LE CHANGEMENT TOUT DE SUITE : `deals.stage`,
-// `deals.status` et `rgd_chantiers.etat` sont des TRADUCTIONS calculées par
-// `push_rgd`. Elles ne se recalculent qu'au relevé suivant. L'écran avance
-// donc le statut brut et laisse le reste rattraper.
-export const majStatutChantier = (d1Id, statut) =>
-  envoyer(`/api/chantiers/${encodeURIComponent(d1Id)}`, { statut });
-
-// Créer un chantier. `client_d1Id` est l'identifiant CÔTÉ CLOUDFLARE du client
-// (`rgd_clients.d1_id`), pas l'uuid du contact dans le CRM.
-//
-// ⚠ DEUX CHOSES À DIRE À QUI APPELLE.
-// 1. Le worker fait passer le prospect en « chantier en cours », ce qui
-//    **envoie un email à son apporteur** s'il en a un.
-// 2. Le chantier n'apparaîtra PAS tout de suite dans le CRM : celui-ci lit un
-//    reflet relevé toutes les 30 minutes. Un écran qui ferait croire le
-//    contraire enverrait quelqu'un chercher une ligne qui n'existe pas encore.
-export const creerChantier = (champs) => envoyer('/api/chantiers', champs, 'POST');
+// ⚠ LES CHANTIERS ONT QUITTÉ CE FICHIER LE 25/09/2026 : le statut et la
+// création s'écrivent dans le CRM, `js/data/rgd-chantiers.js`, et la
+// synchronisation a cessé le même jour d'apporter la traduction du statut.
 
 // Marquer un devis signé. `d1Id` est `rgd_devis.d1_id`.
 //
@@ -240,9 +219,10 @@ export const signerDevis = (d1Id) =>
 // chemins qu'il appelait sur l'application RGD : les deux du dépôt et de la
 // relance (étape 1), puis `/api/sous-traitants`, `/api/sous-traitants/:id` et
 // `/api/sous-traitants/:id/convertir`. Le dépôt des photos en a emmené un
-// sixième de son côté le même jour. **Il en reste NEUF**, et ce sont eux le
-// travail qui reste : chantiers, clients, demandes, devis, évènements,
-// fournitures et la correction manuelle du CA.
+// sixième de son côté le même jour, les partenaires un septième le 25/09, et
+// les chantiers les deux suivants. **Il en reste SIX** : clients, demandes,
+// devis et évènements. (Les fournitures et la correction manuelle du CA ne
+// comptent plus : leurs fonctions sont là mais personne ne les appelle.)
 //
 // ⚠ ET LA SYNCHRONISATION A CESSÉ DE DÉPOSER DANS CETTE TABLE, ce qui est
 // l'autre moitié du changement : sans cette coupure, chaque écriture aurait
