@@ -689,6 +689,33 @@ button.esp-side-titre { background: none; border: 0; font-family: inherit; color
    erreur — elle est vraie, c'est le vocabulaire qui a bouge. */
 .rgdm-puce.est-hors-liste span { border-style: dashed; }
 .rgdm-pied { display: flex; justify-content: flex-end; gap: 10px; }
+/* ---- le formulaire d'un partenaire, refait le 25/09/2026 ----
+   C'etait une grille de douze champs a plat : le role entre le metier et le
+   telephone, la convention entre la ville et les apports. Trois blocs
+   maintenant, dans l'ordre ou l'on remplit une fiche.
+   ⚠ `.paf-bloc h4` NEUTRALISE LE h3/h4 DU CRM, qui est un intertitre de
+   tableau (petites capitales grises) : sans ca le titre d'un bloc de
+   formulaire se lit comme un en-tete de colonne. */
+.paf { display: flex; flex-direction: column; gap: 16px; }
+.paf-bloc { border: 1px solid var(--line); border-radius: 12px; padding: 13px 15px 15px;
+  background: var(--card-2); }
+.paf-bloc h4 { margin: 0 0 11px; font-family: var(--font-display); font-size: 14px;
+  font-weight: 650; letter-spacing: 0; text-transform: none; color: var(--text); }
+.paf-grille { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 11px 13px; }
+.paf-champ { min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.paf-champ.est-large { grid-column: 1 / -1; }
+.paf-champ > span { font-size: 12px; font-weight: 600; color: var(--muted); }
+.paf-champ input, .paf-champ select, .paf-champ textarea {
+  border: 1px solid var(--line-strong); border-radius: 9px; padding: 8px 11px;
+  background: #fff; width: 100%; font: inherit; font-size: 14px; }
+.paf-champ textarea { resize: vertical; line-height: 1.45; }
+.paf-champ input:focus, .paf-champ select:focus, .paf-champ textarea:focus {
+  outline: none; border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
+.paf-pied { display: flex; align-items: center; gap: 10px; }
+@media (max-width: 560px) { .paf-grille { grid-template-columns: 1fr; } }
+
 /* ---- le total d'une etape, en tete du tableau ----
    Il etait d'abord en pied, aligne sous la colonne : joli, et invisible sans
    faire defiler vingt-cinq lignes. On ouvre cet onglet POUR ce chiffre.
@@ -3022,6 +3049,28 @@ button.tb-pp:hover { color: var(--text); text-decoration: underline; text-underl
 .rea-item-n { font-size: 11px; color: var(--muted-2); flex: 0 0 auto; }
 .rea-item.on .rea-item-n, .rea-item.on .rea-item-avis { color: var(--on-accent); }
 .rea-item-avis { font-size: 11px; color: var(--amber); flex: 0 0 auto; }
+/* La pastille « Brouillon » de la liste : elle doit se voir sans ouvrir le
+   projet, c'est tout son role. Ambre comme les etats en attente du reste du
+   CRM, jamais rouge — un brouillon n'est pas une anomalie. */
+.rea-item-brouillon { font-size: 10px; font-weight: 800; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--amber); background: var(--amber-soft, #fff6e5);
+  border-radius: 5px; padding: 2px 6px; flex: 0 0 auto; }
+/* Sur la ligne ouverte, le fond d'accent mange l'ambre : on repasse en blanc
+   translucide pour que la pastille reste lisible. */
+.rea-item.on .rea-item-brouillon { color: var(--on-accent); background: rgba(255,255,255,.28); }
+
+/* ---------- La bascule En ligne / Brouillon de l'atelier ----------
+   Deux boutons plutot qu'une case : celui qui est allume EST l'etat du projet,
+   il n'y a rien a interpreter. Voir le commentaire du gabarit. */
+.rea-etat { display: inline-flex; border: 1px solid var(--line-strong); border-radius: 9px;
+  overflow: hidden; flex: 0 0 auto; }
+.rea-etat button { background: var(--card); color: var(--muted-2); border: 0; cursor: pointer;
+  font: inherit; font-size: 12.5px; font-weight: 700; padding: 7px 13px; }
+.rea-etat button + button { border-left: 1px solid var(--line-strong); }
+.rea-etat button:hover { background: var(--card-2); color: var(--text); }
+.rea-etat button.on { background: var(--accent); color: var(--on-accent); }
+/* L'etat « brouillon » se dit en ambre, comme sa pastille dans la liste. */
+.rea-etat #re-etat-brouillon.on { background: var(--amber); color: #3a2a00; }
 
 .rea-panneau { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
   box-shadow: var(--shadow); padding: 18px 20px; min-width: 0; }

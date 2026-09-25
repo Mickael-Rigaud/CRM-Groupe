@@ -205,6 +205,44 @@ export const SEED = {
   // est public, et un jeu de démo qui recopie la réalité finit par la publier.
   // Les trois cas qui comptent sont représentés : un dossier tenu, un dossier
   // en défaut, un artisan repéré en prospection.
+  // Partenaires et apports d'affaires. Sans eux l'ecran Partenaires n'etait
+  // essayable que sur la production — meme raison que pour les sous-traitants.
+  // Noms inventes : le depot est public.
+  rgd_apporteurs: [
+    { id: 'ap1', d1_id: 8001, nom: 'Vasseur', prenom: 'Claire', societe: 'Cabinet Vasseur',
+      profession: 'Courtier en prets', telephone: '03 44 00 11 22', email: 'claire@example.com',
+      adresse: '18 rue des Tilleuls', code_postal: '60300', ville: 'Senlis',
+      type_partenaire: 'apporteur', actif: true, partenariat_signe: true,
+      date_signature: '2026-03-14', source: 'demo' },
+    { id: 'ap2', d1_id: 8002, nom: 'Bouchard', prenom: 'Yanis', societe: 'Archi Bouchard',
+      profession: 'Architecte', telephone: '03 44 00 11 23',
+      adresse: '5 place du Marche', code_postal: '60500', ville: 'Chantilly',
+      type_partenaire: 'apporteur', actif: true, partenariat_signe: false, source: 'demo' },
+    { id: 'ap3', d1_id: 8003, nom: 'Leroy', prenom: 'Sabine', societe: 'Leroy Immobilier',
+      profession: 'Agent immobilier', telephone: '03 44 00 11 24',
+      code_postal: '60200', ville: 'Compiegne',
+      // Inactif : c'est lui qui fait apparaitre la troisieme section.
+      type_partenaire: 'apporteur', actif: false, partenariat_signe: false, source: 'demo' },
+    { id: 'ap4', d1_id: 8004, nom: 'Materiaux du Valois', societe: 'Materiaux du Valois',
+      profession: 'Negoce de materiaux', telephone: '03 44 00 11 25',
+      adresse: '2 zone de la Gare', code_postal: '60800', ville: 'Crepy-en-Valois',
+      type_partenaire: 'fournisseur', actif: true, partenariat_signe: false, source: 'demo' },
+  ],
+
+  rgd_apports: [
+    { id: 'apt1', apporteur_id: 'ap1', date_apport: '2026-06-12', client: 'Famille Renard',
+      issue: 'gagne', montant_devis: 48000, montant_commission: 2400 },
+    { id: 'apt2', apporteur_id: 'ap1', date_apport: '2026-08-03', client: 'M. Delaunay',
+      issue: 'perdu', montant_devis: 21000, montant_commission: 1050 },
+    { id: 'apt3', apporteur_id: 'ap1', date_apport: '2026-09-18', client: 'Mme Chevalier',
+      // Pas encore tranche : la commission ne doit PAS entrer dans le total.
+      issue: null, montant_devis: 63500, montant_commission: 3175 },
+    { id: 'apt4', apporteur_id: 'ap2', date_apport: '2026-07-22', client: 'SCI des Ormes',
+      issue: 'gagne', montant_devis: 112000, montant_commission: 5600 },
+    { id: 'apt5', apporteur_id: 'ap3', date_apport: '2026-02-09', client: 'M. et Mme Pires',
+      issue: 'gagne', montant_devis: 29000, montant_commission: 1450 },
+  ],
+
   rgd_sous_traitants: [
     { id: 'st1', d1_id: 9001, raison_sociale: 'Élec Démo SARL', contact_nom: 'Paul Martin',
       email: 'paul@example.com', telephone: '02 61 91 00 21', siret: '00000000000001',

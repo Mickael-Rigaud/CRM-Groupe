@@ -28,6 +28,10 @@ export const TABLES = ['profiles', 'organisations', 'contacts', 'deals', 'activi
   // ⚠ `rgd_st_pieces` n'est PAS un reflet : c'est du Supabase pur, écrit par le
   // CRM et par personne d'autre. Le relevé ne l'envoie pas et ne l'écrasera pas.
   'rgd_st_pieces',
+  // ⚠ `rgd_apports` non plus n'est pas un reflet : les apports d'affaires d'un
+  // partenaire se saisissent dans le CRM, et depuis le 25/09/2026 `rgd_apporteurs`
+  // a rejoint ce cas — le relevé ignore désormais sa charge.
+  'rgd_apports',
   'rgd_apporteurs', 'rgd_fournitures', 'rgd_realisations', 'rgd_carrousel',
   'rgd_reglages', 'rgd_clients', 'rgd_costructor_etat',
   'rgd_costructor_journal', 'rgd_costructor_ignores',
