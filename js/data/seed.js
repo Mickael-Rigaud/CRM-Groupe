@@ -111,7 +111,11 @@ export const SEED = {
   btp_vivier: SEED_VIVIER_BTP,
   btp_vivier_evenements: SEED_VIVIER_BTP_EVENEMENTS,
   dtu_sheets: [
-    { id: 'dtu-20-1', code: 'NF DTU 20.1', title: 'Maçonnerie de petits éléments', domain: 'Maçonnerie', essential: true, position: 10,
+    // Une fiche reecrite par la veille et une simplement verifiee : sans les
+    // deux, le bandeau n'etait essayable que sur la production.
+    { id: 'dtu-20-1', version: 'P1-1 juillet 2020 + A1 mars 2026',
+      verifie_le: d(-2), maj_auto_le: d(-2),
+      revision_source: 'https://www.boutique.afnor.org/', code: 'NF DTU 20.1', title: 'Maçonnerie de petits éléments', domain: 'Maçonnerie', essential: true, position: 10,
       summary: 'Cadre la maçonnerie de petits éléments pour murs porteurs, refends et chaînages.',
       key_points: [
         { titre: 'Chaînages horizontaux obligatoires', detail: 'Ceinturage en tête de chaque plancher, section mini 15×15 cm en béton armé. Sans chaînage, les murs travaillent isolément et fissurent au moindre tassement.' },
@@ -121,7 +125,8 @@ export const SEED = {
         { titre: 'Linteaux sans appui suffisant', detail: 'Appui inférieur à 20 cm de chaque côté : la maçonnerie fissure aux angles de la baie, puis le linteau bascule.' },
       ],
       link: 'https://www.boutique.afnor.org/fr-fr/recherche/dtu-20-1', checkpoints: '', notes: '' },
-    { id: 'dtu-25-41', code: 'NF DTU 25.41', title: 'Ouvrages en plaques de plâtre', domain: 'Plâtrerie', essential: false, position: 40,
+    { id: 'dtu-25-41', version: 'P1-1 decembre 2012', verifie_le: d(-2),
+      code: 'NF DTU 25.41', title: 'Ouvrages en plaques de plâtre', domain: 'Plâtrerie', essential: false, position: 40,
       summary: 'Cloisons, doublages et plafonds en plaques de plâtre sur ossature métallique.',
       key_points: [
         { titre: 'Entraxe des montants', detail: '60 cm en courant, 40 cm sous carrelage mural ou en local humide.' },
@@ -208,6 +213,18 @@ export const SEED = {
   // Partenaires et apports d'affaires. Sans eux l'ecran Partenaires n'etait
   // essayable que sur la production — meme raison que pour les sous-traitants.
   // Noms inventes : le depot est public.
+  dtu_revisions: [
+    { id: 'rev1', sheet_id: 'dtu-20-1', code: 'NF DTU 20.1',
+      constat: 'Amendement A1 de mars 2026 : epaisseur minimale des chainages horizontaux revue. Point cle 3 corrige.',
+      version_avant: 'P1-1 juillet 2020', version_apres: 'P1-1 juillet 2020 + A1 mars 2026',
+      source: 'https://www.boutique.afnor.org/',
+      avant: { title: 'Maconnerie de petits elements',
+               summary: 'Ancien resume, avant la passe de la veille.',
+               key_points: [{ titre: 'Ancien point cle', detail: 'Tel qu il etait avant.' }],
+               common_errors: [], checkpoints: '' },
+      cree_le: d(-2) },
+  ],
+
   rgd_apporteurs: [
     { id: 'ap1', d1_id: 8001, nom: 'Vasseur', prenom: 'Claire', societe: 'Cabinet Vasseur',
       profession: 'Courtier en prets', telephone: '03 44 00 11 22', email: 'claire@example.com',

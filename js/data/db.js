@@ -31,6 +31,11 @@ export const TABLES = ['profiles', 'organisations', 'contacts', 'deals', 'activi
   // ⚠ `rgd_apports` non plus n'est pas un reflet : les apports d'affaires d'un
   // partenaire se saisissent dans le CRM, et depuis le 25/09/2026 `rgd_apporteurs`
   // a rejoint ce cas — le relevé ignore désormais sa charge.
+  // ⚠ `dtu_revisions` est le JOURNAL de la veille DTU : une ligne par réécriture
+  // automatique, avec le contenu précédent. C'est lui qui rend la publication
+  // sans relecture réversible — sans lui, une mauvaise passe effacerait un
+  // travail de rédaction qui n'existe nulle part ailleurs.
+  'dtu_revisions',
   'rgd_apports',
   'rgd_apporteurs', 'rgd_fournitures', 'rgd_realisations', 'rgd_carrousel',
   'rgd_reglages', 'rgd_clients', 'rgd_costructor_etat',

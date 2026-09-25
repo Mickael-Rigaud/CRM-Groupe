@@ -2047,6 +2047,57 @@ export const btpDtuPage = {
       });
     };
 
+    // ---- La veille : ce que le robot a constaté et réécrit
+    //
+    // ⚠ LA FICHE DIT QU'ELLE A ÉTÉ RÉÉCRITE PAR UN ROBOT, ET QUAND. Décidé le
+    // 25/09/2026 : la veille publie sans relecture humaine. Le lecteur doit donc
+    // pouvoir faire la différence entre une fiche rédigée par le cabinet et une
+    // fiche remise à jour automatiquement — sans quoi il accorderait la même
+    // confiance aux deux, sur un sujet où se tromper engage sa responsabilité.
+    //
+    // ⚠ ET IL DOIT POUVOIR REVENIR EN ARRIÈRE. `dtu_revisions` garde le contenu
+    // d'avant en entier ; « Restaurer » le repose. C'est le filet qui rend la
+    // publication automatique tenable.
+    const revisionsDe = (f) => db.t('dtu_revisions')
+      .filter(r => r.sheet_id === f.id)
+      .sort((a, b) => String(b.cree_le).localeCompare(String(a.cree_le)));
+
+    const restaurer = async (rev, apres) => {
+      const avant = rev.avant || {};
+      try {
+        await db.update('dtu_sheets', rev.sheet_id, {
+          title: avant.title, summary: avant.summary,
+          key_points: avant.key_points, common_errors: avant.common_errors,
+          checkpoints: avant.checkpoints,
+          version: rev.version_avant || null,
+          maj_auto_le: null,
+        });
+        await db.remove('dtu_revisions', rev.id);
+        toast('Version précédente restaurée');
+        apres();
+      } catch (e) { toast(e.message, 'err'); }
+    };
+
+    const bandeauVeille = (f, apres) => {
+      const revs = revisionsDe(f);
+      const derniere = revs[0];
+      if (!f.verifie_le && !derniere) return '';
+      const auto = f.maj_auto_le && derniere;
+      return `<div class="dtu-veille ${auto ? 'est-auto' : ''}">
+        <div>
+          ${auto
+            ? `<b>Réécrite automatiquement le ${esc(fmtDate(f.maj_auto_le))}</b>
+               <div class="s">${esc(derniere.constat || 'Changement constaté au catalogue.')}</div>`
+            : `<b>Vérifiée le ${esc(fmtDate(f.verifie_le))}</b>
+               <div class="s">Aucun changement constaté depuis.</div>`}
+          ${f.version ? `<div class="s muted">Version suivie : ${esc(f.version)}</div>` : ''}
+        </div>
+        <span class="grow"></span>
+        ${derniere?.source ? `<a class="btn ghost sm" href="${esc(derniere.source)}" target="_blank" rel="noopener">La source ↗</a>` : ''}
+        ${auto ? `<button type="button" class="btn ghost sm" data-dtu-restaurer="${esc(String(derniere.id))}">Restaurer l’ancienne</button>` : ''}
+      </div>`;
+    };
+
     // ---- Une fiche, en pleine page
     const section = (titre, kicker, icone, items, type, tint) => asListe(items).length ? `
       <section class="fiche-section ${type}">
@@ -2086,6 +2137,7 @@ export const btpDtuPage = {
             </div>
           </header>
           <div class="fiche-content">
+            ${bandeauVeille(f)}
             ${section('Points clés à maîtriser', 'À MAÎTRISER', '✓', f.key_points, 'ok', meta.tint)}
             ${section('Erreurs fréquentes à éviter', 'À ÉVITER', '⚠', f.common_errors, 'err', 'var(--red)')}
             ${section('Points de contrôle du cabinet', 'SUR PLACE', '☑', perso.map(l => ({ titre: l, detail: '' })), 'perso', 'var(--accent)')}
@@ -2197,6 +2249,14 @@ export const btpDtuPage = {
         root.querySelector('#f-back').onclick = () => { state.fiche = null; draw(); };
         root.querySelector('#f-edit').onclick = () => editer(f, draw);
         root.querySelector('#f-pdf').onclick = () => exporter([f]);
+        // ⚠ `data-dtu-restaurer` ET NON `data-restaurer` : ce dernier sert
+        // déjà aux fiches archivées de la base BTP. Deux écrans, deux gestes, un
+        // seul nom d'attribut : la collision ne se verrait que le jour où les
+        // deux cohabiteraient dans la même page.
+        root.querySelectorAll('[data-dtu-restaurer]').forEach(b => b.onclick = () => {
+          const rev = db.t('dtu_revisions').find(r => String(r.id) === b.dataset.dtuRestaurer);
+          if (rev) restaurer(rev, draw);
+        });
         return;
       }
 
