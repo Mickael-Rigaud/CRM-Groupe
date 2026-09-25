@@ -86,8 +86,8 @@ import { scope } from '../data/scope.js';
 // fichier n'en garde que l'usage.
 import { ORDRE_ETAPES, ETAPES_RGD, ETAPES_CLES, ETAPE_DU_STATUT, STATUT_DE_L_ETAPE,
          etapeDeFiche, etapeDeDemande, estProspectParSource,
-         joursDeVisite, statutsDeLEtape, statutSuiviLu, montantSigneDe }
-       from '../data/rgd-etapes.js';
+         joursDeVisite, statutsDeLEtape, statutSuiviLu,
+         montantDevisDe, etapeAvecMontant } from '../data/rgd-etapes.js';
 import { db } from '../data/db.js';
 import { esc, eur, fmtDate, fmtDateTime, relDay, terms, hit, searchInput, bindSearch, restoreFocus } from '../ui.js';
 import { poserEspace } from './espace.js';
@@ -568,8 +568,16 @@ export const rgdClientsPage = {
       // toutes les lignes d'un onglet sont au même stade : un en-tête qui dirait
       // « Budget / Montant HT » ferait deviner, colonne par colonne, ce que la
       // barre d'onglets dit déjà.
-      const surMontant = ORDRE_ETAPES.indexOf(state.vue)
-        >= ORDRE_ETAPES.indexOf('devis_accepte');
+      // ⚠ LA COLONNE COMMENCE À « DEVIS EN COURS », pas à « Devis accepté »
+      // (25/09/2026, second passage de Mickael : « je voudrais cette colonne avec
+      // le montant HT des devis en cours avec le total »). C'est l'onglet où l'on
+      // vient voir ce qu'on est en train de chiffrer — y montrer le budget
+      // annoncé pendant que le devis existe déjà n'apprend rien.
+      //
+      // ⚠ CE N'EST PAS LE MÊME DEVIS D'UNE ÉTAPE À L'AUTRE : brouillon ici,
+      // envoyé là, signé ensuite. `montantDevisDe` porte cette table, la même
+      // que celle qui range les dossiers dans les onglets.
+      const surMontant = etapeAvecMontant(state.vue);
 
       const listeBrute = surFrise ? [] : contactsVus;
 
@@ -698,6 +706,21 @@ export const rgdClientsPage = {
       // pas la donnee : une fiche supprimee ou un releve qui passe peut raccourcir
       // la liste sans qu'aucun filtre ne bouge.
       state.page = Math.min(Math.max(1, state.page), pages);
+      // ⚠ LE TOTAL PORTE SUR L'ONGLET ENTIER, PAS SUR LA PAGE (25/09/2026,
+      // demandé par Mickael : « une vue d'ensemble sur les projets de cette
+      // étape »). Un total qui changerait en tournant la page ne serait pas une
+      // vue d'ensemble ; il suit en revanche les filtres, parce qu'un total qui
+      // ne correspond pas aux lignes qu'on a sous les yeux est pire que pas de
+      // total du tout.
+      //
+      // ⚠ ON COMPTE AUSSI LES DOSSIERS CHIFFRÉS, et on le dit quand ils ne sont
+      // pas tous : à « Devis en cours », une partie des dossiers n'a pas encore
+      // de devis: un total seul laisserait croire à une somme sur tout l'onglet.
+      const totalEtape = !surMontant ? 0
+        : lignesProspects.reduce((t, x) => t + montantDevisDe(x.ligne, devis, state.vue), 0);
+      const chiffres = !surMontant ? 0
+        : lignesProspects.filter(x => montantDevisDe(x.ligne, devis, state.vue) > 0).length;
+
       const debut = (state.page - 1) * PAR_PAGE;
       const tranche = (liste) => liste.slice(debut, debut + PAR_PAGE);
 
@@ -766,8 +789,8 @@ export const rgdClientsPage = {
                 ${!x.email && !x.tel ? '<span class="muted">—</span>' : ''}</td>
             <td class="muted">${esc(x.projet || '—')}</td>
             <td class="${surMontant ? 'num' : 'muted'}">${surMontant
-              ? (montantSigneDe(x.ligne, devis) > 0
-                  ? esc(eur(montantSigneDe(x.ligne, devis)))
+              ? (montantDevisDe(x.ligne, devis, state.vue) > 0
+                  ? esc(eur(montantDevisDe(x.ligne, devis, state.vue)))
                   : '<span class="muted">—</span>')
               : esc(String(x.budget || '—').trim())}</td>
             <td class="muted">${esc(x.ville || '—')}</td>
@@ -777,6 +800,13 @@ export const rgdClientsPage = {
             <td class="rcl-note">${champNote(x.ligne, x.cible, state.ecriture)}</td>
             <td>${boutonSuppression(x.ligne)}</td>
           </tr>`; }).join('') || `<tr><td colspan="10"><div class="empty">${esc(vide())}</div></td></tr>`}</tbody>
+          ${surMontant && lignesProspects.length ? `<tfoot><tr class="rcl-total">
+            <td colspan="5">Total de l’étape
+              <span class="s muted">· ${lignesProspects.length} dossier${lignesProspects.length > 1 ? 's' : ''}${
+                chiffres < lignesProspects.length ? `, dont ${chiffres} chiffré${chiffres > 1 ? 's' : ''}` : ''}</span></td>
+            <td class="num"><b>${esc(eur(totalEtape))}</b></td>
+            <td colspan="4"></td>
+          </tr></tfoot>` : ''}
         </table>
         ${pagination()}
         <p class="small muted">${state.ecriture

@@ -689,6 +689,15 @@ button.esp-side-titre { background: none; border: 0; font-family: inherit; color
    erreur — elle est vraie, c'est le vocabulaire qui a bouge. */
 .rgdm-puce.est-hors-liste span { border-style: dashed; }
 .rgdm-pied { display: flex; justify-content: flex-end; gap: 10px; }
+/* ---- le total d'une etape, au pied du tableau ----
+   ⚠ `position: sticky` N'A PAS ETE POSE ICI. `.table-wrap` fait defiler la
+   page entiere, pas la table : un pied colle n'aurait rien a quoi se coller,
+   et la regle serait sans effet sans que rien ne le dise. */
+.rcl-total td { border-top: 2px solid var(--line-strong); background: var(--card-2);
+  font-weight: 600; padding-top: 10px; padding-bottom: 10px; }
+.rcl-total td:first-child { color: var(--text); }
+.rcl-total .num b { font-size: 15px; }
+
 /* ---- les rendez-vous, en haut a droite de l'en-tete ----
    `.rgdf-hero-haut` est un flex : `margin-left: auto` pousse le bloc a droite
    sans lui imposer de largeur, et `align-self: flex-start` le cale en haut du

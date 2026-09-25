@@ -225,20 +225,45 @@ export function joursDeVisite(agenda) {
   return jours;
 }
 
+// Quels devis comptent à quelle étape.
+//
+// ⚠ CE N'EST PAS TOUJOURS « LE SIGNÉ », et c'est tout l'objet de cette table.
+// À « Devis en cours » rien n'est encore signé : compter les signés afficherait
+// une colonne vide sur l'onglet où l'on vient précisément voir ce qu'on est en
+// train de chiffrer. Chaque étape compte donc les devis QUI L'Y ONT MISE — les
+// mêmes que lit `etapeParLesFaits`, sans quoi un dossier serait rangé dans un
+// onglet par un devis et chiffré par un autre.
+const DEVIS_DE_L_ETAPE = {
+  devis_encours: (v) => devisOuvert(v) && !devisEnvoye(v),
+  devis_envoye: devisEnvoye,
+  devis_accepte: (v) => v.statut === 'signe',
+  chantier_encours: (v) => v.statut === 'signe',
+  chantier_termine: (v) => v.statut === 'signe',
+};
+
+/** Les étapes où un montant de devis a un sens. */
+export const etapeAvecMontant = (etape) => !!DEVIS_DE_L_ETAPE[etape];
+
 /**
- * Le montant HT engagé par cette personne : la somme de ses devis SIGNÉS.
+ * Le montant HT des devis de cette personne à cette étape.
  *
- * ⚠ UNE SEULE DÉFINITION, LUE PAR LA FICHE ET PAR LE TABLEAU (25/09/2026). Le
- * montant s'affiche aux deux endroits à partir de « Devis accepté » ; deux
- * calculs séparés auraient fini par ne plus dire la même chose, et l'écart se
- * serait vu comme une erreur de l'un des deux écrans.
+ * ⚠ UNE SEULE DÉFINITION, LUE PAR LA FICHE ET PAR LE TABLEAU (25/09/2026) :
+ * deux calculs séparés auraient fini par ne plus dire la même chose, et l'écart
+ * se serait vu comme une erreur de l'un des deux écrans.
  *
- * ⚠ SEUL `signe` COMPTE, jamais `envoye` : un devis envoyé est une proposition,
- * pas un engagement. C'est la même règle que `etapeParLesFaits`.
+ * Rend 0 aux étapes où aucun devis n'existe encore — l'appelant distingue
+ * « zéro » de « rien à montrer » avec `etapeAvecMontant`.
  */
-export const montantSigneDe = (f, devis) => (devis || [])
-  .filter(v => memeQue(v, f) && v.statut === 'signe')
-  .reduce((t, v) => t + (Number(v.montant_ht) || 0), 0);
+export function montantDevisDe(f, devis, etape) {
+  const compte = DEVIS_DE_L_ETAPE[etape];
+  if (!compte) return 0;
+  return (devis || [])
+    .filter(v => memeQue(v, f) && compte(v))
+    .reduce((t, v) => t + (Number(v.montant_ht) || 0), 0);
+}
+
+/** Le montant signé, quelle que soit l'étape. Ce que lit la fiche. */
+export const montantSigneDe = (f, devis) => montantDevisDe(f, devis, 'devis_accepte');
 
 // L'étape lue sur les FAITS seuls. Elle ne dépend d'aucune saisie, donc elle
 // ne ment pas — mais elle ne sait rien avant le premier devis.
