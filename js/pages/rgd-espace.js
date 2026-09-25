@@ -60,7 +60,12 @@ export const ONGLETS = [
   // groupe se rouvre d'un clic, l'état est gardé par navigateur, et il se déplie
   // tout seul quand on est sur l'un de ses écrans — sinon plus rien ne dirait où
   // l'on se trouve.
-  { label: 'Facturation', bas: true, pliable: true, sous: [
+  // ⚠ LE LIBELLÉ SERT DE CLÉ AU RÉGLAGE DE PLI (`crm_menu_pli_rgd_<libellé>`).
+  // Le renommer oublie donc le réglage mémorisé et le groupe revient à son état
+  // par défaut — replié, c'est-à-dire ce qu'on veut de toute façon. Sans cette
+  // coïncidence il faudrait une clé stable à part ; à retenir avant de renommer
+  // un groupe dont le défaut serait « ouvert ».
+  { label: 'Autres', bas: true, pliable: true, sous: [
     { hash: '#/rgd/devis', label: 'Devis' },
     { hash: '#/rgd/paiements', label: 'Encaissements' },
     { hash: '#/rgd/costructor', label: 'Costructor' },
