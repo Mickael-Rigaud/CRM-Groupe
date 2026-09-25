@@ -290,21 +290,26 @@ export const FICHE_AMO = {
 // des adjectifs — « opération limitée » s'interprète, « moins de 80 k€ » se
 // mesure.
 //
-// ⚠ LES SEUILS DE BUDGET SONT 80 ET 200 k€, PAS 40 ET 120. La demande proposait
-// 40/120 en précisant « seuils à confirmer avec le manuel V5 ». Ils le sont ici :
-// `coteBudget` les applique déjà (80 000 / 200 000) et `BAREME_AMO` les recoupe —
-// 80 k€ y ouvre le taux de 5 %, 200 k€ celui de 7 %. Les changer sans toucher à
-// ces deux-là ferait dire à l'écran autre chose que ce que le calcul fait.
+// ⚠ SEUILS DE BUDGET : 40 ET 120 k€, arbitrés par Mickael le 25/09/2026. Le
+// code portait 80 et 200 ; les deux ont été changés ENSEMBLE, ici et dans
+// `coteBudget`, sans quoi la cotation automatique aurait contredit la case
+// cochée sans que rien ne le dise.
 //
-// ⚠ ET LE BUDGET EST HT, PAS TTC. La demande dit « montant TTC estimé » ; tout le
-// reste de la chaîne AMO est HT — le champ de la fiche s'appelle « Budget travaux
-// HT estimé », `coteBudget` lit `budget_ht`, et le barème d'honoraires est en HT.
-// Écrire TTC dans l'aide ferait coter 100 k€ TTC (≈ 83 k€ HT) comme s'il
-// s'agissait de 100 k€ HT.
+// ⚠ DEUX POINTS RESTENT À TRANCHER, SIGNALÉS PLUTÔT QUE DÉCIDÉS ICI :
+//
+//   1. L'AIDE DIT « TTC », LE CHAMP SAISI EST HT. La fiche découverte demande
+//      un « Budget travaux HT estimé », `coteBudget` lit `budget_ht`, et le
+//      barème d'honoraires est en HT. Un même chantier annoncé 130 k€ TTC vaut
+//      environ 108 k€ HT : il se cote 2 points si l'on prend le TTC, 1 seul si
+//      l'on prend le HT. Le texte suit la demande ; le champ n'a pas bougé.
+//
+//   2. `BAREME_AMO` GARDE SES PALIERS (80 k€ → 5 %, 200 k€ → 7 %). Il répond à
+//      une autre question — ce qu'on facture — que la matrice, qui mesure le
+//      temps demandé. Les deux ne sont plus articulés sur les mêmes montants.
 export const CRITERES_V5 = [
   { key: 'budget', label: 'Budget travaux',
-    aide: "Montant HT estimé des travaux à piloter, selon l'estimation du chargé d'affaires — pas le budget annoncé par le client.",
-    valeurs: ['Moins de 80 k€', '80 à 200 k€', 'Plus de 200 k€'], auto: 'budget' },
+    aide: "Montant TTC estimé des travaux à piloter, selon l'estimation du chargé d'affaires (pas le budget annoncé par le client).",
+    valeurs: ['Moins de 40 k€', '40 à 120 k€', 'Plus de 120 k€'], auto: 'budget' },
   { key: 'lots', label: "Nombre de corps d'état",
     aide: 'Métiers différents à consulter et coordonner (maçonnerie, plâtrerie, électricité, plomberie, menuiseries, carrelage, peinture, isolation, VMC…).',
     valeurs: ['1 à 3 métiers (ex. salle de bain)', '4 à 6 métiers (ex. appartement partiel)', '7 métiers et plus (rénovation complète)'], auto: 'lots' },
@@ -325,10 +330,21 @@ export const CRITERES_V5 = [
 
 // Ce que le manuel demande au CRM de déduire tout seul. Les seuils sont les siens ;
 // la cotation reste modifiable, le score n'est qu'une aide.
+// ⚠ CES SEUILS SONT CEUX QUE LA MATRICE AFFICHE, ET ILS DOIVENT LE RESTER.
+// 40 et 120 k€ depuis le 25/09/2026, sur décision de Mickael. Ils valaient
+// 80 et 200 — les changer à l'écran sans les changer ici aurait fait coter
+// automatiquement un dossier autrement que ce que la case cochée annonce, sans
+// que rien ne le dise. Les deux bougent ensemble ou pas du tout.
+//
+// ⚠ À SAVOIR : `BAREME_AMO` garde ses paliers d'origine (80 k€ → 5 %, 200 k€ →
+// 7 %). Ce barème répond à une autre question — ce qu'on facture — que la
+// matrice, qui mesure le temps que la mission demande. Ils ne sont plus alignés
+// sur les mêmes montants ; c'est à vérifier avec le manuel si un écart se voit
+// sur un devis.
 export const coteBudget = (travauxHt) => {
   const m = Number(travauxHt) || 0;
   if (!m) return null;
-  return m < 80000 ? 0 : m <= 200000 ? 1 : 2;
+  return m < 40000 ? 0 : m <= 120000 ? 1 : 2;
 };
 export const coteDuree = (debut, fin) => {
   if (!debut || !fin) return null;

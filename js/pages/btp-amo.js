@@ -50,8 +50,13 @@ const euro = (n) => (Number.isInteger(n)
 export function champsHonoraires({ travaux, taux, idTravaux = 'hono-travaux', idTaux = 'hono-taux' }) {
   return `<div class="hono-saisie">
     <label class="mail-champ"><span>Montant des travaux HT</span>
+      <!-- ⚠ PAS DE MONTANT D'EXEMPLE ICI (25/09/2026, demandé par Mickael :
+           « on a l'impression que c'est déjà rempli »). Dans un champ de nombre,
+           un texte d'exemple grisé se lit comme une valeur saisie — et celui-ci
+           ouvre un simulateur d'honoraires, où croire qu'un montant est posé
+           fait lire un résultat qui n'existe pas. -->
       <input type="number" id="${idTravaux}" min="0" step="1000" inputmode="decimal"
-        value="${esc(travaux ?? '')}" placeholder="100000"></label>
+        value="${esc(travaux ?? '')}"></label>
     <label class="mail-champ"><span>Taux d'honoraires</span>
       <span class="hono-pct">
         <input type="number" id="${idTaux}" min="0" max="100" step="0.1" inputmode="decimal"
