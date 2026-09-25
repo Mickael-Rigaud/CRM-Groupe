@@ -704,12 +704,42 @@ button.esp-side-titre { background: none; border: 0; font-family: inherit; color
 .rgdf-argent > span:not(.rgdf-tag) { color: var(--muted); font-size: 13px; }
 /* Les commandes de la fiche : a droite de l'en-tete sur large, en rang dessous
    des que ca serre — six boutons ne tiennent pas a cote d'un nom long. */
-.rgdf-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 14px; }
+/* ⚠ `display: grid` L'EMPORTE SUR `[hidden]`, et c'est la TROISIEME fois que
+   ce piege mord dans ce depot (voir `.ndf [hidden]` plus bas). `[hidden]` est
+   un `display: none` de specificite NULLE : toute regle qui pose un `display`
+   sur le meme element le neutralise. Resultat vecu le 25/09/2026 : l'onglet
+   « Facturation » basculait bien — la propriete `hidden` changeait — mais les
+   deux panneaux restaient affiches, donc le bouton « ne fonctionnait pas ».
+   Mesurer `element.hidden` ne le voit pas : il faut regarder le `display`. */
+.rgdf-corps[hidden] { display: none; }
+/* Le coin haut droit de l'en-tete : les commandes, puis les rendez-vous.
+   Les deux y ont ete demandes le 25/09/2026, d'ou une colonne et non une
+   rangee — six boutons et trois dates cote a cote ne tiennent pas. */
+.rgdf-coin { margin-left: auto; display: flex; flex-direction: column;
+  align-items: flex-end; gap: 9px; max-width: 48%; }
+.rgdf-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; }
 /* Les onglets se tiennent entre la frise et le corps, et non colles au bord. */
 .rgdf-onglets { margin: 0 0 14px; }
 /* L'en-tete d'un bloc peut porter un bouton a droite (« + Activite ») : sans
    ca le h3 est un simple titre et le bouton part a la ligne. */
 .rgdf-bloc h3 { display: flex; align-items: center; gap: 8px; }
+
+/* ---- le formulaire d'une affaire, en blocs colores ----
+   ⚠ LA TEINTE VIENT DE LA STRUCTURE (`--dlg-teinte`, posee en style inline par
+   `dealForm` depuis ACTIVITIES), jamais d'une couleur en dur : le meme
+   formulaire sert a BTP Expertise, a La Reference Courtage et a Propulsion.
+   ⚠ `h4` NEUTRALISE LE TITRE DE TABLEAU du CRM (11 px, gris, MAJUSCULES) —
+   sans ca l'intitule d'un bloc se lit comme un en-tete de colonne. */
+.dlg { display: flex; flex-direction: column; gap: 15px; }
+.dlg-bloc { border: 1px solid var(--line); border-left: 3px solid var(--dlg-teinte, var(--accent));
+  border-radius: 12px; padding: 13px 15px 4px; background: var(--card-2); }
+.dlg-bloc h4 { margin: 0 0 11px; font-family: var(--font-display); font-size: 14px;
+  font-weight: 650; letter-spacing: 0; text-transform: none;
+  color: color-mix(in srgb, var(--dlg-teinte, var(--accent)) 72%, var(--text)); }
+.dlg-bloc .field label { font-weight: 600; }
+.dlg-bloc input:focus, .dlg-bloc select:focus, .dlg-bloc textarea:focus {
+  border-color: var(--dlg-teinte, var(--accent));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--dlg-teinte, var(--accent)) 18%, transparent); }
 
 /* ---- le bandeau de veille d'une fiche DTU ----
    ⚠ IL DIT QU'UN ROBOT A ECRIT LA FICHE, et ce n'est pas decoratif : la veille

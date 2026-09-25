@@ -3,7 +3,6 @@ import { db } from '../data/db.js';
 import { scope } from '../data/scope.js';
 import { ACTIVITIES, CHANNELS, LOST_REASONS, stageOf, stageIndex, stagesDe, missionDe, couleurMission, estNouveauLead, etapeEquivalente, estEtapeFinale, etapeFinale, estEngagee } from '../data/schema.js';
 import { esc, eur, openModal, closeModal, renderForm, readForm, refField, bindRefFields, toast, fmtDate, fmtDateTime, userName, marqueResponsable, contactName, dealParty, actBadge, daysSince, confirm } from '../ui.js';
-import { activityForm, activityRowHtml, bindActivityRows, nextActivity } from './activity.js';
 import { documentsSection, bindDocuments } from '../documents.js';
 import { estAmoHenrri, blocHenrri, lierHenrri, etatHenrri } from '../henrri.js';
 // ⚠ LA PRÉSENTATION EST CELLE DE LA FICHE CLIENT RGD, empruntée et non
@@ -72,6 +71,31 @@ export function ficheAJour(deal) {
     honoraires_ht: garde(deal.amount, copie.honoraires_ht),
     etape: garde(stageOf(deal.activity, deal.stage)?.label, copie.etape),
   };
+}
+
+/**
+ * Les rendez-vous de l'affaire, lus dans l'agenda relevé de Google.
+ *
+ * ⚠ LE RAPPROCHEMENT SE FAIT PAR LE NOM, faute de mieux : `agenda_events` est
+ * un reflet de Google et ne porte aucun identifiant d'affaire. On se limite
+ * donc aux événements de la MÊME activité — le calendrier de BTP Expertise
+ * pour une mission BTP — et on exige un nom d'au moins trois lettres, sinon
+ * une initiale accrocherait toute la semaine.
+ *
+ * ⚠ CE N'EST PAS LA MÊME CHOSE QUE `fields.date_visite`, qui est une date
+ * SAISIE à la main. Les deux s'affichent : l'agenda dit ce qui est posé, le
+ * champ dit ce qui était prévu, et leur écart est une information.
+ */
+function rendezVousDeLAffaire(deal, contact) {
+  const nom = contact ? contactName(contact) : '';
+  const cherche = String(nom).normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/\s+/g, ' ').trim();
+  if (cherche.length < 3) return [];
+  return db.t('agenda_events')
+    .filter(e => e.activity === deal.activity && e.title
+      && String(e.title).normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase().includes(cherche))
+    .sort((a, b) => String(b.day || '').localeCompare(String(a.day || '')));
 }
 
 const contactLabel = c => `${contactName(c)}${c.city ? ' (' + c.city + ')' : ''}`;
@@ -234,15 +258,27 @@ export function dealForm(activityKey, existing = null, presets = {}, onSaved, on
   ];
   const specific = act.fields.map(f => ({ ...f, half: f.type !== 'textarea' }));
   const vals = existing ? { ...existing, ...(existing.fields || {}) } : { ...presets, ...(presets.fields || {}) };
-  const html = `<form class="form" id="deal-form">
-    ${renderForm(base, vals)}
-    ${refField('contact_id', 'Contact', contacts, contactLabel, vals.contact_id)}
-    ${refField('organisation_id', 'Entreprise / structure', orgs, orgLabel, vals.organisation_id)}
-    ${refField('referrer_org_id', 'Apporteur (organisation)', orgs, orgLabel, vals.referrer_org_id)}
-    ${refField('referrer_contact_id', 'Apporteur (contact)', contacts, contactLabel, vals.referrer_contact_id)}
-    <div class="field"><label style="font-size:12px;text-transform:uppercase;letter-spacing:.06em">Informations ${esc(act.label)}</label></div>
-    ${renderForm(specific, vals)}
-    <div class="form-actions">${existing ? '<button type="button" class="btn ghost left" id="deal-del">Supprimer</button>' : ''}<button type="button" class="btn ghost" data-close>Annuler</button><button class="btn" type="submit">Enregistrer</button></div>
+  // ⚠ LE FORMULAIRE EST EN BLOCS COLORÉS depuis le 25/09/2026 (« modernise
+  // aussi le formulaire avec des couleurs pour un peu plus de dynamisme »).
+  // C'était une pile de quinze champs à plat, sans respiration ni ordre de
+  // lecture. Trois blocs, dans l'ordre où l'on remplit : l'affaire, qui elle
+  // concerne, ce qu'il y a à en dire.
+  //
+  // ⚠ LE LISERÉ PREND LA COULEUR DE LA STRUCTURE (`--dlg-teinte`), pas une
+  // couleur en dur : le même formulaire sert à BTP, au courtage et à
+  // Propulsion, et trois formulaires bleus ne diraient plus dans lequel on est.
+  const bloc = (titre, dedans) => `
+    <section class="dlg-bloc"><h4>${esc(titre)}</h4>${dedans}</section>`;
+
+  const html = `<form class="form dlg" id="deal-form" style="--dlg-teinte:${esc(act.color || act.accent)}">
+    ${bloc("L’affaire", renderForm(base, vals))}
+    ${bloc('Qui elle concerne', `
+      ${refField('contact_id', 'Contact', contacts, contactLabel, vals.contact_id)}
+      ${refField('organisation_id', 'Entreprise / structure', orgs, orgLabel, vals.organisation_id)}
+      ${refField('referrer_org_id', 'Apporteur (organisation)', orgs, orgLabel, vals.referrer_org_id)}
+      ${refField('referrer_contact_id', 'Apporteur (contact)', contacts, contactLabel, vals.referrer_contact_id)}`)}
+    ${bloc(`Informations ${act.label}`, renderForm(specific, vals))}
+    <div class="form-actions">${existing ? '<button type="button" class="btn ghost left danger" id="deal-del">Supprimer</button>' : ''}<button type="button" class="btn ghost" data-close>Annuler</button><button class="btn primary" type="submit">Enregistrer</button></div>
   </form>`;
   const m = openModal(existing ? "Modifier l'affaire" : `Nouvelle affaire — ${act.label}`, html, { wide: true, onClose });
   const form = m.querySelector('#deal-form');
@@ -316,7 +352,6 @@ export function openDeal(id, onChange) {
   const render = () => {
     const d = db.byId('deals', id); if (!d) return closeModal();
     const act = ACTIVITIES[d.activity];
-    const acts = db.t('activities').filter(a => a.deal_id === id).sort((x, y) => (x.done - y.done) || (x.due_date || '').localeCompare(y.due_date || ''));
     const events = db.t('events').filter(e => e.deal_id === id).sort((x, y) => y.created_at.localeCompare(x.created_at));
     const contact = d.contact_id && db.byId('contacts', d.contact_id);
     const org = d.organisation_id && db.byId('organisations', d.organisation_id);
@@ -327,7 +362,6 @@ export function openDeal(id, onChange) {
     const etapes = stagesDe(d.activity, missionDe(d));
     const curIdx = etapes.findIndex(s => s.key === d.stage);
     const status = d.status === 'won' ? `<span class="status-won">GAGNÉE ${fmtDate(d.won_at)}</span>` : d.status === 'lost' ? `<span class="status-lost">PERDUE — ${esc(d.lost_reason || '')}</span>` : `<span class="pill info">En cours · ${daysSince(d.stage_changed_at) ?? 0} j dans l'étape</span>`;
-    const next = nextActivity(id);
     // ⚠ LE MONTANT SOUS LE NOM CHANGE DE NATURE À L'ENGAGEMENT (25/09/2026 :
     // « rajoute le budget entre les étapes nouveau et lettre de mission, et à
     // partir de lettre de mission je veux les chiffres de la facture »). Le
@@ -335,6 +369,7 @@ export function openDeal(id, onChange) {
     // mission » côté expertise et « Mission AMO signée » côté AMO, déclaré une
     // seule fois dans `schema.js`. Avant, on regarde ce que le client a
     // annoncé ; après, ce qu'on lui a facturé — le budget n'a plus d'usage.
+    const rdvs = rendezVousDeLAffaire(d, contact);
     const engagee = estEngagee(d);
     const budget = Number(d.fields?.montant_travaux ?? d.fields?.budget_annonce) || 0;
     const factureNum = d.fields?.facture_num;
@@ -383,15 +418,36 @@ export function openDeal(id, onChange) {
               <span class="rgdf-tag">Créée le ${esc(fmtDate(d.created_at))}</span>
             </div>
           </div>
-        </div>
-        <div class="rgdf-actions">
-          ${d.status === 'open'
-            ? '<button class="btn green sm" id="d-won">✓ Gagnée</button><button class="btn danger sm" id="d-lost">✕ Perdue</button>'
-            : '<button class="btn ghost sm" id="d-reopen">Réouvrir</button>'}
-          ${d.fields?.decouverte ? '<button class="btn ghost sm" id="d-fiche">🖨 Fiche de mission</button>' : ''}
-          ${scope.isDirection ? `<button class="btn ghost sm" id="d-attr">👤 ${d.owner_id ? 'Changer de responsable' : 'Attribuer'}</button>` : ''}
-          <button class="btn ghost sm" id="d-edit">✎ Modifier</button>
-          <button class="btn ghost sm danger" id="d-del">🗑 Supprimer</button>
+          </div>
+
+          <!-- ⚠ LES COMMANDES ET LES RENDEZ-VOUS SONT EN HAUT A DROITE, en
+               colonne (demande du 25/09/2026). « Perdue » n'est plus un gros
+               bouton rouge au milieu : il est discret, a sa place, et ne se
+               clique plus par accident.
+               ⚠ « Gagnee » EST CONSERVE, volontairement. Mickael a demande de
+               le supprimer ; or chez BTP Expertise gagner est un GESTE et rien
+               d'autre ne le declenche — sans lui, plus aucune affaire ne peut
+               etre gagnee, et le CA encaisse cesse de compter. Il est donc
+               rendu discret comme les autres au lieu d'etre retire. -->
+          <div class="rgdf-coin">
+            <div class="rgdf-actions">
+              ${d.status === 'open'
+                ? '<button class="btn ghost sm" id="d-won">✓ Gagnée</button><button class="btn ghost sm danger" id="d-lost">✕ Perdue</button>'
+                : '<button class="btn ghost sm" id="d-reopen">Réouvrir</button>'}
+              ${d.fields?.decouverte ? '<button class="btn ghost sm" id="d-fiche">🖨 Fiche</button>' : ''}
+              ${scope.isDirection ? `<button class="btn ghost sm" id="d-attr">👤 ${d.owner_id ? 'Responsable' : 'Attribuer'}</button>` : ''}
+              <button class="btn ghost sm" id="d-edit">✎ Modifier</button>
+              <button class="btn ghost sm danger" id="d-del">🗑</button>
+            </div>
+            ${rdvs.length ? `<div class="rgdf-rdv">
+              <span class="rgdf-rdv-titre">${rdvs.length > 1 ? `Rendez-vous <b>${rdvs.length}</b>` : 'Rendez-vous'}</span>
+              <ul>${rdvs.slice(0, 4).map(e => {
+                const passe = String(e.day || '') < new Date().toISOString().slice(0, 10);
+                const quand = e.all_day || !e.starts_at ? fmtDate(e.day) : fmtDateTime(e.starts_at);
+                return `<li class="${passe ? 'est-passe' : ''}"><b>${esc(quand)}</b></li>`;
+              }).join('')}</ul>
+            </div>` : ''}
+          </div>
         </div>
       </div>
 
@@ -412,8 +468,6 @@ export function openDeal(id, onChange) {
             </button>`).join('')}
         </div>
       </div>
-
-      ${d.status === 'open' && !next ? `<div class="alert" style="margin:0 0 16px"><b>!</b><div>Aucune prochaine action planifiée — <a href="#" id="d-add-act-inline">en ajouter une maintenant</a>.</div></div>` : ''}
 
       <!-- ⚠ LA FACTURATION EST DERRIERE UN ONGLET, pas supprimee : six lignes de
            chiffres et le bloc Henrri au milieu du dossier noyaient le projet. -->
@@ -450,14 +504,6 @@ export function openDeal(id, onChange) {
             <div class="timeline">${events.length
               ? events.map(e => `<div class="tl ${esc(e.kind)}"><div class="meta">${esc(fmtDateTime(e.created_at))} · ${esc(userName(e.author_id))}</div>${esc(e.body)}</div>`).join('')
               : '<p class="rgdf-rien">Aucun échange enregistré.</p>'}</div>
-          </section>
-
-          <section class="rgdf-bloc">
-            <h3>Actions à venir <span class="grow"></span>
-              <button class="btn sm" id="d-add-act">+ Activité</button></h3>
-            <div id="d-acts" style="display:flex;flex-direction:column;gap:8px">${acts.length
-              ? acts.map(a => activityRowHtml(a)).join('')
-              : '<p class="rgdf-rien">Aucune action planifiée.</p>'}</div>
           </section>
 
           ${documentsSection('deals', id)}
@@ -511,11 +557,7 @@ export function openDeal(id, onChange) {
       toast('Affaire supprimée');
       onChange?.();
     };
-    const addAct = () => activityForm({ deal_id: id, contact_id: d.contact_id || null, organisation_id: d.organisation_id || null }, null, refresh, render);
-    m.querySelector('#d-add-act').onclick = addAct;
-    m.querySelector('#d-add-act-inline')?.addEventListener('click', e => { e.preventDefault(); addAct(); });
     m.querySelector('#note-form').onsubmit = async e => { e.preventDefault(); const body = e.target.body.value.trim(); if (!body) return; await logEvent(d, 'note', body); refresh(); };
-    bindActivityRows(m.querySelector('#d-acts'), refresh, render);
     bindDocuments(m, 'deals', id, render);
 
     // Henrri, pour les seules missions AMO. La lecture est gratuite chez eux,

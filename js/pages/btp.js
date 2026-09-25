@@ -1887,6 +1887,25 @@ export const btpBasePage = {
       if (!surOrg && state.vue !== 'tous') { const t = f.querySelector('[name="type"]'); if (t) t.value = state.vue === 'clients' ? 'Client' : 'Prospect'; }
     };
 
+    // ⚠ LE MEME CHIFFRE CHANGE DE NATURE A L'ENGAGEMENT, exactement comme sur
+    // la fiche (25/09/2026 : « je veux retrouver la colonne budget ou montant
+    // en fonction des étapes dans les tableaux de la base de données »).
+    // Avant « Lettre de mission » / « Mission AMO signée » c'est le budget que
+    // le client annonce ; après, le montant de la mission qu'on lui facture.
+    // Le seuil n'est pas recopié : `estEngagee` le déclare une seule fois.
+    //
+    // ⚠ UN TIRET N'EST PAS UN ZERO. Une affaire sans chiffre affiche « — » :
+    // écrire 0 € ferait lire « cette mission ne rapporte rien » là où la
+    // réalité est « personne ne l'a chiffrée ».
+    const chiffreDe = (d) => {
+      if (!d) return { texte: '', engagee: false };
+      const engagee = estEngagee(d);
+      const v = engagee
+        ? Number(d.amount) || 0
+        : Number(d.fields?.montant_travaux ?? d.fields?.budget_annonce ?? d.amount) || 0;
+      return { texte: v ? eur(v) : '', engagee };
+    };
+
     const draw = () => {
       const ts = terms(state.q);
       // Les archives ne se mélangent à rien : elles ont leur onglet, et elles
@@ -1908,7 +1927,7 @@ export const btpBasePage = {
           .map(d => {
             const r = rdvTelephonique(d);
             return { id: d.id, lead: true, recu: d.created_at, origine: origineDe(d), nom: d.title,
-                     client: dealParty(d), rdv: r.texte, rdvPasse: r.passe,
+                     client: dealParty(d), rdv: r.texte, rdvPasse: r.passe, chiffre: chiffreDe(d),
                      responsable: userName(d.owner_id), mission: missionDe(d), activity: d.activity,
                      ownerId: d.owner_id, detailOrigine: d.fields?.origine || d.channel || '',
                      mail: mailTransfert(d) };
@@ -1916,7 +1935,7 @@ export const btpBasePage = {
         // Les coordonnées ne sont plus ici : elles vivent dans la fiche du contact,
         // qu'un clic sur la ligne ouvre. Ce que la pile doit montrer, c'est quand
         // l'appel est prévu — c'est lui qui fait sortir le lead de la pile.
-        colonnes = ['Reçu', 'Origine', 'Demande', 'Client', 'RDV téléphonique', "Chargé d'affaires", ''];
+        colonnes = ['Reçu', 'Origine', 'Demande', 'Client', 'Budget', 'RDV téléphonique', "Chargé d'affaires", ''];
       } else if (surArchives) {
         lignes = [
           ...tousContacts.filter(c => !estActive(c)).map(c => ({
@@ -1951,11 +1970,12 @@ export const btpBasePage = {
             const d = deals().find(x => x.contact_id === c.id);
             return {
               id: c.id, nom: contactName(c), detail: c.type, ville: c.city, tel: c.phone, mail: c.email,
-              canal: c.channel || '—', affaire: d ? d.title : null, dealId: d ? d.id : null,
+              canal: c.channel || '—', affaire: d ? d.title : null, dealId: d ? d.id : null, chiffre: chiffreDe(d),
               responsable: d ? userName(d.owner_id) : '', ownerId: d ? d.owner_id : null,
             };
           });
-        colonnes = ['Nom', "Chargé d'affaires", 'Type', 'Ville', 'Téléphone', 'Email', 'Canal', 'Affaire'];
+        colonnes = ['Nom', "Chargé d'affaires", 'Type', 'Ville', 'Téléphone', 'Email', 'Canal', 'Affaire',
+          state.vue === 'clients' ? 'Montant' : 'Budget'];
       }
 
       // Le choix du responsable, partout ou il a un sens. Sans affaire rattachee il
@@ -2003,12 +2023,13 @@ export const btpBasePage = {
               <td class="small"${r.detailOrigine ? ` title="${esc(r.detailOrigine)}"` : ''}>${r.origine ? esc(r.origine) : '<span class="muted">—</span>'}</td>
               <td>${marqueMission(r.mission)}<b>${esc(r.nom)}</b></td>
               <td>${esc(r.client || '—')}</td>
+              <td class="num">${r.chiffre.texte ? esc(r.chiffre.texte) : '<span class="muted">—</span>'}</td>
               <td class="${r.rdvPasse ? 'status-lost' : ''}">${r.rdv ? esc(r.rdv) : '<span class="pill warn">À planifier</span>'}</td>
               <td>${choixResponsable(r.id, r.ownerId, r.activity)}</td>
               <td class="num acts">${r.mail
                 ? `<a class="btn ghost sm" href="${esc(r.mail)}" title="Préparer le message de transmission au chargé d'affaires">✉</a>`
                 : `<span class="muted small" title="${r.ownerId ? "Ce chargé d'affaires n'a pas d'adresse e-mail dans son profil" : 'Attribuez le lead pour pouvoir le transmettre'}">—</span>`}</td>
-            </tr>`).join('') || `<tr><td colspan="7"><div class="empty">Aucun lead en attente. Tout est distribué.</div></td></tr>` : lignes.map(r => `<tr class="click" data-fiche="${r.id}">
+            </tr>`).join('') || `<tr><td colspan="8"><div class="empty">Aucun lead en attente. Tout est distribué.</div></td></tr>` : lignes.map(r => `<tr class="click" data-fiche="${r.id}">
               <td><b>${esc(r.nom)}</b></td>
               ${r.org || surArchives ? '' : `<td>${choixResponsable(r.dealId, r.ownerId)}</td>`}
               <td>${esc(r.detail || '—')}</td>
@@ -2017,7 +2038,8 @@ export const btpBasePage = {
               <td>${r.mail ? `<a href="mailto:${esc(r.mail)}">${esc(r.mail)}</a>` : '—'}</td>
               ${surArchives ? `<td class="small">${esc(fmtDate(r.archive))}</td>`
                 : r.org ? `<td class="num">${r.apports}</td>`
-                : `<td>${esc(r.canal)}</td><td>${r.affaire ? esc(r.affaire) : '—'}</td>`}
+                : `<td>${esc(r.canal)}</td><td>${r.affaire ? esc(r.affaire) : '—'}</td>
+                   <td class="num">${r.chiffre?.texte ? esc(r.chiffre.texte) : '<span class="muted">—</span>'}</td>`}
               <td class="num acts">${surArchives
                 ? `<button type="button" class="btn ghost sm" data-restaurer="${r.id}" data-org="${r.org ? 1 : ''}" title="Remettre cette fiche dans les listes actives">↩ Restaurer</button>${scope.canSupprimerFiche
                     ? `<button type="button" class="btn ghost sm danger" data-suppr="${r.id}" data-org="${r.org ? 1 : ''}" title="Supprimer définitivement, avec ses affaires et son historique">🗑</button>` : ''}`
