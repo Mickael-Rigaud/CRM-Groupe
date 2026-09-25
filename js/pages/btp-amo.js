@@ -239,7 +239,8 @@ export function ficheDecouverteAmo(apres) {
         const cote = coteDe(c.key);
         const deduit = v.cotes[c.key] === null && cote !== null;
         return `<tr>
-          <th scope="row">${esc(c.label)}${deduit ? '<em class="fa-deduit">déduit</em>' : ''}</th>
+          <th scope="row">${esc(c.label)}${deduit ? '<em class="fa-deduit">déduit</em>' : ''}
+            ${c.aide ? `<em class="btp-crit-aide">${esc(c.aide)}</em>` : ''}</th>
           ${c.valeurs.map((lbl, n) => `<td class="choix ${cote === n ? 'on' : ''}" data-crit="${c.key}" data-score="${n}"
             role="radio" aria-checked="${cote === n}" tabindex="0"><span class="btp-coche"></span>${esc(lbl)}</td>`).join('')}
         </tr>`;

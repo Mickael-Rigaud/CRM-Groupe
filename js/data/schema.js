@@ -63,20 +63,22 @@ export const BAREME_AMO = [
 // La matrice de complexité. Le taux ne se lit pas sur le seul budget : cinq critères,
 // zéro à deux points chacun, et le total commande le taux suggéré.
 export const MATRICE_AMO = {
-  intro: "Le taux n'est pas déterminé par le seul budget travaux. La matrice guide le chargé d'affaires et homogénéise les devis.",
-  criteres: [
-    { label: 'Montant / taille', valeurs: ['Opération limitée', 'Opération intermédiaire', 'Opération importante'] },
-    { label: 'Nombre de lots', valeurs: ['1 à 3', '4 à 6', '7 et +'] },
-    { label: 'Durée prévisionnelle', valeurs: ['< 3 mois', '3 à 6 mois', '> 6 mois'] },
-    { label: "Intensité d'accompagnement", valeurs: ['Normale', 'Renforcée', 'Très soutenue'] },
-    { label: 'Interfaces / contraintes', valeurs: ['Faibles', 'Multiples', 'Fortes / sensibles'] },
-  ],
+  intro: 'Le score mesure le temps que la mission va réellement nous demander. Deux chargés d’affaires doivent obtenir le même score sur le même dossier.',
+  // ⚠ LES CRITÈRES NE SONT PLUS DÉCLARÉS ICI : ils viennent de `CRITERES_V5`,
+  // déclarés plus bas, que la fiche découverte lit déjà pour coter un vrai
+  // dossier. Les deux écrans disaient le même barème avec des mots différents —
+  // « Montant / taille » ici, « Budget / ampleur » là-bas — et rien ne les tenait
+  // ensemble. La liste est reconstruite à la lecture (voir `criteresAmo`), pas
+  // recopiée : une copie diverge au premier ajout.
   paliers: [
     { min: 0, max: 2, taux: 5, regle: 'Sous réserve du minimum de 3 500 € HT' },
     { min: 3, max: 5, taux: 6, regle: 'Mission intermédiaire' },
     { min: 6, max: 7, taux: 7, regle: 'Mission soutenue / complexe' },
     { min: 8, max: 10, taux: 8, regle: 'Mission très consommatrice de temps, contraintes fortes' },
   ],
+  // La liste que les écrans parcourent. `get` plutôt qu'une valeur figée : au
+  // moment où cet objet est construit, `CRITERES_V5` n'est pas encore défini.
+  get criteres() { return CRITERES_V5; },
   reserve: "Le taux reste validé par BTP Expertise. Une dérogation sous 5 % demande une validation de la direction. La matrice devra être recalibrée sur les données réelles.",
 };
 // Les honoraires d'une AMO, de bout en bout :
@@ -272,14 +274,53 @@ export const FICHE_AMO = {
   occupation: ['Logement occupé', 'Logement vacant', 'Occupation partielle', 'Non déterminé'],
 };
 
-// §41 — les cinq critères, chiffrés cette fois : « < 80 k€ » se mesure, « opération
-// limitée » s'interprète. C'est la version qui fait règle dans le CRM.
+// §41 — LES CINQ CRITÈRES, SOURCE UNIQUE DES DEUX MATRICES DE L'APPLICATION.
+//
+// ⚠ IL Y EN AVAIT DEUX, ET ELLES NE DISAIENT PAS LA MÊME CHOSE. La page de
+// référence AMO lisait `MATRICE_AMO.criteres` (« Montant / taille », « Opération
+// limitée ») pendant que la fiche découverte — celle qui COTE VRAIMENT un
+// dossier — lisait celle-ci. Un chargé d'affaires lisait donc un vocabulaire sur
+// l'écran qui explique, un autre sur l'écran qui décide.
+// `MATRICE_AMO.criteres` dérive maintenant d'ici : une seule vérité.
+//
+// RÉÉCRITS LE 25/09/2026, DEMANDE DE MICKAEL : « rendre la matrice
+// compréhensible sans le manuel. Un chargé d'affaires doit obtenir le même score
+// que moi sur un même dossier. » D'où trois choses : des noms qui disent ce
+// qu'on mesure, une ligne d'aide par critère, et des seuils concrets à la place
+// des adjectifs — « opération limitée » s'interprète, « moins de 80 k€ » se
+// mesure.
+//
+// ⚠ LES SEUILS DE BUDGET SONT 80 ET 200 k€, PAS 40 ET 120. La demande proposait
+// 40/120 en précisant « seuils à confirmer avec le manuel V5 ». Ils le sont ici :
+// `coteBudget` les applique déjà (80 000 / 200 000) et `BAREME_AMO` les recoupe —
+// 80 k€ y ouvre le taux de 5 %, 200 k€ celui de 7 %. Les changer sans toucher à
+// ces deux-là ferait dire à l'écran autre chose que ce que le calcul fait.
+//
+// ⚠ ET LE BUDGET EST HT, PAS TTC. La demande dit « montant TTC estimé » ; tout le
+// reste de la chaîne AMO est HT — le champ de la fiche s'appelle « Budget travaux
+// HT estimé », `coteBudget` lit `budget_ht`, et le barème d'honoraires est en HT.
+// Écrire TTC dans l'aide ferait coter 100 k€ TTC (≈ 83 k€ HT) comme s'il
+// s'agissait de 100 k€ HT.
 export const CRITERES_V5 = [
-  { key: 'budget', label: 'Budget / ampleur', valeurs: ['< 80 k€', '80 à 200 k€', '> 200 k€'], auto: 'budget' },
-  { key: 'lots', label: 'Nombre de lots', valeurs: ['1 à 3', '4 à 6', '7 et +'], auto: 'lots' },
-  { key: 'duree', label: 'Durée', valeurs: ['< 3 mois', '3 à 6 mois', '> 6 mois'], auto: 'duree' },
-  { key: 'intensite', label: 'Intensité client', valeurs: ['Ponctuelle', 'Régulière', 'Très soutenue'] },
-  { key: 'contraintes', label: 'Interfaces / contraintes', valeurs: ['Faibles', 'Multiples', 'Fortes / sensibles'] },
+  { key: 'budget', label: 'Budget travaux',
+    aide: "Montant HT estimé des travaux à piloter, selon l'estimation du chargé d'affaires — pas le budget annoncé par le client.",
+    valeurs: ['Moins de 80 k€', '80 à 200 k€', 'Plus de 200 k€'], auto: 'budget' },
+  { key: 'lots', label: "Nombre de corps d'état",
+    aide: 'Métiers différents à consulter et coordonner (maçonnerie, plâtrerie, électricité, plomberie, menuiseries, carrelage, peinture, isolation, VMC…).',
+    valeurs: ['1 à 3 métiers (ex. salle de bain)', '4 à 6 métiers (ex. appartement partiel)', '7 métiers et plus (rénovation complète)'], auto: 'lots' },
+  { key: 'duree', label: 'Durée du chantier',
+    aide: "De la préparation à la réception. Plus c'est long, plus il y a de visites, de comptes rendus et de risques de dérive.",
+    valeurs: ['Moins de 3 mois', '3 à 6 mois', 'Plus de 6 mois'], auto: 'duree' },
+  { key: 'intensite', label: 'Présence attendue par le client',
+    aide: 'Fréquence des points, visites et comptes rendus que le client attend de nous. Dans tous les cas, le client reste décisionnaire et donneur d’ordres : nous préparons, contrôlons et alertons, nous ne dirigeons pas les entreprises.',
+    valeurs: ['Client autonome : visites aux étapes clés, compte rendu à chaque étape',
+              'Client peu disponible : visite et compte rendu hebdomadaires, préparation de ses décisions et de ses échanges avec les entreprises',
+              'Client à distance ou peu à l’aise : visites et points fréquents, chaque décision préparée et expliquée avant qu’il la prenne, disponibilité élevée'] },
+  { key: 'contraintes', label: 'Complexité du contexte',
+    aide: 'Tout ce qui complique le chantier en dehors des travaux : occupants, copropriété, autres intervenants, sinistre, litige, délais imposés.',
+    valeurs: ['Logement vide, accès simple, pas de tiers',
+              'Occupé, copropriété ou autres intervenants (architecte, BE, diagnostiqueur)',
+              'Structure, sinistre/assurance, litige en cours, ABF, délai imposé'] },
 ];
 
 // Ce que le manuel demande au CRM de déduire tout seul. Les seuils sont les siens ;

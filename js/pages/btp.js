@@ -645,7 +645,11 @@ const matriceAmo = (scores) => {
     <div class="table-wrap"><table class="btp-matrice">
       <thead><tr><th>Critère</th><th>0 point</th><th>1 point</th><th>2 points</th></tr></thead>
       <tbody>${MATRICE_AMO.criteres.map((c, i) => `<tr class="${scores[i] === null ? 'a-coter' : ''}">
-        <th scope="row">${esc(c.label)}</th>
+        <!-- ⚠ L'AIDE EST DANS LA CELLULE DU CRITERE, pas en legende sous le
+             tableau : une note de bas de tableau se lit une fois et ne se relit
+             jamais, alors que la question « qu'est-ce qu'on mesure ici ? » se
+             pose au moment de cocher la ligne. -->
+        <th scope="row">${esc(c.label)}${c.aide ? `<em class="btp-crit-aide">${esc(c.aide)}</em>` : ''}</th>
         ${c.valeurs.map((v, n) => `<td class="choix ${scores[i] === n ? 'on' : ''}" data-crit="${i}" data-score="${n}"
           role="radio" aria-checked="${scores[i] === n}" tabindex="0">
           <span class="btp-coche"></span>${esc(v)}</td>`).join('')}
