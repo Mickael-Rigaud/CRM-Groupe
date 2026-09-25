@@ -789,6 +789,21 @@ button.esp-side-titre { background: none; border: 0; font-family: inherit; color
   border-color: var(--dlg-teinte, var(--accent));
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--dlg-teinte, var(--accent)) 18%, transparent); }
 
+/* ---- la fiche projet de BTP Expertise ----
+   Une adresse sur UNE ligne : la rue, puis le code postal, puis la ville
+   (demande du 25/09/2026). La rue prend deux parts sur quatre - un code postal
+   large comme une rue se lit comme un champ mal rempli. */
+.mf-adresse { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 10px 12px;
+  margin-bottom: 12px; }
+@media (max-width: 620px) { .mf-adresse { grid-template-columns: 1fr; } }
+/* Le choix du metier commande les deux dernieres etapes : il merite d etre vu
+   avant d etre cherche. */
+/* ⚠ SELECTEUR COMPOSE, ET CE N EST PAS UN EXCES DE ZELE : `.mf-seg` est
+   declaree PLUS BAS dans ce fichier avec `display: inline-flex`. A specificite
+   egale, la derniere gagne - la barre serait restee large comme son texte. */
+.mf-seg.mf-seg-large { display: flex; width: 100%; margin-bottom: 6px; }
+.mf-seg.mf-seg-large button { flex: 1 1 0; padding: 11px 16px; font-size: 14px; font-weight: 650; }
+
 /* ---- le bandeau de veille d'une fiche DTU ----
    ⚠ IL DIT QU'UN ROBOT A ECRIT LA FICHE, et ce n'est pas decoratif : la veille
    publie sans relecture humaine, donc le lecteur doit pouvoir distinguer une

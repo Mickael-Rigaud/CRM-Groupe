@@ -26,12 +26,11 @@ import {
   CROCHETS, champsDe, remplir, donneesDossier, emailDu,
   mailHtml, URL_LOGO, URL_LOGO_PUBLIC, ouvrirCompose, telechargerEml, copierMiseEnPage,
 } from './btp-mail.js';
-import { ficheDecouverteAmo, champsHonoraires, resultatsHonoraires } from './btp-amo.js';
+import { champsHonoraires, resultatsHonoraires } from './btp-amo.js';
 import {
   suiviObjectifs, objectifsVolume, enregistrerObjectifsVolume,
   objectifs as objectifsCa, objectifAnnuel, enregistrerObjectifs, ecoule,
 } from '../data/chiffres.js';
-import { ficheDecouverteExpertise } from './btp-expertise.js';
 import { imprimerFicheDeal } from './btp-fiche.js';
 import { vivierBtpPage } from './btp-vivier.js';
 
@@ -1326,11 +1325,10 @@ const pageMission = (mission) => ({
         // COURANTES, pas la copie figée du jour de la découverte.
         if (d?.fields?.decouverte) imprimerFicheDeal(ficheAJour(d));
       });
-      // Une mission saisie ici naît dans son métier : le formulaire ouvre avec le type
-      // déjà choisi, le reste (contact, montant) se remplit comme partout ailleurs.
-      root.querySelector('#m-new').onclick = () => (mission === 'amo'
-        ? ficheDecouverteAmo(draw)
-        : ficheDecouverteExpertise(draw));
+      // Une mission saisie ici naît dans son métier : la fiche projet ouvre avec le
+      // type déjà choisi, et se change à l'étape « Mission » si l'on s'est trompé.
+      root.querySelector('#m-new').onclick = () =>
+        dealForm(KEY, null, { fields: { type_mission: mission } }, draw);
 
       // Une case cliquée cote son critère ; la recliquer l'annule, pour repartir d'un
       // devis sans avoir à tout effacer.

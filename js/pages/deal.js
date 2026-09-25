@@ -247,6 +247,21 @@ export async function reopen(deal) {
 
 // ---------- Formulaire création / édition ----------
 export function dealForm(activityKey, existing = null, presets = {}, onSaved, onClose = null) {
+  // ⚠ BTP EXPERTISE A SON PROPRE FORMULAIRE : la fiche projet, en quatre
+  // étapes, avec la grille de qualification de l'expertise ou la matrice de
+  // complexité de l'AMO selon le métier choisi (demande du 25/09/2026 :
+  // « remplace les fiches découverte par les fiches projet, comme ça c'est le
+  // même formulaire pour tout le tableau de bord BTP Expertise »). Toutes les
+  // portes d'entrée passent par ici — « Modifier », « + Nouveau lead », une
+  // affaire créée depuis un contact — donc il suffit de dévier ici pour que
+  // les trois ouvrent la même fiche.
+  // Le chargement est PARESSEUX : la fiche projet importe les matrices et le
+  // calculateur d'honoraires, qui n'ont rien à faire dans le poids de départ
+  // d'un écran de courtage.
+  if (activityKey === 'btp') {
+    import('./btp-projet.js').then(({ ficheProjet }) => ficheProjet(existing, presets, onSaved, onClose));
+    return;
+  }
   const act = ACTIVITIES[activityKey];
   // ⚠ SEULS LES MEMBRES DE LA STRUCTURE PEUVENT PORTER L'AFFAIRE (25/09/2026).
   // `profiles.activities` dit de quelles structures quelqu'un fait partie, et la
