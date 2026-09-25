@@ -109,14 +109,27 @@ répétées plusieurs fois avant d'être écrites ici : les reproposer fait perd
    essais : pas de reprise du stockage Cloudflare vers Storage, ni pour eux ni
    comme préalable à autre chose.
 3. ⚠ **LES RELANCES DEVIS SONT SUPPRIMÉES** — « on ne fait plus ». Le cron de 8 h
-   du worker ne sera pas porté ; il s'éteindra avec lui.
+   du worker n'est pas porté. ⚠ **ET « IL S'ÉTEINDRA AVEC LE WORKER » ÉTAIT UNE
+   ERREUR** : le worker ne s'est pas éteint, et ce cron a continué d'**envoyer
+   des emails** au nom de RGD Renova tous les matins pendant que la décision
+   était écrite ici. Constaté le 25/09 en allant regarder le worker.
+   **Coupé dans son code le 25/09** (`rgd-renova-dashboard`, `worker/src/index.js`,
+   commit `49eb5a9`) — une ligne retirée, l'import et la fonction conservés avec
+   la ligne commentée sur place pour que le retour en arrière ne demande pas de
+   réécrire. ⚠ **Ce dépôt n'a aucune CI : rien n'est en ligne tant que
+   `wrangler deploy` n'a pas été lancé à la main.** Les relances **manuelles**
+   restent ouvertes (`relance-now`, `relances/:id/send`) : elles ne partent que
+   sur un clic. **La leçon générale** : une décision « on ne fait plus » qui
+   laisse tourner le code n'a pas été appliquée, elle a été notée.
 4. ⚠ **LES PHOTOS, MICKAEL LES REMET LUI-MÊME** depuis l'écran Réalisations.
    Aucune reprise automatique des photos du stockage Cloudflare à prévoir.
 
 **Ce qui reste donc à porter, et rien d'autre** (état vérifié le 25/09/2026, au
-soir du lot 3) : la synchro **Costructor des chantiers** (la fonction est
-déployée, il manque le cron), puis le **relevé D1 → Supabase**, qui tombe de
-lui-même quand D1 cesse d'être la source. ⚠ **LES ÉCRITURES DU CRM SONT
+soir du lot 3) : le **relevé D1 → Supabase**, qui tombe de lui-même quand D1
+cesse d'être la source. ⚠ **LA SYNCHRO COSTRUCTOR DES CHANTIERS NE MANQUE PAS DE
+CRON** — écrit ici par erreur, corrigé le 25/09 : `sync_costructor_chantiers`
+tourne dans pg_cron aux minutes 20 et 50, de 5 h à 19 h, **trente passages en
+24 h sans un échec**. Les six tâches planifiées sont vertes. ⚠ **LES ÉCRITURES DU CRM SONT
 TERMINÉES** — les quinze chemins sont portés.
 
 ⚠ **LES ÉCRITURES SE PORTENT UN LOT PAR JOUR**, chacun complet — fonction de
@@ -192,6 +205,16 @@ contraire — sans rien exposer, le garde `has_activity('rgd')` refusant un
 appelant sans droit, mais une ACL doit dire ce que la migration prétend.
 Refermé le 25/09 (`rgd_ecritures_fermees_a_anon`). **Toute nouvelle fonction
 d'écriture doit révoquer `anon` explicitement.**
+
+⚠ **LE RYTHME DU RELEVÉ NE SE MESURE PAS SUR `synced_at`** (piège tombé dedans
+le 25/09) : cette colonne est **écrasée à chaque passage**, donc une requête n'en
+montre jamais que le DERNIER. Compter les valeurs distinctes fait conclure « deux
+passages en trente heures » là où il y en a un toutes les demi-heures — le
+passage complet efface la trace de tous les précédents. **Le rythme se lit dans
+le code du worker, pas dans les données** : `worker/wrangler.toml` déclare
+`"0 8 * * *"` et `"*/30 5-19 * * *"`, et c'est la branche des 30 minutes qui
+appelle le relevé, en plus d'une tranche Costructor et des abonnements Google.
+Le worker répond `{"ok":true}` sur `/api/health`.
 
 ⚠ **LE SÉQUENCEMENT N'EST PAS NÉGOCIABLE, ET JE L'AI ENFREINT UNE FOIS** : la
 coupure du relevé ne part en production **qu'une fois le code du CRM servi**
