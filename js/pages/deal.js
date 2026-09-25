@@ -434,7 +434,7 @@ export function openDeal(id, onChange) {
                moi-meme ».
                Une version intermediaire ne l'affichait qu'a la derniere etape.
                Elle a ete RETIREE parce qu'elle enlevait autre chose sans le
-               dire : `setWon` sait declarer gagnee une affaire qui n'y est pas
+               dire : setWon sait declarer gagnee une affaire qui n'y est pas
                encore et la DEPLACER a l'etape finale. Restreindre l'affichage
                fermait donc ce chemin. Le gain reste un GESTE, disponible
                partout ou l'affaire est ouverte. -->
