@@ -1410,7 +1410,14 @@ body:has(.esp-app) .subnav .datepill { display: none; }
 .btp-recap-etapes { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(84px, 1fr); gap: 8px; overflow-x: auto; min-width: 0; padding-bottom: 4px; }
 .btp-recap-etape { display: flex; flex-direction: column; gap: 3px; padding: 10px 11px; border-radius: 10px; background: var(--card-2); text-decoration: none; color: inherit; border: 1px solid transparent; transition: border-color .13s, background .13s; }
 .btp-recap-etape:hover { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); }
-.btp-recap-etape span { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted-2); line-height: 1.25; }
+/* ⚠ LE LIBELLE PREND LA PLACE QUI RESTE, ET LE CHIFFRE SE POSE EN DESSOUS.
+   Sans ce `flex: 1`, chaque etape se contentait de sa hauteur : « Nouveau »
+   tient sur une ligne, « Lettre de mission » sur trois, et les chiffres se
+   retrouvaient a trois hauteurs differentes sur la meme rangee — on ne peut
+   plus les comparer d'un regard, ce qui est tout ce qu'on leur demande.
+   Les cartes sont deja etirees a la meme hauteur par la grille ; il suffisait
+   de dire ou va le vide. Demande de Mickael le 25/09/2026. */
+.btp-recap-etape span { flex: 1; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted-2); line-height: 1.25; }
 .btp-recap-etape b { font-family: var(--font-display); font-size: 21px; font-weight: 700; color: var(--accent-ink); }
 .btp-recap-pied { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 12.5px; color: var(--muted); }
 
