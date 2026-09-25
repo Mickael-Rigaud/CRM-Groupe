@@ -328,6 +328,32 @@ export const SEED = {
       ville: 'Tours', statut_d1: 'termine', etat: 'termine',
       date_passage_termine: d(-10), created_at: d(-2), updated_at: d(-10) },
   ],
+  // Les devis de l'espace RGD.
+  //
+  // ⚠ SANS EUX L'ÉCRAN `#/rgd/devis` EST VIDE EN DÉMO, donc « Marquer signé »
+  // n'était essayable qu'en production — et c'est précisément le geste porté
+  // dans le CRM le 25/09/2026. Quatre lignes pour les quatre cas que l'écran
+  // distingue : un brouillon, un envoyé (le seul sur lequel le bouton a un
+  // sens à deux reprises), un déjà signé (le bouton doit y DISPARAÎTRE) et un
+  // refusé. ⚠ Numéros et objets inventés : le dépôt est public.
+  rgd_devis: [
+    { id: 'rdv1', deal_id: 'd1', numero: 'DEV-2026-201',
+      objet: 'Rénovation appartement — lot peinture',
+      montant_ht: 9800, montant_ttc: 11760, statut: 'brouillon',
+      date_creation: day(-3) },
+    { id: 'rdv2', deal_id: 'd2', numero: 'DEV-2026-118',
+      objet: 'Salle de bain complète',
+      montant_ht: 11500, montant_ttc: 13800, statut: 'envoye',
+      date_creation: day(-20), date_envoi: day(-8) },
+    { id: 'rdv3', deal_id: 'd3', numero: 'DEV-2026-097',
+      objet: 'Réaménagement maison',
+      montant_ht: 42000, montant_ttc: 50400, statut: 'signe',
+      date_creation: day(-120), date_envoi: day(-95), date_signature: day(-80) },
+    { id: 'rdv4', deal_id: 'd4', numero: 'DEV-2026-205',
+      objet: 'Cuisine équipée',
+      montant_ht: 15200, montant_ttc: 18240, statut: 'refuse',
+      date_creation: day(-15), date_envoi: day(-12) },
+  ],
   // Une seule pièce déposée, chez le premier : assez pour voir la pastille
   // verte, le téléchargement et la relance qui ne réclame que ce qui manque.
   rgd_st_pieces: [
