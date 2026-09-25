@@ -235,6 +235,24 @@ const localAdapter = {
       return { ok: true, id: chantier.id, deal_id: deal.id };
     }
 
+    // ── Les devis, depuis le 25/09/2026 ───────────────────────────────────
+    // ⚠ DOUBLE DU SQL, comme ci-dessus et comme `deplierSite` : si
+    // `rgd_devis_signer` change en base, il change ici aussi. Le recalcul de
+    // l'état du chantier n'est PAS rejoué — il se déduit des devis et des
+    // factures, et la démo n'en sème pas assez pour que le résultat veuille
+    // dire quelque chose ; ce qui se vérifie ici, c'est le statut et la date.
+    if (nom === 'rgd_devis_signer') {
+      const d = (this.data.rgd_devis || []).find(x => x.id === args.p_id);
+      if (!d) return { ok: false, error: 'devis introuvable' };
+      const ancien = d.statut;
+      d.statut = 'signe';
+      // `coalesce` : on date la PREMIÈRE signature, pas le dernier clic.
+      d.date_signature = d.date_signature || new Date().toISOString().slice(0, 10);
+      d.updated_at = new Date().toISOString();
+      this.save();
+      return { ok: true, id: d.id, ancien_statut: ancien, date_signature: d.date_signature };
+    }
+
     throw new Error('Fonction inconnue en mode démo : ' + nom);
   },
   // fichiers (démo) : conservés dans le navigateur en base64, petits fichiers uniquement

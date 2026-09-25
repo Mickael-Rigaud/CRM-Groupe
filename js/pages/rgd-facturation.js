@@ -25,7 +25,7 @@ import { esc, eur, fmtDate, terms, hit, searchInput, bindSearch, restoreFocus } 
 import { poserEspace, kpiEspace } from './espace.js';
 import { openDeal } from './deal.js';
 import { cadre, guard, clientDe } from './rgd-espace.js';
-import { peutEcrire, signerDevis } from '../data/rgd-api.js';
+import { signerDevis } from '../data/rgd-devis.js';
 import { toast, confirm as demander } from '../ui.js';
 
 // Le chantier et son client, pour une ligne qui porte un `deal_id`.
@@ -56,8 +56,13 @@ export const rgdDevisPage = {
   render(root) {
     if (guard(root)) return {};
     const coquille = poserEspace(root);
-    const state = { statut: '', q: '', focus: null, ecriture: false };
-    peutEcrire().then(ok => { if (ok !== state.ecriture) { state.ecriture = ok; draw(); } });
+    // ⚠ LE DROIT D'ÉCRIRE EST `scope.canRgd`, PLUS LE JETON DE L'APPLICATION
+    // RGD (25/09/2026). « Marquer signé » passe par une fonction de la base,
+    // gardée par `has_activity('rgd')` dont `scope.canRgd` est le miroir exact.
+    // Exiger en plus un compte du tableau de bord fermerait le bouton à
+    // quelqu'un que la base laisse écrire — et ce droit-là est connu tout de
+    // suite, donc plus de redessin en différé.
+    const state = { statut: '', q: '', focus: null, ecriture: scope.canRgd };
 
     const draw = () => {
       const tous = scope.rgd('rgd_devis')
@@ -117,13 +122,13 @@ export const rgdDevisPage = {
                 <td class="num">${eur(d.montant_ht)}</td>
                 <td>${d.date_creation ? fmtDate(d.date_creation) : '<span class="muted">—</span>'}</td>
                 <td>${d.date_signature ? fmtDate(d.date_signature) : '<span class="muted">—</span>'}</td>
-                ${state.ecriture ? `<td>${d.statut === 'signe' || !d.d1_id ? ''
-                  : `<button type="button" class="btn ghost sm" data-signer="${esc(String(d.d1_id))}">Marquer signé</button>`}</td>` : ''}
+                ${state.ecriture ? `<td>${d.statut === 'signe' ? ''
+                  : `<button type="button" class="btn ghost sm" data-signer="${esc(String(d.id))}">Marquer signé</button>`}</td>` : ''}
               </tr>`;
             }).join('') || `<tr><td colspan="${state.ecriture ? 8 : 7}"><div class="empty">Aucun devis ne correspond.</div></td></tr>`}</tbody>
           </table>
           ${state.ecriture ? `<p class="small muted">⚠ <b>Costructor reste la source des devis.</b>
-          « Marquer signé » écrit dans le tableau de bord, mais la synchronisation
+          « Marquer signé » est enregistré ici tout de suite, mais la synchronisation
           Costructor réécrit le statut et la date de signature à chaque passage :
           si le devis n'est pas accepté <b>chez Costructor</b>, il y reviendra.
           Le bouton dépanne, il ne remplace pas l'acceptation là-bas.</p>` : ''}
@@ -137,22 +142,26 @@ export const rgdDevisPage = {
       // navigateurs, se fait bloquer sans un mot.
       root.querySelectorAll('[data-signer]').forEach(b => b.onclick = async () => {
         const ok = await demander(
-          'Marquer ce devis comme signé dans le tableau de bord RGD ? '
+          'Marquer ce devis comme signé ? '
           + 'Costructor reste la source : si le devis n’y est pas accepté, le statut '
-          + 'y reviendra à la prochaine synchronisation.');
+          + 'reviendra en arrière à la prochaine synchronisation.');
         if (!ok) return;
         b.disabled = true;
         const r = await signerDevis(b.dataset.signer);
         b.disabled = false;
         if (!r.ok) {
-          toast(r.motif === 'pas-de-compte'
-            ? 'Aucun compte RGD à votre adresse : rien n’a été changé.'
+          toast(/42501/.test(r.motif) || /RGD/.test(r.motif)
+            ? 'Réservé à l’équipe RGD : rien n’a été changé.'
             : `Non enregistré — ${r.motif}`, 'err');
           return;
         }
-        const ligne = scope.rgd('rgd_devis').find(x => String(x.d1_id) === b.dataset.signer);
-        if (ligne) { ligne.statut = 'signe'; ligne.date_signature = new Date().toISOString().slice(0, 10); }
-        toast('Devis marqué signé dans le tableau de bord RGD');
+        // ⚠ ON RECHARGE, ON N'AVANCE PLUS LA LIGNE À LA MAIN : signer un devis
+        // relance le calcul de son chantier dans la même transaction — état,
+        // montants et dates de travaux. Poser le seul statut laisserait l'écran
+        // Pipeline affirmer le contraire jusqu'au prochain passage.
+        await db.recharger('rgd_devis');
+        await db.recharger('rgd_chantiers');
+        toast('Devis marqué signé');
         draw();
       });
       root.querySelectorAll('[data-statut]').forEach(b => b.onclick = () => {

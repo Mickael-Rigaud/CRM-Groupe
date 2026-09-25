@@ -89,7 +89,7 @@ import { scope } from '../data/scope.js';
 import { esc, isoDay, relDay, toast, openModal, closeModal } from '../ui.js';
 import { poserEspace } from './espace.js';
 import { cadre, guard, KEY } from './rgd-espace.js';
-import { peutEcrire, creerEvenement } from '../data/rgd-api.js';
+import { creerEvenement } from '../data/rgd-evenements.js';
 
 // JUSQU'OÙ ON A LE DROIT DE NAVIGUER.
 //
@@ -264,8 +264,12 @@ function grille(jours, parJour, calendriers) {
 }
 
 /**
- * Créer un rendez-vous. ⚠ Il part dans Google par le worker, mais ne revient
- * dans cet écran qu'au relevé suivant — la modale le dit.
+ * Créer un rendez-vous.
+ *
+ * ⚠ IL PART DIRECTEMENT DANS GOOGLE DEPUIS LE 25/09/2026, et il EN REVIENT
+ * avant même que la réponse arrive : le serveur relève la journée visée et
+ * attend. L'ancienne route rendait la main dès que Google avait accepté, et le
+ * rendez-vous n'apparaissait qu'au relevé suivant.
  */
 function formulaireEvenement(jour, apres) {
   const corps = `
@@ -289,9 +293,9 @@ function formulaireEvenement(jour, apres) {
       <label class="reg-champ" style="grid-column:1/-1"><span>Description</span>
         <textarea name="description" rows="2"></textarea></label>
     </form>
-    <p class="small muted">Le rendez-vous est créé dans le tableau de bord, qui le pousse
-    dans <b>Google Agenda</b>. Cet écran relit ensuite la semaine affichée : il apparaît en
-    quelques secondes. Pour une autre semaine, ouvrez-la — elle est relue en arrivant.</p>
+    <p class="small muted">Le rendez-vous est créé dans <b>Google Agenda</b>, puis relu
+    aussitôt : il apparaît dans la grille dès la fermeture de cette fenêtre. Pour une autre
+    semaine, ouvrez-la — elle est relue en arrivant.</p>
     <div class="toolbar" style="margin-top:12px">
       <button type="button" class="btn primary" id="ev-ok">Créer le rendez-vous</button>
       <button type="button" class="btn ghost" data-close>Annuler</button>
@@ -305,8 +309,10 @@ function formulaireEvenement(jour, apres) {
       const d = Object.fromEntries(new FormData(f).entries());
       const duree = Number(d.duree);
       // Une journée entière va de minuit à minuit ; sinon on part de l'heure
-      // saisie. Le worker exige `date_debut` ET `date_fin` (400 sans elles),
-      // donc la fin est toujours calculée, jamais laissée vide.
+      // saisie. `date_debut` ET `date_fin` sont exigées (400 sans elles), donc
+      // la fin est toujours calculée, jamais laissée vide. ⚠ Côté serveur, une
+      // journée entière est traduite en dates seules, dont la fin est
+      // EXCLUSIVE chez Google — d'où le lendemain à minuit, et non le même jour.
       const debut = duree === 0 ? `${d.date}T00:00:00` : `${d.date}T${d.heure || '09:00'}:00`;
       const fin = duree === 0
         ? `${decale(d.date, 1)}T00:00:00`
@@ -322,18 +328,21 @@ function formulaireEvenement(jour, apres) {
 
       const b = m.querySelector('#ev-ok');
       b.disabled = true;
-      m.querySelector('#ev-etat').textContent = 'Envoi vers Google…';
+      m.querySelector('#ev-etat').textContent = 'Création dans Google Agenda…';
       const r = await creerEvenement(champs);
       b.disabled = false;
       m.querySelector('#ev-etat').textContent = '';
       if (!r.ok) {
-        toast(r.motif === 'pas-de-compte'
-          ? 'Aucun compte RGD à votre adresse : rien n’a été créé.'
-          : `Non créé — ${r.motif}`, 'err');
+        toast(`Non créé — ${r.motif}`, 'err');
         return;
       }
       closeModal();
-      toast('Rendez-vous créé — il apparaîtra ici au prochain relevé');
+      // ⚠ `releve: false` N'EST PAS UN ÉCHEC : le rendez-vous est dans Google,
+      // seule sa relecture immédiate a manqué. Le dire comme une erreur ferait
+      // recommencer, donc créer deux fois.
+      toast(r.donnees?.releve === false
+        ? 'Rendez-vous créé dans Google Agenda — il apparaîtra ici au prochain relevé'
+        : 'Rendez-vous créé dans Google Agenda');
       apres?.();
     };
   } });
@@ -378,14 +387,17 @@ export const rgdAgendaPage = {
     const state = {
       jour: jourOuvert,
       mois: jourOuvert.slice(0, 7),
-      ecriture: false,
+      ecriture: scope.canRgd,
       // ⚠ AU REPOS AU DÉPART, et pas « en cours ». Mis à « en-cours » ici,
       // le mot restait affiché pour toujours en mode démo, où `rafraichir`
       // renonce avant de l'éteindre.
       releve: 'repos',
       motif: '',
     };
-    peutEcrire().then(ok => { if (ok !== state.ecriture) { state.ecriture = ok; draw(); } });
+    // ⚠ LE DROIT D'ÉCRIRE EST `scope.canRgd`, PLUS LE JETON DE L'APPLICATION
+    // RGD (25/09/2026) : la fonction serveur revérifie `has_activity('rgd')`
+    // auprès de la base, dont `scope.canRgd` est le miroir. Il est connu tout
+    // de suite, d'où la disparition du redessin en différé.
 
     // ⚠ NE RIEN TENTER APRÈS LA FERMETURE DE L'ÉCRAN. Les deux rechargements
     // arrivent plusieurs secondes après ; sans ce drapeau ils redessineraient
