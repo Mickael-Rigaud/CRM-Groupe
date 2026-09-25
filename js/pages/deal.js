@@ -425,23 +425,24 @@ export function openDeal(id, onChange) {
                bouton rouge au milieu : il est discret, a sa place, et ne se
                clique plus par accident.
 
-               ⚠ « MARQUER GAGNEE » N'APPARAIT QU'A LA DERNIERE ETAPE, et c'est
-               la reponse a deux demandes qui se contredisaient. Mickael a
-               d'abord demande de supprimer le bouton, puis explique pourquoi :
-               « je considere que l'affaire est gagnee quand elle franchit
-               toutes les etapes ». Or le 19/09/2026 il avait tranche l'inverse
-               et la raison tient toujours : arriver a « Cloture facture » ne
-               veut pas dire que la facture est reglee, arriver a « Reception
-               chantiers » ne veut pas dire que la reception est faite. Un gain
-               automatique compterait du CA sur du travail non termine.
-               Le bouton disparait donc partout ou il ne sert a rien, et se
-               montre la ou il est l'action evidente. Le gain reste un GESTE. -->
+               ⚠ « GAGNEE » RESTE SUR TOUTES LES ETAPES OUVERTES, et ce n'est
+               pas un oubli : c'est une demande retiree par Mickael lui-meme le
+               25/09/2026. Il a d'abord demande de supprimer le bouton, pensant
+               qu'une affaire est gagnee en franchissant toutes les etapes ; en
+               apprenant que c'etait revenir sur son arbitrage du 19/09, il a
+               tranche « on ne revient pas sur une decision que j'ai prise
+               moi-meme ».
+               Une version intermediaire ne l'affichait qu'a la derniere etape.
+               Elle a ete RETIREE parce qu'elle enlevait autre chose sans le
+               dire : `setWon` sait declarer gagnee une affaire qui n'y est pas
+               encore et la DEPLACER a l'etape finale. Restreindre l'affichage
+               fermait donc ce chemin. Le gain reste un GESTE, disponible
+               partout ou l'affaire est ouverte. -->
           <div class="rgdf-coin">
             <div class="rgdf-actions">
-              ${d.status === 'open' ? `
-                ${estEtapeFinale(d.activity, d.stage)
-                  ? '<button class="btn green sm" id="d-won">✓ Marquer gagnée</button>' : ''}
-                <button class="btn ghost sm danger" id="d-lost">✕ Perdue</button>`
+              ${d.status === 'open'
+                ? '<button class="btn green sm" id="d-won">✓ Gagnée</button>'
+                  + '<button class="btn ghost sm danger" id="d-lost">✕ Perdue</button>'
                 : '<button class="btn ghost sm" id="d-reopen">Réouvrir</button>'}
               ${d.fields?.decouverte ? '<button class="btn ghost sm" id="d-fiche">🖨 Fiche</button>' : ''}
               ${scope.isDirection ? `<button class="btn ghost sm" id="d-attr">👤 ${d.owner_id ? 'Responsable' : 'Attribuer'}</button>` : ''}
