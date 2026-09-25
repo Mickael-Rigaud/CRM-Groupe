@@ -165,6 +165,24 @@ une pièce serveur (devis, rendez-vous), celle-ci part **avant** le code — sin
 le bouton appelle une fonction qui n'existe pas. La question à se poser avant
 chaque lot : *est-ce que je ferme quelque chose ?*
 
+⚠ **UNE EDGE FUNCTION APPELÉE PAR LE NAVIGATEUR A BESOIN DU CORS, ET UNE SONDE
+SERVEUR NE LE DIRA JAMAIS.** Le CRM est servi par GitHub Pages et les fonctions
+par Supabase : l'appel est **croisé**, et comme il porte `Authorization` et
+`Content-Type: application/json`, le navigateur envoie d'abord un préflight
+`OPTIONS`. Sans branche `OPTIONS` **et** sans `Access-Control-Allow-Origin` sur
+toutes les réponses, il bloque l'appel qui suit et `fetch` échoue avant d'avoir
+parlé à la fonction — « Failed to fetch », un message réseau nu qui ne dit rien.
+⚠ **`pg_net` et `curl` ne font aucun préflight** : ils répondent correctement
+sur une fonction cassée pour le navigateur. Le 25/09/2026, `creer-evenement`
+était sondée « verte » depuis la base et échouait au premier clic de Mickael ;
+`envoyer-email` portait le même trou depuis le 24/09, sur le bouton
+« Relancer » des sous-traitants, que personne n'avait cliqué. **Les cinq
+fonctions que le CRM appelle** sont `creer-evenement`, `creer-utilisateur`,
+`envoyer-email`, `henrri-amo`, `supprimer-utilisateur` ; le motif à recopier est
+celui de `henrri-amo`. **Une fonction appelée par un navigateur ne se vérifie
+que depuis un navigateur** — un maillon « non prouvé » finit par cacher un vrai
+défaut, et c'est ce qui est arrivé.
+
 ⚠ **`revoke all … from public` NE FERME PAS `anon`** : les privilèges par défaut
 du projet accordent `execute` au **rôle** `anon` sur toute fonction neuve de
 `public`, et le `revoke` ne retire que le droit de PUBLIC. Cinq fonctions
