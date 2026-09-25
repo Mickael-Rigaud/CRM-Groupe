@@ -337,6 +337,7 @@ export const rgdRealisationsPage = {
                   <button type="button" class="rea-item${state.slug === p.slug && state.vue === 'projet' ? ' on' : ''}"
                           data-projet="${esc(p.slug || '')}">
                     <span class="rea-item-nom">${esc(p.titre || '(sans titre)')}</span>
+                    ${p.brouillon ? '<span class="rea-item-brouillon" title="Brouillon — cette réalisation n’est pas sur le site">Brouillon</span>' : ''}
                     ${temoignageDe(p) ? '<span class="rea-item-avis" title="Avis client rattaché">★</span>' : ''}
                     <span class="rea-item-n">${nbPhotos(p)}</span>
                   </button>`).join('')}

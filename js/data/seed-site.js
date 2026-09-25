@@ -66,6 +66,11 @@ export const SEED_SITE = {
             city: 'Senlis (60)', surface: '4 m²', duration: '2 semaines', gamme: 'Essentielle',
             description: '', notes: '', images: [], photo_tags: {}, ba_pairs: [],
             testimonial: { text: '', author: '', date: '', stars: 5 },
+            // ⚠ LE SEUL BROUILLON DU JEU D'ESSAI, et il y est pour ça : sans
+            // lui, ni la pastille de la liste ni la bascule de l'atelier ne
+            // peuvent s'éprouver hors de la production — c'est-à-dire sur le
+            // site d'une entreprise en activité.
+            brouillon: true,
           },
         ],
       },
@@ -140,7 +145,13 @@ export function deplierSite(cle, doc) {
         images: p.images || [], photo_tags: p.photo_tags || {},
         // `ba_pairs` côté site, « avant_apres » dans le reflet — comme en SQL.
         avant_apres: p.ba_pairs || [], temoignage: p.testimonial || null,
-        notes: p.notes || '', rang: lignes.length,
+        notes: p.notes || '',
+        // ⚠ Le `coalesce` du SQL, écrit ici dans l'autre langue : un drapeau
+        // absent vaut « en ligne ». Les réalisations d'avant le 25/09/2026 ne
+        // le portent pas, et les lire comme des brouillons les retirerait
+        // toutes du site à la première publication.
+        brouillon: p.brouillon === true,
+        rang: lignes.length,
       });
     }
   }

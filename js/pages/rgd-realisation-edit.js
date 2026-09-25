@@ -131,6 +131,10 @@ function normaliser(p) {
   p.testimonial = { text: t.text || '', author: t.author || '', date: t.date || '',
                     stars: Number(t.stars) || 5 };
   p.notes = p.notes || '';
+  // ⚠ UN DRAPEAU ABSENT VAUT « EN LIGNE », JAMAIS « BROUILLON ».
+  // Les 31 réalisations du document ne le portent pas : les lire comme des
+  // brouillons les retirerait toutes du site à la première publication.
+  p.brouillon = p.brouillon === true;
   for (const u of p.images) {
     if (!p.photo_tags[u]) p.photo_tags[u] = /[-_/]avant[-_.\d]/i.test(u) ? 'avant' : 'apres';
   }
@@ -214,8 +218,12 @@ export async function chargerEditeur(cible) {
   let projet, catSlug;
   if (nouveau) {
     catSlug = cible.catSlug || categories[0].slug;
+    // ⚠ UNE NOUVELLE RÉALISATION NAÎT EN BROUILLON (25/09/2026). Avant, créer
+    // c'était publier : le bouton disait « Créer et publier ». Avec les
+    // brouillons le défaut prudent s'inverse — on prépare une fiche, on cherche
+    // ses photos, et rien ne part sur rgdrenova.fr tant qu'on ne l'a pas dit.
     projet = normaliser({ slug: '', title: '', city: '', surface: '', duration: '',
-                          description: '', notes: '', images: [] });
+                          description: '', notes: '', images: [], brouillon: true });
   } else {
     const slug = typeof cible === 'string' ? cible : cible.slug;
     const trouve = trouver(lu.donnees, slug);
@@ -425,9 +433,26 @@ function editeur(etat) {
           : esc([p.city, etat.categories.find(c => c.slug === etat.catSlug)?.nom].filter(Boolean).join(' · ') || '—')}</p>
       </div>
       <span class="grow"></span>
-      ${!etat.nouveau && p.url ? `<a class="btn ghost sm" href="${esc(p.url)}" target="_blank" rel="noopener">↗ Voir sur le site</a>` : ''}
+      <!-- ⚠ DEUX BOUTONS, PAS UNE CASE À COCHER. L'état courant doit se lire
+           sans interpréter : celui qui est allumé EST la situation du projet.
+           Une case « Brouillon » cochée ou non demande de savoir dans quel
+           sens elle est posée, ce qui est exactement ce qu'on ne veut pas
+           avoir à se demander devant un écran qui publie un site public. -->
+      <div class="rea-etat" role="group" aria-label="État de la réalisation">
+        <button type="button" id="re-etat-ligne" class="${p.brouillon ? '' : 'on'}"
+          aria-pressed="${!p.brouillon}">En ligne</button>
+        <button type="button" id="re-etat-brouillon" class="${p.brouillon ? 'on' : ''}"
+          aria-pressed="${!!p.brouillon}">Brouillon</button>
+      </div>
+      ${!etat.nouveau && p.url && !p.brouillon ? `<a class="btn ghost sm" href="${esc(p.url)}" target="_blank" rel="noopener">↗ Voir sur le site</a>` : ''}
+      <!-- ⚠ SUR UN BROUILLON ON SUPPRIME, ON NE « RETIRE DU SITE » PAS : il n'y
+           est pas. Le libellé d'origine aurait laissé croire qu'on dépublie
+           quelque chose de visible, et aurait fait hésiter devant un geste qui
+           ne coûte rien de public. -->
       ${!etat.nouveau ? `<button type="button" class="btn ghost sm${etat.armeSuppr ? ' danger' : ''}" id="re-supprimer">${
-        etat.armeSuppr ? 'Confirmer le retrait du site' : 'Retirer du site…'}</button>` : ''}
+        etat.armeSuppr
+          ? (p.brouillon ? 'Confirmer la suppression' : 'Confirmer le retrait du site')
+          : (p.brouillon ? 'Supprimer…' : 'Retirer du site…')}</button>` : ''}
     </div>
 
     ${sectionInfos()}
@@ -442,8 +467,14 @@ function editeur(etat) {
         etat.armeRestaure ? 'Confirmer le retour arrière' : 'Restaurer la version précédente…'}</button>` : ''}
       <span class="grow"></span>
       <span class="muted small" id="re-ligne">${esc(etat.ligne)}</span>
+      <!-- ⚠ LE BOUTON DIT CE QU'IL FAIT, ET ÇA DÉPEND DE LA BASCULE. Un seul
+           libellé pour deux effets — garder un brouillon, ou changer une page
+           publique — serait le piège de cet écran. Basculer sur « En ligne »
+           puis cliquer, c'est publier, et le bouton l'annonce avant le clic. -->
       <button type="button" class="btn primary" id="re-publier" ${etat.occupe ? 'disabled' : ''}>
-        ${etat.nouveau ? 'Créer et publier' : 'Publier sur le site'}</button>
+        ${p.brouillon
+          ? (etat.nouveau ? 'Créer le brouillon' : 'Enregistrer le brouillon')
+          : (etat.nouveau ? 'Créer et publier' : 'Publier sur le site')}</button>
     </div>`;
 
   // ------------------------------------------------------------- branchements
@@ -670,11 +701,29 @@ function editeur(etat) {
       fermer(null);
     });
 
+    // ⚠ LA BASCULE RELIT LE FORMULAIRE AVANT DE REDESSINER. Le panneau est
+    // reconstruit en entier à chaque rendu : sans `relire()`, une description
+    // en cours de frappe partirait au premier clic sur « Brouillon ».
+    const poserEtat = (brouillon) => {
+      if (p.brouillon === brouillon) return;
+      relire();
+      p.brouillon = brouillon;
+      etat.armeSuppr = false;   // le bouton de suppression change de sens
+      etat.ligne = brouillon
+        ? 'Brouillon : rien ne partira sur le site tant qu’il l’est.'
+        : 'En ligne : la prochaine publication la rendra visible sur le site.';
+      redessiner();
+    };
+    $('#re-etat-brouillon')?.addEventListener('click', () => poserEtat(true));
+    $('#re-etat-ligne')?.addEventListener('click', () => poserEtat(false));
+
     $('#re-supprimer')?.addEventListener('click', async () => {
       if (!etat.armeSuppr) {
         relire();
         etat.armeSuppr = true;
-        etat.ligne = 'Retire cette réalisation de rgdrenova.fr. Ses photos restent dans le stockage.';
+        etat.ligne = p.brouillon
+          ? 'Supprime ce brouillon. Il n’était pas sur le site ; ses photos restent dans le stockage.'
+          : 'Retire cette réalisation de rgdrenova.fr. Ses photos restent dans le stockage.';
         redessiner();
         return;
       }
@@ -682,7 +731,7 @@ function editeur(etat) {
       const r = await publier({ retirer: true });
       etat.occupe = false;
       if (!r) { etat.armeSuppr = false; etat.ligne = ''; redessiner(); return; }
-      toast('Réalisation retirée du site');
+      toast(p.brouillon ? 'Brouillon supprimé' : 'Réalisation retirée du site');
       apresPublication?.();
       fermer(null);
     });
@@ -694,7 +743,13 @@ function editeur(etat) {
       const r = await publier({});
       etat.occupe = false;
       if (!r) { redessiner(); return; }
-      toast(etat.nouveau ? 'Créée et publiée sur rgdrenova.fr' : 'Publié sur rgdrenova.fr');
+      // ⚠ LE MESSAGE NE DOIT PAS ANNONCER UNE PUBLICATION QUI N'A PAS EU LIEU.
+      // Enregistrer un brouillon écrit bien le document — c'est là que vivent
+      // ses photos —, mais la porte publique l'écarte : dire « publié sur
+      // rgdrenova.fr » enverrait quelqu'un vérifier une page où il n'est pas.
+      toast(p.brouillon
+        ? (etat.nouveau ? 'Brouillon créé — il n’est pas sur le site' : 'Brouillon enregistré — il n’est pas sur le site')
+        : (etat.nouveau ? 'Créée et publiée sur rgdrenova.fr' : 'Publié sur rgdrenova.fr'));
       apresPublication?.();
       fermer(r.slug);
     });
@@ -779,6 +834,10 @@ function editeur(etat) {
         photo_tags: Object.fromEntries(p.images.map(u => [u, p.photo_tags[u] === 'avant' ? 'avant' : 'apres'])),
         ba_pairs: p.ba_pairs.filter(x => x.before && x.after).map(x => ({ ...x })),
         testimonial: { ...p.testimonial },
+        // ⚠ SANS CETTE LIGNE LE BROUILLON NE SERAIT NULLE PART. On ne repose
+        // que les champs de l'atelier sur le document fraîchement relu ; un
+        // champ oublié ici est un champ qui n'est jamais publié.
+        brouillon: p.brouillon === true,
       };
     }
   }
