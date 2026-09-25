@@ -296,81 +296,198 @@ function grille(jours, parJour, calendriers) {
  * avant même que la réponse arrive : le serveur relève la journée visée et
  * attend. L'ancienne route rendait la main dès que Google avait accepté, et le
  * rendez-vous n'apparaissait qu'au relevé suivant.
+ *
+ * ⚠ LE FORMULAIRE REPREND CELUI DE GOOGLE AGENDA (25/09/2026, demandé par
+ * Mickael : « je voudrais reprendre les informations demandées comme sur
+ * Google, la même présentation si possible »). Un titre nu en tête, puis des
+ * lignes à icône — horaire, invités, lieu, description. C'est la forme de la
+ * fenêtre de création rapide de Google, et la reprendre a une raison : on y
+ * saisit un rendez-vous dix fois par semaine, et deux outils qui posent les
+ * mêmes questions dans deux ordres différents font hésiter à chaque fois.
+ *
+ * ⚠ CE QUI N'EST PAS REPRIS, ET POURQUOI. Les onglets « Tâche », « Absent du
+ * bureau » et « Planning des rendez-vous » sont des objets Google que le CRM ne
+ * sait pas créer ; « Google Meet », « Occupé / Visibilité » et « notification
+ * 10 minutes avant » ne passent pas par la fonction serveur. Les afficher
+ * grisés ferait un formulaire à moitié mort, et les afficher actifs ferait
+ * perdre la saisie. On montre ce qui marche.
  */
 function formulaireEvenement(jour, apres) {
+  // L'état vit ici et non dans le DOM : la ligne des invités se redessine à
+  // chaque ajout, et une saisie en cours ailleurs ne doit pas partir avec.
+  const etat = { invites: [] };
+
+  // Les fins proposées, comme chez Google : toutes les 15 minutes à partir du
+  // début, avec la durée entre parenthèses. ⚠ La liste se REFAIT quand le début
+  // change — figée, elle proposerait des fins antérieures au début, ce qui est
+  // très exactement le défaut corrigé une heure plus tôt.
+  const optionsFin = (date, debut) => {
+    const out = [];
+    for (let m = 15; m <= 8 * 60; m += 15) {
+      const h = finApres(date, debut, m).slice(11, 16);
+      const lib = m < 60 ? `${m} min`
+        : m % 60 === 0 ? `${m / 60} h`
+        : `${Math.floor(m / 60)} h ${m % 60}`;
+      out.push(`<option value="${esc(String(m))}"${m === 60 ? ' selected' : ''}>${esc(h)} (${esc(lib)})</option>`);
+    }
+    return out.join('');
+  };
+
   const corps = `
-    <form id="ev-form" class="reg-grille" style="grid-template-columns:1fr 1fr">
-      <label class="reg-champ" style="grid-column:1/-1"><span>Titre *</span>
-        <input name="titre" required placeholder="RDV chantier, visite, rappel…"></label>
-      <label class="reg-champ"><span>Date *</span>
-        <input name="date" type="date" required value="${esc(jour)}"></label>
-      <label class="reg-champ"><span>Durée</span>
-        <select name="duree">
-          <option value="30">30 minutes</option>
-          <option value="60" selected>1 heure</option>
-          <option value="90">1 h 30</option>
-          <option value="120">2 heures</option>
-          <option value="0">Journée entière</option>
-        </select></label>
-      <label class="reg-champ"><span>Heure de début</span>
-        <input name="heure" type="time" value="09:00"></label>
-      <label class="reg-champ"><span>Lieu</span>
-        <input name="lieu" placeholder="Adresse du chantier…"></label>
-      <label class="reg-champ" style="grid-column:1/-1"><span>Description</span>
-        <textarea name="description" rows="2"></textarea></label>
-    </form>
-    <p class="small muted">Le rendez-vous est créé dans <b>Google Agenda</b>, puis relu
-    aussitôt : il apparaît dans la grille dès la fermeture de cette fenêtre. Pour une autre
-    semaine, ouvrez-la — elle est relue en arrivant.</p>
-    <div class="toolbar" style="margin-top:12px">
-      <button type="button" class="btn primary" id="ev-ok">Créer le rendez-vous</button>
-      <button type="button" class="btn ghost" data-close>Annuler</button>
-      <span class="grow"></span><span class="muted small" id="ev-etat"></span>
+    <div class="ev">
+      <input class="ev-titre" name="titre" required placeholder="Ajouter un titre"
+             aria-label="Titre du rendez-vous">
+
+      <div class="ev-ligne">
+        <span class="ev-ico" aria-hidden="true">🕐</span>
+        <div class="ev-champ">
+          <div class="ev-horaire">
+            <input name="date" type="date" required value="${esc(jour)}" aria-label="Date">
+            <input name="heure" type="time" value="09:00" aria-label="Heure de début">
+            <span class="ev-tiret" aria-hidden="true">–</span>
+            <select name="duree" aria-label="Heure de fin">${optionsFin(jour, '09:00')}</select>
+          </div>
+          <label class="ev-jour"><input type="checkbox" name="journee"> Journée entière</label>
+        </div>
+      </div>
+
+      <div class="ev-ligne">
+        <span class="ev-ico" aria-hidden="true">👥</span>
+        <div class="ev-champ">
+          <div class="ev-puces" id="ev-invites"></div>
+          <input class="ev-nu" id="ev-invite" type="email" placeholder="Ajouter des invités"
+                 aria-label="Adresse d’un invité">
+          <p class="ev-note" id="ev-note-invites" hidden>
+            Ils recevront une invitation par mail au nom de RGD Renova.</p>
+        </div>
+      </div>
+
+      <div class="ev-ligne">
+        <span class="ev-ico" aria-hidden="true">📍</span>
+        <div class="ev-champ">
+          <input class="ev-nu" name="lieu" placeholder="Ajouter un lieu" aria-label="Lieu"></div>
+      </div>
+
+      <div class="ev-ligne">
+        <span class="ev-ico" aria-hidden="true">☰</span>
+        <div class="ev-champ">
+          <textarea class="ev-nu" name="description" rows="2"
+                    placeholder="Ajouter une description" aria-label="Description"></textarea></div>
+      </div>
+
+      <p class="ev-pied">Créé dans <b>Google Agenda</b>, puis relu aussitôt : il apparaît
+      dans la grille dès la fermeture de cette fenêtre.</p>
+
+      <div class="ev-actions">
+        <span class="muted small" id="ev-etat"></span>
+        <button type="button" class="btn ghost" data-close>Annuler</button>
+        <button type="button" class="btn primary" id="ev-ok">Enregistrer</button>
+      </div>
     </div>`;
 
   openModal('Nouveau rendez-vous', corps, { onOpen: (m) => {
-    m.querySelector('#ev-ok').onclick = async () => {
-      const f = m.querySelector('#ev-form');
-      if (!f.reportValidity()) return;
-      const d = Object.fromEntries(new FormData(f).entries());
-      const duree = Number(d.duree);
-      // Une journée entière va de minuit à minuit ; sinon on part de l'heure
-      // saisie. `date_debut` ET `date_fin` sont exigées (400 sans elles), donc
-      // la fin est toujours calculée, jamais laissée vide. ⚠ Côté serveur, une
-      // journée entière est traduite en dates seules, dont la fin est
-      // EXCLUSIVE chez Google — d'où le lendemain à minuit, et non le même jour.
-      const debut = duree === 0 ? `${d.date}T00:00:00` : `${d.date}T${d.heure || '09:00'}:00`;
-      const fin = duree === 0
-        ? `${decale(d.date, 1)}T00:00:00`
-        : finApres(d.date, d.heure, duree);
-      const champs = {
-        titre: d.titre.trim(),
-        date_debut: debut,
-        date_fin: fin,
-        all_day: duree === 0 ? 1 : 0,
-      };
-      if (d.lieu.trim()) champs.lieu = d.lieu.trim();
-      if (d.description.trim()) champs.description = d.description.trim();
+    const q = (s) => m.querySelector(s);
+    const champ = (n) => m.querySelector(`[name="${n}"]`);
 
-      const b = m.querySelector('#ev-ok');
+    // ── les invités ────────────────────────────────────────────────────────
+    // ⚠ UNE ADRESSE MAL FORMÉE FAIT REFUSER TOUT L'ÉVÉNEMENT par Google : on la
+    // retient ici plutôt que de perdre le rendez-vous entier. Le serveur
+    // revérifie — l'écran est un garde-fou, pas une garantie.
+    const valide = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e);
+
+    const dessineInvites = () => {
+      q('#ev-invites').innerHTML = etat.invites.map((e, i) =>
+        `<span class="ev-puce">${esc(e)}<button type="button" data-oter="${i}"
+           aria-label="Retirer ${esc(e)}">×</button></span>`).join('');
+      q('#ev-note-invites').hidden = !etat.invites.length;
+      q('#ev-invites').querySelectorAll('[data-oter]').forEach(b => b.onclick = () => {
+        etat.invites.splice(Number(b.dataset.oter), 1);
+        dessineInvites();
+      });
+    };
+
+    const ajouteInvite = () => {
+      const i = q('#ev-invite');
+      const v = i.value.trim().toLowerCase();
+      if (!v) return true;
+      if (!valide(v)) { toast(`« ${v} » n’est pas une adresse email`, 'warn'); return false; }
+      if (etat.invites.includes(v)) { i.value = ''; return true; }
+      if (etat.invites.length >= 20) { toast('Vingt invités au maximum', 'warn'); return false; }
+      etat.invites.push(v); i.value = ''; dessineInvites();
+      return true;
+    };
+
+    // Entrée, virgule et point-virgule valident l'adresse, comme chez Google.
+    // ⚠ `preventDefault` sur Entrée : sans lui, la touche enverrait le
+    // formulaire au lieu d'ajouter l'invité qu'on vient de taper.
+    q('#ev-invite').onkeydown = (e) => {
+      if (['Enter', ',', ';'].includes(e.key)) { e.preventDefault(); ajouteInvite(); }
+    };
+    // Quitter le champ retient aussi ce qui y est resté : on ne perd pas une
+    // adresse tapée puis abandonnée pour aller cliquer sur « Enregistrer ».
+    q('#ev-invite').onblur = () => ajouteInvite();
+
+    // ── l'horaire ──────────────────────────────────────────────────────────
+    const refaitFins = () => {
+      const garde = champ('duree').value;
+      champ('duree').innerHTML = optionsFin(champ('date').value, champ('heure').value);
+      champ('duree').value = garde;
+    };
+    champ('heure').onchange = refaitFins;
+    champ('date').onchange = refaitFins;
+
+    champ('journee').onchange = () => {
+      const j = champ('journee').checked;
+      m.querySelector('.ev-horaire').classList.toggle('est-journee', j);
+      champ('heure').disabled = j;
+      champ('duree').disabled = j;
+    };
+
+    // ── enregistrer ────────────────────────────────────────────────────────
+    q('#ev-ok').onclick = async () => {
+      if (!ajouteInvite()) return;
+      const titre = champ('titre').value.trim();
+      if (!titre) { champ('titre').focus(); toast('Un titre est nécessaire', 'warn'); return; }
+      const date = champ('date').value;
+      if (!date) { champ('date').focus(); toast('Une date est nécessaire', 'warn'); return; }
+
+      const journee = champ('journee').checked;
+      const heure = champ('heure').value || '09:00';
+      const duree = Number(champ('duree').value) || 60;
+      // ⚠ UNE JOURNÉE ENTIÈRE VA DE MINUIT AU LENDEMAIN MINUIT : côté Google la
+      // fin est EXCLUSIVE, donc le même jour donnerait une plage vide — l'erreur
+      // rencontrée le 25/09 sur l'heure de fin, pour une autre raison.
+      const debut = journee ? `${date}T00:00:00` : `${date}T${heure}:00`;
+      const fin = journee ? `${decale(date, 1)}T00:00:00` : finApres(date, heure, duree);
+
+      const champs = { titre, date_debut: debut, date_fin: fin, all_day: journee ? 1 : 0 };
+      const lieu = champ('lieu').value.trim();
+      const desc = champ('description').value.trim();
+      if (lieu) champs.lieu = lieu;
+      if (desc) champs.description = desc;
+      if (etat.invites.length) champs.invites = [...etat.invites];
+
+      const b = q('#ev-ok');
       b.disabled = true;
-      m.querySelector('#ev-etat').textContent = 'Création dans Google Agenda…';
+      q('#ev-etat').textContent = 'Création dans Google Agenda…';
       const r = await creerEvenement(champs);
       b.disabled = false;
-      m.querySelector('#ev-etat').textContent = '';
-      if (!r.ok) {
-        toast(`Non créé — ${r.motif}`, 'err');
-        return;
-      }
+      q('#ev-etat').textContent = '';
+      if (!r.ok) { toast(`Non créé — ${r.motif}`, 'err'); return; }
+
       closeModal();
       // ⚠ `releve: false` N'EST PAS UN ÉCHEC : le rendez-vous est dans Google,
       // seule sa relecture immédiate a manqué. Le dire comme une erreur ferait
       // recommencer, donc créer deux fois.
+      const n = r.donnees?.invites || 0;
+      const avec = n ? ` — ${n} invitation${n > 1 ? 's' : ''} envoyée${n > 1 ? 's' : ''}` : '';
       toast(r.donnees?.releve === false
-        ? 'Rendez-vous créé dans Google Agenda — il apparaîtra ici au prochain relevé'
-        : 'Rendez-vous créé dans Google Agenda');
+        ? `Rendez-vous créé dans Google Agenda${avec} — il apparaîtra ici au prochain relevé`
+        : `Rendez-vous créé dans Google Agenda${avec}`);
       apres?.();
     };
+
+    champ('titre').focus();
   } });
 }
 

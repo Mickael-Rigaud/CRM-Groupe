@@ -636,7 +636,7 @@ button.esp-side-titre { background: none; border: 0; font-family: inherit; color
 .rgdf-origine { margin: 10px 0 0; padding: 9px 11px; border-radius: 9px;
   background: var(--card-2); border-left: 3px solid var(--accent);
   font-size: 12.5px; line-height: 1.5; color: var(--muted); }
-.rgdf-origine b { color: var(--ink); font-weight: 600; }
+.rgdf-origine b { color: var(--text); font-weight: 600; }
 .rgdf-source { margin: 0; font-size: 12px; color: var(--muted); }
 
 /* Les tableaux de devis et de chantiers n'ont pas d'en-tete : trois colonnes
@@ -3426,7 +3426,7 @@ img.photo-ko { border: 1px dashed var(--red); box-sizing: border-box;
 /* Le compte est le chiffre qu'on lit de loin : il doit primer sur la regle
    generique `.col-head span`, d'ou la specificite portee a deux classes. */
 .rch-col .rch-n { font-family: var(--font-display); font-size: 27px; font-weight: 700;
-  line-height: 1; color: var(--ink); }
+  line-height: 1; color: var(--text); }
 .rch-col .rch-total { font-size: 11.5px; font-weight: 600; color: var(--muted); }
 .rch-cartes { display: flex; flex-direction: column; gap: 8px; min-height: 90px; }
 .rch-carte { cursor: grab; }
@@ -3446,7 +3446,7 @@ img.photo-ko { border: 1px dashed var(--red); box-sizing: border-box;
   background: var(--c, var(--accent)); transform: translate(-50%, -50%); box-shadow: 0 0 0 2px #fff; }
 .rch-avance-bas { display: flex; justify-content: space-between; align-items: baseline;
   margin-top: 5px; font-size: 11px; color: var(--muted); }
-.rch-pct { font-weight: 700; color: var(--ink); }
+.rch-pct { font-weight: 700; color: var(--text); }
 .rch-reste { font-size: 11px; font-weight: 700; text-align: right; margin-top: 1px; color: var(--muted); }
 .rch-avance-retard .rch-piste i, .rch-avance-retard .rch-piste b { background: var(--red); }
 .rch-avance-retard .rch-pct, .rch-avance-retard .rch-reste { color: var(--red); }
@@ -3513,3 +3513,74 @@ img.photo-ko { border: 1px dashed var(--red); box-sizing: border-box;
 .vb-table td { vertical-align: top; }
 @media (max-width: 1200px) { .vb-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 @media (max-width: 720px) { .vb-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .vb-crit, .vb-comp-grille { grid-template-columns: 1fr; } }
+
+/* ---- Créer un rendez-vous, à la manière de Google Agenda (js/pages/rgd-agenda.js)
+   Repris le 25/09/2026 sur demande de Mickael. Le principe de cette forme : un
+   titre nu en tête, puis des lignes à icône. Pas d'intitulé au-dessus de chaque
+   champ — l'icône ET le texte de substitution disent ce qu'on attend, ce qui
+   divise la hauteur du formulaire par deux et le rend lisible d'un coup d'oeil.
+   ⚠ Les champs sont donc SANS BORDURE au repos et se soulignent au focus : une
+   grille de cadres gris ferait un formulaire ordinaire, pas celui-là. */
+.ev { display: flex; flex-direction: column; gap: 2px; }
+
+.ev-titre { width: 100%; padding: 6px 2px 10px; margin-bottom: 14px;
+  /* ⚠ PAS DE RACCOURCI `font:` ICI : `inherit` n'est pas une famille valide
+     dans le raccourci, la déclaration entière sautait et le titre s'affichait
+     à la taille du corps. Constaté à l'écran, pas deviné. */
+  font-family: var(--font-display); font-size: 22px; font-weight: 700;
+  line-height: 1.3; letter-spacing: -.02em;
+  border: 0; border-bottom: 2px solid var(--line); background: none; color: var(--text); }
+.ev-titre::placeholder { color: var(--muted); font-weight: 400; }
+.ev-titre:focus { outline: none; border-bottom-color: var(--accent); }
+
+.ev-ligne { display: grid; grid-template-columns: 34px 1fr; align-items: start;
+  gap: 8px; padding: 7px 0; }
+/* L'icône s'aligne sur la PREMIÈRE ligne du champ, pas sur son milieu : une
+   ligne « invités » qui grandit ferait flotter son icône au centre d'un pavé. */
+.ev-ico { font-size: 15px; line-height: 34px; text-align: center; color: var(--muted); }
+.ev-champ { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+
+/* Le champ nu : invisible au repos, souligné au focus. */
+.ev-nu { font: inherit; width: 100%; border: 0; background: none; color: var(--text);
+  padding: 8px 6px; border-radius: 6px; }
+.ev-nu::placeholder { color: var(--muted); }
+.ev-nu:hover { background: var(--card-2); }
+.ev-nu:focus { outline: none; background: var(--card-2); box-shadow: inset 0 -2px 0 var(--accent); }
+textarea.ev-nu { resize: vertical; min-height: 40px; }
+
+.ev-horaire { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ev-horaire input, .ev-horaire select { font: inherit; padding: 7px 9px;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--text); }
+.ev-horaire input:focus, .ev-horaire select:focus { outline: none; border-color: var(--accent); }
+.ev-horaire input:disabled, .ev-horaire select:disabled { opacity: .45; }
+.ev-tiret { color: var(--muted); }
+/* En journée entière, l'heure et la durée restent VISIBLES mais éteintes : les
+   masquer ferait sauter la ligne d'un cran et déplacerait tout le formulaire
+   sous la souris au moment où l'on coche. */
+.ev-horaire.est-journee input[type="time"], .ev-horaire.est-journee select,
+.ev-horaire.est-journee .ev-tiret { opacity: .35; }
+.ev-jour { display: inline-flex; align-items: center; gap: 7px; font-size: 13px;
+  color: var(--muted); cursor: pointer; align-self: flex-start; }
+.ev-jour input { margin: 0; }
+
+.ev-puces { display: flex; flex-wrap: wrap; gap: 6px; }
+.ev-puces:empty { display: none; }
+.ev-puce { display: inline-flex; align-items: center; gap: 6px; font-size: 13px;
+  padding: 4px 6px 4px 10px; border-radius: 999px;
+  background: var(--accent-soft); color: var(--accent-ink); }
+.ev-puce button { border: 0; background: none; cursor: pointer; font-size: 15px;
+  line-height: 1; padding: 0 2px; color: inherit; opacity: .6; }
+.ev-puce button:hover { opacity: 1; }
+
+.ev-note { margin: 0; padding-left: 6px; font-size: 12px; color: var(--muted); }
+.ev-pied { margin: 14px 0 0; font-size: 12.5px; color: var(--muted); }
+
+.ev-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px;
+  margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+.ev-actions .small { margin-right: auto; }
+
+@media (max-width: 560px) {
+  .ev-ligne { grid-template-columns: 26px 1fr; gap: 6px; }
+  .ev-horaire { gap: 6px; }
+  .ev-horaire input, .ev-horaire select { flex: 1 1 120px; min-width: 0; }
+}
