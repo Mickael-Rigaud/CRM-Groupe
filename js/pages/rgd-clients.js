@@ -766,7 +766,23 @@ export const rgdClientsPage = {
       // deux populations savent remplir ; « Projet » et « Budget » lisent la
       // demande du site OU les réponses au formulaire Meta, pour ne rien
       // perdre de ce que la personne a écrit elle-même.
+      // ⚠ LE TOTAL EST EN TÊTE, PAS EN PIED (25/09/2026, corrigé par Mickael :
+      // « je voyais plutôt les totaux en haut du tableau et pas en bas de la
+      // page »). Un total qu'il faut aller chercher sous vingt-cinq lignes n'est
+      // pas une vue d'ensemble : on l'ouvre POUR lui, il doit être là à
+      // l'ouverture. La première version l'alignait sous la colonne, ce qui
+      // était joli et inutile.
+      const bandeauTotal = () => !surMontant || !lignesProspects.length ? '' : `
+        <div class="rcl-total">
+          <span>Total de l’étape
+            <span class="s muted">· ${lignesProspects.length} dossier${lignesProspects.length > 1 ? 's' : ''}${
+              chiffres < lignesProspects.length
+                ? `, dont ${chiffres} chiffré${chiffres > 1 ? 's' : ''}` : ''}</span></span>
+          <b>${esc(eur(totalEtape))}</b>
+        </div>`;
+
       const tableauProspects = () => `<section class="card table-wrap">
+        ${bandeauTotal()}
         <table>
           <thead><tr><th>Reçu</th><th>Provenance</th><th>Nom</th><th>Contact</th>
             <th>Projet</th><th>${surMontant ? 'Montant HT' : 'Budget'}</th><th>Ville</th><th>Statut</th>
@@ -800,13 +816,6 @@ export const rgdClientsPage = {
             <td class="rcl-note">${champNote(x.ligne, x.cible, state.ecriture)}</td>
             <td>${boutonSuppression(x.ligne)}</td>
           </tr>`; }).join('') || `<tr><td colspan="10"><div class="empty">${esc(vide())}</div></td></tr>`}</tbody>
-          ${surMontant && lignesProspects.length ? `<tfoot><tr class="rcl-total">
-            <td colspan="5">Total de l’étape
-              <span class="s muted">· ${lignesProspects.length} dossier${lignesProspects.length > 1 ? 's' : ''}${
-                chiffres < lignesProspects.length ? `, dont ${chiffres} chiffré${chiffres > 1 ? 's' : ''}` : ''}</span></td>
-            <td class="num"><b>${esc(eur(totalEtape))}</b></td>
-            <td colspan="4"></td>
-          </tr></tfoot>` : ''}
         </table>
         ${pagination()}
         <p class="small muted">${state.ecriture

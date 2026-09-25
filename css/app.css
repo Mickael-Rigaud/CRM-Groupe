@@ -689,14 +689,16 @@ button.esp-side-titre { background: none; border: 0; font-family: inherit; color
    erreur — elle est vraie, c'est le vocabulaire qui a bouge. */
 .rgdm-puce.est-hors-liste span { border-style: dashed; }
 .rgdm-pied { display: flex; justify-content: flex-end; gap: 10px; }
-/* ---- le total d'une etape, au pied du tableau ----
-   ⚠ `position: sticky` N'A PAS ETE POSE ICI. `.table-wrap` fait defiler la
-   page entiere, pas la table : un pied colle n'aurait rien a quoi se coller,
-   et la regle serait sans effet sans que rien ne le dise. */
-.rcl-total td { border-top: 2px solid var(--line-strong); background: var(--card-2);
-  font-weight: 600; padding-top: 10px; padding-bottom: 10px; }
-.rcl-total td:first-child { color: var(--text); }
-.rcl-total .num b { font-size: 15px; }
+/* ---- le total d'une etape, en tete du tableau ----
+   Il etait d'abord en pied, aligne sous la colonne : joli, et invisible sans
+   faire defiler vingt-cinq lignes. On ouvre cet onglet POUR ce chiffre.
+   ⚠ PAS DE `position: sticky` : `.table-wrap` fait defiler la page entiere et
+   non la table, un bandeau colle n'aurait rien a quoi se coller et la regle
+   serait sans effet sans que rien ne le dise. */
+.rcl-total { display: flex; align-items: baseline; justify-content: space-between;
+  gap: 14px; padding: 11px 14px; border-bottom: 1px solid var(--line);
+  background: var(--card-2); font-weight: 600; }
+.rcl-total b { font-family: var(--font-display); font-size: 17px; white-space: nowrap; }
 
 /* ---- les rendez-vous, en haut a droite de l'en-tete ----
    `.rgdf-hero-haut` est un flex : `margin-left: auto` pousse le bloc a droite
