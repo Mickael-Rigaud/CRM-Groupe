@@ -418,7 +418,12 @@ select.cell-in { text-align: left; }
 .esp-side { width: 224px; flex-shrink: 0; background: var(--accent-ink); color: #fff; display: flex; flex-direction: column;
   position: sticky; top: var(--h-topnav, 116px); align-self: flex-start;
   max-height: calc(100vh - var(--h-topnav, 116px)); overflow-y: auto; }
-.esp-side-brand { display: flex; align-items: center; gap: 10px; padding: 20px 18px; border-bottom: 1px solid rgba(255,255,255,.1); font-family: var(--font-display); font-weight: 700; font-size: 15px; letter-spacing: -.01em; }
+.esp-side-brand { display: flex; align-items: center; gap: 10px; padding: 16px 18px; border-bottom: 1px solid rgba(255,255,255,.1); font-family: var(--font-display); font-weight: 700; font-size: 15px; letter-spacing: -.01em; }
+/* La marque et sa baseline, l'une sous l'autre. Elles etaient separees par toute
+   la hauteur du menu — nom en haut, nom repete en bas avec la baseline. */
+.esp-side-brand span { display: flex; flex-direction: column; min-width: 0; }
+.esp-side-brand em { font-style: normal; font-weight: 500; font-size: 11px;
+  color: rgba(255,255,255,.55); letter-spacing: 0; margin-top: 1px; }
 .esp-side-brand img { width: 30px; height: 30px; object-fit: contain; background: #fff; border-radius: 8px; padding: 3px; }
 .esp-side-nav { flex: 1; padding: 14px 12px; display: flex; flex-direction: column; gap: 3px; }
 .esp-side-nav a { display: block; padding: 11px 15px; border-radius: 9px; text-decoration: none; color: rgba(255,255,255,.76); font-size: 13.5px; font-weight: 600; transition: background .13s, color .13s; }
@@ -689,6 +694,17 @@ button.esp-side-titre { background: none; border: 0; font-family: inherit; color
    erreur — elle est vraie, c'est le vocabulaire qui a bouge. */
 .rgdm-puce.est-hors-liste span { border-style: dashed; }
 .rgdm-pied { display: flex; justify-content: flex-end; gap: 10px; }
+/* ---- le bandeau de veille d'une fiche DTU ----
+   ⚠ IL DIT QU'UN ROBOT A ECRIT LA FICHE, et ce n'est pas decoratif : la veille
+   publie sans relecture humaine, donc le lecteur doit pouvoir distinguer une
+   fiche redigee par le cabinet d'une fiche remise a jour toute seule. Ambre
+   quand c'est le cas, neutre quand la veille n'a fait que verifier. */
+.dtu-veille { display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 11px 14px; border: 1px solid var(--line); border-radius: 11px;
+  background: var(--card-2); margin-bottom: 16px; font-size: 13.5px; }
+.dtu-veille.est-auto { border-color: var(--amber); background: var(--amber-soft); }
+.dtu-veille .s { font-size: 12.5px; margin-top: 2px; }
+
 /* ---- le tableau d'apports, editable dans la fiche partenaire ----
    ⚠ `.rgdf-large` TRAVERSE LA GRILLE. `.rgdf-corps` est une grille a deux
    colonnes : sans cette regle, une section posee dedans occupe une demi-
@@ -1261,9 +1277,7 @@ button.esp-side-titre { background: none; border: 0; font-family: inherit; color
   }
 }
 
-.esp-side-foot { padding: 16px 18px 20px; border-top: 1px solid rgba(255,255,255,.1); display: flex; flex-direction: column; gap: 3px; }
-.esp-side-foot b { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: var(--accent); }
-.esp-side-foot span { font-size: 11.5px; color: rgba(255,255,255,.55); }
+/* `.esp-side-foot` a ete retire le 25/09/2026 : voir le gabarit d'espace.js. */
 .esp-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .esp-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding: 20px 28px; background: var(--card); border-bottom: 1px solid var(--line); }
 .esp-head h1 { font-family: var(--font-display); font-size: 25px; font-weight: 700; margin: 0; letter-spacing: -.02em; }
@@ -1310,7 +1324,6 @@ body:has(.esp-app) .subnav .datepill { display: none; }
   /* Un lisere dit que la bande continue a droite. */
   .esp-side::after { content: ""; position: absolute; inset: 0 0 0 auto; width: 24px; pointer-events: none;
                      background: linear-gradient(90deg, transparent, var(--accent-ink)); }
-  .esp-side-foot { display: none; }
   .esp-head, .esp-body { padding-left: 16px; padding-right: 16px; }
   .esp-body > * { min-width: 0; }
   .esp-head h1 { font-size: 21px; }

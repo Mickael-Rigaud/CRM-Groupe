@@ -105,7 +105,16 @@ export function coquilleEspace({ cle, marque, baseline = '', onglets, actif, tit
   return `
   <div class="esp-app" data-espace="${esc(cle)}">
     <aside class="esp-side">
-      <div class="esp-side-brand"><img src="assets/logos/${esc(cle)}.png" alt="" onerror="this.remove()"><span>${esc(marque)}</span></div>
+      <!-- ⚠ LA BASELINE EST ICI, ET LE PIED DU MENU A DISPARU (25/09/2026).
+           Il répétait la marque déjà affichée juste au-dessus et coûtait 73 px
+           au bas de la colonne — assez pour que le menu de BTP Expertise (603 px,
+           neuf entrées) dépasse la place disponible sur une fenêtre de 700 px et
+           se mette à défiler TOUT SEUL. Mickael l'a signalé ainsi : « je ne veux
+           plus que le menu à gauche déroule ».
+           La baseline, elle, ne s'affichait nulle part ailleurs : elle remonte. -->
+      <div class="esp-side-brand">
+        <img src="assets/logos/${esc(cle)}.png" alt="" onerror="this.remove()">
+        <span><b>${esc(marque)}</b>${baseline ? `<em>${esc(baseline)}</em>` : ''}</span></div>
       <nav class="esp-side-nav" aria-label="Écrans ${esc(marque)}">
         ${onglets.map(o => {
           if (!o.sous) return lienOnglet(o, actif);
@@ -127,7 +136,6 @@ export function coquilleEspace({ cle, marque, baseline = '', onglets, actif, tit
             <div class="esp-side-plis">${liens}</div></div>`;
         }).join('')}
       </nav>
-      <div class="esp-side-foot"><b>${esc(marque)}</b>${baseline ? `<span>${esc(baseline)}</span>` : ''}</div>
     </aside>
     <div class="esp-main">
       <header class="esp-head">
