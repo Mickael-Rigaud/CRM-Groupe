@@ -679,7 +679,7 @@ export const ACTIVITIES = {
       // deux listes — sans que rien ne garantisse que les deux disent la même
       // chose.
       { key: 'type_bien', label: 'Type de bien', type: 'select', options: ['Maison', 'Appartement', 'Immeuble', 'Local pro', 'Autre'], half: true },
-      { key: 'contexte', label: 'Contexte', type: 'select', options: ['Particulier', 'Entreprise', 'Litige', 'Achat immobilier', 'Travaux en cours'], half: true },
+      { key: 'contexte', label: 'Profil du demandeur', type: 'select', options: ['Particulier', 'Entreprise', 'Litige', 'Achat immobilier', 'Travaux en cours'], half: true },
       // ⚠ L'ADRESSE DU BIEN EST EN TROIS CHAMPS depuis le 25/09/2026. Une ligne
       // libre ne se trie pas, ne se regroupe pas par commune, et ne dit pas si le
       // chantier tombe dans la zone d'intervention.

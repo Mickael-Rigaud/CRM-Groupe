@@ -11,6 +11,10 @@ import { estAmoHenrri, blocHenrri, lierHenrri, etatHenrri } from '../henrri.js';
 // vivent dans `rgd-fiche.js` et servent aux trois fiches du CRM : trois
 // présentations qui se ressemblent s'apprennent une fois.
 import { initiales, tuile, info } from './rgd-fiche.js';
+// Ce que la fiche projet enregistre en plus des champs structurés, et où le
+// ranger. Voir l'en-tête du module : la copie porte la plus grande partie de
+// ce qui a été saisi, et rien ne l'affichait.
+import { lignesDecouverte } from '../data/btp-decouverte.js';
 
 // ⚠ TROIS RUBRIQUES, ET LA FACTURATION À PART (25/09/2026 : « sépare bien les
 // informations du prospect et du projet et de la mission », « la facturation à
@@ -24,9 +28,14 @@ import { initiales, tuile, info } from './rgd-fiche.js';
 const RUBRIQUE = {
   // Ce que le prospect nous a dit de lui et d'où il vient.
   urgence: 'prospect',
+  // ⚠ `contexte` EST LE PROFIL DU DEMANDEUR chez BTP Expertise : la fiche
+  // projet y écrit le profil coché à la première étape. Il appartient donc au
+  // prospect et non au projet, et la copie ne le redit pas (voir `dejaDits`) —
+  // les deux lignes affichaient la même valeur sous deux intitulés.
+  contexte: 'prospect',
   // Ce sur quoi on travaille.
   type_bien: 'projet', adresse: 'projet', adresse_chantier: 'projet',
-  contexte: 'projet', type_travaux: 'projet',
+  type_travaux: 'projet',
   code_postal: 'projet', ville: 'projet',
   montant_travaux: 'projet', budget_annonce: 'projet', delai_souhaite: 'projet',
   // Ce qu'on a vendu et comment on l'exécute.
@@ -494,20 +503,72 @@ export function openDeal(id, onChange) {
         + (d.fields?.paiement_date ? ` <span class="rgdf-tag est-etape">Payée le ${esc(fmtDate(d.fields.paiement_date))}</span>` : '')
       : budget
         ? `<b>${esc(eur(budget))}</b> <span>de budget annoncé</span>`
-        : '<span class="muted">Budget non renseigné</span>';
+        // ⚠ REPLI SUR LE MONTANT DE LA MISSION, et ce n'est pas revenir sur la
+        // règle : avant l'engagement on montre ce que le client annonce, sauf
+        // qu'une EXPERTISE n'a pas de budget travaux — la fiche projet y pose
+        // directement un tarif. Sans ce repli, une mission chiffrée à 1 250 €
+        // affichait « Budget non renseigné » jusqu'à la lettre de mission.
+        : Number(d.amount)
+          ? `<b>${esc(eur(d.amount))}</b> <span>proposés</span>`
+          : '<span class="muted">Montant non renseigné</span>';
 
     // Les champs de l'activité, rangés par rubrique. Une rubrique vide ne
     // s'affiche pas : un titre suivi de rien fait chercher ce qui manque.
+    // ⚠ UNE ADRESSE SE LIT D'UN BLOC (25/09/2026 : « dans la fiche projet je
+    // voudrais l'adresse complète »). Elle se SAISIT en trois champs — la rue,
+    // le code postal, la ville — pour qu'on puisse trier et regrouper par
+    // commune ; la découper aussi à la LECTURE donnait trois lignes
+    // « Adresse du bien », « Code postal », « Ville » qu'il fallait recoller de
+    // l'oeil pour savoir où aller. Les deux autres sont donc masquées en lecture
+    // et recollées à la première, qui les porte.
+    // Ce que `act.fields` porte déjà, sous le nom que la copie lui donne :
+    // `detail` EST la description, `problematique` EST la liste des motifs (ou
+    // des travaux côté AMO), `montant_travaux` EST le budget.
+    const dejaDits = [
+      ...(d.fields?.detail ? ['description'] : []),
+      ...(d.fields?.problematique ? ['motifs', 'travaux'] : []),
+      ...(d.fields?.montant_travaux ? ['budget_ht'] : []),
+      ...(d.fields?.contexte ? ['profil'] : []),
+    ];
+
+    const ADRESSE_RECOLLEE = { adresse: ['code_postal', 'ville'] };
+    const MORCEAUX = Object.values(ADRESSE_RECOLLEE).flat();
+    const adresseEntiere = (cle) => [d.fields?.[cle], ...ADRESSE_RECOLLEE[cle].map(k => d.fields?.[k])]
+      .map(x => String(x || '').trim()).filter(Boolean).join(', ');
+
+    // ⚠ UNE LISTE DEROULANTE STOCKE UNE CLE, PAS UN LIBELLE. Sans cette
+    // résolution la fiche affichait « exp_preachat » et « amo » là où le
+    // formulaire propose « Expertise pré-achat » et « AMO / accompagnement ».
+    // Les options peuvent être groupées ({ groupe, options }) : on aplatit.
+    const libelleOption = (fl, v) => {
+      const plat = (fl.options || []).flatMap(o => (o && o.groupe) ? (o.options || []) : [o]);
+      const trouve = plat.find(o => String(Array.isArray(o) ? o[0] : o) === String(v));
+      return trouve ? String(Array.isArray(trouve) ? trouve[1] : trouve) : String(v);
+    };
+
     const champsDe = (rub) => act.fields
-      .filter(fl => rubriqueDe(fl.key) === rub)
+      .filter(fl => rubriqueDe(fl.key) === rub && !MORCEAUX.includes(fl.key))
       .map(fl => {
-        const v = d.fields?.[fl.key];
+        const v = ADRESSE_RECOLLEE[fl.key] ? adresseEntiere(fl.key) : d.fields?.[fl.key];
         if (v === undefined || v === '' || v === null || v === false) return '';
         const texte = fl.type === 'checkbox' ? 'Oui'
           : fl.type === 'date' ? fmtDate(v)
           : fl.type === 'number' && /€/.test(fl.label) ? eur(v)
+          : fl.type === 'select' ? libelleOption(fl, v)
           : String(v);
         return info('regle', fl.label, esc(texte), 'est-gris');
+      }).join('')
+      // ⚠ PUIS TOUT CE QUE LA COPIE PORTE EN PLUS (25/09/2026 : « reprendre
+      // toutes les informations qui ont été enregistrées dans le formulaire »).
+      // `deja` écarte ce que les champs structurés disent déjà sous un autre
+      // nom — la description est `detail`, les motifs sont `problematique` —
+      // sans quoi la même phrase apparaîtrait deux fois sous deux intitulés.
+      + lignesDecouverte(d, rub, dejaDits).map(c => {
+        const texte = c.liste ? c.valeur.join(' · ')
+          : c.date ? fmtDate(c.valeur)
+          : c.euros ? eur(c.valeur)
+          : String(c.valeur);
+        return info('regle', c.label, esc(texte), 'est-gris');
       }).join('');
 
     const blocSi = (titre, dedans, vide) => dedans || vide
@@ -609,13 +670,22 @@ export function openDeal(id, onChange) {
             ${info('personne', 'Contact', contact ? `<a href="#/contacts/${esc(contact.id)}" data-close>${esc(contactName(contact))}</a>` : '', 'est-orange')}
             ${info('tel', 'Téléphone', contact?.phone ? `<a href="tel:${esc(contact.phone)}">${esc(contact.phone)}</a>` : '', 'est-vert')}
             ${info('mail', 'E-mail', contact?.email ? `<a href="mailto:${esc(contact.email)}">${esc(contact.email)}</a>` : '', 'est-bleu')}
+            <!-- ⚠ L'ADRESSE DU CLIENT NE S'AFFICHAIT NULLE PART, alors qu'elle se
+                 saisit à la première étape de la fiche projet. Elle est recollée
+                 ici comme celle du bien — et ce n'est PAS la même : le client
+                 peut habiter à cent kilomètres du chantier. -->
+            ${info('maison', 'Adresse', esc([contact?.address, contact?.postal_code, contact?.city]
+              .map(x => String(x || '').trim()).filter(Boolean).join(', ')), 'est-orange')}
             ${info('maison', 'Entreprise', org ? `<a href="#/contacts/${esc(org.id)}" data-close>${esc(org.name)}</a>` : '', 'est-bleu')}
             ${info('source', 'Canal', esc(d.channel || ''), 'est-violet')}
             ${info('personne', 'Apporteur', refOrg ? esc(refOrg.name) : refC ? esc(contactName(refC)) : '', 'est-vert')}
             ${info('personne', 'Responsable', marqueResponsable(d.owner_id), 'est-gris')}
             ${champsDe('prospect')}`, 'Aucune coordonnée renseignée.')}
 
-          ${blocSi('Le projet', champsDe('projet'), 'Le projet n’a pas encore été décrit.')}
+          ${blocSi('Le projet',
+            info('regle', 'Motifs de la demande', esc(d.fields?.problematique || ''), 'est-gris')
+            + info('regle', 'Description', esc(d.fields?.detail || ''), 'est-gris')
+            + champsDe('projet'), 'Le projet n’a pas encore été décrit.')}
           ${blocSi('La mission', champsDe('mission'), '')}
         </div>
 
