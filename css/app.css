@@ -689,6 +689,46 @@ button.esp-side-titre { background: none; border: 0; font-family: inherit; color
    erreur — elle est vraie, c'est le vocabulaire qui a bouge. */
 .rgdm-puce.est-hors-liste span { border-style: dashed; }
 .rgdm-pied { display: flex; justify-content: flex-end; gap: 10px; }
+/* ---- le tableau d'apports, editable dans la fiche partenaire ----
+   ⚠ `.rgdf-large` TRAVERSE LA GRILLE. `.rgdf-corps` est une grille a deux
+   colonnes : sans cette regle, une section posee dedans occupe une demi-
+   largeur et les sept colonnes du tableau se compriment jusqu'a l'illisible.
+   C'est aussi ce qui a fait que la premiere version laissait toute la droite
+   vide — un seul enfant dans une grille a deux colonnes.
+   ⚠ LES CHAMPS N'ONT NI BORDURE NI FOND AU REPOS : dans un tableau, sept
+   encadres par ligne font une grille de cases qui cache la donnee. La bordure
+   apparait au survol et au focus, ou elle sert vraiment. */
+.rgdf-large { grid-column: 1 / -1; }
+.pat-wrap { margin: 0 -18px; }
+.pat { width: 100%; }
+.pat th { white-space: nowrap; }
+.pat td { padding: 4px 8px; vertical-align: middle; }
+.pat input, .pat select {
+  width: 100%; min-width: 0; font: inherit; font-size: 13.5px;
+  padding: 6px 8px; border-radius: 7px; background: transparent;
+  border: 1px solid transparent; color: var(--text); }
+.pat input::placeholder { color: var(--muted); opacity: .7; }
+.pat input:hover, .pat select:hover { border-color: var(--line); background: #fff; }
+.pat input:focus, .pat select:focus { outline: none; background: #fff;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent); }
+.pat td:nth-child(5) input, .pat td:nth-child(6) input { text-align: right; }
+/* Chaque colonne prend la largeur de ce qu'elle porte : sans ces bornes la
+   grille repartit a parts egales et « Pas tranche » se lisait « Pas tran ». */
+.pat th:nth-child(1), .pat td:nth-child(1) { width: 20%; min-width: 150px; }
+.pat th:nth-child(2), .pat td:nth-child(2) { width: 130px; }
+.pat th:nth-child(4), .pat td:nth-child(4) { width: 132px; }
+.pat th:nth-child(5), .pat td:nth-child(5),
+.pat th:nth-child(6), .pat td:nth-child(6) { width: 120px; }
+.pat th:last-child, .pat td:last-child { width: 34px; }
+/* La croix de suppression reste discrete tant qu'on ne la cherche pas : une
+   poubelle rouge par ligne transforme un tableau de saisie en champ de mines. */
+.pat-x { border: 0; background: none; color: var(--muted); cursor: pointer;
+  font-size: 14px; line-height: 1; padding: 5px 7px; border-radius: 7px; }
+.pat-x:hover { color: var(--red); background: var(--red-soft); }
+.pat-vide td { padding: 0; }
+.pat-pied { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+
 /* ---- le formulaire d'un partenaire, refait le 25/09/2026 ----
    C'etait une grille de douze champs a plat : le role entre le metier et le
    telephone, la convention entre la ville et les apports. Trois blocs

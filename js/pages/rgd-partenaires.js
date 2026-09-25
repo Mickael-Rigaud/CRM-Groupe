@@ -234,134 +234,72 @@ function nouveauPartenaire(apres, typeDefaut = 'apporteur') {
   } });
 }
 
-// ------------------------------------------------------- le formulaire apport
+// ------------------------------------------------- le tableau des apports
+//
+// ⚠ UN VRAI TABLEAU QU'ON REMPLIT, PAS UNE FENÊTRE PAR LIGNE (25/09/2026 :
+// « je voudrais vraiment un tableau où l'on peut rajouter des lignes »). La
+// version d'avant ouvrait une modale pour chaque apport : six champs et deux
+// clics pour une ligne de tableur. Ici chaque cellule est un champ, la ligne
+// s'enregistre quand on en sort, et « + Ajouter une ligne » en pose une vide.
+//
+// ⚠ L'APPORTEUR SE CHOISIT LIBREMENT, et pas seulement celui de la fiche
+// ouverte — demandé explicitement. Une nouvelle ligne le propose par défaut
+// parce que c'est le cas courant, mais la liste donne tout le monde ; changer
+// la colonne DÉPLACE la ligne vers l'autre fiche, et l'écran le dit plutôt que
+// de la faire disparaître sans un mot.
 
-/**
- * Un apport d'affaires : qui l'a présenté, quand, pour qui, et ce qu'il a
- * rapporté. Demandé le 25/09/2026.
- *
- * ⚠ L'ISSUE PEUT RESTER VIDE. Mickael a demandé « gagné ou perdu » ; mais on
- * saisit la ligne le jour de l'apport, avant de savoir. Forcer le choix ferait
- * inscrire « perdu » par défaut sur une affaire en cours — l'option « Pas
- * encore tranché » est là pour ça, et la commission ne compte pas tant qu'elle
- * est choisie.
- */
-function formulaireApport(apport, partenaires, apres, apporteurDefaut = '') {
-  const creation = !apport;
-  const v = apport || { apporteur_id: apporteurDefaut, date_apport: new Date().toISOString().slice(0, 10) };
-  const choix = partenaires
-    .filter(estApporteur)
-    .sort((x, y) => nomDe(x).localeCompare(nomDe(y), 'fr'))
-    .map(p => [p.id, nomDe(p) + (estActif(p) ? '' : ' (inactif)')]);
+const optionsApporteurs = (tous, choisi) => tous
+  .filter(estApporteur)
+  .sort((x, y) => nomDe(x).localeCompare(nomDe(y), 'fr'))
+  .map(p => `<option value="${esc(String(p.id))}"${String(choisi) === String(p.id) ? ' selected' : ''}>${
+    esc(nomDe(p))}${estActif(p) ? '' : ' (inactif)'}</option>`).join('');
 
-  const corps = `<form id="pap" class="paf">
-    <div class="paf-grille">
-      ${liste('apporteur_id', 'Apporteur', [['', '— Choisir —'], ...choix], v.apporteur_id || '')}
-      ${champ('date_apport', 'Date', v.date_apport, { type: 'date' })}
-      ${champ('client', 'Client', v.client, { large: true, placeholder: 'Nom du client présenté' })}
-      ${liste('issue', 'Issue',
-        [['', 'Pas encore tranché'], ['gagne', 'Gagné'], ['perdu', 'Perdu']], v.issue || '')}
-      ${champ('montant_devis', 'Montant du devis (€ HT)', v.montant_devis, { type: 'number' })}
-      ${champ('montant_commission', 'Commission (€)', v.montant_commission, { type: 'number' })}
-    </div>
-    <p class="small muted">La commission n’entre dans le total du partenaire que
-      si l’affaire est <b>gagnée</b> : le montant du devis, lui, compte dès qu’il est chiffré.</p>
-    <div class="paf-pied">
-      ${creation ? '' : '<button type="button" class="btn ghost danger" id="pap-suppr">Supprimer</button>'}
-      <span class="grow"></span>
-      <button type="button" class="btn ghost" data-close>Annuler</button>
-      <button type="submit" class="btn primary" id="pap-ok">${creation ? 'Ajouter l’apport' : 'Enregistrer'}</button>
-    </div>
-  </form>`;
+const ligneApport = (x, tous) => `<tr data-ligne="${esc(String(x.id))}">
+  <td><select data-champ="apporteur_id">${optionsApporteurs(tous, x.apporteur_id)}</select></td>
+  <td><input type="date" data-champ="date_apport" value="${esc(x.date_apport || '')}"></td>
+  <td><input data-champ="client" value="${esc(x.client || '')}" placeholder="Nom du client"></td>
+  <td><select data-champ="issue">
+    <option value=""${x.issue ? '' : ' selected'}>Pas tranché</option>
+    <option value="gagne"${x.issue === 'gagne' ? ' selected' : ''}>Gagné</option>
+    <option value="perdu"${x.issue === 'perdu' ? ' selected' : ''}>Perdu</option>
+  </select></td>
+  <td><input type="number" step="100" data-champ="montant_devis"
+      value="${x.montant_devis != null ? esc(String(x.montant_devis)) : ''}" placeholder="€"></td>
+  <td><input type="number" step="10" data-champ="montant_commission"
+      value="${x.montant_commission != null ? esc(String(x.montant_commission)) : ''}" placeholder="€"></td>
+  <td><button type="button" class="pat-x" data-suppr title="Supprimer la ligne">✕</button></td>
+</tr>`;
 
-  // ⚠ `onClose` RAMÈNE À LA FICHE, y compris sur « Annuler » et sur la croix.
-  // Cette fenêtre REMPLACE celle de la fiche (`openModal` ferme la précédente) :
-  // sans retour, renoncer à saisir un apport refermerait la fiche qu'on était en
-  // train de lire. Sur un enregistrement réussi, `apres` rouvre la fiche et
-  // `closeModal(true)` qu'il déclenche ne rejoue pas `onClose` — donc pas de
-  // double retour.
-  openModal(creation ? 'Nouvel apport' : 'Modifier l’apport', corps,
-    { onClose: () => apres?.(), onOpen: (m) => {
-    const form = m.querySelector('#pap');
-    form.onsubmit = async (ev) => {
-      ev.preventDefault();
-      const lu = Object.fromEntries(
-        [...form.querySelectorAll('[name]')].map(i => [i.name, i.value.trim()]));
-      if (!lu.apporteur_id) return toast('Choisissez l’apporteur', 'warn');
-
-      const nombre = (x) => x === '' ? null : Number(x);
-      const champs = {
-        apporteur_id: lu.apporteur_id,
-        date_apport: lu.date_apport || null,
-        client: lu.client || null,
-        issue: lu.issue || null,
-        montant_devis: nombre(lu.montant_devis),
-        montant_commission: nombre(lu.montant_commission),
-      };
-      const ok = m.querySelector('#pap-ok');
-      ok.disabled = true; ok.textContent = 'Enregistrement…';
-      const r = creation ? await creerApport(champs) : await majApport(apport.id, champs);
-      if (!r.ok) {
-        ok.disabled = false; ok.textContent = creation ? 'Ajouter l’apport' : 'Enregistrer';
-        return toast(`Non enregistré — ${r.motif}`, 'err');
-      }
-      toast(creation ? 'Apport ajouté' : 'Apport enregistré'); apres?.();
-    };
-
-    const suppr = m.querySelector('#pap-suppr');
-    if (suppr) suppr.onclick = async () => {
-      if (!await confirm('Supprimer cet apport ?')) return;
-      const r = await supprimerApport(apport.id);
-      if (!r.ok) return toast(`Non supprimé — ${r.motif}`, 'err');
-      toast('Apport supprimé'); apres?.();
-    };
-  } });
-}
-
-// ------------------------------------------------------------- la fiche
-
-const ligneApport = (x, ecriture) => {
-  const i = ISSUES[x.issue];
-  return `<tr ${ecriture ? `data-apport="${esc(String(x.id))}"` : ''}>
-    <td class="small">${x.date_apport ? esc(fmtDate(x.date_apport)) : '<span class="muted">—</span>'}</td>
-    <td><b>${esc(x.client || '—')}</b></td>
-    <td>${i ? `<span class="chip ${i.ton}">${esc(i.label)}</span>`
-            : '<span class="muted small">Pas encore tranché</span>'}</td>
-    <td class="num">${x.montant_devis != null ? esc(eur(x.montant_devis)) : '<span class="muted">—</span>'}</td>
-    <td class="num">${x.montant_commission != null
-      ? `<span class="${x.issue === 'gagne' ? '' : 'muted'}">${esc(eur(x.montant_commission))}</span>`
-      : '<span class="muted">—</span>'}</td>
-  </tr>`;
-};
+const corpsApports = (siens, tous) => siens.map(x => ligneApport(x, tous)).join('')
+  || '<tr class="pat-vide"><td colspan="7"><div class="empty">Aucun apport. Ajoutez une ligne pour commencer.</div></td></tr>';
 
 /**
  * La fiche d'un partenaire.
  *
- * ⚠ ELLE REMPLACE LE FORMULAIRE SEC (25/09/2026). Cliquer une ligne ouvrait
- * directement les champs de saisie : pour lire un numéro de téléphone il
- * fallait entrer en modification, et l'écran était « trop triste ». La fiche
- * MONTRE d'abord — en-tête coloré, chiffres, pastilles rondes —, et « Modifier
- * les informations » cède la place au formulaire EN PLACE.
+ * ⚠ ELLE REMPLACE LE FORMULAIRE SEC. Cliquer une ligne ouvrait directement les
+ * champs de saisie : pour lire un numéro de téléphone il fallait entrer en
+ * modification. La fiche MONTRE d'abord — en-tête coloré, chiffres, pastilles
+ * rondes —, et « Modifier les informations » cède la place au formulaire EN
+ * PLACE : `openModal` ferme celle qui est ouverte avant d'ouvrir la suivante,
+ * donc un formulaire par-dessus aurait fait disparaître la fiche.
  *
- * ⚠ EN PLACE, ET PAS DANS UNE SECONDE FENÊTRE : `openModal` ferme celle qui
- * est ouverte avant d'ouvrir la suivante, donc un formulaire par-dessus la
- * fiche l'aurait fait disparaître et « Annuler » n'aurait eu nulle part où
- * revenir. C'est la règle déjà posée sur la fiche client.
- *
- * ⚠ LE TABLEAU DES APPORTS EST ICI, et non plus en bas de l'écran (demandé le
- * 25/09) : les apports d'un partenaire se lisent en face de ce qu'il a
- * rapporté, pas dans une liste commune où il faut d'abord retrouver son nom.
+ * ⚠ DEUX COLONNES, PUIS LE TABLEAU EN PLEINE LARGEUR (corrigé le 25/09 :
+ * « tout est à gauche et c'est vide à droite »). `.rgdf-corps` EST une grille à
+ * deux colonnes — n'y poser qu'un seul `.rgdf-colonne` laissait la moitié
+ * droite vide sans que rien ne le signale. Les sept colonnes du tableau, elles,
+ * ne tiennent pas dans une demi-largeur : il prend la ligne entière.
  */
 function ouvrirFichePartenaire(id, apres) {
   let enModification = false;
 
-  // ⚠ CHAQUE REDESSIN ROUVRE LA MODALE, il n'écrase pas son contenu.
-  // `openModal` construit l'en-tête ET le corps ; poser un `innerHTML` sur la
-  // fenêtre emporterait la croix de fermeture. `closeModal(true)`, qu'il appelle
-  // en tête, ne déclenche pas `onClose` — c'est ce qui permet de redessiner sans
-  // faire croire à une fermeture. Même mécanique que la fiche client.
+  // ⚠ CHAQUE REDESSIN ROUVRE LA MODALE, il n'écrase pas son contenu :
+  // `openModal` construit l'en-tête ET le corps, donc un `innerHTML` posé sur
+  // la fenêtre emporterait la croix de fermeture. `closeModal(true)`, qu'il
+  // appelle en tête, ne déclenche pas `onClose` — c'est ce qui permet de
+  // redessiner sans faire croire à une fermeture.
   const dessine = () => {
-    const a = scope.rgd('rgd_apporteurs').find(x => String(x.id) === String(id));
+    const tous = scope.rgd('rgd_apporteurs');
+    const a = tous.find(x => String(x.id) === String(id));
     if (!a) { closeModal(); return; }
     const t = totauxDe(a.id);
     const siens = apportsDe(a.id);
@@ -393,8 +331,8 @@ function ouvrirFichePartenaire(id, apres) {
       </div>
 
       <div class="rgdf-corps">
+        ${enModification ? `<div class="rgdf-colonne rgdf-large">${corpsFormulaire(a, false)}</div>` : `
         <div class="rgdf-colonne">
-          ${enModification ? corpsFormulaire(a, false) : `
           <section class="rgdf-bloc">
             <h3>Comment le joindre</h3>
             ${info('tel', 'Téléphone', a.telephone ? `<a href="tel:${esc(a.telephone)}">${esc(a.telephone)}</a>` : '', 'est-vert')}
@@ -402,7 +340,8 @@ function ouvrirFichePartenaire(id, apres) {
             ${info('lieu', 'Adresse', esc(adresseDe(a)), 'est-gris')}
             ${!a.telephone && !a.email ? '<p class="rgdf-rien">Aucun moyen de contact renseigné.</p>' : ''}
           </section>
-
+        </div>
+        <div class="rgdf-colonne">
           <section class="rgdf-bloc">
             <h3>Le partenariat</h3>
             ${info('personne', 'Métier', esc(a.profession || ''), 'est-orange')}
@@ -412,23 +351,27 @@ function ouvrirFichePartenaire(id, apres) {
                 ? 'Signée' + (a.date_signature ? ` le ${esc(fmtDate(a.date_signature))}` : '')
                 : 'Non signée', a.partenariat_signe ? 'est-vert' : 'est-gris')}
             ${info('texte', 'Notes', esc(a.notes || ''), 'est-gris')}
-          </section>`}
-
-          <section class="rgdf-bloc">
-            <h3>Ses apports <span class="rgdf-compte">${siens.length}</span></h3>
-            ${siens.length ? `<div class="rgdf-tableau"><table>
-              <thead><tr><th>Date</th><th>Client</th><th>Issue</th>
-                <th class="num">Devis</th><th class="num">Commission</th></tr></thead>
-              <tbody>${siens.map(x => ligneApport(x, ecriture)).join('')}</tbody>
-            </table></div>`
-            : '<p class="rgdf-rien">Aucun apport enregistré pour ce partenaire.</p>'}
-            ${ecriture ? `<div class="rgdf-ajout" style="margin-top:10px">
-              <button type="button" class="btn sm" id="pa-apport">+ Nouvel apport</button>
-            </div>` : ''}
-            <p class="rgdf-source">La commission n’entre dans les totaux que sur une
-              affaire <b>gagnée</b> : le montant du devis, lui, compte dès qu’il est chiffré.</p>
           </section>
-        </div>
+        </div>`}
+
+        <section class="rgdf-bloc rgdf-large">
+          <h3>Ses apports <span class="rgdf-compte" id="pa-n">${siens.length}</span></h3>
+          <div class="table-wrap pat-wrap">
+            <table class="pat">
+              <thead><tr><th>Apporteur</th><th>Date</th><th>Client</th><th>Issue</th>
+                <th class="num">Montant devis</th><th class="num">Commission</th><th></th></tr></thead>
+              <tbody id="pa-corps">${corpsApports(siens, tous)}</tbody>
+            </table>
+          </div>
+          ${ecriture ? `<div class="pat-pied">
+            <button type="button" class="btn sm" id="pa-ajout">+ Ajouter une ligne</button>
+            <span class="grow"></span>
+            <span class="small muted" id="pa-etat"></span>
+          </div>` : ''}
+          <p class="rgdf-source">Chaque cellule s’enregistre quand vous en sortez.
+            La commission n’entre dans les totaux que sur une affaire <b>gagnée</b>.
+            Changer l’apporteur d’une ligne la déplace vers sa fiche.</p>
+        </section>
       </div>`;
 
     const m = openModal('', html, { wide: true, onClose: () => apres?.() });
@@ -443,21 +386,101 @@ function ouvrirFichePartenaire(id, apres) {
     const bMod = m.querySelector('#pa-modifier');
     if (bMod) bMod.onclick = () => { enModification = true; dessine(); };
 
-    // ⚠ APRÈS UN APPORT, ON REVIENT SUR LA FICHE. `formulaireApport` ouvre sa
-    // propre fenêtre, qui REMPLACE celle-ci ; sans ce retour, enregistrer un
-    // apport refermerait la fiche qu'on était en train de lire.
-    const revenir = () => { dessine(); apres?.(); };
-    const bApp = m.querySelector('#pa-apport');
-    if (bApp) bApp.onclick = () =>
-      formulaireApport(null, scope.rgd('rgd_apporteurs'), revenir, a.id);
-
-    m.querySelectorAll('[data-apport]').forEach(tr => tr.onclick = () => {
-      const x = siens.find(y => String(y.id) === tr.dataset.apport);
-      if (x) formulaireApport(x, scope.rgd('rgd_apporteurs'), revenir, a.id);
-    });
+    if (ecriture && !enModification) brancherTableau(m, a, apres);
   };
 
   dessine();
+}
+
+/**
+ * Le tableau éditable : enregistrer une cellule, ajouter et retirer une ligne.
+ *
+ * ⚠ ON NE REDESSINE PAS LA FICHE À CHAQUE CELLULE. L'événement `change` part
+ * quand on QUITTE le champ — souvent pour aller au suivant. Un redessin à ce
+ * moment-là volerait le curseur au champ qu'on vient d'atteindre. Seuls les
+ * chiffres de l'en-tête sont remis à jour, en place.
+ */
+function brancherTableau(m, a, apres) {
+  const corps = m.querySelector('#pa-corps');
+  const etat = m.querySelector('#pa-etat');
+  const dire = (mot) => {
+    if (!etat) return;
+    etat.textContent = mot;
+    setTimeout(() => { if (etat.textContent === mot) etat.textContent = ''; }, 2200);
+  };
+
+  // Les tuiles, recalculées sans toucher au reste de la fenêtre.
+  const majChiffres = () => {
+    const t = totauxDe(a.id);
+    const tuiles = m.querySelectorAll('.rgdf-tuile b');
+    if (tuiles[0]) tuiles[0].textContent = t.devis ? eur(t.devis) : '—';
+    if (tuiles[1]) tuiles[1].textContent = t.commission ? eur(t.commission) : '—';
+    if (tuiles[2]) tuiles[2].textContent = String(t.apports);
+    if (tuiles[3]) tuiles[3].textContent = String(t.gagnes);
+    const n = m.querySelector('#pa-n');
+    if (n) n.textContent = String(t.apports);
+  };
+
+  const redessinerCorps = () => {
+    corps.innerHTML = corpsApports(apportsDe(a.id), scope.rgd('rgd_apporteurs'));
+    brancherLignes();
+    majChiffres();
+    apres?.();
+  };
+
+  function brancherLignes() {
+    corps.querySelectorAll('[data-ligne]').forEach(tr => {
+      const ligneId = tr.dataset.ligne;
+
+      tr.querySelectorAll('[data-champ]').forEach(el => {
+        el.onchange = async () => {
+          const cle = el.dataset.champ;
+          const brut = String(el.value).trim();
+          const valeur = brut === '' ? null
+            : (cle === 'montant_devis' || cle === 'montant_commission') ? Number(brut) : brut;
+
+          const r = await majApport(ligneId, { [cle]: valeur });
+          if (!r.ok) return toast(`Non enregistré — ${r.motif}`, 'err');
+          dire('Enregistré');
+
+          // ⚠ CHANGER L'APPORTEUR SORT LA LIGNE DE CETTE FICHE. On redessine
+          // alors le tableau — elle disparaît — et on le DIT, sinon on croirait
+          // l'avoir perdue.
+          if (cle === 'apporteur_id' && String(valeur) !== String(a.id)) {
+            toast('Apport déplacé vers l’autre fiche');
+            return redessinerCorps();
+          }
+          majChiffres();
+          apres?.();
+        };
+      });
+
+      const x = tr.querySelector('[data-suppr]');
+      if (x) x.onclick = async () => {
+        if (!await confirm('Supprimer cette ligne ?')) return;
+        const r = await supprimerApport(ligneId);
+        if (!r.ok) return toast(`Non supprimé — ${r.motif}`, 'err');
+        redessinerCorps();
+      };
+    });
+  }
+
+  brancherLignes();
+
+  const bAjout = m.querySelector('#pa-ajout');
+  if (bAjout) bAjout.onclick = async () => {
+    // Une ligne neuve porte l'apporteur de la fiche et la date du jour : c'est
+    // le cas courant, et les deux se changent dans la ligne même.
+    const r = await creerApport({
+      apporteur_id: a.id,
+      date_apport: new Date().toISOString().slice(0, 10),
+    });
+    if (!r.ok) return toast(`Ligne non ajoutée — ${r.motif}`, 'err');
+    redessinerCorps();
+    // Le curseur va droit dans « Client » de la nouvelle ligne : c'est le
+    // premier champ qu'on remplit, et le seul que la création ne devine pas.
+    corps.querySelector(`[data-ligne="${CSS.escape(String(r.ligne.id))}"] [data-champ="client"]`)?.focus();
+  };
 }
 
 // ------------------------------------------------------------------- l'écran
