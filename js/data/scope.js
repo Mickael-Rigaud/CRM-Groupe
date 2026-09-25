@@ -96,9 +96,21 @@ export const scope = {
   contacts() { return db.t('contacts').filter(c => this.canSeeContact(c)); },
   orgs() { return db.t('organisations').filter(o => this.canSeeOrg(o)); },
   activities() { return db.t('activities').filter(a => this.canSeeActivity(a)); },
-  // Espace RGD Renova. Miroir exact des policies `rgd_*_acces`, qui tiennent
-  // toutes en `has_activity('rgd')` — l'équipe RGD et la direction, personne
-  // d'autre.
+  // Espace RGD Renova. Miroir exact des policies `rgd_*`.
+  //
+  // ⚠ APPARTENIR À RGD NE DONNE PLUS TOUT RGD (25/09/2026, demandé par
+  // Mickael : « le chargé doit constituer à lui tout seul sa base de données
+  // clients, partenaires et sous-traitants »). Les policies ne tiennent plus
+  // en `has_activity('rgd')` : la structure ouvre la porte, le propriétaire
+  // désigne les lignes. Migration `20260925170000_rgd_portefeuille_par_personne`.
+  //
+  // ⚠ POURQUOI LE FRONT REFAIT LE TRAVAIL DU SERVEUR. En vrai la RLS a déjà
+  // filtré : `RGD_PORTEFEUILLE` ne retire alors plus rien, et c'est le signe
+  // que les deux disent la même chose. Mais **le mode démo n'a pas de
+  // serveur** — il lit un jeu inventé dans le navigateur. Sans cette règle
+  // ici, la démonstration montrerait un cloisonnement qui n'existe pas, ou
+  // pire l'absence d'un cloisonnement qui existe. Les deux doivent rester
+  // cohérents : si une policy bouge là-bas, cette table bouge ici.
   //
   // ⚠ CES TABLES NE SONT PLUS TOUTES DES REFLETS (depuis le 22/09/2026).
   // La phase 2 les fait basculer une par une : celles que Supabase possède
@@ -123,7 +135,50 @@ export const scope = {
   // différence assumée : **ni UPDATE ni DELETE**. On ne retire pas une pierre
   // tombale — la retirer ressusciterait la fiche au relevé suivant.
   get canRgd() { return this.activityKeys.includes('rgd'); },
-  rgd(table) { return this.canRgd ? db.t(table) : []; },
+
+  // À quoi se reconnaît le propriétaire d'une ligne, table par table. Quatre
+  // tables le portent elles-mêmes ; les autres le tiennent de ce dont elles
+  // pendent — une affaire, un sous-traitant, un apporteur. Aucune ne porte
+  // DEUX fois la réponse : c'est ce qui évite qu'un chantier et son affaire
+  // finissent par désigner deux personnes différentes.
+  //
+  // Une table absente de cette table-ci reste commune à la structure : le
+  // contenu du site, les réglages, la plomberie de la synchronisation. Là,
+  // c'est l'ÉCRITURE qui est réservée à la direction, côté serveur — un chargé
+  // d'affaires ne publie pas sur rgdrenova.fr.
+  RGD_PORTEFEUILLE: {
+    rgd_clients: 'moi', rgd_demandes: 'moi', rgd_apporteurs: 'moi', rgd_sous_traitants: 'moi',
+    rgd_chantiers: 'affaire', rgd_devis: 'affaire', rgd_paiements: 'affaire', rgd_fournitures: 'affaire',
+    rgd_missions: 'sous_traitant', rgd_st_commissions: 'sous_traitant',
+    rgd_st_paiements: 'sous_traitant', rgd_st_pieces: 'sous_traitant',
+    rgd_apports: 'apporteur',
+  },
+
+  rgdVoitLigne(table, r) {
+    switch (this.RGD_PORTEFEUILLE[table]) {
+      case 'moi': return r.owner_id === this.user.id;
+      // `deal_id` vide → l'affaire n'existe pas → personne. C'est le cas des
+      // paiements venus de Costructor avec une référence client seule : ils
+      // restent à la direction, faute de savoir à qui ils sont.
+      case 'affaire': return !!r.deal_id && this.canSeeDeal(db.byId('deals', r.deal_id));
+      case 'sous_traitant': return db.byId('rgd_sous_traitants', r.sous_traitant_id)?.owner_id === this.user.id;
+      case 'apporteur': return db.byId('rgd_apporteurs', r.apporteur_id)?.owner_id === this.user.id;
+      default: return true;
+    }
+  },
+
+  rgd(table) {
+    if (!this.canRgd) return [];
+    const lignes = db.t(table);
+    if (this.isDirection || !this.RGD_PORTEFEUILLE[table]) return lignes;
+    return lignes.filter(r => this.rgdVoitLigne(table, r));
+  },
+
+  // Qui peut recevoir un dossier RGD : la direction, et les chargés d'affaires
+  // qui portent RGD. Même règle que `candidatsResponsable` pour une affaire —
+  // attribuer une demande à quelqu'un qui ne porte pas l'activité la lui
+  // ferait disparaître aussitôt.
+  candidatsRgd() { return this.users().filter(u => u.role === 'direction' || (u.activities || []).includes('rgd')); },
 
   users() { return db.t('profiles').filter(u => u.active !== false); },
   // Ceux a qui l'on peut ecrire. `users()` reste entier a cote : confier une
