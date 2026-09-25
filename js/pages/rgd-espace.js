@@ -55,7 +55,12 @@ export const ONGLETS = [
   // ⚠ « Application RGD » DISPARAÎTRA — c'est l'étape 5 — et cette ligne partira
   // sans que le reste du menu bouge : c'est aussi pour ça qu'elle est ici, en
   // dernier.
-  { label: 'Facturation', bas: true, sous: [
+  // ⚠ REPLIÉ PAR DÉFAUT (`pliable`), demandé par Mickael le 25/09/2026 : cinq
+  // entrées qu'on n'ouvre pas tous les jours prenaient un tiers du menu. Le
+  // groupe se rouvre d'un clic, l'état est gardé par navigateur, et il se déplie
+  // tout seul quand on est sur l'un de ses écrans — sinon plus rien ne dirait où
+  // l'on se trouve.
+  { label: 'Facturation', bas: true, pliable: true, sous: [
     { hash: '#/rgd/devis', label: 'Devis' },
     { hash: '#/rgd/paiements', label: 'Encaissements' },
     { hash: '#/rgd/costructor', label: 'Costructor' },

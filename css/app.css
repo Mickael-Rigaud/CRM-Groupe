@@ -434,6 +434,41 @@ select.cell-in { text-align: left; }
    bloc partait à y=1084, donc hors de l'écran, et il fallait faire défiler
    toute la page pour atteindre une entrée de menu. Un menu ne se mérite pas. */
 .esp-side-bas { margin-top: 16px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,.12); }
+
+/* ---------- Un groupe de menu qui se replie ----------
+   Un bouton porte le titre, une boite porte les liens, et `data-ouvert` sur le
+   groupe dit lequel des deux etats on montre.
+
+   ⚠ CE N'EST PLUS UN <details>, ET C'EST DELIBERE. Il donnait le pliage, le
+   clavier et l'etat sans une ligne de code, mais il NE SE REPLIE PAS dans le
+   navigateur integre qui sert a eprouver les ecrans — verifie sur un element
+   VIERGE cree hors de l'application, contenu visible ferme comme ouvert. Un
+   bouton, un attribut et une regle marchent partout ET se verifient ici. */
+.esp-side-plis { display: flex; flex-direction: column; gap: 3px; margin-top: 3px; }
+.esp-side-pliable[data-ouvert="0"] > .esp-side-plis { display: none; }
+/* ⚠ Un <button> arrive avec un fond, une bordure, sa propre police et un texte
+   centre. Sans ce desabillage il ne ressemblerait pas aux autres intitules de
+   groupe, qui sont des <span>. */
+/* ⚠ `font: inherit` SERAIT LE PIEGE. Ce raccourci remet TOUTE la typographie —
+   taille comprise — et il gagne sur `.esp-side-titre` (specificite 0,1,1 contre
+   0,1,0) : le titre du groupe repliable s'affichait en 13,5 px la ou les autres
+   intitules font 10,5. On ne reprend donc que la famille, et on laisse
+   `.esp-side-titre` decider de la taille, de la graisse et des majuscules. */
+button.esp-side-titre { background: none; border: 0; font-family: inherit; color: inherit;
+  text-align: left; width: 100%; }
+.esp-side-pliable > .esp-side-titre { cursor: pointer; display: flex;
+  align-items: center; gap: 6px; user-select: none; }
+/* Le chevron, qui tourne a l'ouverture. Il est APRES le titre et pousse a
+   droite : colle devant, il decalait le titre par rapport aux autres intitules
+   de groupe, qui n'en ont pas. */
+.esp-side-pliable > .esp-side-titre::after { content: ''; margin-left: auto; width: 6px; height: 6px;
+  border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg); transition: transform .15s ease; }
+.esp-side-pliable[data-ouvert="1"] > .esp-side-titre::after { transform: rotate(45deg); }
+.esp-side-pliable > .esp-side-titre:hover { color: rgba(255,255,255,.8); }
+/* Le titre garde son padding, mais la fleche doit rester dans la colonne. */
+.esp-side-pliable > .esp-side-titre { padding-right: 15px; }
+
 /* Une seconde rangee d'onglets, sous la premiere : les provenances de
    prospect. Plus petite et sans trait de separation, pour qu'on voie d'un coup
    d'oeil laquelle des deux commande l'autre. */
@@ -1178,6 +1213,13 @@ body:has(.esp-app) .subnav .datepill { display: none; }
   .esp-side-groupe { flex-direction: row; align-items: center; gap: 4px; margin-top: 0; flex: none; }
   /* La colonne devient une barre qui défile : « en bas » n'existe plus, le trait
      passe donc devant le groupe. */
+  /* Sur la bande horizontale le groupe se replie comme ailleurs — meme geste,
+     meme reglage memorise, et ses entrees s'alignent en rangee comme celles des
+     autres groupes. On pourrait le forcer ouvert ici (la bande defile deja, il
+     n'y a aucune hauteur a gagner) : ce serait deux comportements pour une
+     seule commande, qui changeraient en redimensionnant la fenetre. */
+  .esp-side-plis { flex-direction: row; align-items: center; gap: 4px; margin-top: 0; }
+
   .esp-side-bas { margin-top: 0; padding: 0 0 0 10px; border-top: 0; margin-left: 4px;
     border-left: 1px solid rgba(255,255,255,.14); }
   .esp-side-titre { padding: 0 2px 0 8px; align-self: center; white-space: nowrap; }
