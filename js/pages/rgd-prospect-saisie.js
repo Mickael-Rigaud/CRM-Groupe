@@ -41,6 +41,7 @@
 // la liste montre produirait des lignes à moitié vides.
 import { db } from '../data/db.js';
 import { openModal, closeModal, confirm, renderForm, readForm, toast, esc } from '../ui.js';
+import { scope } from '../data/scope.js';
 import { supprimerFicheRgd } from '../data/rgd-clients.js';
 
 // Ce que chaque sous-onglet réclame, en plus de l'identité.
@@ -151,14 +152,26 @@ export function formulaireProspect(sousVue, apporteurs, apresEnregistrement) {
     bouton.disabled = true; bouton.textContent = 'Création…';
 
     try {
-      // 1. Le contact. `activities: ['rgd']` est ce qui le rend visible aux
-      //    comptes RGD : sans lui, la fiche serait créée et invisible.
+      // 1. Le contact.
+      //
+      // ⚠ `activities: ['rgd']` NE REND RIEN VISIBLE, malgré ce que ce
+      // commentaire affirmait jusqu'au 25/09/2026. La policy `contacts_select`
+      // ne regarde `activities` que pour le rôle `propulsion` ; pour tous les
+      // autres elle demande `owner_id = auth.uid()` ou une affaire visible.
+      // Tant que les seuls comptes RGD étaient des directions, l'erreur ne se
+      // voyait pas — la direction voit tout. Un chargé d'affaires, lui, aurait
+      // créé un prospect et ne l'aurait PAS retrouvé : la fiche `rgd_clients`
+      // serait bien à lui, mais le contact qui porte le nom et le téléphone
+      // lui serait resté fermé. D'où `owner_id` ci-dessous, qui est ce qui
+      // ouvre vraiment. `activities` reste : il sert au marquage par structure
+      // dans les listes.
       const contact = await db.insert('contacts', propre({
         first_name: v.prenom, last_name: v.nom,
         email: v.email, phone: v.telephone,
         address: v.adresse, postal_code: v.code_postal, city: v.ville,
         type: 'Prospect', channel: sousVue === 'meta' ? 'meta_ads' : 'Saisie manuelle',
         activities: ['rgd'],
+        owner_id: scope.user?.id || null,
       }));
 
       // 2. La fiche RGD, dans la table de son onglet. `d1_id` reste absent :

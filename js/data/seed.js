@@ -239,21 +239,21 @@ export const SEED = {
   ],
 
   rgd_apporteurs: [
-    { id: 'ap1', d1_id: 8001, nom: 'Vasseur', prenom: 'Claire', societe: 'Cabinet Vasseur',
+    { id: 'ap1', owner_id: 'u-mickael', d1_id: 8001, nom: 'Vasseur', prenom: 'Claire', societe: 'Cabinet Vasseur',
       profession: 'Courtier en prets', telephone: '03 44 00 11 22', email: 'claire@example.com',
       adresse: '18 rue des Tilleuls', code_postal: '60300', ville: 'Senlis',
       type_partenaire: 'apporteur', actif: true, partenariat_signe: true,
       date_signature: '2026-03-14', source: 'demo' },
-    { id: 'ap2', d1_id: 8002, nom: 'Bouchard', prenom: 'Yanis', societe: 'Archi Bouchard',
+    { id: 'ap2', owner_id: 'u-charge', d1_id: 8002, nom: 'Bouchard', prenom: 'Yanis', societe: 'Archi Bouchard',
       profession: 'Architecte', telephone: '03 44 00 11 23',
       adresse: '5 place du Marche', code_postal: '60500', ville: 'Chantilly',
       type_partenaire: 'apporteur', actif: true, partenariat_signe: false, source: 'demo' },
-    { id: 'ap3', d1_id: 8003, nom: 'Leroy', prenom: 'Sabine', societe: 'Leroy Immobilier',
+    { id: 'ap3', owner_id: 'u-mickael', d1_id: 8003, nom: 'Leroy', prenom: 'Sabine', societe: 'Leroy Immobilier',
       profession: 'Agent immobilier', telephone: '03 44 00 11 24',
       code_postal: '60200', ville: 'Compiegne',
       // Inactif : c'est lui qui fait apparaitre la troisieme section.
       type_partenaire: 'apporteur', actif: false, partenariat_signe: false, source: 'demo' },
-    { id: 'ap4', d1_id: 8004, nom: 'Materiaux du Valois', societe: 'Materiaux du Valois',
+    { id: 'ap4', owner_id: 'u-mickael', d1_id: 8004, nom: 'Materiaux du Valois', societe: 'Materiaux du Valois',
       profession: 'Negoce de materiaux', telephone: '03 44 00 11 25',
       adresse: '2 zone de la Gare', code_postal: '60800', ville: 'Crepy-en-Valois',
       type_partenaire: 'fournisseur', actif: true, partenariat_signe: false, source: 'demo' },
@@ -276,21 +276,21 @@ export const SEED = {
   ],
 
   rgd_sous_traitants: [
-    { id: 'st1', d1_id: 9001, raison_sociale: 'Élec Démo SARL', contact_nom: 'Paul Martin',
+    { id: 'st1', owner_id: 'u-mickael', d1_id: 9001, raison_sociale: 'Élec Démo SARL', contact_nom: 'Paul Martin',
       email: 'paul@example.com', telephone: '02 61 91 00 21', siret: '00000000000001',
       specialites: 'Électricité', adresse: '4 rue de la Démo, 37000 Tours',
       actif: true, statut_relation: 'actif', updated_at: d(-1) },
-    { id: 'st2', d1_id: 9002, raison_sociale: 'Plomberie Exemple', contact_nom: 'Sonia Blanc',
+    { id: 'st2', owner_id: 'u-charge', d1_id: 9002, raison_sociale: 'Plomberie Exemple', contact_nom: 'Sonia Blanc',
       email: 'sonia@example.com', telephone: '02 61 91 00 22', siret: '00000000000002',
       specialites: 'Plomberie', adresse: '12 avenue du Test, 37100 Tours',
       // Une date venue de la synchronisation SANS document derrière : c'est le
       // cas que l'écran doit dénoncer, et il faut pouvoir le voir en démo.
       attestation_vigilance_expire: day(120),
       actif: true, statut_relation: 'actif', updated_at: d(-1) },
-    { id: 'st3', d1_id: 9003, raison_sociale: 'Couverture du Val', contact_nom: 'Karim Lefèvre',
+    { id: 'st3', owner_id: 'u-mickael', d1_id: 9003, raison_sociale: 'Couverture du Val', contact_nom: 'Karim Lefèvre',
       telephone: '02 61 91 00 23', specialites: 'Couverture',
       actif: true, statut_relation: 'potentiel', updated_at: d(-1) },
-    { id: 'st4', d1_id: 9004, raison_sociale: 'Peinture Ancienne', contact_nom: 'Yves Roux',
+    { id: 'st4', owner_id: 'u-mickael', d1_id: 9004, raison_sociale: 'Peinture Ancienne', contact_nom: 'Yves Roux',
       email: 'yves@example.com', specialites: 'Peinture',
       actif: false, statut_relation: 'actif', updated_at: d(-30) },
   ],
@@ -390,23 +390,23 @@ export const SEED = {
   // fiche qui en porte est refusée à la suppression AVANT même la question, et
   // la pierre tombale ne se serait jamais essayée.
   rgd_clients: [
-    { id: 'rc1', contact_id: 'c1', statut: 'prospect', statut_suivi: 'nouveau_prospect',
+    { id: 'rc1', owner_id: 'u-charge', contact_id: 'c1', statut: 'prospect', statut_suivi: 'nouveau_prospect',
       source: 'meta_ads', meta_received_at: d(-6), meta_type_projet: 'Rénovation complète',
       meta_budget: '30 000 €', notes: '', maj: d(-6) },
-    { id: 'rc2', contact_id: 'c9', statut: 'prospect', statut_suivi: 'relance_1',
+    { id: 'rc2', owner_id: 'u-charge', contact_id: 'c9', statut: 'prospect', statut_suivi: 'relance_1',
       source: 'meta_ads', meta_received_at: d(-2), meta_type_projet: 'Isolation',
       notes: 'Message laissé sur répondeur.', maj: d(-1) },
-    { id: 'rc3', contact_id: 'c12', statut: 'prospect', statut_suivi: 'relance_2',
+    { id: 'rc3', owner_id: 'u-mickael', contact_id: 'c12', statut: 'prospect', statut_suivi: 'relance_2',
       source: 'Formulaire site', notes: '', maj: d(-4) },
-    { id: 'rc4', contact_id: 'c13', d1_id: 7001, statut: 'prospect', statut_suivi: 'relance_3',
+    { id: 'rc4', owner_id: 'u-mickael', contact_id: 'c13', d1_id: 7001, statut: 'prospect', statut_suivi: 'relance_3',
       source: 'manuel', notes: 'Ne répond plus depuis trois semaines.', maj: d(-9) },
-    { id: 'rc5', contact_id: 'c14', statut: 'qualifie', statut_suivi: 'a_contacter',
+    { id: 'rc5', owner_id: 'u-mickael', contact_id: 'c14', statut: 'qualifie', statut_suivi: 'a_contacter',
       source: 'google_calendar', notes: 'Fiche créée depuis le rendez-vous.', maj: d(-1) },
     // Deux étapes plus loin, pour vérifier qu'aucun filtre de statut
     // n'apparaît là où l'onglet est déjà le statut.
-    { id: 'rc6', contact_id: 'c15', statut: 'qualifie', statut_suivi: 'rdv_planifie',
+    { id: 'rc6', owner_id: 'u-mickael', contact_id: 'c15', statut: 'qualifie', statut_suivi: 'rdv_planifie',
       source: 'google_calendar', notes: '', maj: d(-1) },
-    { id: 'rc7', contact_id: 'c8', statut: 'client', statut_suivi: 'devis_envoye',
+    { id: 'rc7', owner_id: 'u-mickael', contact_id: 'c8', statut: 'client', statut_suivi: 'devis_envoye',
       source: 'manuel', notes: '', maj: d(-8) },
 
     // ⚠ CELLES-CI PORTENT UN `costructor_id`, ET C'EST CE QUI LES FAIT ENTRER
@@ -418,7 +418,7 @@ export const SEED = {
     // Les trois couvrent les trois formes que la colonne doit savoir ecrire :
     // un particulier avec nom et prenom, un professionnel qui n'a qu'une
     // raison sociale, et une personne sans nom de famille.
-    { id: 'rc8', contact_id: 'c2', costructor_id: 'cli_demo_01', statut: 'client',
+    { id: 'rc8', owner_id: 'u-mickael', contact_id: 'c2', costructor_id: 'cli_demo_01', statut: 'client',
       statut_suivi: 'chantier_termine', source: 'costructor', notes: '', maj: d(-40) },
     { id: 'rc9', organisation_id: 'o4', costructor_id: 'cli_demo_02', statut: 'client',
       statut_suivi: 'chantier_en_cours', source: 'costructor', notes: '', maj: d(-12) },
@@ -446,7 +446,7 @@ export const SEED = {
   // 24/09/2026. Elle se lit désormais « nouveau prospect » ; cette ligne est là
   // pour que la prochaine régression se voie sans ouvrir la production.
   rgd_demandes: [
-    { id: 'rd1', d1_id: 7101, prenom: 'Camille', nom: 'Vasseur', email: 'camille.vasseur@example.com',
+    { id: 'rd1', owner_id: 'u-charge', d1_id: 7101, prenom: 'Camille', nom: 'Vasseur', email: 'camille.vasseur@example.com',
       telephone: '06 39 98 00 21', ville: 'Tours', code_postal: '37000',
       adresse: '4 rue des Tanneurs', types_travaux: '["Isolation","Menuiseries"]',
       budget: '15 000 €', statut: 'nouveau_prospect', date_demande: d(-5),

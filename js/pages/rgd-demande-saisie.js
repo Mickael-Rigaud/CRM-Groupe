@@ -52,6 +52,7 @@
 // La validation est donc faite à la main, écran par écran.
 import { db } from '../data/db.js';
 import { openModal, closeModal, toast, esc } from '../ui.js';
+import { scope } from '../data/scope.js';
 import { DEMANDEUR, BIEN, RESIDENCE, TRAVAUX, BUDGETS, CONNU } from '../data/rgd-formulaire.js';
 
 // ⚠ LES LISTES DE RÉPONSES ONT DÉMÉNAGÉ dans `data/rgd-formulaire.js` le
@@ -262,13 +263,25 @@ export function formulaireDemande(apporteurs, apresEnregistrement) {
 
     creer.disabled = true; creer.textContent = 'Création…';
     try {
-      // 1. Le contact. `activities: ['rgd']` est ce qui le rend visible aux
-      //    comptes RGD : sans lui, la fiche serait créée et invisible.
+      // 1. Le contact.
+      //
+      // ⚠ `activities: ['rgd']` NE REND RIEN VISIBLE, malgré ce que ce
+      // commentaire affirmait jusqu'au 25/09/2026. La policy `contacts_select`
+      // ne regarde `activities` que pour le rôle `propulsion` ; pour tous les
+      // autres elle demande `owner_id = auth.uid()` ou une affaire visible.
+      // Tant que les seuls comptes RGD étaient des directions, l'erreur ne se
+      // voyait pas — la direction voit tout. Un chargé d'affaires, lui, aurait
+      // créé un prospect et ne l'aurait PAS retrouvé : la fiche `rgd_clients`
+      // serait bien à lui, mais le contact qui porte le nom et le téléphone
+      // lui serait resté fermé. D'où `owner_id` ci-dessous, qui est ce qui
+      // ouvre vraiment. `activities` reste : il sert au marquage par structure
+      // dans les listes.
       const contact = await db.insert('contacts', vide({
         first_name: lire('prenom'), last_name: lire('nom'),
         email, phone: tel,
         address: lire('adresse'), postal_code: lire('code_postal'), city: lire('ville'),
         type: 'Prospect', channel: 'Saisie manuelle', activities: ['rgd'],
+        owner_id: scope.user?.id || null,
       }));
 
       // 2. La demande. Pas de `d1_id` : elle naît ici, le relevé Cloudflare ne

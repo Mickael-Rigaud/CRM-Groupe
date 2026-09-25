@@ -54,6 +54,7 @@ import { formulaireModif, enregistrerModif, lireModif, refusDeModifier, valeursP
   from './rgd-fiche-modif.js';
 import { listeTravaux } from '../data/rgd-formulaire.js';
 import { rendezVousDeLaFiche, coordonneesDuRendezVous } from '../data/rgd-rdv.js';
+import { attribuerFicheRgd, proprietaireDeLaFiche } from './rgd-attribuer.js';
 
 const ETAT_CHANTIER = {
   demarrage: { label: 'Préparé', ton: 'amber' },
@@ -179,6 +180,13 @@ export function ouvrirFicheRgd(x, onChange) {
       : [];
     const i = ORDRE_ETAPES.indexOf(etapeCourante);
     const perdu = etapeCourante === 'archives';
+    // Qui porte la fiche, et qui a le droit de le changer. Seules les fiches
+    // du portefeuille RGD — une demande du site, un client — se confient ; les
+    // autres écrans qui ouvrent cette même fiche n'ont pas de propriétaire à
+    // montrer, d'où le test sur la cible plutôt qu'un `scope.isDirection` seul.
+    const responsable = proprietaireDeLaFiche(f);
+    const peutAttribuer = scope.isDirection && !enModification
+      && (x.cible === 'demande' || x.cible === 'client');
     const evs = historique();
     // ⚠ LE RENDEZ-VOUS GOOGLE PORTE CE QUE PERSONNE N'A RESAISI. Sa description
     // contient le téléphone et le détail du projet, tels que Mickael les a notés
@@ -319,6 +327,14 @@ export function ouvrirFicheRgd(x, onChange) {
               <span class="rgdf-tag">${esc(x.provenanceLabel || x.provenance)}</span>
               <span class="rgdf-tag ${perdu ? 'est-perdu' : 'est-etape'}">${esc(perdu ? 'Perdu' : nomEtape(etapeCourante))}</span>
               ${x.recu ? `<span class="rgdf-tag">Reçu le ${esc(fmtDate(x.recu))}</span>` : ''}
+              <!-- Qui porte la fiche. « À attribuer » plutôt qu'un tiret : un
+                   tiret ne dit pas qu'il y a quelque chose à faire — c'est la
+                   même règle que SANS_RESPONSABLE sur les cartes du pipeline.
+                   (Pas d'accent grave ici : dans un commentaire HTML posé au
+                   milieu d'un gabarit, il FERME le gabarit, sans un mot.) -->
+              ${responsable
+                ? `<span class="rgdf-tag">${esc(responsable.full_name)}</span>`
+                : '<span class="rgdf-tag est-perdu">À attribuer</span>'}
             </div>
           </div>
           ${blocRendezVous(rdvs)}
@@ -327,6 +343,12 @@ export function ouvrirFicheRgd(x, onChange) {
           ? '<button type="button" class="btn ghost sm rgdf-modifier" id="rgdf-modifier">Modifier les informations</button>'
           : refusDeModifier(x)
             ? `<p class="rgdf-origine" title="${esc(refusDeModifier(x))}">Lecture seule</p>` : ''}
+        <!-- Attribuer ne dépend pas de refusDeModifier : une fiche en lecture
+             seule (un reflet de l'application RGD) se confie tout de même, car
+             c'est le CRM qui décide qui la porte, pas le relevé. -->
+        ${peutAttribuer
+          ? `<button type="button" class="btn ghost sm rgdf-attribuer" id="rgdf-attribuer">${responsable ? 'Changer de responsable' : 'Attribuer à quelqu\'un'}</button>`
+          : ''}
         <div class="rgdf-tuiles">
           ${surMontant
             ? tuile(montantEtape > 0 ? eur(montantEtape) : '—', 'Montant HT')
@@ -454,6 +476,11 @@ export function ouvrirFicheRgd(x, onChange) {
 
     const bModifier = m.querySelector('#rgdf-modifier');
     if (bModifier) bModifier.onclick = () => { enModification = true; dessine(); };
+
+    const bAttribuer = m.querySelector('#rgdf-attribuer');
+    // `dessine()` après coup, et pas seulement `onChange` : la fiche reste
+    // ouverte devant la personne, il faut qu'elle voie le nouveau nom.
+    if (bAttribuer) bAttribuer.onclick = () => attribuerFicheRgd(x, () => { dessine(); onChange?.(); }, dessine);
 
     const formModif = m.querySelector('#rgdm');
     if (formModif) {
