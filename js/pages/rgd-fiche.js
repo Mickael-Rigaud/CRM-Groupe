@@ -71,7 +71,7 @@ const nomEtape = (cle) => ETAPES_RGD.find(e => e.key === cle)?.label || cle;
 
 // Les initiales, pour la pastille de l'en-tête. Deux lettres au plus : trois
 // sur un nom composé donnent une bouillie illisible dans un cercle.
-const initiales = (nom) => String(nom || '?').trim().split(/\s+/)
+export const initiales = (nom) => String(nom || '?').trim().split(/\s+/)
   .filter(m => /[a-zà-ÿ]/i.test(m)).slice(0, 2).map(m => m[0].toUpperCase()).join('') || '?';
 
 const siens = (liste, f) => liste.filter(x =>
@@ -95,6 +95,22 @@ const ICONES = {
   texte: 'M4 4h12M4 8h12M4 12h8M4 16h5',
 };
 const pict = (cle) => `<svg viewBox="0 0 20 20" aria-hidden="true"><path d="${ICONES[cle]}"/></svg>`;
+
+// ⚠ `tuile` ET `info` SONT SORTIS DE `dessine()` POUR ÊTRE PARTÂGÉS avec la
+// fiche partenaire (25/09/2026). Ils ne fermaient sur rien ; les recopier
+// là-bas aurait fabriqué deux présentations qui se ressemblent le premier jour
+// et divergent au premier ajustement — et c'est précisément la couleur de ces
+// blocs que Mickael est venu chercher.
+export const tuile = (valeur, quoi) => `<div class="rgdf-tuile">
+  <b>${esc(String(valeur))}</b><span>${esc(quoi)}</span></div>`;
+
+// ⚠ UNE LIGNE VIDE NE S'AFFICHE PAS. Un tiret en face de six intitulés donne
+// une fiche qui a l'air pleine et ne dit rien.
+export const info = (icone, quoi, valeur, teinte) => valeur
+  ? `<div class="rgdf-ligne ${teinte || ''}">
+       <span class="rgdf-rond">${pict(icone)}</span>
+       <div><span class="rgdf-quoi">${esc(quoi)}</span><div class="rgdf-valeur">${valeur}</div></div>
+     </div>` : '';
 
 // Les rendez-vous, en haut à droite de l'en-tête
 //
@@ -292,16 +308,6 @@ export function ouvrirFicheRgd(x, onChange) {
         .filter(Boolean).join(' · ');
     })();
 
-    const tuile = (valeur, quoi) => `<div class="rgdf-tuile">
-      <b>${esc(String(valeur))}</b><span>${esc(quoi)}</span></div>`;
-
-    // ⚠ UNE LIGNE VIDE NE S'AFFICHE PAS. Un tiret en face de six intitulés
-    // donne une fiche qui a l'air pleine et ne dit rien.
-    const info = (icone, quoi, valeur, teinte) => valeur
-      ? `<div class="rgdf-ligne ${teinte || ''}">
-           <span class="rgdf-rond">${pict(icone)}</span>
-           <div><span class="rgdf-quoi">${esc(quoi)}</span><div class="rgdf-valeur">${valeur}</div></div>
-         </div>` : '';
 
     const html = `
       <div class="rgdf-hero">

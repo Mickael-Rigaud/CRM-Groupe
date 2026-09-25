@@ -55,6 +55,12 @@ import { cadre, guard } from './rgd-espace.js';
 import { creerPartenaire, majPartenaire, supprimerPartenaire,
          apportsDe, totauxDe, creerApport, majApport, supprimerApport }
   from '../data/rgd-partenaires.js';
+// ⚠ LA PRÉSENTATION EST CELLE DE LA FICHE CLIENT, empruntée et non recopiée
+// (25/09/2026 : « ajoute de la couleur dans la fiche, c'est trop triste là »).
+// L'en-tête sur le fond de la marque, les tuiles de chiffres et les pastilles
+// rondes colorées devant chaque information existaient déjà : deux fiches qui
+// se ressemblent s'apprennent une fois.
+import { initiales, tuile, info } from './rgd-fiche.js';
 
 // Deux rôles, et pas trois. « Commercial » et « autre » ont été retirés le
 // 25/09/2026 : une fiche qui les portait est devenue un apporteur.
@@ -134,11 +140,8 @@ const bloc = (titre, dedans) => `
  * saisie nulle part — le relevé la reposait, ce qui est justement ce qu'on
  * vient de couper.
  */
-function formulairePartenaire(a, apres, typeDefaut = 'apporteur') {
-  const creation = !a;
-  const v = a || { type_partenaire: typeDefaut, actif: true };
-
-  const corps = `<form id="paf" class="paf">
+function corpsFormulaire(v, creation) {
+  return `<form id="paf" class="paf">
     ${bloc('Le partenaire', `
       ${champ('nom', 'Nom', v.nom, { required: true })}
       ${champ('prenom', 'Prénom', v.prenom)}
@@ -166,14 +169,25 @@ function formulairePartenaire(a, apres, typeDefaut = 'apporteur') {
     <div class="paf-pied">
       ${creation ? '' : '<button type="button" class="btn ghost danger" id="paf-suppr">Supprimer</button>'}
       <span class="grow"></span>
-      <button type="button" class="btn ghost" data-close>Annuler</button>
+      <button type="button" class="btn ghost" id="paf-annuler">Annuler</button>
       <button type="submit" class="btn primary" id="paf-ok">${creation ? 'Créer le partenaire' : 'Enregistrer'}</button>
     </div>
   </form>`;
+}
 
-  openModal(creation ? 'Nouveau partenaire' : `Modifier — ${nomDe(v)}`, corps,
-    { wide: true, onOpen: (m) => {
+/**
+ * Brancher le formulaire une fois posé dans le DOM.
+ *
+ * @param {Element} hote   l'élément qui porte le `<form id="paf">`
+ * @param {object|null} a  la fiche à modifier, ou `null` pour une création
+ * @param {function} apres ce qu'on fait après un enregistrement réussi
+ * @param {function} [annuler] ce qu'on fait sur « Annuler » ; ferme la modale à défaut
+ */
+function brancherFormulaire(hote, a, apres, annuler) {
+      const creation = !a;
+      const m = hote;
       const form = m.querySelector('#paf');
+      m.querySelector('#paf-annuler').onclick = () => (annuler || closeModal)();
 
       form.onsubmit = async (ev) => {
         ev.preventDefault();
@@ -196,9 +210,8 @@ function formulairePartenaire(a, apres, typeDefaut = 'apporteur') {
           ok.disabled = false; ok.textContent = creation ? 'Créer le partenaire' : 'Enregistrer';
           return toast(`Non enregistré — ${r.motif}`, 'err');
         }
-        closeModal();
         toast(creation ? 'Partenaire créé' : 'Partenaire enregistré');
-        apres?.();
+        apres?.(r.ligne);
       };
 
       const suppr = m.querySelector('#paf-suppr');
@@ -209,9 +222,16 @@ function formulairePartenaire(a, apres, typeDefaut = 'apporteur') {
         if (!r.ok) return toast(`Non supprimé — ${r.motif}`, 'err');
         closeModal();
         toast('Partenaire supprimé');
-        apres?.();
+        apres?.(null);
       };
-    } });
+}
+
+/** Créer un partenaire : le formulaire seul, dans sa propre fenêtre. */
+function nouveauPartenaire(apres, typeDefaut = 'apporteur') {
+  const v = { type_partenaire: typeDefaut, actif: true };
+  openModal('Nouveau partenaire', corpsFormulaire(v, true), { wide: true, onOpen: (m) => {
+    brancherFormulaire(m, null, () => { closeModal(); apres?.(); });
+  } });
 }
 
 // ------------------------------------------------------- le formulaire apport
@@ -254,7 +274,14 @@ function formulaireApport(apport, partenaires, apres, apporteurDefaut = '') {
     </div>
   </form>`;
 
-  openModal(creation ? 'Nouvel apport' : 'Modifier l’apport', corps, { onOpen: (m) => {
+  // ⚠ `onClose` RAMÈNE À LA FICHE, y compris sur « Annuler » et sur la croix.
+  // Cette fenêtre REMPLACE celle de la fiche (`openModal` ferme la précédente) :
+  // sans retour, renoncer à saisir un apport refermerait la fiche qu'on était en
+  // train de lire. Sur un enregistrement réussi, `apres` rouvre la fiche et
+  // `closeModal(true)` qu'il déclenche ne rejoue pas `onClose` — donc pas de
+  // double retour.
+  openModal(creation ? 'Nouvel apport' : 'Modifier l’apport', corps,
+    { onClose: () => apres?.(), onOpen: (m) => {
     const form = m.querySelector('#pap');
     form.onsubmit = async (ev) => {
       ev.preventDefault();
@@ -278,7 +305,7 @@ function formulaireApport(apport, partenaires, apres, apporteurDefaut = '') {
         ok.disabled = false; ok.textContent = creation ? 'Ajouter l’apport' : 'Enregistrer';
         return toast(`Non enregistré — ${r.motif}`, 'err');
       }
-      closeModal(); toast(creation ? 'Apport ajouté' : 'Apport enregistré'); apres?.();
+      toast(creation ? 'Apport ajouté' : 'Apport enregistré'); apres?.();
     };
 
     const suppr = m.querySelector('#pap-suppr');
@@ -286,9 +313,151 @@ function formulaireApport(apport, partenaires, apres, apporteurDefaut = '') {
       if (!await confirm('Supprimer cet apport ?')) return;
       const r = await supprimerApport(apport.id);
       if (!r.ok) return toast(`Non supprimé — ${r.motif}`, 'err');
-      closeModal(); toast('Apport supprimé'); apres?.();
+      toast('Apport supprimé'); apres?.();
     };
   } });
+}
+
+// ------------------------------------------------------------- la fiche
+
+const ligneApport = (x, ecriture) => {
+  const i = ISSUES[x.issue];
+  return `<tr ${ecriture ? `data-apport="${esc(String(x.id))}"` : ''}>
+    <td class="small">${x.date_apport ? esc(fmtDate(x.date_apport)) : '<span class="muted">—</span>'}</td>
+    <td><b>${esc(x.client || '—')}</b></td>
+    <td>${i ? `<span class="chip ${i.ton}">${esc(i.label)}</span>`
+            : '<span class="muted small">Pas encore tranché</span>'}</td>
+    <td class="num">${x.montant_devis != null ? esc(eur(x.montant_devis)) : '<span class="muted">—</span>'}</td>
+    <td class="num">${x.montant_commission != null
+      ? `<span class="${x.issue === 'gagne' ? '' : 'muted'}">${esc(eur(x.montant_commission))}</span>`
+      : '<span class="muted">—</span>'}</td>
+  </tr>`;
+};
+
+/**
+ * La fiche d'un partenaire.
+ *
+ * ⚠ ELLE REMPLACE LE FORMULAIRE SEC (25/09/2026). Cliquer une ligne ouvrait
+ * directement les champs de saisie : pour lire un numéro de téléphone il
+ * fallait entrer en modification, et l'écran était « trop triste ». La fiche
+ * MONTRE d'abord — en-tête coloré, chiffres, pastilles rondes —, et « Modifier
+ * les informations » cède la place au formulaire EN PLACE.
+ *
+ * ⚠ EN PLACE, ET PAS DANS UNE SECONDE FENÊTRE : `openModal` ferme celle qui
+ * est ouverte avant d'ouvrir la suivante, donc un formulaire par-dessus la
+ * fiche l'aurait fait disparaître et « Annuler » n'aurait eu nulle part où
+ * revenir. C'est la règle déjà posée sur la fiche client.
+ *
+ * ⚠ LE TABLEAU DES APPORTS EST ICI, et non plus en bas de l'écran (demandé le
+ * 25/09) : les apports d'un partenaire se lisent en face de ce qu'il a
+ * rapporté, pas dans une liste commune où il faut d'abord retrouver son nom.
+ */
+function ouvrirFichePartenaire(id, apres) {
+  let enModification = false;
+
+  // ⚠ CHAQUE REDESSIN ROUVRE LA MODALE, il n'écrase pas son contenu.
+  // `openModal` construit l'en-tête ET le corps ; poser un `innerHTML` sur la
+  // fenêtre emporterait la croix de fermeture. `closeModal(true)`, qu'il appelle
+  // en tête, ne déclenche pas `onClose` — c'est ce qui permet de redessiner sans
+  // faire croire à une fermeture. Même mécanique que la fiche client.
+  const dessine = () => {
+    const a = scope.rgd('rgd_apporteurs').find(x => String(x.id) === String(id));
+    if (!a) { closeModal(); return; }
+    const t = totauxDe(a.id);
+    const siens = apportsDe(a.id);
+    const r = ROLES[a.type_partenaire] || ROLES.apporteur;
+    const ecriture = scope.canRgd;
+
+    const html = `
+      <div class="rgdf-hero">
+        <div class="rgdf-hero-haut">
+          <div class="rgdf-avatar">${esc(initiales(nomDe(a)))}</div>
+          <div class="rgdf-identite">
+            <h2>${esc(nomDe(a))}</h2>
+            <div class="rgdf-meta">
+              <span class="rgdf-tag">${esc(r.label)}</span>
+              <span class="rgdf-tag ${estActif(a) ? 'est-etape' : 'est-perdu'}">${estActif(a) ? 'Actif' : 'Inactif'}</span>
+              ${a.partenariat_signe ? '<span class="rgdf-tag">Convention signée</span>' : ''}
+            </div>
+          </div>
+        </div>
+        ${!enModification && ecriture
+          ? '<button type="button" class="btn ghost sm rgdf-modifier" id="pa-modifier">Modifier les informations</button>'
+          : ''}
+        <div class="rgdf-tuiles">
+          ${tuile(t.devis ? eur(t.devis) : '—', 'Montant devis')}
+          ${tuile(t.commission ? eur(t.commission) : '—', 'Commissions')}
+          ${tuile(t.apports, t.apports > 1 ? 'Apports' : 'Apport')}
+          ${tuile(t.gagnes, t.gagnes > 1 ? 'Gagnés' : 'Gagné')}
+        </div>
+      </div>
+
+      <div class="rgdf-corps">
+        <div class="rgdf-colonne">
+          ${enModification ? corpsFormulaire(a, false) : `
+          <section class="rgdf-bloc">
+            <h3>Comment le joindre</h3>
+            ${info('tel', 'Téléphone', a.telephone ? `<a href="tel:${esc(a.telephone)}">${esc(a.telephone)}</a>` : '', 'est-vert')}
+            ${info('mail', 'E-mail', a.email ? `<a href="mailto:${esc(a.email)}">${esc(a.email)}</a>` : '', 'est-bleu')}
+            ${info('lieu', 'Adresse', esc(adresseDe(a)), 'est-gris')}
+            ${!a.telephone && !a.email ? '<p class="rgdf-rien">Aucun moyen de contact renseigné.</p>' : ''}
+          </section>
+
+          <section class="rgdf-bloc">
+            <h3>Le partenariat</h3>
+            ${info('personne', 'Métier', esc(a.profession || ''), 'est-orange')}
+            ${info('source', 'Société', esc(a.societe || a.raison_sociale || ''), 'est-violet')}
+            ${info('regle', 'Convention',
+              a.partenariat_signe
+                ? 'Signée' + (a.date_signature ? ` le ${esc(fmtDate(a.date_signature))}` : '')
+                : 'Non signée', a.partenariat_signe ? 'est-vert' : 'est-gris')}
+            ${info('texte', 'Notes', esc(a.notes || ''), 'est-gris')}
+          </section>`}
+
+          <section class="rgdf-bloc">
+            <h3>Ses apports <span class="rgdf-compte">${siens.length}</span></h3>
+            ${siens.length ? `<div class="rgdf-tableau"><table>
+              <thead><tr><th>Date</th><th>Client</th><th>Issue</th>
+                <th class="num">Devis</th><th class="num">Commission</th></tr></thead>
+              <tbody>${siens.map(x => ligneApport(x, ecriture)).join('')}</tbody>
+            </table></div>`
+            : '<p class="rgdf-rien">Aucun apport enregistré pour ce partenaire.</p>'}
+            ${ecriture ? `<div class="rgdf-ajout" style="margin-top:10px">
+              <button type="button" class="btn sm" id="pa-apport">+ Nouvel apport</button>
+            </div>` : ''}
+            <p class="rgdf-source">La commission n’entre dans les totaux que sur une
+              affaire <b>gagnée</b> : le montant du devis, lui, compte dès qu’il est chiffré.</p>
+          </section>
+        </div>
+      </div>`;
+
+    const m = openModal('', html, { wide: true, onClose: () => apres?.() });
+    m.classList.add('rgdf');
+
+    if (enModification) {
+      brancherFormulaire(m, a, (ligne) => {
+        if (ligne === null) return;          // suppression : la modale est déjà fermée
+        enModification = false; dessine(); apres?.();
+      }, () => { enModification = false; dessine(); });
+    }
+    const bMod = m.querySelector('#pa-modifier');
+    if (bMod) bMod.onclick = () => { enModification = true; dessine(); };
+
+    // ⚠ APRÈS UN APPORT, ON REVIENT SUR LA FICHE. `formulaireApport` ouvre sa
+    // propre fenêtre, qui REMPLACE celle-ci ; sans ce retour, enregistrer un
+    // apport refermerait la fiche qu'on était en train de lire.
+    const revenir = () => { dessine(); apres?.(); };
+    const bApp = m.querySelector('#pa-apport');
+    if (bApp) bApp.onclick = () =>
+      formulaireApport(null, scope.rgd('rgd_apporteurs'), revenir, a.id);
+
+    m.querySelectorAll('[data-apport]').forEach(tr => tr.onclick = () => {
+      const x = siens.find(y => String(y.id) === tr.dataset.apport);
+      if (x) formulaireApport(x, scope.rgd('rgd_apporteurs'), revenir, a.id);
+    });
+  };
+
+  dessine();
 }
 
 // ------------------------------------------------------------------- l'écran
@@ -353,53 +522,11 @@ export const rgdPartenairesPage = {
         </section>`;
       };
 
-      // Le tableau des apports, en bas : une ligne par affaire présentée.
-      const apports = scope.rgd('rgd_apports')
-        .slice()
-        .sort((a, b) => String(b.date_apport || '').localeCompare(String(a.date_apport || '')));
-      const parId = new Map(tous.map(a => [a.id, a]));
-      const totalDevis = apports.reduce((t, a) => t + (Number(a.montant_devis) || 0), 0);
-      const totalCom = apports.reduce((t, a) =>
-        t + (a.issue === 'gagne' ? (Number(a.montant_commission) || 0) : 0), 0);
-
-      const tableauApports = () => `
-        <section class="card pa-sect" style="--pa-trait:var(--green)">
-          <div class="pa-head">
-            <h3>Apports d’affaires</h3>
-            <span class="pa-compte" style="background:var(--green)">${apports.length}</span>
-            <span class="grow"></span>
-            ${state.ecriture ? '<button type="button" class="btn primary" id="pa-apport">+ Nouvel apport</button>' : ''}
-          </div>
-          ${apports.length ? `<div class="rcl-total">
-            <span>Total des apports
-              <span class="s muted">· ${apports.length} affaire${apports.length > 1 ? 's' : ''} présentée${apports.length > 1 ? 's' : ''}</span></span>
-            <span><b>${esc(eur(totalDevis))}</b> <span class="s muted">de devis ·</span>
-              <b>${esc(eur(totalCom))}</b> <span class="s muted">de commissions</span></span>
-          </div>` : ''}
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>Apporteur</th><th>Date</th><th>Client</th><th>Issue</th>
-                <th class="num">Montant devis</th><th class="num">Commission</th></tr></thead>
-              <tbody>${apports.map(x => {
-                const p = parId.get(x.apporteur_id);
-                const i = ISSUES[x.issue];
-                return `<tr ${state.ecriture ? `data-apport="${esc(String(x.id))}"` : ''}>
-                  <td><b>${esc(p ? nomDe(p) : '—')}</b></td>
-                  <td class="small">${x.date_apport ? esc(fmtDate(x.date_apport)) : '<span class="muted">—</span>'}</td>
-                  <td>${esc(x.client || '—')}</td>
-                  <td>${i ? `<span class="chip ${i.ton}">${esc(i.label)}</span>`
-                          : '<span class="muted small">Pas encore tranché</span>'}</td>
-                  <td class="num">${x.montant_devis != null ? esc(eur(x.montant_devis)) : '<span class="muted">—</span>'}</td>
-                  <td class="num">${x.montant_commission != null
-                    ? `<span class="${x.issue === 'gagne' ? '' : 'muted'}">${esc(eur(x.montant_commission))}</span>`
-                    : '<span class="muted">—</span>'}</td>
-                </tr>`;
-              }).join('') || `<tr><td colspan="6"><div class="empty">Aucun apport enregistré pour le moment.</div></td></tr>`}</tbody>
-            </table>
-          </div>
-          <p class="small muted">La commission ne compte dans les totaux que sur une
-            affaire <b>gagnée</b> — elle reste grisée tant que l’issue n’est pas tranchée.</p>
-        </section>`;
+      // ⚠ LE TABLEAU DES APPORTS A QUITTÉ CET ÉCRAN le 25/09/2026 : « je le veux
+      // dans la fiche partenaire ». Une liste commune obligeait à retrouver le nom
+      // de quelqu'un avant de lire ce qu'il a rapporté ; dans sa fiche, les deux
+      // sont en face l'un de l'autre. Les colonnes de ce tableau-ci portent déjà
+      // les totaux, ce qui suffit à comparer les partenaires entre eux.
 
       const corps = `
         <div class="toolbar">
@@ -409,8 +536,7 @@ export const rgdPartenairesPage = {
             ? 'Cliquez sur une ligne pour ouvrir la fiche'
             : 'Lecture seule'}</span>
         </div>
-        ${SECTIONS.map(section).join('')}
-        ${tableauApports()}`;
+        ${SECTIONS.map(section).join('')}`;
 
       root.innerHTML = cadre('#/rgd/partenaires', 'Partenaires', corps);
       bindSearch(root, 'rpa-q', state, draw);
@@ -418,19 +544,11 @@ export const rgdPartenairesPage = {
 
       root.querySelectorAll('[data-nouveau]').forEach(b => b.onclick = () => {
         const sec = SECTIONS.find(s => s.cle === b.dataset.nouveau);
-        formulairePartenaire(null, draw, sec?.cree || sec?.cle || 'apporteur');
+        nouveauPartenaire(draw, sec?.cree || sec?.cle || 'apporteur');
       });
-      root.querySelectorAll('[data-partenaire]').forEach(tr => tr.onclick = () => {
-        const a = tous.find(x => String(x.id) === tr.dataset.partenaire);
-        if (a) formulairePartenaire(a, draw);
-      });
-
-      const bApport = root.querySelector('#pa-apport');
-      if (bApport) bApport.onclick = () => formulaireApport(null, tous, draw);
-      root.querySelectorAll('[data-apport]').forEach(tr => tr.onclick = () => {
-        const x = apports.find(y => String(y.id) === tr.dataset.apport);
-        if (x) formulaireApport(x, tous, draw);
-      });
+      // Le clic ouvre la FICHE, pas le formulaire : on vient d'abord lire.
+      root.querySelectorAll('[data-partenaire]').forEach(tr => tr.onclick = () =>
+        ouvrirFichePartenaire(tr.dataset.partenaire, draw));
     };
 
     draw();
