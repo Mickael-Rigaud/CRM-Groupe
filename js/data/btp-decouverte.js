@@ -19,6 +19,16 @@
 export const CHAMPS_DECOUVERTE = [
   { cle: 'profil', label: 'Profil du demandeur', rubrique: 'prospect' },
 
+  // ⚠ CES DEUX-LÀ VIVENT DANS `deals.fields`, PAS DANS LA COPIE, d'où le
+  // `source`. Ils sont écrits par les portes d'entrée automatiques — le
+  // formulaire de btpexpertise.fr pose `besoin` et `origine`, la reprise d'un
+  // rendez-vous Google pose `origine` — et par aucune autre. Ils n'étaient
+  // donc dans `act.fields` (ce qui se saisit) ni dans la copie (ce qui a été
+  // rempli à la main), et personne ne les voyait : un lead venu du site
+  // affichait une fiche muette sur sa propre provenance.
+  { cle: 'origine', label: 'Provenance', rubrique: 'prospect', source: 'fields' },
+  { cle: 'besoin', label: 'Besoin exprimé', rubrique: 'projet', source: 'fields' },
+
   // Le bien, tel qu'il a été décrit au téléphone.
   { cle: 'annee', label: 'Année de construction', rubrique: 'projet' },
   { cle: 'surface', label: 'Surface', rubrique: 'projet' },
@@ -69,9 +79,11 @@ export const estVide = (v) => v === undefined || v === null || v === ''
  */
 export function lignesDecouverte(deal, rubrique, deja = []) {
   const f = deal?.fields?.decouverte;
-  if (!f) return [];
   return CHAMPS_DECOUVERTE
     .filter(c => c.rubrique === rubrique && !deja.includes(c.cle))
-    .map(c => ({ ...c, valeur: f[c.cle] }))
+    // Une ligne sans copie n'est pas perdue si elle vient de `fields` : c'est
+    // exactement le cas d'un lead venu du site, qui n'a pas de copie du tout.
+    .filter(c => c.source === 'fields' || f)
+    .map(c => ({ ...c, valeur: c.source === 'fields' ? deal?.fields?.[c.cle] : f[c.cle] }))
     .filter(c => !estVide(c.valeur));
 }
