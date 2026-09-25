@@ -5,7 +5,7 @@ import { db } from '../data/db.js';
 import { idsDe, urlAgenda, VUES as VUES_CALENDRIER, CLES_AGENDA, modeEmploi } from '../agenda.js';
 import { scope } from '../data/scope.js';
 import {
-  ACTIVITIES, CHANNELS, weightedAmount, stagesDe, stageOf, missionDe, etapeEquivalente, estNouveauLead, estEngagee, ORIGINE_PAR_CANAL, ORIGINE_DEFAUT, NIVEAUX_BTP, CAPACITE_BTP,
+  ACTIVITIES, CHANNELS, weightedAmount, stagesDe, stageOf, missionDe, etapeEquivalente, estNouveauLead, estEngagee, ORIGINE_PAR_CANAL, ORIGINE_DEFAUT, NIVEAUX_BTP, niveauxExpertiseParCharge, CAPACITE_BTP,
   HONORAIRES_AMO, MISSIONS_BTP, couleurMission, niveauDe, pointsDe,
   MATRICE_AMO, tauxSuggere, honorairesAmo, PHASES_AMO, FRONTIERE_AMO, FICHE_CHARGE_BTP,
   REMUNERATION_BTP, partRemuneration, partChargeAffaires,
@@ -872,7 +872,7 @@ const offreExpertise = () => {
       <span class="muted small">Manuel V6 &middot; §3</span>
     </div>
     <div class="table-wrap"><table>
-      <thead><tr><th>Niveau</th><th>Contenu indicatif</th><th>Tarif de travail HT</th><th class="num">Points</th></tr></thead>
+      <thead><tr><th>Prestation</th><th>Ce que comprend la prestation</th><th>Tarif</th><th class="num">Points</th></tr></thead>
       <tbody>${lignes.map(n => `<tr>
         <td>${marqueMission('expertise')}<b>${esc(n.label)}</b></td>
         <td class="small">${esc(n.contenu)}</td>
@@ -887,7 +887,8 @@ const offreExpertise = () => {
 // 4. La qualification. Comme la matrice AMO, elle se coche ; mais rien ne s'additionne :
 // chaque critère désigne un niveau, et le plus souvent désigné l'emporte.
 const qualificationExpertise = (cotes) => {
-  const niveaux = NIVEAUX_BTP.filter(n => n.mission === 'expertise');
+  // Par CHARGE : les colonnes de la grille vont du plus léger au plus lourd.
+  const niveaux = niveauxExpertiseParCharge();
   const sug = niveauExpertise(cotes, QUALIF_EXPERTISE_V6);
   const faits = QUALIF_EXPERTISE_V6.filter(c => cotes[c.key] !== undefined).length;
   return `<div class="card btp-ref" style="${teinteMission('expertise')}">

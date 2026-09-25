@@ -26,7 +26,8 @@ const RUBRIQUE = {
   urgence: 'prospect',
   // Ce sur quoi on travaille.
   type_bien: 'projet', adresse: 'projet', adresse_chantier: 'projet',
-  problematique: 'projet', contexte: 'projet', type_travaux: 'projet',
+  contexte: 'projet', type_travaux: 'projet',
+  code_postal: 'projet', ville: 'projet',
   montant_travaux: 'projet', budget_annonce: 'projet', delai_souhaite: 'projet',
   // Ce qu'on a vendu et comment on l'exécute.
   type_mission: 'mission', niveau: 'mission', taux_amo: 'mission',
@@ -247,17 +248,75 @@ export async function reopen(deal) {
 // ---------- Formulaire création / édition ----------
 export function dealForm(activityKey, existing = null, presets = {}, onSaved, onClose = null) {
   const act = ACTIVITIES[activityKey];
-  const users = scope.users();
+  // ⚠ SEULS LES MEMBRES DE LA STRUCTURE PEUVENT PORTER L'AFFAIRE (25/09/2026).
+  // `profiles.activities` dit de quelles structures quelqu'un fait partie, et la
+  // direction est dans les quatre. La liste entière proposait Stéphanie et Élodie,
+  // qui sont chez Propulsion, sur une mission BTP : une erreur de frappe suffisait
+  // à sortir l'affaire des totaux de sa structure, sans que rien ne le signale.
+  // ⚠ Le porteur ACTUEL est rajouté s'il n'est plus de la structure. Sans ça, la
+  // liste ne le contient pas, le `select` retombe sur « — », et enregistrer une
+  // correction d'adresse lui retirerait l'affaire au passage.
+  const users = scope.users().filter(u => (u.activities || []).includes(activityKey));
+  if (existing?.owner_id && !users.some(u => u.id === existing.owner_id)) {
+    const porteur = db.byId('profiles', existing.owner_id);
+    if (porteur) users.push(porteur);
+  }
   const contacts = scope.contacts(); const orgs = scope.orgs();
+
+  // ⚠ LES COORDONNEES DU CLIENT SONT CELLES DE SA FICHE CONTACT, pas des copies
+  // rangées dans l'affaire (25/09/2026 : « je voudrais plus de détails dans cet
+  // encadré »). Les saisir ici évite d'ouvrir une deuxième fenêtre pour un numéro
+  // de téléphone ; ce qui est écrit part dans `contacts`, d'où tout le CRM le lit.
+  // ⚠ CE SONT LES CLES DE `contacts`, volontairement différentes de `adresse`,
+  // `code_postal` et `ville` du bloc BTP : l'adresse du CLIENT et l'adresse du
+  // BIEN ne sont pas la même, et les confondre enverrait l'expert au mauvais
+  // endroit.
+  const CLIENT = [
+    { key: 'last_name', label: 'Nom', type: 'text', half: true },
+    { key: 'first_name', label: 'Prénom', type: 'text', half: true },
+    { key: 'phone', label: 'Téléphone', type: 'tel', half: true },
+    { key: 'email', label: 'E-mail', type: 'email', half: true },
+    { key: 'address', label: 'Adresse', type: 'text', half: true },
+    { key: 'postal_code', label: 'Code postal', type: 'text', half: true },
+    { key: 'city', label: 'Ville', type: 'text', half: true },
+  ];
+  const coordonneesDe = (id) => {
+    const c = id && db.byId('contacts', id);
+    const out = {};
+    for (const f of CLIENT) out[f.key] = c?.[f.key] ?? '';
+    return out;
+  };
+
   const base = [
     { key: 'title', label: "Intitulé de l'affaire", type: 'text', required: true, placeholder: 'Ex. Rénovation appartement — Dupont' },
     { key: 'owner_id', label: 'Responsable', type: 'select', options: users.map(u => [u.id, u.full_name]), required: true, half: true, value: scope.user.id },
     { key: 'amount', label: act.amountLabel, type: 'number', half: true, step: '1' },
     { key: 'channel', label: "Canal d'origine", type: 'select', options: CHANNELS, required: true, half: true },
-    { key: 'campaign', label: 'Campagne (nom exact Meta / Google)', type: 'text', half: true },
+    // ⚠ « Campagne (nom exact Meta / Google) » A ETE RETIRE le 25/09/2026 : il
+    // demandait de recopier à la main un libellé de régie que personne ne
+    // vérifiait. La valeur déjà saisie n'est PAS effacée : `readForm` ne lit que
+    // les champs déclarés ici, et `db.update` fusionne — ce qui n'est pas envoyé
+    // reste en base. Les contacts venus des régies gardent donc leur `campaign`.
   ];
-  const specific = act.fields.map(f => ({ ...f, half: f.type !== 'textarea' }));
+  // ⚠ Les champs marqués `ongletFacture` ne sont PAS dans ce formulaire : ils se
+  // saisissent dans l'onglet « Facturation » de la fiche, là où on les lit.
+  const specific = act.fields.filter(f => !f.ongletFacture)
+    .map(f => ({ ...f, half: f.type === 'textarea' ? false : f.half !== false }));
   const vals = existing ? { ...existing, ...(existing.fields || {}) } : { ...presets, ...(presets.fields || {}) };
+
+  // ⚠ LA DATE DE VISITE EST REPRISE DE GOOGLE AGENDA (demande du 25/09/2026).
+  // L'agenda est la source : c'est là qu'on pose le rendez-vous. Le champ reste
+  // saisissable — l'agenda peut n'avoir rien à dire — mais il n'est plus à
+  // ressaisir. On ne remplace jamais une date déjà saisie : si les deux
+  // divergent, c'est une information, pas une erreur à corriger en silence.
+  let venuDeLAgenda = null;
+  if (existing && !vals.date_visite) {
+    const c = existing.contact_id ? db.byId('contacts', existing.contact_id) : null;
+    const rdv = rendezVousDeLAffaire(existing, c)[0];
+    if (rdv?.day) { vals.date_visite = rdv.day; venuDeLAgenda = rdv; }
+  }
+  const specs = specific.map(f => f.key === 'date_visite' && venuDeLAgenda
+    ? { ...f, hint: `Repris de Google Agenda : ${venuDeLAgenda.title}` } : f);
   // ⚠ LE FORMULAIRE EST EN BLOCS COLORÉS depuis le 25/09/2026 (« modernise
   // aussi le formulaire avec des couleurs pour un peu plus de dynamisme »).
   // C'était une pile de quinze champs à plat, sans respiration ni ordre de
@@ -272,22 +331,56 @@ export function dealForm(activityKey, existing = null, presets = {}, onSaved, on
 
   const html = `<form class="form dlg" id="deal-form" style="--dlg-teinte:${esc(act.color || act.accent)}">
     ${bloc("L’affaire", renderForm(base, vals))}
-    ${bloc('Qui elle concerne', `
-      ${refField('contact_id', 'Contact', contacts, contactLabel, vals.contact_id)}
+    ${bloc('Informations client', `
+      ${refField('contact_id', 'Fiche contact existante', contacts, contactLabel, vals.contact_id)}
       ${refField('organisation_id', 'Entreprise / structure', orgs, orgLabel, vals.organisation_id)}
+      <div class="dlg-sep">Coordonnées</div>
+      ${renderForm(CLIENT, coordonneesDe(vals.contact_id))}
+      <div class="dlg-sep">Qui a apporté l’affaire</div>
       ${refField('referrer_org_id', 'Apporteur (organisation)', orgs, orgLabel, vals.referrer_org_id)}
       ${refField('referrer_contact_id', 'Apporteur (contact)', contacts, contactLabel, vals.referrer_contact_id)}`)}
-    ${bloc(`Informations ${act.label}`, renderForm(specific, vals))}
+    ${bloc(`Informations ${act.label}`, renderForm(specs, vals))}
     <div class="form-actions">${existing ? '<button type="button" class="btn ghost left danger" id="deal-del">Supprimer</button>' : ''}<button type="button" class="btn ghost" data-close>Annuler</button><button class="btn primary" type="submit">Enregistrer</button></div>
   </form>`;
   const m = openModal(existing ? "Modifier l'affaire" : `Nouvelle affaire — ${act.label}`, html, { wide: true, onClose });
   const form = m.querySelector('#deal-form');
   bindRefFields(form, { contact_id: { rows: contacts, labelFn: contactLabel }, organisation_id: { rows: orgs, labelFn: orgLabel }, referrer_org_id: { rows: orgs, labelFn: orgLabel }, referrer_contact_id: { rows: contacts, labelFn: contactLabel } });
+  // Choisir une fiche contact remplit les coordonnées. ⚠ Un champ DEJA REMPLI
+  // n'est pas écrasé : on peut avoir tapé le numéro avant de retrouver la fiche,
+  // et ce numéro-là est le plus frais des deux.
+  form.querySelector('[name="contact_id__label"]')?.addEventListener('input', () => {
+    const coord = coordonneesDe(form.querySelector('[name="contact_id"]').value);
+    for (const f of CLIENT) {
+      const el = form.querySelector(`[name="${f.key}"]`);
+      if (el && !el.value) el.value = coord[f.key] || '';
+    }
+  });
   form.onsubmit = async e => {
     e.preventDefault();
-    const b = readForm(form, base); const s = readForm(form, specific);
+    const b = readForm(form, base); const s = readForm(form, specs);
     const refs = {};
     for (const k of ['contact_id', 'organisation_id', 'referrer_org_id', 'referrer_contact_id']) refs[k] = form.querySelector(`[name="${k}"]`).value || null;
+
+    // ⚠ LES COORDONNEES PARTENT DANS `contacts`, ET SEULEMENT CE QUI A CHANGE.
+    // Envoyer les sept champs à chaque enregistrement effacerait en silence ce
+    // qu'une autre fiche a rempli entre-temps : un e-mail saisi ailleurs
+    // disparaîtrait parce qu'ici la case était vide. On compare, et on n'écrit
+    // que l'écart.
+    const cli = readForm(form, CLIENT);
+    if (refs.contact_id) {
+      const avant = db.byId('contacts', refs.contact_id) || {};
+      const ecart = {};
+      for (const f of CLIENT) if ((cli[f.key] || '') !== (avant[f.key] || '')) ecart[f.key] = cli[f.key] || null;
+      if (Object.keys(ecart).length) await db.update('contacts', refs.contact_id, ecart);
+    } else if (cli.last_name || cli.first_name) {
+      // Aucune fiche choisie mais un nom saisi : on la crée plutôt que de perdre
+      // ce qui vient d'être tapé.
+      const neuf = await db.insert('contacts', { ...cli, type: 'Prospect', activities: [activityKey],
+        owner_id: b.owner_id || scope.user.id, channel: b.channel || null });
+      refs.contact_id = neuf.id;
+      toast(`Fiche contact créée : ${contactName(neuf)}`);
+    }
+
     if (!refs.contact_id && !refs.organisation_id) return toast('Indiquez au moins un contact ou une organisation', 'warn');
     if (activityKey === 'propulsion' && !b.amount && s.montant_mensuel && s.duree_mois) b.amount = s.montant_mensuel * s.duree_mois;
     if (b.channel === 'Partenaire / apporteur' && !refs.referrer_org_id && !refs.referrer_contact_id) return toast("Canal « Partenaire / apporteur » : indiquez l'apporteur", 'warn');
@@ -369,6 +462,11 @@ export function openDeal(id, onChange) {
     // mission » côté expertise et « Mission AMO signée » côté AMO, déclaré une
     // seule fois dans `schema.js`. Avant, on regarde ce que le client a
     // annoncé ; après, ce qu'on lui a facturé — le budget n'a plus d'usage.
+    // Les champs de facturation de l'activite, plus le montant de l'affaire qui
+    // est une COLONNE et non un champ libre : il s'enregistre a part.
+    const champsFacture = [...act.fields.filter(f => f.ongletFacture),
+      { key: 'amount', label: act.amountLabel, type: 'number', step: '1', half: true }];
+
     const rdvs = rendezVousDeLAffaire(d, contact);
     const engagee = estEngagee(d);
     const budget = Number(d.fields?.montant_travaux ?? d.fields?.budget_annonce) || 0;
@@ -524,14 +622,23 @@ export function openDeal(id, onChange) {
         </div>
       </div>
 
+      <!-- ⚠ LA FACTURATION SE SAISIT ICI, pas dans le formulaire de modification
+           (demande du 25/09/2026, deux fois). Elle se lit dans cet onglet : la
+           saisir ailleurs obligeait à ouvrir une fenêtre, à descendre sous
+           quinze champs de mission, et à revenir pour vérifier.
+           ⚠ C'est un formulaire à part, PAS un appel au formulaire de l'affaire :
+           openModal remplace la fenêtre courante, donc ouvrir un formulaire
+           d'ici fermerait la fiche. -->
       <div class="rgdf-corps" data-vue="facture" hidden>
         <div class="rgdf-colonne rgdf-large">
-          ${blocSi('Facturation', champsDe('facture')
-            + info('euro', act.amountLabel.replace(/\s*\(€\)/, ''), esc(eur(d.amount)), 'est-orange'),
-            '')}
+          <section class="rgdf-bloc">
+            <h3>Facturation</h3>
+            <form class="form" id="fact-form">
+              ${renderForm(champsFacture, { ...d.fields, amount: d.amount })}
+              <div class="form-actions"><button class="btn primary sm" type="submit">Enregistrer</button></div>
+            </form>
+          </section>
           ${estAmoHenrri(d) ? blocHenrri(d, etatCourant) : ''}
-          ${!estAmoHenrri(d) && !champsDe('facture')
-            ? '<p class="rgdf-rien">Rien de facturé pour le moment.</p>' : ''}
         </div>
       </div>`;
     // Le titre est dans l'en-tête de la fiche : le repasser à `openModal` le
@@ -547,6 +654,19 @@ export function openDeal(id, onChange) {
       m.querySelectorAll('[data-onglet]').forEach(x => x.classList.toggle('on', x === b));
       m.querySelectorAll('[data-vue]').forEach(v => { v.hidden = v.dataset.vue !== b.dataset.onglet; });
     });
+    const fact = m.querySelector('#fact-form');
+    if (fact) fact.onsubmit = async (e) => {
+      e.preventDefault();
+      const lu = readForm(fact, champsFacture);
+      const { amount, ...enFiches } = lu;
+      const dd = db.byId('deals', id);
+      // ⚠ `fields` est remplace en bloc par Supabase : on repart de l'existant,
+      // sinon enregistrer une date de facture effacerait l'adresse du bien.
+      await db.update('deals', id, { amount, fields: { ...dd.fields, ...enFiches } });
+      toast('Facturation enregistrée');
+      refresh();
+    };
+
     m.querySelectorAll('[data-stage]').forEach(b => b.onclick = async () => { const dd = db.byId('deals', id); const st = stageOf(dd.activity, b.dataset.stage); if (dd.status === 'lost') return toast('Réouvrez l\'affaire avant de changer d\'étape', 'warn'); if (dd.status === 'won' && !st.delivery) return toast('Affaire gagnée : réouvrez-la pour revenir à une étape commerciale', 'warn'); await moveStage(dd, b.dataset.stage); refresh(); });
     m.querySelector('#d-won')?.addEventListener('click', async () => { await setWon(db.byId('deals', id)); refresh(); });
     m.querySelector('#d-lost')?.addEventListener('click', () => setLost(db.byId('deals', id), refresh, render));

@@ -19,12 +19,26 @@ export const couleurMission = (m) => (MISSIONS_BTP[m] || MISSIONS_BTP.expertise)
 // `contenu` et `tarif` viennent des catalogues du manuel (sections 2 et 3) : ils
 // s'affichent au moment de classer une mission, pour deviser sans rouvrir le PDF.
 export const NIVEAUX_BTP = [
-  { key: 'exp_simple', label: 'Expertise simple', mission: 'expertise', points: 1,
-    contenu: 'Visite, constat, avis technique, restitution.', tarif: '750 à 900 € HT' },
-  { key: 'exp_rapport', label: 'Expertise avec rapport', mission: 'expertise', points: 2,
-    contenu: 'Visite, analyse, photos, recherches utiles, rapport structuré.', tarif: '1 200 à 1 500 € HT' },
-  { key: 'exp_complexe', label: 'Expertise complexe', mission: 'expertise', points: 3,
-    contenu: 'Désordres multiples, litige, investigations et technicité renforcée.', tarif: 'à partir de 2 000 € HT' },
+  // ⚠ LES TROIS PRESTATIONS D'EXPERTISE SONT L'OFFRE COMMERCIALE, telle que
+  // Mickael l'a arrêtée le 25/09/2026. Ce ne sont plus trois degrés de
+  // complexité d'une même mission (« simple / avec rapport / complexe ») mais
+  // trois missions de NATURE différente, chacune avec son livrable et son
+  // plancher de prix.
+  // ⚠ LES TARIFS SONT TTC, là où les précédents étaient HT : c'est ce que voit
+  // le client. Le montant de l'affaire, lui, reste en HT (`amountLabel`) — les
+  // deux ne se comparent pas directement.
+  // ⚠ Les POINTS mesurent la charge du chargé d'affaires, pas le prix. Faute
+  // d'un relevé de temps réel, ils suivent l'ordre des planchers tarifaires
+  // (750 < 900 < 1 200) : à recalibrer dès qu'il y aura des temps mesurés.
+  { key: 'exp_preachat', label: 'Expertise pré-achat', mission: 'expertise', points: 2,
+    contenu: 'Inspection technique du bien, identification des anomalies et des points de vigilance, travaux à anticiper, rapport de synthèse.',
+    tarif: 'À partir de 900 € TTC' },
+  { key: 'exp_desordres', label: 'Expertise désordres & malfaçons', mission: 'expertise', points: 3,
+    contenu: 'Constat des désordres, analyse des causes probables, préconisations techniques, rapport d’expertise détaillé.',
+    tarif: 'À partir de 1 200 € TTC' },
+  { key: 'exp_reception', label: 'Assistance à réception de travaux', mission: 'expertise', points: 1,
+    contenu: 'Contrôle des travaux réalisés, identification des défauts et des non-conformités apparentes, aide à la formulation des réserves, relevé des réserves.',
+    tarif: 'À partir de 750 € TTC' },
   { key: 'amo_ciblee', label: 'AMO ciblée', mission: 'amo', points: 3,
     contenu: 'Périmètre limité, peu de lots, durée courte, accompagnement contenu.', tarif: '5 à 8 % des travaux TTC' },
   { key: 'amo_etendue', label: 'AMO étendue', mission: 'amo', points: 5,
@@ -38,7 +52,20 @@ export const HONORAIRES_AMO = { taux: '5 à 8 % du montant TTC des travaux', min
 // Plafonds au lancement. Le manuel les dit « à recalibrer sur données réelles » : ils
 // sont ici pour qu'une seule ligne suffise à les changer.
 export const CAPACITE_BTP = { points: 18, amoActives: 3 };
-export const niveauDe = (deal) => NIVEAUX_BTP.find(n => n.key === deal?.fields?.niveau) || null;
+// ⚠ LES AFFAIRES DEJA SAISIES PORTENT LES ANCIENNES CLES. Renommer les niveaux
+// sans cette table aurait vidé le champ « Niveau de mission » de toutes les
+// missions d'expertise en cours — silencieusement, et avec lui les points de
+// charge du chargé d'affaires. La correspondance se fait par le LIVRABLE : une
+// expertise « avec rapport » devient une expertise désordres & malfaçons, seule
+// prestation qui rende un rapport détaillé.
+export const NIVEAUX_ANCIENS = {
+  exp_simple: 'exp_reception', exp_rapport: 'exp_desordres', exp_complexe: 'exp_desordres',
+};
+export const cleNiveau = (cle) => NIVEAUX_ANCIENS[cle] || cle;
+export const niveauDe = (deal) => {
+  const cle = cleNiveau(deal?.fields?.niveau);
+  return NIVEAUX_BTP.find(n => n.key === cle) || null;
+};
 export const pointsDe = (deal) => niveauDe(deal)?.points || 0;
 
 // ---- Le référentiel AMO du manuel opérationnel V5 --------------------------
@@ -182,7 +209,7 @@ export const TYPOLOGIE_EXPERTISE = [
   ['Avis sur pièces', 'Analyse de devis, photos, factures, plans, rapports et échanges, avec limites explicites.'],
 ];
 
-export const OFFRE_EXPERTISE_NOTE = "Le tarif final dépend du déplacement, du volume documentaire, du nombre de désordres, des mesures nécessaires, du nombre d'intervenants, du contradictoire et du temps de rédaction. Ces tarifs sont des bases de travail, à recalibrer sur les temps réels.";
+export const OFFRE_EXPERTISE_NOTE = "Tarifs TTC « à partir de », établis selon la nature de la mission, la surface du bien, la complexité du dossier et le lieu d'intervention. Un devis est établi avant toute intervention.";
 
 // §4 — la grille de qualification du V6 : six critères là où le V5 en donnait cinq,
 // et des repères plus concrets. Chaque critère désigne un niveau, rien ne s'additionne.
@@ -255,8 +282,20 @@ export const QUALIF_EXPERTISE = [
 // critères, et tranche vers le HAUT en cas d'égalité — sous-estimer une expertise
 // coûte plus cher que la sur-estimer, on s'engage sur un tarif. Ce n'est qu'une
 // proposition : le niveau reste choisi à la main.
+// ⚠ DEUX ORDRES, ET IL NE FAUT PAS LES CONFONDRE.
+// `NIVEAUX_BTP` range les prestations dans l'ordre de la GRILLE TARIFAIRE
+// montrée au client — pré-achat, désordres, réception — qui ne dit rien de la
+// charge de travail. La grille de qualification, elle, va du plus léger au plus
+// lourd, colonne par colonne. Les afficher dans l'ordre de la liste mettait
+// « 1 sujet ciblé » en face de « pré-achat » et « désordres multiples » en face
+// de « assistance à réception », qui est la prestation la plus légère.
+// Cet ordre-ci est celui de la CHARGE, et c'est le seul que la grille doit
+// utiliser — en-têtes de colonnes comprises.
+export const niveauxExpertiseParCharge = () => NIVEAUX_BTP
+  .filter(n => n.mission === 'expertise').slice().sort((a, b) => a.points - b.points);
+
 export const niveauExpertise = (cotes, grille = QUALIF_EXPERTISE) => {
-  const niveaux = NIVEAUX_BTP.filter(n => n.mission === 'expertise');   // simple, rapport, complexe
+  const niveaux = niveauxExpertiseParCharge();
   const comptes = [0, 0, 0];
   for (const c of grille) {
     const v = cotes?.[c.key];
@@ -397,9 +436,9 @@ export const controleTaux = (suggere, final, motif) => {
 
 // Plus affiché : le système de points se lit sur l'écran des chargés d'affaires.
 export const EXEMPLES_CHARGE = [
-  ['amo_importante', 'amo_etendue', 'exp_complexe'],
-  ['amo_ciblee', 'amo_ciblee', 'amo_etendue', 'exp_complexe'],
-  ['amo_etendue', 'exp_rapport', 'exp_rapport', 'exp_simple'],
+  ['amo_importante', 'amo_etendue', 'exp_desordres'],
+  ['amo_ciblee', 'amo_ciblee', 'amo_etendue', 'exp_desordres'],
+  ['amo_etendue', 'exp_desordres', 'exp_desordres', 'exp_reception'],
 ];
 
 // ---- Le modèle de rémunération du réseau (§13) ------------------------------
@@ -634,17 +673,33 @@ export const ACTIVITIES = {
           options: NIVEAUX_BTP.filter(n => n.mission === m).map(n => [n.key, `${n.label} — ${n.points} pt${n.points > 1 ? 's' : ''} · ${n.tarif}`]),
         })),
         hint: `Sert au calcul de la charge du chargé d'affaires (${CAPACITE_BTP.points} points maximum).` },
-      { key: 'problematique', label: 'Type de problématique', type: 'select', options: ['Malfaçons', 'Fissures', 'Humidité', 'Plomberie', 'Électricité', 'Non-conformité', 'Litige travaux', 'Réception de travaux', 'AMO / accompagnement', 'Avant achat', 'Autre'] },
-      { key: 'type_bien', label: 'Type de bien', type: 'select', options: ['Maison', 'Appartement', 'Immeuble', 'Local pro', 'Autre'] },
-      { key: 'contexte', label: 'Contexte', type: 'select', options: ['Particulier', 'Entreprise', 'Litige', 'Achat immobilier', 'Travaux en cours'] },
+      // ⚠ « Type de problématique » A ETE RETIRE le 25/09/2026, et ce n'est pas
+      // un allegement de facade : il doublait la prestation choisie —
+      // « Réception de travaux », « Avant achat » et « AMO » figuraient dans les
+      // deux listes — sans que rien ne garantisse que les deux disent la même
+      // chose.
+      { key: 'type_bien', label: 'Type de bien', type: 'select', options: ['Maison', 'Appartement', 'Immeuble', 'Local pro', 'Autre'], half: true },
+      { key: 'contexte', label: 'Contexte', type: 'select', options: ['Particulier', 'Entreprise', 'Litige', 'Achat immobilier', 'Travaux en cours'], half: true },
+      // ⚠ L'ADRESSE DU BIEN EST EN TROIS CHAMPS depuis le 25/09/2026. Une ligne
+      // libre ne se trie pas, ne se regroupe pas par commune, et ne dit pas si le
+      // chantier tombe dans la zone d'intervention.
       { key: 'adresse', label: 'Adresse du bien', type: 'text' },
-      { key: 'urgence', label: 'Urgent', type: 'checkbox' },
-      { key: 'date_visite', label: 'Date de visite', type: 'date' },
-      { key: 'date_rapport', label: 'Date remise rapport', type: 'date' },
-      // Facturation : suivi à la main en attendant le raccordement à Stripe.
-      { key: 'facture_num', label: 'N° de facture', type: 'text', half: true },
-      { key: 'facture_date', label: 'Facturée le', type: 'date', half: true },
-      { key: 'paiement_date', label: 'Payée le', type: 'date', half: true },
+      { key: 'code_postal', label: 'Code postal', type: 'text', half: true },
+      { key: 'ville', label: 'Ville', type: 'text', half: true },
+      { key: 'urgence', label: 'Urgent', type: 'checkbox', half: true },
+      // ⚠ LA DATE DE VISITE EST REPRISE DE GOOGLE AGENDA quand un rendez-vous y
+      // porte le nom du client (demande du 25/09/2026). Le champ reste saisissable
+      // — l'agenda peut ne rien avoir, et une visite se cale parfois avant d'être
+      // posée — mais il n'est plus à ressaisir quand le rendez-vous existe.
+      { key: 'date_visite', label: 'Date de visite', type: 'date', half: true },
+      { key: 'date_rapport', label: 'Date remise rapport', type: 'date', half: true },
+      // ⚠ FACTURATION : CES TROIS CHAMPS NE SONT PLUS DANS LE FORMULAIRE. Ils se
+      // saisissent dans l'onglet « Facturation » de la fiche, là où ils sont lus
+      // (demande du 25/09/2026). C'est `ongletFacture` qui les en sort ; ils
+      // restent déclarés ici parce que la fiche a besoin de leur intitulé.
+      { key: 'facture_num', label: 'N° de facture', type: 'text', half: true, ongletFacture: true },
+      { key: 'facture_date', label: 'Facturée le', type: 'date', half: true, ongletFacture: true },
+      { key: 'paiement_date', label: 'Payée le', type: 'date', half: true, ongletFacture: true },
     ],
   },
   courtage: {
