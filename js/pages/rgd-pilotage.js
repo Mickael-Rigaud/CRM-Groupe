@@ -36,8 +36,8 @@
 // `competences`, vides dans D1 au 21/09/2026). Il le dit au lieu d'afficher
 // zéro, qui se lirait comme un résultat.
 import { scope } from '../data/scope.js';
-import { esc, eur, pct, isoDay, fmtDate, daysSince } from '../ui.js';
-import { poserEspace, kpiEspace } from './espace.js';
+import { esc, eur, isoDay, fmtDate, daysSince } from '../ui.js';
+import { poserEspace } from './espace.js';
 import { cadre, guard, KEY } from './rgd-espace.js';
 import { etapesRgd } from '../data/rgd-etapes.js';
 
@@ -259,66 +259,10 @@ export const rgdPilotagePage = {
       const chantiers = scope.rgd('rgd_chantiers');
       const devis = scope.rgd('rgd_devis');
       const paiements = scope.rgd('rgd_paiements');
-      const missions = scope.rgd('rgd_missions');
-      const fournitures = scope.rgd('rgd_fournitures');
       const sousTraitants = scope.rgd('rgd_sous_traitants');
       const demandes = scope.rgd('rgd_demandes');
       const rdv = scope.rgd('agenda_events').filter(e => e.activity === KEY && e.day === aujourdhui);
       const reglage = (cle) => scope.rgd('rgd_reglages').find(r => r.cle === cle)?.valeur ?? null;
-
-      const pourChantier = (c, liste) => liste.filter(x => x.deal_id && x.deal_id === c.deal_id);
-
-      // « CHANTIER EN COURS » — la définition du tableau de bord, mot pour mot :
-      // un devis signé, au moins un paiement, des travaux déjà commencés, et
-      // ni marqué terminé ni entièrement soldé. Le seul `etat = 'en_cours'`
-      // donnerait un autre nombre.
-      const enCours = chantiers.filter(c => {
-        if (c.date_passage_termine) return false;
-        const p = pourChantier(c, paiements);
-        const solde = p.some(x => x.type === 'solde' && x.statut === 'recu');
-        const reste = p.some(x => x.statut !== 'recu');
-        if (solde && !reste) return false;
-        if (!pourChantier(c, devis).some(d => d.statut === 'signe')) return false;
-        if (!p.length) return false;
-        return !!c.work_start_at && c.work_start_at <= aujourdhui;
-      });
-      const caEnCours = enCours.reduce((t, c) => t + (Number(c.montant_ht) || 0), 0);
-
-      // Devis en attente : tout sauf tranché. Même règle que l'écran Devis.
-      const devisAttente = devis.filter(d => !['signe', 'refuse', 'expire'].includes(d.statut));
-      const caDevis = devisAttente.reduce((t, d) => t + (Number(d.montant_ht) || 0), 0);
-
-      const retards = paiements.filter(p => ['attendu', 'facture', 'partiel'].includes(p.statut)
-        && p.date_echeance && p.date_echeance < aujourdhui);
-      const montantRetard = retards.reduce((t, p) => t + (Number(p.montant_ttc) || 0), 0);
-
-      // RENTABILITÉ — seulement les chantiers dont on connaît VRAIMENT les
-      // coûts. Un chantier sans coût saisi afficherait 100 % de marge et
-      // tirerait la moyenne vers le haut : il est écarté, pas compté à zéro.
-      const avecCouts = chantiers.filter(c =>
-        ['en_cours', 'termine'].includes(c.etat)
-        && (pourChantier(c, missions).some(m => Number(m.montant_ht_paye) > 0)
-          || pourChantier(c, fournitures).some(f => Number(f.montant_ht) > 0)));
-      const caRenta = avecCouts.reduce((t, c) =>
-        t + pourChantier(c, devis).filter(d => d.statut === 'signe')
-          .reduce((s, d) => s + (Number(d.montant_ht) || 0), 0), 0);
-      const coutRenta = avecCouts.reduce((t, c) =>
-        t + pourChantier(c, missions).reduce((s, m) => s + (Number(m.montant_ht_paye) || 0), 0)
-          + pourChantier(c, fournitures).reduce((s, f) => s + (Number(f.montant_ht) || 0), 0), 0);
-      const margeEur = caRenta - coutRenta;
-      // ⚠ NE RIEN SAVOIR ET VALOIR ZÉRO NE SONT PAS LA MÊME CHOSE.
-      // `avecCouts` vide donnait `margePct = 0`, donc un grand **0 % rouge** :
-      // « on perd de l'argent » là où la réalité est « aucun chantier n'a de
-      // coût saisi ». La sous-ligne disait bien « 0 chantier avec coûts
-      // connus », mais personne ne lit la sous-ligne d'un grand chiffre rouge.
-      // Le cas est devenu réel le 22/09/2026 : les deux seules sources de coût
-      // de la base étaient des données d'essai, effacées ce jour-là.
-      const marge = avecCouts.length && caRenta > 0 ? (margeEur / caRenta) * 100 : null;
-      // `ton: null` ne prendrait pas le défaut de `kpiEspace` — un défaut de
-      // paramètre ne s'applique qu'à `undefined` — et la CSS recevrait
-      // `var(--null)`. D'où un ton gris explicite pour « on ne sait pas ».
-      const tonMarge = marge === null ? 'muted'
-        : marge >= 20 ? 'green' : marge >= 10 ? 'amber' : 'red';
 
       // CA DE L'EXERCICE — calculé, puis la correction manuelle par-dessus.
       // Les deux sont montrés : l'écart dit à quel point Costructor est en retard.
@@ -361,11 +305,49 @@ export const rgdPilotagePage = {
       }));
       const totalEtapes = etapes.filter(e => !e.hors).reduce((t, e) => t + e.n, 0);
 
-      // L'ORDRE DE LA PAGE, arrêté par Mickael le 21/09/2026 : le chiffre
-      // d'affaires de l'exercice d'abord — c'est ce qu'on vient voir —, les
-      // chiffres clés ensuite, puis le pipeline qui résume l'activité. La
-      // journée et les alertes ferment l'écran.
+      // L'ORDRE DE LA PAGE, REVU PAR MICKAEL LE 25/09/2026 : le pipeline
+      // d'abord, puis le chiffre d'affaires et la journée côte à côte, les
+      // alertes en bas.
+      //
+      // Il remplace l'ordre du 21/09 — chiffre d'affaires, quatre chiffres
+      // clés, pipeline. Ce que le changement dit : on n'ouvre pas cet écran
+      // le matin pour lire un montant, mais pour voir où en sont les affaires.
+      // Le CA de l'exercice ne bouge pas d'un jour à l'autre ; le pipeline, si.
+      //
+      // ⚠ LES QUATRE CHIFFRES CLÉS SONT RETIRÉS, comme sur Clients, Partenaires,
+      // Sous-traitants, Réalisations et Chantiers avant eux — c'est la cinquième
+      // fois que la demande revient, et toujours pour la même raison : une
+      // rangée de grandes cartes repousse sous la ligne de flottaison ce qu'on
+      // est venu voir. Ne pas les remettre.
+      //
+      // ⚠ CE QUI EST PARTI AVEC EUX, ET C'EST VOULU : une cinquantaine de lignes
+      // de calcul que plus rien ne lisait — rentabilité moyenne, chantiers en
+      // cours au sens strict du tableau de bord, devis en attente, paiements en
+      // retard — plus les lectures de `rgd_missions` et `rgd_fournitures` qui
+      // n'alimentaient qu'eux. Les garder « au cas où » aurait refait ici le
+      // défaut que le tableau de bord d'origine traîne dans `overview.js` :
+      // cinq cents lignes mortes et quatre appels d'API que personne ne lit.
+      // Elles restent dans l'historique Git, qui est fait pour ça.
       const corps = `
+
+        <section class="card rgd-pipe">
+          <div class="card-head"><h2>Pipeline</h2>
+            <span class="grow"></span>
+            <a class="btn ghost sm" href="#/rgd/clients">Ouvrir la base →</a></div>
+          ${frisePipeline(etapes, poidsDesEtapes(devis, chantiers, aujourdhui))}
+          <p class="small muted rgd-pipe-pied">${totalEtapes
+            ? `${totalEtapes} affaire${totalEtapes > 1 ? 's' : ''} suivie${totalEtapes > 1 ? 's' : ''}, toutes étapes confondues.`
+            : 'Aucune affaire à suivre pour le moment.'}
+            Chaque étape compte ce qui s’y trouve <b>aujourd’hui</b> : ce n’est pas une
+            cohorte, les nombres ne décroissent donc pas forcément et il n’y a pas de
+            taux de passage à en tirer.
+            Chaque colonne mène à son onglet dans <a href="#/rgd/clients">Clients &amp; prospects</a>,
+            où l’on retrouve exactement les mêmes personnes.
+            Le montant sous chaque étape compte les <b>devis</b> ou les <b>chantiers</b>
+            qui s’y trouvent — pas les personnes, dont une seule peut en avoir plusieurs.
+            <b class="rgd-dormant">Dormant</b> veut dire que rien n’a bougé depuis plus de
+            30 jours sur un devis, 90 sur un chantier.</p>
+        </section>
 
         <div class="rgd-duo">
 
@@ -427,40 +409,7 @@ export const rgdPilotagePage = {
 
         </div>
 
-        <div class="esp-kpis">
-          ${kpiEspace({ label: 'Rentabilité moyenne',
-            valeur: marge === null ? '—' : pct(marge),
-            sous: marge === null
-              ? 'aucun chantier avec coûts connus'
-              : `${eur(margeEur)} HT · ${avecCouts.length} chantier${avecCouts.length > 1 ? 's' : ''} avec coûts connus`,
-            icone: '📈', ton: tonMarge, href: '#/rgd' })}
-          ${kpiEspace({ label: 'Chantiers en cours', valeur: enCours.length,
-            sous: `${eur(caEnCours)} HT`, icone: '🏗', ton: 'accent', href: '#/rgd/chantiers' })}
-          ${kpiEspace({ label: 'Devis en attente', valeur: devisAttente.length,
-            sous: `${eur(caDevis)} HT`, icone: '📋', href: '#/rgd/devis' })}
-          ${kpiEspace({ label: 'Paiements en retard', valeur: retards.length,
-            sous: retards.length ? eur(montantRetard) : 'rien en souffrance',
-            icone: '⚠', ton: retards.length ? 'red' : 'green', href: '#/rgd/paiements' })}
-        </div>
 
-        <section class="card rgd-pipe">
-          <div class="card-head"><h2>Pipeline</h2>
-            <span class="grow"></span>
-            <a class="btn ghost sm" href="#/rgd/clients">Ouvrir la base →</a></div>
-          ${frisePipeline(etapes, poidsDesEtapes(devis, chantiers, aujourdhui))}
-          <p class="small muted rgd-pipe-pied">${totalEtapes
-            ? `${totalEtapes} affaire${totalEtapes > 1 ? 's' : ''} suivie${totalEtapes > 1 ? 's' : ''}, toutes étapes confondues.`
-            : 'Aucune affaire à suivre pour le moment.'}
-            Chaque étape compte ce qui s’y trouve <b>aujourd’hui</b> : ce n’est pas une
-            cohorte, les nombres ne décroissent donc pas forcément et il n’y a pas de
-            taux de passage à en tirer.
-            Chaque colonne mène à son onglet dans <a href="#/rgd/clients">Clients &amp; prospects</a>,
-            où l’on retrouve exactement les mêmes personnes.
-            Le montant sous chaque étape compte les <b>devis</b> ou les <b>chantiers</b>
-            qui s’y trouvent — pas les personnes, dont une seule peut en avoir plusieurs.
-            <b class="rgd-dormant">Dormant</b> veut dire que rien n’a bougé depuis plus de
-            30 jours sur un devis, 90 sur un chantier.</p>
-        </section>
 
 
         ${docsSt.length || leads.length ? `<div class="pil-alertes">
