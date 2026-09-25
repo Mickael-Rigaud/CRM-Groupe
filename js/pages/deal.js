@@ -418,36 +418,33 @@ export function openDeal(id, onChange) {
               <span class="rgdf-tag">Créée le ${esc(fmtDate(d.created_at))}</span>
             </div>
           </div>
-          </div>
 
-          <!-- ⚠ LES COMMANDES ET LES RENDEZ-VOUS SONT EN HAUT A DROITE, en
-               colonne (demande du 25/09/2026). « Perdue » n'est plus un gros
-               bouton rouge au milieu : il est discret, a sa place, et ne se
-               clique plus par accident.
+          <!-- ⚠ LE COIN HAUT DROIT NE PORTE QUE L ISSUE DE L AFFAIRE, plus
+               les rendez-vous. Les commandes ordinaires - fiche de mission,
+               responsable, modifier, supprimer - RESTENT dans leur rangee sous
+               l en-tete, avec leurs intitules entiers. Les avoir entassees
+               dans le coin obligeait a les abreger : un bouton nomme par une
+               seule icone se devine, il ne se lit pas.
 
-               ⚠ « GAGNEE » RESTE SUR TOUTES LES ETAPES OUVERTES, et ce n'est
-               pas un oubli : c'est une demande retiree par Mickael lui-meme le
-               25/09/2026. Il a d'abord demande de supprimer le bouton, pensant
-               qu'une affaire est gagnee en franchissant toutes les etapes ; en
-               apprenant que c'etait revenir sur son arbitrage du 19/09, il a
-               tranche « on ne revient pas sur une decision que j'ai prise
-               moi-meme ».
-               Une version intermediaire ne l'affichait qu'a la derniere etape.
-               Elle a ete RETIREE parce qu'elle enlevait autre chose sans le
-               dire : setWon sait declarer gagnee une affaire qui n'y est pas
-               encore et la DEPLACER a l'etape finale. Restreindre l'affichage
-               fermait donc ce chemin. Le gain reste un GESTE, disponible
-               partout ou l'affaire est ouverte. -->
+               ⚠ GAGNEE ET PERDUE FORMENT UNE PAIRE : meme forme, meme poids,
+               deux teintes. Ce sont les deux issues du meme choix, pas deux
+               commandes de plus. Teintees au repos, pleines au survol, pour
+               qu on voie ce qu on declare avant de cliquer - le gros bouton
+               rouge plein au milieu de la fiche se cliquait par accident.
+
+               ⚠ GAGNEE RESTE SUR TOUTES LES ETAPES OUVERTES, et ce n est pas
+               un oubli : c est une demande retiree par Mickael lui-meme le
+               25/09/2026. Une version intermediaire ne l affichait qu a la
+               derniere etape ; elle a ete retiree parce que setWon sait aussi
+               declarer gagnee une affaire qui n y est pas encore et la
+               DEPLACER a l etape finale. Restreindre l affichage fermait donc
+               ce chemin-la sans le dire. -->
           <div class="rgdf-coin">
-            <div class="rgdf-actions">
+            <div class="rgdf-issues">
               ${d.status === 'open'
-                ? '<button class="btn green sm" id="d-won">✓ Gagnée</button>'
-                  + '<button class="btn ghost sm danger" id="d-lost">✕ Perdue</button>'
-                : '<button class="btn ghost sm" id="d-reopen">Réouvrir</button>'}
-              ${d.fields?.decouverte ? '<button class="btn ghost sm" id="d-fiche">🖨 Fiche</button>' : ''}
-              ${scope.isDirection ? `<button class="btn ghost sm" id="d-attr">👤 ${d.owner_id ? 'Responsable' : 'Attribuer'}</button>` : ''}
-              <button class="btn ghost sm" id="d-edit">✎ Modifier</button>
-              <button class="btn ghost sm danger" id="d-del">🗑</button>
+                ? '<button class="rgdf-issue est-gagne" id="d-won">✓ Gagnée</button>'
+                  + '<button class="rgdf-issue est-perdu" id="d-lost">✕ Perdue</button>'
+                : '<button class="rgdf-issue est-rouvre" id="d-reopen">↺ Réouvrir</button>'}
             </div>
             ${rdvs.length ? `<div class="rgdf-rdv">
               <span class="rgdf-rdv-titre">${rdvs.length > 1 ? `Rendez-vous <b>${rdvs.length}</b>` : 'Rendez-vous'}</span>
@@ -458,6 +455,13 @@ export function openDeal(id, onChange) {
               }).join('')}</ul>
             </div>` : ''}
           </div>
+        </div>
+
+        <div class="rgdf-actions">
+          ${d.fields?.decouverte ? '<button class="btn ghost sm" id="d-fiche">🖨 Fiche de mission</button>' : ''}
+          ${scope.isDirection ? `<button class="btn ghost sm" id="d-attr">👤 ${d.owner_id ? 'Changer de responsable' : 'Attribuer'}</button>` : ''}
+          <button class="btn ghost sm" id="d-edit">✎ Modifier</button>
+          <button class="btn ghost sm danger" id="d-del">🗑 Supprimer</button>
         </div>
       </div>
 
