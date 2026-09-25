@@ -95,6 +95,38 @@ const ICONES = {
 };
 const pict = (cle) => `<svg viewBox="0 0 20 20" aria-hidden="true"><path d="${ICONES[cle]}"/></svg>`;
 
+// Les rendez-vous, en haut à droite de l'en-tête
+//
+// ⚠ EN HAUT À DROITE, ET PAS DANS LE CORPS (25/09/2026, demandé par Mickael).
+// La date du rendez-vous est ce qu'on cherche en ouvrant la fiche de quelqu'un
+// qu'on doit rappeler : elle se lit sans faire défiler, à côté du nom.
+//
+// ⚠ TOUS SONT LISTÉS, pas seulement le prochain — « si il y en a eu plusieurs
+// je voudrais les retrouver ». Une personne revue deux fois a deux lignes, la
+// plus récente en tête ; les rendez-vous PASSÉS sont grisés plutôt que cachés,
+// parce que c'est précisément l'historique qu'on vient chercher.
+//
+// ⚠ UNE JOURNÉE ENTIÈRE N'A PAS D'HEURE, et en inventer une (00:00) ferait
+// croire à un rendez-vous à minuit. `all_day` le dit, on affiche le jour seul.
+function blocRendezVous(rdvs) {
+  if (!rdvs.length) return '';
+  const aujourdhui = new Date().toISOString().slice(0, 10);
+  const lignes = rdvs.map((e) => {
+    const passe = String(e.day || '') < aujourdhui;
+    const quand = e.all_day || !e.starts_at
+      ? fmtDate(e.day)
+      : fmtDateTime(e.starts_at);
+    return `<li class="${passe ? 'est-passe' : ''}">
+      <b>${esc(quand)}</b>
+      ${e.link ? `<a href="${esc(e.link)}" target="_blank" rel="noopener">Ouvrir</a>` : ''}
+    </li>`;
+  }).join('');
+  return `<div class="rgdf-rdv">
+    <span class="rgdf-rdv-titre">${rdvs.length > 1 ? `Rendez-vous <b>${rdvs.length}</b>` : 'Rendez-vous'}</span>
+    <ul>${lignes}</ul>
+  </div>`;
+}
+
 export function ouvrirFicheRgd(x, onChange) {
   let etapeCourante = x.etape;
   // ⚠ LA MODIFICATION SE FAIT EN PLACE, PAS DANS UNE SECONDE FENÊTRE.
@@ -135,7 +167,19 @@ export function ouvrirFicheRgd(x, onChange) {
     // tu recrées un encadré »). Un encadré de plus obligeait à lire la fiche à
     // deux endroits pour connaître un numéro, alors que la ligne qui l'attend
     // était juste au-dessus, vide.
-    const rdv = rendezVousDeLaFiche(f, chantiers, scope.rgd('agenda_events'), x.nom);
+    // ⚠ AVANT « DEVIS EN COURS », NI DEVIS NI CHANTIER À L'ÉCRAN (25/09/2026,
+    // demandé par Mickael). Sur un prospect qu'on vient d'appeler, ces deux
+    // encadrés ne portaient que des lignes venues de Costructor sans rapport
+    // avec l'affaire en cours — d'anciens chantiers de la même personne — et
+    // ils poussaient le projet sous la ligne de flottaison. Les compteurs des
+    // tuiles suivent le même seuil : compter ce qu'on ne montre pas invite à
+    // chercher une liste qui n'est pas là.
+    const auDevis = i >= ORDRE_ETAPES.indexOf('devis_encours');
+    const rdvs = rendezVousDeLaFiche(f, chantiers, scope.rgd('agenda_events'), x.nom);
+    const rdv = rdvs[0] || null;
+    // ⚠ LA DESCRIPTION LUE EST CELLE DU PLUS RÉCENT, pas la concaténation des
+    // trois : ce sont des notes d'appel, pas un journal, et les empiler
+    // ferait remonter un téléphone périmé avant le bon.
     const duRdv = coordonneesDuRendezVous(rdv?.description, x.nom);
 
     // ⚠ LA MENTION « SAISI DANS L'APPLICATION RGD » NE VAUT QUE POUR LES
@@ -153,21 +197,29 @@ export function ouvrirFicheRgd(x, onChange) {
     const commentaireSource = [duRdv.commentaire, noteEcrite].filter(Boolean).join('\n\n');
     const jours = x.recu ? daysSince(x.recu) : null;
     const signes = devis.filter(v => v.statut === 'signe');
-    // ⚠ LE MONTANT QUI COMPTE EST CELUI DES DEVIS SIGNÉS ; à défaut seulement,
-    // le budget annoncé par la personne. Les additionner mélangerait un
-    // engagement et une intention, et la tuile dit laquelle des deux elle
-    // montre.
-    // ⚠ TROIS SOURCES POUR UN SEUL CHIFFRE, ET L'ORDRE EST CELUI DE LA
-    // CERTITUDE. `budget_travaux` est le budget SAISI dans le CRM : il n'existe
-    // que sur une fiche `rgd_clients`, et c'est le seul des trois qu'on puisse
-    // renseigner soi-même. Il passe donc avant `x.budget`, qui vient du
-    // formulaire Meta ou du site — une déclaration de la personne, pas une
-    // estimation faite après l'avoir eue au téléphone.
+    // ⚠ TROIS SOURCES POUR LE BUDGET, ET L'ORDRE EST CELUI DE LA CERTITUDE.
+    // `budget_travaux` est le budget SAISI dans le CRM : il n'existe que sur une
+    // fiche `rgd_clients`, et c'est le seul des trois qu'on puisse renseigner
+    // soi-même. Il passe donc avant `x.budget`, qui vient du formulaire Meta ou
+    // du site — une déclaration de la personne, pas une estimation faite après
+    // l'avoir eue au téléphone.
     const budgetSaisi = Number(f.budget_travaux) > 0 ? eur(Number(f.budget_travaux)) : '';
-    const montant = signes.length
-      ? { valeur: eur(signes.reduce((t, v) => t + (Number(v.montant_ht) || 0), 0)), quoi: 'Signé HT' }
-      : { valeur: valeursProjet(x).budget_annonce || budgetSaisi
-            || String(x.budget || '').trim() || '—', quoi: 'Budget annoncé' };
+    const budgetTuile = valeursProjet(x).budget_annonce || budgetSaisi
+      || String(x.budget || '').trim() || '—';
+
+    // ⚠ LE BUDGET ANNONCÉ ET LE DEVIS ACCEPTÉ SONT DEUX TUILES, plus une seule
+    // qui bascule (25/09/2026, demandé par Mickael : « rajouter le montant HT du
+    // devis accepté à partir de devis accepté »). L'ancienne version REMPLAÇAIT
+    // le budget par le signé dès qu'un devis était signé, donc l'écart entre ce
+    // que la personne annonçait et ce qu'elle a fini par signer ne se lisait
+    // nulle part — c'est pourtant le chiffre qu'on cherche après coup.
+    //
+    // ⚠ ELLE N'APPARAÎT QU'À PARTIR DE « DEVIS ACCEPTÉ », et elle dit « — »
+    // quand l'étape y est sans qu'aucun devis signé ne soit relevé : ne rien
+    // savoir et valoir zéro ne sont pas la même chose.
+    const auDevisAccepte = i >= ORDRE_ETAPES.indexOf('devis_accepte');
+    const totalSigne = signes.reduce((t, v) => t + (Number(v.montant_ht) || 0), 0);
+    const montantSigne = signes.length ? eur(totalSigne) : '—';
 
     // ⚠ CES CHAMPS N'EXISTENT QUE SUR UNE DEMANDE. Une fiche `rgd_clients` a
     // ses équivalents Meta et rien d'autre ; `d` vaut alors un objet vide, et
@@ -254,15 +306,17 @@ export function ouvrirFicheRgd(x, onChange) {
               ${x.recu ? `<span class="rgdf-tag">Reçu le ${esc(fmtDate(x.recu))}</span>` : ''}
             </div>
           </div>
+          ${blocRendezVous(rdvs)}
         </div>
         ${!enModification && !refusDeModifier(x)
           ? '<button type="button" class="btn ghost sm rgdf-modifier" id="rgdf-modifier">Modifier les informations</button>'
           : refusDeModifier(x)
             ? `<p class="rgdf-origine" title="${esc(refusDeModifier(x))}">Lecture seule</p>` : ''}
         <div class="rgdf-tuiles">
-          ${tuile(montant.valeur, montant.quoi)}
-          ${tuile(devis.length, 'Devis')}
-          ${tuile(chantiers.length, chantiers.length > 1 ? 'Chantiers' : 'Chantier')}
+          ${tuile(budgetTuile, 'Budget annoncé')}
+          ${auDevisAccepte ? tuile(montantSigne, 'Devis accepté HT') : ''}
+          ${auDevis ? tuile(devis.length, 'Devis') : ''}
+          ${auDevis ? tuile(chantiers.length, chantiers.length > 1 ? 'Chantiers' : 'Chantier') : ''}
           ${tuile(jours == null ? '—' : (jours <= 0 ? "Aujourd'hui" : jours + ' j'), 'Dans la base')}
         </div>
       </div>
@@ -317,7 +371,7 @@ export function ouvrirFicheRgd(x, onChange) {
               ? '<p class="rgdf-rien">Le projet n’a pas encore été décrit.</p>' : ''}
           </section>`}
 
-          ${devis.length ? `<section class="rgdf-bloc">
+          ${auDevis && devis.length ? `<section class="rgdf-bloc">
             <h3>Devis <span class="rgdf-compte">${devis.length}</span></h3>
             <div class="rgdf-tableau"><table><tbody>
               ${devis.map(v => { const e = dit(STATUT_DEVIS, v.statut, 'En cours');
@@ -330,7 +384,7 @@ export function ouvrirFicheRgd(x, onChange) {
             </tbody></table></div>
           </section>` : ''}
 
-          ${chantiers.length ? `<section class="rgdf-bloc">
+          ${auDevis && chantiers.length ? `<section class="rgdf-bloc">
             <h3>Chantiers <span class="rgdf-compte">${chantiers.length}</span></h3>
             <div class="rgdf-tableau"><table><tbody>
               ${chantiers.map(c => { const e = dit(ETAT_CHANTIER, c.etat, 'Inconnu');

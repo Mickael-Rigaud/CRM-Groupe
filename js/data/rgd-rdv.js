@@ -36,31 +36,50 @@ const sansAccent = (s) => String(s || '').normalize('NFD')
   .replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
 
 /**
- * Le rendez-vous d'où vient la fiche, ou `null`.
+ * TOUS les rendez-vous de la fiche, du plus récent au plus ancien.
+ *
+ * ⚠ IL PEUT Y EN AVOIR PLUSIEURS, et c'est la demande du 25/09/2026 : « si il
+ * y en a eu plusieurs je voudrais les retrouver ». Une personne est revue —
+ * seconde visite, chantier suivant — et n'afficher que le dernier ferait
+ * disparaître l'historique au moment où il commence à exister.
+ *
+ * Deux chemins, cumulés puis dédoublonnés par `google_id` : les événements
+ * désignés par les chantiers (lien exact) et, pour les fiches nées de l'agenda,
+ * ceux dont le titre porte le nom.
+ *
  * @param {object} f        la ligne `rgd_clients`
  * @param {object[]} chantiers  ses chantiers
  * @param {object[]} evenements `agenda_events`
  * @param {string} nom      le nom affiché de la personne
+ * @returns {object[]}
  */
 export function rendezVousDeLaFiche(f, chantiers, evenements, nom) {
-  const id = (chantiers || []).map(c => c.source_event_id).find(Boolean);
-  if (id) {
-    const exact = (evenements || []).find(e => e.google_id === id);
-    if (exact) return exact;
+  const tous = evenements || [];
+  const parId = new Set((chantiers || []).map(c => c.source_event_id).filter(Boolean));
+  const trouves = tous.filter(e => parId.has(e.google_id));
+
+  if (f?.source === 'google_calendar') {
+    for (const e of parLeNom(tous, nom)) {
+      if (!trouves.some(d => d.google_id === e.google_id)) trouves.push(e);
+    }
   }
-  if (f?.source !== 'google_calendar') return null;
+  // Le plus récent d'abord : c'est celui qu'on cherche en ouvrant la fiche.
+  return trouves.sort((a, b) => String(b.day || '').localeCompare(String(a.day || '')));
+}
+
+/** Le premier rendez-vous, ou `null`. Ce que lisait l'ancienne version. */
+export const rendezVousPrincipal = (...args) => rendezVousDeLaFiche(...args)[0] || null;
+
+function parLeNom(evenements, nom) {
 
   // ⚠ TROIS LETTRES, PAS QUATRE. Depuis le 24/09/2026 le contact ne porte plus
   // que son nom — le suffixe « / RGD Renova » a été retiré —, et des noms de
   // trois lettres existent (Roy, Gay, Fay). Le garde ne sert qu'à empêcher une
   // chaîne vide ou une initiale d'attraper n'importe quel rendez-vous.
   const cherche = sansAccent(nom);
-  if (cherche.length < 3) return null;
-  // Le plus récent d'abord : une personne peut avoir été revue.
-  return (evenements || [])
-    .filter(e => /visite technique/i.test(String(e.title || ''))
-      && sansAccent(e.title).includes(cherche))
-    .sort((a, b) => String(b.day || '').localeCompare(String(a.day || '')))[0] || null;
+  if (cherche.length < 3) return [];
+  return (evenements || []).filter(e => /visite technique/i.test(String(e.title || ''))
+    && sansAccent(e.title).includes(cherche));
 }
 
 // Un numéro français, écrit comme on l'écrit vraiment : « 0658209349 »,

@@ -118,6 +118,7 @@ const STATUTS_SUIVI = [
   { key: 'relance_3',         label: 'Relance 3',           ton: 'muted' },
   { key: 'a_contacter',       label: 'Contacté',            ton: 'amber' },
   { key: 'rdv_planifie',      label: 'Rendez-vous planifié', ton: 'bleu' },
+  { key: 'devis_en_cours',    label: 'Devis en cours',      ton: 'accent' },
   { key: 'devis_envoye',      label: 'Devis envoyé',        ton: 'accent' },
   { key: 'devis_accepte',     label: 'Devis accepté',       ton: 'accent' },
   { key: 'chantier_en_cours', label: 'Chantier en cours',   ton: 'green' },

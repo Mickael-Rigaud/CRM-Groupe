@@ -50,16 +50,18 @@
 import { scope } from './scope.js';
 
 // L'ordre du cycle. « archives » n'y figure pas : on n'y avance pas, on en sort.
-export const ORDRE_ETAPES = ['demande', 'rdv', 'devis_encours', 'devis_accepte',
-  'chantier_encours', 'chantier_termine'];
+export const ORDRE_ETAPES = ['demande', 'rdv', 'devis_encours', 'devis_envoye',
+  'devis_accepte', 'chantier_encours', 'chantier_termine'];
 
 export const ETAPES_RGD = [
   { key: 'demande', label: 'Nouvelle demande',
     titre: 'Statut « nouveau prospect », relance ou « contacté »' },
   { key: 'rdv', label: 'RDV', titre: 'Statut « rendez-vous planifié »' },
-  { key: 'devis_encours', label: 'Devis en cours', titre: 'Devis envoyé, ni signé ni refusé' },
-  { key: 'devis_accepte', label: 'Devis accepté',
-    titre: 'Devis signé, ou chantier préparé mais pas commencé' },
+  { key: 'devis_encours', label: 'Devis en cours',
+    titre: 'Devis en préparation, pas encore envoyé au client' },
+  { key: 'devis_envoye', label: 'Devis envoyé',
+    titre: 'Devis envoyé au client, ni signé ni refusé' },
+  { key: 'devis_accepte', label: 'Devis accepté', titre: 'Devis signé' },
   { key: 'chantier_encours', label: 'Chantier en cours',
     titre: 'Chantier commencé, pas encore terminé' },
   { key: 'chantier_termine', label: 'Chantier terminé',
@@ -74,7 +76,13 @@ export const ETAPE_DU_STATUT = {
   nouveau_prospect: 'demande', relance_1: 'demande', relance_2: 'demande',
   relance_3: 'demande', a_contacter: 'demande',
   rdv_planifie: 'rdv',
-  devis_envoye: 'devis_encours',
+  // ⚠ `devis_envoye` MENAIT À « DEVIS EN COURS » jusqu'au 25/09/2026, et les
+  // deux libellés se contredisaient déjà à l'écran : la pastille disait « Devis
+  // envoyé », l'onglet « Devis en cours ». Mickael a demandé de séparer les
+  // deux — préparer un devis et l'avoir envoyé ne sont pas le même moment, et
+  // c'est entre ces deux-là qu'on relance.
+  devis_en_cours: 'devis_encours',
+  devis_envoye: 'devis_envoye',
   devis_accepte: 'devis_accepte',
   chantier_en_cours: 'chantier_encours',
   chantier_termine: 'chantier_termine',
@@ -86,7 +94,8 @@ export const ETAPE_DU_STATUT = {
 // les écraser par un seul perdrait où en est la relance.
 export const STATUT_DE_L_ETAPE = {
   rdv: 'rdv_planifie',
-  devis_encours: 'devis_envoye',
+  devis_encours: 'devis_en_cours',
+  devis_envoye: 'devis_envoye',
   devis_accepte: 'devis_accepte',
   chantier_encours: 'chantier_en_cours',
   chantier_termine: 'chantier_termine',
@@ -175,6 +184,13 @@ export const estVisiteTechnique = (c) => c.statut_d1 === 'visite_technique';
 const estUnChantier = (c) => !estVisiteTechnique(c)
   && (!!c.etat || !!c.date_debut_prevue || !!c.work_start_at);
 const devisOuvert = (v) => !['signe', 'refuse', 'expire'].includes(v.statut);
+// ⚠ « ENVOYÉ » SE LIT SUR LE DEVIS, PAS SUR LE SUIVI. `rgd_devis.statut`
+// distingue déjà `brouillon` de `envoye` — au 25/09/2026, un brouillon et trois
+// envoyés. La distinction existait donc dans les données avant d'exister à
+// l'écran ; il n'y avait rien à inventer, juste à cesser de les confondre.
+// `vu` est du vocabulaire Costructor : un devis consulté par le client a bien
+// été envoyé.
+const devisEnvoye = (v) => ['envoye', 'vu'].includes(v.statut);
 
 // ⚠ C'EST L'AGENDA QUI DIT SI LE RENDEZ-VOUS EXISTE ENCORE, pas le CRM.
 // Une visite technique naît d'un événement Google intitulé « Visite technique :
@@ -221,6 +237,7 @@ export function etapeParLesFaits(f, chantiers, devis, joursVisite) {
   // `demarrage` d'un chantier ne le prouve pas, il vient de l'ancien système
   // et peut précéder toute signature.
   if (dv.some(v => v.statut === 'signe')) return 'devis_accepte';
+  if (dv.some(devisEnvoye)) return 'devis_envoye';
   if (dv.some(devisOuvert)) return 'devis_encours';
   // ⚠ LE RENDEZ-VOUS EST LE DERNIER FAIT, et il vient après les devis à dessein :
   // quelqu'un chez qui on a déjà signé n'est plus « en rendez-vous », même si
