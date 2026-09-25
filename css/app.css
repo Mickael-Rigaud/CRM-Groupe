@@ -694,6 +694,23 @@ button.esp-side-titre { background: none; border: 0; font-family: inherit; color
    erreur — elle est vraie, c'est le vocabulaire qui a bouge. */
 .rgdm-puce.est-hors-liste span { border-style: dashed; }
 .rgdm-pied { display: flex; justify-content: flex-end; gap: 10px; }
+/* ---- la fiche d'affaire, a la presentation de la fiche client RGD ----
+   ⚠ `.rgdf-argent` PORTE LE CHIFFRE SOUS LE NOM, et il change de nature a
+   l'engagement : budget annonce avant la lettre de mission, montant facture
+   apres. Demande du 25/09/2026. */
+.rgdf-argent { margin: 5px 0 7px; font-size: 14px; color: var(--text);
+  display: flex; align-items: baseline; gap: 7px; flex-wrap: wrap; }
+.rgdf-argent b { font-family: var(--font-display); font-size: 21px; line-height: 1; }
+.rgdf-argent > span:not(.rgdf-tag) { color: var(--muted); font-size: 13px; }
+/* Les commandes de la fiche : a droite de l'en-tete sur large, en rang dessous
+   des que ca serre — six boutons ne tiennent pas a cote d'un nom long. */
+.rgdf-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 14px; }
+/* Les onglets se tiennent entre la frise et le corps, et non colles au bord. */
+.rgdf-onglets { margin: 0 0 14px; }
+/* L'en-tete d'un bloc peut porter un bouton a droite (« + Activite ») : sans
+   ca le h3 est un simple titre et le bouton part a la ligne. */
+.rgdf-bloc h3 { display: flex; align-items: center; gap: 8px; }
+
 /* ---- le bandeau de veille d'une fiche DTU ----
    ⚠ IL DIT QU'UN ROBOT A ECRIT LA FICHE, et ce n'est pas decoratif : la veille
    publie sans relecture humaine, donc le lecteur doit pouvoir distinguer une

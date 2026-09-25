@@ -18,7 +18,7 @@ import {
   searchInput, bindSearch, restoreFocus, csvDownload, marqueResponsable,
   PERIODS,
 } from '../ui.js';
-import { openDeal, dealForm, moveStage, assignerResponsable, candidatsResponsable } from './deal.js';
+import { openDeal, dealForm, moveStage, assignerResponsable, candidatsResponsable, ficheAJour } from './deal.js';
 import { contactForm, openContact } from './contacts.js';
 import { orgForm, openOrg } from './organisations.js';
 import { coquilleEspace, poserEspace, kpiEspace, archiverFiche, restaurerFiche, supprimerDefinitivement, estActive } from './espace.js';
@@ -1321,7 +1321,9 @@ const pageMission = (mission) => ({
       root.querySelectorAll('[data-fiche]').forEach(b => b.onclick = (e) => {
         e.stopPropagation();
         const d = db.byId('deals', b.dataset.fiche);
-        if (d?.fields?.decouverte) imprimerFicheDeal(d.fields.decouverte);
+        // Même règle qu'à la fiche : la feuille imprimée reprend les valeurs
+        // COURANTES, pas la copie figée du jour de la découverte.
+        if (d?.fields?.decouverte) imprimerFicheDeal(ficheAJour(d));
       });
       // Une mission saisie ici naît dans son métier : le formulaire ouvre avec le type
       // déjà choisi, le reste (contact, montant) se remplit comme partout ailleurs.

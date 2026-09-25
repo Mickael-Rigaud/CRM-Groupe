@@ -1,11 +1,78 @@
 // Affaires : fiche détaillée (modale), création / édition, changement d'étape, gagné / perdu.
 import { db } from '../data/db.js';
 import { scope } from '../data/scope.js';
-import { ACTIVITIES, CHANNELS, LOST_REASONS, stageOf, stageIndex, stagesDe, missionDe, couleurMission, estNouveauLead, etapeEquivalente, estEtapeFinale, etapeFinale } from '../data/schema.js';
+import { ACTIVITIES, CHANNELS, LOST_REASONS, stageOf, stageIndex, stagesDe, missionDe, couleurMission, estNouveauLead, etapeEquivalente, estEtapeFinale, etapeFinale, estEngagee } from '../data/schema.js';
 import { esc, eur, openModal, closeModal, renderForm, readForm, refField, bindRefFields, toast, fmtDate, fmtDateTime, userName, marqueResponsable, contactName, dealParty, actBadge, daysSince, confirm } from '../ui.js';
 import { activityForm, activityRowHtml, bindActivityRows, nextActivity } from './activity.js';
 import { documentsSection, bindDocuments } from '../documents.js';
 import { estAmoHenrri, blocHenrri, lierHenrri, etatHenrri } from '../henrri.js';
+// ⚠ LA PRÉSENTATION EST CELLE DE LA FICHE CLIENT RGD, empruntée et non
+// recopiée (25/09/2026, demandé par Mickael : « je veux la même présentation
+// que les fiches client de RGD Renova »). `initiales`, `tuile` et `info`
+// vivent dans `rgd-fiche.js` et servent aux trois fiches du CRM : trois
+// présentations qui se ressemblent s'apprennent une fois.
+import { initiales, tuile, info } from './rgd-fiche.js';
+
+// ⚠ TROIS RUBRIQUES, ET LA FACTURATION À PART (25/09/2026 : « sépare bien les
+// informations du prospect et du projet et de la mission », « la facturation à
+// part dans un onglet pour ne pas trop surcharger la fiche »).
+//
+// `act.fields` est une liste PLATE : elle dit quoi saisir, pas où le ranger.
+// Cette table dit où. ⚠ Un champ qu'elle ne connaît pas tombe dans « Le
+// projet » — c'est le repli qui fait que les autres activités (courtage,
+// propulsion) gagnent la nouvelle présentation sans qu'il faille les classer
+// une à une, et qu'un champ ajouté demain s'affiche au lieu de disparaître.
+const RUBRIQUE = {
+  // Ce que le prospect nous a dit de lui et d'où il vient.
+  urgence: 'prospect',
+  // Ce sur quoi on travaille.
+  type_bien: 'projet', adresse: 'projet', adresse_chantier: 'projet',
+  problematique: 'projet', contexte: 'projet', type_travaux: 'projet',
+  montant_travaux: 'projet', budget_annonce: 'projet', delai_souhaite: 'projet',
+  // Ce qu'on a vendu et comment on l'exécute.
+  type_mission: 'mission', niveau: 'mission', taux_amo: 'mission',
+  date_visite: 'mission', date_rapport: 'mission',
+  // Et ce qui part dans l'onglet.
+  facture_num: 'facture', facture_date: 'facture', paiement_date: 'facture',
+  num_devis: 'facture', commission_reelle: 'facture',
+};
+const rubriqueDe = (cle) => RUBRIQUE[cle] || 'projet';
+
+/**
+ * La fiche découverte, remise à jour avant impression.
+ *
+ * ⚠ `fields.decouverte` EST UNE COPIE FIGÉE DU PREMIER JOUR. La fiche
+ * découverte crée trois choses d'un coup — un contact, une affaire, et cette
+ * copie du formulaire — et la copie ne bouge plus jamais. Corriger ensuite
+ * l'adresse du chantier ou le budget sur l'affaire laissait donc la feuille
+ * imprimée sur l'ancienne valeur : la même information à trois endroits, dont
+ * deux qui se taisent. C'est ce que Mickael a signalé le 25/09/2026 comme un
+ * défaut de synchronisation.
+ *
+ * ⚠ LA COPIE N'EST PAS SUPPRIMÉE, ET CE N'EST PAS UN OUBLI : elle porte les
+ * réponses du questionnaire (occupation, cotations, score, avancement) qui
+ * n'ont pas d'autre maison. On repose simplement par-dessus ce dont une source
+ * vivante existe — le contact pour la personne, l'affaire pour le projet et
+ * l'argent. Ce qui reste vient de la copie, et n'a pas bougé depuis.
+ */
+export function ficheAJour(deal) {
+  const copie = deal?.fields?.decouverte;
+  if (!copie) return copie;
+  const c = deal.contact_id && db.byId('contacts', deal.contact_id);
+  const f = deal.fields || {};
+  const garde = (vivant, fige) => (vivant === undefined || vivant === null || vivant === '') ? fige : vivant;
+  return {
+    ...copie,
+    client: garde(c && contactName(c), copie.client),
+    telephone: garde(c?.phone, copie.telephone),
+    adresse: garde(f.adresse, copie.adresse),
+    budget_ht: garde(f.montant_travaux, copie.budget_ht),
+    date_debut: garde(f.date_visite, copie.date_debut),
+    niveau: garde(f.niveau, copie.niveau),
+    honoraires_ht: garde(deal.amount, copie.honoraires_ht),
+    etape: garde(stageOf(deal.activity, deal.stage)?.label, copie.etape),
+  };
+}
 
 const contactLabel = c => `${contactName(c)}${c.city ? ' (' + c.city + ')' : ''}`;
 const orgLabel = o => o.name;
@@ -261,44 +328,165 @@ export function openDeal(id, onChange) {
     const curIdx = etapes.findIndex(s => s.key === d.stage);
     const status = d.status === 'won' ? `<span class="status-won">GAGNÉE ${fmtDate(d.won_at)}</span>` : d.status === 'lost' ? `<span class="status-lost">PERDUE — ${esc(d.lost_reason || '')}</span>` : `<span class="pill info">En cours · ${daysSince(d.stage_changed_at) ?? 0} j dans l'étape</span>`;
     const next = nextActivity(id);
+    // ⚠ LE MONTANT SOUS LE NOM CHANGE DE NATURE À L'ENGAGEMENT (25/09/2026 :
+    // « rajoute le budget entre les étapes nouveau et lettre de mission, et à
+    // partir de lettre de mission je veux les chiffres de la facture »). Le
+    // seuil n'est pas recopié ici : c'est `estEngagee`, donc « Lettre de
+    // mission » côté expertise et « Mission AMO signée » côté AMO, déclaré une
+    // seule fois dans `schema.js`. Avant, on regarde ce que le client a
+    // annoncé ; après, ce qu'on lui a facturé — le budget n'a plus d'usage.
+    const engagee = estEngagee(d);
+    const budget = Number(d.fields?.montant_travaux ?? d.fields?.budget_annonce) || 0;
+    const factureNum = d.fields?.facture_num;
+    const ligneArgent = engagee
+      ? `<b>${esc(eur(d.amount))}</b> <span>${esc(act.amountLabel.replace(/\s*\(€\)/, ''))}</span>`
+        + (factureNum
+            ? ` <span class="rgdf-tag">Facture ${esc(factureNum)}${d.fields?.facture_date ? ' · ' + esc(fmtDate(d.fields.facture_date)) : ''}</span>`
+            : ' <span class="rgdf-tag est-perdu">Pas encore facturée</span>')
+        + (d.fields?.paiement_date ? ` <span class="rgdf-tag est-etape">Payée le ${esc(fmtDate(d.fields.paiement_date))}</span>` : '')
+      : budget
+        ? `<b>${esc(eur(budget))}</b> <span>de budget annoncé</span>`
+        : '<span class="muted">Budget non renseigné</span>';
+
+    // Les champs de l'activité, rangés par rubrique. Une rubrique vide ne
+    // s'affiche pas : un titre suivi de rien fait chercher ce qui manque.
+    const champsDe = (rub) => act.fields
+      .filter(fl => rubriqueDe(fl.key) === rub)
+      .map(fl => {
+        const v = d.fields?.[fl.key];
+        if (v === undefined || v === '' || v === null || v === false) return '';
+        const texte = fl.type === 'checkbox' ? 'Oui'
+          : fl.type === 'date' ? fmtDate(v)
+          : fl.type === 'number' && /€/.test(fl.label) ? eur(v)
+          : String(v);
+        return info('regle', fl.label, esc(texte), 'est-gris');
+      }).join('');
+
+    const blocSi = (titre, dedans, vide) => dedans || vide
+      ? `<section class="rgdf-bloc"><h3>${esc(titre)}</h3>${dedans || `<p class="rgdf-rien">${esc(vide)}</p>`}</section>`
+      : '';
+
     const html = `
-      <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;margin-bottom:14px">
-        <div>${actBadge(d.activity)} &nbsp; ${status}<div class="muted small" style="margin-top:4px">Créée le ${fmtDate(d.created_at)} · Responsable : ${marqueResponsable(d.owner_id)}</div></div>
-        <div class="toolbar">
-          ${d.status === 'open' ? `<button class="btn green sm" id="d-won">✓ Gagnée</button><button class="btn danger sm" id="d-lost">✕ Perdue</button>` : `<button class="btn ghost sm" id="d-reopen">Réouvrir</button>`}
+      <div class="rgdf-hero">
+        <div class="rgdf-hero-haut">
+          <div class="rgdf-avatar">${esc(initiales(contact ? contactName(contact) : d.title))}</div>
+          <div class="rgdf-identite">
+            <h2>${esc(d.title)}</h2>
+            <div class="rgdf-argent">${ligneArgent}</div>
+            <div class="rgdf-meta">
+              <span class="rgdf-tag">${esc(act.label)}</span>
+              <span class="rgdf-tag ${d.status === 'lost' ? 'est-perdu' : 'est-etape'}">${
+                d.status === 'won' ? 'Gagnée le ' + esc(fmtDate(d.won_at))
+                : d.status === 'lost' ? 'Perdue' + (d.lost_reason ? ' — ' + esc(d.lost_reason) : '')
+                : esc(etapes[curIdx]?.label || d.stage)}</span>
+              ${d.status === 'open' ? `<span class="rgdf-tag">${daysSince(d.stage_changed_at) ?? 0} j dans l’étape</span>` : ''}
+              <span class="rgdf-tag">Créée le ${esc(fmtDate(d.created_at))}</span>
+            </div>
+          </div>
+        </div>
+        <div class="rgdf-actions">
+          ${d.status === 'open'
+            ? '<button class="btn green sm" id="d-won">✓ Gagnée</button><button class="btn danger sm" id="d-lost">✕ Perdue</button>'
+            : '<button class="btn ghost sm" id="d-reopen">Réouvrir</button>'}
           ${d.fields?.decouverte ? '<button class="btn ghost sm" id="d-fiche">🖨 Fiche de mission</button>' : ''}
-          ${scope.isDirection ? `<button class="btn ${d.owner_id ? 'ghost ' : ''}sm" id="d-attr">👤 ${d.owner_id ? 'Changer de responsable' : 'Attribuer'}</button>` : ''}
+          ${scope.isDirection ? `<button class="btn ghost sm" id="d-attr">👤 ${d.owner_id ? 'Changer de responsable' : 'Attribuer'}</button>` : ''}
           <button class="btn ghost sm" id="d-edit">✎ Modifier</button>
-                    <button class="btn danger sm" id="d-del">🗑 Supprimer</button>
+          <button class="btn ghost sm danger" id="d-del">🗑 Supprimer</button>
         </div>
       </div>
-      <div class="stage-steps" style="margin-bottom:18px">${etapes.map((s, i) => `<button data-stage="${s.key}" class="${i === curIdx ? 'cur' : i < curIdx ? 'past' : ''}" title="${estEtapeFinale(d.activity, s.key) ? 'Dernière étape. Y être ne suffit pas : l\'affaire se gagne avec « Marquer gagnée », une fois ce travail terminé.' : s.delivery ? 'Étape de réalisation — la mission tourne, elle n\'est pas encore gagnée' : 'Probabilité ' + s.p + ' %'}">${esc(s.label)}</button>`).join('')}</div>
-      ${d.status === 'open' && !next ? `<div class="alert" style="margin-bottom:16px"><b>!</b><div>Aucune prochaine action planifiée — <a href="#" id="d-add-act-inline">en ajouter une maintenant</a>.</div></div>` : ''}
-      <div class="detail">
-        <div>
-          <div class="section"><h3>Informations</h3><dl>
-            <dt>Contact</dt><dd>${contact ? `<a href="#/contacts/${contact.id}" data-close>${esc(contactName(contact))}</a> ${contact.phone ? '· <a href="tel:' + esc(contact.phone) + '">' + esc(contact.phone) + '</a>' : ''} ${contact.email ? '· <a href="mailto:' + esc(contact.email) + '">' + esc(contact.email) + '</a>' : ''}` : '—'}</dd>
-            <dt>Entreprise</dt><dd>${org ? `<a href="#/contacts/${org.id}" data-close>${esc(org.name)}</a>` : '—'}</dd>
-            <dt>${esc(act.amountLabel)}</dt><dd>${eur(d.amount)}</dd>
-            <dt>Canal</dt><dd>${esc(d.channel || '—')}${d.campaign ? ` <span class="pill">${esc(d.campaign)}</span>` : ''}</dd>
-            <dt>Apporteur</dt><dd>${refOrg ? esc(refOrg.name) : refC ? esc(contactName(refC)) : '—'}</dd>
-            ${act.fields.map(f => { const v = d.fields?.[f.key]; if (v === undefined || v === '' || v === null || v === false) return ''; return `<dt>${esc(f.label)}</dt><dd>${f.type === 'checkbox' ? 'Oui' : f.type === 'date' ? fmtDate(v) : f.type === 'number' && /€/.test(f.label) ? eur(v) : esc(v)}</dd>`; }).join('')}
-          </dl></div>
-          <div class="section"><h3>Historique</h3>
-            <form id="note-form" style="display:flex;gap:8px;margin-bottom:10px"><input class="filter-input" style="flex:1" name="body" placeholder="Ajouter une note (appel, échange, décision…)" required><button class="btn sm">Ajouter</button></form>
-            <div class="timeline">${events.length ? events.map(e => `<div class="tl ${e.kind}"><div class="meta">${fmtDateTime(e.created_at)} · ${esc(userName(e.author_id))}</div>${esc(e.body)}</div>`).join('') : '<div class="empty">Aucun échange enregistré</div>'}</div>
-          </div>
+
+      <!-- La frise EST le levier : cliquer une etape la change. Elle etait deja
+           la, mais noyee sous la barre de boutons ; elle passe sous l'en-tete,
+           a la place qu'elle a sur la fiche client RGD. -->
+      <div class="rgdf-piste ${d.status === 'lost' ? 'est-perdu' : ''}">
+        <div class="rgdf-jalons">
+          <div class="rgdf-rail"><span style="width:${curIdx <= 0 ? 0
+            : Math.round((curIdx / Math.max(1, etapes.length - 1)) * 100)}%"></span></div>
+          ${etapes.map((st, i) => `
+            <button data-stage="${esc(st.key)}" title="${esc(estEtapeFinale(d.activity, st.key)
+                ? 'Derniere etape. Y etre ne suffit pas : l affaire se gagne avec « Gagnee ».'
+                : st.delivery ? 'Etape de realisation — la mission tourne, elle n est pas encore gagnee'
+                : 'Probabilite ' + st.p + ' %')}"
+              class="${i === curIdx ? 'cur' : i < curIdx ? 'past' : ''}">
+              <i></i><span>${esc(st.label)}</span>
+            </button>`).join('')}
         </div>
-        <div>
-          <div class="section"><h3 style="display:flex;justify-content:space-between;align-items:center">Activités <button class="btn sm" id="d-add-act">+ Activité</button></h3>
-            <div style="display:flex;flex-direction:column;gap:8px" id="d-acts">${acts.length ? acts.map(a => activityRowHtml(a)).join('') : '<div class="empty">Aucune activité</div>'}</div>
-          </div>
+      </div>
+
+      ${d.status === 'open' && !next ? `<div class="alert" style="margin:0 0 16px"><b>!</b><div>Aucune prochaine action planifiée — <a href="#" id="d-add-act-inline">en ajouter une maintenant</a>.</div></div>` : ''}
+
+      <!-- ⚠ LA FACTURATION EST DERRIERE UN ONGLET, pas supprimee : six lignes de
+           chiffres et le bloc Henrri au milieu du dossier noyaient le projet. -->
+      <div class="pill-tabs rgdf-onglets" role="tablist">
+        <button type="button" data-onglet="fiche" class="on">Le dossier</button>
+        <button type="button" data-onglet="facture">Facturation</button>
+      </div>
+
+      <div class="rgdf-corps" data-vue="fiche">
+        <div class="rgdf-colonne">
+          ${blocSi('Le prospect', `
+            ${info('personne', 'Contact', contact ? `<a href="#/contacts/${esc(contact.id)}" data-close>${esc(contactName(contact))}</a>` : '', 'est-orange')}
+            ${info('tel', 'Téléphone', contact?.phone ? `<a href="tel:${esc(contact.phone)}">${esc(contact.phone)}</a>` : '', 'est-vert')}
+            ${info('mail', 'E-mail', contact?.email ? `<a href="mailto:${esc(contact.email)}">${esc(contact.email)}</a>` : '', 'est-bleu')}
+            ${info('maison', 'Entreprise', org ? `<a href="#/contacts/${esc(org.id)}" data-close>${esc(org.name)}</a>` : '', 'est-bleu')}
+            ${info('source', 'Canal', esc(d.channel || ''), 'est-violet')}
+            ${info('personne', 'Apporteur', refOrg ? esc(refOrg.name) : refC ? esc(contactName(refC)) : '', 'est-vert')}
+            ${info('personne', 'Responsable', marqueResponsable(d.owner_id), 'est-gris')}
+            ${champsDe('prospect')}`, 'Aucune coordonnée renseignée.')}
+
+          ${blocSi('Le projet', champsDe('projet'), 'Le projet n’a pas encore été décrit.')}
+          ${blocSi('La mission', champsDe('mission'), '')}
+        </div>
+
+        <!-- ⚠ L'HISTORIQUE PASSE A DROITE (demande du 25/09), au-dessus des
+             actions a venir, qui RESTENT : elles portent les relances. -->
+        <div class="rgdf-colonne">
+          <section class="rgdf-bloc rgdf-suivi">
+            <h3>Historique <span class="rgdf-compte">${events.length}</span></h3>
+            <form id="note-form" class="rgdf-ajout">
+              <input name="body" required placeholder="Noter un appel, un échange, une décision…">
+              <button class="btn sm" type="submit">Ajouter</button>
+            </form>
+            <div class="timeline">${events.length
+              ? events.map(e => `<div class="tl ${esc(e.kind)}"><div class="meta">${esc(fmtDateTime(e.created_at))} · ${esc(userName(e.author_id))}</div>${esc(e.body)}</div>`).join('')
+              : '<p class="rgdf-rien">Aucun échange enregistré.</p>'}</div>
+          </section>
+
+          <section class="rgdf-bloc">
+            <h3>Actions à venir <span class="grow"></span>
+              <button class="btn sm" id="d-add-act">+ Activité</button></h3>
+            <div id="d-acts" style="display:flex;flex-direction:column;gap:8px">${acts.length
+              ? acts.map(a => activityRowHtml(a)).join('')
+              : '<p class="rgdf-rien">Aucune action planifiée.</p>'}</div>
+          </section>
+
           ${documentsSection('deals', id)}
+        </div>
+      </div>
+
+      <div class="rgdf-corps" data-vue="facture" hidden>
+        <div class="rgdf-colonne rgdf-large">
+          ${blocSi('Facturation', champsDe('facture')
+            + info('euro', act.amountLabel.replace(/\s*\(€\)/, ''), esc(eur(d.amount)), 'est-orange'),
+            '')}
           ${estAmoHenrri(d) ? blocHenrri(d, etatCourant) : ''}
+          ${!estAmoHenrri(d) && !champsDe('facture')
+            ? '<p class="rgdf-rien">Rien de facturé pour le moment.</p>' : ''}
         </div>
       </div>`;
-    const m = openModal(d.title, html, { wide: true, onClose: () => onChange?.() });
+    // Le titre est dans l'en-tête de la fiche : le repasser à `openModal` le
+    // ferait lire deux fois, à deux tailles différentes.
+    const m = openModal('', html, { wide: true, onClose: () => onChange?.() });
+    m.classList.add('rgdf');
     const refresh = () => { render(); onChange?.(); };
+
+    // ⚠ LES ONGLETS NE RECHARGENT RIEN : ils montrent et cachent deux blocs
+    // déjà rendus. Redessiner à chaque clic perdrait la note en cours de
+    // frappe dans l'historique, et rouvrirait la modale pour rien.
+    m.querySelectorAll('[data-onglet]').forEach(b => b.onclick = () => {
+      m.querySelectorAll('[data-onglet]').forEach(x => x.classList.toggle('on', x === b));
+      m.querySelectorAll('[data-vue]').forEach(v => { v.hidden = v.dataset.vue !== b.dataset.onglet; });
+    });
     m.querySelectorAll('[data-stage]').forEach(b => b.onclick = async () => { const dd = db.byId('deals', id); const st = stageOf(dd.activity, b.dataset.stage); if (dd.status === 'lost') return toast('Réouvrez l\'affaire avant de changer d\'étape', 'warn'); if (dd.status === 'won' && !st.delivery) return toast('Affaire gagnée : réouvrez-la pour revenir à une étape commerciale', 'warn'); await moveStage(dd, b.dataset.stage); refresh(); });
     m.querySelector('#d-won')?.addEventListener('click', async () => { await setWon(db.byId('deals', id)); refresh(); });
     m.querySelector('#d-lost')?.addEventListener('click', () => setLost(db.byId('deals', id), refresh, render));
@@ -306,7 +494,9 @@ export function openDeal(id, onChange) {
     m.querySelector('#d-fiche')?.addEventListener('click', async () => {
       try {
         const { imprimerFicheDeal } = await import('./btp-fiche.js');
-        await imprimerFicheDeal(db.byId('deals', id).fields.decouverte);
+        // La feuille imprimee reprend les valeurs COURANTES, pas celles du jour
+        // ou la fiche decouverte a ete remplie.
+        await imprimerFicheDeal(ficheAJour(db.byId('deals', id)));
       } catch (err) { toast(err.message, 'err'); }
     });
     m.querySelector('#d-attr')?.addEventListener('click', () => attribuerDeal(db.byId('deals', id), refresh, render));
