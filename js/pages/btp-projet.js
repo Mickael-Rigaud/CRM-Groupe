@@ -507,8 +507,35 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
     corps.querySelectorAll('[data-niveau]').forEach(b => b.onclick = () => { v.niveau = b.dataset.niveau; dessine(); });
     if (v.mission === 'amo') {
       poser('#fp-motif', 'motif');
-      const t = corps.querySelector('#fp-travaux2'); if (t) t.oninput = () => { v.budget_ht = t.value; dessine(); };
-      const tx = corps.querySelector('#fp-taux'); if (tx) tx.oninput = () => { v.taux_final = tx.value === '' ? null : Number(tx.value); dessine(); };
+      // ⚠ LA FRAPPE NE REDESSINE QUE LES RESULTATS.
+      //
+      // Redessiner tout l'ecran a chaque caractere detruit le champ et en
+      // recree un autre : le curseur part avec l'ancien, et on ne peut plus
+      // saisir qu'un chiffre a la fois. Signale par Mickael le 28/09/2026 sur
+      // le montant des travaux TTC, qu'il fallait retaper dix fois.
+      //
+      // ⚠ LE REDESSIN COMPLET ATTEND LA SORTIE DU CHAMP (`change`), et il est
+      // necessaire : c'est lui qui met a jour la cotation DEDUITE du budget
+      // dans la matrice, le score, le taux suggere et le motif de derogation.
+      // Se contenter de `input` laisserait la matrice affirmer une cotation
+      // que le montant ne justifie plus.
+      //
+      // C'est la mecanique que l'ecran AMO portait depuis l'origine ; je l'ai
+      // perdue en ecrivant la fiche projet. Ne pas la resimplifier.
+      const majHono = () => {
+        const z = corps.querySelector('#fp-hono');
+        if (z) z.innerHTML = resultatsHonoraires(v.budget_ht, tauxRetenu(), tauxSug());
+      };
+      const chTrav = corps.querySelector('#fp-travaux2');
+      if (chTrav) {
+        chTrav.oninput = () => { v.budget_ht = chTrav.value; majHono(); };
+        chTrav.onchange = () => dessine();
+      }
+      const chTaux = corps.querySelector('#fp-taux');
+      if (chTaux) {
+        chTaux.oninput = () => { v.taux_final = chTaux.value === '' ? null : Number(chTaux.value); majHono(); };
+        chTaux.onchange = () => dessine();
+      }
     } else {
       poser('#fp-tarif', 'tarif');
     }
