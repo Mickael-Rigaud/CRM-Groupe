@@ -138,7 +138,11 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
   const cotesFaitesAmo = () => CRITERES_V5.filter(c => coteAmo(c.key) !== null).length;
   const tauxSug = () => tauxSuggere(scoreAmo()).taux;
   const tauxRetenu = () => (v.taux_final ?? tauxSug());
-  const niveauAmo = () => NIVEAUX_AMO.find(n => n.key === v.niveau) || niveauSuggere(scoreAmo());
+  // ⚠ PAS DE NIVEAU PAR DEFAUT SUR UN FORMULAIRE VIERGE : sans cotation, le
+  // niveau suggere serait le plus leger, affiche comme retenu et ENREGISTRE
+  // comme tel. Un niveau que personne n'a choisi vaut moins que pas de niveau.
+  const niveauAmo = () => NIVEAUX_AMO.find(n => n.key === v.niveau)
+    || (cotesFaitesAmo() ? niveauSuggere(scoreAmo()) : null);
   const niveauRetenu = () => (v.mission === 'amo' ? niveauAmo() : niveauExp());
   // ⚠ `honorairesAmo` rend { ht, tva, ttc } : c'est `ht` qu'on garde, parce que
   // `amount` d'une affaire BTP est un montant HT (voir `amountLabel`). Ecrire
@@ -363,9 +367,30 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
     const score = scoreAmo();
     const faites = cotesFaitesAmo();
     const complet = faites === CRITERES_V5.length;
-    const sug = tauxSug();
-    const taux = tauxRetenu();
-    const ctrl = controleTaux(sug, taux, v.motif);
+
+    // ⚠ TANT QUE RIEN N'EST COTE, ON N'AFFICHE AUCUN CHIFFRE (28/09/2026,
+    // demande de Mickael). L'ecran s'ouvrait sur « 0 points sur 10 » et
+    // « 5 % de taux suggéré », avec le champ du taux déjà rempli à 5 — une
+    // suggestion présentée comme acquise alors qu'elle ne repose sur rien. On
+    // lit alors un resultat qui n'existe pas, et pire : le taux se serait
+    // enregistré tel quel sans que personne ne l'ait choisi.
+    //
+    // ⚠ « AUCUNE COTE » N'EST PAS « AUCUN CLIC » : budget, lots et durée se
+    // DÉDUISENT de l'étape précédente. Des que l'un d'eux est connu, la
+    // cotation existe et les chiffres reviennent — c'est `cotesFaitesAmo` qui
+    // le dit, et c'est la meme fonction qui compte les criteres a l'ecran.
+    //
+    // Meme regle que la tuile de rentabilite du tableau de bord RGD : ne rien
+    // savoir et valoir zero ne sont pas la meme chose.
+    const aucuneCote = faites === 0;
+    const sug = aucuneCote ? null : tauxSug();
+    const taux = aucuneCote ? v.taux_final : tauxRetenu();
+    // Sans cotation il n'y a pas d'ecart a justifier : `controleTaux` comparerait
+    // le taux a un suggere inexistant et reclamerait un motif de derogation sur
+    // un formulaire vierge.
+    const ctrl = aucuneCote
+      ? { ecart: false, motifManquant: false, validationDirection: false }
+      : controleTaux(sug, taux, v.motif);
     const niv = niveauAmo();
     return `
     <div class="mf-bloc-titre">J. Score de complexité</div>
@@ -386,9 +411,10 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
       : `${CRITERES_V5.length - faites} critère${CRITERES_V5.length - faites > 1 ? 's' : ''} à coter. Budget, lots et durée se déduisent de l’étape précédente.`}</p>
 
     <div class="btp-score" style="${teinte()}">
-      <div class="btp-score-val ${complet ? 'plein' : ''}"><b>${score}</b><span>points sur 10</span></div>
+      <div class="btp-score-val ${complet ? 'plein' : ''}"><b>${aucuneCote ? '—' : score}</b><span>${
+        aucuneCote ? 'à coter' : 'points sur 10'}</span></div>
       <span class="btp-score-fleche" aria-hidden="true">→</span>
-      <div class="btp-score-taux"><b>${sug} %</b><span>taux suggéré</span></div>
+      <div class="btp-score-taux"><b>${aucuneCote ? '—' : sug + ' %'}</b><span>taux suggéré</span></div>
     </div>
 
     <div class="mf-bloc-titre">Taux retenu et honoraires</div>
@@ -406,7 +432,7 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
       ${NIVEAUX_AMO.map(n => `
         <button type="button" class="mf-niveau ${niv && n.key === niv.key ? 'on' : ''}" data-niveau="${n.key}">
           <span class="mf-niveau-pts">${n.points} pts</span>
-          <b>${esc(n.label)}${niveauSuggere(score).key === n.key ? '<em class="fa-suggere">suggéré</em>' : ''}</b>
+          <b>${esc(n.label)}${!aucuneCote && niveauSuggere(score).key === n.key ? '<em class="fa-suggere">suggéré</em>' : ''}</b>
           <span class="mf-niveau-txt">${esc(n.contenu)}</span>
         </button>`).join('')}
     </div>
@@ -522,9 +548,18 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
       //
       // C'est la mecanique que l'ecran AMO portait depuis l'origine ; je l'ai
       // perdue en ecrivant la fiche projet. Ne pas la resimplifier.
+      // ⚠ LA MEME REGLE QUE LE RENDU, sinon les deux se contredisent sous les
+      // yeux : pendant la frappe les honoraires annonçaient 10 000 € calculés
+      // sur un taux de 5 % que le champ ne montrait pas et que le score disait
+      // « — ». `coteBudget` rend null tant que le montant vaut zéro, donc dès le
+      // premier chiffre tapé la cotation existe et les résultats reviennent
+      // d'eux-mêmes — sans attendre la sortie du champ.
       const majHono = () => {
         const z = corps.querySelector('#fp-hono');
-        if (z) z.innerHTML = resultatsHonoraires(v.budget_ht, tauxRetenu(), tauxSug());
+        if (!z) return;
+        const rien = cotesFaitesAmo() === 0;
+        z.innerHTML = resultatsHonoraires(v.budget_ht,
+          rien ? v.taux_final : tauxRetenu(), rien ? null : tauxSug());
       };
       const chTrav = corps.querySelector('#fp-travaux2');
       if (chTrav) {
