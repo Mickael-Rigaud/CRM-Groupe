@@ -18,6 +18,12 @@ function renderLogin(error = '') {
   const users = db.t('profiles');
   app.innerHTML = `<div class="login"><div class="card">
     <div class="brand"><div class="logo">${esc(CONFIG.APP_NAME)}</div><small>RGD Renova · BTP Expertise · La Référence Courtage · Propulsion</small></div>
+    <!-- Un refus se dit avant le formulaire, et dans les DEUX modes : il etait
+         enferme dans la branche non-demo, donc invisible a la demonstration —
+         c'est-a-dire au seul endroit ou l'on peut l'eprouver sans casser un
+         vrai lien. Un message d'erreur qu'on ne peut pas essayer finit par ne
+         plus s'afficher sans que personne le remarque. -->
+    ${error ? `<p class="mf-aide attention" style="margin:0 0 14px">${esc(error)}</p>` : ''}
     ${db.demo ? `
       <p class="muted small">Mode démo — données d'exemple stockées dans ce navigateur. Choisissez un profil pour tester les droits :</p>
       <div class="userpick">${users.map(u => `<button data-u="${u.id}"><span class="avatar">${esc(u.full_name.split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase())}</span><span><b>${esc(u.full_name)}</b><small>${esc(ROLES[u.role]?.label || u.role)} — ${esc(ROLES[u.role]?.description || '')}</small></span></button>`).join('')}</div>
@@ -25,7 +31,6 @@ function renderLogin(error = '') {
       <form id="login-form" class="form">
         <div class="field"><label>Email</label><input type="email" name="email" required autocomplete="username"></div>
         <div class="field"><label>Mot de passe</label><input type="password" name="password" required autocomplete="current-password"></div>
-        ${error ? `<p style="color:var(--red);flex-basis:100%;margin:0">${esc(error)}</p>` : ''}
         <div class="form-actions"><a href="#" id="forgot" class="small muted" style="margin-right:auto">Mot de passe oublié ?</a><button class="btn" type="submit">Se connecter</button></div>
       </form>`}
   </div></div>`;
@@ -430,12 +435,48 @@ async function start(user) {
 
 window.addEventListener('hashchange', route);
 
+// Un lien d'accès qui n'a pas abouti, DIT EN FRANÇAIS.
+//
+// ⚠ CE SILENCE A COÛTÉ DEUX JOURS (28-29/09/2026). Quand un lien d'invitation
+// ou de réinitialisation est périmé ou déjà servi, la plateforme renvoie bien
+// au CRM — mais avec l'échec rangé dans l'adresse
+// (`#error=access_denied&error_code=otp_expired&…`). Le CRM l'ignorait et
+// affichait un écran de connexion nu : la personne voyait un formulaire vide
+// et n'avait aucun moyen de savoir que son lien était mort, ni qu'il fallait
+// en redemander un. Elle réessayait le même, évidemment.
+//
+// ⚠ ET C'EST DANS LE FRAGMENT, PAS DANS LA REQUÊTE : après `#`, donc jamais
+// envoyé au serveur — seul le navigateur le voit, et seul ce code peut le lire.
+// ⚠ L'ADRESSE EST LUE AVANT `db.init()`, ET CE N'EST PAS UN DÉTAIL D'ORDRE :
+// le client Supabase examine le fragment à sa création pour y trouver une
+// session, et le NETTOIE au passage. Lire après lui, c'est lire une adresse
+// déjà vidée — le message n'arriverait jamais, et le défaut serait invisible
+// puisque tout le reste marche.
+const HASH_AU_DEMARRAGE = location.hash || '';
+
+function refusDeLien() {
+  const brut = HASH_AU_DEMARRAGE.replace(/^#/, '');
+  if (!/(^|&)error/.test(brut)) return '';
+  const p = new URLSearchParams(brut);
+  const code = p.get('error_code') || '';
+  // On efface l'adresse pour qu'un rechargement ne réaffiche pas l'erreur
+  // d'un lien qu'on a depuis remplacé.
+  history.replaceState(null, '', location.pathname + location.search);
+  if (/expired|otp/.test(code)) {
+    return "Ce lien d'accès n'est plus valable : il a déjà servi, ou il a plus de 24 heures. "
+         + 'Demandez-en un nouveau à la direction (Réglages → Utilisateurs → « Renvoyer l\'invitation »).';
+  }
+  return p.get('error_description')
+    ? `Le lien n'a pas abouti : ${p.get('error_description')}`
+    : "Le lien d'accès n'a pas abouti. Demandez-en un nouveau à la direction.";
+}
+
 (async () => {
   try {
     await db.init();
     await db.loadAll().catch(e => { if (db.demo) throw e; /* en prod, sans session, RLS renvoie vide : normal */ });
     const u = await db.currentUser();
-    if (u) { if (!db.demo) await db.loadAll(); start(u); } else renderLogin();
+    if (u) { if (!db.demo) await db.loadAll(); start(u); } else renderLogin(refusDeLien());
   } catch (e) {
     console.error(e);
     app.innerHTML = `<div class="login"><div class="card"><h2>Erreur de démarrage</h2><p>${esc(e.message)}</p><p class="muted small">Vérifiez la configuration dans <code>js/config.js</code>.</p></div></div>`;
