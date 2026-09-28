@@ -235,6 +235,36 @@ anciens passages : `declenche_par` dit qui a fait quoi. ⚠ **LES DEUX GESTES
 SONT INDISSOCIABLES** — supprimer ces lignes sans fermer la porte les ferait
 revenir en 30 minutes.
 
+⚠ **L'INVENTAIRE D'AVANT EXTINCTION A TROUVÉ UN DERNIER TROU, ET IL N'ÉTAIT
+DANS AUCUNE LISTE** (28/09/2026, migration `structure_stats_calculees_dans_le_crm`).
+`push_structure_stats` recevait chaque matin à 8 h les chiffres de RGD —
+prospects et CA HT par mois — et **la vue d'ensemble du groupe les affiche À LA
+PLACE de son calcul interne**. Éteindre le worker aurait figé le CA de RGD sur
+les douze mois du 28/09 : un écran de pilotage immobile, sans qu'une ligne ne
+dise pourquoi. **Le calcul est porté à l'identique** (`rgd_pousser_structure_stats`,
+tâche `rgd_structure_stats` à 6 h 50), et prouvé chiffre par chiffre avant
+d'écrire : les 12 mois de CA, les 9 mois de devis signés et les 13 prospects
+tombent exactement sur ce que le worker posait, et le JSON produit lui est
+**strictement égal** (comparaison `jsonb`). ⚠ **`prospects` EST DÉDUIT DU
+NOMBRE, PAS LU DANS LE CODE** du worker : huit définitions essayées, une seule
+tombe sur 13 (Meta Ads + formulaire du site) — solide, mais c'est là qu'il faut
+regarder si le chiffre s'écarte un jour. ⚠ **DEUX PIÈGES DE MÉTHODE ÉVITÉS** :
+une requête **ne voit pas sa propre écriture** (MVCC), donc la première preuve
+comparait l'ancien à l'ancien et répondait `true` — refaite avec le JSON attendu
+figé en littéral ; et `push_structure_stats` est **en CRLF et lève une
+exception** au lieu de rendre un objet, donc un ancrage recopié des portes
+`push_rgd*` n'aurait rien trouvé — d'où un ancrage sur **une seule ligne**, qui
+ne dépend d'aucune convention de fin de ligne. ⚠ **`push_rgd_pilotage` A PERDU
+SA CHARGE `reglages` le même jour** (`reglages_sortent_du_releve`), dernier
+écrivain concurrent : une seule clé en venait, `costructor_clients_uniques`, que
+`costructor-clients` écrit déjà. Les trois `manual_*` ne venaient pas de là — la
+coupure les **protège**. `rgd_recalculer_chantiers` reste dans cette porte : il
+n'y sera plus déclenché, et n'a pas besoin de l'être (`costructor-chantiers`
+l'appelle toutes les 30 min). **État des 15 portes : huit comptent et jettent,
+cinq sont celles de l'agenda que le CRM s'appelle à lui-même,
+`push_rgd_st` vise deux tables vides, `push_rgd_demandes` un flux porté par
+`formulaire-site`. Aucune ne porte plus rien d'unique.**
+
 ⚠ **LES QUATRE TABLES D'ARGENT SOUS-TRAITANT SONT
 VIDES** (`rgd_missions`, `rgd_st_paiements`, `rgd_st_commissions`,
 `rgd_fournitures`) : le gros morceau redouté du transfert n'existe pas. ⚠ **LA SYNCHRO COSTRUCTOR DES CHANTIERS NE MANQUE PAS DE
