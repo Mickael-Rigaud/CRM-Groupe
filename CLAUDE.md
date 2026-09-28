@@ -166,20 +166,83 @@ seule avant de la planifier** : 41 confirmés contre 41, 34 uniques contre 34,
 `costructor-devis`** : on ne rouvre pas la plus grosse pièce du transfert, en
 service, pour y poser un calcul sans rapport avec l'écriture des devis.
 
-**Ce qui reste donc à porter** (état vérifié le 28/09/2026) : ⚠ **`push_rgd_clients`
-n'est PAS coupé, et c'est une question ouverte** — il porte encore l'entrée des
-fiches **nouvelles** venues de Costructor, et `costructor-devis` sait ADOPTER
-une fiche par e-mail mais n'en crée pas. **Qui crée la fiche d'un client qui
-n'arrive ni du site, ni de Meta, ni d'un rendez-vous ?** À trancher avant de
-fermer cette porte. Reste aussi le **journal de synchro** (`rgd_costructor_etat`,
-5 lignes), alimenté par le worker seul : l'écran `#/rgd/costructor` se figerait
-le jour où on l'éteint. **Le worker ne porte plus que ces deux choses**, contre
-neuf charges le matin même. ⚠ **LES QUATRE TABLES D'ARGENT SOUS-TRAITANT SONT
+⚠ **IL NE RESTE PLUS RIEN À PORTER — LES DEUX DERNIERS FILS SONT FERMÉS LE
+28/09/2026 après-midi.** Le worker ne fournit plus **aucune** charge que le CRM
+ne sache produire lui-même.
+
+**Fil 1 — les fiches clients** (migrations `rgd_visites_agenda_planifiee`,
+`rgd_clients_sortent_du_releve`). La question ouverte était « qui crée la fiche
+d'un client qui n'arrive ni du site, ni de Meta, ni d'un rendez-vous ? ».
+⚠ **ELLE A ÉTÉ TRANCHÉE EN COMPTANT, ET LA MESURE A RETOURNÉ LA QUESTION** : en
+7 jours, cette porte a créé **4 fiches — 3 venues de Google Agenda, 1 d'essai,
+zéro client Costructor**. Le flux vivant n'était pas celui qu'on croyait. Et il
+n'y a plus personne pour saisir ailleurs, le front de l'application RGD ayant
+été supprimé le matin même. ⚠ **`rgd_visites_depuis_agenda` EXISTAIT DEPUIS LE
+24/09 ET NE TOURNAIT PAS** — écrite, corrigée, jamais planifiée : quatre jours
+pendant lesquels le robot de l'autre côté faisait le travail. Elle tourne
+maintenant à **:15 et :45** (`rgd_visites_agenda`), 15 min après le relevé de
+l'agenda. ⚠ **UN ÉCART DE COMPORTEMENT ASSUMÉ** : sans invité dans l'événement,
+elle ne crée RIEN, là où le robot créait quand même — c'est ainsi qu'une fiche
+« test Elodie » était entrée le 25/09. Les 3 vraies visites portent toutes un
+invité ; la règle stricte est donc aussi la plus juste, et ce qu'elle ne fait
+pas est DIT (`sans_invite` au bilan). ⚠ **TROIS PORTES ONT ÉTÉ FERMÉES D'UN
+COUP** pour la même charge : les contacts (`push_rgd`), les fiches
+(`push_rgd_clients`) et `clients_extra` (`push_rgd_rafraichir`) — n'en couper
+qu'une laisserait des contacts sans fiche. ⚠ **CE QUI EST PERDU, ET C'EST
+NOMMÉ** : un client créé **directement** chez Costructor, sans rendez-vous et
+sans e-mail connu, n'aura plus de fiche. **Ce trou existait AVANT la coupure** —
+10 des 41 devis signés sont déjà dans ce cas. On ne le bouche pas (laisser
+`costructor-devis` inventer une fiche créerait des clients pour les 59 devis
+supprimés et 30 refusés, et des doublons pour qui est connu sous une autre
+adresse) : **on le montre**, par une alerte sur `#/rgd/costructor`.
+
+⚠ **UNE COUPURE INCOMPLÈTE RÉPARÉE AU PASSAGE** (`rafraichir_laisse_chantiers_et_devis`).
+`push_rgd_rafraichir` reposait encore, par sa propre porte, ce que `push_rgd`
+avait cessé d'envoyer : **`deals.stage` et `deals.status`** depuis la charge
+`chantiers` — donc un statut changé par `rgd_chantier_statut` était annulé dans
+la demi-heure, le défaut même que la coupure du 25/09 croyait avoir réparé — et
+**`rgd_devis.work_start_at`/`work_end_at`** depuis `devis_extra`, que
+`costructor-devis` écrit depuis le 24/09. Il ne s'est pas vu parce que les
+valeurs de D1 sont figées : l'écrasement remettait la MÊME valeur tant que
+personne ne changeait rien. **La règle qui en sort : une table ne sort pas du
+relevé par une porte, elle en sort par toutes.**
+
+**Fil 2 — le journal de synchro** (migrations `journal_costructor_cote_crm`,
+`journal_costructor_sort_du_releve`). Les trois tables que lit
+`#/rgd/costructor` étaient remplies par le worker SEUL, alors que le travail
+avait changé de main le 24/09 : l'écran racontait l'activité d'un outil qui ne
+faisait plus rien, et se serait figé en entier à son extinction. Les **quatre**
+fonctions Costructor appellent désormais `rgd_journal_costructor`, qui écrit le
+journal ET l'état dans la même transaction. ⚠ **ON RÉUTILISE LES MÊMES TABLES** :
+un second journal couperait l'historique en deux et poserait « lequel fait
+foi ? » à chaque lecture. ⚠ **L'ID DU JOURNAL ÉTAIT CELUI DE L'APPLICATION RGD,
+sans valeur par défaut** — d'où une séquence qui **démarre à 1 000 000** (le
+worker en est à 292) : les deux plages ne se rejoindront jamais, et on
+reconnaît d'un coup d'œil ce qui vient d'où. Le **ménage ne porte que sur nos
+lignes** (`id >= 1000000`, 200 par ressource) : supprimer les siennes les ferait
+revenir au relevé suivant. ⚠ **ON NE JOURNALISE QUE LES PASSAGES QUI ÉCRIVENT** —
+un appel en lecture seule est une inspection, l'inscrire rafraîchirait
+`dernier_succes` sans qu'une ligne ait bougé. **Un échec se journalise aussi**,
+et c'est le cas qui compte ; `costructor-factures` a dû être enveloppée pour
+cela (son corps est sorti de `Deno.serve` **sans être touché**, plutôt que de
+réindenter 190 lignes de code éprouvé). ⚠ **TROIS LIGNES D'ÉTAT ONT ÉTÉ
+SUPPRIMÉES, et ce n'est pas du ménage** : `contacts` (jamais reprise, décision
+du 24/09), `payments` (sujet clos, l'API ne relie pas un encaissement à sa
+facture) et **`projects`, figée au 18 juin — trois mois, et personne ne l'avait
+vue**. Les laisser en ferait des pastilles rouges permanentes, et **une alarme
+qui ne s'éteint jamais cesse d'être lue**. Le journal, lui, garde ses 283
+anciens passages : `declenche_par` dit qui a fait quoi. ⚠ **LES DEUX GESTES
+SONT INDISSOCIABLES** — supprimer ces lignes sans fermer la porte les ferait
+revenir en 30 minutes.
+
+⚠ **LES QUATRE TABLES D'ARGENT SOUS-TRAITANT SONT
 VIDES** (`rgd_missions`, `rgd_st_paiements`, `rgd_st_commissions`,
 `rgd_fournitures`) : le gros morceau redouté du transfert n'existe pas. ⚠ **LA SYNCHRO COSTRUCTOR DES CHANTIERS NE MANQUE PAS DE
 CRON** — écrit ici par erreur, corrigé le 25/09 : `sync_costructor_chantiers`
 tourne dans pg_cron aux minutes 20 et 50, de 5 h à 19 h, **trente passages en
-24 h sans un échec**. Les six tâches planifiées sont vertes. ⚠ **LES ÉCRITURES DU CRM SONT
+24 h sans un échec**. Les tâches planifiées sont vertes — **neuf** depuis le
+28/09 (`costructor_clients` à 6 h 40, `rgd_visites_agenda` à :15 et :45 les
+ont rejointes). ⚠ **LES ÉCRITURES DU CRM SONT
 TERMINÉES** — les quinze chemins sont portés.
 
 ⚠ **LES ÉCRITURES SE PORTENT UN LOT PAR JOUR**, chacun complet — fonction de

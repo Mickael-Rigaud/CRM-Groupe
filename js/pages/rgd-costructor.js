@@ -1,13 +1,21 @@
 // Espace RGD Renova — synchronisation Costructor
 //
-// ÉTAPE 4 DE LA MIGRATION, RANG 6. Lecture seule.
+// Lecture seule.
 //
 // À QUOI SERT CET ÉCRAN
-// Costructor est le logiciel de devis et de facturation de RGD Renova. Le
-// tableau de bord en recopie les contacts, les devis, les factures et les
-// paiements toutes les nuits — et c'est de cette recopie que viennent, de
-// proche en proche, les chiffres du CRM. Quand un devis « n'arrive jamais »,
-// la réponse est ici, et nulle part ailleurs.
+// Costructor est le logiciel de devis et de facturation de RGD Renova. Le CRM
+// en relit les devis, les factures, les chantiers et les clients plusieurs
+// fois par jour — et c'est de cette recopie que viennent, de proche en proche,
+// les chiffres de tout l'espace. Quand un devis « n'arrive jamais », la
+// réponse est ici, et nulle part ailleurs.
+//
+// ⚠ LE JOURNAL S'ÉCRIT DANS LE CRM DEPUIS LE 28/09/2026. Jusque-là, les trois
+// tables que cet écran lit étaient remplies par la synchronisation d'origine
+// SEULE, alors que le travail avait déjà changé de main quatre jours plus tôt :
+// l'écran racontait donc l'activité d'un outil qui ne faisait plus rien, et il
+// se serait figé en entier le jour où celui-ci s'arrête — sans qu'une ligne ne
+// dise pourquoi. Les anciens passages restent à leur place, les nouveaux se
+// rangent à la suite : c'est le même journal, pas un second.
 //
 // CE QUE LA SYNCHRO ÉCARTE N'EST PAS UNE PANNE
 // Vingt-cinq lignes sont volontairement ignorées : deux contacts et
@@ -16,19 +24,38 @@
 // première question. L'écran les montre avec leur motif, au même rang que
 // l'état de la synchro.
 //
+// ⚠ UN DEVIS PEUT N'AVOIR AUCUNE FICHE CLIENT, ET L'ÉCRAN LE DIT MAINTENANT.
+// Un client créé directement dans Costructor, sans rendez-vous et sans e-mail
+// connu du CRM, n'a de fiche nulle part : son devis entre quand même mais
+// reste orphelin — 10 des 41 devis signés au 28/09/2026. Ce trou est ANTÉRIEUR
+// à la sortie de la synchronisation, il n'en vient pas. On ne le bouche pas en
+// inventant une fiche (parmi 798 devis lus, 59 sont supprimés et 30 refusés :
+// on créerait des clients pour des affaires mortes, et des doublons pour ceux
+// qu'on connaît sous une autre adresse). On le MONTRE, c'est tout ce que cet
+// écran sait faire de juste.
+//
 // CE QUE CET ÉCRAN N'EST PAS
-// L'archive du journal. Cloudflare en garde 292 lignes et en gardera plus ; le
-// relevé n'en transmet que les cent dernières. C'est une fenêtre sur la santé
-// de la synchro, pas un registre. Pour remonter plus loin, l'application RGD.
+// L'archive du journal. C'est une fenêtre sur la santé de la synchronisation,
+// pas un registre : les passages les plus anciens sont effacés au fur et à
+// mesure.
 import { scope } from '../data/scope.js';
 import { esc, num, fmtDateTime, terms, hit, searchInput, bindSearch, restoreFocus } from '../ui.js';
 import { poserEspace, kpiEspace } from './espace.js';
 import { cadre, guard } from './rgd-espace.js';
 
-// Les quatre ressources synchronisées, en français. Une ressource inconnue
-// s'affiche telle quelle plutôt que de disparaître.
+// Les ressources synchronisées, en français. Une ressource inconnue s'affiche
+// telle quelle plutôt que de disparaître.
+//
+// ⚠ SIX ENTRÉES POUR QUATRE RESSOURCES VIVANTES, ET C'EST VOULU. « Chantiers »
+// et « Clients » sont les deux qui se sont ajoutées le 28/09 en même temps que
+// le journal du CRM. « Contacts » et « Paiements » n'existent plus que dans
+// l'historique : le premier ne sera jamais repris (la base de référence est
+// celle du CRM), le second est un sujet clos — l'API de Costructor ne relie
+// aucun encaissement à sa facture. Garder leur nom ici évite d'afficher
+// `payments` en anglais sur un vieux passage.
 const RESSOURCES = {
   contacts: 'Contacts', quotes: 'Devis', invoices: 'Factures', payments: 'Paiements',
+  chantiers: 'Chantiers', clients: 'Clients',
 };
 const nomRessource = (r) => RESSOURCES[r] || r || '—';
 
@@ -57,6 +84,13 @@ export const rgdCostructorPage = {
         .sort((a, b) => String(b.debut || '').localeCompare(String(a.debut || '')));
       const ignores = scope.rgd('rgd_costructor_ignores');
 
+      // ⚠ LE SEUL CHIFFRE DE CET ÉCRAN QUI NE VIENT PAS DE LA SYNCHRO ELLE-MÊME.
+      // Un devis sans `contact_id` n'est rattaché à aucune fiche : il compte
+      // dans les totaux mais n'apparaît sur aucun dossier. C'est la question
+      // qu'on vient poser ici quand un devis « n'est nulle part ».
+      const devisSansFiche = scope.rgd('rgd_devis').filter(d => !d.contact_id);
+      const signesSansFiche = devisSansFiche.filter(d => d.statut === 'signe').length;
+
       const enEchec = etats.filter(e => e.derniere_erreur);
       const jamais = etats.filter(e => !e.dernier_succes);
       const vieux = etats.filter(e => e.dernier_succes && retard(e.dernier_succes).heures > 36);
@@ -71,10 +105,23 @@ export const rgdCostructorPage = {
         <div class="alert rgd-source">
           <b>i</b>
           <div>Costructor est le logiciel de devis et de facturation de RGD Renova.
-          Cette page montre l&rsquo;état de sa recopie vers le tableau de bord — d&rsquo;où
-          viennent, de proche en proche, les chiffres de tout cet espace. Elle ne
-          déclenche rien : elle tourne toute seule, toutes les trente minutes.</div>
+          Cette page montre l&rsquo;état de sa recopie vers le CRM — d&rsquo;où viennent,
+          de proche en proche, les chiffres de tout cet espace. Elle ne déclenche
+          rien : la recopie tourne toute seule, toutes les trente minutes pour les
+          devis, les factures et les chantiers, une fois par jour pour les clients.</div>
         </div>
+
+        ${devisSansFiche.length ? `
+        <div class="alert amber">
+          <b>⚠</b>
+          <div><b>${devisSansFiche.length} devis n&rsquo;${devisSansFiche.length > 1 ? 'ont' : 'a'} aucune fiche client</b>
+          (dont ${signesSansFiche} signé${signesSansFiche > 1 ? 's' : ''}).
+          Ce sont des clients créés directement dans Costructor, sans rendez-vous et
+          sans adresse e-mail que le CRM connaisse : la recopie ne peut les rattacher
+          à personne. Le devis est bien là, il n&rsquo;apparaît simplement sur aucune
+          fiche. Pour en rattacher un, il suffit que la fiche existe dans le CRM avec
+          la même adresse e-mail — elle adoptera le client au passage suivant.</div>
+        </div>` : ''}
 
         <div class="esp-kpis">
           ${kpiEspace({ label: 'Ressources suivies', valeur: etats.length,
@@ -157,8 +204,10 @@ export const rgdCostructorPage = {
               <td class="muted">${esc(l.declenche_par || '—')}</td>
             </tr>`).join('') || '<tr><td colspan="8"><div class="empty">Aucun passage relevé.</div></td></tr>'}</tbody>
           </table>
-          <p class="small muted">Les <b>cent derniers</b> passages seulement : cet écran est
-          une fenêtre sur la santé de la synchronisation, pas son archive.</p>
+          <p class="small muted">Les derniers passages seulement : cet écran est une
+          fenêtre sur la santé de la synchronisation, pas son archive. La colonne
+          « Déclenché par » dit qui a fait le travail — les passages les plus anciens
+          viennent de l&rsquo;application RGD, les récents du CRM.</p>
         </section>`}`;
 
       root.innerHTML = cadre('#/rgd/costructor', 'Synchronisation Costructor', corps);
