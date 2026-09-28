@@ -135,9 +135,48 @@ répétées plusieurs fois avant d'être écrites ici : les reproposer fait perd
 4. ⚠ **LES PHOTOS, MICKAEL LES REMET LUI-MÊME** depuis l'écran Réalisations.
    Aucune reprise automatique des photos du stockage Cloudflare à prévoir.
 
-**Ce qui reste donc à porter, et rien d'autre** (état vérifié le 25/09/2026, au
-soir du lot 3) : le **relevé D1 → Supabase**, qui tombe de lui-même quand D1
-cesse d'être la source. ⚠ **LA SYNCHRO COSTRUCTOR DES CHANTIERS NE MANQUE PAS DE
+⚠ **LE RELEVÉ A PERDU TROIS CHARGES LE 28/09/2026** (migration
+`rgd_devis_paiements_chantiers_sortent_du_releve`) : `push_rgd` ignore
+désormais `devis`, `paiements` et `chantiers`, et **compte ce qu'il jette**.
+Depuis le 24/09, trois Edge Functions lisaient Costructor et écrivaient
+DIRECTEMENT dans ces tables — il y avait donc **deux écrivains sur les mêmes
+lignes**. ⚠ **Ce n'était pas une redondance inoffensive** : `push_rgd` reposait
+`statut` ET `date_signature` sur `rgd_devis`, donc le bouton « Marquer signé »
+était **annulé dans la demi-heure par le relevé**, pas par Costructor comme
+l'écran l'annonce. La coupure répare ce défaut. ⚠ **Et `costructor-chantiers`
+l'avait écrit dès le 24/09** — « il n'y a pas de cohabitation possible » — :
+la coupure avait quatre jours de retard, pas d'avance. Comparaison colonne par
+colonne avant de couper : le chemin Supabase est **plus riche** sur les devis
+(contact_id, work_start_at, work_end_at, pdf_url) et les paiements (pdf_url) ;
+ne manquaient que `d1_id`, les trois colonnes de relance (fonctionnalité
+supprimée, `nb_relances` à 0 partout) et `mode_paiement` (**nul sur les 171
+lignes des deux côtés**). ⚠ **CE QUI EST PERDU, ET C'EST NOMMÉ** : une adresse
+modifiée chez Costructor sur un chantier **déjà existant** n'arrive plus — la
+suivre a été essayée puis **écartée sur mesure**, 25 des 26 chantiers appariés
+auraient été réécrits, dont un avec l'adresse d'une AUTRE commune ; la fonction
+compte l'écart sans l'écrire (`ecarts_adresse_constates`).
+⚠ **« QUI EST VRAIMENT CLIENT » A QUITTÉ LE WORKER LE MÊME JOUR** : Edge
+Function **`costructor-clients`**, tâche `costructor_clients` à **6 h 40, une
+fois par jour comme le worker** — son passage complet ne tournait qu'une fois
+par jour, et **un transfert rétablit ce qui existait, il n'améliore pas au
+passage**. Elle pose `rgd_clients.client_confirme` et
+`rgd_reglages.costructor_clients_uniques`. Équivalence **prouvée en lecture
+seule avant de la planifier** : 41 confirmés contre 41, 34 uniques contre 34,
+**zéro fiche qui bascule**. ⚠ **Elle est à part et non greffée dans
+`costructor-devis`** : on ne rouvre pas la plus grosse pièce du transfert, en
+service, pour y poser un calcul sans rapport avec l'écriture des devis.
+
+**Ce qui reste donc à porter** (état vérifié le 28/09/2026) : ⚠ **`push_rgd_clients`
+n'est PAS coupé, et c'est une question ouverte** — il porte encore l'entrée des
+fiches **nouvelles** venues de Costructor, et `costructor-devis` sait ADOPTER
+une fiche par e-mail mais n'en crée pas. **Qui crée la fiche d'un client qui
+n'arrive ni du site, ni de Meta, ni d'un rendez-vous ?** À trancher avant de
+fermer cette porte. Reste aussi le **journal de synchro** (`rgd_costructor_etat`,
+5 lignes), alimenté par le worker seul : l'écran `#/rgd/costructor` se figerait
+le jour où on l'éteint. **Le worker ne porte plus que ces deux choses**, contre
+neuf charges le matin même. ⚠ **LES QUATRE TABLES D'ARGENT SOUS-TRAITANT SONT
+VIDES** (`rgd_missions`, `rgd_st_paiements`, `rgd_st_commissions`,
+`rgd_fournitures`) : le gros morceau redouté du transfert n'existe pas. ⚠ **LA SYNCHRO COSTRUCTOR DES CHANTIERS NE MANQUE PAS DE
 CRON** — écrit ici par erreur, corrigé le 25/09 : `sync_costructor_chantiers`
 tourne dans pg_cron aux minutes 20 et 50, de 5 h à 19 h, **trente passages en
 24 h sans un échec**. Les six tâches planifiées sont vertes. ⚠ **LES ÉCRITURES DU CRM SONT
