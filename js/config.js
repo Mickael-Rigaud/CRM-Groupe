@@ -5,18 +5,14 @@ export const CONFIG = {
   APP_NAME: 'CRM Groupe',
   SUPABASE_URL: 'https://qnidmkufauzguultdmky.supabase.co',
   SUPABASE_ANON_KEY: 'sb_publishable_WVEzYagxnp1SoSn-AXJUBg_Ar9_iSpP',
-  // Application RGD Renova affichee dans l'onglet « Tableau de bord RGD » (site a part, connexion propre).
-  RGD_DASHBOARD_URL: 'https://rgd-renova-dashboard.surge.sh',
-  // L'API du tableau de bord. ⚠ ELLE NE SERT PLUS QU'À LA CONNEXION UNIQUE de
-  // l'onglet « Application RGD » (#/rgd/app) : depuis le 25/09/2026 plus aucun
-  // écran du CRM n'y écrit. Elle partira avec l'onglet, à l'étape 5.
-  RGD_API_URL: 'https://rgd-renova-api.rgdrenova.workers.dev',
-  // Ecrans internes de cette application, pour y arriver directement depuis le CRM
-  // (#/rgd/<cle>) plutot que sur son accueil. La valeur est ce qui suit l'adresse
-  // de base : un chemin (« /prospects »), un fragment (« #/prospects ») ou une
-  // adresse complete. Une valeur vide ouvre l'accueil : jamais de lien casse.
-  RGD_VUES: {
-    prospects: 'index.html#/clients',   // Clients & prospects → Prospects
-  },
+  // ⚠ RGD_DASHBOARD_URL, RGD_API_URL ET RGD_VUES SONT PARTIS LE 28/09/2026,
+  // avec l'onglet « Application RGD » (#/rgd/app) et l'ancien écran qu'il
+  // affichait. C'était l'étape 5. Les trois ne servaient plus qu'à lui : plus
+  // aucun écran du CRM n'écrit ni ne lit là-bas depuis le 25/09, et les deux
+  // réglages qui l'avaient retenu jusqu'ici — la clé Costructor et la
+  // connexion Google Agenda — sont devenus des secrets de la plateforme
+  // (`COSTRUCTOR_API_KEY`, `GOOGLE_SA_JSON`), lus par les fonctions serveur.
+  // Ne pas les remettre : `#/rgd/app` mène désormais à la vue d'ensemble,
+  // pour qu'un ancien signet arrive quelque part au lieu de tomber à vide.
   get DEMO() { return !this.SUPABASE_URL || !this.SUPABASE_ANON_KEY; },
 };

@@ -73,7 +73,7 @@ export const rgdCostructorPage = {
           <div>Costructor est le logiciel de devis et de facturation de RGD Renova.
           Cette page montre l&rsquo;état de sa recopie vers le tableau de bord — d&rsquo;où
           viennent, de proche en proche, les chiffres de tout cet espace. Elle ne
-          déclenche rien : la synchronisation se relance depuis l&rsquo;<a href="#/rgd/app">application RGD</a>.</div>
+          déclenche rien : elle tourne toute seule, toutes les trente minutes.</div>
         </div>
 
         <div class="esp-kpis">

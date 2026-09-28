@@ -5,7 +5,6 @@ import { contactsPage } from './contacts.js';
 import { settingsPage } from './settings.js';
 import { homePage } from './home.js';
 import { patrimoinePage, propertiesPage, loansPage, expensesPage } from './patrimoine.js';
-import { rgdDashboardPage } from './rgd.js';
 import { rgdChantiersPage } from './rgd-chantiers.js';
 import { rgdClientsPage } from './rgd-clients.js';
 import { rgdDevisPage, rgdPaiementsPage } from './rgd-facturation.js';
@@ -34,9 +33,8 @@ export const pages = {
   locatif_suivi: rentalTodoPage,
   locatif_contacts: tenantContactsPage,
   patrimoine_charges: expensesPage,
-  // Espace RGD Renova. Les écrans repris vivent dans le CRM ; l'application
-  // d'origine garde son onglet pour les douze autres, le temps de l'étape 4.
-  rgd: rgdDashboardPage,          // conservé : ancienne adresse plate
+  // Espace RGD Renova. Tous les écrans vivent dans le CRM : l'onglet qui
+  // affichait l'application d'origine est parti le 28/09/2026, avec elle.
   // L'accueil est la vue d'ensemble, comme dans le tableau de bord d'origine.
   rgd_home: rgdPilotagePage,
   rgd_pilotage: rgdPilotagePage,
@@ -51,10 +49,11 @@ export const pages = {
   rgd_costructor: rgdCostructorPage,
   rgd_formations: rgdFormationsPage,
   rgd_reglages: rgdReglagesPage,
-  rgd_app: rgdDashboardPage,
-  // `#/rgd/prospects` menait à l'écran Clients de l'application. Il mène
-  // maintenant au nôtre : un signet ou un lien ancien continue de marcher.
+  // `#/rgd/prospects` menait à l'écran Clients de l'application, `#/rgd/app`
+  // à l'application elle-même. Les deux mènent maintenant aux nôtres : un
+  // signet ou un lien ancien continue de marcher au lieu de tomber à vide.
   rgd_prospects: rgdClientsPage,
+  rgd_app: rgdPilotagePage,
   btp_home: btpHomePage,
   btp_expertise: btpExpertisePage,
   btp_amo: btpAmoPage,

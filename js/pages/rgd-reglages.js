@@ -8,11 +8,19 @@
 //      MÉTIER, saisie par Mickael. Elle vient ici.
 //   2. La clé d'API Costructor — UN SECRET. Il n'a rien à faire dans un écran
 //      ni dans une base ; sa place est dans les secrets de la plateforme. Le
-//      tableau de bord le range aujourd'hui dans `app_settings`, ce qui le
-//      rend lisible par toute requête qui lit cette table.
-//   3. La connexion Google Agenda — UN PARCOURS OAuth, qui exige un serveur
-//      capable de recevoir la redirection. Il restera côté worker jusqu'à ce
-//      qu'une Edge Function le reprenne.
+//      tableau de bord le rangeait dans `app_settings`, lisible par toute
+//      requête qui lit cette table ; c'est aujourd'hui `COSTRUCTOR_API_KEY`,
+//      un secret Supabase que les trois fonctions de synchro lisent seules.
+//   3. La connexion Google Agenda — elle passait par un parcours OAuth, donc
+//      par un serveur capable de recevoir la redirection. Elle passe
+//      désormais par un COMPTE DE SERVICE (`GOOGLE_SA_JSON`, secret
+//      Supabase) : plus de consentement à redonner, plus d'abonnement à
+//      renouveler.
+//
+// ⚠ « CLIENTS ACTIFS DÉCLARÉS » EST DEVENU UN CHAMP — 28/09/2026. Il était
+// listé comme non réglable ici, à changer « dans l'application RGD ». Celle-ci
+// est éteinte, et la valeur vit dans `rgd_reglages` comme les deux autres :
+// la laisser en lecture seule aurait renvoyé vers une porte qui n'existe plus.
 //
 // POURQUOI LE CA EST SAISI À LA MAIN
 // La reprise Costructor est incomplète : le calcul automatique sous-estime.
@@ -89,6 +97,7 @@ export const rgdReglagesPage = {
           <div class="reg-grille">
             ${champ('reg-ht', 'CA HT saisi (€)', ht)}
             ${champ('reg-ttc', 'CA TTC saisi (€)', ttc)}
+            ${champ('reg-clients', 'Clients actifs déclarés', clients)}
           </div>
 
           <p class="small muted"><b>Saisir 0 n’écrit pas « zéro euro »</b> : la correction
@@ -107,22 +116,16 @@ export const rgdReglagesPage = {
             <thead><tr><th>Réglage</th><th>Valeur</th><th>Pourquoi</th></tr></thead>
             <tbody>
               <tr>
-                <td><b>Clients actifs déclarés</b></td>
-                <td>${clients != null ? esc(clients) : '<span class="muted">—</span>'}</td>
-                <td class="muted">Le tableau de bord n’expose pas de route pour l’écrire —
-                    il se change dans l’<a href="#/rgd/app">application RGD</a>.</td>
-              </tr>
-              <tr>
                 <td><b>Clé d’API Costructor</b></td>
                 <td class="muted">masquée</td>
-                <td class="muted">C’est un <b>secret</b>. Sa place est dans les secrets de la
+                <td class="muted">C’est un <b>secret</b>. Il est rangé dans les secrets de la
                     plateforme, pas dans un écran ni dans une table que toute requête peut lire.</td>
               </tr>
               <tr>
                 <td><b>Connexion Google Agenda</b></td>
                 <td class="muted">active</td>
-                <td class="muted">Elle passe par un parcours d’autorisation Google qui exige
-                    un serveur : elle reste dans l’application RGD jusqu’à sa reprise.</td>
+                <td class="muted">Elle passe par un compte de service, lui aussi rangé dans les
+                    secrets : il n’y a aucune autorisation à redonner ni à renouveler.</td>
               </tr>
             </tbody>
           </table></div>
@@ -134,15 +137,17 @@ export const rgdReglagesPage = {
       if (bouton) bouton.onclick = async () => {
         const vHt = root.querySelector('#reg-ht').value.trim();
         const vTtc = root.querySelector('#reg-ttc').value.trim();
+        const vClients = root.querySelector('#reg-clients').value.trim();
         // Un champ laissé vide n'est pas envoyé : vide veut dire « je n'y
         // touche pas », alors que 0 veut dire « efface ». Les confondre
         // effacerait une valeur qu'on n'a pas voulu toucher.
         const corpsMaj = {};
         if (vHt !== '') corpsMaj.ht = nombreDe(vHt);
         if (vTtc !== '') corpsMaj.ttc = nombreDe(vTtc);
+        if (vClients !== '') corpsMaj.clients = nombreDe(vClients);
         if (!Object.keys(corpsMaj).length) { toast('Rien à enregistrer', 'err'); return; }
         if (Object.values(corpsMaj).some(v => v === null)) {
-          toast('Un des montants n’est pas un nombre', 'err'); return;
+          toast('Une des valeurs n’est pas un nombre', 'err'); return;
         }
 
         bouton.disabled = true;
@@ -169,6 +174,7 @@ export const rgdReglagesPage = {
         try {
           if (corpsMaj.ht !== undefined) await poser('manual_ca_ht_exercice', corpsMaj.ht);
           if (corpsMaj.ttc !== undefined) await poser('manual_ca_ttc_exercice', corpsMaj.ttc);
+          if (corpsMaj.clients !== undefined) await poser('manual_clients_actifs', corpsMaj.clients);
         } catch (e) {
           bouton.disabled = false;
           root.querySelector('#reg-etat').textContent = '';

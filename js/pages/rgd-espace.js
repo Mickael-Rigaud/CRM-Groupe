@@ -70,7 +70,6 @@ export const ONGLETS = [
     { hash: '#/rgd/paiements', label: 'Encaissements' },
     { hash: '#/rgd/costructor', label: 'Costructor' },
     { hash: '#/rgd/reglages', label: 'Réglages' },
-    { hash: '#/rgd/app', label: 'Application RGD' },
   ] },
 ];
 

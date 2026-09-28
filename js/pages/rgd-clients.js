@@ -873,7 +873,7 @@ export const rgdClientsPage = {
         ${state.vue === 'contacts' && doublons ? `<p class="small muted rcl-intro">
           ${doublons} fiche${s_(doublons)} en double ${doublons > 1 ? 'sont regroupées' : 'est regroupée'}
           avec ${doublons > 1 ? 'leurs homologues' : 'son homologue'} : même nom, même email ou même
-          téléphone. Rien n’est supprimé — les fiches existent toujours dans l’<a href="#/rgd/app">application RGD</a>.</p>` : ''}
+          téléphone. Rien n’est supprimé — les fiches existent toujours dans l’application RGD.</p>` : ''}
 
         <div class="toolbar">
           ${searchInput('rcl-q', state, surDemande

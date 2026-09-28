@@ -438,7 +438,7 @@ export function ouvrirFicheRgd(x, onChange) {
 
           ${devis.length || chantiers.length ? `<p class="rgdf-source">Devis et chantiers viennent de
             Costructor, relevés toutes les 30 minutes. Ils se modifient dans
-            l’<a href="#/rgd/app">application RGD</a>.</p>` : ''}
+            l’application RGD.</p>` : ''}
         </div>
 
         <div class="rgdf-colonne">
@@ -448,7 +448,7 @@ export function ouvrirFicheRgd(x, onChange) {
             ${duRdv.commentaire ? `<p class="rgdf-source">Noté dans le rendez-vous
               « ${esc(rdv?.title || '')} »${rdv?.day ? ' du ' + esc(fmtDate(rdv.day)) : ''} —
               il se corrige dans Google Agenda.</p>`
-              : f.d1_id != null ? `<p class="rgdf-source">Saisi dans l’<a href="#/rgd/app">application RGD</a>,
+              : f.d1_id != null ? `<p class="rgdf-source">Saisi dans l’application RGD,
               qui en reste la source.</p>` : ''}
           </section>` : ''}
 
