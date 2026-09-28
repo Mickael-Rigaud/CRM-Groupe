@@ -132,6 +132,12 @@ répétées plusieurs fois avant d'être écrites ici : les reproposer fait perd
    PEUT envoyer et un code qui ENVOIE ne se disent pas de la même façon : la
    trace se vérifie avant de l'affirmer. Les relances **manuelles** restent
    ouvertes (`relance-now`, `relances/:id/send`) : elles ne partent que sur un clic.
+   ⚠ **ET CE DÉPLOIEMENT DU MATIN N'A JAMAIS ATTEINT LE WORKER — troisième
+   correction sur le même sujet, le soir même.** Il est parti sur un worker
+   VIDE (voir ci-dessous) : la coupure n'était donc toujours pas en ligne, et
+   nous l'avons cru une journée entière. Elle l'est depuis 16 h 30, avec la
+   coupure des crons. **La leçon s'élargit** : un déploiement lancé n'est pas un
+   déploiement arrivé, et sa sortie se lit — nom du worker, taille, bindings.
 4. ⚠ **LES PHOTOS, MICKAEL LES REMET LUI-MÊME** depuis l'écran Réalisations.
    Aucune reprise automatique des photos du stockage Cloudflare à prévoir.
 
@@ -348,6 +354,47 @@ contraire — sans rien exposer, le garde `has_activity('rgd')` refusant un
 appelant sans droit, mais une ACL doit dire ce que la migration prétend.
 Refermé le 25/09 (`rgd_ecritures_fermees_a_anon`). **Toute nouvelle fonction
 d'écriture doit révoquer `anon` explicitement.**
+
+⚠ **LE WORKER NE TOURNE PLUS TOUT SEUL DEPUIS LE 28/09/2026, 16 H 30.** Ses
+deux tâches planifiées sont retirées (`crons = []` dans `worker/wrangler.toml`,
+la ligne d'origine gardée juste au-dessus en commentaire) et Cloudflare affiche
+**« No cron triggers configured »** — ni queue, ni email trigger non plus : il
+ne peut plus être déclenché que par une requête HTTP, et plus personne ne lui
+en envoie. ⚠ **IL N'EST PAS SUPPRIMÉ, ET C'EST DÉLIBÉRÉ** : `wrangler delete`
+est irréversible et peut emporter des ressources liées, alors qu'un worker sans
+cron ne consomme rien. Il répond toujours `{"ok":true,"app":"rgd-renova-api"}`
+sur `/api/health`. La suppression se fera après une ou deux semaines sans
+manque constaté.
+
+⚠ **IL S'APPELLE `rgd-renova-api`, PAS `rgd-renova-dashboard`** — ce dernier est
+le nom du **dépôt** (et d'un ancien worker qui servait les écrans, sans aucun
+binding). Cette confusion était écrite ici et a failli coûter cher : lancé
+depuis le mauvais dossier, `npx wrangler delete` déduit le nom du **répertoire
+courant** et a proposé de supprimer un worker nommé « elodi », avec un
+« cannot be undone ». **Toujours vérifier le nom que wrangler annonce avant de
+répondre oui.**
+
+⚠ **`npx wrangler deploy` NE LIT PAS `worker/wrangler.toml` SANS `--config`, ET
+ÇA NE DIT RIEN.** Sans le drapeau, il déploie **0,31 Kio sous le nom du dossier
+parent, sans aucun binding** — et se termine par un « Deployed … triggers »
+parfaitement rassurant. Avec `--config wrangler.toml` : 376 Kio, D1, les deux
+KV et les vars. **La commande à employer est donc toujours**
+`npx wrangler deploy --config wrangler.toml`, depuis `worker/`. ⚠ **Et
+`--dry-run` est le bon réflexe** : il calcule tout, affiche nom et bindings, et
+n'envoie rien — c'est lui qui a montré l'écart.
+
+⚠ **« Deployed … triggers » N'EST PAS UNE PREUVE** : wrangler écrit cette ligne
+qu'il y ait des crons ou non. La seule vérification est la page **Settings →
+Trigger events** du worker, ou l'observation : `push_rgd_demandes` et
+`push_rgd_st` sont les deux dernières portes qui **écrivent** encore, donc
+`rgd_demandes.updated_at` est un témoin exact de « le worker a-t-il tourné ? ».
+
+⚠ **LE GESTE QUI FERMERA TOUT POUR DE BON N'EST PAS LA SUPPRESSION, C'EST LE
+JETON.** Le worker détient `CRM_GROUPE_TOKEN` / `SYNC_TOKEN`, c'est-à-dire
+`stats_token`. Le changer côté Supabase interdit à tout worker — ancien,
+restauré ou redéployé par accident — d'écrire une seule ligne, quelles que
+soient les portes encore ouvertes. À faire quand on aura laissé passer une ou
+deux semaines, et après avoir vérifié que rien de vivant ne s'en sert.
 
 ⚠ **LE RYTHME DU RELEVÉ NE SE MESURE PAS SUR `synced_at`** (piège tombé dedans
 le 25/09) : cette colonne est **écrasée à chaque passage**, donc une requête n'en
