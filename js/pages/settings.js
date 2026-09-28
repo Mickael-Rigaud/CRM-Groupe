@@ -1,7 +1,7 @@
 // Paramètres : utilisateurs et droits, import CSV, référentiel, entrée des leads (Make), démo.
 import { CONFIG } from '../config.js';
 import { db } from '../data/db.js';
-import { creerCompte, renvoyerInvitation, supprimerCompte } from '../comptes.js';
+import { creerCompte, renvoyerLienAcces, supprimerCompte } from '../comptes.js';
 import { scope } from '../data/scope.js';
 import { ACTIVITIES, ACTIVITY_KEYS, CHANNELS, ROLES, ROLES_ATTRIBUABLES, LOST_REASONS, ACTIVITY_TYPES } from '../data/schema.js';
 import { esc, toast, openModal, closeModal, renderForm, readForm, confirm, csvDownload } from '../ui.js';
@@ -35,7 +35,7 @@ export const settingsPage = {
               ${users.map(u => `<tr ${scope.isDirection ? `class="click" data-compte="${u.id}"` : ''}><td><b>${esc(u.full_name)}</b><div class="small muted">${esc(u.email || '')}</div></td><td><span class="pill">${esc(ROLES[u.role]?.label || u.role)}</span></td><td>${(u.activities || []).map(k => `<span class="badge" style="--c:${ACTIVITIES[k]?.color}">${esc(ACTIVITIES[k]?.short || k)}</span>`).join(' ')}</td><td>${u.active === false ? '<span class="pill bad">Non</span>' : '<span class="pill ok">Oui</span>'}</td></tr>`).join('')}
             </tbody></table></div>
             <p class="muted small">${Object.entries(ROLES).map(([k, r]) => `<b>${r.label}</b> : ${r.description}`).join('<br>')}</p>
-            ${!db.demo && scope.isDirection ? '<p class="muted small">« + Compte » crée le compte et produit un lien d\'invitation : la personne choisit son mot de passe. Cliquez une ligne pour changer le rôle, les structures ou mettre le compte en sommeil.</p>' : ''}
+            ${!db.demo && scope.isDirection ? '<p class="muted small">« + Compte » crée le compte et envoie à la personne un lien pour créer son espace : elle choisit son mot de passe elle-même. Cliquez une ligne pour changer le rôle, les structures ou mettre le compte en sommeil.</p>' : ''}
           </div>
           <div class="card"><div class="card-head"><h2>Import de contacts (CSV)</h2></div>
             <p class="muted small">Colonnes reconnues : prénom, nom, téléphone, email, adresse, code postal, ville, société, type, canal, campagne, activités (rgd|btp|courtage|propulsion), notes. Séparateur ; ou ,. Les doublons (même email ou téléphone) sont ignorés.</p>
@@ -163,7 +163,7 @@ export const settingsPage = {
                  le faire passer par la console de la plateforme revient a ne
                  pas l'avoir. Propose aussi sur son propre compte : rien
                  n'empeche la direction d'avoir perdu son mot de passe. -->
-            ${edition && !db.demo ? '<button type="button" class="btn ghost sm" id="u-renvoyer">Renvoyer l\'invitation</button>' : ''}
+            ${edition && !db.demo ? '<button type="button" class="btn ghost sm" id="u-renvoyer">Renvoyer le lien d\'accès</button>' : ''}
             <button type="button" class="btn ghost" data-close>Annuler</button>
             <button type="button" class="btn" id="u-ok">${edition ? 'Enregistrer' : (db.demo ? 'Créer (démo)' : 'Créer le compte')}</button>
           </div>`;
@@ -194,7 +194,7 @@ export const settingsPage = {
             const avant = b.textContent;
             b.disabled = true; b.textContent = 'Envoi…';
             try {
-              const rep = await renvoyerInvitation(profil.email);
+              const rep = await renvoyerLienAcces(profil.email);
               if (rep.mail === 'envoye') {
                 toast(`Lien envoyé à ${profil.email}`);
               } else {
@@ -325,7 +325,7 @@ export const settingsPage = {
               <div class="card" style="margin-top:14px">
                 <p class="mf-aide ok" style="margin-bottom:8px">Compte créé pour ${esc(v.nom)}.</p>
                 ${envoye
-                  ? `<p class="mf-aide ok">L'invitation est partie à <b>${esc(v.email.trim())}</b>. La personne choisit son mot de passe elle-même.</p>`
+                  ? `<p class="mf-aide ok">Le lien pour créer son espace est parti à <b>${esc(v.email.trim())}</b>. La personne choisit son mot de passe elle-même.</p>`
                   : `<p class="mf-aide attention">${rep.lien
                         ? "Le courriel n'a PAS pu être envoyé : transmettez le lien ci-dessous vous-même."
                         : "Le courriel n'est pas parti et le lien n'a pas pu être produit."}
@@ -333,7 +333,7 @@ export const settingsPage = {
                 ${rep.lien
                   ? `<label class="mail-champ"><span>Lien d'accès${envoye ? ' — en secours, si le courriel n\'arrive pas' : ' — à transmettre'}</span>
                       <input id="u-lien" value="${esc(rep.lien)}" readonly></label>
-                     <p class="mf-aide">⚠ Ce lien ne fonctionne <b>qu'une seule fois</b> et expire au bout de 24 h. S'il a servi ou s'il est trop vieux, n'essayez pas de le réutiliser : rouvrez cette fiche et cliquez « Renvoyer l'invitation ».</p>
+                     <p class="mf-aide">⚠ Ce lien ne fonctionne <b>qu'une seule fois</b> et expire au bout de 24 h. S'il a servi ou s'il est trop vieux, n'essayez pas de le réutiliser : rouvrez cette fiche et cliquez « Renvoyer le lien d'accès ».</p>
                      <button type="button" class="btn ghost sm" id="u-copier">Copier le lien</button>`
                   : ''}
               </div>`;

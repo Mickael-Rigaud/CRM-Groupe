@@ -33,7 +33,12 @@ export async function creerCompte({ email, full_name, role, activities }) {
   return rep;
 }
 
-// Renvoyer à quelqu'un son lien d'accès.
+// Renvoyer à quelqu'un son lien pour créer son espace.
+//
+// ⚠ ON NE DIT PAS « INVITATION » À L'UTILISATEUR (29/09/2026, demandé par
+// Mickael : « je ne veux pas de lien d'invitation mais un lien pour créer son
+// espace et son mot de passe »). Le mot `invite` reste dans les échanges avec
+// la plateforme, où il désigne un type de lien : c'est son vocabulaire.
 //
 // ⚠ LE GESTE QUI MANQUAIT, ET IL A COÛTÉ UN COMPTE INUTILISABLE (28/09/2026).
 // Un lien d'invitation ne sert QU'UNE FOIS et expire au bout de 24 h. Le
@@ -44,7 +49,7 @@ export async function creerCompte({ email, full_name, role, activities }) {
 // C'est le serveur qui choisit le type de lien (`invite` avant la première
 // connexion, `recovery` après) : demander le mauvais échoue, et le front n'a
 // pas à connaître cette subtilité.
-export async function renvoyerInvitation(email) {
+export async function renvoyerLienAcces(email) {
   if (CONFIG.DEMO) throw new Error('Mode démo : aucun lien réel n’est envoyé.');
   const jeton = await db.accessToken();
   if (!jeton) throw new Error('Session expirée : reconnectez-vous.');

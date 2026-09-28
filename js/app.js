@@ -420,10 +420,34 @@ function route() {
 }
 
 export function passwordForm(forced = false) {
-  const m = openModal(forced ? 'Choisissez votre nouveau mot de passe' : 'Changer mon mot de passe', `<form class="form" id="pw-form">
-    <div class="field"><label>Nouveau mot de passe (8 caractères minimum)</label><input type="password" name="p1" required minlength="8" autocomplete="new-password"></div>
+  // ⚠ « NOUVEAU mot de passe » ÉTAIT FAUX POUR LA MOITIÉ DES CAS. Ce formulaire
+  // s'ouvre sur DEUX arrivées : quelqu'un qui découvre le CRM et n'en a jamais
+  // eu, et quelqu'un qui a oublié le sien. Un titre qui parle de « nouveau »
+  // fait chercher l'ancien au premier, qui n'existe pas. Le titre retenu est
+  // vrai dans les deux cas, et la phrase dessous dit à quoi il sert — c'est
+  // l'écran où quelqu'un entre pour la première fois dans l'outil.
+  const m = openModal(forced ? 'Choisissez votre mot de passe' : 'Changer mon mot de passe', `<form class="form" id="pw-form">
+    ${forced ? '<p class="mf-aide" style="flex-basis:100%">Il vous servira à vous connecter au CRM Groupe. Votre espace est déjà prêt : il s\'ouvrira juste après.</p>' : ''}
+    <div class="field"><label>Mot de passe (8 caractères minimum)</label><input type="password" name="p1" required minlength="8" autocomplete="new-password"></div>
     <div class="field"><label>Confirmer</label><input type="password" name="p2" required minlength="8" autocomplete="new-password"></div>
     <div class="form-actions">${forced ? '' : '<button type="button" class="btn ghost" data-close>Annuler</button>'}<button class="btn" type="submit">Enregistrer</button></div></form>`);
+  // ⚠ LE BOUTON « ANNULER » ÉTAIT RETIRÉ, LA CROIX NON — et la croix ferme
+  // aussi bien. Quelqu'un qui arrive par son lien pouvait donc entrer sans
+  // jamais poser de mot de passe, c'est-à-dire repartir sans pouvoir se
+  // reconnecter : exactement ce que ce formulaire existe pour éviter. On ôte
+  // la croix et on neutralise le clic sur le fond.
+  //
+  // Ce n'est pas un verrou et ça ne prétend pas l'être : la session est ouverte,
+  // un rechargement laisse entrer. C'est une porte qu'on ne montre plus, pas
+  // une porte qu'on ferme — et à cet instant précis, c'est ce qu'il faut.
+  if (forced) {
+    m.querySelector('.modal-head [data-close]')?.remove();
+    const fond = m.parentElement;
+    fond?.addEventListener('click', (e) => {
+      if (e.target === fond) e.stopImmediatePropagation();
+    }, true);
+  }
+
   m.querySelector('#pw-form').onsubmit = async e => {
     e.preventDefault(); const f = new FormData(e.target);
     if (f.get('p1') !== f.get('p2')) return toast('Les deux mots de passe sont différents', 'warn');
@@ -490,7 +514,7 @@ function refusDeLien() {
   history.replaceState(null, '', location.pathname + location.search);
   if (/expired|otp/.test(code)) {
     return "Ce lien d'accès n'est plus valable : il a déjà servi, ou il a plus de 24 heures. "
-         + 'Demandez-en un nouveau à la direction (Réglages → Utilisateurs → « Renvoyer l\'invitation »).';
+         + 'Demandez-en un nouveau à la direction (Réglages → Utilisateurs → « Renvoyer le lien d\'accès »).';
   }
   return p.get('error_description')
     ? `Le lien n'a pas abouti : ${p.get('error_description')}`
