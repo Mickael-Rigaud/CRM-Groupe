@@ -419,30 +419,51 @@ select.cell-in { text-align: left; }
    `overflow-y: auto` est le garde-fou de l'autre bout : un menu plus haut
    que l'ecran doit pouvoir defiler pour lui-meme, sinon ses dernieres
    entrees deviennent inatteignables. */
+/* ---- Le menu prend la hauteur de l'ecran, et s'y tient sans defiler ----
+   Demande de Mickael le 28/09/2026.
+
+   ⚠ `height` ET PAS `max-height`. Avec un maximum, le rail s'arretait a la
+   hauteur de ses entrees : sur La Reference Courtage, qui n'en a que trois,
+   la colonne sombre s'interrompait au quart de la page et le fond gris
+   reprenait dessous. C'est ce qu'on voyait, et ce n'etait pas une question de
+   defilement.
+
+   ⚠ ET L'ESPACEMENT SUIT LA FENETRE. Mesure avant correction, sur le menu le
+   plus charge (RGD Renova, treize entrees) : 577 px de contenu pour 584 px
+   disponibles sur un ecran de 700 px — il passait a SEPT pixels pres — et
+   593 px pour 504 disponibles a 620 px, soit un debordement de 89 px sur un
+   portable de treize pouces. Les `clamp()` lient les marges a la hauteur de la
+   fenetre : le meme menu retombe alors sous les 490 px.
+
+   ⚠ `overflow-y: auto` RESTE, et ce n'est pas un aveu d'echec : sous 500 px de
+   haut, aucun reglage ne fait tenir treize entrees lisibles. Des entrees
+   inatteignables seraient pires qu'un defilement. */
 .esp-side { width: 224px; flex-shrink: 0; background: var(--accent-ink); color: #fff; display: flex; flex-direction: column;
   position: sticky; top: var(--h-topnav, 116px); align-self: flex-start;
-  max-height: calc(100vh - var(--h-topnav, 116px)); overflow-y: auto; }
-.esp-side-brand { display: flex; align-items: center; gap: 10px; padding: 16px 18px; border-bottom: 1px solid rgba(255,255,255,.1); font-family: var(--font-display); font-weight: 700; font-size: 15px; letter-spacing: -.01em; }
+  height: calc(100vh - var(--h-topnav, 116px)); overflow-y: auto; }
+.esp-side-brand { display: flex; align-items: center; gap: 10px; padding: clamp(10px, 1.8vh, 16px) 18px; border-bottom: 1px solid rgba(255,255,255,.1); font-family: var(--font-display); font-weight: 700; font-size: 15px; letter-spacing: -.01em; }
 /* La marque et sa baseline, l'une sous l'autre. Elles etaient separees par toute
    la hauteur du menu — nom en haut, nom repete en bas avec la baseline. */
 .esp-side-brand span { display: flex; flex-direction: column; min-width: 0; }
 .esp-side-brand em { font-style: normal; font-weight: 500; font-size: 11px;
   color: rgba(255,255,255,.55); letter-spacing: 0; margin-top: 1px; }
 .esp-side-brand img { width: 30px; height: 30px; object-fit: contain; background: #fff; border-radius: 8px; padding: 3px; }
-.esp-side-nav { flex: 1; padding: 14px 12px; display: flex; flex-direction: column; gap: 3px; }
-.esp-side-nav a { display: block; padding: 11px 15px; border-radius: 9px; text-decoration: none; color: rgba(255,255,255,.76); font-size: 13.5px; font-weight: 600; transition: background .13s, color .13s; }
+.esp-side-nav { flex: 1; padding: clamp(7px, 1.5vh, 14px) 12px; display: flex; flex-direction: column;
+  gap: clamp(1px, 0.4vh, 3px); }
+.esp-side-nav a { display: block; padding: clamp(6px, 1.15vh, 11px) 15px; border-radius: 9px; text-decoration: none; color: rgba(255,255,255,.76); font-size: 13.5px; font-weight: 600; transition: background .13s, color .13s; }
 .esp-side-nav a:hover { background: rgba(255,255,255,.09); color: #fff; }
 .esp-side-nav a.on { background: var(--accent); color: var(--on-accent); }
 /* Un groupe du menu : son intitule, puis ses ecrans en retrait dessous. */
-.esp-side-groupe { display: flex; flex-direction: column; gap: 3px; margin-top: 4px; }
-.esp-side-titre { padding: 9px 15px 3px; font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; color: rgba(255,255,255,.45); }
+.esp-side-groupe { display: flex; flex-direction: column; gap: clamp(1px, 0.4vh, 3px); margin-top: 4px; }
+.esp-side-titre { padding: clamp(4px, 0.9vh, 9px) 15px 3px; font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; color: rgba(255,255,255,.45); }
 .esp-side-groupe a { padding-left: 27px; font-size: 13px; }
 /* Les écrans de coulisses, détachés du reste par un trait et un peu d'air.
    ⚠ PAS de `margin-top: auto`, essayé puis retiré : la colonne s'étire à la
    hauteur du CONTENU, pas de la fenêtre — sur la vue d'ensemble (1340 px) le
    bloc partait à y=1084, donc hors de l'écran, et il fallait faire défiler
    toute la page pour atteindre une entrée de menu. Un menu ne se mérite pas. */
-.esp-side-bas { margin-top: 16px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,.12); }
+.esp-side-bas { margin-top: clamp(6px, 1.6vh, 16px); padding-top: clamp(6px, 1.2vh, 12px);
+  border-top: 1px solid rgba(255,255,255,.12); }
 
 /* ---------- Un groupe de menu qui se replie ----------
    Un bouton porte le titre, une boite porte les liens, et `data-ouvert` sur le
@@ -1411,7 +1432,7 @@ body:has(.esp-app) .subnav .datepill { display: none; }
      donc a rogner le defilement lateral de la bande, qui est tout son
      interet ici. */
   .esp-side { width: 100%; position: sticky; top: var(--h-topnav, 116px);
-    max-height: none; overflow: visible; }
+    height: auto; max-height: none; overflow: visible; }
   .esp-side-brand { display: none; }   /* la structure est deja dite par la bande du dessus */
   .esp-side-nav { flex-direction: row; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none;
                   gap: 4px; padding: 8px 12px; }
