@@ -110,17 +110,28 @@ répétées plusieurs fois avant d'être écrites ici : les reproposer fait perd
    comme préalable à autre chose.
 3. ⚠ **LES RELANCES DEVIS SONT SUPPRIMÉES** — « on ne fait plus ». Le cron de 8 h
    du worker n'est pas porté. ⚠ **ET « IL S'ÉTEINDRA AVEC LE WORKER » ÉTAIT UNE
-   ERREUR** : le worker ne s'est pas éteint, et ce cron a continué d'**envoyer
-   des emails** au nom de RGD Renova tous les matins pendant que la décision
-   était écrite ici. Constaté le 25/09 en allant regarder le worker.
-   **Coupé dans son code le 25/09** (`rgd-renova-dashboard`, `worker/src/index.js`,
-   commit `49eb5a9`) — une ligne retirée, l'import et la fonction conservés avec
-   la ligne commentée sur place pour que le retour en arrière ne demande pas de
-   réécrire. ⚠ **Ce dépôt n'a aucune CI : rien n'est en ligne tant que
-   `wrangler deploy` n'a pas été lancé à la main.** Les relances **manuelles**
-   restent ouvertes (`relance-now`, `relances/:id/send`) : elles ne partent que
-   sur un clic. **La leçon générale** : une décision « on ne fait plus » qui
-   laisse tourner le code n'a pas été appliquée, elle a été notée.
+   ERREUR** : le worker ne s'est pas éteint, et ce cron a tourné tous les matins
+   pendant que la décision était écrite ici. Constaté le 25/09 en allant
+   regarder le worker. **Coupé dans son code le 25/09**
+   (`rgd-renova-dashboard`, `worker/src/index.js`, commit `49eb5a9`) — une ligne
+   retirée, l'import et la fonction conservés avec la ligne commentée sur place
+   pour que le retour en arrière ne demande pas de réécrire —, **et déployé par
+   Mickael le 28/09** : le dépôt n'a aucune CI, donc rien n'était en ligne avant
+   ce `wrangler deploy` lancé à la main. ⚠ **MAIS J'AI DIT À MICKAEL QUE DES
+   EMAILS PARTAIENT, ET C'ÉTAIT FAUX — corrigé le 28/09.** Le cron tournait,
+   il ne trouvait rien : sa requête exige
+   `relance_active = 1 AND prochaine_relance IS NOT NULL AND prochaine_relance <= ?`,
+   or **aucun des 49 devis n'a de `prochaine_relance`** et `nb_relances` vaut 0
+   partout — vérifié dans `rgd_devis`, que `push_rgd` alimente bien pour ces
+   trois colonnes (46 `relance_active` à vrai contre 3 à faux : la colonne porte
+   de vraies valeurs, pas son défaut). Zéro envoi, donc. **Couper restait juste**
+   — un cron armé part le jour où une `prochaine_relance` se pose, et personne ne
+   l'aurait vu —, mais l'alarme était plus forte que le fait. **La leçon
+   d'origine tient** : une décision « on ne fait plus » qui laisse tourner le code
+   n'a pas été appliquée, elle a été notée. **La seconde**, c'est qu'un code qui
+   PEUT envoyer et un code qui ENVOIE ne se disent pas de la même façon : la
+   trace se vérifie avant de l'affirmer. Les relances **manuelles** restent
+   ouvertes (`relance-now`, `relances/:id/send`) : elles ne partent que sur un clic.
 4. ⚠ **LES PHOTOS, MICKAEL LES REMET LUI-MÊME** depuis l'écran Réalisations.
    Aucune reprise automatique des photos du stockage Cloudflare à prévoir.
 
