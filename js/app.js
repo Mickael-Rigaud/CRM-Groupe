@@ -9,6 +9,20 @@ import { messagesNonLus, monterBulle } from './pages/messagerie.js';
 import { icon } from './icons.js';
 
 
+// ⚠ L'ADRESSE D'ARRIVÉE EST CAPTURÉE ICI, AVANT TOUT LE RESTE, ET C'EST CE QUI
+// REND POSSIBLE DEUX CHOSES QUI ONT MANQUÉ (28-29/09/2026).
+//
+// Le client Supabase examine le fragment à sa création pour y trouver une
+// session, puis **l'efface**. Tout code qui lit `location.hash` après lui lit
+// une adresse vide — et se trompe en silence, puisque le reste marche.
+//
+// Deux lecteurs en dépendent : le message d'un lien périmé (`refusDeLien`) et
+// la reconnaissance d'un retour de lien (`retourDeLien`), qui déclenche le
+// formulaire de mot de passe. Le second avait été oublié : la personne
+// arrivait, se retrouvait connectée, et **on ne lui demandait jamais de
+// choisir un mot de passe**.
+const HASH_AU_DEMARRAGE = location.hash || '';
+
 const app = document.getElementById('app');
 let current = null; // page en cours
 let unsubscribe = null;
@@ -430,7 +444,7 @@ async function start(user) {
   unsubscribe?.();
   unsubscribe = db.onChange(() => { renderNav(); current?.refresh?.(); });
   route();
-  if (db.isRecovery()) setTimeout(() => passwordForm(true), 300);
+  if (retourDeLien()) setTimeout(() => passwordForm(true), 300);
 }
 
 window.addEventListener('hashchange', route);
@@ -447,12 +461,24 @@ window.addEventListener('hashchange', route);
 //
 // ⚠ ET C'EST DANS LE FRAGMENT, PAS DANS LA REQUÊTE : après `#`, donc jamais
 // envoyé au serveur — seul le navigateur le voit, et seul ce code peut le lire.
-// ⚠ L'ADRESSE EST LUE AVANT `db.init()`, ET CE N'EST PAS UN DÉTAIL D'ORDRE :
-// le client Supabase examine le fragment à sa création pour y trouver une
-// session, et le NETTOIE au passage. Lire après lui, c'est lire une adresse
-// déjà vidée — le message n'arriverait jamais, et le défaut serait invisible
-// puisque tout le reste marche.
-const HASH_AU_DEMARRAGE = location.hash || '';
+// Arrive-t-on d'un lien d'accès ? Si oui, la personne doit choisir un mot de
+// passe avant de faire quoi que ce soit.
+//
+// ⚠ `invite` AUTANT QUE `recovery`, ET L'OUBLI SE PAIE SUR LE PREMIER CAS.
+// `db.isRecovery()` ne connaissait que `recovery` : quelqu'un qui ouvre une
+// INVITATION (compte neuf, aucun mot de passe) arrivait donc connecté, sans
+// qu'on lui en demande un — il ne pouvait plus jamais se reconnecter seul une
+// fois la session expirée. C'est le cas de tout nouvel arrivant.
+//
+// ⚠ ET ON LIT L'INSTANTANÉ, PAS `location.hash` : le client Supabase a déjà
+// effacé le fragment quand `start()` s'exécute. C'est exactement pour ça que
+// le formulaire ne s'ouvrait pas, alors que le lien fonctionnait.
+//
+// `db.isRecovery()` reste consulté en second : il regarde aussi la chaîne de
+// requête, que le client, lui, ne touche pas.
+function retourDeLien() {
+  return /(^|[#&])type=(recovery|invite)/.test(HASH_AU_DEMARRAGE) || db.isRecovery();
+}
 
 function refusDeLien() {
   const brut = HASH_AU_DEMARRAGE.replace(/^#/, '');
