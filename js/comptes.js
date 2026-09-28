@@ -33,6 +33,36 @@ export async function creerCompte({ email, full_name, role, activities }) {
   return rep;
 }
 
+// Renvoyer à quelqu'un son lien d'accès.
+//
+// ⚠ LE GESTE QUI MANQUAIT, ET IL A COÛTÉ UN COMPTE INUTILISABLE (28/09/2026).
+// Un lien d'invitation ne sert QU'UNE FOIS et expire au bout de 24 h. Le
+// premier compte créé de l'extérieur a été ouvert une fois — donc consommé —
+// et il n'existait alors aucun moyen d'en produire un second depuis le CRM :
+// il fallait passer par la console de la plateforme, que personne n'ouvre.
+//
+// C'est le serveur qui choisit le type de lien (`invite` avant la première
+// connexion, `recovery` après) : demander le mauvais échoue, et le front n'a
+// pas à connaître cette subtilité.
+export async function renvoyerInvitation(email) {
+  if (CONFIG.DEMO) throw new Error('Mode démo : aucun lien réel n’est envoyé.');
+  const jeton = await db.accessToken();
+  if (!jeton) throw new Error('Session expirée : reconnectez-vous.');
+
+  const r = await fetch(`${CONFIG.SUPABASE_URL}/functions/v1/creer-utilisateur`, {
+    method: 'POST',
+    headers: {
+      apikey: CONFIG.SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${jeton}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ action: 'renvoyer', email }),
+  });
+  const rep = await r.json().catch(() => ({}));
+  if (!r.ok || rep.ok === false) throw new Error(rep.erreur || `Erreur ${r.status}`);
+  return rep;
+}
+
 // Supprimer un compte : geste irréversible, donc en deux temps.
 //
 // Premier appel sans `confirmer` : la fonction rend l'inventaire de ce que la

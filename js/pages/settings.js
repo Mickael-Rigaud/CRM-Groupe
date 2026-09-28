@@ -1,7 +1,7 @@
 // Paramètres : utilisateurs et droits, import CSV, référentiel, entrée des leads (Make), démo.
 import { CONFIG } from '../config.js';
 import { db } from '../data/db.js';
-import { creerCompte, supprimerCompte } from '../comptes.js';
+import { creerCompte, renvoyerInvitation, supprimerCompte } from '../comptes.js';
 import { scope } from '../data/scope.js';
 import { ACTIVITIES, ACTIVITY_KEYS, CHANNELS, ROLES, ROLES_ATTRIBUABLES, LOST_REASONS, ACTIVITY_TYPES } from '../data/schema.js';
 import { esc, toast, openModal, closeModal, renderForm, readForm, confirm, csvDownload } from '../ui.js';
@@ -158,6 +158,12 @@ export const settingsPage = {
           <div id="u-retour"></div>
           <div class="form-actions">
             ${edition && !moi && !db.demo ? '<button type="button" class="btn ghost left danger" id="u-suppr">Supprimer le compte</button>' : ''}
+            <!-- Renvoyer un acces. Il ne depend ni du role ni des structures :
+                 quelqu'un qui n'arrive pas a entrer n'a pas d'autre recours, et
+                 le faire passer par la console de la plateforme revient a ne
+                 pas l'avoir. Propose aussi sur son propre compte : rien
+                 n'empeche la direction d'avoir perdu son mot de passe. -->
+            ${edition && !db.demo ? '<button type="button" class="btn ghost sm" id="u-renvoyer">Renvoyer l\'invitation</button>' : ''}
             <button type="button" class="btn ghost" data-close>Annuler</button>
             <button type="button" class="btn" id="u-ok">${edition ? 'Enregistrer' : (db.demo ? 'Créer (démo)' : 'Créer le compte')}</button>
           </div>`;
@@ -183,6 +189,30 @@ export const settingsPage = {
           const mail = zone.querySelector('#u-mail'); if (!edition) mail.oninput = () => { v.email = mail.value; };
           zone.querySelector('#u-ok').onclick = valider;
           zone.querySelector('#u-suppr')?.addEventListener('click', supprimer);
+          zone.querySelector('#u-renvoyer')?.addEventListener('click', async (ev) => {
+            const b = ev.currentTarget;
+            const avant = b.textContent;
+            b.disabled = true; b.textContent = 'Envoi…';
+            try {
+              const rep = await renvoyerInvitation(profil.email);
+              if (rep.mail === 'envoye') {
+                toast(`Lien envoyé à ${profil.email}`);
+              } else {
+                // Le lien est bon même si le courriel n'est pas parti : on le
+                // montre plutôt que de laisser la direction sans rien.
+                toast("Le courriel n'est pas parti — le lien est affiché", 'warn');
+                openModal("Lien d'accès", `
+                  <p class="mf-aide attention">L'envoi a échoué${rep.detail ? ` : ${esc(rep.detail)}` : ''}. Transmettez ce lien vous-même.</p>
+                  <label class="mail-champ"><span>Lien pour ${esc(profil.full_name)}</span>
+                    <input value="${esc(rep.lien || '')}" readonly onclick="this.select()"></label>
+                  <p class="mf-aide">Il ne fonctionne qu'une fois et expire au bout de 24 h.</p>`);
+              }
+            } catch (e) {
+              toast(e.message || "Le renvoi a échoué", 'err');
+            } finally {
+              b.disabled = false; b.textContent = avant;
+            }
+          });
         };
 
         // On ne supprime pas à l'aveugle, et on ne DEMANDE pas à l'aveugle non plus.
@@ -283,18 +313,29 @@ export const settingsPage = {
               email: v.email.trim(), full_name: v.nom.trim(),
               role: v.role, activities: v.structures,
             });
-            // Le lien vaut mot de passe tant qu'il n'a pas servi : on l'affiche une
-            // fois, à la personne qui vient de créer le compte, et on ne l'écrit
-            // nulle part. Il se regénère depuis Supabase s'il se perd.
+            // ⚠ L'ÉCRAN DIT CE QUI EST PARTI, PAS CE QU'ON ESPÈRE. Il annonçait
+            // « à transmettre à la personne » sans dire qu'aucun courriel ne
+            // partait — et « copiez-le maintenant », alors que le lien ne sert
+            // QU'UNE FOIS. Les deux ensemble ont produit, le 28/09/2026, un
+            // compte dont le lien a été ouvert une fois puis n'a plus marché,
+            // sans que personne comprenne pourquoi. Depuis, la fonction envoie
+            // le courriel elle-même et `rep.mail` dit si c'est réellement parti.
+            const envoye = rep.mail === 'envoye';
             zone.querySelector('#u-retour').innerHTML = `
               <div class="card" style="margin-top:14px">
                 <p class="mf-aide ok" style="margin-bottom:8px">Compte créé pour ${esc(v.nom)}.</p>
+                ${envoye
+                  ? `<p class="mf-aide ok">L'invitation est partie à <b>${esc(v.email.trim())}</b>. La personne choisit son mot de passe elle-même.</p>`
+                  : `<p class="mf-aide attention">${rep.lien
+                        ? "Le courriel n'a PAS pu être envoyé : transmettez le lien ci-dessous vous-même."
+                        : "Le courriel n'est pas parti et le lien n'a pas pu être produit."}
+                     ${rep.detail ? `<br><span class="small muted">${esc(rep.detail)}</span>` : ''}</p>`}
                 ${rep.lien
-                  ? `<label class="mail-champ"><span>Lien d'invitation — à transmettre à la personne</span>
+                  ? `<label class="mail-champ"><span>Lien d'accès${envoye ? ' — en secours, si le courriel n\'arrive pas' : ' — à transmettre'}</span>
                       <input id="u-lien" value="${esc(rep.lien)}" readonly></label>
-                     <p class="mf-aide">Elle choisira son mot de passe elle-même. Ce lien ne s'affichera plus : copiez-le maintenant.</p>
+                     <p class="mf-aide">⚠ Ce lien ne fonctionne <b>qu'une seule fois</b> et expire au bout de 24 h. S'il a servi ou s'il est trop vieux, n'essayez pas de le réutiliser : rouvrez cette fiche et cliquez « Renvoyer l'invitation ».</p>
                      <button type="button" class="btn ghost sm" id="u-copier">Copier le lien</button>`
-                  : '<p class="mf-aide attention">Le compte existe, mais le lien d\'invitation n\'a pas pu être produit. Il se regénère depuis Supabase (Authentication → Users).</p>'}
+                  : ''}
               </div>`;
             zone.querySelector('#u-copier')?.addEventListener('click', async () => {
               try { await navigator.clipboard.writeText(rep.lien); toast('Lien copié'); }
