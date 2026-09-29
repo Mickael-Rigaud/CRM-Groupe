@@ -32,6 +32,7 @@ export const CHAMPS_DECOUVERTE = [
   // Le bien, tel qu'il a été décrit au téléphone.
   { cle: 'annee', label: 'Année de construction', rubrique: 'projet' },
   { cle: 'surface', label: 'Surface', rubrique: 'projet' },
+  { cle: 'pieces', label: 'Nombre de pièces', rubrique: 'projet' },
   { cle: 'occupation', label: 'Occupation', rubrique: 'projet' },
 
   // Ce qu'on vient traiter. `motifs` côté expertise, `travaux` côté AMO : les

@@ -20,19 +20,22 @@ import { db } from '../data/db.js';
 import { scope } from '../data/scope.js';
 import { esc, eur, toast, openModal, closeModal, contactName } from '../ui.js';
 import {
-  CHANNELS, NIVEAUX_BTP, niveauxExpertiseParCharge, QUALIF_EXPERTISE, niveauExpertise,
+  CHANNELS, NIVEAUX_BTP, QUALIF_EXPERTISE,
   FICHE_EXPERTISE, FICHE_AMO, CRITERES_V5, coteBudget, coteDuree, coteLots,
   tauxSuggere, honorairesAmo, niveauSuggere, controleTaux, cleNiveau,
-  couleurMission, stagesDe,
+  tarifExpertise, TVA_TAUX, couleurMission, stagesDe,
 } from '../data/schema.js';
 import { champsHonoraires, resultatsHonoraires } from './btp-amo.js';
 
 const KEY = 'btp';
 const CANAUX_COURANTS = ['Recommandation client', 'Ancien client', 'Téléphone / autre', 'Site internet direct', 'Prospection directe'];
 const TYPES_BIEN = ['Maison', 'Appartement', 'Immeuble', 'Local pro', 'Autre'];
-const NIVEAUX_EXP = niveauxExpertiseParCharge();
+// ⚠ L'ORDRE DE L'OFFRE, PAS CELUI DE LA CHARGE. La prestation se choisit
+// maintenant à la première étape, dans la liste telle que le client la voit :
+// pré-achat, désordres, réception. `niveauxExpertiseParCharge()` existe pour la
+// grille de qualification, qui ne vit plus dans ce formulaire.
+const NIVEAUX_EXP = NIVEAUX_BTP.filter(n => n.mission === 'expertise');
 const NIVEAUX_AMO = NIVEAUX_BTP.filter(n => n.mission === 'amo');
-const courtNiveau = (n) => { const t = n.label.replace(/^Expertise /, ''); return t.charAt(0).toUpperCase() + t.slice(1); };
 
 // L'étape qui DIT que le livrable est parti, par métier. Elle sert à dater le
 // rapport sans le ressaisir : si l'affaire est passée par là, la date est celle
@@ -92,7 +95,8 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
     canal: existing?.channel || presets.channel || 'Recommandation client',
 
     type_bien: f.type_bien || '',
-    annee: d.annee || '', surface: d.surface || '', occupation: d.occupation || '',
+    annee: d.annee || '', surface: d.surface || '', pieces: d.pieces || '',
+    occupation: d.occupation || '',
     adresse: f.adresse || '', code_postal: f.code_postal || '', ville: f.ville || '',
     date_visite: f.date_visite || agenda?.day || '',
     date_rapport: f.date_rapport || dateLivrable(mission0),
@@ -124,8 +128,12 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
   const corps = m.querySelector('#fp-corps');
 
   // ---------------------------------------------------------------- le calcul
-  const suggestionExp = () => niveauExpertise(v.cotes);
-  const niveauExp = () => NIVEAUX_EXP.find(n => n.key === v.niveau) || suggestionExp()?.niveau || null;
+  // ⚠ PLUS DE NIVEAU DEVINÉ : la prestation est CHOISIE à l'étape Mission
+  // (29/09/2026). La grille de qualification proposait un niveau à partir de
+  // six critères de complexité ; elle répondait à « quelle lourdeur » quand la
+  // vraie question est « quelle prestation ». Elle reste consultable sur
+  // l'écran Expertise, où elle est à sa place.
+  const niveauExp = () => NIVEAUX_EXP.find(n => n.key === cleNiveau(v.niveau)) || null;
 
   const autoAmo = {
     budget: () => coteBudget(v.budget_ht),
@@ -148,19 +156,49 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
   // `amount` d'une affaire BTP est un montant HT (voir `amountLabel`). Ecrire
   // `.honoraires` — qui n'existe pas — posait `undefined` sans rien casser :
   // l'affaire s'enregistrait, simplement sans montant.
-  const montant = () => (v.mission === 'amo'
-    ? (honorairesAmo(v.budget_ht, tauxRetenu()).ht || null)
-    : Number(v.tarif) || null);
+  // ⚠ LE MONTANT SAISI L'EMPORTE SUR LA GRILLE, jamais l'inverse : la grille
+  // propose, l'humain tranche. Laissé vide, on retient le HT qui découle du
+  // tarif de la prestation — sinon une expertise partirait sans montant alors
+  // que son prix est affiché juste au-dessus.
+  const montant = () => {
+    if (v.mission === 'amo') return honorairesAmo(v.budget_ht, tauxRetenu()).ht || null;
+    const saisi = Number(v.tarif);
+    if (saisi) return saisi;
+    return tarifExpertise({ prestation: v.niveau, surface: v.surface, pieces: v.pieces })?.ht || null;
+  };
 
   const nomComplet = () => [v.prenom, v.nom].filter(Boolean).join(' ').trim();
 
   // ------------------------------------------------------------- les briques
-  const PAS = () => [
-    ['Identification', 1],
-    ['Mission', 2],
-    [v.mission === 'amo' ? 'Travaux et besoin' : 'Le désordre', 3],
-    [v.mission === 'amo' ? 'Complexité et honoraires' : 'Qualification et tarif', 4],
-  ];
+  // ⚠ L'ORDRE A CHANGÉ LE 29/09/2026, demandé par Mickael pour l'expertise :
+  // Mission → Le désordre & tarif → Identification. On qualifie d'abord, on
+  // prend les coordonnées à la fin.
+  //
+  // ⚠ MISSION EST FORCÉMENT LA PREMIÈRE ÉTAPE, ET CE N'EST PAS UN CHOIX DE
+  // PRÉSENTATION : c'est là qu'on choisit le métier, et le métier commande la
+  // suite du parcours. Mettre l'identification devant obligerait à afficher un
+  // premier écran avant de savoir lequel des deux déroulés on suit.
+  //
+  // ⚠ L'AMO SUIT LE MÊME MOUVEMENT, par conséquence : son identification passe
+  // en dernier elle aussi. Mickael n'a parlé que de l'expertise, mais laisser
+  // l'identification en tête côté AMO aurait demandé deux premiers écrans
+  // différents pour un choix qui n'est pas encore fait.
+  //
+  // ⚠ ON RAISONNE EN NOMS D'ÉCRAN, PLUS EN NUMÉROS : le numéro 3 désigne
+  // l'identification en expertise et la cotation en AMO. Un `v.pas === 3` dans
+  // `lier()` aurait branché les champs du mauvais écran.
+  const ECRANS = () => (v.mission === 'amo'
+    ? ['mission', 'amo-fond', 'amo-cote', 'identification']
+    : ['mission', 'desordre', 'identification']);
+  const TITRES = {
+    mission: 'Mission',
+    desordre: 'Le désordre & tarif',
+    'amo-fond': 'Travaux et besoin',
+    'amo-cote': 'Complexité et honoraires',
+    identification: 'Identification',
+  };
+  const nomEcran = () => ECRANS()[v.pas - 1] || 'mission';
+  const PAS = () => ECRANS().map((n, i) => [TITRES[n], i + 1]);
 
   const enTete = () => `
     <div class="mf-pas" style="${teinte()}">
@@ -187,7 +225,15 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
       ${champ(prefixe + '-ville', 'Ville', ville, 'placeholder="Nice"')}
     </div>`;
 
-  const barre = (gauche, droite) => `
+  // ⚠ LES INTITULÉS DES BOUTONS VIENNENT DU PARCOURS, ils ne sont plus écrits
+  // dans chaque écran : l'ordre change d'un métier à l'autre, et deux libellés
+  // recopiés finissent par annoncer une étape qui n'est pas la suivante.
+  const barre = () => {
+    const liste = PAS();
+    const i = v.pas - 1;
+    const gauche = i > 0 ? liste[i - 1][0] : null;
+    const droite = i < liste.length - 1 ? liste[i + 1][0] : null;
+    return `
     <div class="form-actions">
       ${gauche ? `<button type="button" class="btn ghost left" id="fp-retour">← ${esc(gauche)}</button>` : ''}
       <button type="button" class="btn ghost" data-close>Annuler</button>
@@ -196,58 +242,60 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
         ? `<button type="button" class="btn" id="fp-suite">${esc(droite)} →</button>`
         : `<button type="button" class="btn" id="fp-creer">${existing ? 'Enregistrer et fermer' : 'Créer la mission'}</button>`}
     </div>`;
+  };
 
-  // -------------------------------------------------------------- 1. le client
-  const ecran1 = () => `
-    <div class="mf-bloc-titre">A. Identification</div>
-    <div class="mf-grille">
-      ${champ('fp-nom', 'Nom *', v.nom, 'placeholder="Dupont, ou SCI Les Oliviers"')}
-      ${champ('fp-prenom', 'Prénom', v.prenom, 'placeholder="Marie"')}
-      ${champ('fp-tel', 'Téléphone', v.telephone, 'placeholder="06 12 34 56 78"')}
-      ${champ('fp-email', 'E-mail', v.email, 'type="email" placeholder="contact@exemple.fr"')}
-      <label class="mail-champ"><span>Origine du lead</span>
-        <select id="fp-canal">
-          ${CANAUX_COURANTS.map(x => `<option ${x === v.canal ? 'selected' : ''}>${esc(x)}</option>`).join('')}
-          <optgroup label="Autres canaux">${CHANNELS.filter(x => !CANAUX_COURANTS.includes(x)).map(x => `<option ${x === v.canal ? 'selected' : ''}>${esc(x)}</option>`).join('')}</optgroup>
-        </select></label>
-    </div>
-    ${adresse('fp-cl', 'Adresse du client', v.cl_adresse, v.cl_cp, v.cl_ville)}
-    ${v.contact_id ? `<p class="mf-aide">Rattaché à la fiche contact de <b>${esc(contactName(db.byId('contacts', v.contact_id) || {}))}</b> — ce qui est corrigé ici y est reporté.</p>` : ''}
+  // ------------------------------------------------------------ 1. la mission
+  // ⚠ LA PRESTATION SE CHOISIT ICI, PAS AU BOUT DU PARCOURS (29/09/2026).
+  // Les quatre cartes sont les quatre missions du cabinet : les trois
+  // expertises de l'offre commerciale, et l'AMO. En choisir une fixe le METIER
+  // et, pour une expertise, la PRESTATION - c'est-a-dire ce qui commande le
+  // tarif a l'etape suivante.
+  //
+  // ⚠ L'ORDRE EST CELUI DE L'OFFRE, pas celui de la charge de travail : c'est
+  // la liste que le client a sous les yeux.
+  const CHOIX_MISSION = () => [
+    ...NIVEAUX_EXP.map(n => ({
+      cle: n.key, mission: 'expertise', titre: n.label, txt: n.contenu, note: n.tarif,
+    })),
+    {
+      cle: 'amo', mission: 'amo', titre: 'AMO / accompagnement',
+      txt: "Accompagnement du maitre d'ouvrage, de la consultation des entreprises a la reception.",
+      note: 'Honoraires en % des travaux',
+    },
+  ];
 
-    <div class="mf-bloc-titre">B. Profil du demandeur</div>
-    ${chipsUn('profil', FICHE_EXPERTISE.profils)}
-    <p class="mf-aide">Un seul profil : c'est lui qui dit à qui l'on parle, et souvent ce qui est en jeu.</p>
-
-    ${barre(null, 'Mission')}`;
-
-  // ------------------------------------------------------------- 2. la mission
-  const ecran2 = () => {
+  const ecranMission = () => {
     const etapes = etapesDe(v.mission);
     const cleLivrable = ETAPE_LIVRABLE[v.mission];
     const dateAuto = dateLivrable(v.mission);
+    const choisi = v.mission === 'amo' ? 'amo' : cleNiveau(v.niveau);
     return `
-    <div class="mf-bloc-titre">C. Type de mission</div>
-    <div class="mf-seg mf-seg-large" style="${teinte()}">
-      <button type="button" class="${v.mission === 'expertise' ? 'on' : ''}" data-mission="expertise">Expertise</button>
-      <button type="button" class="${v.mission === 'amo' ? 'on' : ''}" data-mission="amo">AMO / accompagnement</button>
+    <div class="mf-bloc-titre">A. Type de mission</div>
+    <div class="mf-niveaux" style="${teinte()}">
+      ${CHOIX_MISSION().map(c => `
+        <button type="button" class="mf-niveau ${c.cle === choisi ? 'on' : ''}"
+          data-choix="${esc(c.cle)}" data-metier="${esc(c.mission)}">
+          <span class="mf-niveau-pts">${esc(c.note)}</span>
+          <b>${esc(c.titre)}</b>
+          <span class="mf-niveau-txt">${esc(c.txt)}</span>
+        </button>`).join('')}
     </div>
-    <p class="mf-aide">${v.mission === 'amo'
-      ? 'Accompagnement du maître d’ouvrage : la cotation se fait sur cinq critères, et les honoraires sont un pourcentage des travaux.'
-      : 'Expertise technique : la cotation désigne la prestation, et le tarif part de son plancher.'}</p>
+    ${!choisi ? '<p class="mf-aide attention">Choisissez la mission : c’est elle qui commande la suite du parcours et le tarif.</p>' : ''}
 
-    <div class="mf-bloc-titre">D. Le bien</div>
-    <div class="mf-grille">
+    <div class="mf-bloc-titre">B. Le bien</div>
+    <div class="mf-grille mf-grille-serree">
       <label class="mail-champ"><span>Type de bien</span>
         <select id="fp-type"><option value="">—</option>${TYPES_BIEN.map(t => `<option ${t === v.type_bien ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></label>
       ${champ('fp-annee', 'Année de construction', v.annee, 'placeholder="1972"')}
       ${champ('fp-surface', 'Surface approximative', v.surface, 'placeholder="95 m²"')}
+      ${champ('fp-pieces', 'Nombre de pièces', v.pieces, 'placeholder="4" inputmode="numeric"')}
       <label class="mail-champ"><span>${v.mission === 'amo' ? 'Occupation pendant travaux' : 'Occupation actuelle'}</span>
         <select id="fp-occupation"><option value="">—</option>${(v.mission === 'amo' ? FICHE_AMO.occupation : FICHE_EXPERTISE.occupation)
           .map(o => `<option ${o === v.occupation ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select></label>
     </div>
     ${adresse('fp-bien', 'Adresse du bien', v.adresse, v.code_postal, v.ville)}
 
-    <div class="mf-bloc-titre">E. Dates et suivi</div>
+    <div class="mf-bloc-titre">C. Dates et suivi</div>
     <div class="mf-grille">
       <label class="mail-champ"><span>Date de visite</span>
         <input type="date" id="fp-visite" value="${esc(v.date_visite)}">
@@ -264,19 +312,43 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
         <select id="fp-owner">${users.map(u => `<option value="${u.id}" ${u.id === v.owner_id ? 'selected' : ''}>${esc(u.full_name)}</option>`).join('')}</select></label>
     </div>
 
-    ${barre('Identification', v.mission === 'amo' ? 'Travaux et besoin' : 'Le désordre')}`;
+    ${barre()}`;
   };
 
-  // --------------------------------------------------------------- 3. le fond
-  const ecran3Expertise = () => `
-    <div class="mf-bloc-titre">F. Motif de la demande</div>
+  // ------------------------------------------------- 2. le desordre et le tarif
+  // ⚠ LE TARIF SE CALCULE, IL NE SE DEVINE PAS. `tarifExpertise` lit la
+  // prestation, la surface et le nombre de pieces, et rend `null` tant qu'aucune
+  // prestation n'est choisie. La grille detaillee n'existe pas encore : tant
+  // qu'elle est vide, le prix affiche est le PLANCHER de l'offre, et le bloc le
+  // dit - un « a partir de » presente comme un devis ferait annoncer un prix
+  // qu'on ne tiendra pas.
+  const blocTarif = () => {
+    const t = tarifExpertise({ prestation: v.niveau, surface: v.surface, pieces: v.pieces });
+    if (!t) {
+      return `<div class="fp-tarif est-vide"><p class="fp-tarif-note">
+        Le tarif s’affichera dès qu’une prestation sera choisie à l’étape <b>Mission</b>.</p></div>`;
+    }
+    const nom = niveauExp()?.label || '';
+    return `<div class="fp-tarif" style="${teinte()}">
+      <div class="fp-tarif-prix"><b>${esc(eur(t.ttc))}</b><span>TTC</span></div>
+      <p class="fp-tarif-note">${esc(nom)} — ${t.plancher
+        ? '<b>tarif plancher</b> de l’offre ; la grille détaillée n’est pas encore renseignée.'
+        : 'd’après la grille tarifaire.'}
+        Soit environ <b>${esc(eur(t.ht))} HT</b> au taux de ${TVA_TAUX} %.</p>
+    </div>`;
+  };
+
+  const ecranDesordreTarif = () => {
+    const t = tarifExpertise({ prestation: v.niveau, surface: v.surface, pieces: v.pieces });
+    return `
+    <div class="mf-bloc-titre">D. Motif de la demande</div>
     ${chips('motifs', FICHE_EXPERTISE.motifs)}
     <div class="mf-grille">
       <label class="mail-champ plein"><span>Description libre du problème</span>
         <textarea id="fp-description" rows="3" placeholder="Ce que le client décrit, dans ses mots.">${esc(v.description)}</textarea></label>
     </div>
 
-    <div class="mf-bloc-titre">G. Historique et urgence</div>
+    <div class="mf-bloc-titre">E. Historique et urgence</div>
     <div class="mf-grille">
       ${champ('fp-apparition', "Date d'apparition", v.apparition, 'placeholder="Printemps 2025"')}
       ${champ('fp-evolution', 'Évolution observée', v.evolution, 'placeholder="Aggravation depuis l’hiver"')}
@@ -287,10 +359,27 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
     </div>
     <p class="mf-aide attention">Un risque sécurité ou une date butoir change l'urgence de la visite : à remplir même sommairement.</p>
 
-    ${barre('Mission', 'Qualification et tarif')}`;
+    <div class="mf-bloc-titre">F. Documents disponibles</div>
+    ${chips('documents', FICHE_EXPERTISE.documents)}
 
+    <div class="mf-bloc-titre">G. Tarif de l'expertise</div>
+    ${blocTarif()}
+    <div class="mf-grille">
+      <label class="mail-champ"><span>Montant retenu HT</span>
+        <input type="number" id="fp-tarif" min="0" step="50" value="${esc(v.tarif)}">
+        ${t ? `<em class="mf-champ-aide">Laisser vide pour retenir ${esc(eur(t.ht))} HT.</em>`
+            : '<em class="mf-champ-aide">Choisissez d’abord la prestation.</em>'}</label>
+    </div>
+
+    <div class="mf-bloc-titre">H. Contrôles avant attribution</div>
+    ${chips('controles', FICHE_EXPERTISE.controles)}
+
+    ${barre()}`;
+  };
+
+  // --------------------------------------------------- 2 bis. le fond, cote AMO
   const ecran3Amo = () => `
-    <div class="mf-bloc-titre">F. Travaux envisagés</div>
+    <div class="mf-bloc-titre">D. Travaux envisagés</div>
     ${chips('travaux', FICHE_AMO.travaux)}
     <p class="mf-aide">${v.travaux.length
       ? `${v.travaux.length} poste${v.travaux.length > 1 ? 's' : ''} retenu${v.travaux.length > 1 ? 's' : ''} — sert à coter le nombre de lots.`
@@ -309,59 +398,39 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
         <input type="date" id="fp-fin" value="${esc(v.date_fin)}"></label>
     </div>
 
-    <div class="mf-bloc-titre">G. État d'avancement</div>
+    <div class="mf-bloc-titre">E. État d'avancement</div>
     ${chips('avancement', FICHE_AMO.avancement)}
-    <div class="mf-bloc-titre">H. Besoin d'accompagnement</div>
+    <div class="mf-bloc-titre">F. Besoin d'accompagnement</div>
     ${chips('besoins', FICHE_AMO.besoins)}
-    <div class="mf-bloc-titre">I. Risques et contraintes</div>
+    <div class="mf-bloc-titre">G. Risques et contraintes</div>
     ${chips('risques', FICHE_AMO.risques)}
 
-    ${barre('Mission', 'Complexité et honoraires')}`;
+    ${barre()}`;
 
-  // ------------------------------------------------------ 4. la qualification
-  const ecran4Expertise = () => {
-    const sug = suggestionExp();
-    const niv = niveauExp();
-    const faites = QUALIF_EXPERTISE.filter(c => v.cotes[c.key] !== undefined).length;
-    return `
-    <div class="mf-bloc-titre">J. Documents disponibles</div>
-    ${chips('documents', FICHE_EXPERTISE.documents)}
-
-    <div class="mf-bloc-titre">K. Qualification interne</div>
-    <p class="btp-ref-action" style="${teinte()}">
-      <b>Cochez une case par ligne</b> — chaque critère désigne une prestation, la plus souvent retenue est proposée.
-      <span>${faites} sur ${QUALIF_EXPERTISE.length}</span>
-    </p>
-    <div class="table-wrap"><table class="btp-matrice fa-matrice">
-      <thead><tr><th>Critère</th>${NIVEAUX_EXP.map(n => `<th>${esc(courtNiveau(n))} — ${n.points} pt${n.points > 1 ? 's' : ''}</th>`).join('')}</tr></thead>
-      <tbody>${QUALIF_EXPERTISE.map(c => `<tr>
-        <th scope="row">${esc(c.label)}</th>
-        ${c.valeurs.map((lbl, n) => `<td class="choix ${v.cotes[c.key] === n ? 'on' : ''}" data-crit="${c.key}" data-score="${n}"
-          role="radio" aria-checked="${v.cotes[c.key] === n}" tabindex="0"><span class="btp-coche"></span>${esc(lbl)}</td>`).join('')}
-      </tr>`).join('')}</tbody>
-    </table></div>
-
-    <div class="mf-bloc-titre">Prestation retenue</div>
-    <div class="mf-niveaux" style="${teinte()}">
-      ${NIVEAUX_EXP.map(n => `
-        <button type="button" class="mf-niveau ${niv && n.key === niv.key ? 'on' : ''}" data-niveau="${n.key}">
-          <span class="mf-niveau-pts">${n.points} pt${n.points > 1 ? 's' : ''}</span>
-          <b>${esc(n.label)}${sug && sug.niveau.key === n.key ? '<em class="fa-suggere">suggérée</em>' : ''}</b>
-          <span class="mf-niveau-txt">${esc(n.contenu)}</span>
-        </button>`).join('')}
-    </div>
-
+  // ------------------------------------------------------- 3. l'identification
+  // ⚠ ELLE EST PASSEE EN DERNIER (29/09/2026). On qualifie la mission, puis on
+  // prend les coordonnees - l'ordre d'un appel, pas celui d'un fichier.
+  const ecranIdentification = () => `
+    <div class="mf-bloc-titre">${v.mission === 'amo' ? 'I' : 'I'}. Identification</div>
     <div class="mf-grille">
-      <label class="mail-champ"><span>Montant de la mission HT</span>
-        <input type="number" id="fp-tarif" min="0" step="50" value="${esc(v.tarif)}" placeholder="1200">
-        ${niv ? `<em class="mf-champ-aide">Tarif de la prestation : ${esc(niv.tarif)}</em>` : ''}</label>
+      ${champ('fp-nom', 'Nom *', v.nom, 'placeholder="Dupont, ou SCI Les Oliviers"')}
+      ${champ('fp-prenom', 'Prénom', v.prenom, 'placeholder="Marie"')}
+      ${champ('fp-tel', 'Téléphone', v.telephone, 'placeholder="06 12 34 56 78"')}
+      ${champ('fp-email', 'E-mail', v.email, 'type="email" placeholder="contact@exemple.fr"')}
+      <label class="mail-champ"><span>Origine du lead</span>
+        <select id="fp-canal">
+          ${CANAUX_COURANTS.map(x => `<option ${x === v.canal ? 'selected' : ''}>${esc(x)}</option>`).join('')}
+          <optgroup label="Autres canaux">${CHANNELS.filter(x => !CANAUX_COURANTS.includes(x)).map(x => `<option ${x === v.canal ? 'selected' : ''}>${esc(x)}</option>`).join('')}</optgroup>
+        </select></label>
     </div>
+    ${adresse('fp-cl', 'Adresse du client', v.cl_adresse, v.cl_cp, v.cl_ville)}
+    ${v.contact_id ? `<p class="mf-aide">Rattaché à la fiche contact de <b>${esc(contactName(db.byId('contacts', v.contact_id) || {}))}</b> — ce qui est corrigé ici y est reporté.</p>` : ''}
 
-    <div class="mf-bloc-titre">Contrôles avant attribution</div>
-    ${chips('controles', FICHE_EXPERTISE.controles)}
+    <div class="mf-bloc-titre">J. Profil du demandeur</div>
+    ${chipsUn('profil', FICHE_EXPERTISE.profils)}
+    <p class="mf-aide">Un seul profil : c'est lui qui dit à qui l'on parle, et souvent ce qui est en jeu.</p>
 
-    ${barre('Le désordre', null)}`;
-  };
+    ${barre()}`;
 
   const ecran4Amo = () => {
     const score = scoreAmo();
@@ -437,16 +506,20 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
         </button>`).join('')}
     </div>
 
-    ${barre('Travaux et besoin', null)}`;
+    ${barre()}`;
   };
 
   // ------------------------------------------------------------- le dessin
+  const RENDU = {
+    mission: () => ecranMission(),
+    desordre: () => ecranDesordreTarif(),
+    'amo-fond': () => ecran3Amo(),
+    'amo-cote': () => ecran4Amo(),
+    identification: () => ecranIdentification(),
+  };
+
   const dessine = () => {
-    const ecran = v.pas === 1 ? ecran1
-      : v.pas === 2 ? ecran2
-      : v.pas === 3 ? (v.mission === 'amo' ? ecran3Amo : ecran3Expertise)
-      : (v.mission === 'amo' ? ecran4Amo : ecran4Expertise);
-    corps.innerHTML = enTete() + ecran();
+    corps.innerHTML = enTete() + RENDU[nomEcran()]();
     lier();
   };
 
@@ -461,7 +534,14 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
     corps.querySelectorAll('[data-pas]').forEach(b => b.onclick = () => { v.pas = Number(b.dataset.pas); dessine(); });
     corps.querySelector('#fp-retour')?.addEventListener('click', () => { v.pas -= 1; dessine(); });
     corps.querySelector('#fp-suite')?.addEventListener('click', () => {
-      if (v.pas === 1 && !v.nom.trim()) return toast('Le nom du client est nécessaire', 'warn');
+      // ⚠ PLUS DE CONTRÔLE DU NOM ICI : l'identification est passée en
+      // DERNIER, il n'y a plus d'écran après elle. C'est `enregistrer` qui
+      // exige le nom, et qui ramène sur la bonne étape s'il manque.
+      // ⚠ La mission, elle, se vérifie ici : sans prestation choisie, l'écran
+      // suivant n'aurait ni tarif ni cotation à montrer.
+      if (nomEcran() === 'mission' && v.mission !== 'amo' && !cleNiveau(v.niveau)) {
+        return toast('Choisissez la prestation', 'warn');
+      }
       v.pas += 1; dessine();
     });
     corps.querySelector('#fp-enregistrer')?.addEventListener('click', () => enregistrer(false));
@@ -480,51 +560,62 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
       g.querySelectorAll('.fa-chip').forEach(b => b.onclick = () => { v[cle] = v[cle] === b.dataset.val ? '' : b.dataset.val; dessine(); });
     });
 
-    if (v.pas === 1) {
+    const ecran = nomEcran();
+
+    if (ecran === 'identification') {
       poser('#fp-nom', 'nom'); poser('#fp-prenom', 'prenom'); poser('#fp-tel', 'telephone');
       poser('#fp-email', 'email'); poser('#fp-cl-rue', 'cl_adresse'); poser('#fp-cl-cp', 'cl_cp');
       poser('#fp-cl-ville', 'cl_ville'); choisir('#fp-canal', 'canal');
       return;
     }
-    if (v.pas === 2) {
-      corps.querySelectorAll('[data-mission]').forEach(b => b.onclick = () => {
-        if (v.mission === b.dataset.mission) return;
-        v.mission = b.dataset.mission;
+
+    if (ecran === 'mission') {
+      // ⚠ CHOISIR UNE PRESTATION CHOISIT AUSSI LE METIER. Les trois cartes
+      // d'expertise posent `mission = expertise` ET le niveau ; la carte AMO
+      // pose le métier et efface le niveau, qui appartient à l'autre déroulé.
+      corps.querySelectorAll('[data-choix]').forEach(b => b.onclick = () => {
+        const metier = b.dataset.metier;
+        const cle = b.dataset.choix;
         // ⚠ CHANGER DE METIER CHANGE LE DEROULE : les étapes de l'expertise
         // n'existent pas côté AMO. On replace l'affaire au départ du nouveau
         // métier plutôt que de la laisser à une étape qui n'a plus de colonne.
-        const etapes = etapesDe(v.mission);
-        if (!etapes.some(e => e.key === v.stage)) v.stage = etapes[0].key;
-        // Le niveau appartient au métier : celui de l'autre n'a plus de sens.
-        v.niveau = null;
+        if (v.mission !== metier) {
+          v.mission = metier;
+          const etapes = etapesDe(metier);
+          if (!etapes.some(e => e.key === v.stage)) v.stage = etapes[0].key;
+        }
+        v.niveau = metier === 'amo' ? null : cle;
         dessine();
       });
-      poser('#fp-annee', 'annee'); poser('#fp-surface', 'surface');
+      poser('#fp-annee', 'annee'); poser('#fp-surface', 'surface'); poser('#fp-pieces', 'pieces');
       poser('#fp-bien-rue', 'adresse'); poser('#fp-bien-cp', 'code_postal'); poser('#fp-bien-ville', 'ville');
       choisir('#fp-type', 'type_bien'); choisir('#fp-occupation', 'occupation');
       choisir('#fp-visite', 'date_visite'); choisir('#fp-rapport', 'date_rapport');
       choisir('#fp-stage', 'stage'); choisir('#fp-owner', 'owner_id');
       return;
     }
-    if (v.pas === 3) {
+
+    if (ecran === 'desordre') {
       poser('#fp-description', 'description');
-      if (v.mission === 'amo') {
-        poser('#fp-budget', 'budget_ht'); poser('#fp-budgetmax', 'budget_max');
-        choisir('#fp-debut', 'date_debut'); choisir('#fp-fin', 'date_fin');
-      } else {
-        poser('#fp-apparition', 'apparition'); poser('#fp-evolution', 'evolution');
-        poser('#fp-sinistre', 'sinistre'); poser('#fp-procedure', 'procedure');
-        poser('#fp-securite', 'securite'); choisir('#fp-butoir', 'butoir');
-      }
+      poser('#fp-apparition', 'apparition'); poser('#fp-evolution', 'evolution');
+      poser('#fp-sinistre', 'sinistre'); poser('#fp-procedure', 'procedure');
+      poser('#fp-securite', 'securite'); choisir('#fp-butoir', 'butoir');
+      poser('#fp-tarif', 'tarif');
       return;
     }
 
-    // Étape 4 : les matrices.
+    if (ecran === 'amo-fond') {
+      poser('#fp-description', 'description');
+      poser('#fp-budget', 'budget_ht'); poser('#fp-budgetmax', 'budget_max');
+      choisir('#fp-debut', 'date_debut'); choisir('#fp-fin', 'date_fin');
+      return;
+    }
+
+    // Reste l'écran de cotation AMO : les matrices.
     corps.querySelectorAll('[data-crit]').forEach(td => {
       const coter = () => {
         const cle = td.dataset.crit; const n = Number(td.dataset.score);
-        if (v.mission === 'amo') v.cotesAmo[cle] = v.cotesAmo[cle] === n ? null : n;
-        else if (v.cotes[cle] === n) delete v.cotes[cle]; else v.cotes[cle] = n;
+        v.cotesAmo[cle] = v.cotesAmo[cle] === n ? null : n;
         dessine();
       };
       td.onclick = coter;
@@ -586,7 +677,8 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
     client: nomComplet() || '—', telephone: v.telephone, email: v.email,
     adresse_client: [v.cl_adresse, v.cl_cp, v.cl_ville].filter(Boolean).join(', '),
     canal: v.canal, profil: v.profil,
-    type_bien: v.type_bien, annee: v.annee, surface: v.surface, occupation: v.occupation,
+    type_bien: v.type_bien, annee: v.annee, surface: v.surface, pieces: v.pieces,
+    occupation: v.occupation,
     adresse: [v.adresse, v.code_postal, v.ville].filter(Boolean).join(', '),
     motifs: v.motifs, description: v.description,
     apparition: v.apparition, evolution: v.evolution, sinistre: v.sinistre,
@@ -607,7 +699,13 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
   });
 
   async function enregistrer(fermer) {
-    if (!v.nom.trim()) { v.pas = 1; dessine(); return toast('Le nom du client est nécessaire', 'warn'); }
+    if (!v.nom.trim()) {
+      // ⚠ PAS « v.pas = 1 » : l'identification n'est plus la première étape.
+      // On revient sur l'écran qui porte le champ manquant, quel que soit
+      // son rang dans le métier courant.
+      v.pas = ECRANS().indexOf('identification') + 1;
+      dessine(); return toast('Le nom du client est nécessaire', 'warn');
+    }
     const niv = niveauRetenu();
     const champsClient = {
       last_name: v.nom.trim() || null, first_name: v.prenom.trim() || null,

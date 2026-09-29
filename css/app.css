@@ -1736,6 +1736,27 @@ tr.btp-mission .btp-pts { color: var(--m-encre); }
 
 .mf-grille { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 13px 14px; margin-bottom: 16px; }
 .mf-grille .mail-champ.plein { grid-column: 1 / -1; }
+/* Une rangee SERREE, pour loger cinq champs courts sur une ligne : type de
+   bien, annee, surface, nombre de pieces, occupation (29/09/2026, demande de
+   Mickael a l'ajout des pieces). A 210 px de minimum la cinquieme tombait
+   seule a la ligne suivante ; a 165 px les cinq tiennent dans la fenetre de
+   1040 px, et la grille se replie d'elle-meme en dessous. */
+.mf-grille.mf-grille-serree { grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); }
+
+/* ---- Le tarif de l'expertise ----
+   Il se lit d'un coup : le prix en grand, ce qui l'explique en petit dessous.
+   La teinte est celle du metier, comme le reste de la fiche projet. */
+.fp-tarif { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 22px;
+  padding: 14px 18px; margin-bottom: 16px; border-radius: 12px;
+  border: 1px solid var(--m, var(--line)); background: var(--m-clair, var(--card-2)); }
+.fp-tarif-prix { display: flex; align-items: baseline; gap: 8px; }
+.fp-tarif-prix b { font-family: var(--font-display); font-size: 27px; letter-spacing: -.02em;
+  color: var(--m-encre, var(--text)); }
+.fp-tarif-prix span { font-size: 12.5px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--muted); }
+.fp-tarif-note { flex: 1 1 240px; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+.fp-tarif-note b { color: var(--text); }
+.fp-tarif.est-vide { border-style: dashed; background: none; }
 
 .mf-bloc-titre { margin: 4px 0 10px; font-size: 10.5px; font-weight: 700; letter-spacing: .07em;
   text-transform: uppercase; color: var(--muted-2); }

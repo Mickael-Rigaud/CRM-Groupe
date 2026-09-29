@@ -209,6 +209,71 @@ export const TYPOLOGIE_EXPERTISE = [
   ['Avis sur pièces', 'Analyse de devis, photos, factures, plans, rapports et échanges, avec limites explicites.'],
 ];
 
+// ---- La grille tarifaire de l'expertise -------------------------------------
+//
+// ⚠ TABLE PROVISOIRE : elle ne porte pour l'instant que les PLANCHERS de
+// l'offre commerciale (29/09/2026). Mickael doit fournir la grille complète,
+// et `grille` est l'endroit prévu pour la recevoir — rien d'autre ne sera à
+// changer, ni dans le formulaire ni dans la fiche.
+//
+// ⚠ LES PRIX SONT TTC, comme l'offre montrée au client, alors que le montant
+// d'une affaire (`deals.amount`) est un HT. Les deux ne se confondent jamais :
+// `tarifExpertise` rend le TTC et le HT qui en découle, étiquetés, et c'est
+// l'écran qui dit lequel il affiche.
+//
+// ⚠ TANT QUE `grille` EST VIDE, LE PRIX EST UN PLANCHER, et l'écran doit le
+// dire : un « à partir de » présenté comme un devis ferait annoncer un prix
+// qu'on ne tiendra pas.
+export const TARIFS_EXPERTISE = {
+  // Ce que l'offre affiche aujourd'hui, par prestation.
+  planchers: { exp_preachat: 900, exp_desordres: 1200, exp_reception: 750 },
+  // La grille définitive se pose ici. Une ligne :
+  //   { prestation, surfaceMax, piecesMax, prix }
+  // `surfaceMax` et `piecesMax` sont des BORNES HAUTES, `null` = sans limite ;
+  // la première ligne qui contient le bien l'emporte, donc on les range du
+  // plus petit au plus grand.
+  grille: [],
+};
+
+// Un nombre lu dans un champ libre : « 95 m² », « 95m2 », « environ 95 ».
+// ⚠ La surface et le nombre de pièces se saisissent à la main, au téléphone :
+// exiger un nombre pur ferait perdre l'information plutôt que de la ranger.
+export const nombreLu = (v) => {
+  const m = String(v ?? '').replace(',', '.').match(/\d+(?:\.\d+)?/);
+  return m ? Number(m[0]) : null;
+};
+
+/**
+ * Le tarif d'une expertise, d'après la prestation et le bien.
+ *
+ * Rend `null` tant qu'aucune prestation n'est choisie — un prix sans
+ * prestation n'a pas de sens, et afficher un montant par défaut ferait lire un
+ * devis que personne n'a établi.
+ */
+export function tarifExpertise({ prestation, surface, pieces } = {}) {
+  const cle = cleNiveau(prestation);
+  if (!cle || !(cle in TARIFS_EXPERTISE.planchers)) return null;
+
+  const s = nombreLu(surface);
+  const p = nombreLu(pieces);
+  const tient = (borne, valeur) => borne == null || (valeur != null && valeur <= borne);
+
+  const ligne = TARIFS_EXPERTISE.grille.find((l) => cleNiveau(l.prestation) === cle
+    && tient(l.surfaceMax, s) && tient(l.piecesMax, p));
+
+  const ttc = ligne ? ligne.prix : TARIFS_EXPERTISE.planchers[cle];
+  return {
+    ttc,
+    // ⚠ LE HT EST UN CALCUL, PAS UNE DONNÉE : il découle du TTC au taux en
+    // vigueur. L'écran le présente comme une suggestion, jamais comme le
+    // montant retenu — c'est une saisie humaine qui tranche.
+    ht: Math.round((ttc / (1 + TVA_TAUX / 100)) * 100) / 100,
+    plancher: !ligne,
+    surfaceLue: s,
+    piecesLues: p,
+  };
+}
+
 export const OFFRE_EXPERTISE_NOTE = "Tarifs TTC « à partir de », établis selon la nature de la mission, la surface du bien, la complexité du dossier et le lieu d'intervention. Un devis est établi avant toute intervention.";
 
 // §4 — la grille de qualification du V6 : six critères là où le V5 en donnait cinq,
@@ -263,7 +328,13 @@ export const FICHE_EXPERTISE = {
     "Attestations d'assurance", 'Autres'],
   controles: ['RC Pro du chargé valide', 'Habilitation suffisante', 'Zone compatible',
     'Capacité disponible', 'Lettre de mission à envoyer'],
-  occupation: ['Occupé par le propriétaire', 'Loué', 'Vacant', 'Non déterminé'],
+  // ⚠ CETTE LISTE MÊLE DEUX CHOSES, ET C'EST VOULU (29/09/2026, demande de
+  // Mickael). Les quatre premières disent qui occupe le bien ; les trois
+  // dernières disent où en est l'ACHAT. Pour une expertise pré-achat, la
+  // seconde question est la vraie : le client n'occupe rien encore, et
+  // l'étape de la transaction commande le délai comme l'accès au bien.
+  occupation: ['Occupé par le propriétaire', 'Loué', 'Vacant', 'Non déterminé',
+    'Offre d’achat', 'Compromis signé', 'Achat'],
 };
 
 // §36 G — la grille de qualification. Chaque critère désigne un niveau, il n'y a pas
