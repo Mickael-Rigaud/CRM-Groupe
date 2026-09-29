@@ -203,9 +203,8 @@ function vueFiches(liste, ouverte, etat) {
               </button>`).join('')}
           </div>`).join('') : '<div class="empty">Aucune fiche ne correspond.</div>'}
       </div>
-      <div class="at-planche" id="at-planche">
-        ${ouverte ? '' : `<div class="empty">Choisissez une fiche dans l'index.<br>
-          <span class="small muted">La planche s'ouvre ici, et reste affichée pendant que vous en comparez d'autres.</span></div>`}
+      <div class="at-planche${ouverte ? '' : ' est-sommaire'}" id="at-planche">
+        ${ouverte ? '' : sommaire()}
       </div>
     </div>`;
 }
@@ -240,6 +239,50 @@ function vueSignaux() {
           ${s.a_noter ? `<p class="at-signal-l"><em>À noter et photographier</em>${esc(s.a_noter)}</p>` : ''}
           ${s.dire_au_client ? `<p class="at-signal-dire">« ${esc(s.dire_au_client)} »</p>` : ''}
         </div>`).join('')}
+    </div>`;
+}
+
+// ---------------------------------------------------------------- Le sommaire
+//
+// ⚠ C'EST LA PREMIÈRE CHOSE QU'ON VOIT, ET CE N'ÉTAIT PAS LE CAS (29/09/2026,
+// demandé par Mickael : « je veux retrouver le sommaire du début »). L'écran
+// s'ouvrait sur « Choisissez une fiche dans l'index » et une colonne étroite
+// qu'il fallait faire défiler : l'atlas papier, lui, commence par une page qui
+// montre les cinquante d'un coup, rangées par famille. C'est comme ça qu'on
+// trouve un symptôme dont on ne connaît pas encore le nom.
+//
+// ⚠ IL NE PORTE AUCUN CONTENU NEUF : familles, numéros et titres viennent des
+// mêmes lignes que l'index de gauche. Rien à importer, rien à tenir à jour en
+// double — une fiche ajoutée en base apparaît aux deux endroits.
+function sommaire() {
+  const l = fiches();
+  if (!l.length) return '';
+  return `
+    <div class="at-somm">
+      <div class="at-somm-tete">
+        <h3>Sommaire des ${l.length} fiches</h3>
+        <p class="muted small">Cliquez un symptôme pour ouvrir sa planche. Elle restera affichée
+          pendant que vous en comparez d'autres.</p>
+      </div>
+      <div class="at-somm-grille">
+        ${parFamille(l).map(([famille, fs]) => `
+          <div class="at-somm-fam">
+            <div class="at-somm-fam-titre">${esc(famille)} <span>${fs.length}</span></div>
+            ${fs.map(f => `
+              <button type="button" class="at-somm-ligne" data-fiche="${f.numero}">
+                <span class="at-num">${num(f.numero)}</span>
+                <span>${esc(f.titre)}</span>
+              </button>`).join('')}
+          </div>`).join('')}
+      </div>
+      <!-- Le code couleur est imprimé sur chaque planche ; le rappeler ici
+           evite d'ouvrir une fiche pour se souvenir de ce que veut dire une
+           couleur. Trois mots chacun, ce qu'il faut FAIRE et rien d'autre. -->
+      <div class="at-somm-code">
+        <span class="at-code at-code-v">Vert — surveiller, planifier l'entretien</span>
+        <span class="at-code at-code-o">Orange — chercher la cause avant d'intervenir</span>
+        <span class="at-code at-code-r">Rouge — sécuriser et appeler un spécialiste</span>
+      </div>
     </div>`;
 }
 

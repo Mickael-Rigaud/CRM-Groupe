@@ -3651,6 +3651,27 @@ textarea.ev-nu { resize: vertical; min-height: 40px; }
   background: var(--card-2); border-radius: 12px; padding: 14px; }
 .at-img { max-width: 100%; max-height: 74vh; border-radius: 8px; box-shadow: 0 1px 6px rgba(0,0,0,.14); }
 
+/* Le sommaire : la page qui ouvre l'atlas papier, les cinquante fiches d'un
+   coup rangees par famille. Le conteneur passe en bloc — centrer une page de
+   sommaire comme on centre une image la tasserait au milieu. */
+.at-planche.est-sommaire { display: block; background: transparent; padding: 0; }
+.at-somm-tete h3 { margin: 0 0 3px; font-size: 17px; text-transform: none; letter-spacing: 0; color: var(--text); }
+.at-somm-tete p { margin: 0 0 16px; }
+.at-somm-grille { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
+.at-somm-fam { border: 1px solid var(--line); border-radius: 10px; padding: 11px 12px; }
+.at-somm-fam-titre { font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .07em;
+  color: var(--accent-ink); margin-bottom: 6px; display: flex; gap: 6px; align-items: baseline; }
+.at-somm-fam-titre span { color: var(--muted); font-weight: 700; }
+.at-somm-ligne { display: flex; gap: 8px; align-items: baseline; width: 100%; text-align: left;
+  padding: 5px 6px; border: 0; border-radius: 7px; background: transparent; cursor: pointer;
+  font: inherit; font-size: 12.5px; line-height: 1.35; color: var(--text); }
+.at-somm-ligne:hover { background: var(--accent-soft); color: var(--accent-ink); }
+.at-somm-code { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.at-code { font-size: 12px; font-weight: 600; padding: 5px 11px; border-radius: 999px; }
+.at-code-v { background: color-mix(in srgb, var(--green) 14%, transparent); color: var(--green); }
+.at-code-o { background: color-mix(in srgb, var(--amber) 16%, transparent); color: var(--amber); }
+.at-code-r { background: color-mix(in srgb, var(--red) 12%, transparent); color: var(--red); }
+
 /* Les signaux d'alerte : ce ne sont pas des fiches, ils ne se presentent pas
    comme elles. Un liseré rouge, et ce qu'on doit FAIRE avant tout le reste. */
 .at-signaux { display: flex; flex-direction: column; gap: 12px; }
