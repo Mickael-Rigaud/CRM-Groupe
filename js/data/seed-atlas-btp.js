@@ -14,7 +14,18 @@
 
 // Une planche factice : le numéro, un titre, et trois bandes qui évoquent la
 // mise en page d'une fiche sans en reproduire aucune.
-const planche = (n, titre, teinte) => 'data:image/svg+xml;utf8,' + encodeURIComponent(
+// ⚠ LE BAS DE LA PLANCHE DOIT DIRE LA MÊME CHOSE QUE LA PASTILLE. Les six
+// planches annonçaient « VERT · surveiller » en dur : dès que la fiche a porté
+// un niveau d'alerte, la vignette contredisait l'index sur quatre fiches sur
+// six — et c'est exactement l'écran où l'on vient vérifier ce qu'annonce la
+// couleur. En démo comme en production, les deux viennent de la même valeur.
+const NIVEAU = {
+  vert:   { fond: '#e9f7ee', encre: '#1c7a41', texte: 'VERT · surveiller et planifier' },
+  orange: { fond: '#fff4e5', encre: '#a35a00', texte: 'ORANGE · chercher la cause' },
+  rouge:  { fond: '#fdecea', encre: '#a32a1f', texte: 'ROUGE · sécuriser, appeler un spécialiste' },
+};
+
+const planche = (n, titre, teinte, alerte) => 'data:image/svg+xml;utf8,' + encodeURIComponent(
   `<svg xmlns="http://www.w3.org/2000/svg" width="900" height="1350" viewBox="0 0 900 1350">
     <rect width="900" height="1350" fill="#ffffff"/>
     <rect width="900" height="150" fill="${teinte}"/>
@@ -26,24 +37,30 @@ const planche = (n, titre, teinte) => 'data:image/svg+xml;utf8,' + encodeURIComp
     <rect x="48" y="750" width="804" height="120" rx="10" fill="#f6f7f9"/>
     <rect x="48" y="900" width="804" height="200" rx="10" fill="#fff4e5"/>
     <text x="72" y="950" font-family="Arial" font-size="20" font-weight="bold" fill="#a35a00">Le jumeau à écarter</text>
-    <rect x="48" y="1140" width="804" height="90" rx="10" fill="#e9f7ee"/>
-    <text x="72" y="1195" font-family="Arial" font-size="20" font-weight="bold" fill="#1c7a41">VERT · surveiller et planifier</text>
+    <rect x="48" y="1140" width="804" height="90" rx="10" fill="${(NIVEAU[alerte] || { fond: '#f0f1f3' }).fond}"/>
+    <text x="72" y="1195" font-family="Arial" font-size="20" font-weight="bold" fill="${(NIVEAU[alerte] || { encre: '#6b6f76' }).encre}">${(NIVEAU[alerte] || { texte: "Niveau d'alerte non renseign\u00e9" }).texte}</text>
   </svg>`);
 
+// ⚠ LA FICHE 45 N'A VOLONTAIREMENT AUCUN NIVEAU D'ALERTE. C'est le seul
+// endroit où l'état « non renseigné » — pastille grise, planche neutre — peut
+// s'éprouver : en production les cinquante fiches en portent un, donc ce cas
+// ne se verrait qu'au jour où quelqu'un ajoute une fiche sans le remplir. Ne
+// pas « corriger » en lui donnant du vert : ce serait affirmer « à surveiller »
+// d'une fiche dont on ne sait rien.
 export const SEED_ATLAS_BTP = {
   btp_atlas_fiches: [
     { numero: 2, famille: 'Fissures et lézardes', titre: 'Micro-fissures en réseau sur enduit',
-      image: planche(2, 'Micro-fissures en réseau sur enduit', '#4b5bd6') },
+      image: planche(2, 'Micro-fissures en réseau sur enduit', '#4b5bd6', 'vert'), code_couleur: 'vert' },
     { numero: 5, famille: 'Fissures et lézardes', titre: 'Fissure horizontale en partie basse',
-      image: planche(5, 'Fissure horizontale en partie basse', '#4b5bd6') },
+      image: planche(5, 'Fissure horizontale en partie basse', '#4b5bd6', 'orange'), code_couleur: 'orange' },
     { numero: 14, famille: 'Béton et structure', titre: 'Plafond qui perd des fragments',
-      image: planche(14, 'Plafond qui perd des fragments', '#b4541f') },
+      image: planche(14, 'Plafond qui perd des fragments', '#b4541f', 'rouge'), code_couleur: 'rouge' },
     { numero: 19, famille: 'Humidité et infiltrations', titre: 'Bande humide en pied de mur',
-      image: planche(19, 'Bande humide en pied de mur', '#1d7fa3') },
+      image: planche(19, 'Bande humide en pied de mur', '#1d7fa3', 'orange'), code_couleur: 'orange' },
     { numero: 34, famille: 'Sols et revêtements', titre: 'Carrelage qui sonne creux',
-      image: planche(34, 'Carrelage qui sonne creux', '#6b6f76') },
+      image: planche(34, 'Carrelage qui sonne creux', '#6b6f76', 'vert'), code_couleur: 'vert' },
     { numero: 45, famille: 'Toitures et étanchéité', titre: 'Tuiles déplacées après coup de vent',
-      image: planche(45, 'Tuiles déplacées après coup de vent', '#2f7d4f') },
+      image: planche(45, 'Tuiles déplacées après coup de vent', '#2f7d4f', null) },
   ],
   btp_signaux_alerte: [
     { numero: 1, titre: "Fragments tombés d'un plafond", fiches: [14],

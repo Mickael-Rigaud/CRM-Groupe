@@ -3675,8 +3675,35 @@ textarea.ev-nu { resize: vertical; min-height: 40px; }
 /* Le sommaire : la page qui ouvre l'atlas papier, les cinquante fiches d'un
    coup rangees par famille. Le conteneur passe en bloc — centrer une page de
    sommaire comme on centre une image la tasserait au milieu. */
-.at-planche.est-sommaire { display: block; background: transparent; padding: 0; }
+/* ⚠ `.at-planche.est-sommaire` A ÉTÉ RETIRÉE le 29/09/2026 et ne doit pas
+   revenir : le sommaire n'est plus rendu DANS le panneau de droite (ce qui
+   doublait l'index de gauche), il remplace les deux colonnes tant qu'aucune
+   fiche n'est ouverte. Il n'y a donc plus de panneau à neutraliser. */
+
+/* Le retour au sommaire, en tête de l'index étroit. `align-self` explicite :
+   `.at-index` est un flex COLUMN, qui étire ses enfants sur toute la largeur —
+   le bouton faisait une barre pleine colonne. Même piège que sur les fiches
+   de poste RGD. */
+.at-retour { align-self: flex-start; padding: 5px 10px 5px 4px; border: 0; background: none;
+  font: inherit; font-size: 12.5px; font-weight: 600; color: var(--muted); cursor: pointer; border-radius: 7px; }
+.at-retour:hover { color: var(--accent-ink); background: var(--accent-soft); }
+
+/* ---- La pastille de niveau d'alerte ----
+   ⚠ ELLE NE RÉTRÉCIT JAMAIS : `flex: 0 0 auto` sur une ligne dont le titre
+   passe à la ligne, sans quoi elle s'écraserait en trait sur les titres longs
+   — et une pastille écrasée ne se distingue plus par sa couleur.
+   `translateY` parce que la ligne aligne les BASELINES : sans lui, le rond
+   pendait sous le numéro au lieu d'être en face. */
+.at-past { flex: 0 0 auto; width: 9px; height: 9px; border-radius: 50%; display: inline-block;
+  transform: translateY(1px); }
+.at-past-vert { background: var(--green); }
+.at-past-orange { background: var(--amber); }
+.at-past-rouge { background: var(--red); }
+/* Gris, et surtout PAS vert : une fiche sans niveau renseigné n'est pas une
+   fiche « à surveiller », c'est une fiche dont on ne sait rien. */
+.at-past-nul { background: var(--line); box-shadow: inset 0 0 0 1px var(--muted-2); }
 .at-somm-tete h3 { margin: 0 0 3px; font-size: 17px; text-transform: none; letter-spacing: 0; color: var(--text); }
+.at-somm-tete .at-q { max-width: 420px; margin-top: 2px; }
 .at-somm-tete p { margin: 0 0 16px; }
 .at-somm-grille { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
 .at-somm-fam { border: 1px solid var(--line); border-radius: 10px; padding: 11px 12px; }
@@ -3687,6 +3714,7 @@ textarea.ev-nu { resize: vertical; min-height: 40px; }
   padding: 5px 6px; border: 0; border-radius: 7px; background: transparent; cursor: pointer;
   font: inherit; font-size: 12.5px; line-height: 1.35; color: var(--text); }
 .at-somm-ligne:hover { background: var(--accent-soft); color: var(--accent-ink); }
+.at-somm-t { flex: 1 1 auto; min-width: 0; }
 /* Le code couleur vit a cote du titre : il sert a LIRE les planches, il doit
    donc etre vu AVANT d'en ouvrir une. En pied de sommaire on le lisait apres
    les cinquante fiches, c'est-a-dire trop tard. `margin-left: auto` le pousse
@@ -3696,10 +3724,11 @@ textarea.ev-nu { resize: vertical; min-height: 40px; }
 .at-somm-titre h3 { margin: 0; }
 .at-somm-code { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
 @media (max-width: 1100px) { .at-somm-code { margin-left: 0; } }
-.at-code { font-size: 12px; font-weight: 600; padding: 5px 11px; border-radius: 999px; }
-.at-code-v { background: color-mix(in srgb, var(--green) 14%, transparent); color: var(--green); }
-.at-code-o { background: color-mix(in srgb, var(--amber) 16%, transparent); color: var(--amber); }
-.at-code-r { background: color-mix(in srgb, var(--red) 12%, transparent); color: var(--red); }
+.at-code { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 600;
+  padding: 5px 11px; border-radius: 999px; }
+.at-code-vert { background: color-mix(in srgb, var(--green) 14%, transparent); color: var(--green); }
+.at-code-orange { background: color-mix(in srgb, var(--amber) 16%, transparent); color: var(--amber); }
+.at-code-rouge { background: color-mix(in srgb, var(--red) 12%, transparent); color: var(--red); }
 
 /* Les signaux d'alerte : ce ne sont pas des fiches, ils ne se presentent pas
    comme elles. Un liseré rouge, et ce qu'on doit FAIRE avant tout le reste. */
