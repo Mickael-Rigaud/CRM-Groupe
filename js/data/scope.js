@@ -134,6 +134,9 @@ export const scope = {
   // les autres (`has_activity('rgd')` en lecture ET en insertion), avec une
   // différence assumée : **ni UPDATE ni DELETE**. On ne retire pas une pierre
   // tombale — la retirer ressusciterait la fiche au relevé suivant.
+  // Miroir de `has_activity('btp')`, qui garde les deux tables de l'atlas
+  // (`btp_atlas_fiches`, `btp_signaux_alerte`) et le seau `btp-atlas`.
+  get canBtp() { return this.activityKeys.includes('btp'); },
   get canRgd() { return this.activityKeys.includes('rgd'); },
 
   // À quoi se reconnaît le propriétaire d'une ligne, table par table. Quatre

@@ -1,6 +1,7 @@
 // Jeu de données de démonstration (mode local uniquement).
 import { SEED_BROKERS } from './seed-vivier.js';
 import { SEED_VIVIER_BTP, SEED_VIVIER_BTP_EVENEMENTS } from './seed-vivier-btp.js';
+import { SEED_ATLAS_BTP } from './seed-atlas-btp.js';
 import { SEED_SITE, deplierSite } from './seed-site.js';
 const d = (offsetDays, h = 9) => {
   const x = new Date(); x.setHours(h, 0, 0, 0); x.setDate(x.getDate() + offsetDays); return x.toISOString();
@@ -123,6 +124,10 @@ export const SEED = {
   broker_profiles: SEED_BROKERS,
   btp_vivier: SEED_VIVIER_BTP,
   btp_vivier_evenements: SEED_VIVIER_BTP_EVENEMENTS,
+  // Atlas BTP : six fiches et deux signaux INVENTÉS. Le vrai contenu est
+  // sous licence et n'entre dans aucun dépôt — voir seed-atlas-btp.js.
+  btp_atlas_fiches: SEED_ATLAS_BTP.btp_atlas_fiches,
+  btp_signaux_alerte: SEED_ATLAS_BTP.btp_signaux_alerte,
   dtu_sheets: [
     // Une fiche reecrite par la veille et une simplement verifiee : sans les
     // deux, le bandeau n'etait essayable que sur la production.

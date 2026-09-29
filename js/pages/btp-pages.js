@@ -108,12 +108,6 @@ export const btpRapportAmoPage = page('#/btp/amo-rapport',
      'Le procès-verbal de réception et ses réserves'],
   ));
 
-export const btpAtlasPage = page('#/btp/atlas',
-  'BTP Expertise — Atlas visuels',
-  enAttente(
-    'Atlas visuels',
-    "Les images de référence du cabinet : un désordre qu'on reconnaît d'un coup d'œil vaut mieux qu'un paragraphe qui le décrit.",
-    ['Des photos de désordres classées par nature (fissures, humidité, charpente…)',
-     'Ce que chacune montre, et ce qu\'elle ne prouve pas',
-     'Les schémas repris dans les rapports'],
-  ));
+// ⚠ `btpAtlasPage` A QUITTÉ CE FICHIER pour `btp-atlas.js` : l'atlas a reçu
+// son contenu le 29/09/2026 et n'est plus un écran en attente. Les quatre
+// autres le restent tant que le cabinet n'a pas fourni leur matière.

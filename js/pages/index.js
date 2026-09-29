@@ -18,7 +18,8 @@ import { rgdFormationsPage } from './rgd-formations.js';
 import { rgdReglagesPage } from './rgd-reglages.js';
 import { btpHomePage, btpExpertisePage, btpAmoPage, btpChargesPage, btpBasePage, btpDtuPage, btpMailsPage, btpFacturationPage, btpVivierPage } from './btp.js';
 import { btpChecklistExpertisePage, btpRapportExpertisePage, btpChecklistAmoPage,
-         btpRapportAmoPage, btpAtlasPage } from './btp-pages.js';
+         btpRapportAmoPage } from './btp-pages.js';
+import { btpAtlasPage } from './btp-atlas.js';
 import { courtageHomePage, courtageBasePage, courtageVivierPage } from './courtage.js';
 import { messageriePage } from './messagerie.js';
 

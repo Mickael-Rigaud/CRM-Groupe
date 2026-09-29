@@ -1,0 +1,232 @@
+// Atlas visuel des pathologies — les 50 fiches et les 12 signaux d'alerte.
+//
+// À quoi sert cet écran : on est devant un mur, on voit une fissure, et il
+// faut décider en trente secondes si c'est de l'entretien, une cause à
+// chercher, ou un arrêt de chantier. La fiche répond ; le signal d'alerte dit
+// quand on n'a plus le droit de répondre soi-même.
+//
+// ⚠ LE CONTENU NE VIT PAS DANS CE DÉPÔT, ET C'EST POURQUOI L'ÉCRAN VA LE
+// CHERCHER EN BASE. L'atlas est un produit commercial tiers repris pour
+// l'usage interne du cabinet ; le dépôt du front est PUBLIC. Titres et textes
+// sont dans `btp_atlas_fiches` / `btp_signaux_alerte`, les planches dans le
+// seau PRIVÉ `btp-atlas`, servies par URL signée d'une heure. Rien de tout
+// cela n'est lisible sans un compte qui porte l'activité BTP.
+//
+// ⚠ LE JEU DE DÉMO EST INVENTÉ DE BOUT EN BOUT, planches comprises (des SVG
+// dessinés ici, donc sans réseau). Recopier trois vraies fiches « pour
+// montrer » les publierait sur GitHub aussi sûrement que les cinquante.
+//
+// ⚠ LE NUMÉRO DE FICHE EST UNE CLÉ, PAS UN RANG. La check-list renvoie aux
+// fiches par leur numéro imprimé (« 02 · 04 · 25 »), et ces numéros ne suivent
+// pas l'ordre des familles : « Fissures » va de 02 à 11, puis 13, 18 et 49.
+// L'écran range par famille et AFFICHE le numéro — il ne le recalcule jamais.
+import { db } from '../data/db.js';
+import { scope } from '../data/scope.js';
+import { esc, toast } from '../ui.js';
+import { poserEspace } from './espace.js';
+import { cadreBtp as cadre } from './btp.js';
+
+const KEY = 'btp';
+const SEAU = 'btp-atlas';
+
+const guard = (root) => {
+  if (scope.activityKeys.includes(KEY)) return false;
+  root.innerHTML = '<div class="card"><div class="empty">Vous n&rsquo;avez pas accès à l&rsquo;activité BTP Expertise.</div></div>';
+  return true;
+};
+
+const fiches = () => scope.canBtp ? db.t('btp_atlas_fiches') : [];
+const signaux = () => scope.canBtp ? db.t('btp_signaux_alerte') : [];
+
+// Les familles dans l'ordre du document d'origine, pas dans l'ordre
+// alphabétique : il va du structurel au cosmétique, et c'est l'ordre dans
+// lequel on regarde un bâtiment.
+const ORDRE_FAMILLES = [
+  'Fissures et lézardes', 'Béton et structure', 'Humidité et infiltrations',
+  'Enduits et peintures', 'Sols et revêtements', 'ITE et façades',
+  'Toitures et étanchéité',
+];
+const rangFamille = (f) => {
+  const i = ORDRE_FAMILLES.indexOf(f);
+  return i < 0 ? ORDRE_FAMILLES.length : i;   // une famille inconnue passe en fin, jamais devant
+};
+
+const parFamille = (liste) => {
+  const m = new Map();
+  for (const f of liste) {
+    if (!m.has(f.famille)) m.set(f.famille, []);
+    m.get(f.famille).push(f);
+  }
+  return [...m.entries()]
+    .sort((a, b) => rangFamille(a[0]) - rangFamille(b[0]))
+    .map(([famille, l]) => [famille, l.sort((x, y) => x.numero - y.numero)]);
+};
+
+const num = (n) => String(n).padStart(2, '0');
+
+// ---------------------------------------------------------------- La planche
+//
+// ⚠ L'URL EST SIGNÉE ET EXPIRE EN UNE HEURE : elle se demande à l'ouverture,
+// jamais à l'avance pour les cinquante. Charger cinquante URLs signées pour en
+// regarder une ferait cinquante appels et six mégaoctets d'images pour rien.
+async function ouvrirPlanche(root, fiche, dessine) {
+  const zone = root.querySelector('#at-planche');
+  if (!zone) return;
+  zone.innerHTML = '<div class="empty">Ouverture de la planche…</div>';
+  if (!fiche.image) {
+    zone.innerHTML = `<div class="empty">La planche de la fiche ${num(fiche.numero)} n'a pas encore été déposée.</div>`;
+    return;
+  }
+  try {
+    // ⚠ DEUX SORTES DE VALEURS DANS LA MÊME COLONNE, ET IL FAUT LES DISTINGUER.
+    // En production `image` est un CHEMIN dans le seau privé, qu'il faut faire
+    // signer. En démonstration c'est une adresse `data:` — une planche dessinée
+    // dans le jeu d'exemple, puisqu'il n'y a ni seau ni réseau. Passer la
+    // seconde à `fileUrl` la fait chercher dans un magasin de fichiers qui ne
+    // la connaît pas : « Fichier introuvable », et le cadre reste vide.
+    // Le test porte sur « c'est déjà une adresse », jamais sur « ce n'est pas
+    // un chemin » — la seconde formule laisserait passer une URL http un jour.
+    const brut = String(fiche.image);
+    const url = /^(data:|https?:)/.test(brut) ? brut : await db.fileUrl(brut, { bucket: SEAU });
+    zone.innerHTML = `<img src="${esc(url)}" alt="Fiche ${num(fiche.numero)} — ${esc(fiche.titre)}" class="at-img">`;
+  } catch (e) {
+    // Un cadre vide se lit comme « le CRM n'a pas repris la fiche » alors que
+    // c'est le FICHIER qui manque. On dit laquelle des deux — et on n'affiche
+    // pas l'adresse entière, qui peut faire plusieurs milliers de caractères.
+    zone.innerHTML = `<div class="empty">Planche introuvable dans le stockage
+      (${esc(String(fiche.image).slice(0, 60))}).<br>
+      <span class="small muted">${esc(e.message || '')}</span></div>`;
+  }
+}
+
+// ---------------------------------------------------------------- L'écran
+export const btpAtlasPage = {
+  title: () => 'BTP Expertise — Atlas visuels',
+  render(root) {
+    if (guard(root)) return {};
+    const coquille = poserEspace(root);
+    // `vue` : 'fiches' ou 'signaux'. `ouverte` : le numéro de fiche affiché.
+    const etat = { vue: 'fiches', ouverte: null, q: '' };
+
+    const dessine = () => {
+      const toutes = fiches();
+      const q = etat.q.trim().toLowerCase();
+      const filtrees = q
+        ? toutes.filter(f => f.titre.toLowerCase().includes(q) || String(f.numero) === q || num(f.numero) === q)
+        : toutes;
+      const ouverte = toutes.find(f => f.numero === etat.ouverte) || null;
+
+      root.innerHTML = cadre('#/btp/atlas', 'Atlas visuels', `
+        <div class="card">
+          <div class="card-head">
+            <h2>${etat.vue === 'fiches' ? 'Fiches de pathologie' : "Les 12 signaux d'alerte"}</h2>
+            <span class="grow"></span>
+            <div class="chips">
+              <button type="button" class="chip${etat.vue === 'fiches' ? ' on' : ''}" data-vue="fiches">Fiches (${toutes.length})</button>
+              <button type="button" class="chip${etat.vue === 'signaux' ? ' on' : ''}" data-vue="signaux">Signaux d'alerte (${signaux().length})</button>
+            </div>
+          </div>
+          ${etat.vue === 'fiches' ? vueFiches(filtrees, ouverte, etat) : vueSignaux()}
+        </div>`);
+
+      lier(root, etat, dessine);
+      if (etat.vue === 'fiches' && ouverte) ouvrirPlanche(root, ouverte, dessine);
+    };
+
+    dessine();
+    return { refresh: dessine, destroy: coquille.retirer };
+  },
+};
+
+// ⚠ DEUX COLONNES, ET LA PLANCHE À DROITE RESTE EN PLACE pendant qu'on
+// parcourt l'index : c'est la façon dont on s'en sert — on compare ce qu'on
+// voit sur le mur à deux ou trois fiches voisines avant de trancher. Une
+// galerie de vignettes obligerait à revenir en arrière à chaque essai.
+function vueFiches(liste, ouverte, etat) {
+  if (!liste.length && !etat.q) {
+    return `<div class="empty">Aucune fiche. Le contenu de l'atlas s'importe à la main :
+      il n'est pas dans le dépôt, c'est un document sous licence.</div>`;
+  }
+  return `
+    <div class="at-corps">
+      <div class="at-index">
+        <input class="at-q" id="at-q" type="search" placeholder="Chercher un symptôme ou un numéro…"
+               value="${esc(etat.q)}" aria-label="Chercher une fiche">
+        ${liste.length ? parFamille(liste).map(([famille, l]) => `
+          <div class="at-fam">
+            <div class="at-fam-titre">${esc(famille)}</div>
+            ${l.map(f => `
+              <button type="button" class="at-ligne${f.numero === etat.ouverte ? ' on' : ''}" data-fiche="${f.numero}">
+                <span class="at-num">${num(f.numero)}</span>
+                <span class="at-titre">${esc(f.titre)}</span>
+              </button>`).join('')}
+          </div>`).join('') : '<div class="empty">Aucune fiche ne correspond.</div>'}
+      </div>
+      <div class="at-planche" id="at-planche">
+        ${ouverte ? '' : `<div class="empty">Choisissez une fiche dans l'index.<br>
+          <span class="small muted">La planche s'ouvre ici, et reste affichée pendant que vous en comparez d'autres.</span></div>`}
+      </div>
+    </div>`;
+}
+
+// ⚠ LES SIGNAUX NE SONT PAS DES FICHES, et l'écran ne doit pas les présenter
+// comme telles. Une fiche explique ; un signal interrompt. D'où quatre blocs
+// nommés par ce qu'on doit FAIRE — tout de suite, noter, dire — et la phrase
+// au client rendue telle quelle : elle est écrite pour éviter à la fois
+// l'alarmisme et la promesse imprudente, la reformuler perdrait les deux.
+function vueSignaux() {
+  const l = signaux().slice().sort((a, b) => a.numero - b.numero);
+  if (!l.length) {
+    return `<div class="empty">Les douze signaux s'importent avec le contenu de l'atlas.</div>`;
+  }
+  return `
+    <p class="mf-aide attention" style="margin:0 0 14px">
+      Ces douze-là ne se règlent pas avec une fiche : le risque n'est pas esthétique,
+      il porte sur la stabilité ou la sécurité des personnes.
+      <b>On s'arrête, on sécurise, on documente, et on fait intervenir un spécialiste.</b>
+    </p>
+    <div class="at-signaux">
+      ${l.map(s => `
+        <div class="at-signal">
+          <div class="at-signal-tete">
+            <span class="at-signal-num">${num(s.numero)}</span>
+            <b>${esc(s.titre)}</b>
+            <span class="grow"></span>
+            ${(s.fiches || []).map(n => `<button type="button" class="chip accent" data-vers-fiche="${n}">Fiche ${num(n)}</button>`).join(' ')}
+          </div>
+          ${s.pourquoi ? `<p class="at-signal-l"><em>Pourquoi c'est grave</em>${esc(s.pourquoi)}</p>` : ''}
+          ${s.tout_de_suite ? `<p class="at-signal-l"><em>À faire tout de suite</em>${esc(s.tout_de_suite)}</p>` : ''}
+          ${s.a_noter ? `<p class="at-signal-l"><em>À noter et photographier</em>${esc(s.a_noter)}</p>` : ''}
+          ${s.dire_au_client ? `<p class="at-signal-dire">« ${esc(s.dire_au_client)} »</p>` : ''}
+        </div>`).join('')}
+    </div>`;
+}
+
+function lier(root, etat, dessine) {
+  root.querySelectorAll('[data-vue]').forEach(b => b.onclick = () => {
+    etat.vue = b.dataset.vue; dessine();
+  });
+  root.querySelectorAll('[data-fiche]').forEach(b => b.onclick = () => {
+    etat.ouverte = Number(b.dataset.fiche); dessine();
+  });
+  // Depuis un signal, on saute à sa fiche : c'est le geste naturel — on vient
+  // de lire « Fiche 14 », on veut la voir.
+  root.querySelectorAll('[data-vers-fiche]').forEach(b => b.onclick = () => {
+    const n = Number(b.dataset.versFiche);
+    if (!fiches().some(f => f.numero === n)) return toast(`La fiche ${num(n)} n'est pas encore importée`, 'warn');
+    etat.vue = 'fiches'; etat.ouverte = n; etat.q = ''; dessine();
+  });
+  // ⚠ LA RECHERCHE NE REDESSINE PAS À CHAQUE FRAPPE LE CHAMP LUI-MÊME : on
+  // relit, on redessine, puis on replace le curseur — sinon il saute au début
+  // au deuxième caractère.
+  const q = root.querySelector('#at-q');
+  if (q) {
+    q.oninput = () => {
+      etat.q = q.value;
+      const pos = q.selectionStart;
+      dessine();
+      const neuf = root.querySelector('#at-q');
+      if (neuf) { neuf.focus(); neuf.setSelectionRange(pos, pos); }
+    };
+  }
+}
