@@ -47,19 +47,46 @@ const activities = () => {
 // Les cinq écrans du cabinet, présentés comme le tableau de bord RGD Renova :
 // un menu vertical à gauche, le contenu à droite. « BTP Expertise » reste une ligne
 // du menu Pilotage du CRM ; cette coquille vit à l'intérieur de la page.
+// Le menu de l'espace, rangé par NATURE DE TRAVAIL (29/09/2026, découpage
+// donné par Mickael). Il était plat : neuf entrées à la file, où « DTU » — un
+// référentiel qu'on consulte — voisinait avec « Facturation », qu'on tient.
+//
+// ⚠ LE MENU NE FAIT QU'UN SEUL NIVEAU DE GROUPE, et le découpage demandé en
+// voulait deux (Missions → Expertise → Check-list, Rapport). Trois niveaux
+// d'indentation dans une colonne de 200 px se lisent mal, et `coquilleEspace`
+// ne sait pas les rendre. Quand la check-list et le rapport existeront, le
+// choix sera entre deux groupes « EXPERTISE » et « AMO » portant chacun ses
+// trois écrans, ou des onglets À L'INTÉRIEUR de l'écran du métier. À trancher
+// à ce moment-là, avec les écrans sous les yeux — pas avant.
+//
+// ⚠ LES ADRESSES RESTENT PLATES. Le routeur du CRM ne lit que deux segments
+// après le croisillon : `#/btp/expertise/checklist` n'irait nulle part, il
+// faudra `#/btp/checklist-expertise`. Le menu peut s'emboîter, pas l'adresse.
 const ONGLETS = [
   { hash: '#/btp', label: 'Tableau de bord' },
-  // Deux métiers, deux déroulés : chacun son écran, sous un intitulé commun.
+  // Deux métiers, deux déroulés, et qui les porte : c'est le travail du jour.
   { label: 'Missions', sous: [
     { hash: '#/btp/expertise', label: 'Expertise' },
     { hash: '#/btp/amo', label: 'AMO' },
+    { hash: '#/btp/charges', label: "Chargés d'affaires" },
   ] },
-  { hash: '#/btp/charges', label: "Chargés d'affaires" },
-  { hash: '#/btp/vivier', label: 'Vivier Experts & AMO' },
-  { hash: '#/btp/base', label: 'Base de données' },
-  { hash: '#/btp/dtu', label: 'DTU' },
-  { hash: '#/btp/facturation', label: 'Facturation' },
-  { hash: '#/btp/mails', label: 'Mails & modèles' },
+  // Ce qui alimente le cabinet : les clients à venir, et les gens à recruter.
+  { label: 'Prospection', sous: [
+    { hash: '#/btp/base', label: 'Base de données' },
+    { hash: '#/btp/vivier', label: 'Vivier Experts & AMO' },
+  ] },
+  // ⚠ REPLIÉ PAR DÉFAUT : ce sont des référentiels qu'on ouvre quand on en a
+  // besoin, pas tous les matins. Déplié, ce groupe repousse « Facturation »
+  // hors de vue sur une fenêtre courte — le défaut déjà corrigé côté RGD.
+  { label: 'Documentation', pliable: true, sous: [
+    { hash: '#/btp/dtu', label: 'DTU' },
+    { hash: '#/btp/mails', label: 'Mails & modèles' },
+  ] },
+  // `bas: true` le pousse au pied du menu, séparé par un trait : on n'ouvre pas
+  // la facturation pour travailler un dossier, on l'ouvre pour clore un mois.
+  { label: 'Autres', bas: true, sous: [
+    { hash: '#/btp/facturation', label: 'Facturation' },
+  ] },
 ];
 // Enveloppe un écran dans la coquille commune aux espaces de structure.
 const cadre = (actif, titre, corps) => coquilleEspace({
