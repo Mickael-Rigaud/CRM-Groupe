@@ -274,6 +274,69 @@ export function tarifExpertise({ prestation, surface, pieces } = {}) {
   };
 }
 
+// ---- Le schéma de repérage du bien ---------------------------------------
+// ⚠ CE N'EST PAS UN PLAN, ET LA DIFFÉRENCE EST LE FONDEMENT DE TOUT CE QUI
+// SUIT (29/09/2026). Le CRM connaît le type de bien, la surface et le nombre
+// de pièces ; il ne connaît NI la forme des murs, NI leur disposition. Dessiner
+// un plan reviendrait à dessiner un logement qui n'est pas celui du client, et
+// un plan faux dans un rapport d'expertise est pire que pas de plan.
+// Ce qu'on fabrique est une liste d'ESPACES à cocher, présentée en grille.
+//
+// ⚠ « N PIÈCES » AU SENS IMMOBILIER N'EST PAS « N ESPACES » : la cuisine, la
+// salle de bains et les WC ne comptent pas dans le nombre de pièces. 4 pièces
+// = séjour + 3 chambres. Générer quatre blocs anonymes pour 4 pièces aurait
+// donné un schéma où la moitié des désordres n'ont pas d'endroit où se poser.
+//
+// ⚠ ET BEAUCOUP DE DÉSORDRES NE SONT DANS AUCUNE PIÈCE : fissure de façade,
+// infiltration par la toiture, humidité de cave. Les annexes sont donc
+// toujours là, et elles dépendent du type de bien — une toiture n'est pas le
+// sujet d'un appartement, des parties communes ne sont pas celui d'une maison.
+export const ESPACES_SERVICE = ['Cuisine', 'Salle de bains', 'WC', 'Entrée / couloir'];
+export const ESPACES_ANNEXES = {
+  Appartement: ['Façade', 'Parties communes', 'Balcon / terrasse', 'Cave'],
+  Immeuble: ['Façade', 'Toiture', 'Parties communes', 'Sous-sol / cave', 'Extérieur'],
+  'Local pro': ['Façade', 'Toiture', 'Réserve / local technique', 'Extérieur'],
+  defaut: ['Façade', 'Toiture', 'Combles', 'Sous-sol / cave', 'Extérieur'],
+};
+
+// Les trois groupes du schéma. L'ordre est celui de la visite : on parcourt le
+// logement, puis on fait le tour du bâti.
+export const GROUPES_ESPACE = [
+  { cle: 'principal', titre: 'Pièces principales' },
+  { cle: 'service', titre: 'Pièces de service' },
+  { cle: 'annexe', titre: 'Annexes et bâti' },
+];
+
+// ⚠ TROIS NIVEAUX, PAS CINQ : c'est une qualification téléphonique, pas le
+// constat de l'expert. Une échelle fine ferait hésiter sur chaque ligne pour
+// une précision que personne n'a au moment où l'on remplit.
+export const GRAVITES = ['Léger', 'Moyen', 'Grave'];
+
+// Fabrique la liste des espaces d'un bien. `pieces` est le nombre au sens
+// immobilier ; sans lui on ne pose que le séjour, et l'écran dit pourquoi.
+export function espacesDuBien({ pieces, type_bien } = {}) {
+  const n = nombreLu(pieces);
+  const liste = [{ nom: 'Séjour', groupe: 'principal' }];
+  // n pièces = un séjour + (n-1) chambres. Plafonné à douze : au-delà c'est une
+  // saisie aberrante, et douze cartes tiennent encore à l'écran.
+  for (let i = 1; i <= Math.min(Math.max((n || 1) - 1, 0), 11); i += 1) {
+    liste.push({ nom: `Chambre ${i}`, groupe: 'principal' });
+  }
+  ESPACES_SERVICE.forEach(nom => liste.push({ nom, groupe: 'service' }));
+  (ESPACES_ANNEXES[type_bien] || ESPACES_ANNEXES.defaut)
+    .forEach(nom => liste.push({ nom, groupe: 'annexe' }));
+  return liste.map(e => ({ ...e, desordres: [], gravite: '', note: '' }));
+}
+
+// Ce que le schéma dit en une phrase, pour la fiche d'affaire et la feuille
+// imprimée. ⚠ Il est CALCULÉ à l'enregistrement et rangé dans la copie : la
+// fiche ne sait pas lire un tableau d'objets, et lui demander de le rendre
+// aurait mis la mise en forme à deux endroits.
+export const resumeEspaces = (espaces = []) => espaces
+  .filter(e => e.desordres?.length)
+  .map(e => `${e.nom} : ${e.desordres.join(', ')}${e.gravite ? ` (${e.gravite.toLowerCase()})` : ''}`)
+  .join(' · ');
+
 export const OFFRE_EXPERTISE_NOTE = "Tarifs TTC « à partir de », établis selon la nature de la mission, la surface du bien, la complexité du dossier et le lieu d'intervention. Un devis est établi avant toute intervention.";
 
 // §4 — la grille de qualification du V6 : six critères là où le V5 en donnait cinq,

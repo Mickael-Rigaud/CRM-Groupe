@@ -24,6 +24,7 @@ import {
   FICHE_EXPERTISE, FICHE_AMO, CRITERES_V5, coteBudget, coteDuree, coteLots,
   tauxSuggere, honorairesAmo, niveauSuggere, controleTaux, cleNiveau,
   tarifExpertise, TVA_TAUX, couleurMission, stagesDe,
+  espacesDuBien, resumeEspaces, GROUPES_ESPACE, GRAVITES, nombreLu,
 } from '../data/schema.js';
 import { champsHonoraires, resultatsHonoraires } from './btp-amo.js';
 
@@ -107,6 +108,14 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
     apparition: d.apparition || '', evolution: d.evolution || '', sinistre: d.sinistre || '',
     procedure: d.procedure || '', butoir: d.butoir || '', securite: d.securite || '',
     documents: d.documents || [], controles: d.controles || [],
+    // ⚠ LE SCHÉMA REPREND LES MOTIFS DÉJÀ ENREGISTRÉS PLUTÔT QUE DE LES
+    // JETER (29/09/2026). Avant lui, les désordres étaient une liste à plat sur
+    // l'affaire, sans endroit ; repartir d'un schéma vierge aurait effacé en
+    // silence ce qui avait été saisi sur toutes les missions en cours. Ils
+    // atterrissent dans un espace « Non localisé », qui DIT que l'information
+    // manque au lieu de l'inventer à un endroit plausible.
+    espaces: d.espaces || null,
+    espaceOuvert: null,
     cotes: d.cotesBrutes || {},
     niveau: cleNiveau(f.niveau) || null,
     tarif: existing?.amount ?? '',
@@ -324,6 +333,113 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
     ${barre()}`;
   };
 
+  // ------------------------------------------------------ le schéma du bien
+  // ⚠ LES ESPACES SE FABRIQUENT AU RENDU, PAS À L'OUVERTURE : le nombre de
+  // pièces se saisit à l'étape Mission, le schéma se lit à l'étape suivante.
+  // Les figer à l'ouverture aurait montré le bien d'avant la saisie.
+  //
+  // ⚠ ON N'AJOUTE QUE, ON NE RETIRE JAMAIS CE QUI PORTE QUELQUE CHOSE. Passer
+  // le bien de 5 à 3 pièces après avoir repéré un désordre dans la chambre 4
+  // effacerait ce désordre sans un mot — et une faute de frappe dans un champ
+  // numérique est vite arrivée. Un espace VIDE en trop disparaît, lui : il n'y
+  // a rien à perdre, et laisser des chambres fantômes allonge le schéma.
+  const espacesAJour = () => {
+    const voulus = espacesDuBien({ pieces: v.pieces, type_bien: v.type_bien });
+    if (!v.espaces) {
+      v.espaces = voulus;
+      // La reprise des anciennes saisies : voir le commentaire de `espaces`.
+      if (v.motifs.length) {
+        v.espaces.push({ nom: 'Non localisé', groupe: 'annexe', repris: true,
+          desordres: [...v.motifs], gravite: '', note: '' });
+      }
+      return v.espaces;
+    }
+    const parNom = new Map(v.espaces.map(e => [e.nom, e]));
+    const garde = e => e.desordres?.length || e.note?.trim() || e.ajoute || e.repris;
+    const suite = voulus.map(e => parNom.get(e.nom) || e);
+    v.espaces.forEach(e => { if (!suite.includes(e) && garde(e)) suite.push(e); });
+    v.espaces = suite;
+    return v.espaces;
+  };
+
+  // Les désordres de l'affaire sont l'UNION de ceux des espaces, jamais une
+  // seconde liste. ⚠ `fields.problematique` en découle, et il est lu par la
+  // recherche et par les mails types : deux listes auraient fini par ne plus
+  // dire la même chose, et c'est celle-ci qui sort du CRM.
+  const motifsDesEspaces = () => [...new Set((v.espaces || []).flatMap(e => e.desordres || []))];
+
+  const compteEspaces = () => {
+    const touches = (v.espaces || []).filter(e => e.desordres?.length);
+    return { espaces: touches.length, desordres: touches.reduce((n, e) => n + e.desordres.length, 0) };
+  };
+
+  const carteEspace = (e, i) => {
+    const n = e.desordres?.length || 0;
+    return `<button type="button" class="fp-espace ${n ? 'a-desordre' : ''} ${v.espaceOuvert === i ? 'ouvert' : ''}"
+      data-espace="${i}" aria-expanded="${v.espaceOuvert === i}">
+      <span class="fp-espace-nom">${esc(e.nom)}</span>
+      ${n ? `<span class="fp-espace-pastille">${n}</span>` : ''}
+      ${n ? `<span class="fp-espace-liste">${esc(e.desordres.join(', '))}</span>` : ''}
+      ${e.gravite ? `<span class="fp-espace-grav g-${esc(e.gravite.toLowerCase())}">${esc(e.gravite)}</span>` : ''}
+    </button>`;
+  };
+
+  // ⚠ LE PANNEAU S'OUVRE DANS LA PAGE, JAMAIS EN MODALE : `openModal` ferme
+  // celle qui est ouverte avant d'ouvrir la suivante, donc une fenêtre par
+  // espace ferait disparaître le formulaire entier au premier clic. Le piège
+  // est déjà écrit trois fois dans ce dépôt.
+  const panneauEspace = () => {
+    const i = v.espaceOuvert;
+    const e = v.espaces[i];
+    if (!e) return '';
+    return `
+    <div class="fp-panneau" style="${teinte()}">
+      <div class="fp-panneau-tete">
+        <b>${esc(e.nom)}</b>
+        <button type="button" class="fp-panneau-x" data-fermer-espace aria-label="Fermer">×</button>
+      </div>
+      <div class="fa-chips" data-desordres="${i}">
+        ${FICHE_EXPERTISE.motifs.map(m => `
+          <button type="button" class="fa-chip ${e.desordres.includes(m) ? 'on' : ''}" data-val="${esc(m)}">${esc(m)}</button>`).join('')}
+      </div>
+      <div class="fp-panneau-bas">
+        <div class="fa-chips" data-gravite="${i}">
+          <span class="fp-panneau-lbl">Gravité</span>
+          ${GRAVITES.map(g => `
+            <button type="button" class="fa-chip ${e.gravite === g ? 'on' : ''}" data-val="${esc(g)}">${esc(g)}</button>`).join('')}
+        </div>
+        <label class="mail-champ plein"><span>Ce qu'on observe ici</span>
+          <input id="fp-note-espace" value="${esc(e.note || '')}"
+            placeholder="Fissure en escalier au-dessus de la fenêtre, 1,5 m"></label>
+      </div>
+    </div>`;
+  };
+
+  const blocPlan = () => {
+    const espaces = espacesAJour();
+    const c = compteEspaces();
+    const indices = new Map(espaces.map((e, i) => [e, i]));
+    return `
+    <div class="fp-plan-tete">
+      <span>${v.pieces ? `${esc(v.pieces)} pièce${nombreLu(v.pieces) > 1 ? 's' : ''}` : 'Nombre de pièces non renseigné'}${
+        v.surface ? ` · ${esc(v.surface)}` : ''}${v.type_bien ? ` · ${esc(v.type_bien)}` : ''}</span>
+      <span class="fp-plan-compte">${c.desordres
+        ? `${c.desordres} désordre${c.desordres > 1 ? 's' : ''} dans ${c.espaces} espace${c.espaces > 1 ? 's' : ''}`
+        : 'Aucun désordre repéré'}</span>
+    </div>
+    ${GROUPES_ESPACE.map(g => {
+      const liste = espaces.filter(e => e.groupe === g.cle);
+      if (!liste.length) return '';
+      return `<div class="fp-plan-groupe">${esc(g.titre)}</div>
+        <div class="fp-plan" style="${teinte()}">${liste.map(e => carteEspace(e, indices.get(e))).join('')}</div>`;
+    }).join('')}
+    <div class="fp-plan-pied">
+      <button type="button" class="btn ghost" id="fp-ajout-espace">+ Ajouter un espace</button>
+      ${v.pieces ? '' : '<em class="mf-champ-aide">Renseignez le nombre de pièces à l’étape Mission pour que les chambres apparaissent.</em>'}
+    </div>
+    ${v.espaceOuvert !== null ? panneauEspace() : ''}`;
+  };
+
   // ------------------------------------------------- 2. le desordre et le tarif
   // ⚠ LE TARIF SE CALCULE, IL NE SE DEVINE PAS. `tarifExpertise` lit la
   // prestation, la surface et le nombre de pieces, et rend `null` tant qu'aucune
@@ -350,8 +466,8 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
   const ecranDesordreTarif = () => {
     const t = tarifExpertise({ prestation: v.niveau, surface: v.surface, pieces: v.pieces });
     return `
-    <div class="mf-bloc-titre">D. Motif de la demande</div>
-    ${chips('motifs', FICHE_EXPERTISE.motifs)}
+    <div class="mf-bloc-titre">D. Où sont les désordres ?</div>
+    ${blocPlan()}
     <div class="mf-grille">
       <label class="mail-champ plein"><span>Description libre du problème</span>
         <textarea id="fp-description" rows="3" placeholder="Ce que le client décrit, dans ses mots.">${esc(v.description)}</textarea></label>
@@ -613,6 +729,53 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
     }
 
     if (ecran === 'desordre') {
+      // ⚠ OUVRIR UN ESPACE REDESSINE L'ÉCRAN, donc on relit d'abord la note en
+      // cours de frappe : `poser` n'écrit qu'au `input`, mais le panneau
+      // disparaît avec le redessin et la saisie partirait avec lui.
+      const noteCourante = () => {
+        const ch = corps.querySelector('#fp-note-espace');
+        if (ch && v.espaces[v.espaceOuvert]) v.espaces[v.espaceOuvert].note = ch.value;
+      };
+      corps.querySelectorAll('[data-espace]').forEach(b => b.onclick = () => {
+        noteCourante();
+        const i = Number(b.dataset.espace);
+        v.espaceOuvert = v.espaceOuvert === i ? null : i;
+        dessine();
+      });
+      corps.querySelector('[data-fermer-espace]')?.addEventListener('click', () => {
+        noteCourante(); v.espaceOuvert = null; dessine();
+      });
+      const grille = corps.querySelector('[data-desordres]');
+      if (grille) {
+        const e = v.espaces[Number(grille.dataset.desordres)];
+        grille.querySelectorAll('.fa-chip').forEach(b => b.onclick = () => {
+          noteCourante();
+          const m = b.dataset.val;
+          e.desordres = e.desordres.includes(m) ? e.desordres.filter(x => x !== m) : [...e.desordres, m];
+          dessine();
+        });
+      }
+      const grav = corps.querySelector('[data-gravite]');
+      if (grav) {
+        const e = v.espaces[Number(grav.dataset.gravite)];
+        grav.querySelectorAll('.fa-chip').forEach(b => b.onclick = () => {
+          noteCourante();
+          e.gravite = e.gravite === b.dataset.val ? '' : b.dataset.val;
+          dessine();
+        });
+      }
+      const note = corps.querySelector('#fp-note-espace');
+      if (note) note.oninput = () => { v.espaces[v.espaceOuvert].note = note.value; };
+      corps.querySelector('#fp-ajout-espace')?.addEventListener('click', () => {
+        noteCourante();
+        // `ajoute: true` le protège du ménage : un espace créé à la main est
+        // voulu, même vide, et le regenerer ne le retrouverait pas.
+        v.espaces.push({ nom: `Espace ${v.espaces.length + 1}`, groupe: 'annexe',
+          ajoute: true, desordres: [], gravite: '', note: '' });
+        v.espaceOuvert = v.espaces.length - 1;
+        dessine();
+        corps.querySelector('#fp-note-espace')?.focus();
+      });
       poser('#fp-description', 'description');
       poser('#fp-apparition', 'apparition'); poser('#fp-evolution', 'evolution');
       poser('#fp-sinistre', 'sinistre'); poser('#fp-procedure', 'procedure');
@@ -697,7 +860,8 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
     type_bien: v.type_bien, annee: v.annee, surface: v.surface, pieces: v.pieces,
     occupation: v.occupation,
     adresse: [v.adresse, v.code_postal, v.ville].filter(Boolean).join(', '),
-    motifs: v.motifs, description: v.description,
+    motifs: motifsDesEspaces(), description: v.description,
+    espaces: v.espaces || [], espaces_resume: resumeEspaces(v.espaces || []),
     apparition: v.apparition, evolution: v.evolution, sinistre: v.sinistre,
     procedure: v.procedure, butoir: v.butoir, securite: v.securite,
     documents: v.documents, controles: v.controles,
@@ -754,7 +918,7 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
         code_postal: v.code_postal.trim() || null,
         ville: v.ville.trim() || null,
         detail: v.description.trim() || null,
-        problematique: (v.mission === 'amo' ? v.travaux : v.motifs).join(', ') || null,
+        problematique: (v.mission === 'amo' ? v.travaux : motifsDesEspaces()).join(', ') || null,
         date_visite: v.date_visite || null,
         date_rapport: v.date_rapport || null,
         montant_travaux: v.mission === 'amo' ? (Number(v.budget_ht) || null) : null,
@@ -762,7 +926,7 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
         urgence: v.mission === 'expertise' && !!String(v.securite || '').trim() && !/aucun|non|rien/i.test(v.securite),
         decouverte: copie(),
       };
-      const titre = `${(v.mission === 'amo' ? v.travaux[0] : v.motifs[0]) || (v.mission === 'amo' ? 'AMO' : 'Expertise')} — ${nomComplet()}`;
+      const titre = `${(v.mission === 'amo' ? v.travaux[0] : motifsDesEspaces()[0]) || (v.mission === 'amo' ? 'AMO' : 'Expertise')} — ${nomComplet()}`;
       const maintenant = new Date().toISOString();
 
       let id;

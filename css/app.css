@@ -1743,6 +1743,53 @@ tr.btp-mission .btp-pts { color: var(--m-encre); }
    1040 px, et la grille se replie d'elle-meme en dessous. */
 .mf-grille.mf-grille-serree { grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); }
 
+/* ---- Le schema de reperage du bien ----
+   Une grille de cartes, une par espace. Ce n'est PAS un plan : les cartes ne
+   sont pas a l'echelle et leur position ne dit rien du logement — voir le
+   commentaire de `espacesDuBien` dans schema.js. La carte porte tout ce qui
+   permet de lire le schema sans l'ouvrir : le nom, le compte, les desordres
+   et la gravite. */
+.fp-plan-tete { display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+  margin-bottom: 10px; font-size: 12px; color: var(--muted); }
+.fp-plan-compte { font-weight: 700; color: var(--text); }
+.fp-plan-groupe { font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em;
+  color: var(--muted-2); margin: 12px 0 7px; }
+.fp-plan { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.fp-espace { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; text-align: left;
+  position: relative; min-height: 62px; padding: 10px 12px; cursor: pointer;
+  border: 1px solid var(--line-strong); border-radius: 10px; background: var(--card);
+  font: inherit; color: var(--text); transition: border-color .12s, background .12s; }
+.fp-espace:hover { border-color: var(--m); }
+/* Un espace qui porte un desordre se voit AVANT d'etre lu : c'est ce qu'on
+   vient chercher en ouvrant l'ecran. */
+.fp-espace.a-desordre { border-color: var(--m); background: var(--m-clair); }
+.fp-espace.ouvert { box-shadow: inset 0 0 0 2px var(--m); }
+.fp-espace-nom { font-size: 13px; font-weight: 650; padding-right: 22px; }
+.fp-espace-pastille { position: absolute; top: 8px; right: 9px; min-width: 18px; height: 18px;
+  display: inline-flex; align-items: center; justify-content: center; padding: 0 5px;
+  border-radius: 999px; background: var(--m); color: #fff; font-size: 11px; font-weight: 800; }
+.fp-espace-liste { font-size: 11.5px; line-height: 1.35; color: var(--muted); }
+.fp-espace-grav { align-self: flex-start; padding: 1px 8px; border-radius: 999px;
+  font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; }
+.fp-espace-grav.g-leger { background: var(--green-soft, #e8f5ec); color: var(--green, #1c7c3f); }
+.fp-espace-grav.g-moyen { background: var(--amber-soft, #fdf1dc); color: var(--amber, #9a6412); }
+.fp-espace-grav.g-grave { background: var(--red-soft, #fdeaea); color: var(--red, #b3261e); }
+.fp-plan-pied { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+
+/* Le panneau de saisie d'un espace. Il s'ouvre DANS la page et non en modale :
+   openModal remplacerait le formulaire entier (piege deja documente). */
+.fp-panneau { margin-top: 12px; padding: 13px 14px 4px; border: 1px solid var(--m);
+  border-radius: 12px; background: var(--m-clair); }
+.fp-panneau-tete { display: flex; justify-content: space-between; align-items: center; margin-bottom: 9px; }
+.fp-panneau-tete b { font-size: 14px; color: var(--m-encre); }
+.fp-panneau-x { border: 0; background: none; cursor: pointer; font-size: 20px; line-height: 1;
+  color: var(--muted); padding: 0 4px; }
+.fp-panneau-x:hover { color: var(--text); }
+.fp-panneau-bas { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; margin-top: 4px; }
+.fp-panneau-bas .mail-champ { flex: 1 1 280px; }
+.fp-panneau-lbl { align-self: center; margin-right: 4px; font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .05em; color: var(--muted-2); }
+
 /* ---- Le tarif de l'expertise ----
    Il se lit d'un coup : le prix en grand, ce qui l'explique en petit dessous.
    La teinte est celle du metier, comme le reste de la fiche projet. */

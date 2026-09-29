@@ -39,6 +39,12 @@ export const CHAMPS_DECOUVERTE = [
   // deux ne coexistent jamais sur une même affaire, d'où deux lignes et non un
   // intitulé commun qui ne dirait ni l'un ni l'autre.
   { cle: 'motifs', label: 'Motifs de la demande', rubrique: 'projet', liste: true },
+
+  // ⚠ LE SCHÉMA SE LIT ICI SOUS SA FORME RÉSUMÉE, pas sous sa forme brute :
+  // `espaces` est un tableau d'objets que la fiche ne sait pas rendre, et lui
+  // apprendre à le faire aurait mis la mise en forme à deux endroits.
+  // `espaces_resume` est calculé à l'enregistrement par `resumeEspaces()`.
+  { cle: 'espaces_resume', label: 'Où sont les désordres', rubrique: 'projet', long: true },
   { cle: 'travaux', label: 'Travaux envisagés', rubrique: 'projet', liste: true },
   { cle: 'description', label: 'Description', rubrique: 'projet', long: true },
 
