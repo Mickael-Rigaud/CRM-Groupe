@@ -76,6 +76,26 @@ const parFamille = (liste) => {
 
 const num = (n) => String(n).padStart(2, '0');
 
+// ⚠ UNE ICÔNE PAR THÉMATIQUE, ET C'EST CE QUI LES REND RECONNAISSABLES.
+// Les trois cartes étaient trois rectangles blancs avec un chiffre gris : rien
+// ne distinguait « Signaux d'alerte » de « Visites guidées » avant d'en avoir
+// lu le titre. Un dessin se reconnaît avant d'être lu, et sur un écran qu'on
+// rouvre tous les jours c'est ce qui fait gagner le clic.
+//
+// Dessinées ici, en trait : aucune bibliothèque à charger, elles héritent de
+// la couleur du texte (`currentColor`) donc elles suivent l'état de la carte.
+const ICONES = {
+  // des planches empilées : l'atlas
+  fiches: '<rect x="3" y="4" width="13" height="16" rx="2"/><path d="M8 20h11a2 2 0 0 0 2-2V8"/><path d="M7 9h5M7 13h5"/>',
+  // le triangle : on s'arrête
+  signaux: '<path d="M12 4 2.7 20h18.6L12 4Z"/><path d="M12 10v4"/><path d="M12 17.2v.1"/>',
+  // trois jalons reliés : un parcours, pas un catalogue
+  visites: '<circle cx="5" cy="6" r="2"/><circle cx="12" cy="18" r="2"/><circle cx="19" cy="6" r="2"/><path d="M7 6.6c3 .6 3 4.2 4.4 9.6M14 17c1.8-5 2-9 4-10.2"/>',
+};
+const icone = (cle) => `<svg class="fm-icone" viewBox="0 0 24 24" aria-hidden="true"
+  fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"
+  stroke-linejoin="round">${ICONES[cle] || ''}</svg>`;
+
 // ------------------------------------------------------- Le niveau d'alerte
 //
 // ⚠ LA COULEUR DIT QUOI FAIRE, elle ne classe pas la gravité pour le plaisir :
@@ -252,18 +272,26 @@ export const btpAtlasPage = {
                   : vueFiches(filtrees, ouverte, etat);
 
       root.innerHTML = cadre('#/btp/atlas', 'Formation', `
-        <div class="fm-themes" role="tablist" aria-label="Th\u00e9matiques de la formation">
-          ${THEMES.map(o => `
-            <button type="button" class="fm-theme${etat.vue === o.cle ? ' on' : ''}"
-              data-vue="${o.cle}" role="tab" aria-selected="${etat.vue === o.cle}">
-              <span class="fm-theme-n">${o.n}</span>
-              <span class="fm-theme-t">
-                <b>${esc(o.titre)}</b>
-                <span>${esc(o.quoi)}</span>
-              </span>
-            </button>`).join('')}
+        <!-- \u26a0 LE CHOIX SE FAIT SUR FOND PROFOND, LE CONTENU SUR FOND CLAIR.
+             L'\u00e9cran \u00e9tait uniform\u00e9ment blanc : trois cartes p\u00e2les au-dessus
+             d'une quatri\u00e8me, rien ne disait o\u00f9 l'on choisissait et o\u00f9 l'on
+             lisait. Deux zones de valeur oppos\u00e9e donnent cette lecture sans
+             un mot, et la carte du contenu vient \u00e0 cheval dessus. -->
+        <div class="fm-barre">
+          <div class="fm-themes" role="tablist" aria-label="Th\u00e9matiques de la formation">
+            ${THEMES.map(o => `
+              <button type="button" class="fm-theme${etat.vue === o.cle ? ' on' : ''}"
+                data-vue="${o.cle}" role="tab" aria-selected="${etat.vue === o.cle}">
+                ${icone(o.cle)}
+                <span class="fm-theme-t">
+                  <b>${esc(o.titre)}</b>
+                  <span>${esc(o.quoi)}</span>
+                </span>
+                <span class="fm-theme-n">${o.n}</span>
+              </button>`).join('')}
+          </div>
         </div>
-        <div class="card">
+        <div class="card fm-contenu">
           ${scope.isDirection && !db.demo ? `
             <div class="card-head">
               <span class="grow"></span>
@@ -570,6 +598,10 @@ function vueVisites(etat) {
           ${liste.map((v, i) => `
             <button type="button" class="vg-carte est-${esc(v.code_couleur || 'nul')}"
                     data-visite="${v.numero}" style="--rang:${i}">
+              <!-- Le num\u00e9ro en filigrane : il donne \u00e0 la carte un point
+                   d'accroche et rappelle qu'on parcourt une s\u00e9rie. Il est
+                   d\u00e9coratif, le jeton lisible reste au-dessus. -->
+              <span class="vg-fond" aria-hidden="true">${num(v.numero)}</span>
               <span class="vg-carte-tete">
                 ${jeton(v)}
                 <span class="vg-lieu">${esc(v.ville || '')}</span>
@@ -597,10 +629,18 @@ function unCas(v, liste, etat) {
   const avant = i > 0 ? liste[i - 1] : null;
   const apres = i >= 0 && i < liste.length - 1 ? liste[i + 1] : null;
   const a = ALERTE[v.code_couleur];
+  // \u26a0 LES SIX \u00c9TAPES SONT UNE FRISE, PAS SIX ENCADR\u00c9S. Six cartes
+  // identiques empil\u00e9es se lisent comme six rubriques ind\u00e9pendantes ; un
+  // trait qui les relie dit qu'elles se SUIVENT \u2014 et c'est tout ce que la
+  // m\u00e9thode enseigne. Le trait est port\u00e9 par le conteneur, pas par les
+  // \u00e9tapes : sur la derni\u00e8re il s'arr\u00eaterait au milieu du num\u00e9ro.
   const etape = (n, titre, corps, classe = '') => `
     <section class="vg-etape ${classe}">
-      <div class="vg-etape-tete"><span class="vg-etape-n">${n}</span><h4>${esc(titre)}</h4></div>
-      ${corps}
+      <div class="vg-etape-tete">
+        <span class="vg-etape-n">${n}</span>
+        <h4>${esc(titre)}</h4>
+      </div>
+      <div class="vg-etape-corps">${corps}</div>
     </section>`;
   const puces = (l) => `<ul class="vg-puces">${(l || []).map(x => `<li>${esc(x)}</li>`).join('')}</ul>`;
   // ⚠ UN RENVOI VERS UNE FICHE NON IMPORTÉE NE DOIT PAS ÊTRE UN LIEN MORT :
@@ -634,7 +674,7 @@ function unCas(v, liste, etat) {
       </div>
 
       <div class="vg-corps">
-        <div class="vg-colonne">
+        <div class="vg-colonne vg-frise">
           ${etape(1, 'La demande',
             `<blockquote class="vg-citation">${esc(v.demande || '')}</blockquote>
              <p class="vg-note">Les mots du client : ils contiennent souvent d\u00e9j\u00e0 l\u2019indice d\u00e9cisif.</p>`)}
@@ -650,7 +690,11 @@ function unCas(v, liste, etat) {
         </div>
 
         <div class="vg-colonne">
+          <!-- ⚠ LA PHOTO EST HORS DE LA FRISE : ce n'est pas une étape du
+               raisonnement, et le trait qui relie les étapes la longeait sur
+               toute sa hauteur comme si elle en était une. -->
           ${v.image ? `<div class="vg-photo" id="vg-photo"></div>` : ''}
+          <div class="vg-frise">
           ${etape(5, 'Le diagnostic', `
             ${a ? `<span class="at-niveau at-niveau-${v.code_couleur}">${esc(a.mot)} \u00b7 ${esc(a.phrase)}</span>` : ''}
             <p>${esc(v.diagnostic || '')}</p>
@@ -659,6 +703,7 @@ function unCas(v, liste, etat) {
           ${etape(6, 'Ce qu\u2019on \u00e9crit au client', `
             <blockquote class="vg-rapport">${esc(v.extrait_rapport || '')}</blockquote>
             <button type="button" class="at-raz vg-copier" data-copier="${v.numero}">Copier ce paragraphe</button>`)}
+          </div>
           <div class="vg-double">
             ${v.erreur ? `<div class="vg-erreur"><em>L\u2019erreur \u00e0 ne pas faire</em>${esc(v.erreur)}</div>` : ''}
             ${v.lecon ? `<div class="vg-lecon"><em>La le\u00e7on</em>${esc(v.lecon)}</div>` : ''}

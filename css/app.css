@@ -3712,26 +3712,49 @@ textarea.ev-nu { resize: vertical; min-height: 40px; }
    une phrase : « Signaux d'alerte » et « Visites guidees » ne disent pas
    d'eux-memes ce qu'on y trouve, et c'est un ecran de FORMATION — il commence
    par dire ce qu'on y apprend. */
-.fm-themes { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
-  gap: 12px; margin-bottom: 16px; }
+/* ⚠ LE CHOIX SE FAIT SUR FOND PROFOND, LE CONTENU SUR FOND CLAIR (29/09/2026,
+   « je n'aime toujours pas la presentation ni le design, trop fade »).
+   L'ecran etait uniformement blanc : trois cartes pales posees sur une
+   quatrieme, sans qu'aucune valeur ne distingue l'endroit ou l'on CHOISIT de
+   celui ou l'on LIT. Deux zones opposees donnent cette lecture sans un mot.
+
+   La teinte vient de l'activite (`--accent-ink` de BTP Expertise), jamais
+   d'une couleur en dur : c'est la regle de tout le CRM, et le meme bloc doit
+   pouvoir servir a une autre structure. */
+.fm-barre { background: linear-gradient(140deg,
+    var(--accent-ink) 0%,
+    color-mix(in srgb, var(--accent-ink) 82%, #000) 100%);
+  border-radius: 18px 18px 0 0; padding: 18px 18px 40px; }
+.fm-themes { display: grid; grid-template-columns: repeat(auto-fit, minmax(216px, 1fr)); gap: 12px; }
+
+/* ⚠ LA CARTE AU REPOS EST TRANSLUCIDE, PAS GRISE : posee sur un fond profond,
+   un gris franc ferait une tache terne. Elle emprunte au fond ce qu'il faut
+   pour rester lisible. */
 .fm-theme { display: flex; align-items: center; gap: 12px; text-align: left; cursor: pointer;
-  padding: 13px 15px; border: 1px solid var(--line); border-radius: 14px; background: var(--card);
-  font: inherit; color: var(--text);
-  transition: border-color .18s, box-shadow .18s, transform .18s, background .18s; }
-.fm-theme:hover { border-color: color-mix(in srgb, var(--accent) 38%, var(--line));
-  box-shadow: 0 6px 22px -12px color-mix(in srgb, var(--accent) 55%, transparent);
+  padding: 13px 15px; border-radius: 14px; font: inherit;
+  border: 1px solid rgba(255,255,255,.16); background: rgba(255,255,255,.08); color: #fff;
+  transition: background .18s, border-color .18s, transform .18s, box-shadow .18s; }
+.fm-theme:hover { background: rgba(255,255,255,.16); border-color: rgba(255,255,255,.32);
   transform: translateY(-2px); }
-/* La thematique ouverte prend la couleur de la structure : c'est le seul
-   reperage qui reste une fois qu'on a fait defiler la page. */
-.fm-theme.on { border-color: var(--accent); background: var(--accent-soft); }
-.fm-theme-n { flex: 0 0 auto; display: grid; place-items: center; min-width: 38px; height: 38px;
-  border-radius: 11px; background: var(--card-2); color: var(--muted);
-  font-family: var(--font-display); font-size: 17px; font-weight: 800; font-variant-numeric: tabular-nums; }
-.fm-theme.on .fm-theme-n { background: var(--accent); color: #fff; }
-.fm-theme-t { display: flex; flex-direction: column; min-width: 0; }
+/* Celle qui est ouverte passe en blanc plein : c'est elle qui « tient » la
+   carte de contenu juste en dessous, et le lien doit se voir. */
+.fm-theme.on { background: var(--card); border-color: var(--card); color: var(--text);
+  box-shadow: 0 10px 26px -12px rgba(0,0,0,.5); }
+
+.fm-icone { flex: 0 0 auto; width: 26px; height: 26px; opacity: .92; }
+.fm-theme.on .fm-icone { color: var(--accent); opacity: 1; }
+.fm-theme-t { display: flex; flex-direction: column; min-width: 0; flex: 1 1 auto; }
 .fm-theme-t b { font-size: 13.5px; line-height: 1.25; }
-.fm-theme-t span { font-size: 11.5px; line-height: 1.35; color: var(--muted); }
-.fm-theme.on .fm-theme-t span { color: var(--accent-ink); }
+.fm-theme-t span { font-size: 11.5px; line-height: 1.35; opacity: .72; }
+.fm-theme.on .fm-theme-t span { opacity: 1; color: var(--muted); }
+.fm-theme-n { flex: 0 0 auto; font-family: var(--font-display); font-size: 21px; font-weight: 800;
+  font-variant-numeric: tabular-nums; opacity: .5; letter-spacing: -.02em; }
+.fm-theme.on .fm-theme-n { opacity: 1; color: var(--accent); }
+
+/* ⚠ LA CARTE DU CONTENU VIENT A CHEVAL SUR LA BARRE (marge negative) : c'est
+   ce qui rattache visuellement ce qu'on lit a la thematique qu'on a choisie.
+   Sans le chevauchement, les deux blocs se juxtaposent sans se repondre. */
+.fm-contenu { margin-top: -26px; border-radius: 18px; box-shadow: 0 12px 34px -20px rgba(17,21,28,.4); }
 
 /* ---- La liste des visites ----
    ⚠ LA CARTE MONTRE LA VILLE ET LE BIEN, pas seulement le titre : « la
@@ -3740,43 +3763,91 @@ textarea.ev-nu { resize: vertical; min-height: 40px; }
    propre chantier dans le cas. Le lisere gauche porte le niveau d'alerte. */
 .vg-grille { display: grid; grid-template-columns: repeat(auto-fill, minmax(268px, 1fr));
   gap: 14px; align-items: start; }
-.vg-carte { display: flex; flex-direction: column; gap: 7px; text-align: left; cursor: pointer;
-  padding: 13px 15px; border: 1px solid var(--line); border-left: 4px solid var(--line);
+
+/* ⚠ LA CARTE MONTRE LA VILLE ET LE BIEN, pas seulement le titre : « la
+   fissure au-dessus de la porte » ne dit pas si c'est une maison des annees
+   70 ou un parking des annees 60, et c'est ce qui fait qu'on reconnait son
+   propre chantier dans le cas.
+
+   Le lisere gauche porte le niveau d'alerte, et le NUMERO EN FILIGRANE donne
+   a la carte un point d'accroche : sans lui, vingt rectangles blancs alignes
+   n'ont aucun relief. Il est purement decoratif (aria-hidden), le jeton
+   lisible reste au-dessus. */
+.vg-carte { position: relative; overflow: hidden; display: flex; flex-direction: column; gap: 7px;
+  text-align: left; cursor: pointer; padding: 14px 16px;
+  border: 1px solid var(--line); border-left: 5px solid var(--line-strong);
   border-radius: 14px; background: var(--card); font: inherit; color: var(--text);
   animation: at-monte .32s cubic-bezier(.2,.8,.3,1) both;
   animation-delay: calc(var(--rang, 0) * 32ms);
   transition: border-color .18s, box-shadow .18s, transform .18s; }
-.vg-carte:hover { box-shadow: 0 8px 26px -14px rgba(0,0,0,.45); transform: translateY(-2px); }
+.vg-carte:hover { box-shadow: 0 10px 30px -16px rgba(17,21,28,.55); transform: translateY(-3px); }
 .vg-carte.est-vert { border-left-color: var(--green); }
 .vg-carte.est-orange { border-left-color: var(--amber); }
 .vg-carte.est-rouge { border-left-color: var(--red); }
+/* ⚠ IL EST COUPE PAR LE BORD, volontairement : pose entierement dans la
+   carte il venait toucher le titre, et un chiffre decoratif qui gene la
+   lecture du titre a rate sa cible. */
+.vg-fond { position: absolute; right: -10px; top: -26px; font-family: var(--font-display);
+  font-size: 80px; font-weight: 800; line-height: 1; letter-spacing: -.05em;
+  color: var(--line); opacity: .5; pointer-events: none; transition: opacity .18s, color .18s; }
+.vg-carte:hover .vg-fond { opacity: .9; }
+.vg-carte.est-vert:hover .vg-fond { color: color-mix(in srgb, var(--green) 26%, var(--line)); }
+.vg-carte.est-orange:hover .vg-fond { color: color-mix(in srgb, var(--amber) 26%, var(--line)); }
+.vg-carte.est-rouge:hover .vg-fond { color: color-mix(in srgb, var(--red) 26%, var(--line)); }
+.vg-carte > *:not(.vg-fond) { position: relative; }
 .vg-carte-tete { display: flex; align-items: center; gap: 9px; }
 .vg-lieu { font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em;
   color: var(--muted-2); }
-.vg-carte-t { font-size: 14px; line-height: 1.3; }
+.vg-carte-t { font-size: 14.5px; line-height: 1.3; }
 .vg-carte-c { font-size: 12px; line-height: 1.4; color: var(--muted); }
-.vg-carte-vs { font-size: 11px; color: var(--muted-2); margin-top: 2px; }
+.vg-carte-vs { font-size: 11px; color: var(--muted-2); margin-top: 3px;
+  padding-top: 8px; border-top: 1px dashed var(--line); }
 .vg-carte-vs span { font-weight: 700; color: var(--accent-ink); }
 
 /* ---- Un cas ----
    ⚠ LES SIX ETAPES SONT NUMEROTEES ET DANS L'ORDRE, jamais reorganisees
    « pour que ca tienne mieux a l'ecran » : l'ordre EST l'enseignement. Mettre
    le diagnostic en haut donnerait la reponse avant la question. */
-.vg-cas { display: flex; flex-direction: column; gap: 16px; }
+.vg-cas { display: flex; flex-direction: column; gap: 18px; }
 .vg-corps { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
-  gap: 18px; align-items: start; }
+  gap: 22px; align-items: start; }
 .vg-colonne { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
-.vg-etape { border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; background: var(--card); }
-.vg-etape-tete { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-.vg-etape-tete h4 { margin: 0; font-size: 13px; font-weight: 800; text-transform: uppercase;
-  letter-spacing: .07em; color: var(--muted-2); }
-.vg-etape-n { flex: 0 0 auto; display: grid; place-items: center; width: 24px; height: 24px;
-  border-radius: 50%; background: var(--accent-soft); color: var(--accent-ink);
-  font-size: 12px; font-weight: 800; }
-.vg-etape p { margin: 0 0 8px; font-size: 13.5px; line-height: 1.55; }
-.vg-etape.est-vert { border-color: color-mix(in srgb, var(--green) 30%, var(--line)); }
-.vg-etape.est-orange { border-color: color-mix(in srgb, var(--amber) 32%, var(--line)); }
-.vg-etape.est-rouge { border-color: color-mix(in srgb, var(--red) 30%, var(--line)); }
+
+/* ⚠ LES SIX ETAPES SONT UNE FRISE, PAS SIX ENCADRES. Six cartes identiques
+   empilees se lisent comme six rubriques independantes ; un trait qui les
+   relie dit qu'elles se SUIVENT — et c'est tout ce que la methode enseigne.
+   Mettre le diagnostic en haut « pour que ca tienne mieux » donnerait la
+   reponse avant la question et reduirait le cas a une fiche.
+
+   ⚠ LE TRAIT EST PORTE PAR LE CONTENEUR, JAMAIS PAR CHAQUE ETAPE : pose sur
+   l'etape, il depasserait sous la derniere, dans le vide. */
+.vg-frise { position: relative; display: flex; flex-direction: column; }
+.vg-frise::before { content: ''; position: absolute; left: 15px; top: 18px; bottom: 18px;
+  width: 2px; border-radius: 2px;
+  background: linear-gradient(var(--accent-soft), color-mix(in srgb, var(--accent) 22%, transparent)); }
+.vg-etape { position: relative; padding: 4px 0 18px 46px; }
+.vg-etape-tete { display: flex; align-items: center; gap: 10px; margin-bottom: 9px; }
+.vg-etape-tete h4 { margin: 0; font-family: var(--font-display); font-size: 14.5px; font-weight: 700;
+  text-transform: none; letter-spacing: -.01em; color: var(--text); }
+/* Le numero est POSE SUR LE TRAIT : c'est lui le jalon, donc un disque plein
+   avec un anneau de fond pour qu'il « coupe » la ligne proprement. */
+.vg-etape-n { position: absolute; left: 0; top: 2px; display: grid; place-items: center;
+  width: 32px; height: 32px; border-radius: 50%; background: var(--accent); color: var(--on-accent);
+  font-family: var(--font-display); font-size: 14px; font-weight: 800;
+  box-shadow: 0 0 0 5px var(--card); }
+.vg-etape-corps { }
+.vg-etape p { margin: 0 0 8px; font-size: 13.5px; line-height: 1.6; }
+/* L'etape du diagnostic prend la couleur de sa decision : c'est le moment ou
+   l'on tranche, et il doit se voir dans la frise. */
+.vg-etape.est-vert .vg-etape-n { background: var(--green); }
+.vg-etape.est-orange .vg-etape-n { background: var(--amber); }
+.vg-etape.est-rouge .vg-etape-n { background: var(--red); }
+.vg-etape.est-vert .vg-etape-corps,
+.vg-etape.est-orange .vg-etape-corps,
+.vg-etape.est-rouge .vg-etape-corps { padding: 13px 15px; border-radius: 14px; }
+.vg-etape.est-vert .vg-etape-corps { background: var(--green-soft); }
+.vg-etape.est-orange .vg-etape-corps { background: var(--amber-soft); }
+.vg-etape.est-rouge .vg-etape-corps { background: var(--red-soft); }
 
 /* La phrase du client, telle qu'il l'a dite : elle contient souvent deja
    l'indice decisif, la reformuler le ferait disparaitre. */
@@ -3958,7 +4029,8 @@ textarea.ev-nu { resize: vertical; min-height: 40px; }
    doublait l'index de gauche), il remplace les deux colonnes. */
 .at-somm-tete { margin-bottom: 18px; }
 .at-somm-titre { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
-.at-somm-titre h3 { margin: 0; font-size: 18px; text-transform: none; letter-spacing: -.01em; color: var(--text); }
+.at-somm-titre h3 { margin: 0; font-family: var(--font-display); font-size: 21px; font-weight: 800;
+  text-transform: none; letter-spacing: -.02em; color: var(--text); }
 .at-somm-code { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
 @media (max-width: 1100px) { .at-somm-code { margin-left: 0; } }
 
@@ -4020,11 +4092,17 @@ textarea.ev-nu { resize: vertical; min-height: 40px; }
   transition: border-color .18s, box-shadow .18s, transform .18s; }
 .at-somm-fam:hover { border-color: color-mix(in srgb, var(--accent) 34%, var(--line));
   box-shadow: 0 6px 22px -12px color-mix(in srgb, var(--accent) 55%, transparent); transform: translateY(-2px); }
+/* ⚠ L'EN-TETE DE FAMILLE EST UN APLAT, PAS UN TRAIT GRIS. Sept cartes
+   blanches separees par sept traits gris clair : rien n'accrochait l'oeil et
+   on lisait le tableau ligne a ligne au lieu de reperer sa famille d'un coup.
+   L'aplat deborde le padding de la carte (marges negatives) pour aller
+   toucher ses bords. */
 .at-somm-fam-titre { display: flex; align-items: center; gap: 8px; font-size: 10px; font-weight: 800;
-  text-transform: uppercase; letter-spacing: .09em; color: var(--muted-2);
-  padding-bottom: 9px; margin-bottom: 6px; border-bottom: 1px solid var(--line); }
-.at-somm-fam-titre span { margin-left: auto; color: var(--accent-ink); font-weight: 800;
-  background: var(--accent-soft); border-radius: 999px; padding: 1px 8px; letter-spacing: 0; }
+  text-transform: uppercase; letter-spacing: .09em; color: var(--accent-ink);
+  margin: -13px -13px 9px; padding: 11px 13px; background: var(--accent-soft);
+  border-radius: 13px 13px 0 0; }
+.at-somm-fam-titre span { margin-left: auto; color: var(--on-accent); font-weight: 800;
+  background: var(--accent); border-radius: 999px; padding: 1px 8px; letter-spacing: 0; }
 .at-somm-ligne { display: flex; gap: 9px; align-items: flex-start; width: 100%; text-align: left;
   border: 0; background: none; font: inherit; font-size: 13px; color: var(--text);
   padding: 6px 8px; margin-bottom: 2px; border-radius: 9px; cursor: pointer;
@@ -4046,6 +4124,7 @@ textarea.ev-nu { resize: vertical; min-height: 40px; }
   .at-fleche:hover:not(:disabled), .at-retour:hover, .at-somm-ligne:hover .at-jeton,
   .at-signal:hover, .at-signal-fiche:hover,
   .fm-theme:hover, .vg-carte:hover, .vg-fiche-lien:hover { transform: none; }
+  .vg-carte:hover .vg-fond { opacity: .55; }
   .vg-carte { animation: none; }
 }
 
