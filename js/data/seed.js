@@ -336,20 +336,27 @@ export const SEED = {
   // distingue : un brouillon, un envoyé (le seul sur lequel le bouton a un
   // sens à deux reprises), un déjà signé (le bouton doit y DISPARAÎTRE) et un
   // refusé. ⚠ Numéros et objets inventés : le dépôt est public.
+  // ⚠ UN DEVIS SE RATTACHE À UNE PERSONNE **OU** À UNE ENTREPRISE, jamais
+  // seulement par son affaire : l'écran de synchronisation alerte sur les
+  // devis qui n'ont ni l'un ni l'autre, et sans ces deux colonnes la démo
+  // criait cette alerte sur ses quatre devis. Le troisième porte une
+  // `organisation_id` parce que c'est le cas réel le plus fréquent en
+  // production — SCI et sociétés — et celui qui avait fait lire l'alerte de
+  // travers le 28/09/2026.
   rgd_devis: [
-    { id: 'rdv1', deal_id: 'd1', numero: 'DEV-2026-201',
+    { id: 'rdv1', deal_id: 'd1', contact_id: 'c1', numero: 'DEV-2026-201',
       objet: 'Rénovation appartement — lot peinture',
       montant_ht: 9800, montant_ttc: 11760, statut: 'brouillon',
       date_creation: day(-3) },
-    { id: 'rdv2', deal_id: 'd2', numero: 'DEV-2026-118',
+    { id: 'rdv2', deal_id: 'd2', contact_id: 'c8', numero: 'DEV-2026-118',
       objet: 'Salle de bain complète',
       montant_ht: 11500, montant_ttc: 13800, statut: 'envoye',
       date_creation: day(-20), date_envoi: day(-8) },
-    { id: 'rdv3', deal_id: 'd3', numero: 'DEV-2026-097',
+    { id: 'rdv3', deal_id: 'd3', organisation_id: 'o4', numero: 'DEV-2026-097',
       objet: 'Réaménagement maison',
       montant_ht: 42000, montant_ttc: 50400, statut: 'signe',
       date_creation: day(-120), date_envoi: day(-95), date_signature: day(-80) },
-    { id: 'rdv4', deal_id: 'd4', numero: 'DEV-2026-205',
+    { id: 'rdv4', deal_id: 'd4', contact_id: 'c9', numero: 'DEV-2026-205',
       objet: 'Cuisine équipée',
       montant_ht: 15200, montant_ttc: 18240, statut: 'refuse',
       date_creation: day(-15), date_envoi: day(-12) },

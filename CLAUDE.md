@@ -196,11 +196,28 @@ COUP** pour la même charge : les contacts (`push_rgd`), les fiches
 (`push_rgd_clients`) et `clients_extra` (`push_rgd_rafraichir`) — n'en couper
 qu'une laisserait des contacts sans fiche. ⚠ **CE QUI EST PERDU, ET C'EST
 NOMMÉ** : un client créé **directement** chez Costructor, sans rendez-vous et
-sans e-mail connu, n'aura plus de fiche. **Ce trou existait AVANT la coupure** —
-10 des 41 devis signés sont déjà dans ce cas. On ne le bouche pas (laisser
+sans e-mail connu, n'aurait plus de fiche. On ne le bouche pas (laisser
 `costructor-devis` inventer une fiche créerait des clients pour les 59 devis
 supprimés et 30 refusés, et des doublons pour qui est connu sous une autre
 adresse) : **on le montre**, par une alerte sur `#/rgd/costructor`.
+⚠ **CE TROU EST VIDE, ET J'AVAIS DIT LE CONTRAIRE — corrigé le 29/09/2026.**
+J'avais écrit ici « 10 des 41 devis signés sont déjà dans ce cas », en comptant
+les `rgd_devis` sans `contact_id` : **13 lignes, dont 12 portent un
+`organisation_id`**. Ce sont des **ENTREPRISES** — SCI, SARL, commerces —, et le
+CRM range une entreprise dans `organisations`, jamais dans `contacts` : 194
+fiches `rgd_clients` = **162 personnes + 32 entreprises**, et une fiche
+d'entreprise n'a par construction aucun `contact_id`. Le treizième devis est un
+**brouillon à 0 €**. Mesuré ensuite chez Costructor, clé par clé, e-mail par
+e-mail, raison sociale par raison sociale : **zéro client sans fiche**. ⚠ **LA
+LEÇON N'EST PAS « J'AI MAL COMPTÉ »**, c'est qu'un modèle à deux tables se
+vérifie sur les deux : tester `!contact_id` seul donne une alerte fausse d'un
+facteur treize sur l'écran dont le métier est justement de dire ce qui manque.
+`costructor-clients` lit désormais `organisations(name,email)` en plus de
+`contacts`, et l'alerte de l'écran teste **les deux rattachements**. ⚠ **ET RIEN
+N'EST ÉCRIT TANT QUE LE COMPTEUR EST À ZÉRO** : une création de fiche qui ne
+s'exécute sur personne serait du code jamais éprouvé, posé sur le chemin le plus
+sensible de la base de référence. Le compteur (`clients_sans_fiche` au bilan de
+`costructor-clients`) est là pour dire le jour où il se remplit.
 
 ⚠ **UNE COUPURE INCOMPLÈTE RÉPARÉE AU PASSAGE** (`rafraichir_laisse_chantiers_et_devis`).
 `push_rgd_rafraichir` reposait encore, par sa propre porte, ce que `push_rgd`

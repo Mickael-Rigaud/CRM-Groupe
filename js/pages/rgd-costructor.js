@@ -85,10 +85,19 @@ export const rgdCostructorPage = {
       const ignores = scope.rgd('rgd_costructor_ignores');
 
       // ⚠ LE SEUL CHIFFRE DE CET ÉCRAN QUI NE VIENT PAS DE LA SYNCHRO ELLE-MÊME.
-      // Un devis sans `contact_id` n'est rattaché à aucune fiche : il compte
-      // dans les totaux mais n'apparaît sur aucun dossier. C'est la question
+      // Un devis rattaché ni à une personne ni à une entreprise n'apparaît sur
+      // aucun dossier, alors qu'il compte dans les totaux. C'est la question
       // qu'on vient poser ici quand un devis « n'est nulle part ».
-      const devisSansFiche = scope.rgd('rgd_devis').filter(d => !d.contact_id);
+      //
+      // ⚠ LES DEUX RATTACHEMENTS COMPTENT, ET NE TESTER QUE LE PREMIER DONNAIT
+      // UNE ALERTE FAUSSE (posée le 28/09/2026, corrigée le 29). Elle annonçait
+      // « 13 devis sans fiche, dont 10 signés » : douze d'entre eux sont des
+      // ENTREPRISES — SCI, SARL, commerces —, rattachées par `organisation_id`
+      // et parfaitement visibles sur leur fiche. Il en restait un, un brouillon
+      // à 0 €. Une alerte qui se trompe d'un facteur treize sur un écran de
+      // diagnostic fait chercher un problème qui n'existe pas.
+      const devisSansFiche = scope.rgd('rgd_devis')
+        .filter(d => !d.contact_id && !d.organisation_id);
       const signesSansFiche = devisSansFiche.filter(d => d.statut === 'signe').length;
 
       const enEchec = etats.filter(e => e.derniere_erreur);
@@ -114,8 +123,8 @@ export const rgdCostructorPage = {
         ${devisSansFiche.length ? `
         <div class="alert amber">
           <b>⚠</b>
-          <div><b>${devisSansFiche.length} devis n&rsquo;${devisSansFiche.length > 1 ? 'ont' : 'a'} aucune fiche client</b>
-          (dont ${signesSansFiche} signé${signesSansFiche > 1 ? 's' : ''}).
+          <div><b>${devisSansFiche.length} devis n&rsquo;${devisSansFiche.length > 1 ? 'ont' : 'a'} aucune fiche client</b>${
+            signesSansFiche ? ` (dont ${signesSansFiche} signé${signesSansFiche > 1 ? 's' : ''})` : ''}.
           Ce sont des clients créés directement dans Costructor, sans rendez-vous et
           sans adresse e-mail que le CRM connaisse : la recopie ne peut les rattacher
           à personne. Le devis est bien là, il n&rsquo;apparaît simplement sur aucune
