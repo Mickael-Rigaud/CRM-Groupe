@@ -24,9 +24,10 @@ import {
   FICHE_EXPERTISE, FICHE_AMO, CRITERES_V5, coteBudget, coteDuree, coteLots,
   tauxSuggere, honorairesAmo, niveauSuggere, controleTaux, cleNiveau,
   tarifExpertise, TVA_TAUX, couleurMission, stagesDe,
-  espacesDuBien, resumeEspaces, GROUPES_ESPACE, GRAVITES, nombreLu,
+  espacesDuBien, resumeEspaces, GRAVITES, nombreLu,
 } from '../data/schema.js';
 import { champsHonoraires, resultatsHonoraires } from './btp-amo.js';
+import { planSvg, DESSINES } from '../data/btp-plan.js';
 
 const KEY = 'btp';
 const CANAUX_COURANTS = ['Recommandation client', 'Ancien client', 'Téléphone / autre', 'Site internet direct', 'Prospection directe'];
@@ -415,27 +416,37 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
     </div>`;
   };
 
+  // ⚠ LE DESSIN NE PORTE QUE LES ESPACES QU'IL CONNAIT, et le reste tombe en
+  // cartes sous lui. Un espace ajouté à la main ou repris d'une ancienne saisie
+  // (« Non localisé ») n'a aucune place dans une coupe de maison : lui en
+  // inventer une le poserait à un endroit que personne n'a dit.
   const blocPlan = () => {
     const espaces = espacesAJour();
     const c = compteEspaces();
-    const indices = new Map(espaces.map((e, i) => [e, i]));
+    const dessines = DESSINES(v.type_bien);
+    // ⚠ LES PRINCIPALES ET LES SERVICES SONT DESSINÉS PAR LEUR GROUPE, les
+    // annexes par leur NOM : un filtre sur le seul nom aurait fait tomber TOUTES
+    // les pièces dans « hors du schéma », c'est-à-dire le dessin vide et la
+    // liste entière en dessous.
+    const hors = espaces.map((e, i) => ({ e, i }))
+      .filter(({ e }) => e.groupe === 'annexe' && !dessines.includes(e.nom));
     return `
     <div class="fp-plan-tete">
       <span>${v.pieces ? `${esc(v.pieces)} pièce${nombreLu(v.pieces) > 1 ? 's' : ''}` : 'Nombre de pièces non renseigné'}${
-        v.surface ? ` · ${esc(v.surface)}` : ''}${v.type_bien ? ` · ${esc(v.type_bien)}` : ''}</span>
+        v.surface ? ` · ${esc(v.surface)}` : ''} · ${esc(v.type_bien || 'type de bien non renseigné')}</span>
       <span class="fp-plan-compte">${c.desordres
         ? `${c.desordres} désordre${c.desordres > 1 ? 's' : ''} dans ${c.espaces} espace${c.espaces > 1 ? 's' : ''}`
         : 'Aucun désordre repéré'}</span>
     </div>
-    ${GROUPES_ESPACE.map(g => {
-      const liste = espaces.filter(e => e.groupe === g.cle);
-      if (!liste.length) return '';
-      return `<div class="fp-plan-groupe">${esc(g.titre)}</div>
-        <div class="fp-plan" style="${teinte()}">${liste.map(e => carteEspace(e, indices.get(e))).join('')}</div>`;
-    }).join('')}
+    <div class="fp-dessin" style="${teinte()}">${planSvg(espaces, v.type_bien)}</div>
+    ${hors.length ? `
+      <div class="fp-plan-groupe">Hors du schéma</div>
+      <div class="fp-plan" style="${teinte()}">${hors.map(({ e, i }) => carteEspace(e, i)).join('')}</div>` : ''}
     <div class="fp-plan-pied">
       <button type="button" class="btn ghost" id="fp-ajout-espace">+ Ajouter un espace</button>
-      ${v.pieces ? '' : '<em class="mf-champ-aide">Renseignez le nombre de pièces à l’étape Mission pour que les chambres apparaissent.</em>'}
+      <em class="mf-champ-aide">${v.pieces
+        ? 'Schéma de repérage : il situe les désordres, il ne représente pas le plan du bien.'
+        : 'Renseignez le nombre de pièces à l’étape Mission pour que les chambres apparaissent.'}</em>
     </div>
     ${v.espaceOuvert !== null ? panneauEspace() : ''}`;
   };

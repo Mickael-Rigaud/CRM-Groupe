@@ -1790,6 +1790,47 @@ tr.btp-mission .btp-pts { color: var(--m-encre); }
 .fp-panneau-lbl { align-self: center; margin-right: 4px; font-size: 11px; font-weight: 700;
   text-transform: uppercase; letter-spacing: .05em; color: var(--muted-2); }
 
+/* ---- Le schema dessine du bien ----
+   Une coupe schematique, PAS un plan : voir js/data/btp-plan.js. Le SVG est
+   bride en largeur — a 980 px la maison ferait 540 px de haut et pousserait le
+   reste du formulaire sous la ligne de flottaison.
+   ⚠ PAS DE RACCOURCI `font:` AVEC `inherit` EN FAMILLE : la declaration entiere
+   saute (piege deja constate sur .ev-titre). On pose famille et taille a part. */
+.fp-dessin { margin-bottom: 4px; }
+.pl-svg { display: block; width: 100%; max-width: 720px; height: auto; margin: 0 auto; }
+
+.pl-z { outline: none; }
+.pl-z rect, .pl-z path { fill: var(--card-2); stroke: var(--line-strong); stroke-width: 1.5;
+  cursor: pointer; transition: fill .12s, stroke .12s; }
+.pl-z:hover rect, .pl-z:hover path { stroke: var(--m); }
+.pl-z.a-desordre rect, .pl-z.a-desordre path { fill: var(--m-clair); stroke: var(--m); stroke-width: 2; }
+.pl-z:focus-visible rect, .pl-z:focus-visible path { stroke: var(--m); stroke-width: 2.5; }
+
+.pl-nom { font-family: inherit; font-size: 13px; font-weight: 650; fill: var(--text);
+  text-anchor: middle; pointer-events: none; }
+.pl-nom-p { font-size: 11px; }
+.pl-z.a-desordre .pl-nom { fill: var(--m-encre); }
+.pl-sub { font-family: inherit; font-size: 11px; fill: var(--muted);
+  text-anchor: middle; pointer-events: none; }
+.pl-pt { fill: var(--m); pointer-events: none; }
+.pl-ptn { font-family: inherit; font-size: 11px; font-weight: 800; fill: #fff;
+  text-anchor: middle; pointer-events: none; }
+
+/* Le bati : toit, montants de facade. Une teinte froide, distincte des pieces. */
+.pl-toit rect, .pl-toit path, .pl-facade rect { fill: #eceef3; }
+.pl-terre { stroke: var(--line-strong); stroke-width: 2; }
+.pl-cadre { fill: none; stroke: var(--line-strong); stroke-width: 1.5; stroke-dasharray: 5 5; }
+.pl-etiq { font-family: inherit; font-size: 11px; font-weight: 700; fill: var(--muted-2);
+  text-transform: uppercase; letter-spacing: .07em; }
+.pl-annexe rect { fill: #f0f1f5; }
+
+/* La terre : une teinte chaude, distincte du bati, pour qu'une bande de terrain
+   ne se lise pas comme une piece de plus. La cave y est creusee, en pointilles. */
+.pl-sol rect { fill: #ece7df; stroke: #d8d0c4; }
+.pl-sol .pl-nom { fill: #7a6a55; }
+.pl-sol.a-desordre rect { fill: var(--m-clair); stroke: var(--m); }
+.pl-creuse rect { fill: #f7f5f1; stroke: #cfc6b8; stroke-dasharray: 4 3; }
+
 /* ---- Le tarif de l'expertise ----
    Il se lit d'un coup : le prix en grand, ce qui l'explique en petit dessous.
    La teinte est celle du metier, comme le reste de la fiche projet. */
