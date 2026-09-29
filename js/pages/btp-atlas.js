@@ -260,7 +260,24 @@ function sommaire() {
   return `
     <div class="at-somm">
       <div class="at-somm-tete">
-        <h3>Sommaire des ${l.length} fiches</h3>
+        <div class="at-somm-titre">
+          <h3>Sommaire des ${l.length} fiches</h3>
+          <!-- ⚠ LE CODE COULEUR EST MONTÉ À CÔTÉ DU TITRE (29/09/2026, demandé
+               par Mickael). Il était en pied de sommaire : on le lisait après
+               les cinquante fiches, c'est-à-dire une fois qu'on avait déjà
+               choisi. Il sert à LIRE les planches, il doit donc être vu avant
+               d'en ouvrir une. -->
+          <!-- ⚠ TROIS MOTS, PAS TROIS PHRASES. La première version portait
+               l'instruction entière : 796 px de pastilles pour 796 px de
+               colonne, elles passaient SOUS le titre et sur deux lignes —
+               c'est-à-dire pas « à côté ». Mesuré, pas estimé. Le verbe suffit
+               à se souvenir ; la phrase entière reste en infobulle. -->
+          <div class="at-somm-code">
+            <span class="at-code at-code-v" title="Surveiller et planifier l'entretien.">Vert · surveiller</span>
+            <span class="at-code at-code-o" title="Investiguer la cause avant d'intervenir.">Orange · chercher la cause</span>
+            <span class="at-code at-code-r" title="Sécuriser et appeler un spécialiste.">Rouge · sécuriser</span>
+          </div>
+        </div>
         <p class="muted small">Cliquez un symptôme pour ouvrir sa planche. Elle restera affichée
           pendant que vous en comparez d'autres.</p>
       </div>
@@ -274,14 +291,6 @@ function sommaire() {
                 <span>${esc(f.titre)}</span>
               </button>`).join('')}
           </div>`).join('')}
-      </div>
-      <!-- Le code couleur est imprimé sur chaque planche ; le rappeler ici
-           evite d'ouvrir une fiche pour se souvenir de ce que veut dire une
-           couleur. Trois mots chacun, ce qu'il faut FAIRE et rien d'autre. -->
-      <div class="at-somm-code">
-        <span class="at-code at-code-v">Vert — surveiller, planifier l'entretien</span>
-        <span class="at-code at-code-o">Orange — chercher la cause avant d'intervenir</span>
-        <span class="at-code at-code-r">Rouge — sécuriser et appeler un spécialiste</span>
       </div>
     </div>`;
 }

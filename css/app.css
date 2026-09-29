@@ -3666,7 +3666,15 @@ textarea.ev-nu { resize: vertical; min-height: 40px; }
   padding: 5px 6px; border: 0; border-radius: 7px; background: transparent; cursor: pointer;
   font: inherit; font-size: 12.5px; line-height: 1.35; color: var(--text); }
 .at-somm-ligne:hover { background: var(--accent-soft); color: var(--accent-ink); }
-.at-somm-code { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+/* Le code couleur vit a cote du titre : il sert a LIRE les planches, il doit
+   donc etre vu AVANT d'en ouvrir une. En pied de sommaire on le lisait apres
+   les cinquante fiches, c'est-a-dire trop tard. `margin-left: auto` le pousse
+   a droite du titre ; sous 1100 px il repasse dessous plutot que d'ecraser le
+   titre sur deux lignes. */
+.at-somm-titre { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.at-somm-titre h3 { margin: 0; }
+.at-somm-code { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+@media (max-width: 1100px) { .at-somm-code { margin-left: 0; } }
 .at-code { font-size: 12px; font-weight: 600; padding: 5px 11px; border-radius: 999px; }
 .at-code-v { background: color-mix(in srgb, var(--green) 14%, transparent); color: var(--green); }
 .at-code-o { background: color-mix(in srgb, var(--amber) 16%, transparent); color: var(--amber); }
