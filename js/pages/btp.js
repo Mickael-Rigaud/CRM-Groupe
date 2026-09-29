@@ -75,10 +75,14 @@ const ONGLETS = [
     { hash: '#/btp/base', label: 'Base de données' },
     { hash: '#/btp/vivier', label: 'Vivier Experts & AMO' },
   ] },
-  // ⚠ REPLIÉ PAR DÉFAUT : ce sont des référentiels qu'on ouvre quand on en a
-  // besoin, pas tous les matins. Déplié, ce groupe repousse « Facturation »
-  // hors de vue sur une fenêtre courte — le défaut déjà corrigé côté RGD.
-  { label: 'Documentation', pliable: true, sous: [
+  // ⚠ PAS DE REPLI ICI, CONTRAIREMENT À RGD (demandé le 29/09/2026 : « je veux
+  // que documentation soit comme missions, prospection et autres »). Il avait
+  // été posé repliable en reprenant le motif de l'espace RGD — mais là-bas le
+  // groupe replié en compte cinq, qu'on n'ouvre qu'en cas de pépin, alors
+  // qu'ici la documentation se consulte en travaillant. Les quatre groupes de
+  // BTP se lisent donc de la même façon, et le menu ne demande aucun clic pour
+  // montrer ce qu'il contient.
+  { label: 'Documentation', sous: [
     { hash: '#/btp/dtu', label: 'DTU' },
     { hash: '#/btp/mails', label: 'Mails & modèles' },
   ] },
