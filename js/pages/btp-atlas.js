@@ -84,16 +84,42 @@ const ALERTE = {
   rouge:  { mot: 'Rouge',  faire: 'sécuriser',         phrase: "Sécuriser et appeler un spécialiste." },
 };
 
-// ⚠ `title` ET `aria-label` : une pastille de couleur seule est illisible pour
-// qui ne distingue pas le vert du rouge — un cas fréquent, et l'information
-// porte ici sur la sécurité des personnes.
-const pastille = (f) => {
+// ⚠ LE NUMÉRO EST LA PASTILLE, et non une pastille À CÔTÉ du numéro. La
+// première version posait un rond de 9 px devant chaque ligne : deux objets
+// pour une seule information, 9 px de couleur à repérer sur cinquante lignes,
+// et de la place perdue à gauche. Le jeton teinté se voit d'un coup d'œil et
+// ne coûte pas un pixel de plus que le numéro qu'il fallait afficher de toute
+// façon.
+//
+// ⚠ TEINTÉ, PAS EN APLAT PLEIN : cinquante jetons saturés côte à côte font un
+// sapin de Noël où plus rien ne ressort — or ce qu'on cherche ici, ce sont les
+// quatorze rouges.
+//
+// ⚠ `title` ET `aria-label` : une couleur seule est illisible pour qui ne
+// distingue pas le vert du rouge — un cas fréquent, et l'information porte
+// ici sur la sécurité des personnes. Le numéro reste lisible sans la couleur,
+// et le niveau s'énonce en toutes lettres à l'ouverture de la fiche.
+const jeton = (f) => {
   const a = ALERTE[f.code_couleur];
-  const nul = "Niveau d'alerte non renseign\u00e9";
-  return a
-    ? `<span class="at-past at-past-${f.code_couleur}" title="${esc(a.mot)} — ${esc(a.phrase)}" aria-label="Niveau d'alerte : ${esc(a.mot)}"></span>`
-    : `<span class="at-past at-past-nul" title="${nul}" aria-label="${nul}"></span>`;
+  const dit = a ? `${a.mot} — ${a.phrase}` : "Niveau d'alerte non renseign\u00e9";
+  return `<span class="at-jeton at-jeton-${a ? f.code_couleur : 'nul'}" title="${esc(dit)}"
+    aria-label="Fiche ${num(f.numero)}, niveau d'alerte : ${esc(a ? a.mot : 'non renseign\u00e9')}">${num(f.numero)}</span>`;
 };
+
+// L'ordre affiché — famille par famille, numéro par numéro — mis à plat. C'est
+// lui qui donne la fiche précédente et la suivante : suivre l'ordre des NUMÉROS
+// ferait sauter d'une famille à l'autre, alors qu'on compare des voisines.
+const aPlat = (liste) => parFamille(liste).flatMap(([, l]) => l);
+
+// ⚠ LE FILTRE EST ÉCRIT UNE SEULE FOIS. Le sommaire et l'index étroit montrent
+// la même sélection ; deux filtrages séparés finiraient par ne plus dire la
+// même chose, et l'écart ne se verrait que sur une recherche précise.
+function filtrer(toutes, etat) {
+  const q = etat.q.trim().toLowerCase();
+  return toutes.filter(f =>
+    (!etat.couleur || f.code_couleur === etat.couleur) &&
+    (!q || f.titre.toLowerCase().includes(q) || String(f.numero) === q || num(f.numero) === q));
+}
 
 // ---------------------------------------------------------------- La planche
 //
@@ -173,14 +199,12 @@ export const btpAtlasPage = {
     if (guard(root)) return {};
     const coquille = poserEspace(root);
     // `vue` : 'fiches' ou 'signaux'. `ouverte` : le numéro de fiche affiché.
-    const etat = { vue: 'fiches', ouverte: null, q: '' };
+    // `couleur` : le niveau d'alerte retenu, ou null pour les trois.
+    const etat = { vue: 'fiches', ouverte: null, q: '', couleur: null };
 
     const dessine = () => {
       const toutes = fiches();
-      const q = etat.q.trim().toLowerCase();
-      const filtrees = q
-        ? toutes.filter(f => f.titre.toLowerCase().includes(q) || String(f.numero) === q || num(f.numero) === q)
-        : toutes;
+      const filtrees = filtrer(toutes, etat);
       const ouverte = toutes.find(f => f.numero === etat.ouverte) || null;
 
       root.innerHTML = cadre('#/btp/atlas', 'Atlas visuels', `
@@ -230,28 +254,59 @@ function vueFiches(liste, ouverte, etat) {
     return `<div class="empty">Aucune fiche. Le contenu de l'atlas s'importe à la main :
       il n'est pas dans le dépôt, c'est un document sous licence.</div>`;
   }
-  const chercher = `<input class="at-q" id="at-q" type="search" placeholder="Chercher un symptôme ou un numéro…"
-           value="${esc(etat.q)}" aria-label="Chercher une fiche">`;
+  if (!ouverte) return sommaire(liste, etat);
 
-  if (!ouverte) return sommaire(liste, etat, chercher);
+  // ⚠ LES VOISINES SE PRENNENT DANS LA LISTE FILTRÉE, pas dans les cinquante :
+  // quand on a demandé « les rouges », « suivante » doit donner la rouge
+  // suivante. Sinon le filtre ne vaudrait que pour la liste et pas pour le
+  // parcours, ce qui est précisément ce qu'on est en train de faire.
+  const ordre = aPlat(liste);
+  const i = ordre.findIndex(f => f.numero === ouverte.numero);
+  const avant = i > 0 ? ordre[i - 1] : null;
+  const apres = i >= 0 && i < ordre.length - 1 ? ordre[i + 1] : null;
+  const a = ALERTE[ouverte.code_couleur];
 
   return `
     <div class="at-corps">
       <div class="at-index">
         <button type="button" class="at-retour" data-sommaire="1">← Sommaire des ${fiches().length} fiches</button>
-        ${chercher}
+        ${barreRecherche(etat, true)}
         ${liste.length ? parFamille(liste).map(([famille, l]) => `
           <div class="at-fam">
             <div class="at-fam-titre">${esc(famille)}</div>
             ${l.map(f => `
               <button type="button" class="at-ligne${f.numero === etat.ouverte ? ' on' : ''}" data-fiche="${f.numero}">
-                ${pastille(f)}
-                <span class="at-num">${num(f.numero)}</span>
+                ${jeton(f)}
                 <span class="at-titre">${esc(f.titre)}</span>
               </button>`).join('')}
           </div>`).join('') : '<div class="empty">Aucune fiche ne correspond.</div>'}
       </div>
-      <div class="at-planche" id="at-planche"></div>
+
+      <div class="at-droite">
+        <!-- ⚠ LA PLANCHE EST UNE IMAGE : elle ne peut ni être cherchée, ni lue à
+             voix haute, ni résumée. Ce bandeau redit en TEXTE ce qu'elle montre
+             — le numéro, le titre, le niveau d'alerte et ce qu'il commande —
+             pour qu'on sache où l'on est avant même qu'elle soit chargée. -->
+        <div class="at-bandeau${a ? ' est-' + ouverte.code_couleur : ''}">
+          ${jeton(ouverte)}
+          <div class="at-bandeau-t">
+            <b>${esc(ouverte.titre)}</b>
+            <span>${esc(ouverte.famille)}</span>
+          </div>
+          ${a ? `<span class="at-niveau at-niveau-${ouverte.code_couleur}">
+                   ${esc(a.mot)} · ${esc(a.phrase)}</span>` : ''}
+          <span class="grow"></span>
+          <!-- Les flèches se GRISENT aux bouts au lieu de disparaître : un bouton
+               qui s'efface fait sauter les autres sous la souris. -->
+          <div class="at-nav">
+            <button type="button" class="at-fleche" data-voisine="${avant ? avant.numero : ''}"
+              ${avant ? `title="${esc(num(avant.numero) + ' · ' + avant.titre)}"` : 'disabled'}>‹</button>
+            <button type="button" class="at-fleche" data-voisine="${apres ? apres.numero : ''}"
+              ${apres ? `title="${esc(num(apres.numero) + ' · ' + apres.titre)}"` : 'disabled'}>›</button>
+          </div>
+        </div>
+        <div class="at-planche" id="at-planche"></div>
+      </div>
     </div>`;
 }
 
@@ -266,11 +321,15 @@ function vueSignaux() {
     return `<div class="empty">Les douze signaux s'importent avec le contenu de l'atlas.</div>`;
   }
   return `
-    <p class="mf-aide attention" style="margin:0 0 14px">
-      Ces douze-là ne se règlent pas avec une fiche : le risque n'est pas esthétique,
-      il porte sur la stabilité ou la sécurité des personnes.
-      <b>On s'arrête, on sécurise, on documente, et on fait intervenir un spécialiste.</b>
-    </p>
+    <!-- \u26a0 LA PHRASE D'AVERTISSEMENT EST ENCADR\u00c9E, PAS SEULEMENT COLOR\u00c9E. En
+         texte orange nu elle se lisait comme une coquetterie de mise en page ;
+         ici elle occupe un bloc, ce qui correspond \u00e0 ce qu'elle dit. -->
+    <div class="at-avert">
+      <span class="at-avert-pic" aria-hidden="true">!</span>
+      <p>Ces douze-l\u00e0 ne se r\u00e8glent pas avec une fiche : le risque n'est pas esth\u00e9tique,
+        il porte sur la stabilit\u00e9 ou la s\u00e9curit\u00e9 des personnes.
+        <b>On s'arr\u00eate, on s\u00e9curise, on documente, et on fait intervenir un sp\u00e9cialiste.</b></p>
+    </div>
     <div class="at-signaux">
       ${l.map(s => `
         <div class="at-signal">
@@ -278,15 +337,39 @@ function vueSignaux() {
             <span class="at-signal-num">${num(s.numero)}</span>
             <b>${esc(s.titre)}</b>
             <span class="grow"></span>
-            ${(s.fiches || []).map(n => `<button type="button" class="chip accent" data-vers-fiche="${n}">Fiche ${num(n)}</button>`).join(' ')}
+            ${(s.fiches || []).map(n => `<button type="button" class="at-signal-fiche" data-vers-fiche="${n}">Fiche ${num(n)} \u2192</button>`).join(' ')}
           </div>
-          ${s.pourquoi ? `<p class="at-signal-l"><em>Pourquoi c'est grave</em>${esc(s.pourquoi)}</p>` : ''}
-          ${s.tout_de_suite ? `<p class="at-signal-l"><em>À faire tout de suite</em>${esc(s.tout_de_suite)}</p>` : ''}
-          ${s.a_noter ? `<p class="at-signal-l"><em>À noter et photographier</em>${esc(s.a_noter)}</p>` : ''}
-          ${s.dire_au_client ? `<p class="at-signal-dire">« ${esc(s.dire_au_client)} »</p>` : ''}
+          <!-- \u26a0 TROIS COLONNES SUR UN GRAND \u00c9CRAN, empil\u00e9es en dessous : ces
+               trois consignes se lisent D'UN COUP devant le mur, et non l'une
+               apr\u00e8s l'autre en faisant d\u00e9filer. -->
+          <div class="at-signal-corps">
+            ${s.pourquoi ? `<p class="at-signal-l"><em>Pourquoi c'est grave</em>${esc(s.pourquoi)}</p>` : ''}
+            ${s.tout_de_suite ? `<p class="at-signal-l"><em>\u00c0 faire tout de suite</em>${esc(s.tout_de_suite)}</p>` : ''}
+            ${s.a_noter ? `<p class="at-signal-l"><em>\u00c0 noter et photographier</em>${esc(s.a_noter)}</p>` : ''}
+          </div>
+          ${s.dire_au_client ? `<p class="at-signal-dire">\u00ab\u00a0${esc(s.dire_au_client)}\u00a0\u00bb</p>` : ''}
         </div>`).join('')}
     </div>`;
 }
+
+// ------------------------------------------------------- La barre de recherche
+//
+// Écrite une seule fois : elle sert au sommaire ET à l'index étroit. Deux
+// champs séparés ne porteraient pas le même `id`, et la reprise du curseur
+// après redessin — qui cherche `#at-q` — casserait sur l'un des deux.
+//
+// ⚠ SEUL LE TEXTE DE SUBSTITUTION SE RACCOURCIT DANS LA COLONNE ÉTROITE
+// (296 px) : « Chercher un symptôme ou un numéro… » y était coupé au milieu
+// d'un mot. L'`aria-label`, lui, reste entier des deux côtés — c'est ce que
+// lit un lecteur d'écran, et il n'a pas de largeur.
+const barreRecherche = (etat, court = false) => `
+  <div class="at-quete">
+    <svg class="at-loupe" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+    <input class="at-q" id="at-q" type="search"
+           placeholder="${court ? 'Chercher\u2026' : 'Chercher un sympt\u00f4me ou un num\u00e9ro\u2026'}"
+           value="${esc(etat.q)}" aria-label="Chercher une fiche par sympt\u00f4me ou par num\u00e9ro">
+    ${etat.q ? '<button type="button" class="at-vider" data-vider="1" title="Effacer la recherche">\u00d7</button>' : ''}
+  </div>`;
 
 // ---------------------------------------------------------------- Le sommaire
 //
@@ -302,54 +385,75 @@ function vueSignaux() {
 // tenir à jour en double — une fiche ajoutée en base paraît aux deux endroits.
 //
 // ⚠ IL REÇOIT LA LISTE DÉJÀ FILTRÉE, il ne relit pas `fiches()` : la recherche
-// vit désormais DANS le sommaire, et un sommaire qui montrerait les cinquante
-// pendant qu'on tape ne servirait à rien. Le total, lui, reste celui de la
-// base — « Sommaire des 50 fiches » ne doit pas devenir « des 3 fiches ».
-function sommaire(liste, etat, chercher) {
-  const total = fiches().length;
+// et le filtre par niveau vivent DANS le sommaire. Le total, lui, reste celui
+// de la base — « Sommaire des 50 fiches » ne doit pas devenir « des 3 fiches ».
+function sommaire(liste, etat) {
+  const toutes = fiches();
+  const compte = (c) => toutes.filter(f => f.code_couleur === c).length;
+  const parts = ['vert', 'orange', 'rouge'].map(c => [c, compte(c)]);
+  const connus = parts.reduce((s, [, n]) => s + n, 0);
+  const filtre = etat.couleur || etat.q;
+
   return `
     <div class="at-somm">
       <div class="at-somm-tete">
         <div class="at-somm-titre">
-          <h3>Sommaire des ${total} fiches</h3>
-          <!-- ⚠ LE CODE COULEUR EST MONTÉ À CÔTÉ DU TITRE (29/09/2026, demandé
-               par Mickael). Il était en pied de sommaire : on le lisait après
-               les cinquante fiches, c'est-à-dire une fois qu'on avait déjà
-               choisi. Il sert à LIRE les planches, il doit donc être vu avant
-               d'en ouvrir une. -->
-          <!-- ⚠ TROIS MOTS, PAS TROIS PHRASES. La première version portait
-               l'instruction entière : 796 px de pastilles pour 796 px de
-               colonne, elles passaient SOUS le titre et sur deux lignes,
-               c'est-à-dire pas « à côté ». Mesuré, pas estimé. Le verbe suffit
-               à se souvenir ; la phrase entière reste en infobulle. -->
-          <!-- ⚠ ET CE N'EST PLUS UN SIMPLE RAPPEL : depuis que chaque fiche
-               porte sa pastille, ces trois étiquettes en sont la LÉGENDE —
-               d'où la même pastille à l'intérieur de chacune. -->
-          <div class="at-somm-code">
-            ${['vert', 'orange', 'rouge'].map(c => `
-              <span class="at-code at-code-${c}" title="${esc(ALERTE[c].phrase)}">
+          <h3>Sommaire des ${toutes.length} fiches</h3>
+          <!-- ⚠ LA LÉGENDE EST DEVENUE UN FILTRE (29/09/2026). Elle disait déjà
+               ce que veut dire chaque couleur ; en la rendant cliquable, elle
+               répond en plus à la question qu'on se pose vraiment devant un
+               atlas — « montre-moi les rouges ». Une légende qui ne fait
+               qu'expliquer occupe la même place sans rien faire.
+               ⚠ LES COMPTES PORTENT SUR LES CINQUANTE, jamais sur la sélection :
+               sinon cliquer « Vert » mettrait Orange et Rouge à zéro, et plus
+               rien ne permettrait d'en sortir. -->
+          <div class="at-somm-code" role="group" aria-label="Filtrer par niveau d'alerte">
+            ${parts.map(([c, n]) => `
+              <button type="button" class="at-code at-code-${c}${etat.couleur === c ? ' on' : ''}"
+                data-couleur="${c}" aria-pressed="${etat.couleur === c}"
+                title="${esc(ALERTE[c].phrase)}${etat.couleur === c ? ' — cliquer pour tout revoir' : ''}">
                 <span class="at-past at-past-${c}"></span>${esc(ALERTE[c].mot)} · ${esc(ALERTE[c].faire)}
-              </span>`).join('')}
+                <b>${n}</b>
+              </button>`).join('')}
           </div>
         </div>
-        <p class="muted small">Cliquez un symptôme pour ouvrir sa planche. Elle restera affichée
-          pendant que vous en comparez d'autres.</p>
-        ${chercher}
+
+        <!-- ⚠ LA BARRE N'EST PAS UNE DÉCORATION : elle dit d'un coup d'œil ce
+             qu'un atlas de cinquante fiches contient — ici deux tiers d'orange,
+             c'est-à-dire deux tiers de cas où il faut chercher la cause avant de
+             toucher. Trois nombres en ligne ne donnent pas cette proportion. -->
+        ${connus ? `
+          <div class="at-barre" role="img"
+               aria-label="${parts.map(([c, n]) => `${n} ${ALERTE[c].mot}`).join(', ')}">
+            ${parts.filter(([, n]) => n).map(([c, n]) => `
+              <span class="at-barre-part at-barre-${c}" style="flex:${n}"></span>`).join('')}
+          </div>` : ''}
+
+        <div class="at-somm-outils">
+          ${barreRecherche(etat)}
+          <p class="muted small at-somm-aide">
+            ${filtre
+              ? `${liste.length} fiche${liste.length > 1 ? 's' : ''} sur ${toutes.length}`
+              : 'Cliquez un sympt\u00f4me pour ouvrir sa planche. Elle restera affich\u00e9e pendant que vous en comparez d\u2019autres.'}
+          </p>
+          ${filtre ? '<button type="button" class="at-raz" data-raz="1">Tout revoir</button>' : ''}
+        </div>
       </div>
+
       ${liste.length ? `
         <div class="at-somm-grille">
-          ${parFamille(liste).map(([famille, fs]) => `
-            <div class="at-somm-fam">
+          ${parFamille(liste).map(([famille, fs], i) => `
+            <div class="at-somm-fam" style="--rang:${i}">
               <div class="at-somm-fam-titre">${esc(famille)} <span>${fs.length}</span></div>
               ${fs.map(f => `
                 <button type="button" class="at-somm-ligne" data-fiche="${f.numero}">
-                  ${pastille(f)}
-                  <span class="at-num">${num(f.numero)}</span>
+                  ${jeton(f)}
                   <span class="at-somm-t">${esc(f.titre)}</span>
                 </button>`).join('')}
             </div>`).join('')}
         </div>`
-      : `<div class="empty">Aucune fiche ne correspond à « ${esc(etat.q)} ».</div>`}
+      : `<div class="empty">Aucune fiche ne correspond${etat.q ? ` \u00e0 \u00ab ${esc(etat.q)} \u00bb` : ''}${
+          etat.couleur ? ` en niveau ${esc(ALERTE[etat.couleur].mot.toLowerCase())}` : ''}.</div>`}
     </div>`;
 }
 
@@ -367,6 +471,25 @@ function lier(root, etat, dessine) {
   // Revenir au sommaire, c'est refermer la fiche : il n'y a pas d'autre état.
   const retour = root.querySelector('[data-sommaire]');
   if (retour) retour.onclick = () => { etat.ouverte = null; dessine(); };
+
+  // ⚠ UN SECOND CLIC SUR LE NIVEAU DÉJÀ CHOISI LE RETIRE. Sans cela, le seul
+  // moyen de revoir les cinquante serait de trouver « Tout revoir » ailleurs
+  // sur l'écran, alors que le doigt est déjà sur le bouton qui a filtré.
+  root.querySelectorAll('[data-couleur]').forEach(b => b.onclick = () => {
+    etat.couleur = etat.couleur === b.dataset.couleur ? null : b.dataset.couleur;
+    dessine();
+  });
+  const raz = root.querySelector('[data-raz]');
+  if (raz) raz.onclick = () => { etat.couleur = null; etat.q = ''; dessine(); };
+  const vider = root.querySelector('[data-vider]');
+  if (vider) vider.onclick = () => { etat.q = ''; dessine(); };
+
+  // Passer à la fiche voisine sans repasser par la liste : c'est le geste de
+  // quelqu'un qui compare, et il doit coûter un clic.
+  root.querySelectorAll('[data-voisine]').forEach(b => b.onclick = () => {
+    const n = Number(b.dataset.voisine);
+    if (n) { etat.ouverte = n; dessine(); }
+  });
   // Depuis un signal, on saute à sa fiche : c'est le geste naturel — on vient
   // de lire « Fiche 14 », on veut la voir.
   root.querySelectorAll('[data-vers-fiche]').forEach(b => b.onclick = () => {
