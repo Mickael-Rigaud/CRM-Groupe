@@ -90,6 +90,36 @@ const lienOnglet = (o, actif) => {
   return `<a href="${o.hash}" class="${ouvert ? 'on' : ''}" ${ouvert ? 'aria-current="page"' : ''}>${esc(o.label)}</a>`;
 };
 
+// Tous les écrans d'un menu, à plat, quelle que soit leur profondeur.
+//
+// ⚠ À ÉCRIRE UNE FOIS ET À EMPLOYER PARTOUT. Trois endroits demandent « cet
+// écran est-il dans ce menu ? » — l'avertissement de console, le dépliage du
+// groupe ouvert, et le repère. Chacun le faisait à sa façon, sur UN niveau ;
+// avec deux niveaux, trois lectures séparées se seraient désyncées au premier
+// oubli, et le symptôme aurait été un menu qui n'allume rien sans rien dire.
+const tousLesEcrans = (liste = []) => liste.flatMap(o => [o, ...tousLesEcrans(o.sous)]);
+
+// Une entrée de groupe, qui peut elle-même en porter d'autres.
+//
+// ⚠ DEUX NIVEAUX DE GROUPE DEPUIS LE 29/09/2026, demandé par Mickael pour BTP
+// Expertise : « Missions → Expertise → Check-list, Rapport ». Ce fichier
+// affirmait qu'un seul niveau suffisait ; c'était vrai tant qu'un métier
+// n'avait qu'un écran. L'expertise en a trois — son pipeline, sa check-list,
+// son rapport — et les mettre à plat dans « Missions » aurait donné six
+// entrées dont rien ne dirait laquelle appartient à quel métier.
+//
+// ⚠ LE PARENT RESTE UN LIEN, il ne devient pas un simple intitulé : « Expertise »
+// est un écran qu'on ouvre, pas une étiquette. Un titre non cliquable aurait
+// rendu le pipeline introuvable.
+//
+// Pas de repli à ce niveau : un groupe qu'on replie se signale par son titre,
+// or ici le titre EST l'écran ouvert la moitié du temps.
+const entreeOnglet = (o, actif) => {
+  if (!o.sous?.length) return lienOnglet(o, actif);
+  return `<div class="esp-side-sous">${lienOnglet(o, actif)}
+    <div class="esp-side-sous-liens">${o.sous.map(x => lienOnglet(x, actif)).join('')}</div></div>`;
+};
+
 // `data-espace` permet de styler UNE structure sans toucher aux trois autres :
 // cette coquille est partagée par RGD, BTP, le courtage et Propulsion, et une
 // couleur changée ici les repeindrait toutes.
@@ -99,7 +129,7 @@ export function coquilleEspace({ cle, marque, baseline = '', onglets, actif, tit
   // C'est arrivé le 21/09/2026 — la vue d'ensemble RGD déclarait
   // `#/rgd/pilotage` quand le menu proposait `#/rgd` — et rien ne l'a signalé.
   // Un avertissement en console coûte une ligne et fait gagner la recherche.
-  if (actif && !onglets.some(o => o.hash === actif || (o.sous || []).some(x => x.hash === actif))) {
+  if (actif && !tousLesEcrans(onglets).some(o => o.hash === actif)) {
     console.warn(`coquilleEspace : l'onglet « ${actif} » n'existe pas dans le menu de ${cle} — aucun repère ne sera marqué.`);
   }
   return `
@@ -119,13 +149,13 @@ export function coquilleEspace({ cle, marque, baseline = '', onglets, actif, tit
         ${onglets.map(o => {
           if (!o.sous) return lienOnglet(o, actif);
           const classes = `esp-side-groupe${o.bas ? ' esp-side-bas' : ''}`;
-          const liens = o.sous.map(x => lienOnglet(x, actif)).join('');
+          const liens = o.sous.map(x => entreeOnglet(x, actif)).join('');
           if (!o.pliable) {
             return `<div class="${classes}">
                <span class="esp-side-titre">${esc(o.label)}</span>${liens}</div>`;
           }
           // Le groupe de la page ouverte se déplie, réglage ou pas.
-          const ici = o.sous.some(x => x.hash === actif);
+          const ici = tousLesEcrans(o.sous).some(x => x.hash === actif);
           const ouvert = ici || !estReplie(cle, o.label);
           // Les liens vivent dans leur propre boîte : c'est elle que le repli
           // masque, et le titre reste visible pour pouvoir rouvrir.

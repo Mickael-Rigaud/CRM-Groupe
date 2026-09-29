@@ -65,9 +65,17 @@ const activities = () => {
 const ONGLETS = [
   { hash: '#/btp', label: 'Tableau de bord' },
   // Deux métiers, deux déroulés, et qui les porte : c'est le travail du jour.
+  // ⚠ CHAQUE MÉTIER PORTE SES TROIS ÉCRANS — pipeline, check-list, rapport —
+  // au lieu de six entrées à plat dont rien ne dirait laquelle est à qui.
   { label: 'Missions', sous: [
-    { hash: '#/btp/expertise', label: 'Expertise' },
-    { hash: '#/btp/amo', label: 'AMO' },
+    { hash: '#/btp/expertise', label: 'Expertise', sous: [
+      { hash: '#/btp/expertise-checklist', label: 'Check-list' },
+      { hash: '#/btp/expertise-rapport', label: 'Rapport' },
+    ] },
+    { hash: '#/btp/amo', label: 'AMO', sous: [
+      { hash: '#/btp/amo-checklist', label: 'Check-list' },
+      { hash: '#/btp/amo-rapport', label: 'Rapport' },
+    ] },
     { hash: '#/btp/charges', label: "Chargés d'affaires" },
   ] },
   // Ce qui alimente le cabinet : les clients à venir, et les gens à recruter.
@@ -84,6 +92,7 @@ const ONGLETS = [
   // montrer ce qu'il contient.
   { label: 'Documentation', sous: [
     { hash: '#/btp/dtu', label: 'DTU' },
+    { hash: '#/btp/atlas', label: 'Atlas visuels' },
     { hash: '#/btp/mails', label: 'Mails & modèles' },
   ] },
   // `bas: true` le pousse au pied du menu, séparé par un trait : on n'ouvre pas
@@ -93,10 +102,15 @@ const ONGLETS = [
   ] },
 ];
 // Enveloppe un écran dans la coquille commune aux espaces de structure.
-const cadre = (actif, titre, corps) => coquilleEspace({
+// ⚠ EXPORTÉE POUR `btp-pages.js`, qui porte les cinq écrans neufs. Recopier le
+// menu là-bas aurait donné deux listes à tenir, et la seconde aurait cessé de
+// suivre au premier ajout — le genre d'écart qui ne se voit que le jour où un
+// écran n'allume plus rien dans la colonne.
+export const cadreBtp = (actif, titre, corps) => coquilleEspace({
   actif, titre, corps,
   cle: KEY, marque: act().label, baseline: 'Expertise et conseil bâtiment', onglets: ONGLETS,
 });
+const cadre = cadreBtp;
 const poser = poserEspace;
 
 const guard = (root) => {

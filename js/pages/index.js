@@ -17,6 +17,8 @@ import { rgdCostructorPage } from './rgd-costructor.js';
 import { rgdFormationsPage } from './rgd-formations.js';
 import { rgdReglagesPage } from './rgd-reglages.js';
 import { btpHomePage, btpExpertisePage, btpAmoPage, btpChargesPage, btpBasePage, btpDtuPage, btpMailsPage, btpFacturationPage, btpVivierPage } from './btp.js';
+import { btpChecklistExpertisePage, btpRapportExpertisePage, btpChecklistAmoPage,
+         btpRapportAmoPage, btpAtlasPage } from './btp-pages.js';
 import { courtageHomePage, courtageBasePage, courtageVivierPage } from './courtage.js';
 import { messageriePage } from './messagerie.js';
 
@@ -63,6 +65,15 @@ export const pages = {
   btp_dtu: btpDtuPage,
   btp_mails: btpMailsPage,
   btp_facturation: btpFacturationPage,
+  // Les cinq écrans neufs de BTP Expertise (29/09/2026). Les clés portent un
+  // TIRET parce que l'adresse en porte un : `route()` compose
+  // `pages['btp_' + param]` à partir du second segment du hash, et le routeur
+  // n'en lit que deux — `#/btp/expertise/checklist` n'irait nulle part.
+  'btp_expertise-checklist': btpChecklistExpertisePage,
+  'btp_expertise-rapport': btpRapportExpertisePage,
+  'btp_amo-checklist': btpChecklistAmoPage,
+  'btp_amo-rapport': btpRapportAmoPage,
+  btp_atlas: btpAtlasPage,
   courtage_home: courtageHomePage,
   courtage_base: courtageBasePage,
   courtage_vivier: courtageVivierPage,

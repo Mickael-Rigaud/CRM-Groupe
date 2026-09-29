@@ -474,6 +474,27 @@ select.cell-in { text-align: left; }
    navigateur integre qui sert a eprouver les ecrans — verifie sur un element
    VIERGE cree hors de l'application, contenu visible ferme comme ouvert. Un
    bouton, un attribut et une regle marchent partout ET se verifient ici. */
+/* Le troisieme niveau du menu : les ecrans d'un metier, sous son pipeline.
+   Le retrait passe de 27 a 38 px et la taille baisse d'un demi-point — assez
+   pour qu'on lise l'appartenance sans compter les pixels, pas assez pour que
+   la colonne se mette a ressembler a un arbre de fichiers. */
+.esp-side-sous { display: flex; flex-direction: column; gap: clamp(1px, 0.4vh, 3px); }
+.esp-side-sous-liens { display: flex; flex-direction: column; gap: clamp(1px, 0.35vh, 2px); }
+.esp-side-groupe .esp-side-sous-liens a { padding-left: 38px; font-size: 12.5px; color: rgba(255,255,255,.66); }
+.esp-side-groupe .esp-side-sous-liens a:hover { color: #fff; }
+.esp-side-groupe .esp-side-sous-liens a.on { color: var(--on-accent); }
+/* ⚠ LE MENU DE BTP EST RESSERRE, ET DE LUI SEUL. Avec les deux metiers et
+   leurs quatre ecrans, il compte DIX-HUIT lignes contre neuf aux autres
+   structures : aux memes espacements il depassait une fenetre de 900 px, ce
+   qui rouvrait le defaut corrige le 25/09 (« je ne veux plus que le menu a
+   gauche deroule »).
+   Le reglage passe par `[data-espace="btp"]`, comme le fond noir de RGD :
+   resserrer la regle commune aurait tasse les trois autres menus, qui n'en ont
+   aucun besoin. Ce qui est rogne est l'AIR, jamais la taille du texte. */
+.esp-app[data-espace="btp"] .esp-side-nav a { padding-top: clamp(4px, 0.75vh, 8px); padding-bottom: clamp(4px, 0.75vh, 8px); }
+.esp-app[data-espace="btp"] .esp-side-titre { padding-top: clamp(3px, 0.6vh, 7px); padding-bottom: 2px; }
+.esp-app[data-espace="btp"] .esp-side-groupe { gap: 1px; margin-top: 2px; }
+.esp-app[data-espace="btp"] .esp-side-sous-liens a { padding-top: 3px; padding-bottom: 3px; }
 .esp-side-plis { display: flex; flex-direction: column; gap: 3px; margin-top: 3px; }
 .esp-side-pliable[data-ouvert="0"] > .esp-side-plis { display: none; }
 /* ⚠ Un <button> arrive avec un fond, une bordure, sa propre police et un texte
