@@ -1762,6 +1762,12 @@ tr.btp-mission .btp-pts { color: var(--m-encre); }
   text-transform: uppercase; color: var(--muted-2); }
 
 /* Le niveau se choisit sur des cartes : on lit ce qu'il contient et ce qu'il pese */
+/* Le sous-titre de la rangee des prestations. Il pose une QUESTION
+   (« Quelle expertise ? ») la ou .mf-bloc-titre nomme une rubrique : on vient
+   de choisir le metier juste au-dessus, et la rangee qui suit est la suite de
+   ce choix, pas un nouveau bloc du formulaire. */
+.mf-sous-titre { font-size: 12px; font-weight: 700; color: var(--text); margin: 14px 0 9px; }
+
 .mf-niveaux { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 11px; margin-bottom: 20px; }
 .mf-niveau { display: flex; flex-direction: column; gap: 5px; text-align: left; padding: 13px 15px 14px;
   border: 1px solid var(--line-strong); border-radius: 12px; background: var(--card); cursor: pointer;

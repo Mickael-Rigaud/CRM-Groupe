@@ -245,42 +245,51 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
   };
 
   // ------------------------------------------------------------ 1. la mission
-  // ⚠ LA PRESTATION SE CHOISIT ICI, PAS AU BOUT DU PARCOURS (29/09/2026).
-  // Les quatre cartes sont les quatre missions du cabinet : les trois
-  // expertises de l'offre commerciale, et l'AMO. En choisir une fixe le METIER
-  // et, pour une expertise, la PRESTATION - c'est-a-dire ce qui commande le
-  // tarif a l'etape suivante.
+  // ⚠ LE CHOIX SE FAIT EN DEUX TEMPS (29/09/2026) : le METIER d'abord, la
+  // PRESTATION ensuite. La première version posait les quatre missions à plat
+  // — trois expertises et l'AMO dans la même rangée — ce qui mélangeait deux
+  // questions de nature différente : « quel métier » commande tout le parcours,
+  // « quelle prestation » ne commande que le tarif.
   //
-  // ⚠ L'ORDRE EST CELUI DE L'OFFRE, pas celui de la charge de travail : c'est
-  // la liste que le client a sous les yeux.
-  const CHOIX_MISSION = () => [
-    ...NIVEAUX_EXP.map(n => ({
-      cle: n.key, mission: 'expertise', titre: n.label, txt: n.contenu, note: n.tarif,
-    })),
-    {
-      cle: 'amo', mission: 'amo', titre: 'AMO / accompagnement',
-      txt: "Accompagnement du maitre d'ouvrage, de la consultation des entreprises a la reception.",
-      note: 'Honoraires en % des travaux',
-    },
-  ];
+  // ⚠ LES DEUX LISTES NE SE VALENT PAS, ET C'EST POURQUOI ELLES NE SONT PAS
+  // TRAITÉES PAREIL PLUS BAS : les trois expertises sont des missions de nature
+  // différente, que seul l'humain peut trancher ; les trois niveaux d'AMO sont
+  // des degrés de charge, que la matrice de l'étape « Complexité » sait
+  // proposer à partir du budget, des lots et de la durée.
+  const PRESTATIONS = () => (v.mission === 'amo' ? NIVEAUX_AMO : NIVEAUX_EXP);
+  const QUESTION = () => (v.mission === 'amo'
+    ? 'Quel accompagnement ?'
+    : 'Quelle expertise ?');
 
   const ecranMission = () => {
     const etapes = etapesDe(v.mission);
     const cleLivrable = ETAPE_LIVRABLE[v.mission];
     const dateAuto = dateLivrable(v.mission);
-    const choisi = v.mission === 'amo' ? 'amo' : cleNiveau(v.niveau);
+    const choisi = cleNiveau(v.niveau);
     return `
     <div class="mf-bloc-titre">A. Type de mission</div>
+    <div class="mf-seg mf-seg-large" style="${teinte()}">
+      <button type="button" class="${v.mission === 'expertise' ? 'on' : ''}" data-metier="expertise">Expertise</button>
+      <button type="button" class="${v.mission === 'amo' ? 'on' : ''}" data-metier="amo">AMO / accompagnement</button>
+    </div>
+    <p class="mf-aide">${v.mission === 'amo'
+      ? 'Accompagnement du maître d’ouvrage : les honoraires sont un pourcentage des travaux.'
+      : 'Expertise technique : le tarif part du plancher de la prestation choisie.'}</p>
+
+    <div class="mf-sous-titre">${QUESTION()}</div>
     <div class="mf-niveaux" style="${teinte()}">
-      ${CHOIX_MISSION().map(c => `
-        <button type="button" class="mf-niveau ${c.cle === choisi ? 'on' : ''}"
-          data-choix="${esc(c.cle)}" data-metier="${esc(c.mission)}">
-          <span class="mf-niveau-pts">${esc(c.note)}</span>
-          <b>${esc(c.titre)}</b>
-          <span class="mf-niveau-txt">${esc(c.txt)}</span>
+      ${PRESTATIONS().map(n => `
+        <button type="button" class="mf-niveau ${n.key === choisi ? 'on' : ''}" data-choix="${esc(n.key)}">
+          <span class="mf-niveau-pts">${esc(n.tarif)}</span>
+          <b>${esc(n.label)}</b>
+          <span class="mf-niveau-txt">${esc(n.contenu)}</span>
         </button>`).join('')}
     </div>
-    ${!choisi ? '<p class="mf-aide attention">Choisissez la mission : c’est elle qui commande la suite du parcours et le tarif.</p>' : ''}
+    ${!choisi && v.mission !== 'amo'
+      ? '<p class="mf-aide attention">Choisissez la prestation : c’est elle qui commande le tarif.</p>'
+      : v.mission === 'amo'
+        ? '<p class="mf-aide">À défaut de choix ici, le niveau sera proposé par la cotation de l’étape « Complexité et honoraires ».</p>'
+        : ''}
 
     <div class="mf-bloc-titre">B. Le bien</div>
     <div class="mf-grille mf-grille-serree">
@@ -537,8 +546,11 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
       // ⚠ PLUS DE CONTRÔLE DU NOM ICI : l'identification est passée en
       // DERNIER, il n'y a plus d'écran après elle. C'est `enregistrer` qui
       // exige le nom, et qui ramène sur la bonne étape s'il manque.
-      // ⚠ La mission, elle, se vérifie ici : sans prestation choisie, l'écran
-      // suivant n'aurait ni tarif ni cotation à montrer.
+      // ⚠ LA PRESTATION SE VÉRIFIE ICI, ET CÔTÉ EXPERTISE SEULEMENT : c'est
+      // elle qui commande le tarif de l'écran suivant, il n'y aurait rien à
+      // montrer sans elle. Côté AMO le niveau se DÉDUIT de la cotation, et
+      // l'exiger dès le premier écran ferait choisir un degré de charge avant
+      // de connaître le budget, les lots et la durée.
       if (nomEcran() === 'mission' && v.mission !== 'amo' && !cleNiveau(v.niveau)) {
         return toast('Choisissez la prestation', 'warn');
       }
@@ -570,21 +582,27 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
     }
 
     if (ecran === 'mission') {
-      // ⚠ CHOISIR UNE PRESTATION CHOISIT AUSSI LE METIER. Les trois cartes
-      // d'expertise posent `mission = expertise` ET le niveau ; la carte AMO
-      // pose le métier et efface le niveau, qui appartient à l'autre déroulé.
-      corps.querySelectorAll('[data-choix]').forEach(b => b.onclick = () => {
+      corps.querySelectorAll('[data-metier]').forEach(b => b.onclick = () => {
         const metier = b.dataset.metier;
-        const cle = b.dataset.choix;
+        if (v.mission === metier) return;
+        v.mission = metier;
         // ⚠ CHANGER DE METIER CHANGE LE DEROULE : les étapes de l'expertise
         // n'existent pas côté AMO. On replace l'affaire au départ du nouveau
         // métier plutôt que de la laisser à une étape qui n'a plus de colonne.
-        if (v.mission !== metier) {
-          v.mission = metier;
-          const etapes = etapesDe(metier);
-          if (!etapes.some(e => e.key === v.stage)) v.stage = etapes[0].key;
-        }
-        v.niveau = metier === 'amo' ? null : cle;
+        const etapes = etapesDe(metier);
+        if (!etapes.some(e => e.key === v.stage)) v.stage = etapes[0].key;
+        // ⚠ LE NIVEAU APPARTIENT AU METIER : `exp_preachat` n'existe pas côté
+        // AMO, le garder afficherait une prestation absente de la rangée et
+        // ferait chercher un tarif dans la mauvaise grille.
+        v.niveau = null;
+        dessine();
+      });
+      // La prestation, dans le métier déjà choisi. Un second clic sur la carte
+      // retenue la désélectionne : c'est le seul moyen de revenir à « rien de
+      // choisi » après s'être trompé, et côté AMO cela rend la main à la
+      // cotation.
+      corps.querySelectorAll('[data-choix]').forEach(b => b.onclick = () => {
+        v.niveau = cleNiveau(v.niveau) === b.dataset.choix ? null : b.dataset.choix;
         dessine();
       });
       poser('#fp-annee', 'annee'); poser('#fp-surface', 'surface'); poser('#fp-pieces', 'pieces');
