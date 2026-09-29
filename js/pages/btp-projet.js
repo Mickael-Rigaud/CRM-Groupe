@@ -259,10 +259,20 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
   // connaître ce qui le détermine.
   const PRESTATIONS = () => NIVEAUX_EXP;
 
+  // ⚠ « RAPPORT ENVOYÉ LE » A QUITTÉ CET ÉCRAN LE 29/09/2026, ET LA DONNÉE
+  // RESTE : `v.date_rapport` est toujours initialisé depuis `dateLivrable()` et
+  // toujours enregistré dans `fields.date_rapport`. Le champ demandait, sur le
+  // premier écran d'une mission qui commence, la date d'un livrable qui n'est
+  // pas écrit — et il se remplit tout seul au passage à l'étape
+  // (`ETAPE_LIVRABLE`), ce que son propre texte d'aide disait.
+  // ⚠ NE PAS EN CONCLURE QUE `dateLivrable` OU `ETAPE_LIVRABLE` SONT MORTS :
+  // les deux servent encore, à l'initialisation de `v` juste au-dessus.
+  // ⚠ CONSÉQUENCE À CONNAÎTRE : la date ne se CORRIGE plus à la main nulle
+  // part. Elle reste affichée sur la fiche d'affaire (`act.fields`, rubrique
+  // « mission ») et se déduit de `stage_history` à chaque ouverture du
+  // formulaire ; c'est le passage à l'étape qui la pose, pas une saisie.
   const ecranMission = () => {
     const etapes = etapesDe(v.mission);
-    const cleLivrable = ETAPE_LIVRABLE[v.mission];
-    const dateAuto = dateLivrable(v.mission);
     const choisi = cleNiveau(v.niveau);
     return `
     <div class="mf-bloc-titre">A. Type de mission</div>
@@ -305,11 +315,6 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
         <input type="date" id="fp-visite" value="${esc(v.date_visite)}">
         ${agenda ? `<em class="mf-champ-aide">Google Agenda : ${esc(agenda.title)}${agenda.day ? ` le ${esc(agenda.day)}` : ''}</em>`
           : '<em class="mf-champ-aide">Aucun rendez-vous à ce nom dans l’agenda.</em>'}</label>
-      <label class="mail-champ"><span>Rapport envoyé le</span>
-        <input type="date" id="fp-rapport" value="${esc(v.date_rapport)}">
-        <em class="mf-champ-aide">${dateAuto
-          ? `Repris de l’étape « ${esc(etapes.find(e => e.key === cleLivrable)?.label || cleLivrable)} ».`
-          : `Se remplit au passage à « ${esc(etapes.find(e => e.key === cleLivrable)?.label || cleLivrable)} ».`}</em></label>
       <label class="mail-champ"><span>Où en est la mission ?</span>
         <select id="fp-stage">${etapes.map(e => `<option value="${e.key}" ${e.key === v.stage ? 'selected' : ''}>${esc(e.label)}</option>`).join('')}</select></label>
       <label class="mail-champ"><span>Chargé d'affaires</span>
@@ -602,7 +607,7 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
       poser('#fp-annee', 'annee'); poser('#fp-surface', 'surface'); poser('#fp-pieces', 'pieces');
       poser('#fp-bien-rue', 'adresse'); poser('#fp-bien-cp', 'code_postal'); poser('#fp-bien-ville', 'ville');
       choisir('#fp-type', 'type_bien'); choisir('#fp-occupation', 'occupation');
-      choisir('#fp-visite', 'date_visite'); choisir('#fp-rapport', 'date_rapport');
+      choisir('#fp-visite', 'date_visite');
       choisir('#fp-stage', 'stage'); choisir('#fp-owner', 'owner_id');
       return;
     }
