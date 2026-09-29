@@ -99,6 +99,42 @@ async function ouvrirPlanche(root, fiche, dessine) {
   }
 }
 
+// ------------------------------------------------- Déposer les 50 planches
+//
+// ⚠ LE DÉPÔT SE FAIT D'ICI, ET PAS DEPUIS LA CONSOLE DE LA PLATEFORME. Le
+// premier jet renvoyait la direction vers Supabase pour y glisser un dossier :
+// c'est une porte de plus à connaître, dans un outil que personne n'ouvre, et
+// l'atlas est resté vide. Le navigateur de quelqu'un de la direction a
+// exactement le droit qu'il faut (policy `btp_atlas_objets_ajout`) — autant
+// s'en servir.
+//
+// ⚠ LE NOM DU FICHIER EST LA CLÉ, ET IL EST VÉRIFIÉ AVANT D'ENVOYER. Une
+// planche déposée sous un autre nom que `fiche-NN.jpeg` ne serait rattachée à
+// aucune fiche et n'apparaîtrait nulle part — un envoi qui réussit et ne sert
+// à rien est pire qu'un refus.
+async function deposerPlanches(root, fichiers, dessine) {
+  const connues = new Set(fiches().map(f => f.image));
+  const bons = [...fichiers].filter(f => connues.has(f.name));
+  const ecartes = [...fichiers].length - bons.length;
+  if (!bons.length) {
+    return toast(`Aucun fichier ne porte un nom attendu (fiche-01.jpeg …). ${ecartes} écarté(s).`, 'warn');
+  }
+  let ok = 0; const rates = [];
+  for (const f of bons) {
+    try {
+      // `upsert` : redéposer une planche corrigée doit la remplacer, pas
+      // échouer — d'où la policy UPDATE sur le seau.
+      await db.uploadFile(f.name, f, { bucket: SEAU, upsert: true });
+      ok++;
+    } catch (e) { rates.push(`${f.name} : ${e.message}`); }
+  }
+  toast(`${ok} planche${ok > 1 ? 's' : ''} déposée${ok > 1 ? 's' : ''}`
+    + (ecartes ? ` · ${ecartes} nom${ecartes > 1 ? 's' : ''} inattendu${ecartes > 1 ? 's' : ''}` : '')
+    + (rates.length ? ` · ${rates.length} en échec` : ''), rates.length ? 'warn' : 'ok');
+  if (rates.length) console.warn(['Planches non déposées :', ...rates].join(String.fromCharCode(10)));
+  dessine();
+}
+
 // ---------------------------------------------------------------- L'écran
 export const btpAtlasPage = {
   title: () => 'BTP Expertise — Atlas visuels',
@@ -125,6 +161,11 @@ export const btpAtlasPage = {
               <button type="button" class="chip${etat.vue === 'fiches' ? ' on' : ''}" data-vue="fiches">Fiches (${toutes.length})</button>
               <button type="button" class="chip${etat.vue === 'signaux' ? ' on' : ''}" data-vue="signaux">Signaux d'alerte (${signaux().length})</button>
             </div>
+            ${scope.isDirection && !db.demo ? `
+              <label class="btn ghost sm" style="cursor:pointer;margin-left:8px">
+                Déposer les planches
+                <input type="file" id="at-depot" accept="image/jpeg,image/png,image/webp" multiple hidden>
+              </label>` : ''}
           </div>
           ${etat.vue === 'fiches' ? vueFiches(filtrees, ouverte, etat) : vueSignaux()}
         </div>`);
@@ -203,6 +244,10 @@ function vueSignaux() {
 }
 
 function lier(root, etat, dessine) {
+  const depot = root.querySelector('#at-depot');
+  if (depot) depot.onchange = () => {
+    if (depot.files?.length) deposerPlanches(root, depot.files, dessine);
+  };
   root.querySelectorAll('[data-vue]').forEach(b => b.onclick = () => {
     etat.vue = b.dataset.vue; dessine();
   });
