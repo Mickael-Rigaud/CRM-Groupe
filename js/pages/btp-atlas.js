@@ -58,6 +58,28 @@ const ORDRE_FAMILLES = [
   'Enduits et peintures', 'Sols et revêtements', 'ITE et façades',
   'Toitures et étanchéité',
 ];
+// ⚠ UNE ICÔNE PAR FAMILLE, ET C'EST CE QUI REND LE SOMMAIRE PARCOURABLE.
+// À cinquante fiches, les sept en-têtes étaient sept bandeaux identiques : il
+// fallait LIRE chaque titre pour trouver sa famille, alors qu'on arrive sur
+// cet écran en sachant déjà qu'on cherche une fissure ou de l'humidité. Un
+// dessin se repère en balayant la page, un texte non.
+//
+// ⚠ LA CLÉ EST LE NOM DE LA FAMILLE, tel qu'il est écrit en base : une famille
+// qu'on ajouterait demain n'aurait pas d'icône et prendrait le repli, plutôt
+// que de faire disparaître son en-tête.
+const ICONES_FAMILLE = {
+  'Fissures et l\u00e9zardes':      '<path d="M13 3 8.5 10h5L9 21"/><path d="M13.5 10.6 18 13"/>',
+  'B\u00e9ton et structure':        '<path d="M4 3h16"/><path d="M4 21h16"/><path d="M8 3v18M16 3v18"/><path d="M8 9h8M8 15h8"/>',
+  'Humidit\u00e9 et infiltrations': '<path d="M12 3s5.5 6.2 5.5 10a5.5 5.5 0 0 1-11 0C6.5 9.2 12 3 12 3Z"/>',
+  'Enduits et peintures':     '<rect x="3" y="4" width="13" height="6" rx="1.5"/><path d="M16 7h3a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2h-7"/><path d="M12 13v3"/><rect x="10" y="16" width="4" height="5" rx="1"/>',
+  'Sols et rev\u00eatements':       '<rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/>',
+  'ITE et fa\u00e7ades':            '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 12h18"/><path d="M9 4v8M15 12v8"/>',
+  'Toitures et \u00e9tanch\u00e9it\u00e9':   '<path d="M2 12 12 4l10 8"/><path d="M5 11v8h14v-8"/><path d="M9 19v-5h6v5"/>',
+};
+const iconeFamille = (f) => `<svg class="at-fam-icone" viewBox="0 0 24 24" aria-hidden="true"
+  fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"
+  stroke-linejoin="round">${ICONES_FAMILLE[f] || '<circle cx="12" cy="12" r="8"/>'}</svg>`;
+
 const rangFamille = (f) => {
   const i = ORDRE_FAMILLES.indexOf(f);
   return i < 0 ? ORDRE_FAMILLES.length : i;   // une famille inconnue passe en fin, jamais devant
@@ -355,7 +377,7 @@ function vueFiches(liste, ouverte, etat) {
         ${barreRecherche(etat, true)}
         ${liste.length ? parFamille(liste).map(([famille, l]) => `
           <div class="at-fam">
-            <div class="at-fam-titre">${esc(famille)}</div>
+            <div class="at-fam-titre">${iconeFamille(famille)}${esc(famille)}</div>
             ${l.map(f => `
               <button type="button" class="at-ligne${f.numero === etat.ouverte ? ' on' : ''}" data-fiche="${f.numero}">
                 ${jeton(f)}
@@ -526,7 +548,10 @@ function sommaire(liste, etat) {
         <div class="at-somm-grille">
           ${parFamille(liste).map(([famille, fs], i) => `
             <div class="at-somm-fam" style="--rang:${i}">
-              <div class="at-somm-fam-titre">${esc(famille)} <span>${fs.length}</span></div>
+              <div class="at-somm-fam-titre">
+                ${iconeFamille(famille)}${esc(famille)}
+                <span>${fs.length}</span>
+              </div>
               ${fs.map(f => `
                 <button type="button" class="at-somm-ligne" data-fiche="${f.numero}">
                   ${jeton(f)}

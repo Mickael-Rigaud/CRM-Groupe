@@ -3976,8 +3976,10 @@ textarea.ev-nu { resize: vertical; min-height: 40px; }
 .at-vider:hover { background: var(--accent-soft); color: var(--accent-ink); }
 
 /* ---- L'index etroit ---- */
-.at-fam-titre { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .09em;
+.at-fam-titre { display: flex; align-items: center; gap: 7px;
+  font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .09em;
   color: var(--muted-2); margin: 12px 0 5px 3px; }
+.at-fam-titre .at-fam-icone { width: 14px; height: 14px; }
 .at-ligne { display: flex; gap: 9px; align-items: flex-start; width: 100%; text-align: left;
   border: 0; background: none; font: inherit; font-size: 13px; color: var(--text);
   padding: 6px 9px; border-radius: 9px; cursor: pointer;
@@ -4084,29 +4086,58 @@ textarea.ev-nu { resize: vertical; min-height: 40px; }
    ⚠ L'APPARITION EST EN CASCADE PAR FAMILLE (sept blocs), jamais par ligne :
    cinquante animations decalees donnent une page qui fremit pendant une
    seconde, ce qu'on remarque tous les jours et qui finit par agacer. */
-.at-somm-grille { display: grid; grid-template-columns: repeat(auto-fill, minmax(258px, 1fr));
-  gap: 15px; align-items: start; }
-.at-somm-fam { border: 1px solid var(--line); border-radius: 14px; padding: 13px 13px 9px;
-  background: var(--card); animation: at-monte .32s cubic-bezier(.2,.8,.3,1) both;
+/* ⚠ DES COLONNES, PAS UNE GRILLE — et c'est le defaut principal que les 50
+   fiches ont revele (29/09/2026). En grille, toutes les cartes d'une rangee
+   prennent la hauteur de la plus haute : « Fissures » en compte 13 et
+   « ITE » 3, donc la rangee laissait 400 px de vide sous les petites
+   familles, deux fois. On ne le voyait pas sur le jeu de demo, qui n'a que
+   six fiches.
+
+   Les colonnes remplissent en continu : une famille commence la ou la
+   precedente s'arrete. L'ordre de lecture devient vertical, ce qui est
+   justement celui d'un index imprime — le PDF d'origine presente le sien en
+   deux colonnes verticales.
+
+   ⚠ `break-inside: avoid` EST INDISPENSABLE : sans lui une famille se coupe
+   en deux entre deux colonnes, en-tete d'un cote et moitie des fiches de
+   l'autre. */
+.at-somm-grille { columns: 292px; column-gap: 16px; }
+.at-somm-fam { break-inside: avoid; -webkit-column-break-inside: avoid;
+  border: 1px solid var(--line); border-radius: 14px; padding: 0 13px 9px;
+  margin-bottom: 16px; background: var(--card);
+  animation: at-monte .32s cubic-bezier(.2,.8,.3,1) both;
   animation-delay: calc(var(--rang, 0) * 45ms);
-  transition: border-color .18s, box-shadow .18s, transform .18s; }
+  transition: border-color .18s, box-shadow .18s; }
+/* ⚠ PAS DE `transform` AU SURVOL ICI : dans un conteneur en colonnes, un
+   element deplace peut etre reparti d'une colonne a l'autre au repaint, et la
+   carte saute sous la souris. L'ombre suffit a repondre. */
 .at-somm-fam:hover { border-color: color-mix(in srgb, var(--accent) 34%, var(--line));
-  box-shadow: 0 6px 22px -12px color-mix(in srgb, var(--accent) 55%, transparent); transform: translateY(-2px); }
+  box-shadow: 0 6px 22px -12px color-mix(in srgb, var(--accent) 55%, transparent); }
 /* ⚠ L'EN-TETE DE FAMILLE EST UN APLAT, PAS UN TRAIT GRIS. Sept cartes
    blanches separees par sept traits gris clair : rien n'accrochait l'oeil et
    on lisait le tableau ligne a ligne au lieu de reperer sa famille d'un coup.
-   L'aplat deborde le padding de la carte (marges negatives) pour aller
-   toucher ses bords. */
-.at-somm-fam-titre { display: flex; align-items: center; gap: 8px; font-size: 10px; font-weight: 800;
-  text-transform: uppercase; letter-spacing: .09em; color: var(--accent-ink);
-  margin: -13px -13px 9px; padding: 11px 13px; background: var(--accent-soft);
+   Il est colle aux bords de la carte (padding-top de la carte a 0) plutot que
+   tire par des marges negatives — dans un conteneur en colonnes, une marge
+   negative sur le premier enfant decale le calcul de hauteur du bloc. */
+.at-somm-fam-titre { display: flex; align-items: center; gap: 9px; font-size: 10.5px; font-weight: 800;
+  text-transform: uppercase; letter-spacing: .08em; color: var(--accent-ink);
+  margin: 0 -13px 8px; padding: 11px 13px; background: var(--accent-soft);
   border-radius: 13px 13px 0 0; }
 .at-somm-fam-titre span { margin-left: auto; color: var(--on-accent); font-weight: 800;
   background: var(--accent); border-radius: 999px; padding: 1px 8px; letter-spacing: 0; }
+.at-fam-icone { flex: 0 0 auto; width: 17px; height: 17px; opacity: .9; }
+
+/* ⚠ UN FILET ENTRE LES LIGNES, pas autour : sur treize lignes d'affilee l'oeil
+   perd la sienne en revenant du titre au numero. Il est tres clair et
+   disparait au survol, ou le fond prend le relais. */
 .at-somm-ligne { display: flex; gap: 9px; align-items: flex-start; width: 100%; text-align: left;
-  border: 0; background: none; font: inherit; font-size: 13px; color: var(--text);
-  padding: 6px 8px; margin-bottom: 2px; border-radius: 9px; cursor: pointer;
-  transition: background .16s, color .16s, transform .16s; }
+  border: 0; border-top: 1px solid var(--line); background: none; font: inherit;
+  font-size: 13px; color: var(--text);
+  padding: 7px 8px; border-radius: 9px; cursor: pointer;
+  transition: background .16s, color .16s, transform .16s, border-color .16s; }
+.at-somm-fam .at-somm-ligne:first-of-type { border-top-color: transparent; }
+.at-somm-ligne:hover { border-top-color: transparent; }
+.at-somm-ligne:hover + .at-somm-ligne { border-top-color: transparent; }
 .at-somm-ligne:hover { background: var(--accent-soft); color: var(--accent-ink); transform: translateX(3px); }
 .at-somm-ligne:hover .at-jeton { transform: scale(1.09); }
 .at-somm-t { flex: 1 1 auto; min-width: 0; line-height: 1.35; }
