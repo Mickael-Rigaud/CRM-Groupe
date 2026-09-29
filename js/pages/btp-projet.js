@@ -170,7 +170,7 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
   const nomComplet = () => [v.prenom, v.nom].filter(Boolean).join(' ').trim();
 
   // ------------------------------------------------------------- les briques
-  // ⚠ L'ORDRE A CHANGÉ LE 29/09/2026, demandé par Mickael pour l'expertise :
+  // ⚠ L'ORDRE A CHANGÉ LE 29/09/2026, demandé pour l'expertise :
   // Mission → Le désordre & tarif → Identification. On qualifie d'abord, on
   // prend les coordonnées à la fin.
   //
@@ -245,21 +245,19 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
   };
 
   // ------------------------------------------------------------ 1. la mission
-  // ⚠ LE CHOIX SE FAIT EN DEUX TEMPS (29/09/2026) : le METIER d'abord, la
-  // PRESTATION ensuite. La première version posait les quatre missions à plat
-  // — trois expertises et l'AMO dans la même rangée — ce qui mélangeait deux
-  // questions de nature différente : « quel métier » commande tout le parcours,
-  // « quelle prestation » ne commande que le tarif.
+  // ⚠ LE CHOIX SE FAIT EN DEUX TEMPS CÔTÉ EXPERTISE, EN UN SEUL CÔTÉ AMO
+  // (29/09/2026). Le METIER se choisit ici pour les deux ; la PRESTATION ne se
+  // choisit ici que pour l'expertise.
   //
-  // ⚠ LES DEUX LISTES NE SE VALENT PAS, ET C'EST POURQUOI ELLES NE SONT PAS
-  // TRAITÉES PAREIL PLUS BAS : les trois expertises sont des missions de nature
-  // différente, que seul l'humain peut trancher ; les trois niveaux d'AMO sont
-  // des degrés de charge, que la matrice de l'étape « Complexité » sait
-  // proposer à partir du budget, des lots et de la durée.
-  const PRESTATIONS = () => (v.mission === 'amo' ? NIVEAUX_AMO : NIVEAUX_EXP);
-  const QUESTION = () => (v.mission === 'amo'
-    ? 'Quel accompagnement ?'
-    : 'Quelle expertise ?');
+  // ⚠ CE N'EST PAS UNE ASYMÉTRIE GRATUITE : les trois expertises sont des
+  // missions de NATURE différente, que seul l'humain peut trancher et dont
+  // dépend le tarif de l'écran suivant. Les trois niveaux d'AMO sont des
+  // DEGRÉS DE CHARGE, et ils ont déjà leur place à l'étape « Complexité et
+  // honoraires », où la matrice les propose à partir du budget, des lots et de
+  // la durée. Les poser ici aussi aurait fait DEUX ENDROITS POUR UNE MÊME
+  // DÉCISION, et le premier aurait fait choisir un degré de charge avant de
+  // connaître ce qui le détermine.
+  const PRESTATIONS = () => NIVEAUX_EXP;
 
   const ecranMission = () => {
     const etapes = etapesDe(v.mission);
@@ -273,23 +271,20 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
       <button type="button" class="${v.mission === 'amo' ? 'on' : ''}" data-metier="amo">AMO / accompagnement</button>
     </div>
     <p class="mf-aide">${v.mission === 'amo'
-      ? 'Accompagnement du maître d’ouvrage : les honoraires sont un pourcentage des travaux.'
+      ? 'Accompagnement du maître d’ouvrage : les honoraires sont un pourcentage des travaux, et le niveau de mission se définit à l’étape « Complexité et honoraires ».'
       : 'Expertise technique : le tarif part du plancher de la prestation choisie.'}</p>
 
-    <div class="mf-sous-titre">${QUESTION()}</div>
-    <div class="mf-niveaux" style="${teinte()}">
-      ${PRESTATIONS().map(n => `
-        <button type="button" class="mf-niveau ${n.key === choisi ? 'on' : ''}" data-choix="${esc(n.key)}">
-          <span class="mf-niveau-pts">${esc(n.tarif)}</span>
-          <b>${esc(n.label)}</b>
-          <span class="mf-niveau-txt">${esc(n.contenu)}</span>
-        </button>`).join('')}
-    </div>
-    ${!choisi && v.mission !== 'amo'
-      ? '<p class="mf-aide attention">Choisissez la prestation : c’est elle qui commande le tarif.</p>'
-      : v.mission === 'amo'
-        ? '<p class="mf-aide">À défaut de choix ici, le niveau sera proposé par la cotation de l’étape « Complexité et honoraires ».</p>'
-        : ''}
+    ${v.mission === 'amo' ? '' : `
+      <div class="mf-sous-titre">Quelle expertise ?</div>
+      <div class="mf-niveaux" style="${teinte()}">
+        ${PRESTATIONS().map(n => `
+          <button type="button" class="mf-niveau ${n.key === choisi ? 'on' : ''}" data-choix="${esc(n.key)}">
+            <span class="mf-niveau-pts">${esc(n.tarif)}</span>
+            <b>${esc(n.label)}</b>
+            <span class="mf-niveau-txt">${esc(n.contenu)}</span>
+          </button>`).join('')}
+      </div>
+      ${choisi ? '' : '<p class="mf-aide attention">Choisissez la prestation : c’est elle qui commande le tarif.</p>'}`}
 
     <div class="mf-bloc-titre">B. Le bien</div>
     <div class="mf-grille mf-grille-serree">
@@ -597,10 +592,9 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
         v.niveau = null;
         dessine();
       });
-      // La prestation, dans le métier déjà choisi. Un second clic sur la carte
-      // retenue la désélectionne : c'est le seul moyen de revenir à « rien de
-      // choisi » après s'être trompé, et côté AMO cela rend la main à la
-      // cotation.
+      // La prestation — CÔTÉ EXPERTISE SEULEMENT, la rangée n'existe pas en
+      // AMO. Un second clic sur la carte retenue la désélectionne : c'est le
+      // seul moyen de revenir à « rien de choisi » après s'être trompé.
       corps.querySelectorAll('[data-choix]').forEach(b => b.onclick = () => {
         v.niveau = cleNiveau(v.niveau) === b.dataset.choix ? null : b.dataset.choix;
         dessine();
