@@ -23,7 +23,7 @@ export const TABLES = ['profiles', 'organisations', 'contacts', 'deals', 'activi
   // Atlas visuel des pathologies : l'index des 50 fiches et les 12 signaux
   // d'alerte. ⚠ Le CONTENU n'est pas dans le dépôt — produit sous licence,
   // importé à la main ; les planches vivent dans le seau PRIVÉ `btp-atlas`.
-  'btp_atlas_fiches', 'btp_signaux_alerte',
+  'btp_atlas_fiches', 'btp_signaux_alerte', 'btp_visites_guidees',
   // espace RGD Renova : le relevé déposé toutes les 30 min par son worker.
   // Cloudflare D1 reste la source ; ces tables en sont le reflet, personne
   // n'y écrit depuis le CRM tant que la migration n'est pas terminée.

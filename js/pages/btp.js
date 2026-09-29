@@ -92,7 +92,14 @@ const ONGLETS = [
   // montrer ce qu'il contient.
   { label: 'Documentation', sous: [
     { hash: '#/btp/dtu', label: 'DTU' },
-    { hash: '#/btp/atlas', label: 'Atlas visuels' },
+    // ⚠ L'ÉCRAN S'APPELLE « FORMATION » DEPUIS LE 29/09/2026 (demandé par
+    // Mickael), ET SON ADRESSE NE CHANGE PAS. Il ne portait que l'atlas ; il
+    // porte maintenant trois choses qui s'apprennent ensemble — les fiches,
+    // les signaux d'alerte et les vingt visites guidées. « Atlas visuels »
+    // décrivait un tiers du contenu.
+    // Un nom d'écran se renomme, une adresse se casse : `#/btp/atlas` est
+    // écrite dans des liens déjà partis et dans le CLAUDE.md du dépôt.
+    { hash: '#/btp/atlas', label: 'Formation' },
     { hash: '#/btp/mails', label: 'Mails & modèles' },
   ] },
   // `bas: true` le pousse au pied du menu, séparé par un trait : on n'ouvre pas

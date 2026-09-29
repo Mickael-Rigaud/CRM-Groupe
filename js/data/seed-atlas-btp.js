@@ -47,6 +47,17 @@ const planche = (n, titre, teinte, alerte) => 'data:image/svg+xml;utf8,' + encod
 // ne se verrait qu'au jour où quelqu'un ajoute une fiche sans le remplir. Ne
 // pas « corriger » en lui donnant du vert : ce serait affirmer « à surveiller »
 // d'une fiche dont on ne sait rien.
+// La photo d'une visite : un cadre paysage, pour que l'\u00e9cran ait la bonne
+// proportion \u00e0 l'essai. Aucune image r\u00e9elle ici, m\u00eame raison que les planches.
+const photoDemo = (n, titre, teinte) => 'data:image/svg+xml;utf8,' + encodeURIComponent(
+  `<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="933" viewBox="0 0 1400 933">
+    <rect width="1400" height="933" fill="#eceff3"/>
+    <rect x="60" y="60" width="1280" height="813" rx="18" fill="#ffffff"/>
+    <circle cx="700" cy="420" r="150" fill="none" stroke="${teinte}" stroke-width="14"/>
+    <text x="700" y="640" font-family="Arial" font-size="34" fill="#8a94a6" text-anchor="middle">Photo d'exemple \u2014 mode d\u00e9monstration</text>
+    <text x="700" y="700" font-family="Arial" font-size="28" fill="#b3bac6" text-anchor="middle">Visite ${String(n).padStart(2, '0')} \u00b7 ${titre}</text>
+  </svg>`);
+
 export const SEED_ATLAS_BTP = {
   btp_atlas_fiches: [
     { numero: 2, famille: 'Fissures et lézardes', titre: 'Micro-fissures en réseau sur enduit',
@@ -62,6 +73,49 @@ export const SEED_ATLAS_BTP = {
     { numero: 45, famille: 'Toitures et étanchéité', titre: 'Tuiles déplacées après coup de vent',
       image: planche(45, 'Tuiles déplacées après coup de vent', '#2f7d4f', null) },
   ],
+  // \u26a0 DEUX VISITES INVENT\u00c9ES, de bout en bout comme le reste du fichier.
+  // Elles suffisent \u00e0 \u00e9prouver l'\u00e9cran : les six \u00e9tapes, le renvoi vers une
+  // fiche PR\u00c9SENTE (02) et vers une fiche ABSENTE du jeu de d\u00e9mo (07), les
+  // deux sens du filtre par couleur, et la photo.
+  btp_visites_guidees: [
+    { numero: 1, titre: 'La fissure qui suit le linteau', ville: 'Ville-Exemple',
+      contexte: 'Maison de d\u00e9monstration, murs en ma\u00e7onnerie',
+      demande: "Une fissure est apparue au-dessus d'une porte. Je peux repeindre ?",
+      observations: ['Fissure fine partant de l\u2019angle de l\u2019ouverture.',
+                     'Longueur stable, bords nets.',
+                     'Aucune autre fissure dans la pi\u00e8ce.'],
+      fiche_soupcon: 2, soupcon_titre: 'Micro-fissures en r\u00e9seau sur enduit',
+      fiche_jumeau: 7, jumeau_titre: 'Fiche absente du jeu de d\u00e9monstration',
+      detail: "Le jumeau d\u00e9signe ici une fiche que la d\u00e9monstration ne contient pas : c'est volontaire, l'\u00e9cran doit le dire au lieu d'offrir un lien mort.",
+      verifications: ['Rep\u00e8res au crayon dat\u00e9s aux extr\u00e9mit\u00e9s.',
+                      'Contr\u00f4le six semaines plus tard : aucun allongement.'],
+      code_couleur: 'vert',
+      diagnostic: 'Fissure de concentration de contraintes sur le linteau, stable.',
+      intervention: 'Rebouchage avec treillis diagonal \u00e0 l\u2019angle.',
+      erreur: 'Refermer avant d\u2019avoir mesur\u00e9 : si elle travaillait, elle se rouvrirait apr\u00e8s les travaux.',
+      lecon: 'On ne referme rien avant d\u2019avoir mesur\u00e9 deux fois, \u00e0 six semaines d\u2019intervalle.',
+      extrait_rapport: 'Lors de la visite du [date], on observe une fissure en biais \u00e0 l\u2019angle sup\u00e9rieur de l\u2019ouverture. La surveillance sur six semaines n\u2019a mis en \u00e9vidence aucune variation. La fissure est consid\u00e9r\u00e9e comme non \u00e9volutive.',
+      image: photoDemo(1, 'La fissure qui suit le linteau', '#2e9e5b') },
+    { numero: 2, titre: 'Le plafond qui perd des morceaux', ville: 'Ville-Exemple',
+      contexte: 'Immeuble de d\u00e9monstration, plancher \u00e0 entrevous',
+      demande: "Un morceau est tomb\u00e9 du plafond. Je rebouche ?",
+      observations: ['Cratère d\u2019une trentaine de centim\u00e8tres au plafond.',
+                     'Fragments de terre cuite au sol, pas seulement de l\u2019enduit.',
+                     'Deux autres zones l\u00e9g\u00e8rement bomb\u00e9es.'],
+      fiche_soupcon: 14, soupcon_titre: 'Plafond qui perd des fragments',
+      fiche_jumeau: 2, jumeau_titre: 'Micro-fissures en r\u00e9seau sur enduit',
+      detail: 'Un simple d\u00e9collement d\u2019enduit laisse voir un support intact ; ici, le mat\u00e9riau tomb\u00e9 est le fond du bloc lui-m\u00eame.',
+      verifications: ['Sondage de tout le plafond : trois zones creuses.',
+                      'Pi\u00e8ce occup\u00e9e en dessous.'],
+      code_couleur: 'rouge',
+      diagnostic: 'Rupture des fonds d\u2019entrevous, avec d\u2019autres zones \u00e0 risque de chute.',
+      intervention: 'Dispositif anti-chute certifi\u00e9 apr\u00e8s mise en s\u00e9curit\u00e9.',
+      erreur: 'Refermer le trou \u00e0 l\u2019enduit : on cache ce qui peut retomber.',
+      lecon: 'Regardez toujours dans le trou : le mat\u00e9riau tomb\u00e9 dit de quelle pathologie il s\u2019agit.',
+      extrait_rapport: 'On rel\u00e8ve la chute du fond de plusieurs entrevous du plancher. Le sondage met en \u00e9vidence d\u2019autres zones \u00e0 risque. Il est recommand\u00e9 d\u2019interdire l\u2019usage de la pi\u00e8ce jusqu\u2019\u00e0 la pose d\u2019un syst\u00e8me anti-chute certifi\u00e9.',
+      image: photoDemo(2, 'Le plafond qui perd des morceaux', '#c8483c') },
+  ],
+
   btp_signaux_alerte: [
     { numero: 1, titre: "Fragments tombés d'un plafond", fiches: [14],
       pourquoi: "D'autres morceaux peuvent tomber sans prévenir : la zone en dessous n'est plus sûre.",

@@ -16,6 +16,17 @@
 // dessinés ici, donc sans réseau). Recopier trois vraies fiches « pour
 // montrer » les publierait sur GitHub aussi sûrement que les cinquante.
 //
+// ⚠ TROIS THÉMATIQUES DEPUIS LE 29/09/2026, ET L'ÉCRAN S'APPELLE « FORMATION »
+// (demandé par Mickael). Il ne portait que l'atlas ; il porte maintenant les
+// trois choses qui s'apprennent ensemble :
+//   1. les FICHES         — reconnaître une pathologie ;
+//   2. les SIGNAUX        — savoir quand ce n'est plus son rôle ;
+//   3. les VISITES guidées — voir le raisonnement à l'œuvre, de la phrase du
+//      client au paragraphe du rapport.
+// Elles se tiennent : chaque visite désigne DEUX fiches de l'atlas, celle
+// qu'on soupçonne et son « jumeau », et l'écran laisse passer de l'une à
+// l'autre. Séparées en trois écrans, ce lien se perdrait.
+//
 // ⚠ LE NUMÉRO DE FICHE EST UNE CLÉ, PAS UN RANG. La check-list renvoie aux
 // fiches par leur numéro imprimé (« 02 · 04 · 25 »), et ces numéros ne suivent
 // pas l'ordre des familles : « Fissures » va de 02 à 11, puis 13, 18 et 49.
@@ -37,6 +48,7 @@ const guard = (root) => {
 
 const fiches = () => scope.canBtp ? db.t('btp_atlas_fiches') : [];
 const signaux = () => scope.canBtp ? db.t('btp_signaux_alerte') : [];
+const visites = () => scope.canBtp ? db.t('btp_visites_guidees') : [];
 
 // Les familles dans l'ordre du document d'origine, pas dans l'ordre
 // alphabétique : il va du structurel au cosmétique, et c'est l'ordre dans
@@ -126,35 +138,45 @@ function filtrer(toutes, etat) {
 // ⚠ L'URL EST SIGNÉE ET EXPIRE EN UNE HEURE : elle se demande à l'ouverture,
 // jamais à l'avance pour les cinquante. Charger cinquante URLs signées pour en
 // regarder une ferait cinquante appels et six mégaoctets d'images pour rien.
-async function ouvrirPlanche(root, fiche, dessine) {
-  const zone = root.querySelector('#at-planche');
+// ⚠ UNE SEULE FONCTION POUR LES DEUX IMAGES DE L'ÉCRAN — la planche d'une
+// fiche et la photo d'une visite. Elles posent exactement le même problème
+// (URL signée, valeur `data:` en démo, fichier absent), et deux copies
+// finissent toujours par diverger : l'une saurait distinguer une adresse déjà
+// faite, l'autre non, et le défaut ne se verrait que dans un seul des deux
+// volets.
+async function ouvrirImage(root, selecteur, chemin, legende) {
+  const zone = root.querySelector(selecteur);
   if (!zone) return;
-  zone.innerHTML = '<div class="empty">Ouverture de la planche…</div>';
-  if (!fiche.image) {
-    zone.innerHTML = `<div class="empty">La planche de la fiche ${num(fiche.numero)} n'a pas encore été déposée.</div>`;
+  zone.innerHTML = '<div class="empty">Ouverture\u2026</div>';
+  if (!chemin) {
+    zone.innerHTML = `<div class="empty">L'image n'a pas encore \u00e9t\u00e9 d\u00e9pos\u00e9e.</div>`;
     return;
   }
   try {
-    // ⚠ DEUX SORTES DE VALEURS DANS LA MÊME COLONNE, ET IL FAUT LES DISTINGUER.
-    // En production `image` est un CHEMIN dans le seau privé, qu'il faut faire
-    // signer. En démonstration c'est une adresse `data:` — une planche dessinée
-    // dans le jeu d'exemple, puisqu'il n'y a ni seau ni réseau. Passer la
-    // seconde à `fileUrl` la fait chercher dans un magasin de fichiers qui ne
-    // la connaît pas : « Fichier introuvable », et le cadre reste vide.
-    // Le test porte sur « c'est déjà une adresse », jamais sur « ce n'est pas
-    // un chemin » — la seconde formule laisserait passer une URL http un jour.
-    const brut = String(fiche.image);
+    // \u26a0 DEUX SORTES DE VALEURS DANS LA M\u00caME COLONNE, ET IL FAUT LES DISTINGUER.
+    // En production c'est un CHEMIN dans le seau priv\u00e9, qu'il faut faire
+    // signer. En d\u00e9monstration c'est une adresse `data:` \u2014 une image dessin\u00e9e
+    // dans le jeu d'exemple, puisqu'il n'y a ni seau ni r\u00e9seau. Passer la
+    // seconde \u00e0 `fileUrl` la fait chercher dans un magasin de fichiers qui ne
+    // la conna\u00eet pas : \u00ab Fichier introuvable \u00bb, et le cadre reste vide.
+    // Le test porte sur \u00ab c'est d\u00e9j\u00e0 une adresse \u00bb, jamais sur \u00ab ce n'est pas
+    // un chemin \u00bb \u2014 la seconde formule laisserait passer une URL http un jour.
+    const brut = String(chemin);
     const url = /^(data:|https?:)/.test(brut) ? brut : await db.fileUrl(brut, { bucket: SEAU });
-    zone.innerHTML = `<img src="${esc(url)}" alt="Fiche ${num(fiche.numero)} — ${esc(fiche.titre)}" class="at-img">`;
+    zone.innerHTML = `<img src="${esc(url)}" alt="${esc(legende)}" class="at-img">`;
   } catch (e) {
-    // Un cadre vide se lit comme « le CRM n'a pas repris la fiche » alors que
-    // c'est le FICHIER qui manque. On dit laquelle des deux — et on n'affiche
-    // pas l'adresse entière, qui peut faire plusieurs milliers de caractères.
-    zone.innerHTML = `<div class="empty">Planche introuvable dans le stockage
-      (${esc(String(fiche.image).slice(0, 60))}).<br>
+    // Un cadre vide se lit comme \u00ab le CRM n'a pas repris la fiche \u00bb alors que
+    // c'est le FICHIER qui manque. On dit laquelle des deux \u2014 et on n'affiche
+    // pas l'adresse enti\u00e8re, qui peut faire plusieurs milliers de caract\u00e8res.
+    zone.innerHTML = `<div class="empty">Image introuvable dans le stockage
+      (${esc(String(chemin).slice(0, 60))}).<br>
       <span class="small muted">${esc(e.message || '')}</span></div>`;
   }
 }
+
+const ouvrirPlanche = (root, fiche) =>
+  ouvrirImage(root, '#at-planche', fiche.image,
+              `Fiche ${num(fiche.numero)} \u2014 ${fiche.titre}`);
 
 // ------------------------------------------------- Déposer les 50 planches
 //
@@ -170,11 +192,14 @@ async function ouvrirPlanche(root, fiche, dessine) {
 // aucune fiche et n'apparaîtrait nulle part — un envoi qui réussit et ne sert
 // à rien est pire qu'un refus.
 async function deposerPlanches(root, fichiers, dessine) {
-  const connues = new Set(fiches().map(f => f.image));
+  // Les planches de l'atlas ET les photos des visites : même seau, même
+  // droit, même bouton. Deux boutons pour le même geste feraient chercher
+  // lequel prend quoi.
+  const connues = new Set([...fiches().map(f => f.image), ...visites().map(v => v.image)]);
   const bons = [...fichiers].filter(f => connues.has(f.name));
   const ecartes = [...fichiers].length - bons.length;
   if (!bons.length) {
-    return toast(`Aucun fichier ne porte un nom attendu (fiche-01.jpeg …). ${ecartes} écarté(s).`, 'warn');
+    return toast(`Aucun fichier ne porte un nom attendu (fiche-01.jpeg, visite-01.jpeg …). ${ecartes} écarté(s).`, 'warn');
   }
   let ok = 0; const rates = [];
   for (const f of bons) {
@@ -185,7 +210,7 @@ async function deposerPlanches(root, fichiers, dessine) {
       ok++;
     } catch (e) { rates.push(`${f.name} : ${e.message}`); }
   }
-  toast(`${ok} planche${ok > 1 ? 's' : ''} déposée${ok > 1 ? 's' : ''}`
+  toast(`${ok} image${ok > 1 ? 's' : ''} déposée${ok > 1 ? 's' : ''}`
     + (ecartes ? ` · ${ecartes} nom${ecartes > 1 ? 's' : ''} inattendu${ecartes > 1 ? 's' : ''}` : '')
     + (rates.length ? ` · ${rates.length} en échec` : ''), rates.length ? 'warn' : 'ok');
   if (rates.length) console.warn(['Planches non déposées :', ...rates].join(String.fromCharCode(10)));
@@ -194,11 +219,13 @@ async function deposerPlanches(root, fichiers, dessine) {
 
 // ---------------------------------------------------------------- L'écran
 export const btpAtlasPage = {
-  title: () => 'BTP Expertise — Atlas visuels',
+  title: () => 'BTP Expertise — Formation',
   render(root) {
     if (guard(root)) return {};
     const coquille = poserEspace(root);
     // `vue` : 'fiches' ou 'signaux'. `ouverte` : le numéro de fiche affiché.
+    // `vue` : 'fiches' | 'signaux' | 'visites'. `ouverte` : le numéro affiché
+    // — une fiche ou une visite selon la vue, jamais les deux à la fois.
     // `couleur` : le niveau d'alerte retenu, ou null pour les trois.
     const etat = { vue: 'fiches', ouverte: null, q: '', couleur: null };
 
@@ -207,26 +234,53 @@ export const btpAtlasPage = {
       const filtrees = filtrer(toutes, etat);
       const ouverte = toutes.find(f => f.numero === etat.ouverte) || null;
 
-      root.innerHTML = cadre('#/btp/atlas', 'Atlas visuels', `
+      // ⚠ LES TROIS THÉMATIQUES SONT DES CARTES, PAS DES PASTILLES. Elles
+      // étaient deux petites étiquettes dans un coin de l'en-tête ; à trois,
+      // chacune porte son rôle en une phrase, parce que « Signaux d'alerte »
+      // et « Visites guidées » ne disent pas d'eux-mêmes ce qu'on y trouve.
+      // C'est un écran de FORMATION : il commence par dire ce qu'on y apprend.
+      const THEMES = [
+        { cle: 'fiches',  titre: 'Fiches Atlas visuels', n: toutes.length,
+          quoi: 'Reconna\u00eetre une pathologie sur la planche' },
+        { cle: 'signaux', titre: "Signaux d'alerte", n: signaux().length,
+          quoi: 'Savoir quand ce n\u2019est plus votre r\u00f4le' },
+        { cle: 'visites', titre: 'Les visites techniques guid\u00e9es', n: visites().length,
+          quoi: 'Le raisonnement complet, du client au rapport' },
+      ];
+      const corps = etat.vue === 'signaux' ? vueSignaux()
+                  : etat.vue === 'visites' ? vueVisites(etat)
+                  : vueFiches(filtrees, ouverte, etat);
+
+      root.innerHTML = cadre('#/btp/atlas', 'Formation', `
+        <div class="fm-themes" role="tablist" aria-label="Th\u00e9matiques de la formation">
+          ${THEMES.map(o => `
+            <button type="button" class="fm-theme${etat.vue === o.cle ? ' on' : ''}"
+              data-vue="${o.cle}" role="tab" aria-selected="${etat.vue === o.cle}">
+              <span class="fm-theme-n">${o.n}</span>
+              <span class="fm-theme-t">
+                <b>${esc(o.titre)}</b>
+                <span>${esc(o.quoi)}</span>
+              </span>
+            </button>`).join('')}
+        </div>
         <div class="card">
-          <div class="card-head">
-            <h2>${etat.vue === 'fiches' ? 'Fiches de pathologie' : "Les 12 signaux d'alerte"}</h2>
-            <span class="grow"></span>
-            <div class="chips">
-              <button type="button" class="chip${etat.vue === 'fiches' ? ' on' : ''}" data-vue="fiches">Fiches (${toutes.length})</button>
-              <button type="button" class="chip${etat.vue === 'signaux' ? ' on' : ''}" data-vue="signaux">Signaux d'alerte (${signaux().length})</button>
-            </div>
-            ${scope.isDirection && !db.demo ? `
-              <label class="btn ghost sm" style="cursor:pointer;margin-left:8px">
-                Déposer les planches
+          ${scope.isDirection && !db.demo ? `
+            <div class="card-head">
+              <span class="grow"></span>
+              <label class="btn ghost sm" style="cursor:pointer">
+                D\u00e9poser des images
                 <input type="file" id="at-depot" accept="image/jpeg,image/png,image/webp" multiple hidden>
-              </label>` : ''}
-          </div>
-          ${etat.vue === 'fiches' ? vueFiches(filtrees, ouverte, etat) : vueSignaux()}
+              </label>
+            </div>` : ''}
+          ${corps}
         </div>`);
 
       lier(root, etat, dessine);
-      if (etat.vue === 'fiches' && ouverte) ouvrirPlanche(root, ouverte, dessine);
+      if (etat.vue === 'fiches' && ouverte) ouvrirPlanche(root, ouverte);
+      if (etat.vue === 'visites' && etat.ouverte) {
+        const v = visites().find(x => x.numero === etat.ouverte);
+        if (v) ouvrirImage(root, '#vg-photo', v.image, `Visite ${num(v.numero)} — ${v.titre}`);
+      }
     };
 
     dessine();
@@ -457,13 +511,174 @@ function sommaire(liste, etat) {
     </div>`;
 }
 
+// --------------------------------------------- Les visites techniques guidées
+//
+// ⚠ UNE VISITE N'EST PAS UNE FICHE DE PLUS, et la présenter comme telle
+// viderait le volet de son sens. Une fiche décrit un désordre hors contexte ;
+// une visite montre QUELQU'UN QUI RÉFLÉCHIT — il entend une phrase, il
+// observe, il soupçonne, il écarte le jumeau, il tranche, il écrit. C'est la
+// séquence qu'on vient apprendre, donc l'écran la déroule dans l'ordre, du
+// haut vers le bas, et numérote les étapes.
+//
+// ⚠ LA LISTE MONTRE LA VILLE ET LE BIEN, pas seulement le titre : « la
+// fissure au-dessus de la porte » ne dit pas si c'est une maison des années
+// 70 ou un parking des années 60, et c'est précisément ce qui fait qu'on
+// reconnaît son propre chantier dans le cas.
+function vueVisites(etat) {
+  const toutes = visites();
+  if (!toutes.length) {
+    return `<div class="empty">Aucune visite. Le contenu s'importe \u00e0 la main :
+      il n'est pas dans le d\u00e9p\u00f4t, c'est un document sous licence.</div>`;
+  }
+  const q = etat.q.trim().toLowerCase();
+  const liste = toutes
+    .filter(v => (!etat.couleur || v.code_couleur === etat.couleur)
+      && (!q || [v.titre, v.ville, v.contexte, v.demande, v.diagnostic]
+            .some(x => (x || '').toLowerCase().includes(q))
+          || String(v.numero) === q || num(v.numero) === q))
+    .sort((a, b) => a.numero - b.numero);
+  const ouverte = toutes.find(v => v.numero === etat.ouverte) || null;
+
+  if (ouverte) return unCas(ouverte, liste, etat);
+
+  const compte = (c) => toutes.filter(v => v.code_couleur === c).length;
+  return `
+    <div class="at-somm">
+      <div class="at-somm-tete">
+        <div class="at-somm-titre">
+          <h3>Les ${toutes.length} visites guid\u00e9es</h3>
+          <div class="at-somm-code" role="group" aria-label="Filtrer par niveau d'alerte">
+            ${['vert', 'orange', 'rouge'].map(c => `
+              <button type="button" class="at-code at-code-${c}${etat.couleur === c ? ' on' : ''}"
+                data-couleur="${c}" aria-pressed="${etat.couleur === c}"
+                title="${esc(ALERTE[c].phrase)}">
+                <span class="at-past at-past-${c}"></span>${esc(ALERTE[c].mot)}<b>${compte(c)}</b>
+              </button>`).join('')}
+          </div>
+        </div>
+        <div class="at-somm-outils">
+          ${barreRecherche(etat)}
+          <p class="muted small at-somm-aide">
+            ${etat.couleur || etat.q ? `${liste.length} visite${liste.length > 1 ? 's' : ''} sur ${toutes.length}`
+              : 'Six \u00e9tapes \u00e0 chaque fois : la demande, ce qu\u2019on observe, le jumeau \u00e0 \u00e9carter, les v\u00e9rifications, la d\u00e9cision, ce qu\u2019on \u00e9crit.'}
+          </p>
+          ${etat.couleur || etat.q ? '<button type="button" class="at-raz" data-raz="1">Tout revoir</button>' : ''}
+        </div>
+      </div>
+      ${liste.length ? `
+        <div class="vg-grille">
+          ${liste.map((v, i) => `
+            <button type="button" class="vg-carte est-${esc(v.code_couleur || 'nul')}"
+                    data-visite="${v.numero}" style="--rang:${i}">
+              <span class="vg-carte-tete">
+                ${jeton(v)}
+                <span class="vg-lieu">${esc(v.ville || '')}</span>
+              </span>
+              <b class="vg-carte-t">${esc(v.titre)}</b>
+              <span class="vg-carte-c">${esc(v.contexte || '')}</span>
+              <!-- Les deux fiches en pied : c'est la promesse du cas, et ce
+                   qui le relie \u00e0 l'atlas. -->
+              <span class="vg-carte-vs">
+                <span>fiche ${num(v.fiche_soupcon)}</span> contre
+                <span>fiche ${num(v.fiche_jumeau)}</span>
+              </span>
+            </button>`).join('')}
+        </div>`
+      : `<div class="empty">Aucune visite ne correspond.</div>`}
+    </div>`;
+}
+
+// ⚠ LES SIX ÉTAPES SONT NUMÉROTÉES ET DANS L'ORDRE, jamais réorganisées « pour
+// que ça tienne mieux à l'écran » : l'ordre EST l'enseignement. Mettre le
+// diagnostic en haut, par exemple, donnerait la réponse avant la question et
+// réduirait le cas à une fiche.
+function unCas(v, liste, etat) {
+  const i = liste.findIndex(x => x.numero === v.numero);
+  const avant = i > 0 ? liste[i - 1] : null;
+  const apres = i >= 0 && i < liste.length - 1 ? liste[i + 1] : null;
+  const a = ALERTE[v.code_couleur];
+  const etape = (n, titre, corps, classe = '') => `
+    <section class="vg-etape ${classe}">
+      <div class="vg-etape-tete"><span class="vg-etape-n">${n}</span><h4>${esc(titre)}</h4></div>
+      ${corps}
+    </section>`;
+  const puces = (l) => `<ul class="vg-puces">${(l || []).map(x => `<li>${esc(x)}</li>`).join('')}</ul>`;
+  // ⚠ UN RENVOI VERS UNE FICHE NON IMPORTÉE NE DOIT PAS ÊTRE UN LIEN MORT :
+  // on l'affiche en clair plutôt que de promettre une planche absente.
+  const versFiche = (n, titre, role) => {
+    const existe = fiches().some(f => f.numero === n);
+    return `<div class="vg-fiche vg-fiche-${role}">
+      <span class="vg-fiche-role">${role === 'soupcon' ? 'On soup\u00e7onne' : '\u00c0 \u00e9carter'}</span>
+      ${existe
+        ? `<button type="button" class="vg-fiche-lien" data-vers-fiche="${n}">Fiche ${num(n)} \u2014 ${esc(titre || '')} \u2192</button>`
+        : `<span class="vg-fiche-lien est-absente">Fiche ${num(n)} \u2014 ${esc(titre || '')} <em>(non import\u00e9e)</em></span>`}
+    </div>`;
+  };
+
+  return `
+    <div class="vg-cas">
+      <div class="at-bandeau${a ? ' est-' + v.code_couleur : ''}">
+        ${jeton(v)}
+        <div class="at-bandeau-t">
+          <b>${esc(v.titre)}</b>
+          <span>${esc(v.ville || '')}${v.contexte ? ' \u00b7 ' + esc(v.contexte) : ''}</span>
+        </div>
+        <span class="grow"></span>
+        <div class="at-nav">
+          <button type="button" class="at-fleche" data-voisine-visite="${avant ? avant.numero : ''}"
+            ${avant ? `title="${esc(num(avant.numero) + ' \u00b7 ' + avant.titre)}"` : 'disabled'}>\u2039</button>
+          <button type="button" class="at-fleche" data-voisine-visite="${apres ? apres.numero : ''}"
+            ${apres ? `title="${esc(num(apres.numero) + ' \u00b7 ' + apres.titre)}"` : 'disabled'}>\u203a</button>
+        </div>
+        <button type="button" class="at-retour" data-sommaire="1">\u2190 Les ${visites().length} visites</button>
+      </div>
+
+      <div class="vg-corps">
+        <div class="vg-colonne">
+          ${etape(1, 'La demande',
+            `<blockquote class="vg-citation">${esc(v.demande || '')}</blockquote>
+             <p class="vg-note">Les mots du client : ils contiennent souvent d\u00e9j\u00e0 l\u2019indice d\u00e9cisif.</p>`)}
+          ${etape(2, "Ce que j'ai observ\u00e9", puces(v.observations))}
+          ${etape(3, "Le jumeau \u00e0 \u00e9carter", `
+            <div class="vg-jumeaux">
+              ${versFiche(v.fiche_soupcon, v.soupcon_titre, 'soupcon')}
+              <span class="vg-vs">contre</span>
+              ${versFiche(v.fiche_jumeau, v.jumeau_titre, 'jumeau')}
+            </div>
+            ${v.detail ? `<p class="vg-detail"><em>Le d\u00e9tail qui les s\u00e9pare</em>${esc(v.detail)}</p>` : ''}`)}
+          ${etape(4, 'Les v\u00e9rifications', puces(v.verifications))}
+        </div>
+
+        <div class="vg-colonne">
+          ${v.image ? `<div class="vg-photo" id="vg-photo"></div>` : ''}
+          ${etape(5, 'Le diagnostic', `
+            ${a ? `<span class="at-niveau at-niveau-${v.code_couleur}">${esc(a.mot)} \u00b7 ${esc(a.phrase)}</span>` : ''}
+            <p>${esc(v.diagnostic || '')}</p>
+            ${v.intervention ? `<p class="vg-inter"><em>Intervention conseill\u00e9e</em>${esc(v.intervention)}</p>` : ''}`,
+            'est-' + (v.code_couleur || 'nul'))}
+          ${etape(6, 'Ce qu\u2019on \u00e9crit au client', `
+            <blockquote class="vg-rapport">${esc(v.extrait_rapport || '')}</blockquote>
+            <button type="button" class="at-raz vg-copier" data-copier="${v.numero}">Copier ce paragraphe</button>`)}
+          <div class="vg-double">
+            ${v.erreur ? `<div class="vg-erreur"><em>L\u2019erreur \u00e0 ne pas faire</em>${esc(v.erreur)}</div>` : ''}
+            ${v.lecon ? `<div class="vg-lecon"><em>La le\u00e7on</em>${esc(v.lecon)}</div>` : ''}
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
 function lier(root, etat, dessine) {
   const depot = root.querySelector('#at-depot');
   if (depot) depot.onchange = () => {
     if (depot.files?.length) deposerPlanches(root, depot.files, dessine);
   };
+  // ⚠ CHANGER DE THÉMATIQUE REFERME CE QUI ÉTAIT OUVERT : `ouverte` porte un
+  // numéro, et le 14 désigne la fiche 14 d'un côté, la visite 14 de l'autre.
+  // Le garder ferait s'ouvrir un objet qu'on n'a pas demandé.
   root.querySelectorAll('[data-vue]').forEach(b => b.onclick = () => {
-    etat.vue = b.dataset.vue; dessine();
+    if (etat.vue !== b.dataset.vue) { etat.vue = b.dataset.vue; etat.ouverte = null; etat.q = ''; }
+    dessine();
   });
   root.querySelectorAll('[data-fiche]').forEach(b => b.onclick = () => {
     etat.ouverte = Number(b.dataset.fiche); dessine();
@@ -490,12 +705,34 @@ function lier(root, etat, dessine) {
     const n = Number(b.dataset.voisine);
     if (n) { etat.ouverte = n; dessine(); }
   });
+  root.querySelectorAll('[data-visite]').forEach(b => b.onclick = () => {
+    etat.ouverte = Number(b.dataset.visite); dessine();
+  });
+  root.querySelectorAll('[data-voisine-visite]').forEach(b => b.onclick = () => {
+    const n = Number(b.dataset.voisineVisite);
+    if (n) { etat.ouverte = n; dessine(); }
+  });
+  // ⚠ LE PARAGRAPHE DU RAPPORT SE COPIE : c'est son usage, il est écrit pour
+  // être collé dans un rapport et adapté. Le sélectionner à la souris dans
+  // une citation de dix lignes rate un mot une fois sur deux.
+  const copier = root.querySelector('[data-copier]');
+  if (copier) copier.onclick = async () => {
+    const v = visites().find(x => x.numero === Number(copier.dataset.copier));
+    try {
+      await navigator.clipboard.writeText(v?.extrait_rapport || '');
+      toast('Paragraphe copi\u00e9', 'ok');
+    } catch { toast('Copie refus\u00e9e par le navigateur', 'warn'); }
+  };
   // Depuis un signal, on saute à sa fiche : c'est le geste naturel — on vient
   // de lire « Fiche 14 », on veut la voir.
+  // Depuis un signal OU depuis une visite : on saute à la fiche, ce qui veut
+  // dire changer de thématique. Le filtre par couleur tombe aussi — sinon la
+  // fiche demandée peut ne pas être dans la sélection et l'index s'ouvre sans
+  // elle.
   root.querySelectorAll('[data-vers-fiche]').forEach(b => b.onclick = () => {
     const n = Number(b.dataset.versFiche);
     if (!fiches().some(f => f.numero === n)) return toast(`La fiche ${num(n)} n'est pas encore importée`, 'warn');
-    etat.vue = 'fiches'; etat.ouverte = n; etat.q = ''; dessine();
+    etat.vue = 'fiches'; etat.ouverte = n; etat.q = ''; etat.couleur = null; dessine();
   });
   // ⚠ LA RECHERCHE NE REDESSINE PAS À CHAQUE FRAPPE LE CHAMP LUI-MÊME : on
   // relit, on redessine, puis on replace le curseur — sinon il saute au début

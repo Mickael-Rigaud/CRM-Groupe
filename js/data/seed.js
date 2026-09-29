@@ -128,6 +128,7 @@ export const SEED = {
   // sous licence et n'entre dans aucun dépôt — voir seed-atlas-btp.js.
   btp_atlas_fiches: SEED_ATLAS_BTP.btp_atlas_fiches,
   btp_signaux_alerte: SEED_ATLAS_BTP.btp_signaux_alerte,
+  btp_visites_guidees: SEED_ATLAS_BTP.btp_visites_guidees,
   dtu_sheets: [
     // Une fiche reecrite par la veille et une simplement verifiee : sans les
     // deux, le bandeau n'etait essayable que sur la production.
