@@ -1,5 +1,11 @@
 // Créer un rendez-vous — écrit dans Google Agenda depuis le CRM
 //
+// ⚠ IL S'APPELAIT `rgd-evenements.js` JUSQU'AU 30/09/2026, et le renommer n'est
+// pas cosmétique : depuis que le tableau de bord de BTP Expertise crée ses
+// rendez-vous par ici, un fichier nommé « rgd » enverrait chercher au mauvais
+// endroit celui qui débogue un rendez-vous du cabinet. Même raison que
+// `rgd-api.js` devenu `rgd-site.js` le 25/09.
+//
 // LE DERNIER GESTE DE L'AGENDA QUI PASSAIT PAR L'APPLICATION RGD (25/09/2026).
 // Elle écrivait dans sa propre base puis poussait vers Google ; le CRM, lui, ne
 // lit que Google relu (`agenda_events`). Le détour ne servait qu'à laisser une
@@ -25,13 +31,19 @@ import { db } from './db.js';
 import { CONFIG } from '../config.js';
 
 /**
- * Créer un rendez-vous dans l'agenda RGD.
+ * Créer un rendez-vous dans l'agenda d'une structure.
  *
  * `champs` : `titre`, `date_debut`, `date_fin` (heure LOCALE,
- * « AAAA-MM-JJTHH:MM:SS »), `all_day`, et facultativement `lieu` et
- * `description`. ⚠ Les trois premiers sont obligatoires — un rendez-vous sans
- * fin n'a pas de place dans une grille horaire —, contrat inchangé pour que
- * l'écran n'ait pas à être réécrit.
+ * « AAAA-MM-JJTHH:MM:SS »), `all_day`, et facultativement `lieu`,
+ * `description`, `invites`. ⚠ Les trois premiers sont obligatoires — un
+ * rendez-vous sans fin n'a pas de place dans une grille horaire —, contrat
+ * inchangé pour que l'écran n'ait pas à être réécrit.
+ *
+ * ⚠ `activite` EST FACULTATIVE ET VAUT « rgd » PAR DÉFAUT, côté serveur comme
+ * ici : l'écran Agenda de RGD n'a donc rien eu à changer le jour où BTP est
+ * arrivé. `metier` ne concerne que les structures qui tiennent plusieurs
+ * agendas — aujourd'hui BTP Expertise seule, « expertise » ou « amo » —, et le
+ * serveur le REFUSE absent pour celles-là plutôt que d'en choisir un.
  *
  * Rend `{ ok, donnees }` ou `{ ok: false, motif }`. ⚠ `donnees.releve` dit si
  * la journée a pu être relue : **faux ne veut pas dire échec** — le rendez-vous

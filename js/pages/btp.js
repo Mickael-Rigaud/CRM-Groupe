@@ -16,8 +16,11 @@ import {
   esc, eur, daysSince, fmtDate, contactName, dealParty, userName, toast,
   openModal, closeModal, confirm, terms, hit,
   searchInput, bindSearch, restoreFocus, csvDownload, marqueResponsable,
-  PERIODS,
+  PERIODS, isoDay,
 } from '../ui.js';
+// Le formulaire de rendez-vous est celui de l'écran Agenda de RGD : il en a été
+// SORTI le 30/09/2026 pour servir ici aussi, jamais recopié.
+import { formulaireEvenement } from './evenement-form.js';
 import { openDeal, dealForm, moveStage, assignerResponsable, candidatsResponsable, ficheAJour } from './deal.js';
 import { contactForm, openContact } from './contacts.js';
 import { orgForm, openOrg } from './organisations.js';
@@ -216,6 +219,49 @@ function lierAgenda(root, apres) {
     try { await db.update('settings', CLES_AGENDA.btp, { value: '' }); toast('Calendrier détaché'); apres(); }
     catch (err) { toast(err.message, 'err'); }
   });
+  root.querySelector('#cal-nouveau')?.addEventListener('click', () => formulaireEvenement({
+    jour: isoDay(),
+    activite: 'btp',
+    structure: 'BTP Expertise',
+    // ⚠ LE MÉTIER EST DEMANDÉ, ET IL N'A PAS DE DÉFAUT UTILE. Le cabinet tient
+    // DEUX agendas Google, un par métier, et le cadre ci-dessus les superpose :
+    // ce qu'on voit d'un seul tenant part en réalité dans l'un ou dans l'autre.
+    // Se tromper ne se verrait pas ici — les deux s'affichent — mais rangerait
+    // la mission dans le mauvais pipeline cinq minutes plus tard.
+    metiers: [['expertise', 'Expertise'], ['amo', 'AMO']],
+    // ⚠ CE N'EST PAS UN AVERTISSEMENT DÉCORATIF, et il n'y a pas moyen de s'en
+    // passer : tout événement posé dans ces deux agendas devient une fiche
+    // projet au nom de son titre, contact compris. C'est ce qu'on veut d'un
+    // rendez-vous client — c'est même l'intérêt du bouton — et c'est un faux
+    // dossier pour une réunion interne. On ne peut pas l'empêcher ici, donc on
+    // le dit avant d'enregistrer plutôt que de le laisser découvrir.
+    avis: 'Ce rendez-vous créera une <b>fiche projet</b> à ce nom, dans le pipeline choisi. '
+      + 'Pour une réunion interne, mieux vaut la poser sur un autre calendrier, depuis Google Agenda.',
+    // ⚠ LE CADRE NE SE REMPLIT PAS TOUT SEUL, contrairement à la grille de RGD :
+    // c'est Google qui l'affiche, le CRM n'y dessine rien. On le recharge, et on
+    // ne promet pas l'instantané — Google met parfois quelques secondes à servir
+    // un événement qu'il vient d'accepter.
+    pied: 'Créé dans <b>Google Agenda</b> : le cadre se recharge ensuite. '
+      + 'S’il n’y est pas encore, il y sera au rafraîchissement suivant.',
+    apres: () => rechargerCadre(root),
+  }));
+}
+
+// Forcer le cadre à relire Google.
+//
+// ⚠ UN SIMPLE REDESSIN NE SUFFIRAIT PAS : on reconstruirait une iframe avec
+// exactement la même adresse, que le navigateur peut servir depuis son cache —
+// le rendez-vous qu'on vient de créer n'apparaîtrait pas, et on croirait que
+// l'enregistrement a échoué. Le paramètre horodaté change l'adresse sans rien
+// changer pour Google, qui ignore ce qu'il ne connaît pas.
+//
+// ⚠ ET ON NE REDESSINE PAS LA PAGE AUTOUR : le cadre est le seul élément
+// concerné, et un `draw()` complet remonterait la vue en haut de l'écran.
+function rechargerCadre(root) {
+  const cadreGoogle = root.querySelector('#cal-cadre');
+  if (!cadreGoogle) return;
+  const base = cadreGoogle.src.split('&_=')[0];
+  cadreGoogle.src = `${base}&_=${Date.now()}`;
 }
 
 // Trois blocs : les chiffres clés, la pipeline des missions, l'agenda Google du cabinet.
@@ -259,11 +305,12 @@ function agenda() {
       <h2>${TITRES_VUE[vue] || 'Agenda'}</h2>
       <div class="seg agenda-vues">${VUES_AGENDA.map(([v, l]) => `<button type="button" data-vue="${v}" class="${v === vue ? 'active' : ''}">${l}</button>`).join('')}</div>
       <span class="grow"></span>
+      <button type="button" class="btn sm" id="cal-nouveau">+ Rendez-vous</button>
       ${scope.isDirection ? '<button type="button" class="btn ghost sm" id="cal-edit">Changer de calendrier</button>' : ''}
       <a class="btn ghost sm" href="https://calendar.google.com/calendar/r/week" target="_blank" rel="noopener">Ouvrir dans Google Agenda ↗</a>
     </div>
     <div class="agenda-cadre agenda-${vue.toLowerCase()}">
-      <iframe src="${esc(urlAgenda(ids, vue))}" title="Agenda BTP Expertise" loading="lazy"></iframe>
+      <iframe id="cal-cadre" src="${esc(urlAgenda(ids, vue))}" title="Agenda BTP Expertise" loading="lazy"></iframe>
     </div>
     <p class="muted small">Cet agenda est celui de Google : ce qui est modifié là-bas apparaît ici, et inversement. Si le cadre reste vide, votre adresse n&rsquo;a pas encore été ajoutée au partage du calendrier, ou votre navigateur refuse la mémorisation des sites affichés dans un autre site.</p>
   </div>`;

@@ -3791,6 +3791,34 @@ textarea.ev-nu { resize: vertical; min-height: 40px; }
 .ev-note { margin: 0; padding-left: 6px; font-size: 12px; color: var(--muted); }
 .ev-pied { margin: 14px 0 0; font-size: 12.5px; color: var(--muted); }
 
+/* Le choix de l'agenda, quand la structure en tient plusieurs — BTP Expertise
+   et ses deux métiers. Le segment reprend celui de l'espace, à ceci près qu'il
+   s'étire : deux boutons collés à gauche d'une modale de 520 px se lisent
+   comme une option secondaire, alors que ce choix décide de l'agenda où part
+   le rendez-vous. */
+.ev-metiers { display: inline-flex; }
+.ev-metiers button { flex: 1 1 0; }
+/* ⚠ L'ACTIF EST TEINTÉ, PAS SEULEMENT BLANC. Le segment ordinaire distingue
+   son bouton actif par un fond blanc sur gris très clair — assez dans une
+   barre d'écran, trop peu dans une modale déjà blanche, où l'on ne voit plus
+   lequel des deux est choisi (constaté à l'écran). Ici le choix décide de
+   l'agenda où part le rendez-vous : il doit se lire sans hésiter.
+   ⚠ ET LE FOND EST `--accent-ink`, JAMAIS `--accent` : la couleur de marque de
+   BTP Expertise est un bleu clair (#00BBF6) qui donne **2,2:1** sous du texte
+   blanc — mesuré, pas estimé. La version assombrie monte à 9,6:1. C'est la
+   règle déjà écrite pour le grand chiffre des indicateurs, et elle vaut partout
+   où du blanc se pose sur une couleur de structure. */
+.ev-metiers button.active { background: var(--accent-ink); color: #fff; box-shadow: none; }
+
+/* ⚠ CET AVIS N'EST PAS UNE NOTE DE BAS DE PAGE : il annonce une conséquence
+   qu'on ne peut pas défaire — la fiche projet créée par le rendez-vous. Il est
+   donc AU-DESSUS du pied, teinté, et il ne prend pas le gris des mentions
+   discrètes, qui se lit comme « détail ». */
+.ev-avis { margin: 14px 0 0; padding: 9px 11px; border-radius: 10px;
+  font-size: 12.5px; line-height: 1.45; color: var(--text);
+  background: color-mix(in srgb, var(--amber) 12%, var(--card));
+  border: 1px solid color-mix(in srgb, var(--amber) 34%, transparent); }
+
 .ev-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px;
   margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
 .ev-actions .small { margin-right: auto; }

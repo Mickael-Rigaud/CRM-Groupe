@@ -97,6 +97,18 @@ export const SEED = {
     // une seule source par chiffre (voir `chiffres.js`).
     { key: 'objectifs_volume', value: { btp: { leads: 10, qualifie: 6, rdv: 4 } } },
     { key: 'objectifs_ca', value: { periode: 'annuel', btp: 180000 } },
+    // ⚠ SANS CES TROIS CLÉS, L'AGENDA DU TABLEAU DE BORD BTP AFFICHE SON ÉCRAN
+    // DE RACCORDEMENT, et le bouton « + Rendez-vous » n'existe pas : le
+    // formulaire de création n'était donc essayable que sur la production
+    // (30/09/2026). Les identifiants sont INVENTÉS — le dépôt est public, et
+    // un vrai identifiant de calendrier est une adresse à part entière.
+    // ⚠ CONSÉQUENCE À CONNAÎTRE : le cadre Google affichera « calendrier
+    // introuvable », puisque ces agendas n'existent pas. C'est le prix à payer
+    // pour pouvoir ouvrir le formulaire ; l'alternative était de ne jamais le
+    // voir hors production.
+    { key: 'btp_calendar_expertise', value: 'demo-expertise@group.calendar.google.com' },
+    { key: 'btp_calendar_amo', value: 'demo-amo@group.calendar.google.com' },
+    { key: 'btp_calendar_id', value: 'demo-expertise@group.calendar.google.com,demo-amo@group.calendar.google.com' },
   ],
   // Messagerie : les canaux existent d'office, un par structure plus le canal Groupe.
   // En production ils sont créés par supabase/lot12-messagerie.sql.
