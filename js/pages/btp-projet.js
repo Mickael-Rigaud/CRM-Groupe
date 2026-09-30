@@ -240,8 +240,20 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
 
   const chips = (cle, liste) => `<div class="fa-chips" data-chips="${cle}">${liste.map(x => `
     <button type="button" class="fa-chip ${v[cle].includes(x) ? 'on' : ''}" data-val="${esc(x)}">${esc(x)}</button>`).join('')}</div>`;
-  const chipsUn = (cle, liste) => `<div class="fa-chips" data-chips-un="${cle}">${liste.map(x => `
-    <button type="button" class="fa-chip ${v[cle] === x ? 'on' : ''}" data-val="${esc(x)}">${esc(x)}</button>`).join('')}</div>`;
+  // ⚠ `horsListe` FAIT SURVIVRE UNE VALEUR QUE LA LISTE NE PROPOSE PLUS, et le
+  // cas est réel : deux affaires portent « Particulier », venu du formulaire
+  // générique d'avant la fiche projet, qui n'a jamais figuré dans les profils.
+  // Sans ce rattrapage, aucune pastille n'est allumée en rouvrant la fiche — on
+  // croit le champ vide, et le premier enregistrement le rend vrai. Elle est
+  // ajoutée en bout de liste, COCHÉE, en trait discontinu : même remède que les
+  // budgets hors tranches de la fiche client RGD.
+  const chipsUn = (cle, liste, horsListe = false) => {
+    const valeur = v[cle];
+    const tout = horsListe && valeur && !liste.includes(valeur) ? [...liste, valeur] : liste;
+    return `<div class="fa-chips" data-chips-un="${cle}">${tout.map(x => `
+      <button type="button" class="fa-chip ${valeur === x ? 'on' : ''}${liste.includes(x) ? '' : ' est-hors-liste'}"
+        data-val="${esc(x)}">${esc(x)}</button>`).join('')}</div>`;
+  };
   const champ = (id, label, valeur, attrs = '', plein = false) =>
     `<label class="mail-champ ${plein ? 'plein' : ''}"><span>${esc(label)}</span><input id="${id}" value="${esc(valeur ?? '')}" ${attrs}></label>`;
 
@@ -771,8 +783,9 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
     ${v.contact_id ? `<p class="mf-aide">Rattaché à la fiche contact de <b>${esc(contactName(db.byId('contacts', v.contact_id) || {}))}</b> — ce qui est corrigé ici y est reporté.</p>` : ''}
 
     <div class="mf-bloc-titre">J. Profil du demandeur</div>
-    ${chipsUn('profil', FICHE_EXPERTISE.profils)}
-    <p class="mf-aide">Un seul profil : c'est lui qui dit à qui l'on parle, et souvent ce qui est en jeu.</p>
+    ${chipsUn('profil', FICHE_EXPERTISE.profils, true)}
+    <p class="mf-aide">Un seul profil : c'est lui qui dit à qui l'on parle, et souvent ce qui est en jeu.
+    Acquéreur et vendeur n'attendent pas le même rapport.</p>
 
     ${barre()}`;
 

@@ -75,8 +75,19 @@ export const piedFiche = () => `
 export const signatures = (gauche, droite) => `
 <div class="sign"><div>${esc(gauche)}<u></u></div><div>${esc(droite)}<u></u></div></div>`;
 
-export const cases = (liste, retenus = []) => liste.map(x =>
-  `<span class="c ${retenus.includes(x) ? 'on' : ''}">${retenus.includes(x) ? '☒' : '☐'} ${esc(x)}</span>`).join('');
+// ⚠ UNE VALEUR RETENUE QUI N'EST PLUS DANS LA LISTE EST AJOUTÉE EN BOUT, COCHÉE
+// (30/09/2026). Sans ça elle **disparaît de la feuille imprimée** : on remet au
+// client, ou à l'expert qui part sur place, un document où le profil du
+// demandeur est vierge alors que quelqu'un l'a renseigné. C'est pire qu'à
+// l'écran — le papier ne montre pas qu'il manque quelque chose, et personne ne
+// va vérifier dans le CRM ce qu'une case vide voulait dire.
+// Le cas arrive dès qu'une liste est découpée (les profils l'ont été le même
+// jour) ou qu'une ancienne saisie porte un libellé abandonné.
+export const cases = (liste, retenus = []) => {
+  const sus = retenus.filter(r => r && !liste.includes(r));
+  return [...liste, ...sus].map(x =>
+    `<span class="c ${retenus.includes(x) ? 'on' : ''}">${retenus.includes(x) ? '☒' : '☐'} ${esc(x)}</span>`).join('');
+};
 
 export const ligne = (lbl, val) => `<tr><th>${esc(lbl)}</th><td>${val ? esc(val) : '<i>—</i>'}</td></tr>`;
 
