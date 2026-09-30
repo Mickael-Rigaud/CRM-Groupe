@@ -3993,6 +3993,18 @@ textarea.ev-nu { resize: vertical; min-height: 40px; }
   border-radius: 18px 18px 0 0; padding: 18px 18px 40px; }
 .fm-themes { display: grid; grid-template-columns: repeat(auto-fit, minmax(216px, 1fr)); gap: 12px; }
 
+/* ---- Revenir d'ou l'on vient ----
+   Pose sur le fond profond, au-dessus des trois thematiques : on ouvre une
+   fiche pour la regarder trente secondes au milieu d'un releve, et le retour
+   doit etre sous les yeux sans faire defiler une planche de 1350 px. */
+.fm-retour { display: inline-flex; align-items: center; gap: 7px; margin-bottom: 12px;
+  min-height: 40px; padding: 8px 15px 8px 12px; border-radius: 999px; text-decoration: none;
+  border: 1px solid rgba(255,255,255,.28); background: rgba(255,255,255,.12); color: #fff;
+  font-size: 12.5px; font-weight: 600;
+  transition: background .16s, border-color .16s, transform .16s; }
+.fm-retour:hover { background: rgba(255,255,255,.22); border-color: rgba(255,255,255,.45);
+  transform: translateX(-2px); }
+
 /* ⚠ LA CARTE AU REPOS EST TRANSLUCIDE, PAS GRISE : posee sur un fond profond,
    un gris franc ferait une tache terne. Elle emprunte au fond ce qu'il faut
    pour rester lisible. */
@@ -4448,7 +4460,7 @@ textarea.ev-nu { resize: vertical; min-height: 40px; }
   .at-somm-fam:hover, .at-somm-ligne:hover, .at-ligne:hover, .at-code:hover,
   .at-fleche:hover:not(:disabled), .at-retour:hover, .at-somm-ligne:hover .at-jeton,
   .at-signal:hover, .at-signal-fiche:hover,
-  .fm-theme:hover, .vg-carte:hover, .vg-fiche-lien:hover { transform: none; }
+  .fm-theme:hover, .vg-carte:hover, .vg-fiche-lien:hover, .fm-retour:hover { transform: none; }
   .vg-carte:hover .vg-fond { opacity: .55; }
   .vg-carte { animation: none; }
 }

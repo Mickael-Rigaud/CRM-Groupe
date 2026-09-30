@@ -38,6 +38,34 @@ const guard = (root) => {
 
 const num = (n) => String(n).padStart(2, '0');
 
+// ⚠ L'ÉTAT DE L'ÉCRAN VIT DANS L'ADRESSE, PAS DANS UNE VARIABLE (30/09/2026,
+// demandé par Mickael : « je voudrais un bouton retour à la check-list, pour ne
+// pas perdre ce que j'étais en train de faire »). Aller lire une fiche de
+// l'atlas est un CHANGEMENT D'ÉCRAN : une variable locale serait perdue, et
+// l'on reviendrait sur la liste des visites au lieu du point qu'on renseignait.
+//
+// Trois effets, tous voulus : le retour ramène à la bonne zone ET au bon
+// point, le bouton « précédent » du navigateur marche, et une visite en cours
+// s'envoie par lien. Même mécanique que les fiches de poste RGD.
+const lireAdresse = () => {
+  const p = new URLSearchParams(location.hash.split('?')[1] || '');
+  const n = (v) => { const x = Number(v); return Number.isFinite(x) && x > 0 ? x : null; };
+  return { ouvert: p.get('visite') || null, zone: n(p.get('zone')) ?? 1, point: n(p.get('point')) };
+};
+
+// ⚠ `replaceState`, PAS `pushState` : cocher quinze points empilerait quinze
+// entrées d'historique, et « précédent » remonterait les clics un par un au
+// lieu de ramener à l'écran d'avant.
+function ecrireAdresse(etat) {
+  const p = new URLSearchParams();
+  if (etat.ouvert) p.set('visite', etat.ouvert);
+  if (etat.ouvert && etat.zone) p.set('zone', String(etat.zone));
+  if (etat.ouvert && etat.point) p.set('point', String(etat.point));
+  const q = p.toString();
+  const neuve = '#/btp/expertise-checklist' + (q ? '?' + q : '');
+  if (location.hash !== neuve) history.replaceState(null, '', neuve);
+}
+
 // ⚠ UN VRAI LIEN, PAS UN BOUTON QUI AFFICHE UN MESSAGE. Il menait à l'écran
 // Formation en disant « ouvrez la fiche 14 » : on arrivait sur le sommaire avec
 // un numéro à chercher à la main, c'est-à-dire le travail qu'un renvoi doit
@@ -49,7 +77,12 @@ const num = (n) => String(n).padStart(2, '0');
 function lienFiche(n) {
   const f = db.t('btp_atlas_fiches').find(x => x.numero === n);
   if (!f) return `<span class="cl-fiche est-absente" title="Fiche non import\u00e9e">${num(n)}</span>`;
-  return `<a class="cl-fiche" href="#/btp/atlas?fiche=${n}" title="${esc(f.titre)}">${num(n)}</a>`;
+  // ⚠ LE LIEN EMPORTE SON CHEMIN DE RETOUR. Sans lui, l'écran de l'atlas
+  // n'aurait aucun moyen de savoir d'où l'on vient : « revenir » là-bas
+  // ramènerait au sommaire des fiches, pas à la visite en cours.
+  const retour = encodeURIComponent(location.hash || '#/btp/expertise-checklist');
+  return `<a class="cl-fiche" href="#/btp/atlas?fiche=${n}&retour=${retour}"
+    title="${esc(f.titre)}">${num(n)}</a>`;
 }
 const jour = (d) => d ? new Date(d + 'T12:00:00').toLocaleDateString('fr-FR',
   { day: '2-digit', month: 'long', year: 'numeric' }) : '';
@@ -86,10 +119,16 @@ export const btpChecklistPage = {
     const coquille = poserEspace(root);
     // `ouvert` : l'identifiant du relevé affiché, ou null pour la liste.
     // `zone` : la zone dépliée, une seule à la fois — voir plus bas.
-    const etat = { ouvert: null, zone: 1, point: null };
+    // Il est LU DANS L'ADRESSE : on revient ici depuis une fiche de l'atlas.
+    const etat = lireAdresse();
 
     const dessine = () => {
       const r = etat.ouvert ? releves().find(x => x.id === etat.ouvert) : null;
+      // ⚠ UN RELEVÉ QUI N'EXISTE PAS RAMÈNE À LA LISTE : l'adresse peut porter
+      // l'identifiant d'une visite supprimée, ou d'un dossier qu'on n'a pas le
+      // droit de voir. Un écran vide ne dirait pas pourquoi.
+      if (etat.ouvert && !r) etat.ouvert = null;
+      ecrireAdresse(etat);
       root.innerHTML = cadre('#/btp/expertise-checklist', 'Check-list de visite',
         r ? vueReleve(r, etat) : vueListe());
       lier(root, etat, dessine);
