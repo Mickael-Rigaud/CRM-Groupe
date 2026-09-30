@@ -1836,6 +1836,14 @@ tr.btp-mission .btp-pts { color: var(--m-encre); }
 .evd-google { align-self: flex-start; font-size: 12.5px; font-weight: 600; color: var(--accent-ink); }
 .evd-titre { font-size: 10.5px; font-weight: 800; text-transform: uppercase;
   letter-spacing: .08em; color: var(--muted-2); margin-top: 6px; }
+.evd-titre-bloc { font-size: 10.5px; font-weight: 800; text-transform: uppercase;
+  letter-spacing: .08em; color: var(--muted-2); margin: 14px 0 6px; }
+/* L'etat des invites tant que Google n'a pas repondu, et le cas ou il n'a pas
+   repondu du tout : on DIT qu'on ne sait pas, plutot que d'afficher une liste
+   vide qui se lirait comme « personne n'est invite ». */
+.evd-attente { font-size: 12px; color: var(--muted); margin: 2px 0 6px; }
+.evd-attente.est-echec { color: var(--amber, #9a6412); }
+.evd-corps .ev-puces { margin-bottom: 6px; }
 .evd-deplacer { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; }
 .evd-deplacer label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
 .evd-deplacer label > span { font-size: 11px; font-weight: 700; text-transform: uppercase;

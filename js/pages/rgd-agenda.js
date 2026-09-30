@@ -96,7 +96,7 @@ import { cadre, guard, KEY } from './rgd-espace.js';
 // n'en restent une que jusqu'au jour où l'on n'en corrige qu'une.
 import { formulaireEvenement, decale, finApres } from './evenement-form.js';
 // Ouvrir, déplacer, supprimer : les trois gestes passent par le même module.
-import { modifierEvenement, supprimerEvenement } from '../data/evenements.js';
+import { lireEvenement, modifierEvenement, supprimerEvenement } from '../data/evenements.js';
 
 // JUSQU'OÙ ON A LE DROIT DE NAVIGUER.
 //
@@ -409,76 +409,206 @@ function panneauEvenement(ev, ecriture, apres) {
   // déplace un rendez-vous, on ne le raccourcit pas.
   const dureeMin = finie ? Math.max(15, Math.round((finie - debut) / 60000)) : 60;
 
-  const lignes = [
+  // ⚠ CE QUE LE CRM CROIT SAVOIR DES INVITÉS EST PARTIEL, et on ne modifie
+  // JAMAIS sur cette base : `agenda_events.invites` ne porte que les externes,
+  // et seulement pour les visites. La vraie liste arrive de `lire-evenement`,
+  // après l'ouverture — d'où un état qui commence à « on ne sait pas encore »
+  // et un bloc invités qui reste en lecture tant qu'elle n'est pas là.
+  const etat = { invites: null, organisateurs: [], charge: false, touche: false };
+
+  const lignesFixes = () => [
     ['Quand', ev.all_day
       ? `${jourLongAn(ev.day)} — journée entière`
       : `${jourLongAn(ev.day)} · ${hhmm(ev.starts_at)}${finie ? ` → ${hhmm(ev.ends_at)}` : ''}`],
-    ['Où', ev.location || ''],
-    ['Invités', ev.attendees ? `${ev.attendees} invité${ev.attendees > 1 ? 's' : ''}` : ''],
     ['Agenda', ev.calendar_id || ''],
   ].filter(([, v]) => v);
 
-  const m = openModal(ev.title || '(sans titre)', `
+  const blocInvites = () => {
+    if (!etat.charge) {
+      return `<p class="evd-attente">Lecture des invités dans Google…</p>`;
+    }
+    if (etat.invites === null) {
+      return `<p class="evd-attente est-echec">Invités illisibles — ils ne sont pas modifiables ici.</p>`;
+    }
+    return `
+      <div class="ev-puces" id="evd-invites"></div>
+      ${ecriture ? `<input class="ev-nu" id="evd-invite" type="email"
+          placeholder="Ajouter un invité (adresse email)" autocomplete="off">` : ''}
+      ${etat.organisateurs.length ? `<p class="evd-attente">Organisateur : ${
+        esc(etat.organisateurs.join(', '))} — il ne se retire pas d’ici.</p>` : ''}`;
+  };
+
+  const corpsHtml = () => `
     <div class="evd-corps">
-      ${lignes.map(([k, v]) => `<div class="evd-ligne"><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join('')}
-      ${ev.description ? `<div class="evd-desc">${esc(ev.description)}</div>` : ''}
+      ${lignesFixes().map(([k, v]) => `<div class="evd-ligne"><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join('')}
       ${ev.link ? `<a class="evd-google" href="${esc(ev.link)}" target="_blank" rel="noopener">Ouvrir dans Google Agenda ↗</a>` : ''}
 
+      <div class="evd-titre-bloc">Le rendez-vous</div>
+      <label class="mail-champ plein"><span>Titre</span>
+        <input id="evd-titre" value="${esc(ev.title || '')}" ${ecriture ? '' : 'readonly'}></label>
+      <label class="mail-champ plein"><span>Lieu</span>
+        <input id="evd-lieu" value="${esc(ev.location || '')}" placeholder="Adresse du chantier"
+          ${ecriture ? '' : 'readonly'}></label>
+      <label class="mail-champ plein"><span>Description</span>
+        <textarea id="evd-description" rows="3" ${ecriture ? '' : 'readonly'}>${esc(ev.description || '')}</textarea></label>
+
+      <div class="evd-titre-bloc">Invités</div>
+      ${blocInvites()}
+
       ${ecriture && !ev.all_day ? `
-        <div class="evd-titre">Déplacer</div>
+        <div class="evd-titre-bloc">Quand</div>
         <div class="evd-deplacer">
           <label><span>Date</span><input type="date" id="ev-d-jour" value="${esc(ev.day)}"></label>
           <label><span>Début</span><input type="time" id="ev-d-heure" value="${esc(hhmm(ev.starts_at))}" step="300"></label>
           <label><span>Durée</span><input type="number" id="ev-d-duree" value="${dureeMin}" min="15" step="15"> min</label>
-        </div>
-        <p class="mf-aide">Les invités recevront un message de report.</p>` : ''}
+        </div>` : ''}
+      ${ecriture ? '<p class="mf-aide">Les invités recevront un message de mise à jour.</p>' : ''}
     </div>
     <div class="form-actions">
       <button type="button" class="btn ghost" data-close>Fermer</button>
       ${ecriture ? '<button type="button" class="btn ghost evd-danger" id="ev-supprimer">Supprimer</button>' : ''}
-      ${ecriture && !ev.all_day ? '<button type="button" class="btn" id="ev-deplacer">Déplacer</button>' : ''}
-    </div>`, { wide: false });
+      ${ecriture ? '<button type="button" class="btn" id="ev-deplacer">Enregistrer</button>' : ''}
+    </div>`;
 
+  const m = openModal(ev.title || '(sans titre)', corpsHtml(), { wide: false });
   const q = (sel) => m.querySelector(sel);
 
-  q('#ev-deplacer')?.addEventListener('click', async () => {
-    const jour = q('#ev-d-jour').value;
-    const heure = q('#ev-d-heure').value;
-    const duree = Number(q('#ev-d-duree').value) || 60;
-    if (!jour || !heure) return toast('Date et heure sont nécessaires', 'warn');
-    const b = q('#ev-deplacer');
-    b.disabled = true; b.textContent = 'Déplacement…';
-    const [h, mn] = heure.split(':').map(Number);
-    const r = await modifierEvenement({
-      evenement: ev.id,
-      date_debut: `${jour}T${p2(h)}:${p2(mn)}:00`,
-      date_fin: finApres(jour, `${p2(h)}:${p2(mn)}`, duree),
+  // ⚠ ON NE REDESSINE QUE LE CORPS, JAMAIS LA MODALE : `openModal` reconstruit
+  // la croix de fermeture avec le contenu, et un `innerHTML` sur la fenêtre
+  // l'emporterait. Même précaution que sur la fiche partenaire.
+  const redessine = () => {
+    const saisie = {
+      titre: q('#evd-titre')?.value, lieu: q('#evd-lieu')?.value,
+      description: q('#evd-description')?.value,
+      jour: q('#ev-d-jour')?.value, heure: q('#ev-d-heure')?.value, duree: q('#ev-d-duree')?.value,
+    };
+    m.querySelector('.modal-body').innerHTML = corpsHtml();
+    // La saisie en cours vit dans le DOM : sans cette reprise, l'arrivée des
+    // invités effacerait un lieu qu'on était en train de corriger.
+    for (const [k, v] of Object.entries({ '#evd-titre': saisie.titre, '#evd-lieu': saisie.lieu,
+      '#evd-description': saisie.description, '#ev-d-jour': saisie.jour,
+      '#ev-d-heure': saisie.heure, '#ev-d-duree': saisie.duree })) {
+      if (v !== undefined && q(k)) q(k).value = v;
+    }
+    lier();
+  };
+
+  const dessineInvites = () => {
+    const zone = q('#evd-invites');
+    if (!zone || !etat.invites) return;
+    zone.innerHTML = etat.invites.length
+      ? etat.invites.map((e, i) => `<span class="ev-puce">${esc(e)}${
+        ecriture ? `<button type="button" data-oter="${i}" aria-label="Retirer">×</button>` : ''}</span>`).join('')
+      : '<span class="evd-attente">Aucun invité.</span>';
+    zone.querySelectorAll('[data-oter]').forEach(b => b.onclick = () => {
+      etat.invites.splice(Number(b.dataset.oter), 1);
+      etat.touche = true;
+      dessineInvites();
     });
-    if (!r.ok) { b.disabled = false; b.textContent = 'Déplacer'; return toast(r.motif, 'err'); }
-    // ⚠ `releve: false` N'EST PAS UN ÉCHEC : le changement est chez Google, le
-    // relevé suivant le rapportera. Le dire comme une erreur ferait recommencer,
-    // donc prévenir le client deux fois.
-    toast(r.donnees.releve ? 'Rendez-vous déplacé' : 'Déplacé dans Google — visible au prochain relevé');
-    closeModal(true);
-    apres?.();
-  });
+  };
+
+  const ajouteInvite = () => {
+    const i = q('#evd-invite');
+    if (!i) return true;
+    const v = i.value.trim().toLowerCase();
+    if (!v) return true;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v)) { toast('Adresse invalide', 'warn'); return false; }
+    if (etat.invites.includes(v)) { i.value = ''; return true; }
+    if (etat.invites.length >= 20) { toast('Vingt invités au maximum', 'warn'); return false; }
+    etat.invites.push(v); i.value = ''; etat.touche = true; dessineInvites();
+    return true;
+  };
 
   let arme = null;
-  q('#ev-supprimer')?.addEventListener('click', async () => {
-    const b = q('#ev-supprimer');
-    if (!arme) {
-      arme = setTimeout(() => { arme = null; b.classList.remove('est-arme'); b.textContent = 'Supprimer'; }, 4000);
-      b.classList.add('est-arme');
-      b.textContent = ev.attendees ? 'Confirmer — les invités seront prévenus' : 'Confirmer la suppression';
-      return;
+
+  function lier() {
+    dessineInvites();
+    const champ = q('#evd-invite');
+    if (champ) {
+      champ.onkeydown = (e) => {
+        if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); ajouteInvite(); }
+      };
+      // ⚠ On valide AUSSI à la sortie du champ : une adresse tapée puis laissée
+      // là doit compter, sinon on croit avoir convié quelqu'un qui n'a rien reçu.
+      champ.onblur = () => ajouteInvite();
     }
-    clearTimeout(arme); arme = null;
-    b.disabled = true; b.textContent = 'Suppression…';
-    const r = await supprimerEvenement({ evenement: ev.id });
-    if (!r.ok) { b.disabled = false; b.textContent = 'Supprimer'; return toast(r.motif, 'err'); }
-    toast(r.donnees.deja_parti ? 'Rendez-vous déjà supprimé dans Google' : 'Rendez-vous supprimé');
-    closeModal(true);
-    apres?.();
+
+    q('#ev-deplacer')?.addEventListener('click', async () => {
+      ajouteInvite();
+      const b = q('#ev-deplacer');
+      const champs = { evenement: ev.id };
+
+      // ⚠ ON N'ENVOIE QUE CE QUI A CHANGÉ : un PATCH qui reposerait tout
+      // écraserait ce que la fonction ne connaît pas, et ferait partir un message
+      // de mise à jour pour un rendez-vous identique.
+      const titre = q('#evd-titre').value.trim();
+      const lieu = q('#evd-lieu').value;
+      const desc = q('#evd-description').value;
+      if (titre && titre !== (ev.title || '')) champs.titre = titre;
+      if (lieu !== (ev.location || '')) champs.lieu = lieu;
+      if (desc !== (ev.description || '')) champs.description = desc;
+      if (etat.touche && etat.invites) champs.invites = [...etat.invites];
+
+      if (!ev.all_day && q('#ev-d-jour')) {
+        const jour = q('#ev-d-jour').value;
+        const heure = q('#ev-d-heure').value;
+        const duree = Number(q('#ev-d-duree').value) || 60;
+        if (!jour || !heure) return toast('Date et heure sont nécessaires', 'warn');
+        const [h, mn] = heure.split(':').map(Number);
+        const bouge = jour !== ev.day
+          || h * 60 + mn !== debut.getHours() * 60 + debut.getMinutes()
+          || duree !== dureeMin;
+        if (bouge) {
+          champs.date_debut = `${jour}T${p2(h)}:${p2(mn)}:00`;
+          champs.date_fin = finApres(jour, `${p2(h)}:${p2(mn)}`, duree);
+        }
+      }
+
+      if (Object.keys(champs).length === 1) return toast('Rien n’a changé');
+
+      b.disabled = true; b.textContent = 'Enregistrement…';
+      const r = await modifierEvenement(champs);
+      if (!r.ok) { b.disabled = false; b.textContent = 'Enregistrer'; return toast(r.motif, 'err'); }
+      // ⚠ `releve: false` N'EST PAS UN ÉCHEC : le changement est chez Google, le
+      // relevé suivant le rapportera. Le dire comme une erreur ferait
+      // recommencer, donc prévenir le client deux fois.
+      toast(r.donnees.releve ? 'Rendez-vous enregistré'
+        : 'Enregistré dans Google — visible au prochain relevé');
+      closeModal(true);
+      apres?.();
+    });
+
+    q('#ev-supprimer')?.addEventListener('click', async () => {
+      const b = q('#ev-supprimer');
+      if (!arme) {
+        arme = setTimeout(() => { arme = null; b.classList.remove('est-arme'); b.textContent = 'Supprimer'; }, 4000);
+        b.classList.add('est-arme');
+        b.textContent = (etat.invites?.length ?? ev.attendees)
+          ? 'Confirmer — les invités seront prévenus' : 'Confirmer la suppression';
+        return;
+      }
+      clearTimeout(arme); arme = null;
+      b.disabled = true; b.textContent = 'Suppression…';
+      const r = await supprimerEvenement({ evenement: ev.id });
+      if (!r.ok) { b.disabled = false; b.textContent = 'Supprimer'; return toast(r.motif, 'err'); }
+      toast(r.donnees.deja_parti ? 'Rendez-vous déjà supprimé dans Google' : 'Rendez-vous supprimé');
+      closeModal(true);
+      apres?.();
+    });
+  }
+
+  lier();
+
+  // La vraie liste, demandée à Google après l'ouverture : le panneau s'affiche
+  // tout de suite, les invités arrivent ensuite.
+  lireEvenement({ evenement: ev.id }).then(r => {
+    if (!m.isConnected) return;   // panneau fermé entre-temps
+    etat.charge = true;
+    if (r.ok) {
+      etat.invites = r.donnees.invites || [];
+      etat.organisateurs = r.donnees.organisateurs || [];
+    }
+    redessine();
   });
 
   return m;

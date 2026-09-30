@@ -83,6 +83,20 @@ async function appeler(fonction, champs) {
   }
 }
 
+/**
+ * Le détail VRAI d'un rendez-vous, tel que Google le porte.
+ *
+ * ⚠ IL FAUT LIRE AVANT DE MODIFIER LES INVITÉS, et ce n'est pas un confort :
+ * `agenda_events.invites` ne porte que les participants EXTERNES, et seulement
+ * pour les visites ; `attendees` n'est qu'un compte. Un `PATCH` chez Google
+ * REMPLACE la liste entière — envoyer ce que le CRM affiche retirerait
+ * l'organisateur, et sur un rendez-vous ordinaire tous les participants, qui
+ * recevraient une annulation que personne n'a demandée.
+ *
+ * Rend aussi `organisateurs` : ils s'affichent, ils ne se retirent pas d'ici.
+ */
+export const lireEvenement = (champs) => appeler('lire-evenement', champs);
+
 export const creerEvenement = (champs) => appeler('creer-evenement', champs);
 
 /**
