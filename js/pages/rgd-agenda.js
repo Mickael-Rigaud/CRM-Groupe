@@ -86,7 +86,7 @@
 // dit, sinon on le chercherait en vain dans la grille.
 import { db } from '../data/db.js';
 import { scope } from '../data/scope.js';
-import { esc, isoDay, relDay } from '../ui.js';
+import { esc, isoDay, relDay, toast, openModal, closeModal } from '../ui.js';
 import { poserEspace } from './espace.js';
 import { cadre, guard, KEY } from './rgd-espace.js';
 // ⚠ LE FORMULAIRE A QUITTÉ CE FICHIER LE 30/09/2026, avec les deux calculs
@@ -95,6 +95,8 @@ import { cadre, guard, KEY } from './rgd-espace.js';
 // `finApres` corrigent chacun un défaut vécu, et deux copies d'une correction
 // n'en restent une que jusqu'au jour où l'on n'en corrige qu'une.
 import { formulaireEvenement, decale, finApres } from './evenement-form.js';
+// Ouvrir, déplacer, supprimer : les trois gestes passent par le même module.
+import { modifierEvenement, supprimerEvenement } from '../data/evenements.js';
 
 // JUSQU'OÙ ON A LE DROIT DE NAVIGUER.
 //
@@ -217,7 +219,11 @@ function miniCalendrier(mois, jourSel, parJour, min, max) {
  * ⚠ LA PLAGE S'ADAPTE : 8 h → 19 h par défaut, élargie si un rendez-vous sort
  * de ces bornes. Une plage fixe ferait disparaître un rendez-vous de 7 h.
  */
-function grille(jours, parJour, calendriers) {
+// ⚠ `ecriture` COMMANDE LE GLISSER, pas seulement l'affichage : un rendez-vous
+// qu'on peut attraper et déposer alors que le serveur refusera l'écriture est
+// pire qu'un rendez-vous fixe — le geste a l'air d'avoir marché jusqu'à ce que
+// la grille revienne en arrière.
+function grille(jours, parJour, calendriers, ecriture) {
   const evts = jours.flatMap(j => parJour.get(j) || []).filter(e => !e.all_day);
   let debut = 8 * 60, fin = 19 * 60;
   for (const e of evts) {
@@ -244,7 +250,8 @@ function grille(jours, parJour, calendriers) {
         ${journee.length ? `<span class="ag-journee" title="${esc(journee.map(e => e.title).join(' · '))}">
           ${journee.length} journée${journee.length > 1 ? 's' : ''}</span>` : ''}
       </div>
-      <div class="ag-piste" style="height:${hauteur}px">
+      <div class="ag-piste" style="height:${hauteur}px"
+        data-piste="${j}" data-debut="${debut}" data-plage="${fin - debut}">
         ${heures.map((_, i) => `<div class="ag-ligne" style="top:${y((debut / 60 + i) * 60)}px"></div>`).join('')}
         ${j === isoDay() ? (() => {
           const m = new Date().getHours() * 60 + new Date().getMinutes();
@@ -253,13 +260,19 @@ function grille(jours, parJour, calendriers) {
         ${cales.map(e => {
           const d = minutes(e.starts_at);
           const f = e.ends_at ? Math.max(minutes(e.ends_at), d + 30) : d + 60;
-          return `<a class="ag-evt" style="top:${y(d)}px;height:${Math.max(18, y(f) - y(d))}px;
+          // ⚠ UN BOUTON, PLUS UN LIEN VERS GOOGLE (30/09/2026, demandé :
+          // « pouvoir cliquer sur le rdv pour en savoir plus »). Le lien
+          // emmenait dans un autre outil, dans un autre onglet, pour lire ce
+          // que le CRM a déjà — et il ne permettait ni de déplacer ni de
+          // supprimer. Il n'est pas perdu : le panneau le propose.
+          return `<button type="button" class="ag-evt" data-ev="${esc(e.id)}"
+                ${ecriture ? 'draggable="true"' : ''}
+                style="top:${y(d)}px;height:${Math.max(18, y(f) - y(d))}px;
                 --ag-teinte:${teinteDe(calendriers, e.calendar_id)}"
-                ${e.link ? `href="${esc(e.link)}" target="_blank" rel="noopener"` : ''}
                 title="${esc(e.title || '')}${e.location ? ' — ' + esc(e.location) : ''}">
             <b>${esc(e.title || '(sans titre)')}</b>
             <span>${esc(hhmm(e.starts_at))}${e.location ? ' · ' + esc(e.location) : ''}</span>
-          </a>`;
+          </button>`;
         }).join('')}
       </div>
     </div>`;
@@ -276,6 +289,200 @@ function grille(jours, parJour, calendriers) {
 // savoir ici : il crée DIRECTEMENT dans Google, et le rendez-vous EN REVIENT
 // avant que la réponse arrive — le serveur relève la journée visée et attend,
 // d'où le redessin qui suit l'enregistrement.
+
+// ⚠ `p2` EST PARTI AVEC LE FORMULAIRE dans `evenement-form.js`, qui ne
+// l'exporte pas — et il reste utilisé ici pour composer les heures envoyées au
+// serveur. On le redonne sur place : élargir l'interface d'un module partagé
+// pour deux chiffres coûterait plus cher que cette ligne.
+// ⚠ `node --check` NE VOIT PAS CE GENRE DE TROU : il valide la syntaxe, pas les
+// liaisons. Sans cette ligne, le premier déplacement lèverait un ReferenceError
+// à l'exécution, et nulle part avant.
+const p2 = (n) => String(n).padStart(2, '0');
+
+// ------------------------------------- ouvrir, et déplacer à la souris
+// ⚠ LE GLISSER ET LES CHAMPS SONT LES DEUX CHEMINS DU MÊME GESTE, et aucun des
+// deux ne suffit seul (30/09/2026). Le glisser est le plus direct à la souris,
+// mais **il ne fonctionne pas au doigt** — constaté sur les photos des
+// réalisations, d'où les flèches ajoutées là-bas — et il ne peut pas déposer
+// un rendez-vous sur un jour qui n'est pas affiché. Les champs du panneau font
+// les deux.
+const PAS_MIN = 15;
+
+function lierGrille(root, ecriture, apres) {
+  // ⚠ ON RETROUVE LE RENDEZ-VOUS DANS LA MÊME SOURCE QUE LE DESSIN,
+  // `scope.rgd(...)`, et jamais dans une copie gardée de côté : le relevé
+  // remplace ces lignes, et une copie désignerait un rendez-vous qui n'existe
+  // plus à l'identique.
+  const parId = (id) => scope.rgd('agenda_events').find(e => e.id === id) || null;
+
+  root.querySelectorAll('[data-ev]').forEach(b => {
+    b.onclick = () => {
+      const ev = parId(b.dataset.ev);
+      if (ev) panneauEvenement(ev, ecriture, apres);
+    };
+    if (!ecriture) return;
+    b.addEventListener('dragstart', (e) => {
+      e.dataTransfer.setData('text/plain', b.dataset.ev);
+      e.dataTransfer.effectAllowed = 'move';
+      b.classList.add('est-pris');
+    });
+    b.addEventListener('dragend', () => b.classList.remove('est-pris'));
+  });
+
+  if (!ecriture) return;
+
+  root.querySelectorAll('[data-piste]').forEach(piste => {
+    // ⚠ IL FAUT ANNULER `dragover` POUR QUE `drop` EXISTE. Sans
+    // `preventDefault`, le navigateur refuse le dépôt et rien ne se passe —
+    // même piège que la zone de fichiers de la fiche projet.
+    piste.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      piste.classList.add('survol');
+    });
+    piste.addEventListener('dragleave', () => piste.classList.remove('survol'));
+
+    piste.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      piste.classList.remove('survol');
+      const ev = parId(e.dataTransfer.getData('text/plain'));
+      if (!ev) return;
+
+      // L'heure visée se lit de la POSITION DU CURSEUR dans la piste, rapportée
+      // à la plage horaire que la colonne couvre — celle-ci s'adapte aux
+      // rendez-vous du jour, elle n'est donc pas toujours 8 h → 19 h.
+      const boite = piste.getBoundingClientRect();
+      const debut = Number(piste.dataset.debut);
+      const plage = Number(piste.dataset.plage);
+      const brut = debut + ((e.clientY - boite.top) / boite.height) * plage;
+      // Arrondi au quart d'heure : au pixel près on obtiendrait 14 h 03.
+      const mins = Math.max(0, Math.min(24 * 60 - PAS_MIN,
+        Math.round(brut / PAS_MIN) * PAS_MIN));
+      const jour = piste.dataset.piste;
+
+      // ⚠ LA DURÉE EST REPORTÉE : on déplace un rendez-vous, on ne le
+      // raccourcit pas. Sans fin connue, une heure — même défaut que le dessin.
+      const d0 = new Date(ev.starts_at);
+      const duree = ev.ends_at
+        ? Math.max(PAS_MIN, Math.round((new Date(ev.ends_at) - d0) / 60000)) : 60;
+
+      // Reposé exactement où il était : rien à écrire, et surtout aucun message
+      // de report à envoyer au client pour un rendez-vous qui n'a pas bougé.
+      const h = Math.floor(mins / 60);
+      const mn = mins % 60;
+      if (jour === ev.day && h * 60 + mn === d0.getHours() * 60 + d0.getMinutes()) return;
+
+      // ⚠ `finApres` ATTEND L'HEURE EN CHAÎNE « HH:MM », PAS UN NOMBRE : avec
+      // un nombre, `String(14).split(':')` rend `['14']`, les minutes valent
+      // `undefined` et la fin part en `TNaN:NaN`. Google refuserait — mais le
+      // défaut ne se voit ni à l'écran ni au contrôle de syntaxe, seulement en
+      // lisant ce qui est réellement envoyé.
+      toast('Déplacement…');
+      const r = await modifierEvenement({
+        evenement: ev.id,
+        date_debut: `${jour}T${p2(h)}:${p2(mn)}:00`,
+        date_fin: finApres(jour, `${p2(h)}:${p2(mn)}`, duree),
+      });
+      if (!r.ok) return toast(r.motif, 'err');
+      toast(r.donnees.releve
+        ? `Déplacé à ${p2(h)}:${p2(mn)}`
+        : 'Déplacé dans Google — visible au prochain relevé');
+      apres?.();
+    });
+  });
+}
+
+// ------------------------------------------------ le panneau d'un rendez-vous
+// ⚠ IL REMPLACE LE LIEN VERS GOOGLE, il ne s'y ajoute pas : on venait ici pour
+// savoir ce qu'il y a dans un rendez-vous, et il fallait ouvrir un autre outil.
+//
+// ⚠ AUCUN `confirm()` DE `ui.js` SUR CET ÉCRAN : il appelle `closeModal(true)`
+// et REMPLACE la fenêtre courante — le panneau disparaîtrait avant la réponse,
+// et la saisie d'horaire avec lui. Sixième occurrence du piège dans ce dépôt.
+// La suppression tient donc en DEUX CLICS sur le même bouton, qui se désarme
+// seul au bout de quatre secondes pour qu'un bouton rouge oublié ne piège pas
+// le clic suivant.
+function panneauEvenement(ev, ecriture, apres) {
+  const finie = ev.ends_at ? new Date(ev.ends_at) : null;
+  const debut = new Date(ev.starts_at);
+  // La durée est reportée telle quelle quand on change l'heure de début : on
+  // déplace un rendez-vous, on ne le raccourcit pas.
+  const dureeMin = finie ? Math.max(15, Math.round((finie - debut) / 60000)) : 60;
+
+  const lignes = [
+    ['Quand', ev.all_day
+      ? `${jourLongAn(ev.day)} — journée entière`
+      : `${jourLongAn(ev.day)} · ${hhmm(ev.starts_at)}${finie ? ` → ${hhmm(ev.ends_at)}` : ''}`],
+    ['Où', ev.location || ''],
+    ['Invités', ev.attendees ? `${ev.attendees} invité${ev.attendees > 1 ? 's' : ''}` : ''],
+    ['Agenda', ev.calendar_id || ''],
+  ].filter(([, v]) => v);
+
+  const m = openModal(ev.title || '(sans titre)', `
+    <div class="evd-corps">
+      ${lignes.map(([k, v]) => `<div class="evd-ligne"><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join('')}
+      ${ev.description ? `<div class="evd-desc">${esc(ev.description)}</div>` : ''}
+      ${ev.link ? `<a class="evd-google" href="${esc(ev.link)}" target="_blank" rel="noopener">Ouvrir dans Google Agenda ↗</a>` : ''}
+
+      ${ecriture && !ev.all_day ? `
+        <div class="evd-titre">Déplacer</div>
+        <div class="evd-deplacer">
+          <label><span>Date</span><input type="date" id="ev-d-jour" value="${esc(ev.day)}"></label>
+          <label><span>Début</span><input type="time" id="ev-d-heure" value="${esc(hhmm(ev.starts_at))}" step="300"></label>
+          <label><span>Durée</span><input type="number" id="ev-d-duree" value="${dureeMin}" min="15" step="15"> min</label>
+        </div>
+        <p class="mf-aide">Les invités recevront un message de report.</p>` : ''}
+    </div>
+    <div class="form-actions">
+      <button type="button" class="btn ghost" data-close>Fermer</button>
+      ${ecriture ? '<button type="button" class="btn ghost evd-danger" id="ev-supprimer">Supprimer</button>' : ''}
+      ${ecriture && !ev.all_day ? '<button type="button" class="btn" id="ev-deplacer">Déplacer</button>' : ''}
+    </div>`, { wide: false });
+
+  const q = (sel) => m.querySelector(sel);
+
+  q('#ev-deplacer')?.addEventListener('click', async () => {
+    const jour = q('#ev-d-jour').value;
+    const heure = q('#ev-d-heure').value;
+    const duree = Number(q('#ev-d-duree').value) || 60;
+    if (!jour || !heure) return toast('Date et heure sont nécessaires', 'warn');
+    const b = q('#ev-deplacer');
+    b.disabled = true; b.textContent = 'Déplacement…';
+    const [h, mn] = heure.split(':').map(Number);
+    const r = await modifierEvenement({
+      evenement: ev.id,
+      date_debut: `${jour}T${p2(h)}:${p2(mn)}:00`,
+      date_fin: finApres(jour, `${p2(h)}:${p2(mn)}`, duree),
+    });
+    if (!r.ok) { b.disabled = false; b.textContent = 'Déplacer'; return toast(r.motif, 'err'); }
+    // ⚠ `releve: false` N'EST PAS UN ÉCHEC : le changement est chez Google, le
+    // relevé suivant le rapportera. Le dire comme une erreur ferait recommencer,
+    // donc prévenir le client deux fois.
+    toast(r.donnees.releve ? 'Rendez-vous déplacé' : 'Déplacé dans Google — visible au prochain relevé');
+    closeModal(true);
+    apres?.();
+  });
+
+  let arme = null;
+  q('#ev-supprimer')?.addEventListener('click', async () => {
+    const b = q('#ev-supprimer');
+    if (!arme) {
+      arme = setTimeout(() => { arme = null; b.classList.remove('est-arme'); b.textContent = 'Supprimer'; }, 4000);
+      b.classList.add('est-arme');
+      b.textContent = ev.attendees ? 'Confirmer — les invités seront prévenus' : 'Confirmer la suppression';
+      return;
+    }
+    clearTimeout(arme); arme = null;
+    b.disabled = true; b.textContent = 'Suppression…';
+    const r = await supprimerEvenement({ evenement: ev.id });
+    if (!r.ok) { b.disabled = false; b.textContent = 'Supprimer'; return toast(r.motif, 'err'); }
+    toast(r.donnees.deja_parti ? 'Rendez-vous déjà supprimé dans Google' : 'Rendez-vous supprimé');
+    closeModal(true);
+    apres?.();
+  });
+
+  return m;
+}
 
 // Le jour visé par l'adresse : `#/rgd/agenda?jour=2026-10-06`.
 //
@@ -478,7 +685,7 @@ export const rgdAgendaPage = {
 
             <section class="card ag-cadre">
               ${vide ? '<p class="ag-libre">Aucun rendez-vous cette semaine.</p>' : ''}
-              ${grille(affiches, parJour, calendriers)}
+              ${grille(affiches, parJour, calendriers, state.ecriture)}
             </section>
           </section>
         </div>`;
@@ -501,6 +708,7 @@ export const rgdAgendaPage = {
         state.mois = b.dataset.mois;
         draw();
       });
+      lierGrille(root, state.ecriture, () => rafraichir({ force: true }));
       const nouveau = root.querySelector('#ag-nouveau');
       // ⚠ APRÈS UNE CRÉATION, ON RELÈVE — on ne redessine pas. Le rendez-vous
       // vient de partir dans Google par le tableau de bord ; c'est de Google

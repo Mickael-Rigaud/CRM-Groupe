@@ -1,4 +1,4 @@
-// Créer un rendez-vous — écrit dans Google Agenda depuis le CRM
+// Créer, déplacer et supprimer un rendez-vous — dans Google, depuis le CRM
 //
 // ⚠ IL S'APPELAIT `rgd-evenements.js` JUSQU'AU 30/09/2026, et le renommer n'est
 // pas cosmétique : depuis que le tableau de bord de BTP Expertise crée ses
@@ -50,7 +50,11 @@ import { CONFIG } from '../config.js';
  * est dans Google, il arrivera au relevé suivant. Le confondre avec une erreur
  * ferait recommencer, donc créer deux fois.
  */
-export async function creerEvenement(champs) {
+// ⚠ UN SEUL CHEMIN POUR LES TROIS GESTES : ils présentent le même jeton, au
+// même serveur, et rendent le même couple `{ ok, motif }`. Trois copies de cet
+// appel auraient fini par traiter l'échec de trois façons différentes — et
+// c'est l'échec qu'on lit le moins souvent, donc celui qui dérive en silence.
+async function appeler(fonction, champs) {
   // Le mode démo n'a ni fonction serveur ni Google. On le dit au lieu de
   // laisser l'appel échouer sur une adresse vide, comme l'écran Agenda le fait
   // déjà pour son relevé.
@@ -60,7 +64,7 @@ export async function creerEvenement(champs) {
   const jeton = await db.accessToken();
   if (!jeton) return { ok: false, motif: 'Session expirée : reconnectez-vous.' };
   try {
-    const r = await fetch(`${CONFIG.SUPABASE_URL}/functions/v1/creer-evenement`, {
+    const r = await fetch(`${CONFIG.SUPABASE_URL}/functions/v1/${fonction}`, {
       method: 'POST',
       headers: {
         apikey: CONFIG.SUPABASE_ANON_KEY,
@@ -78,3 +82,30 @@ export async function creerEvenement(champs) {
     return { ok: false, motif: String(e.message || e).slice(0, 160) };
   }
 }
+
+export const creerEvenement = (champs) => appeler('creer-evenement', champs);
+
+/**
+ * Déplacer ou corriger un rendez-vous existant.
+ *
+ * `champs` : `evenement` (l'identifiant de la LIGNE `agenda_events`, jamais un
+ * identifiant Google), et ce qui change — `date_debut` + `date_fin` ensemble,
+ * `titre`, `lieu`, `description`.
+ *
+ * ⚠ LES INVITÉS REÇOIVENT UN MESSAGE DE REPORT (décision du 30/09/2026) :
+ * l'écran doit se comporter comme Google Agenda. Sans invité, rien ne part.
+ *
+ * ⚠ `donnees.releve` à faux NE VEUT PAS DIRE ÉCHEC : le changement est dans
+ * Google, le relevé suivant le rapportera. Le confondre avec une erreur ferait
+ * recommencer — donc prévenir le client deux fois.
+ */
+export const modifierEvenement = (champs) => appeler('modifier-evenement', champs);
+
+/**
+ * Supprimer un rendez-vous. `champs` : `evenement`, l'identifiant de la ligne.
+ *
+ * ⚠ LA SUPPRESSION SE FAIT DANS GOOGLE, ET C'EST LA SEULE QUI TIENNE : une
+ * ligne effacée dans le reflet seul reviendrait au relevé suivant, Google
+ * étant la source. ⚠ ELLE ENVOIE UNE ANNULATION AUX INVITÉS.
+ */
+export const supprimerEvenement = (champs) => appeler('supprimer-evenement', champs);
