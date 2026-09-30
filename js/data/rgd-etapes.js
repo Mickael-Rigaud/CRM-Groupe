@@ -335,6 +335,34 @@ function visiteEnCours(c, joursVisite) {
   return jour >= decalerDeJours(0);
 }
 
+/**
+ * LA VISITE QUI A FAIT RANGER LA FICHE DANS L'ONGLET « RDV ».
+ *
+ * ⚠ ELLE SE LIT SUR LE CHANTIER, PAS SUR L'AGENDA, et ce n'est pas un détail :
+ * c'est `date_debut_prevue` d'un chantier « visite technique » qui décide du
+ * classement (voir `etapeParLesFaits`). Rapprocher l'agenda par le nom pour
+ * afficher une date donnerait, sur une personne revue deux fois, une date
+ * différente de celle qui l'a rangée là — une colonne qui contredit son propre
+ * onglet.
+ *
+ * ⚠ ELLE NE PORTE PAS L'HEURE : `date_debut_prevue` est un `date` en base.
+ * L'heure vit dans `agenda_events`, que l'appelant joint par `source_event_id`
+ * — le lien EXACT, posé par le relevé. Une visite sur six ne l'a pas (mesuré le
+ * 30/09/2026) : sans événement, la date seule, jamais une heure inventée.
+ *
+ * ⚠ LA PLUS PROCHE À VENIR D'ABORD. Deux visites en cours sont rares mais
+ * possibles (une reportée, l'ancienne encore dans la fenêtre relevée) : c'est
+ * celle qu'on va honorer qu'on veut lire, pas la plus ancienne.
+ */
+export function visiteDeLaFiche(f, chantiers, joursVisite) {
+  const aujourdhui = decalerDeJours(0);
+  const jourDe = (c) => String(c.date_debut_prevue || c.work_start_at || '').slice(0, 10);
+  const miennes = (chantiers || [])
+    .filter(c => memeQue(c, f) && estVisiteTechnique(c) && visiteEnCours(c, joursVisite))
+    .sort((a, b) => jourDe(a).localeCompare(jourDe(b)));
+  return miennes.find(c => jourDe(c) >= aujourdhui) || miennes[miennes.length - 1] || null;
+}
+
 // L'étape d'une fiche `rgd_clients`. Les deux tables sont passées en argument
 // pour que l'appelant qui en tient déjà une copie ne la relise pas à chaque
 // ligne — `etapesRgd()` ci-dessous les lit une fois pour toutes.

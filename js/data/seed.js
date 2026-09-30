@@ -460,7 +460,25 @@ export const SEED = {
     { id: 'rch1', deal_id: 'd1', contact_id: 'c1', reference: 'Rénovation appartement — Bernard',
       adresse: '12 rue Nationale', code_postal: '37000', ville: 'Tours',
       statut_d1: 'visite_technique', date_debut_prevue: day(1),
+      // ⚠ LE LIEN VERS L'AGENDA EST CE QUI DONNE L'HEURE. Sans lui la colonne
+      // « Rendez-vous » de l'onglet RDV n'affiche que la date — le cas de la
+      // sixième visite en production. Les deux cas sont donc semés : celui-ci
+      // avec son événement, `rch5` sans.
+      source_event_id: 'demo-visite-bernard',
       created_at: d(-6), updated_at: d(-3) },
+    // ⚠ CES DEUX VISITES SONT LÀ POUR LES DEUX CAS DE LA COLONNE « Rendez-vous »
+    // de `#/rgd/clients`, et elles portent sur des fiches DÉJÀ dans l'onglet RDV
+    // (`rc5` et `rc6`, nées d'un rendez-vous) — une visite sur une fiche qui a
+    // déjà un devis ne s'y affiche pas, le devis l'emportant sur le rendez-vous.
+    // `rch6` est liée à son événement : date ET heure. `rch5` ne l'est pas :
+    // date seule, « heure inconnue » — l'état d'une visite sur six en production.
+    { id: 'rch5', deal_id: null, contact_id: 'c15', reference: 'Visite technique — Leclerc',
+      ville: 'Tours', statut_d1: 'visite_technique', date_debut_prevue: day(3),
+      created_at: d(-2), updated_at: d(-2) },
+    { id: 'rch6', deal_id: null, contact_id: 'c14', reference: 'Visite technique — Dumas',
+      ville: 'Tours', statut_d1: 'visite_technique', date_debut_prevue: day(2),
+      source_event_id: 'demo-visite-dumas',
+      created_at: d(-1), updated_at: d(-1) },
     { id: 'rch2', deal_id: 'd2', contact_id: 'c8', reference: 'Salle de bain — Fontaine',
       ville: 'Tours', statut_d1: 'devis_presente', montant_ht: 11500,
       created_at: d(-20), updated_at: d(-8) },
@@ -471,6 +489,36 @@ export const SEED = {
     { id: 'rch4', deal_id: 'd4', contact_id: 'c9', reference: 'Cuisine — Roux',
       ville: 'Tours', statut_d1: 'termine', etat: 'termine',
       date_passage_termine: d(-10), created_at: d(-2), updated_at: d(-10) },
+  ],
+  // ⚠ L'AGENDA RELEVÉ, ABSENT DU JEU D'EXEMPLE JUSQU'AU 30/09/2026. Sans lui la
+  // colonne « Rendez-vous » de `#/rgd/clients` n'affiche jamais d'heure, et le
+  // bloc « Aujourd'hui » de la vue d'ensemble reste vide : les deux n'étaient
+  // essayables qu'en production. Ce sont des rendez-vous INVENTÉS — le dépôt
+  // est public.
+  // ⚠ `google_id` est ce que le chantier désigne par `source_event_id` : c'est
+  // le lien exact, celui que le relevé pose, et pas un rapprochement par nom.
+  agenda_events: [
+    { id: 'rgd|demo-visite-bernard|' + day(1), activity: 'rgd',
+      calendar_id: 'demo-rgd@group.calendar.google.com', google_id: 'demo-visite-bernard',
+      title: 'Visite technique: Mme Bernard', location: '12 rue Nationale, Tours',
+      starts_at: d(1, 14), ends_at: d(1, 15), all_day: false, day: day(1) },
+    // ⚠ CELUI-CI EST POSÉ SANS LIEN SUR LE CHANTIER, et c'est le second cas à
+    // éprouver : la visite tient (l'agenda porte bien un rendez-vous ce
+    // jour-là, donc `joursDeVisite` la confirme) mais aucun `source_event_id`
+    // ne la relie, donc l'heure reste inconnue. C'est l'état d'une visite sur
+    // six en production.
+    { id: 'rgd|demo-visite-leclerc|' + day(3), activity: 'rgd',
+      calendar_id: 'demo-rgd@group.calendar.google.com', google_id: 'demo-visite-leclerc',
+      title: 'Visite technique: M. Leclerc', location: 'Tours',
+      starts_at: d(3, 9), ends_at: d(3, 10), all_day: false, day: day(3) },
+    { id: 'rgd|demo-visite-dumas|' + day(2), activity: 'rgd',
+      calendar_id: 'demo-rgd@group.calendar.google.com', google_id: 'demo-visite-dumas',
+      title: 'Visite technique: M. Dumas', location: 'Saint-Cyr-sur-Loire',
+      starts_at: d(2, 16), ends_at: d(2, 17), all_day: false, day: day(2) },
+    { id: 'rgd|demo-point-chantier|' + day(0), activity: 'rgd',
+      calendar_id: 'demo-rgd@group.calendar.google.com', google_id: 'demo-point-chantier',
+      title: 'Point chantier Haddad', location: 'Joué-lès-Tours',
+      starts_at: d(0, 10), ends_at: d(0, 11), all_day: false, day: day(0) },
   ],
   // Les devis de l'espace RGD.
   //
@@ -551,7 +599,7 @@ export const SEED = {
       source: 'Formulaire site', notes: '', maj: d(-4) },
     { id: 'rc4', owner_id: 'u-mickael', contact_id: 'c13', d1_id: 7001, statut: 'prospect', statut_suivi: 'relance_3',
       source: 'manuel', notes: 'Ne répond plus depuis trois semaines.', maj: d(-9) },
-    { id: 'rc5', owner_id: 'u-mickael', contact_id: 'c14', statut: 'qualifie', statut_suivi: 'a_contacter',
+    { id: 'rc5', owner_id: 'u-mickael', contact_id: 'c14', statut: 'qualifie', statut_suivi: 'rdv_planifie',
       source: 'google_calendar', notes: 'Fiche créée depuis le rendez-vous.', maj: d(-1) },
     // Deux étapes plus loin, pour vérifier qu'aucun filtre de statut
     // n'apparaît là où l'onglet est déjà le statut.

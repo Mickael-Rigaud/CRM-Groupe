@@ -3333,19 +3333,51 @@ button.tb-pp:hover { color: var(--text); text-decoration: underline; text-underl
    Le champ se fond dans la cellule tant qu'on n'y touche pas : une bordure sur
    chaque ligne ferait un tableau en grillage, et on ne lirait plus les noms.
    Il se révèle au survol et au focus, là où on s'apprête à écrire. */
-.rcl-note { min-width: 150px; }
-.rcl-note input {
+/* ⚠ LE COMMENTAIRE S'ENROULE SUR PLUSIEURS LIGNES DEPUIS LE 30/09/2026. C'était
+   un champ d'une seule ligne : tout ce qui dépassait vivait derrière un
+   défilement horizontal invisible, et il fallait cliquer dedans puis parcourir
+   au clavier pour lire une note de deux phrases.
+   La largeur est BORNÉE des deux côtés — sans maximum, une longue note étirerait
+   sa colonne et comprimerait toutes les autres ; sans minimum, elle ferait une
+   colonne d'un mot de large. */
+/* ⚠ `width` ET NON `min-width` : le texte s'enroulant, le navigateur peut
+   réduire la colonne autant qu'il veut, et `min-width` sur une cellule d'un
+   tableau en `table-layout: auto` n'est qu'une suggestion qu'il ignore. Mesuré :
+   la colonne tombait à 176 px et un commentaire de trois phrases s'y étalait
+   sur dix lignes, alors que la table laissait de la place à droite. */
+.rcl-note { width: 300px; max-width: 340px; vertical-align: top; }
+.rcl-note textarea {
   width: 100%; border: 1px solid transparent; background: transparent;
   border-radius: 6px; padding: 4px 6px; font-size: 13px; color: var(--muted);
+  font-family: inherit; line-height: 1.4;
+  /* La hauteur est posée en JS (`ajusterNote`) sur le contenu ; `resize: none`
+     empêche la poignée du navigateur de la contredire, et `overflow: hidden`
+     évite une barre de défilement d'un pixel sur un champ d'une ligne. */
+  resize: none; overflow: hidden; display: block;
 }
-.rcl-note input::placeholder { color: var(--muted); opacity: .45; }
-.rcl-note input:hover { border-color: var(--line); }
-.rcl-note input:focus {
+.rcl-note textarea::placeholder { color: var(--muted); opacity: .45; }
+.rcl-note textarea:hover { border-color: var(--line); }
+.rcl-note textarea:focus {
   border-color: var(--accent); background: var(--card); color: var(--text); outline: none;
 }
 /* Pendant l'enregistrement le champ est désactivé : le dire, sinon une saisie
    qui ne répond plus ressemble à une application figée. */
-.rcl-note input:disabled { opacity: .5; cursor: progress; }
+.rcl-note textarea:disabled { opacity: .5; cursor: progress; }
+/* En lecture seule, le même enroulement : sans lui une longue note sortirait du
+   tableau, et rien ne dirait qu'il en manque. */
+.note-lue { display: block; white-space: pre-wrap; overflow-wrap: anywhere;
+  font-size: 13px; color: var(--muted); line-height: 1.4; }
+
+/* La date et l'heure du rendez-vous, sur l'onglet RDV seulement. La date en
+   gras, l'heure dessous : c'est la date qu'on parcourt du regard pour savoir
+   ce qui vient, l'heure ne sert qu'une fois la ligne trouvée. */
+.rcl-rdv-cell { white-space: nowrap; }
+.rcl-rdv { display: flex; flex-direction: column; line-height: 1.3; }
+.rcl-rdv span { font-size: 12px; color: var(--muted); }
+/* Une visite passée reste lisible mais s'efface : dans cet onglet, elle veut
+   dire « la visite a eu lieu, le devis n'est pas parti » — une information,
+   pas une erreur. */
+.rcl-rdv.est-passe { opacity: .55; }
 
 /* ===== Agenda RGD — le hub deux colonnes du tableau de bord ===============
    Mini-calendrier et prochains rendez-vous à gauche, la grille horaire à
