@@ -92,7 +92,8 @@ import { scope } from '../data/scope.js';
 import { ORDRE_ETAPES, ETAPES_RGD, ETAPES_CLES, ETAPE_DU_STATUT, STATUT_DE_L_ETAPE,
          etapeDeFiche, etapeDeDemande, estProspectParSource,
          joursDeVisite, statutsDeLEtape, statutSuiviLu,
-         montantDevisDe, etapeAvecMontant, ecrireStatut } from '../data/rgd-etapes.js';
+         montantDevisDe, etapeAvecMontant, ecrireStatut,
+         visiteDeLaFiche } from '../data/rgd-etapes.js';
 import { db } from '../data/db.js';
 import { esc, eur, fmtDate, fmtDateTime, relDay, terms, hit, searchInput, bindSearch, restoreFocus } from '../ui.js';
 import { poserEspace } from './espace.js';
@@ -178,13 +179,39 @@ const menuStatut = (cle, cible, uuid) => {
 // toucher à une fiche qui en venait, et rien de plus que l'activité RGD pour
 // une fiche née ici : deux droits sur la même colonne, selon d'où la ligne
 // arrivait. `scope.canRgd` décide pour les deux.
+// ⚠ C'EST UN `textarea` DEPUIS LE 30/09/2026, ET PLUS UN `input` (demandé par
+// Mickael : « il faut dérouler toute la ligne pour voir l'entièreté du
+// commentaire »). Un champ d'une seule ligne cache tout ce qui dépasse derrière
+// un défilement horizontal qu'on ne voit pas : le commentaire était là, mais
+// illisible sans cliquer dedans et parcourir au clavier. Un commentaire qu'on
+// ne lit pas d'un coup d'œil ne sert à rien dans un tableau.
+//
+// ⚠ IL N'A PAS DE `rows` FIXE : `ajusterNotes()` cale sa hauteur sur son
+// contenu, après le rendu et à chaque frappe. Une hauteur figée à deux ou trois
+// lignes remplacerait un défilement horizontal par un vertical, dans une case
+// encore plus petite.
+//
+// ⚠ ENTRÉE Y FAIT UN RETOUR À LA LIGNE, et c'est voulu — un commentaire d'appel
+// s'écrit souvent en deux temps. L'enregistrement part au `change`, donc en
+// quittant le champ, exactement comme avant : le gestionnaire n'a pas changé.
 const champNote = (ligne, cible) => {
   const v = (cible === 'demande' ? ligne.commentaire_admin : ligne.notes) || '';
-  if (!scope.canRgd) return v ? esc(v) : '<span class="muted">—</span>';
-  return `<input class="note-champ" data-cible="${esc(cible)}"
-    data-uuid="${esc(ligne.id)}"
-    value="${esc(v)}" placeholder="Commentaire…" aria-label="Commentaire">`;
+  // ⚠ EN LECTURE SEULE AUSSI LE TEXTE S'ENROULE : `.rcl-note` porte le
+  // `white-space` qu'il faut, sinon une longue note sortirait du tableau au
+  // lieu d'être tronquée — et personne ne verrait qu'il en manque.
+  if (!scope.canRgd) return v ? `<span class="note-lue">${esc(v)}</span>` : '<span class="muted">—</span>';
+  return `<textarea class="note-champ" data-cible="${esc(cible)}"
+    data-uuid="${esc(ligne.id)}" rows="1"
+    placeholder="Commentaire…" aria-label="Commentaire">${esc(v)}</textarea>`;
 };
+
+// La hauteur suit le contenu. `scrollHeight` se lit après avoir remis la
+// hauteur à zéro : sans cette remise, un champ qu'on raccourcit garderait la
+// hauteur qu'il avait au plus long.
+function ajusterNote(champ) {
+  champ.style.height = 'auto';
+  champ.style.height = `${Math.min(champ.scrollHeight, 220)}px`;
+}
 
 const pastilleFiche = (cle) => cle
   ? `<span class="chip st-${esc(dit(STATUTS_FICHE, cle).key)}">${esc(dit(STATUTS_FICHE, cle).label)}</span>`
@@ -781,10 +808,48 @@ export const rgdClientsPage = {
           <b>${esc(eur(totalEtape))}</b>
         </div>`;
 
+      // ⚠ LA COLONNE « RENDEZ-VOUS » N'EXISTE QUE SUR L'ONGLET « RDV »
+      // (30/09/2026, demandé par Mickael). Ailleurs elle serait vide de haut en
+      // bas : une visite technique en cours EST ce qui range une fiche dans cet
+      // onglet, donc partout ailleurs il n'y en a pas. Une colonne vide prend
+      // la place des autres et fait chercher une donnée qui n'a pas lieu d'être.
+      const surRdv = state.vue === 'rdv';
+
+      // ⚠ LA DATE VIENT DU CHANTIER, L'HEURE DE L'AGENDA, et les deux sources
+      // ne sont pas interchangeables : c'est `date_debut_prevue` qui décide du
+      // classement dans l'onglet (voir `visiteDeLaFiche`), et `date_debut_prevue`
+      // est un `date` — l'heure n'y est pas. On la cherche sur l'événement lié
+      // par `source_event_id`, le lien exact posé par le relevé.
+      //
+      // ⚠ SANS ÉVÉNEMENT, LA DATE SEULE — jamais une heure inventée. Une visite
+      // sur six n'a pas de `source_event_id` (mesuré le 30/09/2026), et une
+      // journée entière n'a pas d'heure non plus : afficher « 00:00 » ferait
+      // croire à un rendez-vous à minuit, le défaut déjà corrigé sur la fiche.
+      const evenements = surRdv ? scope.rgd('agenda_events') : [];
+      const celluleRdv = (f) => {
+        const visite = visiteDeLaFiche(f, chantiers, joursVisite);
+        if (!visite) return '<span class="muted">—</span>';
+        const jour = String(visite.date_debut_prevue || visite.work_start_at || '').slice(0, 10);
+        const ev = visite.source_event_id
+          ? evenements.find(e => e.google_id === visite.source_event_id) : null;
+        const heure = ev && !ev.all_day && ev.starts_at
+          ? new Date(ev.starts_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+          : '';
+        // Passé = grisé, jamais caché : une visite d'hier sans devis derrière
+        // est précisément ce qu'on vient chercher dans cet onglet.
+        const passe = jour && jour < new Date().toISOString().slice(0, 10);
+        return `<span class="rcl-rdv${passe ? ' est-passe' : ''}">
+          <b>${jour ? esc(fmtDate(jour)) : '—'}</b>
+          ${heure ? `<span>${esc(heure)}</span>`
+            : '<span class="muted" title="Aucun rendez-vous lié dans l’agenda : l’heure n’est pas connue">heure inconnue</span>'}
+        </span>`;
+      };
+
       const tableauProspects = () => `<section class="card table-wrap">
         ${bandeauTotal()}
         <table>
           <thead><tr><th>Reçu</th><th>Provenance</th><th>Nom</th><th>Contact</th>
+            ${surRdv ? '<th>Rendez-vous</th>' : ''}
             <th>Projet</th><th>${surMontant ? 'Montant HT' : 'Budget'}</th><th>Ville</th><th>Statut</th>
             <th>Commentaire</th><th></th></tr></thead>
           <!-- ⚠ L'INDEX EST CELUI DE LA LISTE ENTIERE, PAS DE LA PAGE.
@@ -803,6 +868,8 @@ export const rgdClientsPage = {
             <td>${x.email ? `<a href="mailto:${esc(x.email)}">${esc(x.email)}</a>` : ''}
                 ${x.tel ? `<div class="s">${esc(x.tel)}</div>` : ''}
                 ${!x.email && !x.tel ? '<span class="muted">—</span>' : ''}</td>
+            ${surRdv ? `<td class="rcl-rdv-cell">${x.cible === 'demande'
+              ? '<span class="muted">—</span>' : celluleRdv(x.ligne)}</td>` : ''}
             <td class="muted">${esc(x.projet || '—')}</td>
             <td class="${surMontant ? 'num' : 'muted'}">${surMontant
               ? (montantDevisDe(x.ligne, devis, state.vue) > 0
@@ -815,7 +882,7 @@ export const rgdClientsPage = {
               : pastilleSuivi(x.statut)}</td>
             <td class="rcl-note">${champNote(x.ligne, x.cible)}</td>
             <td>${boutonSuppression(x.ligne)}</td>
-          </tr>`; }).join('') || `<tr><td colspan="10"><div class="empty">${esc(vide())}</div></td></tr>`}</tbody>
+          </tr>`; }).join('') || `<tr><td colspan="${surRdv ? 11 : 10}"><div class="empty">${esc(vide())}</div></td></tr>`}</tbody>
         </table>
         ${pagination()}
         <p class="small muted">${state.ecriture
@@ -987,6 +1054,10 @@ export const rgdClientsPage = {
       // ferait une écriture par lettre.
       root.querySelectorAll('.note-champ').forEach(i => {
         i.dataset.avant = i.value;
+        // La hauteur se cale au rendu, puis à chaque frappe : le champ grandit
+        // sous la main pendant qu'on écrit, au lieu d'attendre un redessin.
+        ajusterNote(i);
+        i.oninput = () => ajusterNote(i);
         i.onchange = async () => {
           const avant = i.dataset.avant;
           const apres = i.value.trim();
@@ -1004,6 +1075,9 @@ export const rgdClientsPage = {
             toast('Commentaire enregistré');
           } else {
             i.value = avant;
+            // La valeur revient, la hauteur doit revenir avec : un champ resté
+            // haut sur un texte court se lit comme un enregistrement réussi.
+            ajusterNote(i);
             toast(`Commentaire non enregistré — ${r.motif}`, 'err');
           }
         };
