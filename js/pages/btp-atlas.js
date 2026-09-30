@@ -144,7 +144,7 @@ const icone = (cle) => `<svg class="fm-icone" viewBox="0 0 24 24" aria-hidden="t
 // ⚠ UNE FICHE SANS COULEUR N'EST PAS UNE FICHE VERTE : la pastille devient
 // grise et le dit. Retomber sur le vert par défaut ferait passer pour
 // « à surveiller » une fiche dont personne n'a renseigné le niveau.
-const ALERTE = {
+export const ALERTE = {
   vert:   { mot: 'Vert',   faire: 'surveiller',        phrase: "Surveiller et planifier l'entretien." },
   orange: { mot: 'Orange', faire: 'chercher la cause', phrase: "Investiguer la cause avant d'intervenir." },
   rouge:  { mot: 'Rouge',  faire: 'sécuriser',         phrase: "Sécuriser et appeler un spécialiste." },
@@ -203,7 +203,7 @@ function filtrer(toutes, etat) {
 // finissent toujours par diverger : l'une saurait distinguer une adresse déjà
 // faite, l'autre non, et le défaut ne se verrait que dans un seul des deux
 // volets.
-async function ouvrirImage(root, selecteur, chemin, legende) {
+export async function ouvrirImage(root, selecteur, chemin, legende) {
   const zone = root.querySelector(selecteur);
   if (!zone) return;
   zone.innerHTML = '<div class="empty">Ouverture\u2026</div>';
@@ -299,18 +299,6 @@ export const btpAtlasPage = {
     // sinon sur un panneau vide dont rien ne dirait pourquoi.
     const demande = new URLSearchParams(location.hash.split('?')[1] || '');
 
-    // ⚠ D'OÙ L'ON VIENT, ET COMMENT Y RETOURNER. Un renvoi depuis la
-    // check-list de visite emporte son chemin : on va lire une planche au
-    // milieu d'un relevé, et il faut pouvoir revenir AU POINT qu'on était en
-    // train de renseigner, pas à la liste des visites.
-    //
-    // ⚠ ON NE SUIT QU'UNE ADRESSE INTERNE (`#/`) : ce paramètre vient de
-    // l'adresse, donc de l'extérieur, et un bouton qui suivrait n'importe
-    // quelle URL ferait de cet écran une porte de sortie vers le premier site
-    // venu. Tout le reste est ignoré, sans bouton et sans message.
-    const brutRetour = demande.get('retour') || '';
-    const retour = /^#\/[\w\-?=&%./]*$/.test(brutRetour) ? brutRetour : null;
-
     const nFiche = Number(demande.get('fiche'));
     if (nFiche && fiches().some(f => f.numero === nFiche)) {
       etat.vue = 'fiches'; etat.ouverte = nFiche;
@@ -349,11 +337,6 @@ export const btpAtlasPage = {
              lisait. Deux zones de valeur oppos\u00e9e donnent cette lecture sans
              un mot, et la carte du contenu vient \u00e0 cheval dessus. -->
         <div class="fm-barre">
-          ${retour ? `
-            <!-- \u26a0 EN T\u00caTE DE LA BARRE, PAS AU PIED DE LA PAGE : on ouvre une
-                 fiche pour la regarder trente secondes, et le retour doit \u00eatre
-                 sous les yeux sans faire d\u00e9filer une planche de 1350 px. -->
-            <a class="fm-retour" href="${esc(retour)}">\u2190 Revenir \u00e0 la check-list</a>` : ''}
           <div class="fm-themes" role="tablist" aria-label="Th\u00e9matiques de la formation">
             ${THEMES.map(o => `
               <button type="button" class="fm-theme${etat.vue === o.cle ? ' on' : ''}"

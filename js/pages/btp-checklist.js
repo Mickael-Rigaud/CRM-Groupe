@@ -23,6 +23,12 @@ import { scope } from '../data/scope.js';
 import { esc, toast, confirm as confirmer, openModal, closeModal } from '../ui.js';
 import { poserEspace } from './espace.js';
 import { cadreBtp as cadre } from './btp.js';
+// ⚠ EMPRUNTÉS À L'ATLAS, PAS RECOPIÉS : la teinte d'un niveau d'alerte et la
+// façon de demander une image signée n'ont pas à exister en deux exemplaires
+// — deux copies finissent par ne plus dire la même chose, et l'écart ne se
+// verrait que sur une fiche. Aucun cycle : `btp-atlas.js` ne connaît pas ce
+// fichier.
+import { ALERTE, ouvrirImage } from './btp-atlas.js';
 import {
   ETATS, SEAU_RELEVES, zones, pointsDe, tousLesPoints,
   releves, reponsesDe, bilan, creerReleve, majReleve, repondre, deposerPhoto,
@@ -74,15 +80,47 @@ function ecrireAdresse(etat) {
 //
 // ⚠ UNE FICHE NON IMPORTÉE N'EST PAS UN LIEN MORT : son numéro s'affiche en
 // clair, et on voit qu'il manque quelque chose au lieu de cliquer dans le vide.
-function lienFiche(n) {
+// ⚠ LA PLANCHE S'OUVRE PAR-DESSUS LA CHECK-LIST, ON NE CHANGE PLUS D'ÉCRAN
+// (30/09/2026, demandé par Mickael : « je n'aime pas le bouton retour, je ne
+// trouve pas ça intuitif »). La version d'avant envoyait sur l'écran
+// Formation avec un chemin de retour : ça marchait, mais on QUITTAIT son
+// relevé pour regarder une image trente secondes, et il fallait apprendre un
+// bouton pour en revenir.
+//
+// Ici on ne quitte rien : la fiche se pose devant, on la ferme, le relevé est
+// toujours là — avec la note qu'on était en train d'écrire, puisque rien n'a
+// été redessiné.
+const boutonFiche = (n) => {
   const f = db.t('btp_atlas_fiches').find(x => x.numero === n);
   if (!f) return `<span class="cl-fiche est-absente" title="Fiche non import\u00e9e">${num(n)}</span>`;
-  // ⚠ LE LIEN EMPORTE SON CHEMIN DE RETOUR. Sans lui, l'écran de l'atlas
-  // n'aurait aucun moyen de savoir d'où l'on vient : « revenir » là-bas
-  // ramènerait au sommaire des fiches, pas à la visite en cours.
-  const retour = encodeURIComponent(location.hash || '#/btp/expertise-checklist');
-  return `<a class="cl-fiche" href="#/btp/atlas?fiche=${n}&retour=${retour}"
-    title="${esc(f.titre)}">${num(n)}</a>`;
+  return `<button type="button" class="cl-fiche" data-planche="${n}"
+    title="${esc(f.titre)}">${num(n)}</button>`;
+};
+
+// ⚠ L'IMAGE SE DEMANDE APRÈS L'OUVERTURE, jamais avant : son adresse est
+// signée et se demande au serveur, alors que le rendu de la fenêtre est
+// synchrone. On ouvre donc sur le titre et le niveau — ce qui permet déjà de
+// décider — et la planche arrive dedans.
+function ouvrirPlanche(n) {
+  const f = db.t('btp_atlas_fiches').find(x => x.numero === n);
+  if (!f) return toast(`La fiche ${num(n)} n'est pas encore import\u00e9e`, 'warn');
+  const a = ALERTE[f.code_couleur];
+  openModal(`Fiche ${num(f.numero)}`, `
+    <div class="cl-planche">
+      <div class="cl-planche-tete">
+        <div>
+          <b>${esc(f.titre)}</b>
+          <span>${esc(f.famille || '')}</span>
+        </div>
+        ${a ? `<span class="at-niveau at-niveau-${f.code_couleur}">${esc(a.mot)} \u00b7 ${esc(a.phrase)}</span>` : ''}
+      </div>
+      <div class="cl-planche-img" id="cl-planche"></div>
+      <div class="form-actions">
+        <a class="btn ghost" href="#/btp/atlas?fiche=${f.numero}">Ouvrir dans la Formation</a>
+        <button type="button" class="btn primary" data-close>Fermer</button>
+      </div>
+    </div>`, { wide: true, onOpen: (m) => ouvrirImage(m, '#cl-planche', f.image,
+      `Fiche ${num(f.numero)} \u2014 ${f.titre}`) });
 }
 const jour = (d) => d ? new Date(d + 'T12:00:00').toLocaleDateString('fr-FR',
   { day: '2-digit', month: 'long', year: 'numeric' }) : '';
@@ -294,7 +332,7 @@ function unPoint(p, rep, etat) {
              papier les imprime d'ailleurs sur chaque ligne, sans rien à
              cocher. -->
         ${p.fiches?.length ? `
-          <span class="cl-fiches">${p.fiches.map(lienFiche).join('')}</span>` : ''}
+          <span class="cl-fiches">${p.fiches.map(boutonFiche).join('')}</span>` : ''}
         <span class="grow"></span>
         ${rep?.note ? `<span class="cl-a-note" title="${esc(rep.note)}">note</span>` : ''}
         ${rep?.photos?.length ? `<span class="cl-a-note">${rep.photos.length} photo${rep.photos.length > 1 ? 's' : ''}</span>` : ''}
@@ -390,6 +428,10 @@ function lier(root, etat, dessine) {
     try { await majReleve(etat.ouvert, { date_visite: date.value }); toast('Date enregistrée', 'ok'); }
     catch (e) { toast('Date non enregistrée : ' + e.message, 'warn'); }
   };
+
+  // ⚠ LA FENÊTRE NE REDESSINE PAS L'ÉCRAN EN SE FERMANT : une note en cours de
+  // frappe vit dans le champ, pas dans l'état, et un redessin l'effacerait.
+  q('[data-planche]').forEach(b => b.onclick = () => ouvrirPlanche(Number(b.dataset.planche)));
 
   q('[data-ajout]').forEach(i => i.onchange = () => {
     if (i.files?.length) ajouterPhotos(etat, Number(i.dataset.ajout), i.files, dessine);
