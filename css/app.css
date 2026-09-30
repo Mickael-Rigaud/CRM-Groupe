@@ -3760,6 +3760,165 @@ textarea.ev-nu { resize: vertical; min-height: 40px; }
 }
 
 
+/* ------------------------------------------ Check-list de visite BTP Expertise
+   ⚠ CET ECRAN SE TAPE DEBOUT, DEVANT UN MUR, souvent sur une tablette et
+   parfois avec des gants. Tout y est dimensionne pour ca : des BOUTONS et non
+   des listes deroulantes, des cibles d'au moins 40 px de haut, une seule zone
+   depliee a la fois pour ne pas perdre sa ligne dans 54 points.
+
+   Ce n'est pas un formulaire de bureau qu'on aurait rendu tactile apres coup :
+   c'est l'outil DE la visite. */
+
+/* ---- La liste des visites ---- */
+.cl-liste { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+.cl-carte { display: flex; flex-direction: column; gap: 7px; text-align: left; cursor: pointer;
+  padding: 14px 16px; border: 1px solid var(--line); border-left: 5px solid var(--line-strong);
+  border-radius: 14px; background: var(--card); font: inherit; color: var(--text);
+  transition: box-shadow .18s, transform .18s, border-color .18s; }
+.cl-carte:hover { box-shadow: 0 10px 30px -16px rgba(17,21,28,.5); transform: translateY(-2px); }
+/* Une visite qui a releve des anomalies se repere sans etre ouverte : c'est
+   elle qu'on rouvre pour ecrire le rapport. */
+.cl-carte.a-des-anomalies { border-left-color: var(--red); }
+.cl-carte-tete { display: flex; align-items: baseline; gap: 10px; }
+.cl-carte-tete b { font-size: 14.5px; }
+.cl-date { margin-left: auto; font-size: 11.5px; color: var(--muted-2); white-space: nowrap; }
+.cl-adresse { font-size: 12px; color: var(--muted); }
+
+/* ⚠ L'AVANCEMENT AVANT TOUT LE RESTE : une visite a moitie relevee est ce
+   qu'on cherche en rouvrant l'ecran, et « 3 anomalies » n'a pas le meme sens
+   sur 12 points vus que sur 54. */
+.cl-jauge { height: 6px; border-radius: 999px; background: var(--card-2); overflow: hidden; margin: 3px 0; }
+.cl-jauge.grande { height: 8px; }
+.cl-jauge span { display: block; height: 100%; border-radius: 999px; background: var(--accent);
+  transition: width .3s cubic-bezier(.2,.8,.3,1); }
+.cl-compte { display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  font-size: 12px; color: var(--muted); }
+.cl-pastille { font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 999px;
+  background: var(--card-2); color: var(--muted); }
+.cl-pastille.est-ok { background: var(--green-soft); color: var(--green); }
+.cl-pastille.est-anomalie { background: var(--red-soft); color: var(--red); }
+.cl-pastille.est-nv { background: var(--muted-soft); color: var(--muted); }
+
+/* ---- L'en-tete d'un releve ---- */
+.cl-tete { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+.cl-tete-nom { display: flex; flex-direction: column; min-width: 0; }
+.cl-tete-nom b { font-family: var(--font-display); font-size: 18px; letter-spacing: -.01em; }
+.cl-tete-nom span { font-size: 12px; color: var(--muted); }
+.cl-date-champ { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .07em; color: var(--muted-2); }
+.cl-date-champ input { font: inherit; font-size: 13px; font-weight: 500; text-transform: none;
+  letter-spacing: 0; color: var(--text); padding: 7px 10px;
+  border: 1px solid var(--line); border-radius: 9px; }
+.cl-bandeau { padding: 13px 15px; margin-bottom: 18px; border-radius: 12px; background: var(--card-2); }
+.cl-bandeau .cl-compte { margin-top: 8px; font-size: 12.5px; }
+.cl-bandeau .cl-compte b { color: var(--text); font-size: 14px; }
+
+/* ---- Une zone ----
+   ⚠ UNE SEULE DEPLIEE A LA FOIS : on suit le parcours de la visite, et les 54
+   points d'un coup font une page de trois metres ou l'on ne sait plus ou l'on
+   en est. La zone ouverte est celle qu'on est en train de faire. */
+.cl-zone { border: 1px solid var(--line); border-radius: 14px; margin-bottom: 10px;
+  background: var(--card); overflow: hidden; transition: border-color .18s; }
+.cl-zone.est-ouverte { border-color: color-mix(in srgb, var(--accent) 38%, var(--line));
+  box-shadow: 0 6px 22px -14px color-mix(in srgb, var(--accent) 60%, transparent); }
+.cl-zone.a-des-anomalies { border-left: 4px solid var(--red); }
+.cl-zone-tete { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+  padding: 13px 16px; border: 0; background: none; font: inherit; cursor: pointer;
+  min-height: 52px; transition: background .16s; }
+.cl-zone-tete:hover { background: var(--card-2); }
+.cl-zone-tete.sans-clic { cursor: default; }
+.cl-zone-n { flex: 0 0 auto; display: grid; place-items: center; width: 28px; height: 28px;
+  border-radius: 50%; background: var(--accent-soft); color: var(--accent-ink);
+  font-family: var(--font-display); font-size: 13px; font-weight: 800; }
+.cl-zone.est-ouverte .cl-zone-n { background: var(--accent); color: var(--on-accent); }
+.cl-zone-t { font-family: var(--font-display); font-size: 14px; font-weight: 700; letter-spacing: -.01em; }
+.cl-zone-avance { font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums;
+  color: var(--muted); padding: 2px 9px; border-radius: 999px; background: var(--card-2); }
+.cl-zone-avance.est-complet { background: var(--green-soft); color: var(--green); }
+.cl-chevron { color: var(--muted-2); font-size: 12px; }
+.cl-points { padding: 4px 16px 16px; }
+
+/* ---- Un point ----
+   ⚠ TROIS BOUTONS, PAS UNE LISTE DEROULANTE : un menu a ouvrir puis une
+   option a viser, 54 fois, avec des gants, est le meilleur moyen pour que la
+   check-list reste dans la voiture. */
+.cl-point { padding: 11px 0; border-top: 1px solid var(--line); }
+.cl-point:first-child { border-top: 0; }
+.cl-point-haut { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.cl-point-t { flex: 1 1 260px; font-size: 13.5px; line-height: 1.45; }
+.cl-point.est-ok .cl-point-t { color: var(--muted); }
+.cl-point.est-nv .cl-point-t { color: var(--muted-2); }
+
+.cl-choix { display: inline-flex; gap: 3px; padding: 3px; border-radius: 11px;
+  background: var(--card-2); border: 1px solid var(--line); }
+/* 44 px de haut : la cible tactile recommandee, et celle qu'un doigt gante
+   atteint sans viser. En dessous on tape a cote et on corrige, 54 fois — or
+   c'est l'argument meme qui justifie des boutons plutot qu'une liste
+   deroulante, autant le respecter. Mesure a 40 px au premier essai. */
+.cl-b { min-width: 62px; min-height: 44px; padding: 0 12px; border: 0; border-radius: 9px;
+  background: none; font: inherit; font-size: 12.5px; font-weight: 700; color: var(--muted);
+  cursor: pointer; transition: background .16s, color .16s, box-shadow .16s; }
+.cl-b:hover { background: var(--card); }
+.cl-b-ok.on { background: var(--green); color: #fff; }
+.cl-b-anomalie.on { background: var(--red); color: #fff; }
+.cl-b-nv.on { background: var(--muted); color: #fff; }
+
+.cl-point-bas { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+.cl-fiches { font-size: 11.5px; color: var(--muted); }
+/* Le renvoi vers l'atlas : il sert a NOMMER le desordre qu'on vient de voir. */
+.cl-fiche { border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  background: var(--accent-soft); color: var(--accent-ink); font: inherit; font-size: 11.5px;
+  font-weight: 700; padding: 3px 10px; border-radius: 999px; cursor: pointer; margin-left: 3px; }
+.cl-fiche:hover { background: color-mix(in srgb, var(--accent) 20%, transparent); }
+.cl-a-note { font-size: 11px; font-weight: 700; color: var(--muted-2);
+  padding: 2px 8px; border-radius: 999px; background: var(--card-2); }
+.cl-plus { border: 1px solid var(--line); background: var(--card); font: inherit; font-size: 12px;
+  font-weight: 600; color: var(--muted); padding: 6px 12px; border-radius: 999px; cursor: pointer;
+  min-height: 34px; transition: background .16s, color .16s, border-color .16s; }
+.cl-plus:hover { background: var(--accent-soft); color: var(--accent-ink); border-color: var(--accent); }
+
+.cl-detail { margin-top: 10px; padding: 12px 14px; border-radius: 12px; background: var(--card-2); }
+.cl-note, .cl-notes { width: 100%; font: inherit; font-size: 13px; line-height: 1.5;
+  padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--card);
+  color: var(--text); resize: vertical; }
+.cl-note:focus, .cl-notes:focus { outline: none; border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent); }
+
+/* ---- Les photos ---- */
+.cl-photos { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+.cl-vignette { position: relative; margin: 0; width: 92px; height: 92px; border-radius: 10px;
+  overflow: hidden; background: var(--card); border: 1px solid var(--line); }
+.cl-vignette-img { width: 100%; height: 100%; display: grid; place-items: center;
+  font-size: 10.5px; color: var(--muted-2); }
+.cl-vignette img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cl-cassee { color: var(--red); }
+.cl-retirer { position: absolute; top: 4px; right: 4px; width: 22px; height: 22px;
+  display: grid; place-items: center; border: 0; border-radius: 50%;
+  background: rgba(0,0,0,.55); color: #fff; font-size: 14px; line-height: 1; cursor: pointer; }
+.cl-retirer:hover { background: var(--red); }
+/* `capture` ouvre l'appareil photo sur un telephone : la visite se fait dehors. */
+.cl-ajout { width: 92px; height: 92px; display: grid; place-items: center; cursor: pointer;
+  border: 1px dashed var(--line-strong); border-radius: 10px; font-size: 12px; font-weight: 600;
+  color: var(--muted); transition: border-color .16s, color .16s, background .16s; }
+.cl-ajout:hover { border-color: var(--accent); color: var(--accent-ink); background: var(--accent-soft); }
+
+/* Les photos a rapporter, EN PIED de zone : on les lit en quittant la zone,
+   quand il est encore temps d'y retourner. */
+.cl-photos-zone { margin: 14px 0 0; padding: 11px 14px; border-radius: 10px;
+  background: var(--accent-soft); font-size: 12.5px; line-height: 1.5; color: var(--accent-ink); }
+.cl-photos-zone em { display: block; font-style: normal; font-size: 10px; font-weight: 800;
+  text-transform: uppercase; letter-spacing: .08em; margin-bottom: 3px; opacity: .75; }
+
+.cl-zone.est-notes { border-style: dashed; }
+
+@media (max-width: 720px) {
+  .cl-point-haut { align-items: stretch; }
+  .cl-choix { width: 100%; }
+  .cl-b { flex: 1 1 0; min-width: 0; }
+  .cl-tete { gap: 10px; }
+  .cl-date-champ { width: 100%; }
+}
+
 /* ------------------------------------------------- Formation BTP Expertise
    Trois thematiques sur un seul ecran : les fiches de l'atlas, les signaux
    d'alerte, les vingt visites guidees. Elles se tiennent — chaque visite

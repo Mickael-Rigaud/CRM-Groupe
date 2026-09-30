@@ -2,6 +2,7 @@
 import { SEED_BROKERS } from './seed-vivier.js';
 import { SEED_VIVIER_BTP, SEED_VIVIER_BTP_EVENEMENTS } from './seed-vivier-btp.js';
 import { SEED_ATLAS_BTP } from './seed-atlas-btp.js';
+import { SEED_CHECKLIST_BTP } from './seed-checklist-btp.js';
 import { SEED_SITE, deplierSite } from './seed-site.js';
 const d = (offsetDays, h = 9) => {
   const x = new Date(); x.setHours(h, 0, 0, 0); x.setDate(x.getDate() + offsetDays); return x.toISOString();
@@ -129,6 +130,24 @@ export const SEED = {
   btp_atlas_fiches: SEED_ATLAS_BTP.btp_atlas_fiches,
   btp_signaux_alerte: SEED_ATLAS_BTP.btp_signaux_alerte,
   btp_visites_guidees: SEED_ATLAS_BTP.btp_visites_guidees,
+  // Le REFERENTIEL de la check-list de visite (invente, voir le fichier).
+  btp_checklist_zones: SEED_CHECKLIST_BTP.btp_checklist_zones,
+  btp_checklist_points: SEED_CHECKLIST_BTP.btp_checklist_points,
+  // ⚠ UN RELEVE DEJA COMMENCE, ET C'EST DELIBERE : un ecran d'avancement
+  // essaye sur une liste vide ne montre ni jauge, ni compteur d'anomalies, ni
+  // zone partiellement faite. Il porte donc trois reponses sur dix points,
+  // dont une anomalie avec sa note — l'etat le plus courant en pleine visite.
+  btp_releves: [
+    { id: 'rel1', deal_id: 'd6', date_visite: day(-2), auteur_id: 'u-mickael',
+      notes: 'Acces par le portail lateral. Proprietaire present.' },
+  ],
+  btp_releve_reponses: [
+    { id: 'rep1', releve_id: 'rel1', point_id: 1, etat: 'anomalie',
+      note: 'Fissure en biais a l’angle de la porte, environ 0,5 mm, bords nets.', photos: [] },
+    { id: 'rep2', releve_id: 'rel1', point_id: 2, etat: 'ok', note: null, photos: [] },
+    { id: 'rep3', releve_id: 'rel1', point_id: 4, etat: 'nv',
+      note: 'Toiture non accessible le jour de la visite.', photos: [] },
+  ],
   dtu_sheets: [
     // Une fiche reecrite par la veille et une simplement verifiee : sans les
     // deux, le bandeau n'etait essayable que sur la production.

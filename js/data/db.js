@@ -24,6 +24,12 @@ export const TABLES = ['profiles', 'organisations', 'contacts', 'deals', 'activi
   // d'alerte. ⚠ Le CONTENU n'est pas dans le dépôt — produit sous licence,
   // importé à la main ; les planches vivent dans le seau PRIVÉ `btp-atlas`.
   'btp_atlas_fiches', 'btp_signaux_alerte', 'btp_visites_guidees',
+  // La check-list de visite : le REFERENTIEL (zones et points, le meme pour
+  // tous) et le RELEVE (ce qui a ete constate chez un client, ce jour-la).
+  // ⚠ Les deux ne se melangent pas : corriger un libelle de point ne doit
+  // jamais reecrire un constat d'expert.
+  'btp_checklist_zones', 'btp_checklist_points',
+  'btp_releves', 'btp_releve_reponses',
   // espace RGD Renova : le relevé déposé toutes les 30 min par son worker.
   // Cloudflare D1 reste la source ; ces tables en sont le reflet, personne
   // n'y écrit depuis le CRM tant que la migration n'est pas terminée.
