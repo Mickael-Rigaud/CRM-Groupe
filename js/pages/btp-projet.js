@@ -29,6 +29,7 @@ import {
 } from '../data/schema.js';
 import { champsHonoraires, resultatsHonoraires } from './btp-amo.js';
 import { planSvg, DESSINES } from '../data/btp-plan.js';
+import { DOC_CATEGORIES, docsOf } from '../documents.js';
 
 const KEY = 'btp';
 const CANAUX_COURANTS = ['Recommandation client', 'Ancien client', 'Téléphone / autre', 'Site internet direct', 'Prospection directe'];
@@ -130,6 +131,13 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
     // manque au lieu de l'inventer à un endroit plausible.
     espaces: d.espaces || null,
     espaceOuvert: null,
+    // ⚠ LES FICHIERS ATTENDENT L'ENREGISTREMENT, TOUJOURS, même sur une affaire
+    // qui existe déjà. Les téléverser au dépôt donnerait deux comportements
+    // selon qu'on crée ou qu'on modifie, et laisserait des fichiers rattachés à
+    // une affaire qu'on finit par annuler. Une affaire neuve n'a de toute façon
+    // pas encore d'identifiant auquel les rattacher.
+    fichiers: [],
+    fichiersCategorie: '',
     cotes: d.cotesBrutes || {},
     niveau: cleNiveau(f.niveau) || null,
     tarif: existing?.amount ?? '',
@@ -464,6 +472,131 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
     ${v.espaceOuvert !== null ? panneauEspace() : ''}`;
   };
 
+  // ------------------------------------------------ le dépôt de documents
+  // ⚠ CE N'EST PAS `documentsSection()` DE `documents.js`, ET CE N'EST PAS UN
+  // OUBLI. Ce module-là supprime un document derrière le `confirm()` de
+  // `ui.js`, qui appelle `closeModal(true)` et REMPLACE la fenêtre courante :
+  // le formulaire entier disparaîtrait, avec la saisie en cours. Le piège est
+  // déjà écrit cinq fois dans ce dépôt. Ici on ne supprime rien : on RETIRE de
+  // la liste d'attente, ce qui n'efface aucun fichier et ne demande donc aucune
+  // confirmation. La suppression d'un document déjà rattaché reste sur la fiche
+  // d'affaire, qui porte le vrai bloc Documents.
+  const MAX_MO = 25;
+  const poids = (n) => (n > 1048576 ? `${(n / 1048576).toFixed(1)} Mo` : `${Math.max(1, Math.round(n / 1024))} Ko`);
+
+  const blocDepot = () => {
+    const dejaLa = existing ? docsOf('deals', existing.id) : [];
+    return `
+    <div class="fp-depot" id="fp-depot">
+      <label class="fp-depot-zone" id="fp-depot-zone">
+        <input type="file" multiple hidden id="fp-depot-input">
+        <b>Déposez vos fichiers ici</b>
+        <span>ou cliquez pour les choisir — photos, devis, factures, PV de réception, courriers. ${MAX_MO} Mo par fichier.</span>
+      </label>
+      <div class="fp-depot-cat">
+        <label class="mail-champ"><span>Catégorie des fichiers déposés</span>
+          <select id="fp-depot-categorie">
+            <option value="">—</option>
+            ${DOC_CATEGORIES.map(c => `<option ${c === v.fichiersCategorie ? 'selected' : ''}>${esc(c)}</option>`).join('')}
+          </select></label>
+      </div>
+      ${v.fichiers.length ? `
+        <div class="fp-depot-liste">
+          ${v.fichiers.map((f, i) => `
+            <div class="fp-fichier en-attente">
+              <span class="fp-fichier-nom">${esc(f.file.name)}</span>
+              <span class="fp-fichier-info">${esc(poids(f.file.size))}${f.categorie ? ` · ${esc(f.categorie)}` : ''}</span>
+              <button type="button" class="fp-fichier-x" data-retirer="${i}" aria-label="Retirer">×</button>
+            </div>`).join('')}
+        </div>
+        <em class="mf-champ-aide">${v.fichiers.length} fichier${v.fichiers.length > 1 ? 's' : ''} partira${v.fichiers.length > 1 ? 'ont' : ''} à l’enregistrement.</em>` : ''}
+      ${dejaLa.length ? `
+        <div class="fp-plan-groupe">Déjà rattachés à cette affaire</div>
+        <div class="fp-depot-liste">
+          ${dejaLa.map(d => `
+            <div class="fp-fichier">
+              <a href="#" class="fp-fichier-nom" data-ouvrir="${esc(d.id)}">${esc(d.name)}</a>
+              <span class="fp-fichier-info">${d.category ? `${esc(d.category)} · ` : ''}${esc(poids(d.size || 0))}</span>
+            </div>`).join('')}
+        </div>
+        <em class="mf-champ-aide">Pour en supprimer un, passez par la fiche de l’affaire.</em>` : ''}
+    </div>`;
+  };
+
+  // ⚠ LE DÉPÔT NE REDESSINE QUE SON PROPRE BLOC quand c'est possible : un
+  // `dessine()` complet ferme le panneau d'espace ouvert et remonte la page au
+  // milieu d'une saisie. Ici il n'y a pas de champ en cours de frappe dans le
+  // bloc, donc le redessin local suffit et coûte moins.
+  const redessineDepot = () => {
+    const bloc = corps.querySelector('#fp-depot');
+    if (!bloc) return dessine();
+    bloc.outerHTML = blocDepot();
+    lierDepot();
+  };
+
+  const ajouteFichiers = (liste) => {
+    let refuses = 0;
+    [...liste].forEach(file => {
+      if (file.size > MAX_MO * 1048576) { refuses += 1; return; }
+      v.fichiers.push({ file, categorie: v.fichiersCategorie });
+    });
+    if (refuses) toast(`${refuses} fichier${refuses > 1 ? 's' : ''} trop lourd${refuses > 1 ? 's' : ''} (${MAX_MO} Mo max)`, 'warn');
+    redessineDepot();
+  };
+
+  function lierDepot() {
+    const zone = corps.querySelector('#fp-depot-zone');
+    const input = corps.querySelector('#fp-depot-input');
+    if (!zone || !input) return;
+    input.onchange = () => { ajouteFichiers(input.files); input.value = ''; };
+    // ⚠ IL FAUT ANNULER `dragover` POUR QUE `drop` EXISTE : sans
+    // `preventDefault`, le navigateur ouvre le fichier dans l'onglet et on perd
+    // le formulaire entier.
+    ['dragenter', 'dragover'].forEach(e => zone.addEventListener(e, ev => {
+      ev.preventDefault(); zone.classList.add('survol');
+    }));
+    ['dragleave', 'drop'].forEach(e => zone.addEventListener(e, ev => {
+      ev.preventDefault(); zone.classList.remove('survol');
+    }));
+    zone.addEventListener('drop', ev => ajouteFichiers(ev.dataTransfer?.files || []));
+    corps.querySelector('#fp-depot-categorie')?.addEventListener('change', (e) => {
+      v.fichiersCategorie = e.target.value;
+    });
+    corps.querySelectorAll('[data-retirer]').forEach(b => b.onclick = () => {
+      v.fichiers.splice(Number(b.dataset.retirer), 1);
+      redessineDepot();
+    });
+    corps.querySelectorAll('[data-ouvrir]').forEach(a => a.onclick = async (e) => {
+      e.preventDefault();
+      const doc = db.byId('documents', a.dataset.ouvrir);
+      try { window.open(await db.fileUrl(doc.storage_path), '_blank', 'noopener'); }
+      catch (err) { toast(err.message, 'err'); }
+    });
+  }
+
+  // ⚠ LE TÉLÉVERSEMENT N'EMPÊCHE PAS L'ENREGISTREMENT D'AVOIR EU LIEU : un
+  // fichier qui échoue est dit, l'affaire reste enregistrée. Refuser la fiche
+  // entière parce qu'une photo de 24 Mo a coupé ferait reperdre quatre écrans
+  // de saisie.
+  async function envoyerFichiers(dealId) {
+    if (!v.fichiers.length) return;
+    let ok = 0;
+    for (const { file, categorie } of v.fichiers) {
+      try {
+        const chemin = `deals/${dealId}/${Date.now()}-${file.name.replace(/[^\w.\-]+/g, '_')}`;
+        await db.uploadFile(chemin, file);
+        await db.insert('documents', {
+          entity_type: 'deals', entity_id: dealId, name: file.name,
+          mime: file.type || null, size: file.size, storage_path: chemin,
+          category: categorie || null, created_by: scope.user?.id || null,
+        });
+        ok += 1;
+      } catch (err) { toast(`${file.name} : ${err.message}`, 'err'); }
+    }
+    if (ok) toast(`${ok} document${ok > 1 ? 's' : ''} déposé${ok > 1 ? 's' : ''}`);
+    v.fichiers = [];
+  }
+
   // ------------------------------------------- l'historique et l'urgence
   // ⚠ LA SAISIE LIBRE D'AVANT EST MONTRÉE, PAS EFFACÉE. Trois de ces champs
   // étaient du texte libre jusqu'au 30/09/2026 ; une valeur qui ne rentre pas
@@ -549,8 +682,9 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
     <div class="mf-bloc-titre">E. Historique et urgence</div>
     ${blocHistorique()}
 
-    <div class="mf-bloc-titre">F. Documents disponibles</div>
+    <div class="mf-bloc-titre">F. Documents</div>
     ${chips('documents', FICHE_EXPERTISE.documents)}
+    ${blocDepot()}
 
     <div class="mf-bloc-titre">G. Tarif de l'expertise</div>
     ${blocTarif()}
@@ -560,9 +694,6 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
         ${t ? `<em class="mf-champ-aide">Laisser vide pour retenir ${esc(eur(t.ht))} HT.</em>`
             : '<em class="mf-champ-aide">Choisissez d’abord la prestation.</em>'}</label>
     </div>
-
-    <div class="mf-bloc-titre">H. Contrôles avant attribution</div>
-    ${chips('controles', FICHE_EXPERTISE.controles)}
 
     ${barre()}`;
   };
@@ -855,6 +986,7 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
       choisir('#fp-sinistre-aupres', 'sinistre_aupres');
       choisir('#fp-butoir', 'butoir');
       poser('#fp-tarif', 'tarif');
+      lierDepot();
       return;
     }
 
@@ -1034,7 +1166,13 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
         id = deal.id;
         toast(v.mission === 'amo' ? 'Mission AMO créée' : 'Mission d’expertise créée');
       }
+      // ⚠ LES FICHIERS PARTENT APRÈS L'AFFAIRE, jamais avant : ils se rattachent
+      // à `id`, qui n'existe pas tant que l'insertion n'a pas eu lieu.
+      await envoyerFichiers(id);
       if (fermer) closeModal(true);
+      // Sans fermeture, le bloc doit montrer les fichiers désormais rattachés et
+      // ne plus annoncer une attente qui n'a plus lieu.
+      else redessineDepot();
       apres?.(id);
     } catch (err) {
       toast(err.message, 'err');

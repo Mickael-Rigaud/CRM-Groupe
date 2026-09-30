@@ -1807,6 +1807,35 @@ tr.btp-mission .btp-pts { color: var(--m-encre); }
    Elle est MONTREE et non effacee : voir `repris` dans btp-projet.js. */
 .mf-champ-aide.est-repris { color: var(--amber, #9a6412); font-style: normal; }
 
+/* ---- Le depot de documents de la fiche projet ----
+   Une zone de glisser-deposer, la liste de ce qui attend l'enregistrement, et
+   ce qui est deja rattache a l'affaire. Rien n'est televerse au depot : voir le
+   commentaire de `blocDepot` dans btp-projet.js. */
+.fp-depot { margin-top: 12px; }
+.fp-depot-zone { display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 20px 16px; border: 2px dashed var(--line-strong); border-radius: 12px;
+  background: var(--card-2); cursor: pointer; text-align: center;
+  transition: border-color .12s, background .12s; }
+.fp-depot-zone:hover { border-color: var(--m); }
+/* La zone doit changer d'aspect PENDANT le survol d'un fichier : sans retour
+   visuel on ne sait pas si le lacher va marcher. */
+.fp-depot-zone.survol { border-color: var(--m); background: var(--m-clair); }
+.fp-depot-zone b { font-size: 14px; color: var(--text); }
+.fp-depot-zone span { font-size: 12px; color: var(--muted); max-width: 520px; }
+.fp-depot-cat { margin-top: 10px; }
+.fp-depot-cat .mail-champ { max-width: 320px; }
+.fp-depot-liste { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.fp-fichier { display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+  border: 1px solid var(--line); border-radius: 9px; background: var(--card); }
+.fp-fichier.en-attente { border-color: var(--m); background: var(--m-clair); }
+.fp-fichier-nom { flex: 1 1 auto; min-width: 0; font-size: 13px; font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+a.fp-fichier-nom { color: var(--m-encre); }
+.fp-fichier-info { flex: 0 0 auto; font-size: 11.5px; color: var(--muted); }
+.fp-fichier-x { flex: 0 0 auto; border: 0; background: none; cursor: pointer;
+  font-size: 18px; line-height: 1; color: var(--muted); padding: 0 2px; }
+.fp-fichier-x:hover { color: var(--red, #b3261e); }
+
 /* ---- Le schema dessine du bien ----
    Une coupe schematique, PAS un plan : voir js/data/btp-plan.js. Le SVG est
    bride en largeur — a 980 px la maison ferait 540 px de haut et pousserait le
