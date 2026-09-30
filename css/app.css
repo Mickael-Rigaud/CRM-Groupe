@@ -4116,6 +4116,34 @@ textarea.ev-nu { resize: vertical; min-height: 40px; }
 .at-barre-rouge { background: var(--red); }
 
 .at-somm-outils { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 14px; }
+
+/* ---- La bascule d'ordre ----
+   Deux boutons colles dans un meme etui, pas deux pastilles separees : ce sont
+   les deux etats d'UN reglage, et l'etui le dit sans un mot. Celui qui est
+   choisi passe en blanc sur le fond de l'etui — le meme motif que les onglets
+   Jour / Semaine de l'agenda RGD. */
+.at-tri { display: inline-flex; gap: 2px; padding: 2px; border-radius: 999px;
+  background: var(--card-2); border: 1px solid var(--line); }
+.at-tri-b { border: 0; background: none; font: inherit; font-size: 12px; font-weight: 600;
+  color: var(--muted); padding: 6px 13px; border-radius: 999px; cursor: pointer;
+  transition: background .16s, color .16s, box-shadow .16s; }
+.at-tri-b:hover { color: var(--accent-ink); }
+.at-tri-b.on { background: var(--card); color: var(--accent-ink);
+  box-shadow: 0 1px 3px rgba(17,21,28,.12); }
+
+/* ---- Le sommaire range par numero ----
+   Pas de cartes : les cinquante lignes coulent dans les colonnes, 01 en haut a
+   gauche, la suite en dessous puis dans la colonne suivante. Les regrouper
+   dans un cadre n'aurait rien a encadrer — il n'y a plus de famille. */
+.at-somm-suite { columns: 292px; column-gap: 26px; }
+.at-somm-ligne.est-suite { break-inside: avoid; -webkit-column-break-inside: avoid; }
+/* L'icone de famille passe a droite, tres discrete : on a choisi de ne plus
+   RANGER par famille, pas de ne plus SAVOIR de laquelle il s'agit. */
+.at-somm-fam-mini { flex: 0 0 auto; display: inline-flex; color: var(--muted-2); opacity: .6; }
+.at-somm-fam-mini .at-fam-icone { width: 15px; height: 15px; }
+.at-somm-ligne:hover .at-somm-fam-mini { opacity: 1; color: var(--accent); }
+
+@media (max-width: 900px) { .at-tri { width: 100%; } .at-tri-b { flex: 1 1 0; } }
 .at-somm-outils .at-quete { flex: 0 1 340px; }
 .at-somm-aide { margin: 0; }
 .at-raz { border: 1px solid var(--line); background: var(--card); font: inherit; font-size: 12px;

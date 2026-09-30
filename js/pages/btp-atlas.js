@@ -40,6 +40,18 @@ import { cadreBtp as cadre } from './btp.js';
 const KEY = 'btp';
 const SEAU = 'btp-atlas';
 
+// ⚠ LE TRI EST UNE PRÉFÉRENCE, PAS UNE DONNÉE : il vit dans le navigateur, pas
+// en base. Deux personnes ne cherchent pas de la même façon — l'une connaît
+// sa famille (« c'est une fissure »), l'autre a un numéro sous les yeux, relevé
+// sur une check-list ou cité par un signal d'alerte. Même mécanique que la vue
+// de l'agenda RGD ou la période des objectifs BTP.
+const CLE_TRI = 'crm_btp_formation_tri';
+const lireTri = () => {
+  try { return localStorage.getItem(CLE_TRI) === 'numero' ? 'numero' : 'famille'; }
+  catch { return 'famille'; }          // navigateur qui refuse le stockage
+};
+const ecrireTri = (v) => { try { localStorage.setItem(CLE_TRI, v); } catch { /* sans effet */ } };
+
 const guard = (root) => {
   if (scope.activityKeys.includes(KEY)) return false;
   root.innerHTML = '<div class="card"><div class="empty">Vous n&rsquo;avez pas accès à l&rsquo;activité BTP Expertise.</div></div>';
@@ -163,7 +175,12 @@ const jeton = (f) => {
 // L'ordre affiché — famille par famille, numéro par numéro — mis à plat. C'est
 // lui qui donne la fiche précédente et la suivante : suivre l'ordre des NUMÉROS
 // ferait sauter d'une famille à l'autre, alors qu'on compare des voisines.
-const aPlat = (liste) => parFamille(liste).flatMap(([, l]) => l);
+// ⚠ ELLE DOIT RENDRE L'ORDRE RÉELLEMENT AFFICHÉ, sinon « suivante » saute
+// ailleurs que sous les yeux : c'est elle qui donne la fiche précédente et la
+// suivante aux flèches du bandeau.
+const aPlat = (liste, tri) => tri === 'numero'
+  ? liste.slice().sort((a, b) => a.numero - b.numero)
+  : parFamille(liste).flatMap(([, l]) => l);
 
 // ⚠ LE FILTRE EST ÉCRIT UNE SEULE FOIS. Le sommaire et l'index étroit montrent
 // la même sélection ; deux filtrages séparés finiraient par ne plus dire la
@@ -269,7 +286,7 @@ export const btpAtlasPage = {
     // `vue` : 'fiches' | 'signaux' | 'visites'. `ouverte` : le numéro affiché
     // — une fiche ou une visite selon la vue, jamais les deux à la fois.
     // `couleur` : le niveau d'alerte retenu, ou null pour les trois.
-    const etat = { vue: 'fiches', ouverte: null, q: '', couleur: null };
+    const etat = { vue: 'fiches', ouverte: null, q: '', couleur: null, tri: lireTri() };
 
     const dessine = () => {
       const toutes = fiches();
@@ -364,7 +381,7 @@ function vueFiches(liste, ouverte, etat) {
   // quand on a demandé « les rouges », « suivante » doit donner la rouge
   // suivante. Sinon le filtre ne vaudrait que pour la liste et pas pour le
   // parcours, ce qui est précisément ce qu'on est en train de faire.
-  const ordre = aPlat(liste);
+  const ordre = aPlat(liste, etat.tri);
   const i = ordre.findIndex(f => f.numero === ouverte.numero);
   const avant = i > 0 ? ordre[i - 1] : null;
   const apres = i >= 0 && i < ordre.length - 1 ? ordre[i + 1] : null;
@@ -375,7 +392,18 @@ function vueFiches(liste, ouverte, etat) {
       <div class="at-index">
         <button type="button" class="at-retour" data-sommaire="1">← Sommaire des ${fiches().length} fiches</button>
         ${barreRecherche(etat, true)}
-        ${liste.length ? parFamille(liste).map(([famille, l]) => `
+        <!-- \u26a0 L'INDEX SUIT LE M\u00caME ORDRE QUE LE SOMMAIRE. Choisir \u00ab par
+             num\u00e9ro \u00bb puis ouvrir une planche et retrouver l'index rang\u00e9 par
+             famille ferait chercher deux fois : c'est le m\u00eame r\u00e9glage, il vaut
+             pour les deux. Les fl\u00e8ches \u2039 \u203a suivent aussi, par aPlat. -->
+        ${!liste.length ? '<div class="empty">Aucune fiche ne correspond.</div>'
+          : etat.tri === 'numero' ? liste.slice().sort((a, b) => a.numero - b.numero).map(f => `
+              <button type="button" class="at-ligne${f.numero === etat.ouverte ? ' on' : ''}"
+                      data-fiche="${f.numero}" title="${esc(f.famille)}">
+                ${jeton(f)}
+                <span class="at-titre">${esc(f.titre)}</span>
+              </button>`).join('')
+          : parFamille(liste).map(([famille, l]) => `
           <div class="at-fam">
             <div class="at-fam-titre">${iconeFamille(famille)}${esc(famille)}</div>
             ${l.map(f => `
@@ -383,7 +411,7 @@ function vueFiches(liste, ouverte, etat) {
                 ${jeton(f)}
                 <span class="at-titre">${esc(f.titre)}</span>
               </button>`).join('')}
-          </div>`).join('') : '<div class="empty">Aucune fiche ne correspond.</div>'}
+          </div>`).join('')}
       </div>
 
       <div class="at-droite">
@@ -535,6 +563,17 @@ function sommaire(liste, etat) {
 
         <div class="at-somm-outils">
           ${barreRecherche(etat)}
+          <!-- \u26a0 DEUX FA\u00c7ONS DE CHERCHER, ET AUCUNE N'EST LA BONNE POUR TOUT LE
+               MONDE. Par famille quand on part du sympt\u00f4me (\u00ab c'est une
+               fissure \u00bb) ; par num\u00e9ro quand on en a un sous les yeux \u2014 relev\u00e9
+               sur une check-list, cit\u00e9 par un signal d'alerte ou par une visite
+               guid\u00e9e. Le choix est m\u00e9moris\u00e9 : on ne le refait pas chaque matin. -->
+          <div class="at-tri" role="group" aria-label="Ordre du sommaire">
+            <button type="button" class="at-tri-b${etat.tri === 'famille' ? ' on' : ''}"
+              data-tri="famille" aria-pressed="${etat.tri === 'famille'}">Par famille</button>
+            <button type="button" class="at-tri-b${etat.tri === 'numero' ? ' on' : ''}"
+              data-tri="numero" aria-pressed="${etat.tri === 'numero'}">Par num\u00e9ro</button>
+          </div>
           <p class="muted small at-somm-aide">
             ${filtre
               ? `${liste.length} fiche${liste.length > 1 ? 's' : ''} sur ${toutes.length}`
@@ -544,7 +583,20 @@ function sommaire(liste, etat) {
         </div>
       </div>
 
-      ${liste.length ? `
+      ${liste.length ? (etat.tri === 'numero' ? `
+        <!-- \u26a0 PAR NUM\u00c9RO, LA FAMILLE NE DISPARA\u00ceT PAS, elle passe \u00e0 droite en
+             ic\u00f4ne : on a choisi de ne plus ranger par famille, pas de ne plus
+             savoir de laquelle il s'agit. Sans elle, une fiche trouv\u00e9e par son
+             num\u00e9ro ne dirait plus dans quel chapitre la relire. -->
+        <div class="at-somm-suite">
+          ${liste.slice().sort((a, b) => a.numero - b.numero).map(f => `
+            <button type="button" class="at-somm-ligne est-suite" data-fiche="${f.numero}"
+                    title="${esc(f.famille)}">
+              ${jeton(f)}
+              <span class="at-somm-t">${esc(f.titre)}</span>
+              <span class="at-somm-fam-mini">${iconeFamille(f.famille)}</span>
+            </button>`).join('')}
+        </div>` : `
         <div class="at-somm-grille">
           ${parFamille(liste).map(([famille, fs], i) => `
             <div class="at-somm-fam" style="--rang:${i}">
@@ -558,7 +610,7 @@ function sommaire(liste, etat) {
                   <span class="at-somm-t">${esc(f.titre)}</span>
                 </button>`).join('')}
             </div>`).join('')}
-        </div>`
+        </div>`)
       : `<div class="empty">Aucune fiche ne correspond${etat.q ? ` \u00e0 \u00ab ${esc(etat.q)} \u00bb` : ''}${
           etat.couleur ? ` en niveau ${esc(ALERTE[etat.couleur].mot.toLowerCase())}` : ''}.</div>`}
     </div>`;
@@ -763,6 +815,10 @@ function lier(root, etat, dessine) {
   root.querySelectorAll('[data-couleur]').forEach(b => b.onclick = () => {
     etat.couleur = etat.couleur === b.dataset.couleur ? null : b.dataset.couleur;
     dessine();
+  });
+  root.querySelectorAll('[data-tri]').forEach(b => b.onclick = () => {
+    if (etat.tri === b.dataset.tri) return;      // deja choisi : rien à faire
+    etat.tri = b.dataset.tri; ecrireTri(etat.tri); dessine();
   });
   const raz = root.querySelector('[data-raz]');
   if (raz) raz.onclick = () => { etat.couleur = null; etat.q = ''; dessine(); };
