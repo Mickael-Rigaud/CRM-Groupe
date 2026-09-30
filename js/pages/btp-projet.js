@@ -137,7 +137,6 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
     // une affaire qu'on finit par annuler. Une affaire neuve n'a de toute façon
     // pas encore d'identifiant auquel les rattacher.
     fichiers: [],
-    fichiersCategorie: '',
     cotes: d.cotesBrutes || {},
     niveau: cleNiveau(f.niveau) || null,
     tarif: existing?.amount ?? '',
@@ -484,42 +483,75 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
   const MAX_MO = 25;
   const poids = (n) => (n > 1048576 ? `${(n / 1048576).toFixed(1)} Mo` : `${Math.max(1, Math.round(n / 1024))} Ko`);
 
+  // ⚠ UNE ZONE DE DÉPÔT PAR TYPE COCHÉ (30/09/2026, demandé : « je voudrais
+  // vraiment une zone de dépôts pour les documents que l'on sélectionne juste
+  // avant »). Première version : les puces déclaraient ce que le client A, et
+  // une zone unique en dessous recevait les fichiers avec une liste déroulante
+  // de catégorie. Cocher « Devis » ne permettait donc PAS de déposer le devis,
+  // et il fallait rechoisir la catégorie à la main entre deux dépôts.
+  //
+  // ⚠ LA CATÉGORIE EST LE LIBELLÉ DE LA PUCE, pas une valeur de
+  // `DOC_CATEGORIES` : « PV de réception » et « Constat commissaire de
+  // justice » n'y existent pas, et `documents.category` est du texte libre.
+  // Une table de correspondance entre les deux listes se périmerait au premier
+  // ajout, et traduire « PV de réception » en « Autre » perdrait justement ce
+  // que la personne venait de dire.
+  //
+  // ⚠ « AUTRES DOCUMENTS » EST TOUJOURS LÀ : sans elle, rien ne se dépose tant
+  // qu'aucune puce n'est cochée, et un fichier qui n'entre dans aucun type
+  // n'aurait nulle part où aller.
+  const ZONES = () => [
+    ...FICHE_EXPERTISE.documents.filter(d => v.documents.includes(d)).map(nom => ({ nom, cle: nom })),
+    { nom: 'Autres documents', cle: '' },
+  ];
+
+  const ligneFichier = (f, i) => `
+    <div class="fp-fichier en-attente">
+      <span class="fp-fichier-nom">${esc(f.file.name)}</span>
+      <span class="fp-fichier-info">${esc(poids(f.file.size))}</span>
+      <button type="button" class="fp-fichier-x" data-retirer="${i}" aria-label="Retirer">×</button>
+    </div>`;
+
+  const ligneDoc = (d) => `
+    <div class="fp-fichier">
+      <a href="#" class="fp-fichier-nom" data-ouvrir="${esc(d.id)}">${esc(d.name)}</a>
+      <span class="fp-fichier-info">${esc(poids(d.size || 0))} · déjà rattaché</span>
+    </div>`;
+
   const blocDepot = () => {
+    const zones = ZONES();
+    const typesOuverts = zones.slice(0, -1).map(z => z.cle);
     const dejaLa = existing ? docsOf('deals', existing.id) : [];
+    // Un document dont la catégorie n'a plus de zone (la puce a été décochée,
+    // ou il vient d'ailleurs) tombe dans « Autres » plutôt que de disparaître.
+    const pourZone = (cle) => (cle
+      ? { attente: v.fichiers.map((f, i) => ({ f, i })).filter(({ f }) => f.categorie === cle),
+          docs: dejaLa.filter(d => d.category === cle) }
+      : { attente: v.fichiers.map((f, i) => ({ f, i })).filter(({ f }) => !typesOuverts.includes(f.categorie)),
+          docs: dejaLa.filter(d => !typesOuverts.includes(d.category || '')) });
+    const total = v.fichiers.length;
     return `
     <div class="fp-depot" id="fp-depot">
-      <label class="fp-depot-zone" id="fp-depot-zone">
-        <input type="file" multiple hidden id="fp-depot-input">
-        <b>Déposez vos fichiers ici</b>
-        <span>ou cliquez pour les choisir — photos, devis, factures, PV de réception, courriers. ${MAX_MO} Mo par fichier.</span>
-      </label>
-      <div class="fp-depot-cat">
-        <label class="mail-champ"><span>Catégorie des fichiers déposés</span>
-          <select id="fp-depot-categorie">
-            <option value="">—</option>
-            ${DOC_CATEGORIES.map(c => `<option ${c === v.fichiersCategorie ? 'selected' : ''}>${esc(c)}</option>`).join('')}
-          </select></label>
-      </div>
-      ${v.fichiers.length ? `
-        <div class="fp-depot-liste">
-          ${v.fichiers.map((f, i) => `
-            <div class="fp-fichier en-attente">
-              <span class="fp-fichier-nom">${esc(f.file.name)}</span>
-              <span class="fp-fichier-info">${esc(poids(f.file.size))}${f.categorie ? ` · ${esc(f.categorie)}` : ''}</span>
-              <button type="button" class="fp-fichier-x" data-retirer="${i}" aria-label="Retirer">×</button>
-            </div>`).join('')}
-        </div>
-        <em class="mf-champ-aide">${v.fichiers.length} fichier${v.fichiers.length > 1 ? 's' : ''} partira${v.fichiers.length > 1 ? 'ont' : ''} à l’enregistrement.</em>` : ''}
-      ${dejaLa.length ? `
-        <div class="fp-plan-groupe">Déjà rattachés à cette affaire</div>
-        <div class="fp-depot-liste">
-          ${dejaLa.map(d => `
-            <div class="fp-fichier">
-              <a href="#" class="fp-fichier-nom" data-ouvrir="${esc(d.id)}">${esc(d.name)}</a>
-              <span class="fp-fichier-info">${d.category ? `${esc(d.category)} · ` : ''}${esc(poids(d.size || 0))}</span>
-            </div>`).join('')}
-        </div>
-        <em class="mf-champ-aide">Pour en supprimer un, passez par la fiche de l’affaire.</em>` : ''}
+      ${zones.map((z, n) => {
+        const { attente, docs } = pourZone(z.cle);
+        return `
+        <div class="fp-zone ${z.cle ? '' : 'est-autres'}" data-zone="${n}">
+          <label class="fp-zone-tete">
+            <input type="file" multiple hidden data-input="${n}">
+            <span class="fp-zone-nom">${esc(z.nom)}</span>
+            <span class="fp-zone-action">Déposer ou choisir…</span>
+          </label>
+          ${attente.length || docs.length ? `
+            <div class="fp-depot-liste">
+              ${attente.map(({ f, i }) => ligneFichier(f, i)).join('')}
+              ${docs.map(ligneDoc).join('')}
+            </div>` : ''}
+        </div>`;
+      }).join('')}
+      <em class="mf-champ-aide">${total
+        ? `${total} fichier${total > 1 ? 's' : ''} partira${total > 1 ? 'ont' : ''} à l’enregistrement. ${MAX_MO} Mo par fichier.`
+        : `Glissez vos fichiers sur la ligne du type correspondant, ou cliquez dessus. ${MAX_MO} Mo par fichier.`}</em>
+      ${existing ? '<em class="mf-champ-aide">Pour supprimer un document déjà rattaché, passez par la fiche de l’affaire.</em>' : ''}
     </div>`;
   };
 
@@ -534,33 +566,33 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
     lierDepot();
   };
 
-  const ajouteFichiers = (liste) => {
+  const ajouteFichiers = (liste, categorie) => {
     let refuses = 0;
     [...liste].forEach(file => {
       if (file.size > MAX_MO * 1048576) { refuses += 1; return; }
-      v.fichiers.push({ file, categorie: v.fichiersCategorie });
+      v.fichiers.push({ file, categorie });
     });
     if (refuses) toast(`${refuses} fichier${refuses > 1 ? 's' : ''} trop lourd${refuses > 1 ? 's' : ''} (${MAX_MO} Mo max)`, 'warn');
     redessineDepot();
   };
 
   function lierDepot() {
-    const zone = corps.querySelector('#fp-depot-zone');
-    const input = corps.querySelector('#fp-depot-input');
-    if (!zone || !input) return;
-    input.onchange = () => { ajouteFichiers(input.files); input.value = ''; };
-    // ⚠ IL FAUT ANNULER `dragover` POUR QUE `drop` EXISTE : sans
-    // `preventDefault`, le navigateur ouvre le fichier dans l'onglet et on perd
-    // le formulaire entier.
-    ['dragenter', 'dragover'].forEach(e => zone.addEventListener(e, ev => {
-      ev.preventDefault(); zone.classList.add('survol');
-    }));
-    ['dragleave', 'drop'].forEach(e => zone.addEventListener(e, ev => {
-      ev.preventDefault(); zone.classList.remove('survol');
-    }));
-    zone.addEventListener('drop', ev => ajouteFichiers(ev.dataTransfer?.files || []));
-    corps.querySelector('#fp-depot-categorie')?.addEventListener('change', (e) => {
-      v.fichiersCategorie = e.target.value;
+    const zones = ZONES();
+    corps.querySelectorAll('[data-zone]').forEach(zone => {
+      const n = Number(zone.dataset.zone);
+      const cle = zones[n]?.cle ?? '';
+      const input = zone.querySelector(`[data-input="${n}"]`);
+      if (input) input.onchange = () => { ajouteFichiers(input.files, cle); input.value = ''; };
+      // ⚠ IL FAUT ANNULER `dragover` POUR QUE `drop` EXISTE : sans
+      // `preventDefault`, le navigateur ouvre le fichier dans l'onglet et on
+      // perd le formulaire entier.
+      ['dragenter', 'dragover'].forEach(e => zone.addEventListener(e, ev => {
+        ev.preventDefault(); zone.classList.add('survol');
+      }));
+      ['dragleave', 'drop'].forEach(e => zone.addEventListener(e, ev => {
+        ev.preventDefault(); zone.classList.remove('survol');
+      }));
+      zone.addEventListener('drop', ev => ajouteFichiers(ev.dataTransfer?.files || [], cle));
     });
     corps.querySelectorAll('[data-retirer]').forEach(b => b.onclick = () => {
       v.fichiers.splice(Number(b.dataset.retirer), 1);
@@ -669,9 +701,7 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
     </div>`;
   };
 
-  const ecranDesordreTarif = () => {
-    const t = tarifExpertise({ prestation: v.niveau, surface: v.surface, pieces: v.pieces });
-    return `
+  const ecranDesordreTarif = () => `
     <div class="mf-bloc-titre">D. Où sont les désordres ?</div>
     ${blocPlan()}
     <div class="mf-grille">
@@ -688,15 +718,8 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
 
     <div class="mf-bloc-titre">G. Tarif de l'expertise</div>
     ${blocTarif()}
-    <div class="mf-grille">
-      <label class="mail-champ"><span>Montant retenu HT</span>
-        <input type="number" id="fp-tarif" min="0" step="50" value="${esc(v.tarif)}">
-        ${t ? `<em class="mf-champ-aide">Laisser vide pour retenir ${esc(eur(t.ht))} HT.</em>`
-            : '<em class="mf-champ-aide">Choisissez d’abord la prestation.</em>'}</label>
-    </div>
 
     ${barre()}`;
-  };
 
   // --------------------------------------------------- 2 bis. le fond, cote AMO
   const ecran3Amo = () => `
@@ -985,7 +1008,6 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
       corps.querySelector('#fp-ap-annee')?.addEventListener('change', majApparition);
       choisir('#fp-sinistre-aupres', 'sinistre_aupres');
       choisir('#fp-butoir', 'butoir');
-      poser('#fp-tarif', 'tarif');
       lierDepot();
       return;
     }
@@ -1048,8 +1070,6 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
         chTaux.oninput = () => { v.taux_final = chTaux.value === '' ? null : Number(chTaux.value); majHono(); };
         chTaux.onchange = () => dessine();
       }
-    } else {
-      poser('#fp-tarif', 'tarif');
     }
   };
 
