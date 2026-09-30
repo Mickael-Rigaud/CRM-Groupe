@@ -1807,6 +1807,22 @@ tr.btp-mission .btp-pts { color: var(--m-encre); }
    Elle est MONTREE et non effacee : voir `repris` dans btp-projet.js. */
 .mf-champ-aide.est-repris { color: var(--amber, #9a6412); font-style: normal; }
 
+/* ---- Le bandeau « nouvelle version » ----
+   EN BAS A GAUCHE, et ce n'est pas un choix esthetique : la bulle de messagerie
+   est fixee en bas a DROITE et recouvrirait le bouton au moment de cliquer
+   (meme remede que sur l'atelier des realisations et les fiches de poste). */
+.maj-bandeau { position: fixed; left: 16px; bottom: 16px; z-index: 60;
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+  border: 1px solid var(--accent); border-radius: 12px; background: var(--card);
+  box-shadow: 0 6px 22px rgba(17, 21, 28, .16); }
+.maj-texte { font-size: 13px; font-weight: 600; color: var(--text); }
+.maj-bandeau button { border: 0; border-radius: 8px; cursor: pointer;
+  font-family: inherit; font-size: 12.5px; font-weight: 700; }
+.maj-oui { padding: 6px 12px; background: var(--accent); color: #fff; }
+.maj-oui[disabled] { opacity: .6; cursor: default; }
+.maj-non { padding: 4px 7px; background: none; color: var(--muted); font-size: 16px; line-height: 1; }
+.maj-non:hover { color: var(--text); }
+
 /* ---- Le depot de documents de la fiche projet ----
    UNE ZONE PAR TYPE COCHE, plus une zone « Autres » toujours presente. La ligne
    entiere est la cible du glisser-deposer ET un label qui ouvre le selecteur :
@@ -3907,11 +3923,12 @@ textarea.ev-nu { resize: vertical; min-height: 40px; }
    ligne mangeait la largeur sur 54 lignes, et le mot « Fiche » n'apprend rien
    qu'on ne sache déjà — c'est un atlas de fiches. Le titre est en infobulle,
    le clic ouvre la planche.
-   ⚠ Ce sont des LIENS (`<a href>`), pas des boutons : ils s'ouvrent dans un
-   nouvel onglet au clic du milieu, et se copient. */
+   ⚠ Ce sont des BOUTONS depuis le 30/09/2026 : ils n'emmenent plus ailleurs,
+   ils ouvrent la planche par-dessus le releve. Le lien vers l'ecran Formation
+   reste, au pied de cette fenetre, pour qui veut la pleine page. */
 .cl-fiches { display: inline-flex; gap: 4px; flex-wrap: wrap; }
 .cl-fiche { display: inline-grid; place-items: center; min-width: 27px; height: 22px;
-  padding: 0 6px; border-radius: 7px; text-decoration: none;
+  padding: 0 6px; border-radius: 7px; text-decoration: none; cursor: pointer; font-family: inherit;
   border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
   background: var(--accent-soft); color: var(--accent-ink);
   font-size: 11.5px; font-weight: 800; font-variant-numeric: tabular-nums;
@@ -3960,6 +3977,40 @@ textarea.ev-nu { resize: vertical; min-height: 40px; }
 
 .cl-zone.est-notes { border-style: dashed; }
 
+/* ---- La planche, ouverte par-dessus le releve ----
+   ⚠ ON NE CHANGE PLUS D'ECRAN POUR REGARDER UNE FICHE : on la pose devant, on
+   la ferme, le releve est toujours la — avec la note en cours de frappe,
+   puisque rien n'a ete redessine. Un bouton de retour marchait, mais il
+   fallait l'apprendre. */
+.cl-planche { display: flex; flex-direction: column; gap: 12px; }
+.cl-planche-tete { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.cl-planche-tete > div { display: flex; flex-direction: column; min-width: 0; }
+.cl-planche-tete b { font-family: var(--font-display); font-size: 16px; letter-spacing: -.01em; }
+.cl-planche-tete span { font-size: 10.5px; font-weight: 800; text-transform: uppercase;
+  letter-spacing: .08em; color: var(--muted-2); }
+/* Le niveau d'alerte garde sa pastille : c'est lui qui dit quoi faire, et on
+   ouvre justement la fiche pour le savoir. */
+.cl-planche-tete .at-niveau { margin-left: auto; text-transform: none; letter-spacing: 0; }
+/* ⚠ LA HAUTEUR EST BORNEE A LA FENETRE : une planche fait 1350 px de haut, et
+   sans cette borne la fenetre depasse l'ecran — on ne voit alors ni le bas de
+   l'image ni le bouton qui la ferme. */
+/* ⚠ LE CADRE EPOUSE LA PLANCHE, il ne s'etale pas : une fiche est au format
+   portrait (900 x 1350), donc bornee en hauteur elle ne fait que ~420 px de
+   large — dans une fenetre de 1040 px cela laissait six cents pixels de gris
+   autour d'une image qu'on vient justement LIRE. Le cadre se reduit a elle, et
+   elle monte a 74vh. */
+.cl-planche-img { display: flex; align-items: flex-start; justify-content: center;
+  width: fit-content; max-width: 100%; margin: 0 auto;
+  background: var(--card-2); border-radius: 12px; padding: 10px; min-height: 220px; }
+/* ⚠ LA HAUTEUR SE CALCULE SUR CE QUI RESTE, pas sur une fraction de l'ecran :
+   a 74vh l'image seule tenait, mais l'en-tete et les deux boutons passaient
+   SOUS le bord — on ne voyait plus celui qui ferme la fenetre. Les 300 px
+   retires sont l'en-tete de la fenetre, le titre de la fiche, la rangee de
+   boutons et les marges. Constate a l'ecran. */
+.cl-planche-img img { max-width: 100%; max-height: calc(100vh - 300px); border-radius: 8px;
+  box-shadow: 0 2px 14px rgba(0,0,0,.16); }
+.cl-planche-img .empty { padding: 30px 10px; }
+
 @media (max-width: 720px) {
   .cl-point-haut { align-items: stretch; }
   .cl-choix { width: 100%; }
@@ -3993,18 +4044,6 @@ textarea.ev-nu { resize: vertical; min-height: 40px; }
   border-radius: 18px 18px 0 0; padding: 18px 18px 40px; }
 .fm-themes { display: grid; grid-template-columns: repeat(auto-fit, minmax(216px, 1fr)); gap: 12px; }
 
-/* ---- Revenir d'ou l'on vient ----
-   Pose sur le fond profond, au-dessus des trois thematiques : on ouvre une
-   fiche pour la regarder trente secondes au milieu d'un releve, et le retour
-   doit etre sous les yeux sans faire defiler une planche de 1350 px. */
-.fm-retour { display: inline-flex; align-items: center; gap: 7px; margin-bottom: 12px;
-  min-height: 40px; padding: 8px 15px 8px 12px; border-radius: 999px; text-decoration: none;
-  border: 1px solid rgba(255,255,255,.28); background: rgba(255,255,255,.12); color: #fff;
-  font-size: 12.5px; font-weight: 600;
-  transition: background .16s, border-color .16s, transform .16s; }
-.fm-retour:hover { background: rgba(255,255,255,.22); border-color: rgba(255,255,255,.45);
-  transform: translateX(-2px); }
-
 /* ⚠ LA CARTE AU REPOS EST TRANSLUCIDE, PAS GRISE : posee sur un fond profond,
    un gris franc ferait une tache terne. Elle emprunte au fond ce qu'il faut
    pour rester lisible. */
@@ -4028,6 +4067,7 @@ textarea.ev-nu { resize: vertical; min-height: 40px; }
 .fm-theme-n { flex: 0 0 auto; font-family: var(--font-display); font-size: 21px; font-weight: 800;
   font-variant-numeric: tabular-nums; opacity: .5; letter-spacing: -.02em; }
 .fm-theme.on .fm-theme-n { opacity: 1; color: var(--accent); }
+
 
 /* ⚠ LA CARTE DU CONTENU VIENT A CHEVAL SUR LA BARRE (marge negative) : c'est
    ce qui rattache visuellement ce qu'on lit a la thematique qu'on a choisie.
@@ -4460,7 +4500,7 @@ textarea.ev-nu { resize: vertical; min-height: 40px; }
   .at-somm-fam:hover, .at-somm-ligne:hover, .at-ligne:hover, .at-code:hover,
   .at-fleche:hover:not(:disabled), .at-retour:hover, .at-somm-ligne:hover .at-jeton,
   .at-signal:hover, .at-signal-fiche:hover,
-  .fm-theme:hover, .vg-carte:hover, .vg-fiche-lien:hover, .fm-retour:hover { transform: none; }
+  .fm-theme:hover, .vg-carte:hover, .vg-fiche-lien:hover { transform: none; }
   .vg-carte:hover .vg-fond { opacity: .55; }
   .vg-carte { animation: none; }
 }

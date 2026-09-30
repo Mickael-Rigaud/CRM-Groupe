@@ -7,6 +7,7 @@ import { esc, toast, isoDay, daysSince, closeModal, openModal } from './ui.js';
 import { pages } from './pages/index.js';
 import { messagesNonLus, monterBulle } from './pages/messagerie.js';
 import { icon } from './icons.js';
+import { surveillerVersion } from './maj.js';
 
 
 // ⚠ L'ADRESSE D'ARRIVÉE EST CAPTURÉE ICI, AVANT TOUT LE RESTE, ET C'EST CE QUI
@@ -523,6 +524,8 @@ function refusDeLien() {
 
 (async () => {
   try {
+    // Dit quand une nouvelle version est en ligne : voir js/maj.js.
+    surveillerVersion();
     await db.init();
     await db.loadAll().catch(e => { if (db.demo) throw e; /* en prod, sans session, RLS renvoie vide : normal */ });
     const u = await db.currentUser();
