@@ -9,6 +9,17 @@ const d = (offsetDays, h = 9) => {
 };
 const day = (offsetDays) => d(offsetDays).slice(0, 10);
 
+// Une photo de visite de demonstration, DESSINEE et non telechargee : le mode
+// demo n'a ni seau de stockage ni reseau. ⚠ L'ecran distingue les deux sortes
+// de valeurs que porte la colonne `photos` — une adresse `data:` en demo, un
+// CHEMIN a faire signer en production — et le test porte sur « c'est deja une
+// adresse », jamais sur « ce n'est pas un chemin ».
+const PHOTO_VISITE = (texte, fond) =>
+  `data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='320' height='240'>`
+  + `<rect width='320' height='240' fill='%23${fond}'/>`
+  + `<text x='160' y='128' font-family='sans-serif' font-size='20' fill='%23405060' `
+  + `text-anchor='middle'>${texte}</text></svg>`;
+
 export const SEED_USERS = [
   { id: 'u-mickael', full_name: 'Mickael Rigaud', email: 'mickael@example.com', role: 'direction', activities: ['rgd', 'btp', 'courtage', 'propulsion'], active: true, patrimony_access: true },
   { id: 'u-stephanie', full_name: 'Stéphanie', email: 'stephanie@example.com', role: 'propulsion', activities: ['propulsion'], active: true, rental_access: true },
@@ -152,13 +163,75 @@ export const SEED = {
   btp_releves: [
     { id: 'rel1', deal_id: 'd6', date_visite: day(-2), auteur_id: 'u-mickael',
       notes: 'Acces par le portail lateral. Proprietaire present.' },
+    // ⚠ UNE SECONDE VISITE SANS AUCUNE REPONSE, ET SANS RAPPORT : c'est le
+    // SEUL moyen d'eprouver l'ecran qui annonce ce qu'un rapport reprendra
+    // avant de le creer. Avec un seul releve deja rapporte, ce chemin-la ne
+    // s'ouvrait jamais — ni en demonstration, ni au controle.
+    { id: 'rel2', deal_id: 'd7', date_visite: day(0), auteur_id: 'u-charge',
+      notes: null },
   ],
+  // ⚠ QUATRE ANOMALIES ET NON UNE SEULE, DEPUIS LE 30/09/2026 : l'ecran du
+  // RAPPORT tire son tableau de desordres de ces lignes, et une seule anomalie
+  // sans photo ne montrait ni la numerotation, ni le reportage photo, ni le
+  // choix de fiche quand un point en propose plusieurs. Les quatre cas qui
+  // comptent sont donc representes, et chacun pour une raison :
+  //   rep1 — point aux DEUX fiches candidates (2 et 5) : il faut choisir ;
+  //   rep4 — une seule fiche candidate, avec PHOTOS : numerotation et reportage ;
+  //   rep5 — fiche ABSENTE du jeu (44) : ni couleur, ni priorite deduite ;
+  //   rep3 — non verifiable : c'est lui qui alimente les LIMITES du rapport.
   btp_releve_reponses: [
     { id: 'rep1', releve_id: 'rel1', point_id: 1, etat: 'anomalie',
       note: 'Fissure en biais a l’angle de la porte, environ 0,5 mm, bords nets.', photos: [] },
     { id: 'rep2', releve_id: 'rel1', point_id: 2, etat: 'ok', note: null, photos: [] },
     { id: 'rep3', releve_id: 'rel1', point_id: 4, etat: 'nv',
       note: 'Toiture non accessible le jour de la visite.', photos: [] },
+    { id: 'rep4', releve_id: 'rel1', point_id: 6, etat: 'anomalie',
+      note: 'Fissure verticale au-dessus de la fenetre du sejour, traversant l’enduit.',
+      photos: [PHOTO_VISITE('fissure%20sejour', 'd8d0c9'), PHOTO_VISITE('detail%20au%20metre', 'cfd6dd')] },
+    { id: 'rep5', releve_id: 'rel1', point_id: 5, etat: 'anomalie',
+      note: 'Descente d’eau pluviale debouchant au pied du mur, sans regard.',
+      photos: [PHOTO_VISITE('descente%20EP', 'c9cfd8')] },
+    { id: 'rep6', releve_id: 'rel1', point_id: 7, etat: 'anomalie',
+      note: 'Bande humide sur 40 cm en pied de mur nord, salpetre par endroits.', photos: [] },
+    // ⚠ CELUI-CI CITE LA FICHE 14, LA SEULE ROUGE DU JEU : sans lui, ni la
+    // priorite « haute » ni le groupe rouge des preconisations ne se voyaient
+    // — et c'est justement l'ordre de lecture du document (les rouges d'abord)
+    // qu'on veut pouvoir regarder.
+    { id: 'rep7', releve_id: 'rel1', point_id: 8, etat: 'anomalie',
+      note: 'Bombement du plafond sur environ 1 m², un fragment tombe au sol.',
+      photos: [PHOTO_VISITE('plafond%20sejour', 'e0dcd4')] },
+  ],
+
+  // ⚠ UN RAPPORT A MOITIE REDIGE, ET C'EST TOUT L'INTERET : la frise des six
+  // sections, les avertissements « preconisation a ecrire » et le bouton
+  // « marquer comme finalise » ne se voient que sur un document incomplet.
+  // L'objet et les limites sont ecrits, les hypotheses et les conclusions non.
+  btp_rapports: [
+    { id: 'rap1', releve_id: 'rel1', statut: 'brouillon',
+      bien: null, maitre_ouvrage: null, intervenant: null,
+      meteo: 'Temps sec, 16 °C, apres deux jours sans pluie.',
+      objet: 'Visite sur site a la demande du maitre d’ouvrage, en vue de constater '
+           + 'les desordres apparents et d’en proposer une interpretation. Les constats '
+           + 'sont faits a vue, sans sondage ni essai.',
+      limites: 'N’ont pas pu etre verifies le jour de la visite :\n'
+             + '— EXTÉRIEURS (démonstration) : Couverture : elements deplaces '
+             + '(Toiture non accessible le jour de la visite).',
+      hypotheses: null, conclusions: null,
+      lieu_signature: 'Nice', date_signature: day(0) },
+  ],
+
+  // ⚠ DEUX LIGNES SEULEMENT POUR SIX DESORDRES, ET C'EST LE MODELE LUI-MEME :
+  // une ligne n'existe que quand l'expert a ecrit dedans. Les quatre autres
+  // desordres s'affichent quand meme — ils viennent du releve.
+  btp_rapport_lignes: [
+    // Une fiche choisie parmi deux, et une preconisation ecrite.
+    { id: 'rli1', rapport_id: 'rap1', reponse_id: 'rep1', retenu: true,
+      fiche_numero: 5, desordre: null, priorite: null,
+      preconisation: 'Poser deux temoins platre et revoir dans six semaines. '
+                   + 'Si l’ouverture progresse, sondage de fondation a prevoir.', rang: 1 },
+    // Un desordre ECARTE du rapport : il reste dans la check-list.
+    { id: 'rli2', rapport_id: 'rap1', reponse_id: 'rep6', retenu: false,
+      fiche_numero: null, desordre: null, priorite: null, preconisation: null, rang: 2 },
   ],
   dtu_sheets: [
     // Une fiche reecrite par la veille et une simplement verifiee : sans les

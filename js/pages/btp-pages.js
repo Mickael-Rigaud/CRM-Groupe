@@ -1,5 +1,5 @@
-// Les cinq écrans neufs de BTP Expertise : check-list et rapport pour chacun
-// des deux métiers, et l'atlas visuel.
+// Les deux écrans de BTP Expertise encore en attente de leur contenu :
+// check-list et rapport de l'AMO.
 //
 // ⚠ ILS SONT CRÉÉS VIDES, ET C'EST DÉLIBÉRÉ (29/09/2026). Mickael a demandé le
 // découpage du menu « exactement » tel qu'il l'a écrit, parce qu'il veut y
@@ -68,26 +68,6 @@ const page = (actif, titre, corps) => ({
   },
 });
 
-export const btpChecklistExpertisePage = page('#/btp/expertise-checklist',
-  'BTP Expertise — Check-list expertise',
-  enAttente(
-    'Check-list expertise',
-    "Ce qu'il faut avoir fait, vu ou emporté sur une mission d'expertise — pour que rien ne se perde entre la prise de rendez-vous et la remise du rapport.",
-    ['Ce qu\'on prépare avant la visite (pièces à demander au client, matériel)',
-     'Ce qu\'on relève sur place, poste par poste',
-     'Ce qu\'on vérifie avant d\'envoyer le rapport'],
-  ));
-
-export const btpRapportExpertisePage = page('#/btp/expertise-rapport',
-  'BTP Expertise — Rapport expertise',
-  enAttente(
-    'Rapport expertise',
-    "La trame du rapport d'expertise : les parties attendues, dans l'ordre, et ce que chacune doit contenir.",
-    ['Le plan type du rapport',
-     'Les formulations de référence du cabinet',
-     'Ce qui ne doit jamais y figurer'],
-  ));
-
 export const btpChecklistAmoPage = page('#/btp/amo-checklist',
   'BTP Expertise — Check-list AMO',
   enAttente(
@@ -108,6 +88,14 @@ export const btpRapportAmoPage = page('#/btp/amo-rapport',
      'Le procès-verbal de réception et ses réserves'],
   ));
 
-// ⚠ `btpAtlasPage` A QUITTÉ CE FICHIER pour `btp-atlas.js` : l'atlas a reçu
-// son contenu le 29/09/2026 et n'est plus un écran en attente. Les quatre
-// autres le restent tant que le cabinet n'a pas fourni leur matière.
+// ⚠ TROIS ÉCRANS ONT QUITTÉ CE FICHIER, et il n'en reste que DEUX ici.
+// `btpAtlasPage` est parti dans `btp-atlas.js` le 29/09/2026, la check-list
+// d'expertise dans `btp-checklist.js` et le rapport d'expertise dans
+// `btp-rapport.js` le 30/09 : ils ont reçu leur contenu et ne sont plus des
+// écrans en attente.
+//
+// ⚠ LEURS PLACEHOLDERS SONT SUPPRIMÉS, PAS LAISSÉS DE CÔTÉ. Un écran exporté
+// que plus aucune route n'appelle décrit un contenu qui existe désormais
+// ailleurs : à la relecture on croit avoir trouvé la page, et on modifie celle
+// qui ne s'affiche plus. Le fichier ne garde donc que ce qui attend vraiment —
+// les deux écrans AMO, dont Mickael n'a pas encore fourni la matière.

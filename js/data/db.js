@@ -30,6 +30,12 @@ export const TABLES = ['profiles', 'organisations', 'contacts', 'deals', 'activi
   // jamais reecrire un constat d'expert.
   'btp_checklist_zones', 'btp_checklist_points',
   'btp_releves', 'btp_releve_reponses',
+  // Le RAPPORT de visite. ⚠ Il ne recopie AUCUN désordre : ses lignes pointent
+  // les réponses du relève et n'ajoutent que ce que la check-list ne pouvait pas
+  // savoir — la priorité, la préconisation, la fiche retenue. Deux copies
+  // auraient divergé dès la première correction, et c'est le document SIGNÉ qui
+  // aurait fini par mentir.
+  'btp_rapports', 'btp_rapport_lignes',
   // espace RGD Renova : le relevé déposé toutes les 30 min par son worker.
   // Cloudflare D1 reste la source ; ces tables en sont le reflet, personne
   // n'y écrit depuis le CRM tant que la migration n'est pas terminée.

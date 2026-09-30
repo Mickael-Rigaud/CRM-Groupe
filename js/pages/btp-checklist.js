@@ -90,7 +90,13 @@ function ecrireAdresse(etat) {
 // Ici on ne quitte rien : la fiche se pose devant, on la ferme, le relevé est
 // toujours là — avec la note qu'on était en train d'écrire, puisque rien n'a
 // été redessiné.
-const boutonFiche = (n) => {
+// ⚠ CES DEUX-CI SONT PARTAGÉES AVEC L'ÉCRAN RAPPORT (30/09/2026), qui tire ses
+// désordres de cette check-list et doit donc ouvrir les mêmes planches de la
+// même façon. Elles restent ici plutôt que de migrer vers `btp-atlas.js` : leur
+// mise en forme est celle de la check-list (classes `.cl-planche*`), et la
+// déplacer aurait voulu dire renommer du CSS que Mickael vient de valider.
+// Aucun cycle : le rapport descend de la check-list, jamais l'inverse.
+export const boutonFiche = (n) => {
   const f = db.t('btp_atlas_fiches').find(x => x.numero === n);
   if (!f) return `<span class="cl-fiche est-absente" title="Fiche non import\u00e9e">${num(n)}</span>`;
   return `<button type="button" class="cl-fiche" data-planche="${n}"
@@ -101,7 +107,7 @@ const boutonFiche = (n) => {
 // signée et se demande au serveur, alors que le rendu de la fenêtre est
 // synchrone. On ouvre donc sur le titre et le niveau — ce qui permet déjà de
 // décider — et la planche arrive dedans.
-function ouvrirPlanche(n) {
+export function ouvrirPlanche(n) {
   const f = db.t('btp_atlas_fiches').find(x => x.numero === n);
   if (!f) return toast(`La fiche ${num(n)} n'est pas encore import\u00e9e`, 'warn');
   const a = ALERTE[f.code_couleur];

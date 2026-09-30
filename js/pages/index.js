@@ -18,8 +18,8 @@ import { rgdFormationsPage } from './rgd-formations.js';
 import { rgdReglagesPage } from './rgd-reglages.js';
 import { btpHomePage, btpExpertisePage, btpAmoPage, btpChargesPage, btpBasePage, btpDtuPage, btpMailsPage, btpFacturationPage, btpVivierPage } from './btp.js';
 import { btpChecklistPage } from './btp-checklist.js';
-import { btpRapportExpertisePage, btpChecklistAmoPage,
-         btpRapportAmoPage } from './btp-pages.js';
+import { btpRapportPage } from './btp-rapport.js';
+import { btpChecklistAmoPage, btpRapportAmoPage } from './btp-pages.js';
 import { btpAtlasPage } from './btp-atlas.js';
 import { courtageHomePage, courtageBasePage, courtageVivierPage } from './courtage.js';
 import { messageriePage } from './messagerie.js';
@@ -75,7 +75,7 @@ export const pages = {
   // de visite (`btp-checklist.js`). Les trois autres ecrans BTP restent en
   // attente de leur contenu.
   'btp_expertise-checklist': btpChecklistPage,
-  'btp_expertise-rapport': btpRapportExpertisePage,
+  'btp_expertise-rapport': btpRapportPage,
   'btp_amo-checklist': btpChecklistAmoPage,
   'btp_amo-rapport': btpRapportAmoPage,
   btp_atlas: btpAtlasPage,
