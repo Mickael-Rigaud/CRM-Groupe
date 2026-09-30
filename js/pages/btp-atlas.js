@@ -288,6 +288,25 @@ export const btpAtlasPage = {
     // `couleur` : le niveau d'alerte retenu, ou null pour les trois.
     const etat = { vue: 'fiches', ouverte: null, q: '', couleur: null, tri: lireTri() };
 
+    // ⚠ UNE FICHE S'OUVRE PAR L'ADRESSE : `#/btp/atlas?fiche=14`. C'est ce qui
+    // permet à la check-list de visite de renvoyer VRAIMENT sur la planche au
+    // lieu de déposer l'utilisateur sur le sommaire avec un numéro à chercher.
+    // Le routeur retire déjà la chaîne de requête du nom de page (`route()` dans
+    // `app.js`), l'écran la relit lui-même — même mécanique que les fiches de
+    // poste RGD.
+    //
+    // ⚠ UNE FICHE NON IMPORTÉE EST IGNORÉE plutôt que suivie : on se poserait
+    // sinon sur un panneau vide dont rien ne dirait pourquoi.
+    const demande = new URLSearchParams(location.hash.split('?')[1] || '');
+    const nFiche = Number(demande.get('fiche'));
+    if (nFiche && fiches().some(f => f.numero === nFiche)) {
+      etat.vue = 'fiches'; etat.ouverte = nFiche;
+    }
+    const nVisite = Number(demande.get('visite'));
+    if (nVisite && visites().some(v => v.numero === nVisite)) {
+      etat.vue = 'visites'; etat.ouverte = nVisite;
+    }
+
     const dessine = () => {
       const toutes = fiches();
       const filtrees = filtrer(toutes, etat);

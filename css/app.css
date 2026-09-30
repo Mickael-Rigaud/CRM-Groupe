@@ -1808,32 +1808,29 @@ tr.btp-mission .btp-pts { color: var(--m-encre); }
 .mf-champ-aide.est-repris { color: var(--amber, #9a6412); font-style: normal; }
 
 /* ---- Le depot de documents de la fiche projet ----
-   Une zone de glisser-deposer, la liste de ce qui attend l'enregistrement, et
-   ce qui est deja rattache a l'affaire. Rien n'est televerse au depot : voir le
-   commentaire de `blocDepot` dans btp-projet.js. */
-.fp-depot { margin-top: 12px; }
-.fp-depot-zone { display: flex; flex-direction: column; align-items: center; gap: 4px;
-  padding: 20px 16px; border: 2px dashed var(--line-strong); border-radius: 12px;
-  background: var(--card-2); cursor: pointer; text-align: center;
-  transition: border-color .12s, background .12s; }
-.fp-depot-zone:hover { border-color: var(--m); }
-/* La zone doit changer d'aspect PENDANT le survol d'un fichier : sans retour
-   visuel on ne sait pas si le lacher va marcher. */
-.fp-depot-zone.survol { border-color: var(--m); background: var(--m-clair); }
-.fp-depot-zone b { font-size: 14px; color: var(--text); }
-.fp-depot-zone span { font-size: 12px; color: var(--muted); max-width: 520px; }
-.fp-depot-cat { margin-top: 10px; }
-.fp-depot-cat .mail-champ { max-width: 320px; }
-.fp-depot-liste { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
-.fp-fichier { display: flex; align-items: center; gap: 10px; padding: 8px 12px;
-  border: 1px solid var(--line); border-radius: 9px; background: var(--card); }
-.fp-fichier.en-attente { border-color: var(--m); background: var(--m-clair); }
-.fp-fichier-nom { flex: 1 1 auto; min-width: 0; font-size: 13px; font-weight: 600;
+   UNE ZONE PAR TYPE COCHE, plus une zone « Autres » toujours presente. La ligne
+   entiere est la cible du glisser-deposer ET un label qui ouvre le selecteur :
+   voir le commentaire de `blocDepot` dans btp-projet.js. */
+.fp-depot { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.fp-zone { border: 1px dashed var(--line-strong); border-radius: 10px; background: var(--card-2); }
+.fp-zone.survol { border-color: var(--m); border-style: solid; background: var(--m-clair); }
+.fp-zone.est-autres { border-style: dotted; }
+.fp-zone-tete { display: flex; align-items: center; gap: 12px; padding: 11px 14px; cursor: pointer; }
+.fp-zone-nom { flex: 1 1 auto; font-size: 13px; font-weight: 650; color: var(--text); }
+.fp-zone-action { flex: 0 0 auto; font-size: 11.5px; font-weight: 600; color: var(--m-encre);
+  padding: 3px 10px; border: 1px solid var(--m); border-radius: 999px; background: var(--card); }
+.fp-zone:hover { border-color: var(--m); }
+
+.fp-depot-liste { display: flex; flex-direction: column; gap: 5px; padding: 0 12px 11px; }
+.fp-fichier { display: flex; align-items: center; gap: 10px; padding: 7px 11px;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--card); }
+.fp-fichier.en-attente { border-color: var(--m); }
+.fp-fichier-nom { flex: 1 1 auto; min-width: 0; font-size: 12.5px; font-weight: 600;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 a.fp-fichier-nom { color: var(--m-encre); }
-.fp-fichier-info { flex: 0 0 auto; font-size: 11.5px; color: var(--muted); }
+.fp-fichier-info { flex: 0 0 auto; font-size: 11px; color: var(--muted); }
 .fp-fichier-x { flex: 0 0 auto; border: 0; background: none; cursor: pointer;
-  font-size: 18px; line-height: 1; color: var(--muted); padding: 0 2px; }
+  font-size: 17px; line-height: 1; color: var(--muted); padding: 0 2px; }
 .fp-fichier-x:hover { color: var(--red, #b3261e); }
 
 /* ---- Le schema dessine du bien ----
@@ -3829,7 +3826,8 @@ textarea.ev-nu { resize: vertical; min-height: 40px; }
 .cl-pastille.est-nv { background: var(--muted-soft); color: var(--muted); }
 
 /* ---- L'en-tete d'un releve ---- */
-.cl-tete { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+.cl-tete { display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  margin: 0 auto 10px; max-width: 968px; }
 .cl-tete-nom { display: flex; flex-direction: column; min-width: 0; }
 .cl-tete-nom b { font-family: var(--font-display); font-size: 18px; letter-spacing: -.01em; }
 .cl-tete-nom span { font-size: 12px; color: var(--muted); }
@@ -3838,22 +3836,23 @@ textarea.ev-nu { resize: vertical; min-height: 40px; }
 .cl-date-champ input { font: inherit; font-size: 13px; font-weight: 500; text-transform: none;
   letter-spacing: 0; color: var(--text); padding: 7px 10px;
   border: 1px solid var(--line); border-radius: 9px; }
-.cl-bandeau { padding: 13px 15px; margin-bottom: 18px; border-radius: 12px; background: var(--card-2); }
-.cl-bandeau .cl-compte { margin-top: 8px; font-size: 12.5px; }
+.cl-bandeau { padding: 10px 14px; margin: 0 auto 12px; max-width: 968px;
+  border-radius: 11px; background: var(--card-2); }
+.cl-bandeau .cl-compte { margin-top: 6px; font-size: 12.5px; }
 .cl-bandeau .cl-compte b { color: var(--text); font-size: 14px; }
 
 /* ---- Une zone ----
    ⚠ UNE SEULE DEPLIEE A LA FOIS : on suit le parcours de la visite, et les 54
    points d'un coup font une page de trois metres ou l'on ne sait plus ou l'on
    en est. La zone ouverte est celle qu'on est en train de faire. */
-.cl-zone { border: 1px solid var(--line); border-radius: 14px; margin-bottom: 10px;
+.cl-zone { border: 1px solid var(--line); border-radius: 12px; margin: 0 auto 7px; max-width: 968px;
   background: var(--card); overflow: hidden; transition: border-color .18s; }
 .cl-zone.est-ouverte { border-color: color-mix(in srgb, var(--accent) 38%, var(--line));
   box-shadow: 0 6px 22px -14px color-mix(in srgb, var(--accent) 60%, transparent); }
 .cl-zone.a-des-anomalies { border-left: 4px solid var(--red); }
 .cl-zone-tete { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
-  padding: 13px 16px; border: 0; background: none; font: inherit; cursor: pointer;
-  min-height: 52px; transition: background .16s; }
+  padding: 10px 14px; border: 0; background: none; font: inherit; cursor: pointer;
+  min-height: 48px; transition: background .16s; }
 .cl-zone-tete:hover { background: var(--card-2); }
 .cl-zone-tete.sans-clic { cursor: default; }
 .cl-zone-n { flex: 0 0 auto; display: grid; place-items: center; width: 28px; height: 28px;
@@ -3865,15 +3864,25 @@ textarea.ev-nu { resize: vertical; min-height: 40px; }
   color: var(--muted); padding: 2px 9px; border-radius: 999px; background: var(--card-2); }
 .cl-zone-avance.est-complet { background: var(--green-soft); color: var(--green); }
 .cl-chevron { color: var(--muted-2); font-size: 12px; }
-.cl-points { padding: 4px 16px 16px; }
+/* ⚠ LE CONTENU EST BORNÉ ET CENTRÉ, ET C'EST LA VRAIE CAUSE DU « trop
+   espacé » (30/09/2026). Sur un écran large, le libellé restait collé à
+   gauche et les trois boutons à l'extrême droite : sept cents pixels de vide
+   entre la question et la réponse, sur cinquante-quatre lignes. Resserrer les
+   marges verticales ne pouvait rien y faire — c'était la LARGEUR.
+   Les deux se répondent maintenant, et l'oeil ne traverse plus l'écran. */
+.cl-points { padding: 2px 14px 12px; }
+.cl-points > *, .cl-photos-zone { max-width: 940px; margin-left: auto; margin-right: auto; }
 
 /* ---- Un point ----
    ⚠ TROIS BOUTONS, PAS UNE LISTE DEROULANTE : un menu a ouvrir puis une
    option a viser, 54 fois, avec des gants, est le meilleur moyen pour que la
    check-list reste dans la voiture. */
-.cl-point { padding: 11px 0; border-top: 1px solid var(--line); }
+/* ⚠ CE BLOC SE RÉPÈTE 54 FOIS : chaque pixel de respiration y est multiplié
+   par cinquante-quatre, et c'est là que l'écran paraissait « trop espacé ».
+   On resserre ici, PAS sur la hauteur des boutons d'état. */
+.cl-point { padding: 7px 0; border-top: 1px solid var(--line); }
 .cl-point:first-child { border-top: 0; }
-.cl-point-haut { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.cl-point-haut { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .cl-point-t { flex: 1 1 260px; font-size: 13.5px; line-height: 1.45; }
 .cl-point.est-ok .cl-point-t { color: var(--muted); }
 .cl-point.est-nv .cl-point-t { color: var(--muted-2); }
@@ -3892,13 +3901,24 @@ textarea.ev-nu { resize: vertical; min-height: 40px; }
 .cl-b-anomalie.on { background: var(--red); color: #fff; }
 .cl-b-nv.on { background: var(--muted); color: #fff; }
 
-.cl-point-bas { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
-.cl-fiches { font-size: 11.5px; color: var(--muted); }
-/* Le renvoi vers l'atlas : il sert a NOMMER le desordre qu'on vient de voir. */
-.cl-fiche { border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
-  background: var(--accent-soft); color: var(--accent-ink); font: inherit; font-size: 11.5px;
-  font-weight: 700; padding: 3px 10px; border-radius: 999px; cursor: pointer; margin-left: 3px; }
-.cl-fiche:hover { background: color-mix(in srgb, var(--accent) 20%, transparent); }
+.cl-point-bas { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 5px; }
+/* ---- Les renvois vers l'atlas ----
+   ⚠ LE NUMÉRO SEUL, EN PASTILLE RONDE : « Fiche 02 » répété trois fois par
+   ligne mangeait la largeur sur 54 lignes, et le mot « Fiche » n'apprend rien
+   qu'on ne sache déjà — c'est un atlas de fiches. Le titre est en infobulle,
+   le clic ouvre la planche.
+   ⚠ Ce sont des LIENS (`<a href>`), pas des boutons : ils s'ouvrent dans un
+   nouvel onglet au clic du milieu, et se copient. */
+.cl-fiches { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+.cl-fiche { display: inline-grid; place-items: center; min-width: 27px; height: 22px;
+  padding: 0 6px; border-radius: 7px; text-decoration: none;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  background: var(--accent-soft); color: var(--accent-ink);
+  font-size: 11.5px; font-weight: 800; font-variant-numeric: tabular-nums;
+  transition: background .16s, transform .16s; }
+.cl-fiche:hover { background: color-mix(in srgb, var(--accent) 22%, transparent); transform: translateY(-1px); }
+/* Une fiche non importee se lit, elle ne se clique pas. */
+.cl-fiche.est-absente { border-style: dashed; background: none; color: var(--muted-2); }
 .cl-a-note { font-size: 11px; font-weight: 700; color: var(--muted-2);
   padding: 2px 8px; border-radius: 999px; background: var(--card-2); }
 .cl-plus { border: 1px solid var(--line); background: var(--card); font: inherit; font-size: 12px;
@@ -3906,7 +3926,7 @@ textarea.ev-nu { resize: vertical; min-height: 40px; }
   min-height: 34px; transition: background .16s, color .16s, border-color .16s; }
 .cl-plus:hover { background: var(--accent-soft); color: var(--accent-ink); border-color: var(--accent); }
 
-.cl-detail { margin-top: 10px; padding: 12px 14px; border-radius: 12px; background: var(--card-2); }
+.cl-detail { margin-top: 7px; padding: 10px 12px; border-radius: 11px; background: var(--card-2); }
 .cl-note, .cl-notes { width: 100%; font: inherit; font-size: 13px; line-height: 1.5;
   padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--card);
   color: var(--text); resize: vertical; }
@@ -3914,7 +3934,7 @@ textarea.ev-nu { resize: vertical; min-height: 40px; }
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent); }
 
 /* ---- Les photos ---- */
-.cl-photos { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+.cl-photos { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .cl-vignette { position: relative; margin: 0; width: 92px; height: 92px; border-radius: 10px;
   overflow: hidden; background: var(--card); border: 1px solid var(--line); }
 .cl-vignette-img { width: 100%; height: 100%; display: grid; place-items: center;
@@ -3933,7 +3953,7 @@ textarea.ev-nu { resize: vertical; min-height: 40px; }
 
 /* Les photos a rapporter, EN PIED de zone : on les lit en quittant la zone,
    quand il est encore temps d'y retourner. */
-.cl-photos-zone { margin: 14px 0 0; padding: 11px 14px; border-radius: 10px;
+.cl-photos-zone { margin: 10px 0 0; padding: 9px 12px; border-radius: 10px;
   background: var(--accent-soft); font-size: 12.5px; line-height: 1.5; color: var(--accent-ink); }
 .cl-photos-zone em { display: block; font-style: normal; font-size: 10px; font-weight: 800;
   text-transform: uppercase; letter-spacing: .08em; margin-bottom: 3px; opacity: .75; }

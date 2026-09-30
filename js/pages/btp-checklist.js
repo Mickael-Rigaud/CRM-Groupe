@@ -20,7 +20,7 @@
 // lecture ET en écriture) ; l'écran n'en est que le miroir.
 import { db } from '../data/db.js';
 import { scope } from '../data/scope.js';
-import { esc, toast, confirm as confirmer, openModal, closeModal, renderForm, readForm } from '../ui.js';
+import { esc, toast, confirm as confirmer, openModal, closeModal } from '../ui.js';
 import { poserEspace } from './espace.js';
 import { cadreBtp as cadre } from './btp.js';
 import {
@@ -37,6 +37,20 @@ const guard = (root) => {
 };
 
 const num = (n) => String(n).padStart(2, '0');
+
+// ⚠ UN VRAI LIEN, PAS UN BOUTON QUI AFFICHE UN MESSAGE. Il menait à l'écran
+// Formation en disant « ouvrez la fiche 14 » : on arrivait sur le sommaire avec
+// un numéro à chercher à la main, c'est-à-dire le travail qu'un renvoi doit
+// précisément éviter. L'adresse porte désormais la fiche (`?fiche=14`), donc la
+// planche s'ouvre — et le lien se partage.
+//
+// ⚠ UNE FICHE NON IMPORTÉE N'EST PAS UN LIEN MORT : son numéro s'affiche en
+// clair, et on voit qu'il manque quelque chose au lieu de cliquer dans le vide.
+function lienFiche(n) {
+  const f = db.t('btp_atlas_fiches').find(x => x.numero === n);
+  if (!f) return `<span class="cl-fiche est-absente" title="Fiche non import\u00e9e">${num(n)}</span>`;
+  return `<a class="cl-fiche" href="#/btp/atlas?fiche=${n}" title="${esc(f.titre)}">${num(n)}</a>`;
+}
 const jour = (d) => d ? new Date(d + 'T12:00:00').toLocaleDateString('fr-FR',
   { day: '2-digit', month: 'long', year: 'numeric' }) : '';
 
@@ -231,13 +245,17 @@ function unPoint(p, rep, etat) {
       </div>
 
       <div class="cl-point-bas">
-        <!-- ⚠ LES FICHES NE S'AFFICHENT QU'À L'ANOMALIE. Elles servent à NOMMER
-             ce qu'on vient de voir ; les montrer sur les 54 points ferait 47
-             renvois permanents dont on ne lirait plus aucun. -->
-        ${e === 'anomalie' && p.fiches?.length ? `
-          <span class="cl-fiches">Pour la nommer :
-            ${p.fiches.map(n => `<button type="button" class="cl-fiche" data-fiche="${n}">Fiche ${num(n)}</button>`).join(' ')}
-          </span>` : ''}
+        <!-- ⚠ LES FICHES SONT VISIBLES DÈS LE DÉBUT, sur tous les points et
+             sans rien avoir coché (30/09/2026, demandé par Mickael). Elles
+             ne s'affichaient qu'une fois « Anomalie » posé, au motif que 54
+             renvois permanents ne se liraient plus. C'ÉTAIT LE MAUVAIS
+             RAISONNEMENT : on ouvre la fiche AVANT de trancher, pour savoir
+             si ce qu'on voit en est une — les cacher jusqu'après le clic les
+             rendait inutiles au moment précis où elles servent. Le document
+             papier les imprime d'ailleurs sur chaque ligne, sans rien à
+             cocher. -->
+        ${p.fiches?.length ? `
+          <span class="cl-fiches">${p.fiches.map(lienFiche).join('')}</span>` : ''}
         <span class="grow"></span>
         ${rep?.note ? `<span class="cl-a-note" title="${esc(rep.note)}">note</span>` : ''}
         ${rep?.photos?.length ? `<span class="cl-a-note">${rep.photos.length} photo${rep.photos.length > 1 ? 's' : ''}</span>` : ''}
@@ -334,13 +352,6 @@ function lier(root, etat, dessine) {
     catch (e) { toast('Date non enregistrée : ' + e.message, 'warn'); }
   };
 
-  // Un renvoi vers l'atlas ouvre la planche dans l'écran Formation : c'est là
-  // qu'elle vit, et la recopier ici en ferait une seconde vérité.
-  q('[data-fiche]').forEach(b => b.onclick = () => {
-    location.hash = '#/btp/atlas';
-    toast(`Ouvrez la fiche ${num(Number(b.dataset.fiche))} dans la Formation`, 'ok');
-  });
-
   q('[data-ajout]').forEach(i => i.onchange = () => {
     if (i.files?.length) ajouterPhotos(etat, Number(i.dataset.ajout), i.files, dessine);
   });
@@ -356,36 +367,71 @@ async function nouvelleVisite(etat, dessine) {
   const l = affairesBtp();
   if (!l.length) return toast('Aucune affaire BTP \u00e0 laquelle rattacher une visite', 'warn');
 
-  // ⚠ LE SPEC EST GARDÉ DANS UNE VARIABLE : `readForm(form, spec)` l'exige,
-  // et une seconde liste écrite à la main pour la relecture finirait par ne
-  // plus dire la même chose que celle qui a servi à dessiner.
-  // ⚠ LE FORMAT DE `renderForm` EST `key`, PAS `name`, ET SES OPTIONS SONT
-  // DES PAIRES [valeur, libelle], pas des objets : avec { value, label } le
-  // selecteur affichait « [object Object] » sur chaque ligne et les champs
-  // sortaient sous le nom `undefined`. Constate a l'essai, pas devine.
-  const spec = [
-    { key: 'deal_id', label: 'Affaire', type: 'select', required: true,
-      options: l.map(d => [d.id, `${nomAffaire(d.id)}${adresseAffaire(d.id) ? ' \u00b7 ' + adresseAffaire(d.id) : ''}`]) },
-    { key: 'date_visite', label: 'Date de la visite', type: 'date',
-      value: new Date().toISOString().slice(0, 10),
-      hint: 'Le jour o\u00f9 l\u2019on est all\u00e9 sur place, pas celui de la saisie.' },
-  ];
+  // ⚠ ON ÉCRIT LE NOM DU CLIENT, ON NE LE CHERCHE PLUS DANS UNE LISTE
+  // (30/09/2026, demandé par Mickael). Un sélecteur va très bien à six
+  // affaires et devient impraticable à deux cents : on sait qui on va voir,
+  // on tape les trois premières lettres.
+  //
+  // ⚠ UN `datalist`, PAS UN COMPOSANT À ÉCRIRE : il filtre, il se navigue au
+  // clavier, il s'ouvre en liste complète si on ne tape rien, et il se
+  // comporte comme le champ natif du téléphone — or cet écran s'ouvre aussi
+  // sur une tablette. Même choix que la colonne « Apporté par » des
+  // partenaires RGD.
+  //
+  // ⚠ CE QUI EST TAPÉ EST UN LIBELLÉ, PAS UN IDENTIFIANT : on le retrouve
+  // dans la table faite ici. Deux clients de même nom sont départagés par
+  // l'adresse, déjà dans le libellé ; si le texte ne correspond à rien, on le
+  // DIT au lieu de créer la visite sur la première affaire venue.
+  const libelle = (d) => {
+    const a = adresseAffaire(d.id);
+    return `${nomAffaire(d.id)}${a ? ' \u00b7 ' + a : ''}`;
+  };
+  const parLibelle = new Map(l.map(d => [libelle(d), d.id]));
+  const aujourdhui = new Date().toISOString().slice(0, 10);
 
   openModal('Nouvelle visite', `
     <form id="cl-neuve">
-      ${renderForm(spec)}
+      <div class="field">
+        <label>Client ou affaire *</label>
+        <input id="cl-affaire" list="cl-affaires" autocomplete="off" required
+               placeholder="Tapez les premi\u00e8res lettres du nom\u2026">
+        <datalist id="cl-affaires">
+          ${l.map(d => `<option value="${esc(libelle(d))}"></option>`).join('')}
+        </datalist>
+        <div class="small muted" style="margin-top:4px">
+          ${l.length} affaire${l.length > 1 ? 's' : ''} BTP ouverte${l.length > 1 ? 's' : ''} \u00e0 votre nom.
+        </div>
+      </div>
+      <div class="field">
+        <label>Date de la visite</label>
+        <input type="date" id="cl-date" value="${aujourdhui}">
+        <div class="small muted" style="margin-top:4px">
+          Le jour o\u00f9 l\u2019on est all\u00e9 sur place, pas celui de la saisie.
+        </div>
+      </div>
       <div class="form-actions">
         <button type="button" class="btn ghost" data-close>Annuler</button>
         <button type="submit" class="btn primary">Ouvrir la check-list</button>
       </div>
     </form>`, { onOpen: (m) => {
-      const form = m.querySelector('#cl-neuve');
-      form.onsubmit = async (ev) => {
+      const champ = m.querySelector('#cl-affaire');
+      champ.focus();
+      m.querySelector('#cl-neuve').onsubmit = async (ev) => {
         ev.preventDefault();
-        const v = readForm(form, spec);
-        if (!v.deal_id) return toast('Choisissez une affaire', 'warn');
+        const saisi = champ.value.trim();
+        let dealId = parLibelle.get(saisi);
+        // Repli : on accepte une saisie partielle si elle ne désigne qu'UNE
+        // affaire. Deux correspondances, on ne choisit pas à la place de
+        // l'utilisateur.
+        if (!dealId) {
+          const bas = saisi.toLowerCase();
+          const candidats = [...parLibelle.entries()].filter(([k]) => k.toLowerCase().includes(bas));
+          if (saisi && candidats.length === 1) dealId = candidats[0][1];
+          else if (candidats.length > 1) return toast(`\u00ab ${saisi} \u00bb d\u00e9signe ${candidats.length} affaires : pr\u00e9cisez`, 'warn');
+        }
+        if (!dealId) return toast('Aucune affaire ne correspond \u00e0 ce nom', 'warn');
         try {
-          const r = await creerReleve(v.deal_id, v.date_visite);
+          const r = await creerReleve(dealId, m.querySelector('#cl-date').value || aujourdhui);
           closeModal();
           etat.ouvert = r.id; etat.zone = 1; etat.point = null;
           dessine();
