@@ -407,8 +407,26 @@ export const SPECIALISTES_EXPERTISE = [
 // donne pas de formule — voir `niveauExpertise` pour ce que le CRM en fait.
 
 export const FICHE_EXPERTISE = {
-  profils: ['Propriétaire occupant', 'Propriétaire bailleur', 'Acquéreur / vendeur',
-    'Entreprise / artisan', 'Syndic / copropriété', 'Avocat / assureur / autre professionnel', 'Autre'],
+  // ⚠ ACQUÉREUR ET VENDEUR SONT SÉPARÉS, AVOCAT / ASSUREUR / AUTRE PROFESSIONNEL
+  // AUSSI (30/09/2026, demandé par Mickael). Ce n'est pas un découpage
+  // cosmétique : dans un dossier d'expertise, **acquéreur et vendeur sont les
+  // deux parties opposées** — l'un cherche ce qui cloche avant d'acheter,
+  // l'autre à se couvrir avant de vendre —, et un avocat, un assureur et un
+  // agent immobilier n'attendent pas non plus le même rapport. Les regrouper
+  // rendait le champ inutilisable pour ce à quoi il sert : dire à qui l'on
+  // parle et ce qui est en jeu.
+  //
+  // ⚠ AUCUNE TABLE DE SURVIVANCE N'ACCOMPAGNE CE DÉCOUPAGE, contrairement à
+  // `NIVEAUX_ANCIENS` — et c'est une MESURE, pas une confiance : au 30/09/2026
+  // aucune affaire BTP ne porte l'une des deux valeurs groupées (`fields.contexte`
+  // vaut « Particulier » deux fois, « Propriétaire bailleur » une fois, nul
+  // ailleurs). Une table qui ne traduit rien serait du code mort sur un chemin
+  // qu'on ne relit jamais. **La vérification est refaite avant de retirer une
+  // valeur d'ici**, elle prend une requête.
+  profils: ['Propriétaire occupant', 'Propriétaire bailleur',
+    'Acquéreur', 'Vendeur',
+    'Entreprise / artisan', 'Syndic / copropriété',
+    'Avocat', 'Assureur', 'Autre professionnel', 'Autre'],
   motifs: ['Fissures', 'Humidité / remontées capillaires', 'Infiltration', 'Condensation / moisissures',
     'Toiture / étanchéité', 'Façade', 'Structure / maçonnerie', 'Plomberie / évacuation', 'Électricité',
     'Isolation / thermique', 'Menuiseries', 'Sol / parquet / carrelage', 'Réception de travaux',
