@@ -36,6 +36,11 @@ export const TABLES = ['profiles', 'organisations', 'contacts', 'deals', 'activi
   // auraient divergé dès la première correction, et c'est le document SIGNÉ qui
   // aurait fini par mentir.
   'btp_rapports', 'btp_rapport_lignes',
+  // Le suivi d'une mission AMO. ⚠ Il se rattache a l'AFFAIRE et non a une
+  // visite : une mission est une duree de plusieurs mois, pas un moment. Son
+  // referentiel (38 points, 6 phases) vit dans le depot du front et non en
+  // base — il est ecrit pour le cabinet, rien a proteger.
+  'btp_amo_suivi',
   // espace RGD Renova : le relevé déposé toutes les 30 min par son worker.
   // Cloudflare D1 reste la source ; ces tables en sont le reflet, personne
   // n'y écrit depuis le CRM tant que la migration n'est pas terminée.

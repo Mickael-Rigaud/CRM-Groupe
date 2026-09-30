@@ -5092,3 +5092,237 @@ textarea.ev-nu { resize: vertical; min-height: 40px; }
   .rp-doc-t { display: block; overflow-x: auto; white-space: nowrap; }
   .rp-doc-signature { flex-direction: column; gap: 16px; }
 }
+
+/* =====================================================================
+   CHECK-LIST D'UNE MISSION AMO — BTP Expertise   (.am-*)
+   ---------------------------------------------------------------------
+   ⚠ CE N'EST PAS L'ECRAN DE VISITE, ET LA FORME LE DIT. La check-list
+   d'expertise se remplit DEBOUT devant un batiment, avec des gants :
+   cibles tactiles de 44 px, trois gros boutons par point. Celle-ci se
+   remplit ASSIS, sur plusieurs mois, et ce qu'elle doit montrer d'un
+   coup d'oeil est autre chose - ou en est la mission, ce qui manque
+   avant de facturer, et quels points de frontiere ont ete traites.
+
+   ⚠ BLOC AJOUTE EN FIN DE FICHIER, jamais insere entre deux reperes de
+   commentaire : une coupe « du commentaire A au commentaire B » a deja
+   emporte cinq regles sans qu'aucun controle de rendu ne le voie.
+   ===================================================================== */
+
+.am-corps { max-width: 1000px; margin: 0 auto; }
+.am-intro { max-width: 700px; margin: 0 0 16px; color: var(--muted); font-size: 13px; }
+.am-note { margin: 10px 0 0; color: var(--muted-2); font-size: 12px; }
+
+/* ---- la jauge d'avancement ------------------------------------------ */
+.am-jauge {
+  height: 5px; border-radius: 999px; background: var(--muted-soft); overflow: hidden; margin: 9px 0;
+}
+.am-jauge span { display: block; height: 100%; background: var(--accent); border-radius: 999px;
+  transition: width .25s; }
+.am-jauge.est-grande { height: 7px; }
+
+.am-part, .am-part-grand {
+  font-weight: 700; font-variant-numeric: tabular-nums; color: var(--accent-ink); flex: none;
+}
+.am-part { font-size: 19px; }
+.am-part-grand { font-size: 26px; letter-spacing: -.02em; }
+.am-part em, .am-part-grand em { font-style: normal; font-size: .55em; margin-left: 1px; }
+
+/* ---- la liste des missions ------------------------------------------ */
+.am-liste { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+.am-carte {
+  border: 1px solid var(--line); border-radius: var(--radius); background: var(--card);
+  padding: 13px 14px; cursor: pointer; transition: border-color .12s, box-shadow .12s, transform .12s;
+}
+.am-carte:hover, .am-carte:focus-visible {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+  box-shadow: var(--shadow-lift); transform: translateY(-1px); outline: none;
+}
+.am-carte-h { display: flex; align-items: flex-start; gap: 10px; justify-content: space-between; }
+.am-carte-h b { font-size: 14.5px; display: block; }
+.am-carte-h span:not(.am-part) { display: block; color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+.am-carte-c { display: flex; flex-wrap: wrap; gap: 5px 14px; font-size: 12.5px; font-weight: 600; }
+.am-carte-c em, .am-tete-c em {
+  display: block; font-style: normal; font-weight: 600; font-size: 10px;
+  text-transform: uppercase; letter-spacing: .07em; color: var(--muted-2);
+}
+.am-carte-c .est-alerte, .am-tete-c .est-alerte { color: var(--red); }
+.am-carte-c .est-terne, .am-tete-c .est-terne { color: var(--muted-2); }
+/* ⚠ LE COMPTE DE FRONTIERE SE VOIT MEME INCOMPLET : c'est le seul chiffre
+   de la carte qui dit un risque, pas un avancement. */
+.am-carte-c .est-frontiere { color: var(--amber); }
+
+/* ---- le bandeau de la mission --------------------------------------- */
+.am-tete {
+  max-width: 1000px; margin: 0 auto 16px; padding: 15px 18px 14px;
+  border: 1px solid var(--line); border-radius: var(--radius);
+  background: linear-gradient(180deg, var(--accent-soft), var(--card) 78%);
+}
+.am-tete-h { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.am-tete h2 { font-size: 19px; margin-top: 4px; }
+.am-tete-lieu { margin: 3px 0 0; color: var(--muted); font-size: 13px; }
+.am-tete-c { display: flex; flex-wrap: wrap; gap: 5px 16px; font-size: 12.5px; color: var(--muted); }
+.am-tete-c b { color: var(--text); font-size: 14px; }
+.am-retour {
+  border: 0; background: none; padding: 0; cursor: pointer; font: inherit;
+  color: var(--accent-ink); font-weight: 600; font-size: 12.5px;
+}
+.am-retour::before { content: '\2190'; margin-right: 5px; }
+.am-retour:hover { text-decoration: underline; }
+
+/* ⚠ LA GARDE EST UN AVERTISSEMENT, PAS UNE DECORATION : franchir la
+   frontiere fait basculer la mission dans la responsabilite decennale du
+   constructeur. Elle ne s'affiche que s'il reste des points a traiter -
+   une alerte permanente cesse d'etre lue. */
+.am-garde {
+  margin: 12px 0 0; padding: 10px 13px; border-radius: 9px;
+  background: var(--amber-soft); color: var(--amber);
+  font-size: 12.5px; line-height: 1.5; border-left: 3px solid var(--amber);
+}
+.am-garde b { display: block; margin-bottom: 2px; }
+
+/* ---- la barre des six phases ---------------------------------------- */
+.am-barre { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 14px; }
+.am-phase {
+  display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font: inherit;
+  border: 1px solid var(--line); background: var(--card); border-radius: 10px;
+  padding: 7px 12px 7px 7px; font-size: 12.5px; color: var(--muted);
+  transition: border-color .12s, color .12s, background .12s;
+}
+.am-phase:hover { border-color: var(--line-strong); color: var(--text); }
+.am-phase.on {
+  border-color: var(--accent); background: var(--accent-soft); color: var(--accent-ink); font-weight: 600;
+}
+.am-phase-n {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; border-radius: 7px; flex: none;
+  background: var(--muted-soft); color: var(--muted-2); font-weight: 700; font-size: 11.5px;
+}
+.am-phase.on .am-phase-n { background: var(--accent); color: var(--on-accent); }
+.am-phase.est-complete .am-phase-n { background: var(--green); color: #fff; }
+.am-phase.est-complete { border-color: color-mix(in srgb, var(--green) 30%, transparent); }
+/* Une phase qui porte une vigilance le dit meme quand elle est complete :
+   « tout est traite » et « tout va bien » ne sont pas la meme chose. */
+.am-phase.est-alerte .am-phase-c { color: var(--red); font-weight: 700; }
+.am-phase-c { font-variant-numeric: tabular-nums; font-size: 11.5px; color: var(--muted-2); }
+
+/* ---- la phase ouverte ------------------------------------------------ */
+.am-sec {
+  border: 1px solid var(--line); border-radius: var(--radius); background: var(--card);
+  padding: 15px 18px 17px; margin-bottom: 14px;
+}
+.am-sec-h { display: flex; align-items: flex-start; gap: 14px; justify-content: space-between; margin-bottom: 14px; }
+/* ⚠ Le h3 du CRM est un intertitre de tableau (11 px, gris, MAJUSCULES) :
+   il faut le neutraliser sur un titre de section. Piege deja rencontre. */
+.am-sec-h h3 {
+  font-size: 15px; margin: 0; text-transform: none; letter-spacing: -.01em;
+  color: var(--text); font-weight: 700;
+}
+.am-sec-h p { margin: 3px 0 0; color: var(--muted); font-size: 12.5px; max-width: 620px; }
+.am-poids {
+  flex: none; font-weight: 700; font-size: 17px; color: var(--muted-2);
+  font-variant-numeric: tabular-nums;
+}
+.am-poids em { font-style: normal; font-size: .6em; }
+
+/* ---- un point -------------------------------------------------------- */
+.am-points { display: grid; gap: 8px; }
+.am-p {
+  border: 1px solid var(--line); border-radius: 11px; padding: 11px 13px;
+  background: var(--card); transition: border-color .12s, background .12s;
+}
+.am-p:hover { border-color: var(--line-strong); }
+.am-p.est-traite { background: var(--card-2); }
+/* ⚠ UN POINT DE FRONTIERE SE RECONNAIT AVANT D'ETRE LU : liseré ambre a
+   gauche. Ce sont ceux sur lesquels une mission bascule. */
+.am-p.est-frontiere { border-left: 3px solid var(--amber); }
+.am-p.est-alerte { border-left: 3px solid var(--red); background: var(--red-soft); }
+.am-p-h { display: flex; align-items: flex-start; gap: 12px; justify-content: space-between; }
+.am-p-t { flex: 1; min-width: 0; }
+.am-p-t b { font-size: 13.5px; font-weight: 600; }
+.am-p-t p { margin: 4px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.am-f {
+  display: inline-block; margin-left: 7px; padding: 1px 7px; border-radius: 999px;
+  background: var(--amber-soft); color: var(--amber);
+  font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em;
+  vertical-align: 2px;
+}
+
+.am-etat {
+  flex: none; display: inline-flex; align-items: center; height: 22px; padding: 0 9px;
+  border-radius: 999px; font-size: 11px; font-weight: 700;
+}
+.am-etat-fait       { background: var(--green-soft); color: var(--green); }
+.am-etat-sans_objet { background: var(--muted-soft); color: var(--muted-2); }
+.am-etat-alerte     { background: var(--red); color: #fff; }
+/* « A faire » en trait discontinu : c'est un trou a combler, pas un etat
+   valide - meme principe que « priorite a definir » sur le rapport. */
+.am-etat-vide {
+  background: #fff; color: var(--muted-2); border: 1px dashed var(--line-strong); font-weight: 600;
+}
+
+.am-p-b { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.am-b {
+  border: 1px solid var(--line-strong); background: #fff; cursor: pointer; font: inherit;
+  font-size: 12px; font-weight: 600; padding: 6px 12px; border-radius: 8px; color: var(--muted);
+  transition: background .12s, border-color .12s, color .12s;
+}
+.am-b:hover { background: var(--card-2); color: var(--text); }
+.am-b-fait.on       { background: var(--green); border-color: var(--green); color: #fff; }
+.am-b-sans_objet.on { background: var(--muted-2); border-color: var(--muted-2); color: #fff; }
+.am-b-alerte.on     { background: var(--red); border-color: var(--red); color: #fff; }
+.am-b-annule { margin-left: auto; border-style: dashed; }
+
+.am-p-d {
+  display: grid; gap: 10px; grid-template-columns: 200px 1fr;
+  margin-top: 11px; padding-top: 11px; border-top: 1px dashed var(--line);
+}
+.am-champ.est-large { grid-column: auto; }
+.am-champ > span {
+  display: block; margin-bottom: 4px; font-size: 10.5px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .07em; color: var(--muted-2);
+}
+.am-champ input, .am-champ textarea {
+  width: 100%; padding: 7px 10px; border: 1px solid var(--line-strong); border-radius: 8px;
+  font: inherit; font-size: 13px; background: #fff; color: var(--text); resize: vertical;
+  line-height: 1.5;
+}
+.am-champ input:focus, .am-champ textarea:focus {
+  outline: none; border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+/* ---- les jalons de facturation --------------------------------------- */
+.am-jalons {
+  border: 1px solid var(--line); border-radius: var(--radius); background: var(--card);
+  padding: 15px 18px 16px;
+}
+.am-jalons h3 {
+  font-size: 11px; margin: 0 0 12px; text-transform: uppercase;
+  letter-spacing: .09em; color: var(--muted-2);
+}
+.am-jalons-l { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+.am-jalon {
+  border: 1px solid var(--line); border-radius: 10px; padding: 11px 13px; background: var(--card-2);
+}
+.am-jalon-h { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.am-jalon-h b { font-size: 13px; }
+.am-jalon-h span { font-weight: 700; font-variant-numeric: tabular-nums; font-size: 13px; }
+.am-jalon p { margin: 4px 0 8px; color: var(--muted); font-size: 11.5px; }
+.am-jalon-e { font-size: 11.5px; font-weight: 700; color: var(--amber); }
+.am-jalon.est-pret { background: var(--green-soft); border-color: color-mix(in srgb, var(--green) 26%, transparent); }
+.am-jalon.est-pret .am-jalon-e { color: var(--green); }
+/* L'echeance que l'etape a deja franchie : c'est celle qu'on facture
+   maintenant, elle passe devant les autres. */
+.am-jalon.est-atteinte { border-color: var(--accent); }
+
+/* ---- en largeur telephone --------------------------------------------
+   ⚠ `screen and` N'EST PAS DECORATIF : sans lui ces regles valent aussi
+   pour l'impression, ou l'echelle ramene la page sous la borne. */
+@media screen and (max-width: 760px) {
+  .am-liste { grid-template-columns: 1fr; }
+  .am-tete, .am-sec, .am-jalons { padding-left: 13px; padding-right: 13px; }
+  .am-phase-t { display: none; }
+  .am-phase { padding: 7px 10px 7px 7px; }
+  .am-p-d { grid-template-columns: 1fr; }
+  .am-b-annule { margin-left: 0; width: 100%; }
+}

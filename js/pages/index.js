@@ -19,7 +19,8 @@ import { rgdReglagesPage } from './rgd-reglages.js';
 import { btpHomePage, btpExpertisePage, btpAmoPage, btpChargesPage, btpBasePage, btpDtuPage, btpMailsPage, btpFacturationPage, btpVivierPage } from './btp.js';
 import { btpChecklistPage } from './btp-checklist.js';
 import { btpRapportPage } from './btp-rapport.js';
-import { btpChecklistAmoPage, btpRapportAmoPage } from './btp-pages.js';
+import { btpAmoChecklistPage } from './btp-amo-checklist.js';
+import { btpRapportAmoPage } from './btp-pages.js';
 import { btpAtlasPage } from './btp-atlas.js';
 import { courtageHomePage, courtageBasePage, courtageVivierPage } from './courtage.js';
 import { messageriePage } from './messagerie.js';
@@ -76,7 +77,7 @@ export const pages = {
   // attente de leur contenu.
   'btp_expertise-checklist': btpChecklistPage,
   'btp_expertise-rapport': btpRapportPage,
-  'btp_amo-checklist': btpChecklistAmoPage,
+  'btp_amo-checklist': btpAmoChecklistPage,
   'btp_amo-rapport': btpRapportAmoPage,
   btp_atlas: btpAtlasPage,
   courtage_home: courtageHomePage,

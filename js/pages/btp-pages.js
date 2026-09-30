@@ -1,5 +1,5 @@
-// Les deux écrans de BTP Expertise encore en attente de leur contenu :
-// check-list et rapport de l'AMO.
+// Le dernier écran de BTP Expertise encore en attente de son contenu :
+// le rapport de l'AMO.
 //
 // ⚠ ILS SONT CRÉÉS VIDES, ET C'EST DÉLIBÉRÉ (29/09/2026). Mickael a demandé le
 // découpage du menu « exactement » tel qu'il l'a écrit, parce qu'il veut y
@@ -68,16 +68,6 @@ const page = (actif, titre, corps) => ({
   },
 });
 
-export const btpChecklistAmoPage = page('#/btp/amo-checklist',
-  'BTP Expertise — Check-list AMO',
-  enAttente(
-    'Check-list AMO',
-    "Ce qu'il faut avoir fait à chaque phase d'une mission d'assistance à maîtrise d'ouvrage — le déroulé est long, et c'est là que des étapes s'oublient.",
-    ['Ce qu\'on réunit au cadrage',
-     'Ce qu\'on contrôle à la consultation des entreprises',
-     'Ce qu\'on vérifie à la réception'],
-  ));
-
 export const btpRapportAmoPage = page('#/btp/amo-rapport',
   'BTP Expertise — Rapport AMO',
   enAttente(
@@ -88,14 +78,15 @@ export const btpRapportAmoPage = page('#/btp/amo-rapport',
      'Le procès-verbal de réception et ses réserves'],
   ));
 
-// ⚠ TROIS ÉCRANS ONT QUITTÉ CE FICHIER, et il n'en reste que DEUX ici.
+// ⚠ QUATRE ÉCRANS ONT QUITTÉ CE FICHIER, et il n'en reste qu'UN ici.
 // `btpAtlasPage` est parti dans `btp-atlas.js` le 29/09/2026, la check-list
 // d'expertise dans `btp-checklist.js` et le rapport d'expertise dans
-// `btp-rapport.js` le 30/09 : ils ont reçu leur contenu et ne sont plus des
-// écrans en attente.
+// `btp-rapport.js` le 30/09, et la check-list AMO dans
+// `btp-amo-checklist.js` le même jour : ils ont reçu leur contenu et ne sont
+// plus des écrans en attente.
 //
 // ⚠ LEURS PLACEHOLDERS SONT SUPPRIMÉS, PAS LAISSÉS DE CÔTÉ. Un écran exporté
 // que plus aucune route n'appelle décrit un contenu qui existe désormais
 // ailleurs : à la relecture on croit avoir trouvé la page, et on modifie celle
 // qui ne s'affiche plus. Le fichier ne garde donc que ce qui attend vraiment —
-// les deux écrans AMO, dont Mickael n'a pas encore fourni la matière.
+// le rapport AMO, dont la trame n'a pas encore été arrêtée.

@@ -233,6 +233,40 @@ export const SEED = {
     { id: 'rli2', rapport_id: 'rap1', reponse_id: 'rep6', retenu: false,
       fiche_numero: null, desordre: null, priorite: null, preconisation: null, rang: 2 },
   ],
+  // ⚠ UNE MISSION AMO A MI-PARCOURS, ET C'EST DELIBERE : un ecran d'avancement
+  // essaye sur une liste vide ne montre ni jauge, ni phase complete, ni point de
+  // vigilance. Le jeu porte donc la phase 1 entierement traitee, la phase 2
+  // entamee, un point ECARTE (« sans objet ») et une ALERTE sur un point de
+  // frontiere — les quatre etats qu'on veut pouvoir regarder.
+  //
+  // ⚠ LES POINTS SONT DESIGNES PAR LEUR NUMERO, qui vit dans
+  // `btp-amo-checklist.js` : 7 = la lettre de mission, 13 = « aucune
+  // preconisation ne vaut prescription », tous deux des points de frontiere.
+  btp_amo_suivi: [
+    { id: 'am1', deal_id: 'd8b', point_id: 1, etat: 'fait', fait_le: day(-48), auteur_id: 'u-mickael',
+      note: 'Besoin relu avec le gerant de la SCI, valide par mail le lendemain.' },
+    { id: 'am2', deal_id: 'd8b', point_id: 2, etat: 'fait', fait_le: day(-48), auteur_id: 'u-mickael', note: null },
+    { id: 'am3', deal_id: 'd8b', point_id: 3, etat: 'fait', fait_le: day(-46), auteur_id: 'u-mickael',
+      note: 'Enveloppe de 180 000 €, hors honoraires, provision aleas 8 %.' },
+    { id: 'am4', deal_id: 'd8b', point_id: 4, etat: 'fait', fait_le: day(-46), auteur_id: 'u-mickael', note: null },
+    { id: 'am5', deal_id: 'd8b', point_id: 5, etat: 'fait', fait_le: day(-44), auteur_id: 'u-mickael',
+      note: 'Pas de maitre d’œuvre. Perimetre rappele par ecrit au client.' },
+    { id: 'am6', deal_id: 'd8b', point_id: 6, etat: 'fait', fait_le: day(-42), auteur_id: 'u-mickael', note: null },
+    { id: 'am7', deal_id: 'd8b', point_id: 7, etat: 'fait', fait_le: day(-38), auteur_id: 'u-mickael',
+      note: 'Lettre de mission signee, exclusions en annexe 2.' },
+
+    { id: 'am8', deal_id: 'd8b', point_id: 8, etat: 'fait', fait_le: day(-30), auteur_id: 'u-mickael', note: null },
+    { id: 'am9', deal_id: 'd8b', point_id: 9, etat: 'fait', fait_le: day(-28), auteur_id: 'u-mickael',
+      note: 'Sept lots. Les menuiseries exterieures restent hors perimetre.' },
+    { id: 'am10', deal_id: 'd8b', point_id: 10, etat: 'fait', fait_le: day(-26), auteur_id: 'u-mickael', note: null },
+    // Ne s'applique pas : l'immeuble est posterieur a 1997.
+    { id: 'am11', deal_id: 'd8b', point_id: 12, etat: 'sans_objet', fait_le: day(-24), auteur_id: 'u-mickael',
+      note: 'Immeuble de 2004 : ni amiante ni plomb. DPE deja fourni.' },
+    // Un point de frontiere signale par ecrit, pas simplement coche.
+    { id: 'am12', deal_id: 'd8b', point_id: 13, etat: 'alerte', fait_le: day(-22), auteur_id: 'u-mickael',
+      note: 'Le client demandait un descriptif d’execution lot par lot. Refuse par mail du 08 : cela releve de la maitrise d’œuvre.' },
+  ],
+
   dtu_sheets: [
     // Une fiche reecrite par la veille et une simplement verifiee : sans les
     // deux, le bandeau n'etait essayable que sur la production.
