@@ -274,6 +274,33 @@ export function tarifExpertise({ prestation, surface, pieces } = {}) {
   };
 }
 
+// ---- La date d'apparition d'un désordre -----------------------------------
+// ⚠ ON STOCKE LE LIBELLÉ LISIBLE (« Mars 2025 »), PAS UN FORMAT MACHINE.
+// Personne ne trie ni ne filtre sur cette date : elle se lit dans la fiche et
+// dans le rapport. Un « 2025-03 » obligerait chaque écran qui l'affiche à
+// savoir le traduire, et les valeurs déjà saisies à la main (« Printemps 2025 »)
+// ne rentrent dans aucun format.
+export const MOIS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+  'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+
+// Les quarante dernières années, la plus récente en tête. Au-delà, le désordre
+// n'est plus daté à l'année près par la personne au téléphone.
+export const anneesApparition = () => {
+  const a = new Date().getFullYear();
+  return Array.from({ length: 41 }, (_, i) => String(a - i));
+};
+
+// Rend { mois, annee } quand la valeur est un libellé que NOUS avons écrit, et
+// `null` sinon. ⚠ `null` NE VEUT PAS DIRE « vide » : il veut dire « saisie
+// libre d'avant », que l'écran doit montrer au lieu de l'effacer en silence.
+export function litApparition(valeur) {
+  const m = String(valeur ?? '').trim().match(/^([A-Za-zéû]+)?\s*(\d{4})$/);
+  if (!m) return null;
+  const mois = m[1] ? MOIS.find(x => x.toLowerCase() === m[1].toLowerCase()) : '';
+  if (m[1] && !mois) return null;
+  return { mois: mois || '', annee: m[2] };
+}
+
 // ---- Le schéma de repérage du bien ---------------------------------------
 // ⚠ CE N'EST PAS UN PLAN, ET LA DIFFÉRENCE EST LE FONDEMENT DE TOUT CE QUI
 // SUIT (29/09/2026). Le CRM connaît le type de bien, la surface et le nombre
@@ -391,6 +418,19 @@ export const FICHE_EXPERTISE = {
     "Attestations d'assurance", 'Autres'],
   controles: ['RC Pro du chargé valide', 'Habilitation suffisante', 'Zone compatible',
     'Capacité disponible', 'Lettre de mission à envoyer'],
+
+  // ⚠ À QUI LE SINISTRE A ÉTÉ DÉCLARÉ (30/09/2026). Ce n'est pas une question
+  // de curiosité : l'assureur saisi commande la suite du dossier. Une
+  // dommages-ouvrage ouvre une expertise contradictoire, une décennale met
+  // l'entreprise en cause, une protection juridique paie l'expertise.
+  sinistre_aupres: ['Assurance habitation (MRH)', 'Dommages-ouvrage',
+    'Décennale de l’entreprise', 'Protection juridique',
+    'Assurance de la copropriété', 'Autre assureur'],
+
+  // ⚠ TROIS ÉTAPES QUI SE CUMULENT, d'où un choix MULTIPLE et non une liste
+  // déroulante : on met en demeure, PUIS une expertise a lieu, PUIS la
+  // procédure s'engage. N'en garder qu'une effacerait ce qui a déjà eu lieu.
+  procedures: ['Mise en demeure', 'Expertise', 'Procédure'],
   // ⚠ CETTE LISTE MÊLE DEUX CHOSES, ET C'EST VOULU (29/09/2026, demande de
   // Mickael). Les quatre premières disent qui occupe le bien ; les trois
   // dernières disent où en est l'ACHAT. Pour une expertise pré-achat, la

@@ -51,10 +51,19 @@ export const CHAMPS_DECOUVERTE = [
   // L'historique du désordre — côté expertise. Ce sont les six questions qui
   // décident de l'urgence de la visite.
   { cle: 'apparition', label: 'Date d’apparition', rubrique: 'projet' },
-  { cle: 'evolution', label: 'Évolution observée', rubrique: 'projet' },
   { cle: 'sinistre', label: 'Sinistre déclaré', rubrique: 'projet' },
-  { cle: 'procedure', label: 'Procédure engagée', rubrique: 'projet' },
+  { cle: 'sinistre_aupres', label: 'Déclaré auprès de', rubrique: 'projet' },
+  // ⚠ `liste: true` DEPUIS LE 30/09/2026 : la procédure est un CHOIX MULTIPLE
+  // (mise en demeure, expertise, procédure), plus une phrase. Les fiches
+  // anciennes portent encore une chaine, et la fiche sait rendre les deux.
+  { cle: 'procedure', label: 'Procédure engagée', rubrique: 'projet', liste: true },
   { cle: 'butoir', label: 'Date butoir', rubrique: 'projet', date: true },
+
+  // ⚠ CES DEUX-LÀ NE SE SAISISSENT PLUS (30/09/2026) mais restent AFFICHÉS :
+  // les fiches d'avant les portent, et les retirer d'ici ferait disparaître de
+  // l'écran ce que quelqu'un avait pris la peine de noter. Rien ne les écrit
+  // plus, donc ils ne reviendront pas sur une fiche neuve.
+  { cle: 'evolution', label: 'Évolution observée', rubrique: 'projet' },
   { cle: 'securite', label: 'Risque sécurité', rubrique: 'projet' },
 
   // L'opération — côté AMO.

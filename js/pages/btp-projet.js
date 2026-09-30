@@ -25,6 +25,7 @@ import {
   tauxSuggere, honorairesAmo, niveauSuggere, controleTaux, cleNiveau,
   tarifExpertise, TVA_TAUX, couleurMission, stagesDe,
   espacesDuBien, resumeEspaces, GRAVITES, nombreLu,
+  MOIS, anneesApparition, litApparition,
 } from '../data/schema.js';
 import { champsHonoraires, resultatsHonoraires } from './btp-amo.js';
 import { planSvg, DESSINES } from '../data/btp-plan.js';
@@ -106,8 +107,20 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
     // expertise
     motifs: d.motifs || (f.problematique ? String(f.problematique).split(', ') : []),
     description: d.description || f.detail || '',
-    apparition: d.apparition || '', evolution: d.evolution || '', sinistre: d.sinistre || '',
-    procedure: d.procedure || '', butoir: d.butoir || '', securite: d.securite || '',
+    apparition: d.apparition || '', evolution: d.evolution || '',
+    // ⚠ « Sinistre déclaré » EST PASSÉ DE TEXTE LIBRE À Oui/Non (30/09/2026),
+    // et « procédure » de texte libre à une liste de cases. Les valeurs déjà
+    // saisies ne rentrent dans ni l'un ni l'autre : elles restent dans `v` et
+    // l'écran les MONTRE sous le champ. Les convertir au jugé réécrirait ce que
+    // quelqu'un a constaté au téléphone.
+    sinistre: ['Oui', 'Non'].includes(d.sinistre) ? d.sinistre : '',
+    sinistre_libre: ['Oui', 'Non'].includes(d.sinistre) ? '' : (d.sinistre || ''),
+    sinistre_aupres: d.sinistre_aupres || '',
+    procedure: Array.isArray(d.procedure) ? d.procedure
+      : (FICHE_EXPERTISE.procedures.includes(d.procedure) ? [d.procedure] : []),
+    procedure_libre: Array.isArray(d.procedure) || FICHE_EXPERTISE.procedures.includes(d.procedure)
+      ? '' : (d.procedure || ''),
+    butoir: d.butoir || '', securite: d.securite || '',
     documents: d.documents || [], controles: d.controles || [],
     // ⚠ LE SCHÉMA REPREND LES MOTIFS DÉJÀ ENREGISTRÉS PLUTÔT QUE DE LES
     // JETER (29/09/2026). Avant lui, les désordres étaient une liste à plat sur
@@ -451,6 +464,55 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
     ${v.espaceOuvert !== null ? panneauEspace() : ''}`;
   };
 
+  // ------------------------------------------- l'historique et l'urgence
+  // ⚠ LA SAISIE LIBRE D'AVANT EST MONTRÉE, PAS EFFACÉE. Trois de ces champs
+  // étaient du texte libre jusqu'au 30/09/2026 ; une valeur qui ne rentre pas
+  // dans les nouvelles cases s'affiche sous le champ, en clair. Un formulaire
+  // qui repart vide sur une fiche déjà remplie fait croire que rien n'a jamais
+  // été saisi, et le premier enregistrement le rend vrai.
+  const repris = (valeur) => (valeur
+    ? `<em class="mf-champ-aide est-repris">Saisi auparavant : ${esc(valeur)}</em>` : '');
+
+  const blocHistorique = () => {
+    const ap = litApparition(v.apparition);
+    return `
+    <div class="mf-grille">
+      <label class="mail-champ"><span>Date d’apparition</span>
+        <div class="fp-duo">
+          <select id="fp-ap-mois">
+            <option value="">Mois</option>
+            ${MOIS.map(m => `<option ${ap?.mois === m ? 'selected' : ''}>${esc(m)}</option>`).join('')}
+          </select>
+          <select id="fp-ap-annee">
+            <option value="">Année</option>
+            ${anneesApparition().map(a => `<option ${ap?.annee === a ? 'selected' : ''}>${esc(a)}</option>`).join('')}
+          </select>
+        </div>
+        ${ap ? '' : repris(v.apparition)}</label>
+
+      <label class="mail-champ"><span>Date butoir éventuelle</span>
+        <input type="date" id="fp-butoir" value="${esc(v.butoir)}">
+        <em class="mf-champ-aide">Une date butoir marque la mission urgente.</em></label>
+    </div>
+
+    <div class="mf-sous-titre">Sinistre déclaré ?</div>
+    <div class="fp-ligne">
+      ${chipsUn('sinistre', ['Oui', 'Non'])}
+      ${v.sinistre === 'Oui' ? `
+        <label class="mail-champ fp-aqui"><span>À qui ?</span>
+          <select id="fp-sinistre-aupres">
+            <option value="">—</option>
+            ${FICHE_EXPERTISE.sinistre_aupres.map(a => `
+              <option ${a === v.sinistre_aupres ? 'selected' : ''}>${esc(a)}</option>`).join('')}
+          </select></label>` : ''}
+    </div>
+    ${repris(v.sinistre_libre)}
+
+    <div class="mf-sous-titre">Procédure déjà engagée ?</div>
+    ${chips('procedure', FICHE_EXPERTISE.procedures)}
+    ${repris(v.procedure_libre)}`;
+  };
+
   // ------------------------------------------------- 2. le desordre et le tarif
   // ⚠ LE TARIF SE CALCULE, IL NE SE DEVINE PAS. `tarifExpertise` lit la
   // prestation, la surface et le nombre de pieces, et rend `null` tant qu'aucune
@@ -485,15 +547,7 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
     </div>
 
     <div class="mf-bloc-titre">E. Historique et urgence</div>
-    <div class="mf-grille">
-      ${champ('fp-apparition', "Date d'apparition", v.apparition, 'placeholder="Printemps 2025"')}
-      ${champ('fp-evolution', 'Évolution observée', v.evolution, 'placeholder="Aggravation depuis l’hiver"')}
-      ${champ('fp-sinistre', 'Sinistre déclaré ? à qui ?', v.sinistre, '', true)}
-      ${champ('fp-procedure', 'Mise en demeure, expertise ou procédure déjà engagée ?', v.procedure, '', true)}
-      ${champ('fp-butoir', 'Date butoir éventuelle', v.butoir, 'type="date"')}
-      ${champ('fp-securite', 'Risque sécurité immédiat ?', v.securite, 'placeholder="Aucun constaté"')}
-    </div>
-    <p class="mf-aide attention">Un risque sécurité ou une date butoir change l'urgence de la visite : à remplir même sommairement.</p>
+    ${blocHistorique()}
 
     <div class="mf-bloc-titre">F. Documents disponibles</div>
     ${chips('documents', FICHE_EXPERTISE.documents)}
@@ -788,9 +842,18 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
         corps.querySelector('#fp-note-espace')?.focus();
       });
       poser('#fp-description', 'description');
-      poser('#fp-apparition', 'apparition'); poser('#fp-evolution', 'evolution');
-      poser('#fp-sinistre', 'sinistre'); poser('#fp-procedure', 'procedure');
-      poser('#fp-securite', 'securite'); choisir('#fp-butoir', 'butoir');
+      // ⚠ LE LIBELLÉ SE FABRIQUE ICI à partir des deux listes : c'est lui qu'on
+      // enregistre (« Mars 2025 »), pas un format machine — voir `litApparition`.
+      const majApparition = () => {
+        const m = corps.querySelector('#fp-ap-mois')?.value || '';
+        const a = corps.querySelector('#fp-ap-annee')?.value || '';
+        // Un mois sans année ne désigne rien : on attend l'année.
+        v.apparition = a ? [m, a].filter(Boolean).join(' ') : '';
+      };
+      corps.querySelector('#fp-ap-mois')?.addEventListener('change', majApparition);
+      corps.querySelector('#fp-ap-annee')?.addEventListener('change', majApparition);
+      choisir('#fp-sinistre-aupres', 'sinistre_aupres');
+      choisir('#fp-butoir', 'butoir');
       poser('#fp-tarif', 'tarif');
       return;
     }
@@ -873,8 +936,10 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
     adresse: [v.adresse, v.code_postal, v.ville].filter(Boolean).join(', '),
     motifs: motifsDesEspaces(), description: v.description,
     espaces: v.espaces || [], espaces_resume: resumeEspaces(v.espaces || []),
-    apparition: v.apparition, evolution: v.evolution, sinistre: v.sinistre,
-    procedure: v.procedure, butoir: v.butoir, securite: v.securite,
+    apparition: v.apparition, evolution: v.evolution,
+    sinistre: v.sinistre || v.sinistre_libre, sinistre_aupres: v.sinistre_aupres,
+    procedure: v.procedure.length ? v.procedure : v.procedure_libre,
+    butoir: v.butoir, securite: v.securite,
     documents: v.documents, controles: v.controles,
     cotesBrutes: { ...v.cotes },
     cotes: QUALIF_EXPERTISE.map(c => ({ label: c.label, valeurs: c.valeurs, cote: v.cotes[c.key] ?? null })),
@@ -934,7 +999,12 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
         date_rapport: v.date_rapport || null,
         montant_travaux: v.mission === 'amo' ? (Number(v.budget_ht) || null) : null,
         taux_amo: v.mission === 'amo' ? tauxRetenu() : null,
-        urgence: v.mission === 'expertise' && !!String(v.securite || '').trim() && !/aucun|non|rien/i.test(v.securite),
+        // ⚠ L'URGENCE SE LIT SUR LA DATE BUTOIR DEPUIS LE 30/09/2026. Elle se
+        // lisait sur « Risque sécurité immédiat ? », champ retiré de l'écran :
+        // la laisser dessus l'aurait figée à « non » pour toujours, sans que
+        // rien ne le dise. Le texte d'aide citait déjà les deux signaux, il n'en
+        // reste qu'un.
+        urgence: v.mission === 'expertise' && !!v.butoir,
         decouverte: copie(),
       };
       const titre = `${(v.mission === 'amo' ? v.travaux[0] : motifsDesEspaces()[0]) || (v.mission === 'amo' ? 'AMO' : 'Expertise')} — ${nomComplet()}`;

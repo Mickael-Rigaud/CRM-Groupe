@@ -1790,6 +1790,23 @@ tr.btp-mission .btp-pts { color: var(--m-encre); }
 .fp-panneau-lbl { align-self: center; margin-right: 4px; font-size: 11px; font-weight: 700;
   text-transform: uppercase; letter-spacing: .05em; color: var(--muted-2); }
 
+/* Deux listes qui composent une seule reponse (mois + annee). Elles sont dans
+   le meme label, donc sous le meme intitule : deux champs cote a cote avec
+   deux intitules feraient croire a deux questions. */
+.fp-duo { display: flex; gap: 6px; }
+
+/* La question et sa precision sur la meme ligne : « Sinistre declare ? Oui —
+   aupres de qui ? » est UNE question, pas deux. Seule dans une .mf-grille, la
+   liste s'etirait sur toute la largeur et se lisait comme un bloc a part. */
+.fp-ligne { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 6px 16px; }
+.fp-ligne .fa-chips { margin-bottom: 0; }
+.fp-aqui { flex: 0 1 300px; }
+.fp-duo select { flex: 1 1 0; min-width: 0; }
+
+/* La saisie libre d'avant, quand elle ne rentre pas dans les nouvelles cases.
+   Elle est MONTREE et non effacee : voir `repris` dans btp-projet.js. */
+.mf-champ-aide.est-repris { color: var(--amber, #9a6412); font-style: normal; }
+
 /* ---- Le schema dessine du bien ----
    Une coupe schematique, PAS un plan : voir js/data/btp-plan.js. Le SVG est
    bride en largeur — a 980 px la maison ferait 540 px de haut et pousserait le
