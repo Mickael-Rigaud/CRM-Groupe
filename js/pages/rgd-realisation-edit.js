@@ -109,6 +109,29 @@ function ecrireDuree(n, unite) {
   if (unite === 'jours') return v <= 1 ? `${v} jour` : `${v} jours`;
   return v <= 1 ? `${v} semaine` : `${v} semaines`;
 }
+// ⚠ « RÉALISÉ EN » SE RANGE EN `AAAA-MM`, PAS EN TEXTE LISIBLE, et c'est le
+// contraire de la date d'apparition d'un désordre côté BTP : ici le site TRIE
+// dessus. « Mars 2025 » obligerait le navigateur à connaître les mois français
+// pour comparer deux chantiers, et un mois mal orthographié passerait en
+// dernier sans que rien ne le dise.
+// ⚠ ET LE JOUR N'Y EST PAS : personne ne se souvient du jour où un chantier
+// s'est terminé, et le mois suffit pour ranger une page de références.
+function lireRealiseLe(v) {
+  const m = /^(\d{4})-(\d{2})$/.exec(String(v || '').trim());
+  return m ? { an: m[1], mois: m[2] } : { an: '', mois: '' };
+}
+// Les deux moitiés vont ensemble : un mois sans année ne se compare à rien, et
+// une année seule rangerait le chantier au 1er janvier — une date inventée.
+const ecrireRealiseLe = (mois, an) => (mois && an ? `${an}-${mois}` : '');
+
+// De l'année prochaine à il y a quinze ans : on saisit parfois un chantier
+// signé pour le mois suivant, et la plus vieille réalisation du site date de
+// quelques années.
+function anneesRealisation() {
+  const a = new Date().getFullYear();
+  return Array.from({ length: 17 }, (_, i) => a + 1 - i);
+}
+
 function lireDateAvis(s) {
   const parts = String(s || '').trim().split(/\s+/);
   const mois = MOIS.find(m => m.toLowerCase() === (parts[0] || '').toLowerCase()) || '';
@@ -261,6 +284,7 @@ function editeur(etat) {
 
   const sectionInfos = () => {
     const dur = lireDuree(p.duration);
+    const fait = lireRealiseLe(p.realise_le);
     return `
     <section class="rea-sec">
       <h3>Informations générales</h3>
@@ -278,6 +302,19 @@ function editeur(etat) {
           <span class="rea-combo">
             <input id="re-surface" type="number" min="0" step="0.5" value="${esc(lireSurface(p.surface))}" placeholder="8">
             <span class="rea-unite">m²</span>
+          </span></label>
+        <label class="rea-champ"><span>Réalisé en</span>
+          <span class="rea-combo">
+            <select id="re-fait-mois">
+              <option value="">—</option>
+              ${MOIS.map((m, i) => `<option value="${String(i + 1).padStart(2, '0')}"${
+                fait.mois === String(i + 1).padStart(2, '0') ? ' selected' : ''}>${m}</option>`).join('')}
+            </select>
+            <select id="re-fait-an">
+              <option value="">—</option>
+              ${anneesRealisation().map(a =>
+                `<option value="${a}"${fait.an === String(a) ? ' selected' : ''}>${a}</option>`).join('')}
+            </select>
           </span></label>
         <label class="rea-champ"><span>Durée</span>
           <span class="rea-combo">
@@ -492,6 +529,7 @@ function editeur(etat) {
       p.city = v('#re-city').trim();
       p.surface = ecrireSurface(v('#re-surface'));
       p.duration = ecrireDuree(v('#re-duree'), v('#re-duree-unite'));
+      p.realise_le = ecrireRealiseLe(v('#re-fait-mois'), v('#re-fait-an'));
       p.description = v('#re-desc').trim();
       p.notes = v('#re-notes');
       p.testimonial.text = v('#re-t-text').trim();
@@ -828,6 +866,11 @@ function editeur(etat) {
       return {
         title: p.title, city: p.city, surface: p.surface,
         duration: p.duration, description: p.description, notes: p.notes,
+        // ⚠ UN CHAMP ABSENT D'ICI EST UN CHAMP QUI N'EST JAMAIS PUBLIÉ : on ne
+        // repose que les champs de l'atelier sur le document frais.
+        // ⚠ ET IL PART VIDE PLUTÔT QU'ABSENT QUAND IL L'EST : sans ça, effacer
+        // une date ne l'effacerait pas, le document gardant l'ancienne.
+        realise_le: p.realise_le || '',
         images: p.images.slice(),
         // Un tag orphelin (photo retirée entre-temps) n'a plus de sens : le
         // document ne doit porter que ce qu'il affiche.

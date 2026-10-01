@@ -42,6 +42,11 @@ export const SEED_SITE = {
     categories: [
       {
         slug: 'salle-de-bain', name: 'Salle de bain',
+        // ⚠ LA DÉMO PORTE LES TROIS CHAMPS NEUFS DU 01/10/2026 — `tri` sur la
+        // catégorie, `realise_le` et `a_la_une` sur les projets. Sans eux, le
+        // panneau d'organisation s'essaie à vide : ni le tri par date, ni
+        // l'étoile de la page d'accueil n'ont de quoi se montrer.
+        tri: 'recent',
         // ⚠ Les descriptions de catégorie n'ont AUCUNE colonne dans le reflet.
         // C'est la raison pour laquelle l'atelier relit toujours le document :
         // le rebâtir depuis les lignes les effacerait du site sans un mot. La
@@ -53,6 +58,7 @@ export const SEED_SITE = {
             title: 'Rénovation d’une salle de bain à Chantilly',
             url: 'https://rgdrenova.fr/nos-realisations/projet/?p=salle-de-bain-demo-chantilly',
             city: 'Chantilly (60)', surface: '6 m²', duration: '3 semaines', gamme: 'Signature',
+            realise_le: '2026-03', a_la_une: true,
             description: 'Salle de bain entièrement repensée : douche à l’italienne, meuble double vasque et carrelage effet marbre. (Démonstration.)',
             notes: 'Douche italienne\nMeuble double vasque\nCarrelage effet marbre',
             images: [AV1, AP1],
@@ -64,6 +70,7 @@ export const SEED_SITE = {
             slug: 'salle-de-bain-demo-senlis',
             title: 'Salle de bain à Senlis', url: '',
             city: 'Senlis (60)', surface: '4 m²', duration: '2 semaines', gamme: 'Essentielle',
+            realise_le: '2025-11',
             description: '', notes: '', images: [], photo_tags: {}, ba_pairs: [],
             testimonial: { text: '', author: '', date: '', stars: 5 },
             // ⚠ LE SEUL BROUILLON DU JEU D'ESSAI, et il y est pour ça : sans

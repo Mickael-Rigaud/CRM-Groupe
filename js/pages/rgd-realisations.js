@@ -40,6 +40,7 @@ import { poserEspace } from './espace.js';
 import { cadre, guard, lienPhoto, signalerPhotosCassees } from './rgd-espace.js';
 import { chargerEditeur } from './rgd-realisation-edit.js';
 import { chargerCarrousel } from './rgd-carrousel-edit.js';
+import { chargerCategories } from './rgd-categories-edit.js';
 
 // Le nombre de photos, avant/après compris. C'est ce qui dit si une référence
 // est montrable ou si elle n'est qu'un titre.
@@ -214,6 +215,22 @@ export const rgdRealisationsPage = {
       draw();
     };
 
+    // ⚠ LES CATÉGORIES SONT UN ATELIER COMME LES AUTRES, et pour la même
+    // raison : elles republient le document entier. Le passer par le même
+    // chemin donne gratuitement la demande avant de quitter, le garde-fou du
+    // rechargement de page, et le gel du redessin pendant la saisie.
+    const ouvrirCategories = async () => {
+      if (state.occupe) return;
+      state.occupe = true;
+      const r = await chargerCategories();
+      state.occupe = false;
+      if (!r.ok) { toast(`Organisation indisponible — ${r.motif}.`, 'err'); return; }
+      state.editeur = r.editeur;
+      state.vue = 'categories';
+      armerGarde(true);
+      draw();
+    };
+
     const ouvrirCarrousel = async () => {
       if (state.occupe) return;
       state.occupe = true;
@@ -279,7 +296,14 @@ export const rgdRealisationsPage = {
       if (state.editeur) {
         // Rien à faire après publication : l'atelier a déjà rechargé la table
         // et appelle `fermer`, qui redessine la page entière sur le frais.
-        state.editeur.brancher(panneau, { redessiner: dessinerPanneau, fermer: fermerAtelier });
+        // ⚠ `apresPublication` REDESSINE TOUT, et seul l'atelier des catégories
+        // s'en sert : les compteurs, les noms et l'ordre de la colonne de
+        // gauche viennent de changer, et le panneau reste ouvert pour la suite
+        // du rangement. Les deux autres ateliers ferment après publication,
+        // ce qui redessine déjà.
+        state.editeur.brancher(panneau, {
+          redessiner: dessinerPanneau, fermer: fermerAtelier, apresPublication: draw,
+        });
         return;
       }
       panneau.querySelectorAll('[data-modifier]').forEach(b => b.onclick = () =>
@@ -323,11 +347,15 @@ export const rgdRealisationsPage = {
             ${ecriture ? `<button type="button" class="btn primary rea-neuf" data-neuf>+ Nouvelle réalisation</button>` : ''}
 
             <div class="rea-groupe">
-              <div class="rea-groupe-titre">Page d’accueil</div>
+              <div class="rea-groupe-titre">Le site</div>
               <button type="button" class="rea-item${state.vue === 'carrousel' ? ' on' : ''}" data-carrousel>
-                <span class="rea-item-nom">Carrousel du site</span>
+                <span class="rea-item-nom">Carrousel d’accueil</span>
                 <span class="rea-item-n">${images.length}</span>
               </button>
+              ${ecriture ? `<button type="button" class="rea-item${state.vue === 'categories' ? ' on' : ''}" data-categories>
+                <span class="rea-item-nom">Catégories et mises en avant</span>
+                <span class="rea-item-n">${cats.length}</span>
+              </button>` : ''}
             </div>
 
             ${cats.map(c => `
@@ -365,6 +393,11 @@ export const rgdRealisationsPage = {
         if (!await quitterAtelier()) return;
         choisir('projet', b.dataset.projet);
       });
+      const cate = root.querySelector('[data-categories]');
+      if (cate) cate.onclick = async () => {
+        if (!await quitterAtelier()) return;
+        ouvrirCategories();
+      };
       const carr = root.querySelector('[data-carrousel]');
       if (carr) carr.onclick = async () => {
         if (!await quitterAtelier()) return;
