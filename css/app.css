@@ -1878,6 +1878,112 @@ tr.btp-mission .btp-pts { color: var(--m-encre); }
 .rcl-rel-age, .rcl-rel-avant { display: block; font-size: 11px; line-height: 1.3; }
 .rcl-rel-age:empty, .rcl-rel-avant:empty { display: none; }
 
+/* ⚠ `[hidden]` A UNE SPECIFICITE NULLE : `.pill-tabs { display: flex }` le
+   bat, et la rangee des structures restait affichee au-dessus du tableau — ou
+   elle ne sert a rien, puisque les colonnes SONT les structures. C'est la
+   quatrieme fois que ce piege est pose dans ce depot ; voir `.rgdf-corps`. */
+.pill-tabs[hidden] { display: none; }
+
+/* ---- Le formulaire d'une tache ----
+   Meme forme que le formulaire de rendez-vous : un titre nu en tete, puis des
+   lignes a icone. Prefixe `.taf-`. La lecture reste a `readForm` : tous les
+   champs gardent leur `name`, c'est la condition pour refaire la mise en page
+   sans rien casser. */
+.taf { display: flex; flex-direction: column; gap: 2px; }
+.taf-titre { width: 100%; padding: 6px 2px 10px; border: 0; border-bottom: 2px solid var(--line);
+  background: none; font-family: inherit; font-size: 19px; font-weight: 700;
+  color: var(--text); margin-bottom: 6px; }
+.taf-titre:focus { outline: none; border-bottom-color: var(--accent); }
+.taf-titre::placeholder { color: var(--line-strong); font-weight: 600; }
+.taf-ligne { display: flex; align-items: flex-start; gap: 12px; padding: 7px 0; }
+.taf-ico { flex: 0 0 22px; font-size: 15px; line-height: 26px; text-align: center; opacity: .75; }
+.taf-champ { flex: 1; min-width: 0; }
+.taf-lab { display: block; font-size: 10.5px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .04em; color: var(--muted); margin-bottom: 3px; }
+.taf-champ select, .taf-champ input, .taf-champ textarea {
+  width: 100%; padding: 7px 10px; border: 1px solid var(--line-strong); border-radius: 9px;
+  font-family: inherit; font-size: 13px; background: var(--card); color: var(--text); }
+.taf-champ textarea { resize: vertical; }
+.taf-duo { display: flex; gap: 8px; }
+.taf-duo input[type="date"] { flex: 1 1 60%; }
+.taf-duo input[type="time"] { flex: 1 1 40%; }
+/* Trois valeurs, qu'on rechoisit sans cesse : des pastilles plutot qu'une
+   liste deroulante, qui demande deux clics pour la meme chose. */
+.taf-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.taf-chip { padding: 5px 12px; border: 1px solid var(--line-strong); border-radius: 999px;
+  background: var(--card); cursor: pointer; font-family: inherit; font-size: 12.5px;
+  font-weight: 650; color: var(--muted); }
+.taf-chip:hover { border-color: var(--accent); color: var(--accent); }
+.taf-chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.taf-chip.p-urgent.on { background: var(--red); border-color: var(--red); }
+.taf-chip.p-retard.on { background: var(--amber, #9a6412); border-color: var(--amber, #9a6412); }
+/* Une valeur deja posee mais qu'on ne propose plus : trait discontinu, comme
+   les budgets hors tranches de la fiche client. */
+.taf-chip.est-hors-liste { border-style: dashed; }
+.taf-aide { margin: 4px 0 0; font-size: 11px; color: var(--muted); }
+
+/* ---- To do list : le tableau par structures (direction) ----
+   Une colonne par structure, demande le 01/10/2026. Prefixe `.kb-` : `.todo-`
+   appartient a la liste, et deux jeux de styles dans le meme ecran se
+   prefixent separement. */
+.kb-plateau { display: flex; gap: 14px; align-items: flex-start;
+  overflow-x: auto; padding: 2px 2px 10px; }
+/* ⚠ `min-width` ET `flex: 0 0 auto` : sans le second, les colonnes se
+   compriment au lieu de defiler, et cinq structures donnent cinq bandes
+   illisibles. */
+.kb-col { flex: 0 0 auto; width: 292px; display: flex; flex-direction: column;
+  background: var(--card-2); border-radius: 14px; padding: 10px; }
+.kb-tete { padding: 2px 4px 10px; border-bottom: 2px solid var(--c); margin-bottom: 10px; }
+.kb-tete-haut { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.kb-tete h3 { margin: 0; font-size: 13px; font-weight: 800; color: var(--ci); letter-spacing: -.01em; }
+.kb-compte { margin: 3px 0 0; font-size: 11.5px; color: var(--muted); }
+.kb-compte .est-tard { color: var(--red); }
+.kb-plus { width: 24px; height: 24px; padding: 0; border: 0; border-radius: 8px;
+  background: var(--c); color: #fff; cursor: pointer; font-size: 16px; line-height: 1;
+  opacity: .9; }
+.kb-plus:hover { opacity: 1; transform: scale(1.08); }
+.kb-pile { display: flex; flex-direction: column; gap: 8px; }
+.kb-vide { margin: 6px 2px; font-size: 12px; color: var(--muted); }
+
+/* La carte : fond blanc sur la colonne teintee, un liseré a gauche a la
+   couleur de la structure, et elle se souleve au survol. */
+.kb-carte { display: flex; gap: 9px; padding: 11px 12px; border-radius: 11px;
+  background: var(--card); border: 1px solid var(--line);
+  border-left: 3px solid var(--c); cursor: pointer;
+  transition: transform .12s ease, box-shadow .12s ease; }
+.kb-carte:hover, .kb-carte:focus-visible { transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(16, 18, 40, .10); outline: none; border-color: var(--line-strong); }
+.kb-carte.est-urgente { border-left-color: var(--red); }
+.kb-carte.est-faite { opacity: .5; }
+.kb-carte.est-faite .kb-titre { text-decoration: line-through; }
+.kb-corps { flex: 1; min-width: 0; }
+.kb-titre { margin: 0; font-size: 13px; font-weight: 650; line-height: 1.35; color: var(--text); }
+.kb-ctx { margin: 3px 0 0; font-size: 11.5px; color: var(--muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kb-checklist { margin: 5px 0 0; font-size: 11px; font-weight: 700; color: var(--muted); }
+.kb-checklist.est-complete { color: var(--green); }
+.kb-pied { display: flex; align-items: center; gap: 6px; margin-top: 9px; }
+.kb-etiq { padding: 1px 7px; border-radius: 999px; font-size: 10px; font-weight: 800;
+  text-transform: uppercase; letter-spacing: .02em; }
+.kb-etiq.urgent { background: var(--red-soft, #fdecea); color: var(--red); }
+.kb-etiq.retard { background: var(--amber-soft, #fdf1dc); color: var(--amber, #9a6412); }
+.kb-quand { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.kb-quand.est-tard { color: var(--red); font-weight: 700; }
+.kb-quand.est-aujourdhui { color: var(--amber, #9a6412); font-weight: 700; }
+/* Le rond des initiales : la meme personne garde sa teinte d'une colonne a
+   l'autre — la couleur vient du nom, pas du hasard. */
+.kb-qui { flex: 0 0 24px; height: 24px; border-radius: 999px; color: #fff;
+  font-size: 10px; font-weight: 800; line-height: 24px; text-align: center; }
+.kb-case { flex: 0 0 auto; padding-top: 1px; }
+.kb-note { margin: 4px 2px 0; max-width: 70ch; }
+
+@media (max-width: 760px) {
+  /* Au doigt, un tableau qui defile horizontalement se manipule mal : les
+     colonnes s'empilent et gardent leurs en-tetes. */
+  .kb-plateau { flex-direction: column; overflow-x: visible; }
+  .kb-col { width: auto; align-self: stretch; }
+}
+
 /* ---- To do list : ce qui protege le travail ----
    ⚠ « Supprimer » et « Annuler » etaient a dix pixels l'un de l'autre, dans le
    meme habillage blanc. L'un ferme la fenetre, l'autre detruisait la tache sans

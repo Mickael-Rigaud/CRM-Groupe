@@ -16,6 +16,7 @@ import { scope } from '../data/scope.js';
 import { ACTIVITIES } from '../data/schema.js';
 import { esc, daysSince, fmtDate, relDay, userName, searchInput, bindSearch, restoreFocus, terms, hit } from '../ui.js';
 import { actType, bindActivityRows, activityForm, nextActivity, structureDe, toggleActivity } from './activity.js';
+import { kanbanHtml } from './todo-kanban.js';
 import { openDeal } from './deal.js';
 
 // Les trois rangs de la liste, dans l'ordre où ils se lisent. Ils reprennent les
@@ -109,14 +110,27 @@ const ONGLETS = [
     garde: (a, moi) => a.created_by === moi && !!a.assignee_id && a.assignee_id !== moi },
 ];
 
+// ⚠ POUR LA DIRECTION, LE TABLEAU REMPLACE « Ma to do list » — demandé ainsi le
+// 01/10/2026, pas ajouté à côté. Elle ne perd rien : ses propres tâches sont
+// dans le tableau, rangées sous leur structure.
+// Les autres gardent la liste : une seule colonne n'est pas un tableau.
+const ONGLET_KANBAN = { key: 'structures', label: 'Toutes les structures',
+  garde: () => true };
+const ongletsDe = (direction) => (direction ? [ONGLET_KANBAN, ONGLETS[1]] : ONGLETS);
+
 export const todayPage = {
   title: () => 'To do list',
   render(root) {
-    const state = { onglet: 'mienne', structure: '', q: '', showDone: false, focus: null };
+    // Le tableau par structures n'a de sens qu'avec plusieurs structures : la
+    // direction les porte toutes, un chargé d'affaires souvent une seule.
+    const enTableau = scope.isDirection;
+    const onglets = ongletsDe(enTableau);
+    const state = { onglet: onglets[0].key, structure: '', q: '', showDone: false, focus: null };
     const moi = scope.user.id;
 
     const draw = () => {
-      const onglet = ONGLETS.find(o => o.key === state.onglet) || ONGLETS[0];
+      const onglet = onglets.find(o => o.key === state.onglet) || onglets[0];
+      const surTableau = onglet.key === 'structures';
       const ts = terms(state.q);
       const surStructure = (a) => !state.structure
         || (state.structure === '—' ? !structureDe(a) : structureDe(a) === state.structure);
@@ -159,10 +173,10 @@ export const todayPage = {
       root.innerHTML = `
         <div class="todo-page">
         <div class="pill-tabs todo-onglets">
-          ${ONGLETS.map(o => `<button type="button" data-onglet="${o.key}" class="${state.onglet === o.key ? 'on' : ''}">${esc(o.label)}<span>${compte(o)}</span></button>`).join('')}
+          ${onglets.map(o => `<button type="button" data-onglet="${o.key}" class="${state.onglet === o.key ? 'on' : ''}">${esc(o.label)}<span>${compte(o)}</span></button>`).join('')}
         </div>
 
-        <div class="pill-tabs todo-structures">
+        <div class="pill-tabs todo-structures" ${surTableau ? 'hidden' : ''}>
           <button type="button" data-struct="" class="${state.structure ? '' : 'on'}">Toutes<span>${ouvertes.length}</span></button>
           ${parStructure.map(a => `<button type="button" data-struct="${a.key}" class="${state.structure === a.key ? 'on' : ''}">${logo(a)}${esc(a.label)}<span>${a.n}</span></button>`).join('')}
           ${sansStructure ? `<button type="button" data-struct="—" class="${state.structure === '—' ? 'on' : ''}">Sans structure<span>${sansStructure}</span></button>` : ''}
@@ -180,13 +194,15 @@ export const todayPage = {
 
         ${sansProchaine.length ? `<div class="alert"><b>${sansProchaine.length}</b><div><b>affaire${sansProchaine.length > 1 ? 's' : ''} sans prochaine action</b> — ${sansProchaine.slice(0, 6).map(d => `<a href="#" data-open-deal="${d.id}">${esc(d.title)}</a>`).join(', ')}${sansProchaine.length > 6 ? '…' : ''}</div></div>` : ''}
 
-        <section class="card todo-liste">
+        ${surTableau
+          ? kanbanHtml([...retenues, ...faites], recentes)
+          : `<section class="card todo-liste">
           ${groupes.map(gr => `<div class="todo-groupe ${gr.key}">${gr.titre}<i>${gr.l.filter(a => !a.done).length}</i></div>${tri(gr.l).map(a => carte(a, pour)).join('')}`).join('')}
           ${faites.length ? `<div class="todo-groupe fait">Fait aujourd&rsquo;hui<i>${faites.length}</i></div>${tri(faites).map(a => carte(a, pour)).join('')}` : ''}
           ${!retenues.length && !faites.length ? `<div class="empty">${onglet.key === 'mienne'
             ? 'Rien à faire — tout est à jour.'
             : 'Aucune tâche envoyée. Le bouton « Envoyer une tâche » sert à en confier une.'}</div>` : ''}
-        </section>
+        </section>`}
         </div>`;
 
       bindSearch(root, 't-q', state, draw); restoreFocus(root, state);
@@ -216,10 +232,28 @@ export const todayPage = {
         state.onglet = 'envoyees'; draw();
       });
       root.querySelectorAll('[data-open-deal]').forEach(a => a.onclick = e => { e.preventDefault(); openDeal(a.dataset.openDeal, draw); });
+      // ⚠ UNE CARTE S'OUVRE EN ENTIER, pas seulement par un crayon : sur un
+      // tableau on clique la carte. La case à cocher et ses boutons gardent
+      // leur geste — un clic dessus ne doit pas ouvrir le formulaire.
+      root.querySelectorAll('.kb-carte[data-tache]').forEach(el => {
+        const ouvrir = () => {
+          const a = db.byId('activities', el.dataset.tache);
+          if (a) activityForm({}, a, draw);
+        };
+        el.onclick = (e) => { if (e.target.closest('label, input, button, a')) return; ouvrir(); };
+        el.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ouvrir(); } };
+      });
+      // Le « + » d'une colonne crée dans SA structure : c'est tout l'intérêt
+      // d'avoir une colonne par structure.
+      root.querySelectorAll('[data-col-neuve]').forEach(b => b.onclick = (e) => {
+        e.stopPropagation();
+        const k = b.dataset.colNeuve;
+        activityForm({ assignee_id: moi, ...(k ? { activity: k } : {}) }, null, draw);
+      });
       bindActivityRows(root, draw);
       // Posé après bindActivityRows, qui pose son propre gestionnaire sur ces cases.
       // Décocher pendant le délai annule la disparition ; recocher le relance.
-      root.querySelectorAll('.todo-tache input[data-toggle]').forEach(cb => cb.onchange = async () => {
+      root.querySelectorAll('.todo-tache input[data-toggle], .kb-carte input[data-toggle]').forEach(cb => cb.onchange = async () => {
         const id = cb.dataset.toggle;
         clearTimeout(recentes.get(id));
         recentes.delete(id);

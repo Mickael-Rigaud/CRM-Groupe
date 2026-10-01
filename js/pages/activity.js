@@ -2,7 +2,7 @@
 import { db } from '../data/db.js';
 import { scope } from '../data/scope.js';
 import { ACTIVITY_TYPES, ACTIVITIES, PRIORITES } from '../data/schema.js';
-import { esc, openModal, closeModal, renderForm, readForm, toast, isoDay, daysSince, relDay, userName, fmtDate } from '../ui.js';
+import { esc, openModal, closeModal, readForm, toast, isoDay, daysSince, relDay, userName, fmtDate } from '../ui.js';
 
 export const actType = (k) => ACTIVITY_TYPES.find(t => t.key === k) || { label: k, icon: '•' };
 
@@ -55,9 +55,85 @@ export function activityForm(link = {}, existing = null, onSaved, onClose = null
   //
   // Trois choses changent, et aucune n'est décorative : le bouton est ROUGE,
   // il est SÉPARÉ des deux autres, et il demande DEUX CLICS.
-  const m = openModal(existing ? "Modifier l'activité" : 'Nouvelle activité', `<form class="form" id="act-form">${renderForm(spec, existing || {})}
+  // ⚠ LA MISE EN PAGE EST ÉCRITE ICI, LA LECTURE RESTE À `readForm`. C'est la
+  // condition pour moderniser sans rien casser : tous les champs gardent leur
+  // `name` et leur `required`, donc `readForm(form, spec)` et la validation du
+  // navigateur fonctionnent exactement comme avant. `spec` reste la source de
+  // vérité de ce qui est lu — on ne fait que le dessiner autrement.
+  //
+  // ⚠ C'EST LA FORME DU FORMULAIRE DE RENDEZ-VOUS, reprise à dessein (voir
+  // `evenement-form.js`, 25/09/2026) : un titre nu en tête, puis des lignes à
+  // icône. Deux formulaires du même outil qui posent les mêmes questions dans
+  // deux présentations différentes font hésiter à chaque fois.
+  const v0 = existing || {};
+  const val = (k) => {
+    const f = spec.find(x => x.key === k);
+    return v0[k] ?? f?.value ?? '';
+  };
+  const selOptions = (k) => {
+    const f = spec.find(x => x.key === k) || {};
+    const v = val(k);
+    const opt = (o) => {
+      const [x, l] = Array.isArray(o) ? o : [o, o];
+      return `<option value="${esc(x)}" ${String(v) === String(x) ? 'selected' : ''}>${esc(l)}</option>`;
+    };
+    return (f.options || []).map(o => (o && o.groupe)
+      ? `<optgroup label="${esc(o.groupe)}">${(o.options || []).map(opt).join('')}</optgroup>`
+      : opt(o)).join('');
+  };
+  // ⚠ LES TEXTES D'AIDE SONT REVENUS : la première version de cette mise en
+  // page les avait perdus en chemin. Ils ne décorent pas — « à laisser vide
+  // pour une tâche ordinaire » est la seule phrase qui explique un champ dont
+  // la valeur par défaut est l'absence de valeur.
+  const ligne = (icone, titre, corps, aide = '') => `<div class="taf-ligne">
+    <span class="taf-ico" aria-hidden="true">${icone}</span>
+    <div class="taf-champ"><span class="taf-lab">${esc(titre)}</span>${corps}
+      ${aide ? `<p class="taf-aide">${esc(aide)}</p>` : ''}</div></div>`;
+
+  // ⚠ LE DEGRÉ DE TRAITEMENT EST EN PASTILLES, PAS EN LISTE DÉROULANTE : il n'a
+  // que trois valeurs et c'est le choix qu'on refait le plus souvent. Un
+  // `input hidden` porte la valeur, pour que `readForm` ne voie aucune
+  // différence avec un `select`.
+  // ⚠ « À FAIRE » N'EST PAS PROPOSÉ, ET CE N'EST PAS UN OUBLI : il se range
+  // exactement au même endroit qu'une tâche sans degré — `GROUPES` de
+  // `today.js` attrape les deux dans le même rang. Offrir deux façons de dire
+  // la même chose fait hésiter pour rien. Une tâche qui le porte DÉJÀ le garde,
+  // en pastille marquée : on n'efface pas en silence ce que quelqu'un a choisi.
+  // Même remède que les budgets hors tranches de la fiche client RGD.
+  const prio = val('priority');
+  const degres = PRIORITES.filter(x => x.key !== 'afaire' || prio === 'afaire');
+  const pastillesPrio = `<input type="hidden" name="priority" value="${esc(prio)}">
+    <div class="taf-chips" id="taf-prio">
+      <button type="button" class="taf-chip ${!prio ? 'on' : ''}" data-prio="">Ordinaire</button>
+      ${degres.map(x => `<button type="button" class="taf-chip p-${esc(x.key)} ${prio === x.key ? 'on' : ''} ${
+        x.key === 'afaire' ? 'est-hors-liste' : ''}" data-prio="${esc(x.key)}">${esc(x.icon)} ${esc(x.label)}</button>`).join('')}
+    </div>`;
+
+  const corpsForm = `
+    <input class="taf-titre" type="text" name="title" required autocomplete="off"
+      value="${esc(val('title'))}" placeholder="Que faut-il faire ?">
+    ${ligne('🏷️', 'Type', `<select name="type" required>${selOptions('type')}</select>`)}
+    ${ligne('⚡', 'Degré de traitement', pastillesPrio,
+      'Ordinaire suffit dans la plupart des cas : la tâche se range alors à son échéance.')}
+    ${ligne('👤', 'Responsable', `<select name="assignee_id" required><option value="">—</option>${selOptions('assignee_id')}</select>`)}
+    ${ligne('📅', 'Échéance', `<span class="taf-duo">
+      <input type="date" name="due_date" required value="${esc(val('due_date'))}">
+      <input type="time" name="due_time" value="${esc(val('due_time'))}" title="Heure (optionnel)">
+    </span>`)}
+    ${ligne('🏢', 'Structure', `<select name="activity"><option value="">—</option>${selOptions('activity')}</select>`,
+      'À quelle activité du groupe cette tâche appartient. C’est elle qui décide de sa colonne.')}
+    ${ligne('📝', 'Notes', `<textarea name="notes" rows="3" placeholder="Ce qu'il faut savoir avant de s'y mettre…">${esc(val('notes'))}</textarea>`)}`;
+
+  const m = openModal(existing ? 'Modifier la tâche' : 'Nouvelle tâche', `<form class="form taf" id="act-form">${corpsForm}
     <div class="form-actions">${existing ? '<button type="button" class="btn danger left" id="act-del" data-arme="0">Supprimer</button>' : ''}<button type="button" class="btn ghost" data-close>Annuler</button><button class="btn" type="submit">Enregistrer</button></div></form>`, { onClose });
   const form = m.querySelector('#act-form');
+  // Les pastilles écrivent dans le champ caché : une seule valeur lue, celle
+  // que `readForm` ira chercher.
+  form.querySelectorAll('#taf-prio [data-prio]').forEach(b => b.onclick = () => {
+    form.querySelector('[name="priority"]').value = b.dataset.prio;
+    form.querySelectorAll('#taf-prio [data-prio]').forEach(x => x.classList.toggle('on', x === b));
+  });
+  form.querySelector('.taf-titre')?.focus();
   form.onsubmit = async (e) => {
     e.preventDefault();
     const v = readForm(form, spec);
