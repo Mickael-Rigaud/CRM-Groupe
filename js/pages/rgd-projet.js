@@ -34,15 +34,29 @@
 // qu'en remplissant. Ici les trois étapes sont des onglets — toutes cliquables,
 // tout le temps, dans les deux sens — et **« Créer la demande » est disponible
 // dès la première**. Rien n'est gated : ni la navigation, ni l'enregistrement.
-// Seul l'affichage est paginé, ce qui est la condition pour que le même
-// formulaire tienne dans la colonne de la fiche, où il remplace deux blocs.
+// Seul l'affichage est paginé.
+//
+// ⚠ LES DEUX PORTES OUVRENT MAINTENANT LA MÊME FENÊTRE (01/10/2026, après-midi,
+// demandé : « quand on modifie la fiche du projet je voudrais que ce soit le
+// formulaire de la fiche projet qui s'ouvre, ce sera plus clair visuellement »).
+// Le matin, « Modifier » le rendait dans la colonne de la fiche : il y tenait,
+// mais à l'étroit — la semaine de créneaux et le duo commentaire/rappel sont
+// dessinés pour la largeur d'une modale. La fiche se rouvre derrière, voir
+// `rgd-fiche.js`.
 //
 // ⚠ PAS DE `confirm()` DE `ui.js` ICI NON PLUS : il appelle `closeModal(true)`
-// et REMPLACE la fenêtre courante — sur la porte « Modifier », c'est la fiche
-// entière qui disparaîtrait, avec la saisie. Septième occurrence du piège dans
-// ce dépôt. Il n'y a donc aucune confirmation : le formulaire n'efface rien.
+// et REMPLACE la fenêtre courante — c'est donc le formulaire entier qui
+// disparaîtrait, avec les trois écrans qu'on vient de remplir pendant l'appel.
+// Septième occurrence du piège dans ce dépôt. Il n'y a donc aucune
+// confirmation : le formulaire n'efface rien.
 import { scope } from '../data/scope.js';
 import { esc, openModal, closeModal, toast, fmtDate } from '../ui.js';
+// ⚠ `aujourdhui` DE `rgd-etapes.js` N'EST PAS IMPORTÉ ICI, ET C'EST VOULU :
+// deux fonctions de ce fichier déclarent déjà un `const aujourdhui` local, qui
+// la MASQUERAIT sans un mot — le piège s'est déjà payé dans `rgd-fiche.js`. Le
+// `max` des champs se borne donc sur `aujourdhuiParis()`, et de toute façon
+// le vrai refus d'une date future est dans `majDateRelance`, pas à l'écran.
+import { COL_RELANCE, majDateRelance } from '../data/rgd-etapes.js';
 import { DEMANDEUR, BIEN, RESIDENCE, TRAVAUX, BUDGETS, CONNU, listeTravaux,
          CONNU_RECOMMANDATION, CONNU_APPORTEUR } from '../data/rgd-formulaire.js';
 import { valeursProjet, valeursSuivi, personneDe, enregistrerProjet, ditCreneau,
@@ -74,20 +88,19 @@ const TEINTE = '--m:var(--accent);--m-clair:var(--accent-soft);--m-encre:var(--a
 /**
  * Le formulaire, monté dans un élément que l'appelant fournit.
  *
- * ⚠ IL NE S'OUVRE PAS LUI-MÊME DANS UNE MODALE, contrairement à la fiche projet
- * BTP, et c'est la porte « Modifier » qui l'impose : elle le rend DANS la
- * fiche, en remplacement de ses deux blocs d'information. `openModal` ferme
- * celle qui est ouverte avant d'ouvrir la suivante — un formulaire par-dessus
- * la fiche l'aurait fait disparaître, et « Annuler » n'aurait eu nulle part où
- * revenir.
+ * ⚠ IL NE S'OUVRE PAS LUI-MÊME : les DEUX portes l'hébergent dans une modale
+ * qu'elles ouvrent — « + Nouvelle demande » par `nouvelleDemandeRgd` ci-dessous,
+ * « Modifier » par la fiche, qui se rouvre derrière lui à la fermeture. Il a
+ * été rendu EN PLACE dans la colonne de la fiche le 01/10/2026 au matin, et
+ * Mickael l'a fait sortir le jour même : « ce sera plus clair visuellement ».
+ * Garder le montage dans un élément fourni plutôt que d'appeler `openModal`
+ * ici laisse l'appelant maître de sa fenêtre — c'est lui qui sait ce qu'il
+ * faut rouvrir derrière.
  *
  * `cible`  l'instantané de la fiche (`ficheDe`), ou `null` pour une création.
- * `etat`   `{ pas }`, gardé par l'appelant : la fiche se redessine de
- *          l'extérieur (changement d'étape, attribution), et un numéro
- *          d'étape posé ici repartirait à 1 à chaque fois.
  */
 export function ficheProjetRgd({ dans, cible = null, apporteurs = null,
-                                 propose = {}, etat = null, apres, annuler } = {}) {
+                                 propose = {}, apres, annuler } = {}) {
   const x = cible;
   const f = x?.ligne || {};
   const p = x ? personneDe(f) : null;
@@ -108,7 +121,7 @@ export function ficheProjetRgd({ dans, cible = null, apporteurs = null,
       || [a.prenom, a.nom].filter(Boolean).join(' ') || '(sans nom)'])
     .sort((a, b) => a[1].localeCompare(b[1], 'fr'));
 
-  const etatPas = etat || { pas: 1 };
+  const etatPas = { pas: 1 };
   const v = {
     prenom: pro ? '' : (l.first_name ?? f.prenom ?? ''),
     nom: pro ? '' : (l.last_name ?? f.nom ?? ''),
@@ -326,6 +339,7 @@ export function ficheProjetRgd({ dans, cible = null, apporteurs = null,
           ${choixApporteurs.map(([id, nom]) => `
             <option value="${esc(id)}"${id === v.apporteur_id ? ' selected' : ''}>${esc(nom)}</option>`).join('')}
         </select></label>`}
+      ${blocRelances()}
       <!-- ⚠ LE COMMENTAIRE ET LE RAPPEL SONT COTE A COTE (demande du jour) :
            on note ce qu'on retient de la personne et le moment ou on la
            rappelle dans le meme geste, a la fin de l'appel.
@@ -342,6 +356,49 @@ export function ficheProjetRgd({ dans, cible = null, apporteurs = null,
         la recommandation ne sont posés que sur une demande : cette fiche vient de
         l’application RGD, qui ne les porte pas.</p>`}
     </div>`;
+
+  // ----------------------------------------------------------- les relances
+  //
+  // ⚠ ELLES ONT QUITTÉ LA FICHE POUR LE FORMULAIRE LE 01/10/2026 (demandé :
+  // « dans le récap de la fiche enlève l'encadré des relances »). L'encadré
+  // part, les trois dates restent corrigeables — et c'est nécessaire : le
+  // tableau ne propose que la relance EN COURS, les deux autres s'y lisent
+  // sans se modifier. Sans ce bloc, une R1 jamais datée ne se rattrapait plus
+  // nulle part. La fiche, elle, les montre désormais en une ligne de lecture.
+  //
+  // ⚠ ELLES S'ÉCRIVENT AU `change`, PAS À « ENREGISTRER », et il faut le dire
+  // à l'écran : c'est le seul champ du formulaire qui parte tout seul. La
+  // raison est que la porte est `majDateRelance` et non `enregistrerProjet` —
+  // la date se pose aussi toute seule dans `ecrireStatut`, le tableau en
+  // corrige une, et une quatrième écriture de la même colonne par un autre
+  // chemin finirait par ne plus appliquer les mêmes règles (le refus d'une
+  // date future, le rang vérifié contre la liste).
+  //
+  // ⚠ RIEN SUR UNE CRÉATION : la ligne n'existe pas encore, il n'y a aucune
+  // relance à dater sur un prospect qu'on est en train de saisir.
+  const blocRelances = () => {
+    if (!x || (x.cible !== 'demande' && x.cible !== 'client')) return '';
+    const posees = COL_RELANCE.filter(c => f[c]).length;
+    if (!posees && !scope.canRgd) return '';
+    const borne = aujourdhuiParis();
+    return `
+      <div class="mail-champ plein rgp-relances">
+        <span>Relances</span>
+        <div class="rgp-relances-lignes">
+          ${COL_RELANCE.map((col, i) => `
+            <label class="rgp-relance">
+              <span>Relance ${i + 1}</span>
+              ${scope.canRgd
+                ? `<input type="date" data-relance="${i + 1}" max="${esc(borne)}"
+                     value="${esc(f[col] || '')}">`
+                : `<b>${f[col] ? esc(fmtDate(f[col])) : '—'}</b>`}
+            </label>`).join('')}
+        </div>
+        ${scope.canRgd ? `<p class="rgp-note">La date se pose toute seule quand le statut
+          passe en relance ; corrigez-la ici si vous saisissez après coup.
+          <b>Elle s’enregistre aussitôt</b>, sans attendre le bouton du bas.</p>` : ''}
+      </div>`;
+  };
 
   // ------------------------------------------------------------- le rappel
   //
@@ -605,6 +662,27 @@ export function ficheProjetRgd({ dans, cible = null, apporteurs = null,
         'code_postal', 'ville', 'recommandation', 'commentaire'].forEach(poser);
       const ap = dans.querySelector('#rgp-apporteur_id');
       if (ap) ap.onchange = () => { v.apporteur_id = ap.value; };
+
+      // ⚠ LES RELANCES PARTENT AU `change`, SANS REDESSINER. Un champ date
+      // émet à chaque chiffre tapé, d'où `change` ; et redessiner volerait le
+      // curseur au champ suivant, qu'on vient d'atteindre en quittant
+      // celui-ci. ⚠ `db.update` REMPLACE la ligne du cache : sans le report
+      // sur `f`, rouvrir le formulaire réafficherait l'ancienne date.
+      dans.querySelectorAll('[data-relance]').forEach(champ => {
+        champ.onchange = async () => {
+          const rang = Number(champ.dataset.relance);
+          const col = COL_RELANCE[rang - 1];
+          // Vider le champ EFFACE la date : c'est le seul moyen de défaire une
+          // relance posée par un changement de statut fait par erreur.
+          const jour = champ.value || null;
+          champ.disabled = true;
+          const r = await majDateRelance({ uuid: f.id, cible: x.cible, rang, jour });
+          champ.disabled = false;
+          if (r.ok) { f[col] = jour; return; }
+          champ.value = f[col] || '';
+          toast(r.motif, 'err');
+        };
+      });
       // Le rappel. ⚠ Les raccourcis POSENT une date dans le champ, ils ne le
       // remplacent pas : on clique « Dans 3 j » puis on ajuste si besoin.
       dans.querySelectorAll('[data-rappel]').forEach(b2 => b2.onclick = () => {

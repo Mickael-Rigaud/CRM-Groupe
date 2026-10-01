@@ -13,8 +13,35 @@
 //   Les documents — ils appartiennent aux affaires du CRM, pas aux fiches
 //   relevées de Cloudflare, qui n'en ont pas.
 //
-// ⚠ « MODIFIER » OUVRE LA FICHE PROJET (voir `rgd-projet.js`, 01/10/2026 ;
-// un formulaire à part existait depuis le 24/09).
+// ⚠ « MODIFIER » OUVRE LA FICHE PROJET DANS SA PROPRE FENÊTRE (01/10/2026,
+// demandé par Mickael : « quand on modifie la fiche du projet je voudrais que
+// ce soit le formulaire de la fiche projet qui s'ouvre, ce sera plus clair
+// visuellement »). Le matin même, le formulaire était rendu DANS la colonne de
+// gauche, en remplacement des deux blocs d'information : il y tenait, mesuré
+// jusqu'à 340 px, mais il y tenait à l'étroit — la semaine de créneaux et les
+// deux colonnes du commentaire et du rappel sont dessinées pour la largeur
+// d'une modale, pas pour une demi-fiche.
+//
+// ⚠ CE QUI RENDAIT LE RENDU EN PLACE NÉCESSAIRE EST LEVÉ, PAS OUBLIÉ.
+// `openModal` ferme la fenêtre courante avant d'ouvrir la suivante, donc un
+// formulaire par-dessus la fiche la faisait disparaître et « Annuler »
+// n'avait nulle part où revenir. La réponse est que la fiche se RECONSTRUIT :
+// `dessine()` la rouvre, et elle est de toute façon reconstruite à chaque
+// enregistrement. Deux détails qui tiennent le tout :
+//   · `closeModal(true)` — la fermeture pour remplacement — N'APPELLE PAS
+//     `onClose` : ouvrir le formulaire ne déclenche donc pas le `onChange`
+//     de la fiche, et `dessine()` depuis le formulaire ne redessine pas deux
+//     fois ;
+//   · le formulaire porte `onClose: dessine`, donc la croix et le clic sur le
+//     fond ramènent à la fiche au lieu de tout fermer — c'est ce que fait
+//     « Annuler », par le même chemin.
+//
+// ⚠ IL N'Y A PLUS D'ÉTAT À GARDER ICI. L'étape du formulaire vivait dans la
+// fiche parce que celle-ci se redessinait par-dessous (attribution, changement
+// d'étape) et remontait un formulaire neuf. La fiche n'est plus là pendant la
+// saisie : le formulaire garde son étape tout seul, et repart du « Projet » à
+// chaque ouverture. La frise n'a plus besoin d'être gelée non plus.
+//
 // L'en-tête annonçait ici que l'espace RGD était en lecture seule et qu'un
 // formulaire serait écrasé au relevé suivant. C'était exact, et c'est
 // précisément pour ça que le formulaire écrit À LA SOURCE et non dans le
@@ -47,12 +74,13 @@
 //      devant chaque information remplace « TÉLÉPHONE » en petites capitales :
 //      on reconnaît une forme plus vite qu'on ne lit un mot.
 import { db } from '../data/db.js';
-import { esc, eur, fmtDate, fmtDateTime, openModal, toast, userName, daysSince } from '../ui.js';
+import { esc, eur, fmtDate, fmtDateTime, openModal, closeModal, toast, userName,
+         daysSince } from '../ui.js';
 import { ETAPES_RGD, ORDRE_ETAPES, STATUT_DE_L_ETAPE, ecrireStatut,
-         montantDevisDe, etapeAvecMontant, COL_RELANCE, majDateRelance,
+         montantDevisDe, etapeAvecMontant, COL_RELANCE, derniereRelance,
          aujourdhui } from '../data/rgd-etapes.js';
 import { scope } from '../data/scope.js';
-import { refusDeProjet, valeursProjet } from '../data/rgd-projet.js';
+import { refusDeProjet, valeursProjet, valeursSuivi } from '../data/rgd-projet.js';
 import { ficheProjetRgd } from './rgd-projet.js';
 import { listeTravaux } from '../data/rgd-formulaire.js';
 import { rendezVousDeLaFiche, coordonneesDuRendezVous } from '../data/rgd-rdv.js';
@@ -159,18 +187,6 @@ function blocRendezVous(rdvs) {
 
 export function ouvrirFicheRgd(x, onChange) {
   let etapeCourante = x.etape;
-  // ⚠ LA MODIFICATION SE FAIT EN PLACE, PAS DANS UNE SECONDE FENÊTRE.
-  // `openModal` ferme celle qui est ouverte avant d'ouvrir la suivante : un
-  // formulaire en fenêtre par-dessus la fiche aurait fait disparaître la fiche,
-  // et l'annulation n'aurait eu nulle part où revenir. Les deux blocs
-  // d'information cèdent donc la place au formulaire, et la reprennent après.
-  let enModification = false;
-  // ⚠ L'ÉTAPE DE LA FICHE PROJET VIT ICI, PAS DANS LE FORMULAIRE. La fiche se
-  // redessine de l'extérieur — attribution, enregistrement, rendez-vous — et
-  // remonte alors un formulaire neuf ; un numéro d'étape gardé dedans
-  // repartirait à « Le prospect » à chaque fois, sous les yeux de quelqu'un qui
-  // en était à « Le suivi ».
-  const etatProjet = { pas: 1 };
   const f = x.ligne;
 
   const clefs = { contact_id: f.contact_id || null, organisation_id: f.organisation_id || null };
@@ -186,42 +202,53 @@ export function ouvrirFicheRgd(x, onChange) {
     : Promise.resolve();
 
   // ------------------------------------------------------- les relances
-  // ⚠ LA DATE SE POSE TOUTE SEULE AU CHANGEMENT DE STATUT, dans `ecrireStatut`
-  // (30/09/2026) : c'est la seule porte par laquelle un statut change, donc le
-  // seul endroit où la date ne peut pas être oubliée. Ici on CORRIGE, parce
-  // qu'on saisit souvent le lendemain de l'appel.
+  // ⚠ L'ENCADRÉ « RELANCES » A QUITTÉ LA FICHE LE 01/10/2026, demandé par
+  // Mickael — et les trois dates se CORRIGENT MAINTENANT DANS LA FICHE PROJET,
+  // à l'étape « Le prospect ». Les retirer sans les remettre ailleurs aurait
+  // fermé le seul chemin qui rattrape une R1 jamais datée : le tableau ne
+  // propose que la relance EN COURS, les deux autres s'y lisent sans se
+  // modifier. Ici il ne reste qu'une ligne, en lecture, dans le récapitulatif.
   //
-  // ⚠ CE N'EST PAS UN SECOND CHEMIN D'ÉCRITURE : on passe par `majDateRelance`,
-  // la porte unique des trois colonnes, sans toucher au statut. Les deux disent
-  // des choses différentes — « où en est le dossier » et « quand a-t-on
-  // appelé » — et ne se déduisent pas l'une de l'autre : on peut relancer sans
-  // changer d'étape. ⚠ Elle écrivait par `db.update` en direct jusqu'au
-  // 01/10/2026 ; le tableau est devenu le troisième écrivain de la même
-  // colonne, et trois copies d'une règle dérivent encore plus vite que deux.
-  //
-  // ⚠ LE BLOC NE S'AFFICHE QUE S'IL Y A QUELQUE CHOSE À MONTRER OU À SAISIR :
-  // un encadré « Relances » vide sur un chantier terminé n'apprend rien et
-  // repousse l'historique sous la ligne de flottaison.
-  // ⚠ LA LISTE VIENT DE `rgd-etapes.js` : la recopier ici en ferait la seconde,
-  // et le tableau lit la première.
-  const RELANCES = COL_RELANCE.map((col, i) => [col, `Relance ${i + 1}`, i + 1]);
+  // ⚠ LA PORTE D'ÉCRITURE RESTE `majDateRelance`, où qu'on la pousse : la date
+  // se pose toute seule dans `ecrireStatut`, le tableau en corrige une, le
+  // formulaire les trois. Trois écrans, une seule fonction — cet écran s'était
+  // déjà fabriqué un second chemin pour le statut, et les deux ont vécu
+  // séparément trois jours.
+  const relancesDites = () => {
+    const posees = COL_RELANCE
+      .map((c, i) => (f[c] ? `R${i + 1} ${fmtDate(f[c])}` : null)).filter(Boolean);
+    if (!posees.length) return '';
+    const d = derniereRelance(f);
+    const depuis = !d ? '' : d.jours <= 0 ? "aujourd’hui"
+      : d.jours < 0 ? `dans ${-d.jours} j` : `il y a ${d.jours} j`;
+    return `${esc(posees.join(' · '))}${depuis ? ` <span class="muted">· ${esc(depuis)}</span>` : ''}`;
+  };
 
-  const blocRelances = () => {
-    if (x.cible !== 'demande' && x.cible !== 'client') return '';
-    const garnies = RELANCES.filter(([c]) => f[c]).length;
-    if (!garnies && !scope.canRgd) return '';
-    return `<section class="rgdf-bloc rgdf-relances">
-      <h3>Relances</h3>
-      ${RELANCES.map(([champ, titre, rang]) => `
-        <label class="rgdf-relance">
-          <span>${esc(titre)}</span>
-          ${scope.canRgd
-            ? `<input type="date" data-relance="${rang}" max="${esc(aujourdhui())}"
-                 value="${esc(f[champ] || '')}">`
-            : `<b>${f[champ] ? esc(fmtDate(f[champ])) : '—'}</b>`}
-        </label>`).join('')}
-      ${scope.canRgd ? `<p class="rgdf-source">La date se pose toute seule quand le statut
-        passe en relance. Corrigez-la ici si vous saisissez après coup.</p>` : ''}
+  // ⚠ LES RAPPELS SONT UNE ÉCRITURE DU FORMULAIRE, DONC ILS SE LISENT ICI
+  // (01/10/2026 : « je veux bien évidemment toutes les infos qui ont été
+  // enregistrées dans le formulaire »). Ils vivent dans `activities`, la vraie
+  // to-do du CRM — c'est là qu'on les coche, et la fiche ne fait que les
+  // montrer. Sans cette liste, poser un rappel depuis la fiche ne laissait
+  // aucune trace sur la fiche elle-même.
+  const rappelsOuverts = () => {
+    if (!aUneAncre) return [];
+    return (scope.rgd('activities') || [])
+      .filter(a => !a.done && a.due_date
+        && ((clefs.contact_id && a.contact_id === clefs.contact_id)
+          || (clefs.organisation_id && a.organisation_id === clefs.organisation_id)))
+      .sort((a, b) => String(a.due_date).localeCompare(String(b.due_date)));
+  };
+
+  const blocRappels = () => {
+    const liste = rappelsOuverts();
+    if (!liste.length) return '';
+    return `<section class="rgdf-bloc rgdf-rappels">
+      <h3>Rappels <span class="rgdf-compte">${liste.length}</span></h3>
+      <ul>${liste.slice(0, 6).map(a => `<li>
+        <span class="rgdf-quand">${esc(fmtDate(a.due_date))}${a.due_time ? ` à ${esc(a.due_time)}` : ''}</span>
+        <span class="rgdf-dit">${esc(a.title || 'Rappel')}</span>
+      </li>`).join('')}</ul>
+      <p class="rgdf-source">Ils se cochent dans la to-do du CRM.</p>
     </section>`;
   };
 
@@ -237,7 +264,7 @@ export function ouvrirFicheRgd(x, onChange) {
     // autres écrans qui ouvrent cette même fiche n'ont pas de propriétaire à
     // montrer, d'où le test sur la cible plutôt qu'un `scope.isDirection` seul.
     const responsable = proprietaireDeLaFiche(f);
-    const peutAttribuer = scope.isDirection && !enModification
+    const peutAttribuer = scope.isDirection
       && (x.cible === 'demande' || x.cible === 'client');
     const evs = historique();
     // ⚠ LE RENDEZ-VOUS GOOGLE PORTE CE QUE PERSONNE N'A RESAISI. Sa description
@@ -306,16 +333,19 @@ export function ouvrirFicheRgd(x, onChange) {
     const surMontant = etapeAvecMontant(etapeCourante);
     const montantEtape = montantDevisDe(f, devis, etapeCourante);
 
-    // ⚠ CES CHAMPS N'EXISTENT QUE SUR UNE DEMANDE. Une fiche `rgd_clients` a
-    // ses équivalents Meta et rien d'autre ; `d` vaut alors un objet vide, et
-    // `info()` n'affiche pas une ligne vide — la fiche ne montre donc que ce
-    // qu'elle a.
-    const d = x.genre === 'demande' ? f : {};
-    // ⚠ LES RÉPONSES « PROJET » PASSENT PAR `valeursProjet`, la même traduction
-    // que le formulaire de modification. Deux lectures séparées auraient fini
-    // par ne plus dire la même chose, et l'écart ne se serait vu que sur un
-    // genre de fiche — une demande ou un client, jamais les deux.
+    // ⚠ LES RÉPONSES PASSENT PAR `valeursProjet` ET `valeursSuivi`, les mêmes
+    // traductions que le formulaire. Deux lectures séparées auraient fini par
+    // ne plus dire la même chose, et l'écart ne se serait vu que sur un genre
+    // de fiche — une demande ou un client, jamais les deux.
+    //
+    // ⚠ TROIS DES CINQ CHAMPS DE SUIVI N'EXISTENT QUE SUR UNE DEMANDE : une
+    // fiche `rgd_clients` n'a pas de colonne pour le type de demandeur, le
+    // « connu via » ni la recommandation. `valeursSuivi` rend alors des chaînes
+    // vides, et `info()` n'affiche pas une ligne vide — la fiche ne montre donc
+    // que ce qu'elle a. Elle lisait `f` directement jusqu'ici, ce qui faisait
+    // une seconde traduction à tenir.
     const proj = valeursProjet(x);
+    const suivi = valeursSuivi(x);
     // Le bien : « Une maison · Une résidence principale » du formulaire, ou le
     // `meta_type_bien` d'un lead Meta, qui répond dans son propre vocabulaire.
     const bien = [proj.type_projet, proj.type_intervention].filter(Boolean).join(' · ')
@@ -327,6 +357,19 @@ export function ouvrirFicheRgd(x, onChange) {
     // que la personne avait répondu à Facebook ou au site. Le premier est le
     // seul qu'on puisse corriger soi-même, il passe donc devant.
     const budgetDit = proj.budget_annonce || budgetSaisi || String(x.budget || '').trim();
+
+    // ⚠ L'ADRESSE DU CHANTIER EST EN TROIS COLONNES DEPUIS LE 01/10/2026, et la
+    // fiche n'en montrait que la première : un chantier saisi « 9 rue des
+    // Lilas / 95100 / Argenteuil » s'affichait « 9 rue des Lilas », sans la
+    // commune — c'est-à-dire sans ce qui dit où l'on va.
+    const unLieu = (rue, cp, ville) =>
+      [rue, [cp, ville].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+    const chantierDit = unLieu(proj.adresse_chantier, proj.code_postal_chantier,
+      proj.ville_chantier);
+    // `adresseDe` rend « — » quand elle n'a rien : laissé tel quel, `info()` le
+    // prend pour une valeur et affiche une ligne « Adresse : — », exactement ce
+    // qu'elle est faite pour éviter.
+    const adresseLue = x.adresse && x.adresse !== '—' ? x.adresse : (x.ville || '');
 
     // ⚠ NE PAS REPETER LE MEME MOT DEUX FOIS. La provenance est DEDUITE du
     // « comment nous avez-vous connus », donc quand la personne a repondu
@@ -359,12 +402,12 @@ export function ouvrirFicheRgd(x, onChange) {
 
     const provenance = (() => {
       const deduite = x.provenanceLabel || x.provenance;
-      const dite = String(d.comment_connu || '').trim();
+      const dite = String(suivi.comment_connu || '').trim();
       const memeMot = dite.toLowerCase() === String(deduite).toLowerCase();
       // ⚠ QUAND IL Y A UN APPORTEUR, IL A SA PROPRE LIGNE juste au-dessus :
       // remettre son nom ici ferait lire deux fois la même chose.
       return [deduite, memeMot ? '' : dite,
-        !nomApporteur && d.recommandation ? `par ${d.recommandation}` : '']
+        !nomApporteur && suivi.recommandation ? `par ${suivi.recommandation}` : '']
         .filter(Boolean).join(' · ');
     })();
 
@@ -391,10 +434,9 @@ export function ouvrirFicheRgd(x, onChange) {
           </div>
           ${blocRendezVous(rdvs)}
         </div>
-        ${!enModification && !refusDeProjet(x)
-          ? '<button type="button" class="btn ghost sm rgdf-modifier" id="rgdf-modifier">Modifier les informations</button>'
-          : refusDeProjet(x)
-            ? `<p class="rgdf-origine" title="${esc(refusDeProjet(x))}">Lecture seule</p>` : ''}
+        ${refusDeProjet(x)
+          ? `<p class="rgdf-origine" title="${esc(refusDeProjet(x))}">Lecture seule</p>`
+          : '<button type="button" class="btn ghost sm rgdf-modifier" id="rgdf-modifier">Modifier les informations</button>'}
         <!-- Attribuer ne dépend pas de refusDeProjet : une fiche en lecture
              seule (un reflet de l'application RGD) se confie tout de même, car
              c'est le CRM qui décide qui la porte, pas le relevé. -->
@@ -430,36 +472,43 @@ export function ouvrirFicheRgd(x, onChange) {
 
       <div class="rgdf-corps">
         <div class="rgdf-colonne">
-          ${enModification ? '<div id="rgdf-projet"></div>' : `
+          <!-- ⚠ LE RÉCAPITULATIF DOIT MONTRER TOUT CE QUE LE FORMULAIRE
+               ENREGISTRE (01/10/2026, demande du jour). Trois manques
+               trouvés en le relisant champ par champ contre
+               enregistrerProjet : le code postal et la ville du chantier,
+               qui venaient d'etre separes le matin meme ; les relances,
+               dont l'encadre partait ; et les rappels, que le formulaire
+               pose dans la to-do sans que la fiche en dise rien. -->
           <section class="rgdf-bloc">
             <h3>Le prospect</h3>
             ${(() => { const t = x.tel || duRdv.telephone;
               return info('tel', 'Téléphone', t ? `<a href="tel:${esc(t)}">${esc(t)}</a>` : '', 'est-vert'); })()}
             ${info('mail', 'Email', x.email ? `<a href="mailto:${esc(x.email)}">${esc(x.email)}</a>` : '', 'est-bleu')}
-            ${info('lieu', 'Adresse', esc(x.adresse || x.ville || ''), 'est-gris')}
+            ${info('lieu', 'Adresse', esc(adresseLue), 'est-gris')}
+            ${info('personne', 'Type de demandeur', esc(suivi.type_demandeur || ''), 'est-gris')}
             ${info('personne', 'Nature', esc(x.type || ''), 'est-gris')}
+            ${info('tel', 'Relances', relancesDites(), 'est-gris')}
             ${!x.tel && !duRdv.telephone && !x.email ? '<p class="rgdf-rien">Aucun moyen de contact renseigné.</p>' : ''}
           </section>
 
           <section class="rgdf-bloc">
             <h3>Le projet</h3>
-            ${info('travaux', 'Nature des travaux', travaux, 'est-orange')}
+            ${info('travaux', 'Types de travaux', travaux, 'est-orange')}
             ${info('euro', 'Budget annoncé', esc(budgetDit), 'est-orange')}
             ${info('maison', 'Le bien', esc(bien), 'est-bleu')}
-            ${info('lieu', 'Adresse du chantier', esc(proj.adresse_chantier), 'est-bleu')}
+            ${info('lieu', 'Adresse du chantier', esc(chantierDit), 'est-bleu')}
             ${info('regle', 'Superficie', proj.superficie ? esc(proj.superficie) + ' m²' : '', 'est-bleu')}
-            ${info('personne', 'Le demandeur', esc(d.type_demandeur || ''), 'est-gris')}
-            ${info('texte', 'Ce qui est demandé', esc(proj.projet_description), 'est-gris')}
+            ${info('texte', 'Détails du projet', esc(proj.projet_description), 'est-gris')}
             ${info('personne', 'Apporté par', esc(nomApporteur), 'est-vert')}
             ${info('source', 'Provenance', esc(provenance), 'est-violet')}
             ${neeDuCalendrier ? `<p class="rgdf-origine">
               <b>Cette fiche a été créée depuis Google Agenda</b>${dateDeCreation ? `, le ${fmtDate(dateDeCreation)}` : ''} —
               un rendez-vous « Visite technique » l'a fait naître, avec son chantier.
             </p>` : ''}
-            ${!travaux && !budgetDit && !bien && !proj.adresse_chantier
+            ${!travaux && !budgetDit && !bien && !chantierDit
               && !proj.superficie && !proj.projet_description
               ? '<p class="rgdf-rien">Le projet n’a pas encore été décrit.</p>' : ''}
-          </section>`}
+          </section>
 
           ${auDevis && devis.length ? `<section class="rgdf-bloc">
             <h3>Devis <span class="rgdf-compte">${devis.length}</span></h3>
@@ -504,7 +553,7 @@ export function ouvrirFicheRgd(x, onChange) {
               qui en reste la source.</p>` : ''}
           </section>` : ''}
 
-          ${blocRelances()}
+          ${blocRappels()}
 
           <section class="rgdf-bloc rgdf-suivi">
             <h3>Historique <span class="rgdf-compte">${evs.length}</span></h3>
@@ -528,42 +577,37 @@ export function ouvrirFicheRgd(x, onChange) {
     const m = openModal('', html, { wide: true, onClose: () => onChange?.() });
     m.classList.add('rgdf');
 
+    // ⚠ LE FORMULAIRE S'OUVRE DANS SA PROPRE FENÊTRE, ET LA FICHE SE
+    // RECONSTRUIT DERRIÈRE : voir l'en-tête du fichier. `onClose` ramène à la
+    // fiche quand on referme par la croix ou par le fond — sans lui, les deux
+    // gestes qu'on fait sans y penser feraient disparaître la fiche aussi.
     const bModifier = m.querySelector('#rgdf-modifier');
-    if (bModifier) bModifier.onclick = () => { enModification = true; dessine(); };
-
-    const bAttribuer = m.querySelector('#rgdf-attribuer');
-    // `dessine()` après coup, et pas seulement `onChange` : la fiche reste
-    // ouverte devant la personne, il faut qu'elle voie le nouveau nom.
-    if (bAttribuer) bAttribuer.onclick = () => attribuerFicheRgd(x, () => { dessine(); onChange?.(); }, dessine);
-
-    // ⚠ LA FICHE PROJET EST MONTÉE APRÈS COUP, dans un élément que le gabarit
-    // réserve : elle se redessine toute seule à chaque changement d'étape du
-    // formulaire, ce qu'une chaîne de caractères ne sait pas faire.
-    const hote = m.querySelector('#rgdf-projet');
-    if (hote) {
+    if (bModifier) bModifier.onclick = () => {
+      const w = openModal(x.nom ? `Fiche projet — ${x.nom}` : 'Fiche projet',
+        '<div id="rgp-hote"></div>', { wide: true, onClose: () => dessine() });
       ficheProjetRgd({
-        dans: hote, cible: x, propose: { telephone: duRdv.telephone }, etat: etatProjet,
-        annuler: () => { enModification = false; dessine(); },
+        dans: w.querySelector('#rgp-hote'), cible: x,
+        propose: { telephone: duRdv.telephone },
+        annuler: () => closeModal(),
         apres: async () => {
           // ⚠ L'HISTORIQUE DIT QU'ON A TOUCHÉ, PAS CE QU'ON A ÉCRIT. Recopier
           // les valeurs y mettrait des téléphones et des adresses, dans un fil
           // que tout l'espace RGD peut lire — et la fiche les montre déjà.
           await inscrire('note', 'Informations de la fiche modifiées');
-          enModification = false;
           toast('Informations enregistrées');
+          // ⚠ `dessine()` ET PAS `closeModal()` : `openModal` ferme pour
+          // REMPLACEMENT, ce qui n'appelle pas `onClose` — la fiche ne se
+          // redessine donc qu'une fois. Fermer d'abord la tirerait deux fois.
           dessine();
           onChange?.();
         },
       });
-    }
+    };
 
-    // ⚠ LA FRISE SE FIGE PENDANT LA SAISIE, ET C'EST UNE PERTE ÉVITÉE, PAS UN
-    // VERROU DE PRINCIPE. Changer d'étape rappelle `dessine()`, qui reconstruit
-    // la fiche entière : le formulaire repart à zéro, et trois écrans de saisie
-    // partent avec lui. C'était déjà vrai de l'ancien formulaire, où ça ne
-    // coûtait qu'une colonne ; ça coûte maintenant tout ce qu'on vient de
-    // noter pendant un appel. « Annuler » ou « Enregistrer » rendent la frise.
-    m.querySelectorAll('[data-etape]').forEach(b => { b.disabled = enModification; });
+    const bAttribuer = m.querySelector('#rgdf-attribuer');
+    // `dessine()` après coup, et pas seulement `onChange` : la fiche reste
+    // ouverte devant la personne, il faut qu'elle voie le nouveau nom.
+    if (bAttribuer) bAttribuer.onclick = () => attribuerFicheRgd(x, () => { dessine(); onChange?.(); }, dessine);
 
     m.querySelectorAll('[data-etape]').forEach(b => b.onclick = async () => {
       const vers = b.dataset.etape;
@@ -586,33 +630,6 @@ export function ouvrirFicheRgd(x, onChange) {
         m.querySelectorAll('[data-etape]').forEach(o => { o.disabled = false; });
         toast(`Étape non enregistrée — ${r.motif}`, 'err');
       }
-    });
-
-    // ⚠ AU `change`, PAS À LA FRAPPE, et SANS REDESSINER : un champ date émet
-    // à chaque chiffre tapé, et redessiner la fiche volerait le curseur à
-    // celui qu'on est en train de remplir. Même règle que la note et que le
-    // tableau des apports partenaires.
-    m.querySelectorAll('[data-relance]').forEach(champ => {
-      champ.onchange = async () => {
-        const rang = champ.dataset.relance;
-        const col = COL_RELANCE[Number(rang) - 1];
-        // Vider le champ efface la date : c'est le seul moyen de défaire une
-        // relance posée par un changement de statut fait par erreur.
-        const valeur = champ.value || null;
-        champ.disabled = true;
-        const r = await majDateRelance({ uuid: f.id, cible: x.cible, rang, jour: valeur });
-        champ.disabled = false;
-        if (r.ok) {
-          // ⚠ `db.update` REMPLACE la ligne du cache : sans ce report, la fiche
-          // garderait une référence orpheline et réafficherait l'ancienne date
-          // au prochain redessin — base juste, écran faux.
-          f[col] = valeur;
-          onChange?.();
-        } else {
-          champ.value = f[col] || '';
-          toast(r.motif, 'err');
-        }
-      };
     });
 
     const form = m.querySelector('#rgdf-note');

@@ -242,8 +242,18 @@ async function creer(v) {
 
   // Pas de `d1_id` : elle naît ici, la synchronisation ne la verra jamais et ne
   // pourra donc jamais l'écraser.
+  //
+  // ⚠ `owner_id` SUR LA DEMANDE AUSSI, ET PAS SEULEMENT SUR LE CONTACT — défaut
+  // trouvé à l'essai le 01/10/2026, hérité de `rgd-demande-saisie.js` : le
+  // commentaire ci-dessus décrivait le piège pour `contacts` et le laissait
+  // ouvert ici. `rgd_demandes` est une table « moi » (voir `RGD_PORTEFEUILLE`
+  // dans `scope.js`, miroir de la policy) : sans porteur, la demande est
+  // invisible à TOUT LE MONDE sauf la direction — y compris à celui qui vient
+  // de la saisir. Mesuré en démo avec le compte chargé d'affaires : « Demande
+  // créée », ligne écrite en base, et zéro ligne à l'écran.
   const demande = await db.insert('rgd_demandes', {
     contact_id: contact.id,
+    owner_id: scope.user?.id || null,
     date_demande: new Date().toISOString(),
     source: 'manuel', statut: 'nouveau_prospect',
     // `rgd_demandes` porte l'identité EN DOUBLE du contact : c'est une table en

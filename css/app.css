@@ -1826,15 +1826,36 @@ tr.btp-mission .btp-pts { color: var(--m-encre); }
 .maj-non:hover { color: var(--text); }
 
 /* ---- Les relances dates ----
-   Trois dates dans la fiche, une colonne dans le tableau. La date se pose
-   toute seule au changement de statut : voir `ecrireStatut` dans rgd-etapes.js. */
-.rgdf-relances .rgdf-relance { display: flex; align-items: center; justify-content: space-between;
-  gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--line); }
-.rgdf-relances .rgdf-relance:last-of-type { border-bottom: 0; }
-.rgdf-relance > span { font-size: 12px; font-weight: 650; color: var(--muted); }
-.rgdf-relance input { padding: 5px 8px; border: 1px solid var(--line-strong); border-radius: 7px;
-  font-family: inherit; font-size: 12.5px; }
-.rgdf-relance input:disabled { opacity: .6; }
+   Trois dates dans la fiche PROJET, une colonne dans le tableau, une ligne de
+   lecture dans le recapitulatif. La date se pose toute seule au changement de
+   statut : voir `ecrireStatut` dans rgd-etapes.js.
+   ⚠ L'ENCADRE DE LA FICHE A ETE RETIRE LE 01/10/2026, demande — les trois
+   champs sont passes dans le formulaire, a l'etape « Le prospect ». Les styles
+   `.rgdf-relance*` sont partis avec lui ; ceux-ci sont les leurs. */
+.rgp-relances { gap: 7px; }
+.rgp-relances-lignes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+@media (max-width: 560px) { .rgp-relances-lignes { grid-template-columns: 1fr; } }
+.rgp-relance { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.rgp-relance > span { font-size: 11.5px; font-weight: 650; color: var(--muted); }
+.rgp-relance input { width: 100%; min-width: 0; padding: 6px 9px;
+  border: 1px solid var(--line-strong); border-radius: 8px;
+  font-family: inherit; font-size: 12.5px; background: var(--card); color: var(--text); }
+.rgp-relance input:focus { outline: none; border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft); }
+.rgp-relance input:disabled { opacity: .6; }
+
+/* Les rappels ouverts, en lecture sur la fiche : c'est une ecriture du
+   formulaire, elle doit se relire la ou on l'a faite. Ils se cochent dans la
+   to-do, pas ici. */
+.rgdf-rappels ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 9px; }
+.rgdf-rappels li { position: relative; padding-left: 15px; }
+.rgdf-rappels li::before { content: ''; position: absolute; left: 0; top: 6px;
+  width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+/* Les deux sont des `span` : sans `display: block` la date et l'objet se
+   suivent sur la meme ligne, et l'objet fait souvent une phrase entiere. */
+.rgdf-rappels .rgdf-quand,
+.rgdf-rappels .rgdf-dit { display: block; }
+.rgdf-rappels .rgdf-dit { font-size: 12.5px; line-height: 1.4; }
 
 /* Dans le tableau : le rang en pastille, puis la date et l'anciennete.
    Au-dela de deux semaines le rang passe en ambre — c'est le moment ou l'on
