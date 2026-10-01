@@ -92,7 +92,7 @@ import { scope } from '../data/scope.js';
 import { ORDRE_ETAPES, ETAPES_RGD, ETAPES_CLES, ETAPE_DU_STATUT, STATUT_DE_L_ETAPE,
          etapeDeFiche, etapeDeDemande, estProspectParSource,
          joursDeVisite, statutsDeLEtape, statutSuiviLu,
-         montantDevisDe, etapeAvecMontant, ecrireStatut,
+         montantDevisDe, etapeAvecMontant, ecrireStatut, derniereRelance,
          visiteDeLaFiche } from '../data/rgd-etapes.js';
 import { db } from '../data/db.js';
 import { esc, eur, fmtDate, fmtDateTime, relDay, terms, hit, searchInput, bindSearch, restoreFocus } from '../ui.js';
@@ -268,25 +268,47 @@ const VIA = (txt) => {
   return null;   // « Recherche Google », « Publicité »… restent du site
 };
 
-// Avancer ou reculer une personne dans le cycle, sans ouvrir le menu.
-// ⚠ LES DEUX BOUTONS ÉCRIVENT UN STATUT, ils ne déplacent pas une ligne :
-// c'est le statut qui décide de l'onglet, donc tout passe par lui. Un bouton
-// qui bougerait l'affichage sans écrire mentirait dès le prochain relevé.
+// Reculer une personne dans le cycle, sans ouvrir le menu.
+// ⚠ LE BOUTON ÉCRIT UN STATUT, il ne déplace pas une ligne : c'est le statut
+// qui décide de l'onglet, donc tout passe par lui. Un bouton qui bougerait
+// l'affichage sans écrire mentirait dès le prochain relevé.
+//
+// ⚠ LA FLÈCHE « AVANCER » A ÉTÉ RETIRÉE LE 30/09/2026, demandée. Elle faisait
+// franchir une étape d'un seul clic, sur une ligne d'un tableau qu'on parcourt
+// à la souris — et avancer un prospect n'est pas un geste anodin : ça le sort
+// de la liste qu'on est en train de travailler, et depuis le 30/09 ça DATE une
+// relance. Le menu de statut reste, juste à côté : il demande de choisir où
+// l'on va, ce qui est le bon niveau d'intention pour une étape franchie.
+// **Ne pas la remettre** sans en reparler.
+//
+// ⚠ LE RETOUR EN ARRIÈRE RESTE : il répare, il n'engage rien. C'est
+// précisément ce qu'on cherche après un clic de trop.
 const flechesEtape = (etape, ecriture) => {
   if (!ecriture) return '';
   const i = ORDRE_ETAPES.indexOf(etape);
-  // « Archivés » est hors du cycle : on n'y avance pas, on y sort. Depuis là,
-  // seul le retour en arrière a un sens, et il ramène au début.
+  // « Archivés » est hors du cycle : depuis là, le retour ramène au début.
   const avant = etape === 'archives' ? 'a_contacter'
     : i > 0 ? STATUT_DE_L_ETAPE[ORDRE_ETAPES[i - 1]] || 'a_contacter' : null;
-  const apres = etape === 'archives' ? null
-    : i >= 0 && i < ORDRE_ETAPES.length - 1 ? STATUT_DE_L_ETAPE[ORDRE_ETAPES[i + 1]] : null;
-  const bouton = (vers, signe, titre) => vers
-    ? `<button type="button" class="rcl-fleche" data-vers="${vers}" title="${esc(titre)}">${signe}</button>`
-    : `<span class="rcl-fleche vide" aria-hidden="true">${signe}</span>`;
+  if (!avant) return '';
   return `<span class="rcl-fleches">
-    ${bouton(avant, '‹', 'Reculer d’une étape')}${bouton(apres, '›', 'Avancer d’une étape')}
+    <button type="button" class="rcl-fleche" data-vers="${avant}"
+      title="Reculer d’une étape">‹</button>
   </span>`;
+};
+
+// ⚠ ON DIT LES JOURS, PAS SEULEMENT LA DATE : au téléphone la question est
+// « ça fait combien de temps ? », et personne ne compte les jours de tête entre
+// le 24 et aujourd'hui. Le rang (« R2 ») dit où on en est des trois relances.
+const celluleRelance = (ligne) => {
+  const r = derniereRelance(ligne);
+  if (!r) return '<span class="muted">—</span>';
+  const quand = r.jours === 0 ? 'aujourd’hui'
+    : r.jours === 1 ? 'hier'
+    : `il y a ${r.jours} j`;
+  // Au-delà de deux semaines sans nouvelle, la relance se signale : c'est le
+  // moment où l'on perd le dossier sans s'en apercevoir.
+  return `<b class="rcl-relance${r.jours >= 14 ? ' est-vieux' : ''}">R${r.rang}</b>
+    ${esc(fmtDate(r.jour))} <span class="muted">(${esc(quand)})</span>`;
 };
 
 const pastilleProvenance = (cle) => {
@@ -814,6 +836,10 @@ export const rgdClientsPage = {
       // onglet, donc partout ailleurs il n'y en a pas. Une colonne vide prend
       // la place des autres et fait chercher une donnée qui n'a pas lieu d'être.
       const surRdv = state.vue === 'rdv';
+      // ⚠ LA COLONNE DES RELANCES NE S'AFFICHE QUE SUR « NOUVELLE DEMANDE » :
+      // les trois statuts de relance n'existent que là, et une colonne vide sur
+      // six onglets coûterait de la largeur à tous pour n'informer qu'un seul.
+      const surRelances = state.vue === 'demande';
 
       // ⚠ LA DATE VIENT DU CHANTIER, L'HEURE DE L'AGENDA, et les deux sources
       // ne sont pas interchangeables : c'est `date_debut_prevue` qui décide du
@@ -851,6 +877,7 @@ export const rgdClientsPage = {
           <thead><tr><th>Reçu</th><th>Provenance</th><th>Nom</th><th>Contact</th>
             ${surRdv ? '<th>Rendez-vous</th>' : ''}
             <th>Projet</th><th>${surMontant ? 'Montant HT' : 'Budget'}</th><th>Ville</th><th>Statut</th>
+            ${surRelances ? '<th>Dernière relance</th>' : ''}
             <th>Commentaire</th><th></th></tr></thead>
           <!-- ⚠ L'INDEX EST CELUI DE LA LISTE ENTIERE, PAS DE LA PAGE.
                L'attribut data-fiche sert au clic, qui relit la liste entiere.
@@ -880,9 +907,10 @@ export const rgdClientsPage = {
             <td class="rcl-statut-cell">${state.ecriture
               ? menuStatut(x.statut, x.cible, x.ligne.id) + flechesEtape(x.etape, true)
               : pastilleSuivi(x.statut)}</td>
+            ${surRelances ? `<td class="small">${celluleRelance(x.ligne)}</td>` : ''}
             <td class="rcl-note">${champNote(x.ligne, x.cible)}</td>
             <td>${boutonSuppression(x.ligne)}</td>
-          </tr>`; }).join('') || `<tr><td colspan="${surRdv ? 11 : 10}"><div class="empty">${esc(vide())}</div></td></tr>`}</tbody>
+          </tr>`; }).join('') || `<tr><td colspan="${10 + (surRdv ? 1 : 0) + (surRelances ? 1 : 0)}"><div class="empty">${esc(vide())}</div></td></tr>`}</tbody>
         </table>
         ${pagination()}
         <p class="small muted">${state.ecriture

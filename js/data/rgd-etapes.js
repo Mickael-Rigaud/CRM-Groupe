@@ -455,13 +455,55 @@ export function etapesRgd() {
 // l'appellent tous les trois. Deux chemins auraient dérivé l'un de l'autre à la
 // première correction — c'est déjà arrivé, l'écran Clients s'en était fabriqué
 // un second, replié ici le 25/09.
+// ⚠ LA DATE DE RELANCE SE POSE ICI, ET NULLE PART AILLEURS (30/09/2026).
+// `ecrireStatut` est la seule porte par laquelle un statut change — le
+// tableau, la fiche et le pipeline passent tous par elle —, donc c'est le seul
+// endroit où la date ne peut pas être oubliée. La poser dans l'écran aurait
+// laissé les deux autres chemins muets.
+//
+// ⚠ ELLE NE S'ÉCRASE PAS : repasser par « Relance 2 » après avoir corrigé un
+// statut ne redate pas une relance déjà faite. On ne pose que ce qui est vide,
+// et la fiche permet de corriger à la main — c'est l'humain qui tranche quand
+// il sait mieux.
+const CHAMP_RELANCE = {
+  relance_1: 'relance_1_le', relance_2: 'relance_2_le', relance_3: 'relance_3_le',
+};
+
 export async function ecrireStatut({ uuid, cible, statut }) {
   const { db } = await import('./db.js');
   const table = cible === 'demande' ? 'rgd_demandes' : 'rgd_clients';
   const champ = cible === 'demande' ? 'statut' : 'statut_suivi';
+  const patch = { [champ]: statut };
+
+  const champDate = CHAMP_RELANCE[statut];
+  if (champDate) {
+    const ligne = db.byId(table, uuid);
+    // ⚠ Le jour LOCAL, pas `toISOString()` : celui-ci rend de l'UTC, et une
+    // relance passée à 23 h serait datée du lendemain. Même piège que les
+    // horaires de l'agenda.
+    if (!ligne?.[champDate]) {
+      const d = new Date();
+      const p2 = (n) => String(n).padStart(2, '0');
+      patch[champDate] = `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
+    }
+  }
+
   // `db.update` remet la ligne dans le cache : il n'y a rien à avancer à la
   // main, et le redessin la retrouve à sa place.
-  return db.update(table, uuid, { [champ]: statut })
+  return db.update(table, uuid, patch)
     .then(() => ({ ok: true }))
     .catch(e => ({ ok: false, motif: String(e.message || e).slice(0, 80) }));
+}
+
+// La dernière relance d'une ligne, et depuis combien de jours. ⚠ On prend la
+// PLUS RÉCENTE des trois et non `relance_3_le` : une fiche peut être à la
+// relance 2, et une date posée à la main peut être postérieure à une autre.
+export function derniereRelance(ligne) {
+  const dates = ['relance_1_le', 'relance_2_le', 'relance_3_le']
+    .map(c => ligne?.[c]).filter(Boolean).sort();
+  if (!dates.length) return null;
+  const jour = dates[dates.length - 1];
+  const d = new Date(`${jour}T12:00:00`);
+  const jours = Math.round((Date.now() - d.getTime()) / 86400000);
+  return { jour, jours, rang: dates.length };
 }

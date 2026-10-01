@@ -173,6 +173,45 @@ export function ouvrirFicheRgd(x, onChange) {
     ? db.insert('events', { ...clefs, deal_id: null, kind, body, author_id: scope.user?.id || null })
     : Promise.resolve();
 
+  // ------------------------------------------------------- les relances
+  // ⚠ LA DATE SE POSE TOUTE SEULE AU CHANGEMENT DE STATUT, dans `ecrireStatut`
+  // (30/09/2026) : c'est la seule porte par laquelle un statut change, donc le
+  // seul endroit où la date ne peut pas être oubliée. Ici on CORRIGE, parce
+  // qu'on saisit souvent le lendemain de l'appel.
+  //
+  // ⚠ CE N'EST PAS UN SECOND CHEMIN D'ÉCRITURE : on écrit la même colonne, par
+  // `db.update`, sans toucher au statut. Les deux disent des choses
+  // différentes — « où en est le dossier » et « quand a-t-on appelé » — et ne
+  // se déduisent pas l'une de l'autre : on peut relancer sans changer d'étape.
+  //
+  // ⚠ LE BLOC NE S'AFFICHE QUE S'IL Y A QUELQUE CHOSE À MONTRER OU À SAISIR :
+  // un encadré « Relances » vide sur un chantier terminé n'apprend rien et
+  // repousse l'historique sous la ligne de flottaison.
+  const RELANCES = [
+    ['relance_1_le', 'Relance 1'],
+    ['relance_2_le', 'Relance 2'],
+    ['relance_3_le', 'Relance 3'],
+  ];
+  const tableDeLaFiche = () => (x.cible === 'demande' ? 'rgd_demandes' : 'rgd_clients');
+
+  const blocRelances = () => {
+    if (x.cible !== 'demande' && x.cible !== 'client') return '';
+    const garnies = RELANCES.filter(([c]) => f[c]).length;
+    if (!garnies && !scope.canRgd) return '';
+    return `<section class="rgdf-bloc rgdf-relances">
+      <h3>Relances</h3>
+      ${RELANCES.map(([champ, titre]) => `
+        <label class="rgdf-relance">
+          <span>${esc(titre)}</span>
+          ${scope.canRgd
+            ? `<input type="date" data-relance="${esc(champ)}" value="${esc(f[champ] || '')}">`
+            : `<b>${f[champ] ? esc(fmtDate(f[champ])) : '—'}</b>`}
+        </label>`).join('')}
+      ${scope.canRgd ? `<p class="rgdf-source">La date se pose toute seule quand le statut
+        passe en relance. Corrigez-la ici si vous saisissez après coup.</p>` : ''}
+    </section>`;
+  };
+
   const dessine = () => {
     const devis = x.genre === 'fiche' ? siens(scope.rgd('rgd_devis'), f) : [];
     const chantiers = x.genre === 'fiche'
@@ -452,6 +491,8 @@ export function ouvrirFicheRgd(x, onChange) {
               qui en reste la source.</p>` : ''}
           </section>` : ''}
 
+          ${blocRelances()}
+
           <section class="rgdf-bloc rgdf-suivi">
             <h3>Historique <span class="rgdf-compte">${evs.length}</span></h3>
             ${aUneAncre ? `
@@ -527,6 +568,33 @@ export function ouvrirFicheRgd(x, onChange) {
         m.querySelectorAll('[data-etape]').forEach(o => { o.disabled = false; });
         toast(`Étape non enregistrée — ${r.motif}`, 'err');
       }
+    });
+
+    // ⚠ AU `change`, PAS À LA FRAPPE, et SANS REDESSINER : un champ date émet
+    // à chaque chiffre tapé, et redessiner la fiche volerait le curseur à
+    // celui qu'on est en train de remplir. Même règle que la note et que le
+    // tableau des apports partenaires.
+    m.querySelectorAll('[data-relance]').forEach(champ => {
+      champ.onchange = async () => {
+        const col = champ.dataset.relance;
+        // Vider le champ efface la date : c'est le seul moyen de défaire une
+        // relance posée par un changement de statut fait par erreur.
+        const valeur = champ.value || null;
+        champ.disabled = true;
+        try {
+          await db.update(tableDeLaFiche(), f.id, { [col]: valeur });
+          // ⚠ `db.update` REMPLACE la ligne du cache : sans ce report, la fiche
+          // garderait une référence orpheline et réafficherait l'ancienne date
+          // au prochain redessin — base juste, écran faux.
+          f[col] = valeur;
+          onChange?.();
+        } catch (e) {
+          champ.value = f[col] || '';
+          toast(String(e.message || e).slice(0, 90), 'err');
+        } finally {
+          champ.disabled = false;
+        }
+      };
     });
 
     const form = m.querySelector('#rgdf-note');

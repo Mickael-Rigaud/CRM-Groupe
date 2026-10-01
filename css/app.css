@@ -1823,6 +1823,25 @@ tr.btp-mission .btp-pts { color: var(--m-encre); }
 .maj-non { padding: 4px 7px; background: none; color: var(--muted); font-size: 16px; line-height: 1; }
 .maj-non:hover { color: var(--text); }
 
+/* ---- Les relances dates ----
+   Trois dates dans la fiche, une colonne dans le tableau. La date se pose
+   toute seule au changement de statut : voir `ecrireStatut` dans rgd-etapes.js. */
+.rgdf-relances .rgdf-relance { display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.rgdf-relances .rgdf-relance:last-of-type { border-bottom: 0; }
+.rgdf-relance > span { font-size: 12px; font-weight: 650; color: var(--muted); }
+.rgdf-relance input { padding: 5px 8px; border: 1px solid var(--line-strong); border-radius: 7px;
+  font-family: inherit; font-size: 12.5px; }
+.rgdf-relance input:disabled { opacity: .6; }
+
+/* Dans le tableau : le rang en pastille, puis la date et l'anciennete.
+   Au-dela de deux semaines le rang passe en ambre — c'est le moment ou l'on
+   perd le dossier sans s'en apercevoir. */
+.rcl-relance { display: inline-block; min-width: 22px; padding: 1px 6px; margin-right: 5px;
+  border-radius: 999px; background: var(--card-2); color: var(--muted);
+  font-size: 11px; font-weight: 800; text-align: center; }
+.rcl-relance.est-vieux { background: var(--amber-soft, #fdf1dc); color: var(--amber, #9a6412); }
+
 /* ---- Le panneau d'un rendez-vous, et le glisser dans la grille ----
    On clique un rendez-vous pour le lire, le deplacer ou le supprimer : voir
    `panneauEvenement` et `lierGrille` dans js/pages/rgd-agenda.js. */
