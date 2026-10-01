@@ -94,7 +94,8 @@ import { cadre, guard, KEY } from './rgd-espace.js';
 // rendez-vous par le même. Il en est SORTI, pas recopié — `decale` et
 // `finApres` corrigent chacun un défaut vécu, et deux copies d'une correction
 // n'en restent une que jusqu'au jour où l'on n'en corrige qu'une.
-import { formulaireEvenement, decale, finApres } from './evenement-form.js';
+import { formulaireEvenement } from './evenement-form.js';
+import { decale, finApres } from '../data/evenements.js';
 // Ouvrir, déplacer, supprimer : les trois gestes passent par le même module.
 import { lireEvenement, modifierEvenement, supprimerEvenement } from '../data/evenements.js';
 
@@ -136,7 +137,7 @@ const jourLongAn = (j) => j.slice(0, 4) === String(new Date().getFullYear())
 // toutes — « Semaine Du Lundi 21 Septembre » — et ce n'est pas du français.
 const majuscule = (t) => t.charAt(0).toUpperCase() + t.slice(1);
 
-// `decale` et `finApres` sont importés de `evenement-form.js` : ils servent ici
+// `decale` et `finApres` sont importés de `data/evenements.js` : ils servent ici
 // à la navigation de la grille et là-bas au calcul de l'heure de fin, et les
 // deux pièges qu'ils évitent — la conversion UTC d'une heure locale, et
 // l'arithmétique sur un `Date` la nuit du changement d'heure — sont écrits

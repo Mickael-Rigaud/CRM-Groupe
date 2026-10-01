@@ -270,6 +270,48 @@ const localAdapter = {
       return { ok: true, id: chantier.id, deal_id: deal.id };
     }
 
+    // ── La visite posée depuis la fiche projet, depuis le 01/10/2026 ──────
+    // ⚠ DOUBLE DU SQL `rgd_visite_planifiee`, même règle que ci-dessus. Sans
+    // lui, prendre un rendez-vous depuis la fiche n'était essayable que sur
+    // la production, c'est-à-dire sur l'agenda d'une entreprise en activité.
+    // ⚠ IDEMPOTENTE comme elle : `source_event_id` porte un index UNIQUE en
+    // base, et un second appel y échouerait après que Google a déjà créé le
+    // rendez-vous. Ici on rend le chantier existant, exactement pareil.
+    if (nom === 'rgd_visite_planifiee') {
+      if (!String(args.p_event_id || '').trim()) throw new Error('identifiant de rendez-vous requis');
+      if (!args.p_jour) throw new Error('jour du rendez-vous requis');
+      if (!args.p_contact && !args.p_organisation) {
+        throw new Error('un contact ou une organisation est requis');
+      }
+      const deja = (this.data.rgd_chantiers || [])
+        .find(c => c.source_event_id === args.p_event_id);
+      if (deja) return { ok: true, chantier: deja.id, deja: true };
+
+      const quand = new Date().toISOString();
+      const titre = String(args.p_titre || '').trim() || 'Visite technique';
+      const deal = {
+        id: uid(), title: titre, activity: 'rgd', stage: 'visite', status: 'open',
+        contact_id: args.p_contact || null, organisation_id: args.p_organisation || null,
+        channel: 'En direct',
+        fields: { google_event_id: args.p_event_id, ne_ici: true },
+        created_at: quand,
+      };
+      const chantier = {
+        id: uid(), deal_id: deal.id,
+        contact_id: args.p_contact || null, organisation_id: args.p_organisation || null,
+        source_event_id: args.p_event_id, statut_d1: 'visite_technique',
+        reference: `VT-${String(args.p_jour).slice(0, 4)}-${String(args.p_event_id).slice(0, 8)}`,
+        adresse: args.p_adresse || null, code_postal: args.p_code_postal || null,
+        ville: args.p_ville || null, description: args.p_description || null,
+        date_debut_prevue: args.p_jour,
+        created_at: quand, updated_at: quand,
+      };
+      (this.data.deals ||= []).push(deal);
+      (this.data.rgd_chantiers ||= []).push(chantier);
+      this.save();
+      return { ok: true, chantier: chantier.id, affaire: deal.id, deja: false };
+    }
+
     // ── Les devis, depuis le 25/09/2026 ───────────────────────────────────
     // ⚠ DOUBLE DU SQL, comme ci-dessus et comme `deplierSite` : si
     // `rgd_devis_signer` change en base, il change ici aussi. Le recalcul de

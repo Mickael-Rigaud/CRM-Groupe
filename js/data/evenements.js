@@ -30,6 +30,46 @@
 import { db } from './db.js';
 import { CONFIG } from '../config.js';
 
+// ---------------------------------------------------------------- l'heure
+// ⚠ CES DEUX FONCTIONS SONT LA CORRECTION D'UN DÉFAUT VÉCU, pas des utilitaires
+// de confort (25/09/2026, signalé par Mickael : « Google Agenda : The specified
+// time range is empty »).
+//
+// ⚠ NE JAMAIS CALCULER UNE FIN AVEC `new Date(...).toISOString()`. Une chaîne
+// sans fuseau — « 2026-09-25T18:00:00 » — est lue par le navigateur comme de
+// l'heure LOCALE, puis `toISOString()` la rend en UTC : 18:00 à Paris devenait
+// « 17:00 ». Or le serveur envoie cette chaîne à Google **étiquetée
+// Europe/Paris**, sans la reconvertir. La fin partait donc une heure AVANT le
+// début, deux en été, et Google appelle ça une plage vide.
+//
+// ⚠ PAS D'ARITHMÉTIQUE SUR UN `Date` NON PLUS : « une heure » sur un agenda
+// veut dire 18:00 → 19:00, y compris la nuit du changement d'heure, où soixante
+// minutes réelles déplaceraient la pendule de deux heures. On compte en minutes
+// de pendule, et on change de jour si l'on passe minuit — `decale` s'en charge,
+// lui est ancré à midi UTC et ne dérive pas.
+//
+// ⚠ ELLES VIVAIENT DANS `js/pages/evenement-form.js` JUSQU'AU 01/10/2026. Elles
+// en sont sorties quand la fiche projet RGD a eu besoin de calculer la fin d'un
+// créneau : c'est un module de DONNÉES, qui ne peut pas importer une page sans
+// inverser les couches — et les recopier aurait fait deux exemplaires d'une
+// correction, dont un seul serait corrigé le jour venu.
+export const decale = (jour, n) =>
+  new Date(new Date(jour + 'T12:00:00Z').getTime() + n * 86400000).toISOString().slice(0, 10);
+
+const p2h = (n) => String(n).padStart(2, '0');
+
+/** ⚠ `heure` EST UNE CHAÎNE « HH:MM », JAMAIS UN NOMBRE : avec un nombre,
+ *  `String(14).split(':')` rend `['14']`, les minutes valent `undefined` et la
+ *  fin part en « TNaN:NaN ». Ça ne se voit ni à l'écran ni au contrôle de
+ *  syntaxe — seulement en lisant ce qui est réellement envoyé. */
+export const finApres = (jour, heure, minutes) => {
+  const [h, m] = String(heure || '09:00').split(':').map(Number);
+  const total = h * 60 + m + minutes;
+  const jours = Math.floor(total / 1440);
+  const reste = ((total % 1440) + 1440) % 1440;
+  return `${jours ? decale(jour, jours) : jour}T${p2h(Math.floor(reste / 60))}:${p2h(reste % 60)}:00`;
+};
+
 /**
  * Créer un rendez-vous dans l'agenda d'une structure.
  *

@@ -22,37 +22,15 @@
 // grisés ferait un formulaire à moitié mort, et les afficher actifs ferait
 // perdre la saisie. On montre ce qui marche.
 import { esc, openModal, closeModal, toast } from '../ui.js';
-import { creerEvenement } from '../data/evenements.js';
+import { creerEvenement, decale, finApres } from '../data/evenements.js';
 
-// ---------------------------------------------------------------- l'heure
-// ⚠ CES DEUX FONCTIONS SONT LA CORRECTION D'UN DÉFAUT VÉCU, pas des utilitaires
-// de confort (25/09/2026, signalé par Mickael : « Google Agenda : The specified
-// time range is empty »).
-//
-// ⚠ NE JAMAIS CALCULER UNE FIN AVEC `new Date(...).toISOString()`. Une chaîne
-// sans fuseau — « 2026-09-25T18:00:00 » — est lue par le navigateur comme de
-// l'heure LOCALE, puis `toISOString()` la rend en UTC : 18:00 à Paris devenait
-// « 17:00 ». Or le serveur envoie cette chaîne à Google **étiquetée
-// Europe/Paris**, sans la reconvertir. La fin partait donc une heure AVANT le
-// début, deux en été, et Google appelle ça une plage vide.
-//
-// ⚠ PAS D'ARITHMÉTIQUE SUR UN `Date` NON PLUS : « une heure » sur un agenda
-// veut dire 18:00 → 19:00, y compris la nuit du changement d'heure, où soixante
-// minutes réelles déplaceraient la pendule de deux heures. On compte en minutes
-// de pendule, et on change de jour si l'on passe minuit — `decale` s'en charge,
-// lui est ancré à midi UTC et ne dérive pas.
-export const decale = (jour, n) =>
-  new Date(new Date(jour + 'T12:00:00Z').getTime() + n * 86400000).toISOString().slice(0, 10);
-
+// ⚠ `decale` ET `finApres` ONT QUITTÉ CE FICHIER LE 01/10/2026 pour
+// `js/data/evenements.js`. Ils comptaient en minutes de pendule pour un
+// formulaire ; ils servent maintenant aussi au choix de créneau de la fiche
+// projet RGD, qui est un module de DONNÉES et ne peut pas importer une page.
+// Les recopier là-bas aurait fait deux exemplaires d'une correction — très
+// exactement ce que l'en-tête de ce fichier interdit pour le formulaire.
 const p2 = (n) => String(n).padStart(2, '0');
-
-export const finApres = (jour, heure, minutes) => {
-  const [h, m] = String(heure || '09:00').split(':').map(Number);
-  const total = h * 60 + m + minutes;
-  const jours = Math.floor(total / 1440);
-  const reste = ((total % 1440) + 1440) % 1440;
-  return `${jours ? decale(jour, jours) : jour}T${p2(Math.floor(reste / 60))}:${p2(reste % 60)}:00`;
-};
 
 /**
  * Ouvre le formulaire et crée le rendez-vous dans Google Agenda.

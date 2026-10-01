@@ -15,6 +15,17 @@
 // retombent déjà sur `--accent` quand `--m` n'est pas posé, et deux fiches
 // projet qui se ressemblent s'apprennent une fois.
 //
+// ⚠ L'ORDRE DES ÉTAPES EST CELUI DE MICKAEL (01/10/2026) : **Le projet · Le
+// rendez-vous · Le prospect**. Il remplace « Le prospect · Le projet · Le
+// suivi » de la veille, et ce n'est pas un détail de présentation : au
+// téléphone on qualifie d'abord — de quoi s'agit-il, où, quel budget —, on
+// cale la visite, et on prend les coordonnées à la fin. C'est le même
+// retournement que la fiche projet de BTP Expertise le 29/09, pour la même
+// raison. Les quatre champs du suivi (connu via, recommandation, apporteur,
+// commentaire) **n'ont pas disparu** : Mickael ne les a pas listés, mais les
+// supprimer retirerait une saisie qui existe ; ils sont passés sous un trait,
+// au bas de « Le prospect », qui est l'étape qui parle de la personne.
+//
 // ⚠ ELLE REVIENT SUR LE « UN SEUL ÉCRAN, DEUX COLONNES » DU 23/09/2026, et il
 // faut dire pourquoi. L'argument d'alors tient toujours : on saisit pendant un
 // appel, avec la personne au bout du fil, et un formulaire qui impose son ordre
@@ -31,14 +42,28 @@
 // entière qui disparaîtrait, avec la saisie. Septième occurrence du piège dans
 // ce dépôt. Il n'y a donc aucune confirmation : le formulaire n'efface rien.
 import { scope } from '../data/scope.js';
-import { esc, openModal, closeModal, toast } from '../ui.js';
+import { esc, openModal, closeModal, toast, fmtDate } from '../ui.js';
 import { DEMANDEUR, BIEN, RESIDENCE, TRAVAUX, BUDGETS, CONNU, listeTravaux }
   from '../data/rgd-formulaire.js';
-import { valeursProjet, valeursSuivi, personneDe, enregistrerProjet }
+import { valeursProjet, valeursSuivi, personneDe, enregistrerProjet, ditCreneau }
   from '../data/rgd-projet.js';
+import {
+  lireCreneaux, occupationDuJour, placesLibres, hhmm, lundiDe,
+  aujourdhuiParis, maintenantParis, DUREES,
+} from '../data/rgd-creneaux.js';
+import { decale } from '../data/evenements.js';
 
-const ECRANS = ['prospect', 'projet', 'suivi'];
-const TITRES = { prospect: 'Le prospect', projet: 'Le projet', suivi: 'Le suivi' };
+const ECRANS = ['projet', 'rendezvous', 'prospect'];
+const TITRES = { projet: 'Le projet', rendezvous: 'Le rendez-vous', prospect: 'Le prospect' };
+
+// La semaine affichée par le choix de créneau. Six jours : RGD travaille le
+// samedi, pas le dimanche — une colonne vide tous les sept jours ne dit rien
+// et prend un sixième de la largeur.
+const JOURS_SEMAINE = 6;
+const NOMS_JOURS = ['lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.'];
+// Jusqu'où on peut avancer. `agenda-creneaux` plafonne à 45 jours : proposer
+// d'aller au-delà donnerait une semaine vide sans que rien ne le dise.
+const SEMAINES_MAX = 6;
 
 // Les puces de RGD prennent la couleur de la structure. `--m` n'est pas posé
 // ailleurs dans cet espace, et `.fa-chip` retombe sur `--accent` sans lui ; on
@@ -105,9 +130,34 @@ export function ficheProjetRgd({ dans, cible = null, apporteurs = null,
     recommandation: suivi.recommandation || '',
     apporteur_id: suivi.apporteur_id || '',
     commentaire: suivi.commentaire || '',
+    // Le créneau retenu. Vide tant qu'on n'a rien choisi — prendre un
+    // rendez-vous n'est pas obligatoire pour noter une demande.
+    rdv_jour: '', rdv_heure: '', rdv_duree: 60,
   };
 
-  const nomEcran = () => ECRANS[etatPas.pas - 1] || 'prospect';
+  // ⚠ CE QUI EST LU CHEZ GOOGLE NE VIT PAS DANS `v` : `v` est la saisie, ceci
+  // est une lecture. La confondre avec la saisie ferait repartir une requête à
+  // chaque frappe, et enregistrer l'agenda de la semaine avec la fiche.
+  const agenda = {
+    semaine: lundiDe(aujourdhuiParis()),
+    occupes: null, lu_a: null, demo: false, erreur: null, charge: false,
+  };
+
+  // Les visites déjà posées pour cette fiche. Elles viennent des chantiers, pas
+  // de l'agenda : c'est le chantier qui relie un rendez-vous à une personne.
+  const visitesDejaLa = () => {
+    if (!x) return [];
+    const cid = f.contact_id;
+    const oid = f.organisation_id;
+    if (!cid && !oid) return [];
+    return (scope.rgd('rgd_chantiers') || [])
+      .filter(c => c.statut_d1 === 'visite_technique'
+        && ((cid && c.contact_id === cid) || (oid && c.organisation_id === oid))
+        && c.date_debut_prevue)
+      .sort((a, b) => String(b.date_debut_prevue).localeCompare(String(a.date_debut_prevue)));
+  };
+
+  const nomEcran = () => ECRANS[etatPas.pas - 1] || 'projet';
   const nomDit = () => (v.raison_sociale || [v.prenom, v.nom].filter(Boolean).join(' ')).trim();
 
   // ------------------------------------------------------------- les briques
@@ -149,35 +199,57 @@ export function ficheProjetRgd({ dans, cible = null, apporteurs = null,
   const puce = (cle, libelle, liste) => bloc(cle, libelle, liste, v[cle] ? [v[cle]] : [], false);
 
   // ------------------------------------------------------------- les écrans
-  const ecranProspect = () => `
-    <div class="mf-grille">
-      ${pro ? champ('raison_sociale', 'Raison sociale', { plein: true })
-            : champ('prenom', 'Prénom') + champ('nom', 'Nom')}
-      ${champ('telephone', 'Téléphone', { type: 'tel', placeholder: '06 …' })}
-      ${champ('email', 'E-mail', { type: 'email', placeholder: 'nom@exemple.fr' })}
-      ${champ('adresse', 'Adresse', { plein: true })}
-      ${champ('code_postal', 'Code postal')}
-      ${champ('ville', 'Ville')}
-      ${aLeContexte ? puce('type_demandeur', 'Type de demandeur', DEMANDEUR) : ''}
-    </div>`;
-
+  // ⚠ L'ORDRE DES CHAMPS EST CELUI QUE MICKAEL A ÉCRIT (01/10/2026), y compris
+  // « Détails du projet » AVANT le budget : on décrit ce qu'il y a à faire,
+  // puis ce que ça peut coûter. L'inverse fait annoncer un prix sur un projet
+  // qu'on n'a pas fini d'entendre.
   const ecranProjet = () => `
     <div class="mf-grille">
       ${puce('type_projet', 'Type de bien', BIEN)}
       ${puce('type_intervention', 'Usage du bien', RESIDENCE)}
       ${champ('superficie', 'Superficie', { type: 'number', inputmode: 'numeric', placeholder: 'm²' })}
       ${puces('types_travaux', 'Types de travaux', TRAVAUX)}
+      <!-- ⚠ « DÉTAILS DU PROJET », pas « Ce que la personne demande » : c'est le
+           nom que Mickael lui donne, et c'est la MÊME colonne en base. En créer
+           une seconde aurait donné deux textes libres que personne ne saurait
+           départager. (Pas d'accent grave dans un commentaire HTML pose au
+           milieu d'un gabarit : il FERME le gabarit, et node --check ne le voit
+           pas — refait ici le 01/10/2026, vu au premier chargement.) -->
+      ${zone('projet_description', 'Détails du projet', 4,
+        'Ce qu’il y a à faire, pièce par pièce : l’état actuel, ce que la personne veut obtenir, ses délais, ce qui l’inquiète…')}
       ${puce('budget_annonce', 'Budget annoncé', BUDGETS)}
       <!-- L'adresse du chantier n'est pas celle de la personne : un chantier se
            fait souvent ailleurs que chez elle. Elle ne se saisissait qu'en
            modification jusqu'au 01/10/2026. -->
       ${champ('adresse_chantier', 'Adresse du chantier', { plein: true })}
-      ${zone('projet_description', 'Ce que la personne demande', 4,
-        'Noté pendant l’appel : ce qu’elle veut faire, ses délais, ce qui l’inquiète…')}
     </div>`;
 
-  const ecranSuivi = () => `
+  // ⚠ L'ADRESSE TIENT SUR UNE SEULE LIGNE (demandé le 01/10/2026) : rue, code
+  // postal, ville. Dans une `.mf-grille` en `auto-fit`, les trois champs
+  // tombaient où la place les menait — le code postal sous la rue, la ville
+  // toute seule à la ligne suivante. `.rgp-adresse` les tient en 3fr / 1fr / 2fr.
+  const ecranProspect = () => `
     <div class="mf-grille">
+      ${pro ? champ('raison_sociale', 'Raison sociale', { plein: true })
+            : champ('nom', 'Nom') + champ('prenom', 'Prénom')}
+      ${champ('telephone', 'Téléphone', { type: 'tel', placeholder: '06 …' })}
+      ${champ('email', 'E-mail', { type: 'email', placeholder: 'nom@exemple.fr' })}
+      <div class="rgp-adresse plein">
+        ${champ('adresse', 'Adresse')}
+        ${champ('code_postal', 'Code postal')}
+        ${champ('ville', 'Ville')}
+      </div>
+      ${aLeContexte ? puce('type_demandeur', 'Type de demandeur', DEMANDEUR) : ''}
+
+      <!-- ⚠ CE QUI SUIT N'ÉTAIT PAS DANS LA LISTE DE MICKAEL, ET N'EST PAS
+           SUPPRIMÉ POUR AUTANT. Les quatre champs du suivi sont la seule façon
+           de corriger un apporteur ou un commentaire — c'est précisément le
+           trou que la fiche projet venait de boucher la veille. Les retirer
+           parce qu'ils ne sont pas cités le rouvrirait. Ils passent sous un
+           trait : on les voit, ils ne s'imposent pas. -->
+      <div class="rgp-second plein">
+        <span>Provenance et suivi</span>
+      </div>
       ${aLeContexte ? puce('comment_connu', 'Connu via', CONNU) : ''}
       ${aLeContexte && /recommand/i.test(v.comment_connu)
         ? champ('recommandation', 'Recommandé par',
@@ -195,17 +267,121 @@ export function ficheProjetRgd({ dans, cible = null, apporteurs = null,
         </select></label>
       <!-- ⚠ CE COMMENTAIRE-LA PARLE DE LA PERSONNE, pas du projet : ce qu'on
            retient d'elle, son humeur, l'heure a laquelle la rappeler. Le projet
-           a deja le sien, a l'etape d'avant. C'est le meme champ que la colonne
-           « Note » du tableau. Et SURTOUT PAS d'accent grave dans ce
+           a deja le sien, a la premiere etape. C'est le meme champ que la
+           colonne « Note » du tableau. Et SURTOUT PAS d'accent grave dans ce
            commentaire : il refermerait le gabarit. -->
-      ${zone('commentaire', 'Commentaire', 4,
+      ${zone('commentaire', 'Commentaire', 3,
         'Ce qu’il faut savoir sur elle : disponibilités, ton de l’échange, à rappeler quand…')}
       ${aLeContexte ? '' : `<p class="rgp-note plein">Le type de demandeur, le « connu via » et
         la recommandation ne sont posés que sur une demande : cette fiche vient de
         l’application RGD, qui ne les porte pas.</p>`}
     </div>`;
 
-  const RENDU = { prospect: ecranProspect, projet: ecranProjet, suivi: ecranSuivi };
+  // ---------------------------------------------------- l'écran rendez-vous
+  //
+  // ⚠ CE QUI EST MONTRÉ EST LU CHEZ GOOGLE À L'INSTANT, pas dans le reflet du
+  // CRM : voir l'en-tête de `data/rgd-creneaux.js`. Un rendez-vous pris ce
+  // matin pour la semaine prochaine n'est pas dans le reflet avant demain, et
+  // c'est exactement celui par-dessus lequel on poserait une visite.
+  //
+  // ⚠ ON MONTRE CE QUI OCCUPE, PAS SEULEMENT CE QUI RESTE. Une colonne qui
+  // n'afficherait que les heures libres ne dirait pas POURQUOI le mardi
+  // après-midi manque — et on ne saurait pas si ça vaut la peine de décaler.
+  const ecranRendezVous = () => {
+    const aujourdhui = aujourdhuiParis();
+    const jours = Array.from({ length: JOURS_SEMAINE }, (_, i) => decale(agenda.semaine, i));
+    const premiereSemaine = lundiDe(aujourdhui);
+    const derniereSemaine = decale(premiereSemaine, 7 * SEMAINES_MAX);
+    const dejaLa = visitesDejaLa();
+
+    const tete = `
+      <div class="rgp-cal-tete">
+        <div class="rgp-cal-nav">
+          <button type="button" class="btn ghost sm" id="rgp-sem-prec"
+            ${agenda.semaine <= premiereSemaine ? 'disabled' : ''}>‹</button>
+          <b>${esc(libelleSemaine(jours[0], jours[jours.length - 1]))}</b>
+          <button type="button" class="btn ghost sm" id="rgp-sem-suiv"
+            ${agenda.semaine >= derniereSemaine ? 'disabled' : ''}>›</button>
+        </div>
+        <div class="rgp-cal-duree">
+          <span>Durée</span>
+          ${DUREES.map(([m, lbl]) => `
+            <button type="button" class="fa-chip ${Number(v.rdv_duree) === m ? 'on' : ''}"
+              data-duree="${m}">${esc(lbl)}</button>`).join('')}
+        </div>
+      </div>`;
+
+    if (agenda.erreur) {
+      return `${tete}<p class="rgp-cal-vide">L’agenda n’a pas pu être lu — ${esc(agenda.erreur)}.
+        <br>La demande s’enregistre quand même, le rendez-vous se posera depuis l’écran Agenda.</p>
+        ${piedRdv(dejaLa)}`;
+    }
+    if (!agenda.occupes) {
+      return `${tete}<p class="rgp-cal-vide">Lecture de l’agenda…</p>${piedRdv(dejaLa)}`;
+    }
+
+    const colonnes = jours.map((jour, i) => {
+      const occ = occupationDuJour(agenda.occupes, jour);
+      const libres = placesLibres(occ, {
+        duree: Number(v.rdv_duree) || 60,
+        // ⚠ PAS DE CRÉNEAU DANS LE PASSÉ : seulement pour aujourd'hui, et
+        // seulement aujourd'hui — borner les autres jours sur l'heure courante
+        // masquerait toutes les matinées à partir de midi.
+        avant: jour === aujourdhui ? maintenantParis() : null,
+      });
+      const passe = jour < aujourdhui;
+      return `
+        <div class="rgp-jour ${passe ? 'est-passe' : ''}">
+          <div class="rgp-jour-tete">
+            <b>${esc(NOMS_JOURS[i] || '')}</b>
+            <span>${esc(String(Number(jour.slice(8, 10))))}/${esc(jour.slice(5, 7))}</span>
+          </div>
+          ${occ.length ? `<ul class="rgp-occupe">${occ.map(o => `
+            <li title="${esc(o.titre)}">${o.journee ? 'journée'
+              : `${esc(hhmm(o.debut))}`} · ${esc(o.titre)}</li>`).join('')}</ul>` : ''}
+          ${passe ? '<p class="rgp-jour-rien">passé</p>'
+            : libres.length ? `<div class="rgp-libres">${libres.map(t => `
+                <button type="button" class="rgp-creneau ${v.rdv_jour === jour && v.rdv_heure === hhmm(t) ? 'on' : ''}"
+                  data-jour="${jour}" data-heure="${esc(hhmm(t))}">${esc(hhmm(t))}</button>`).join('')}</div>`
+              : '<p class="rgp-jour-rien">complet</p>'}
+        </div>`;
+    }).join('');
+
+    const source = agenda.demo
+      ? '<span class="rgp-cal-source est-demo">Jeu d’exemple — en vrai, l’agenda est lu chez Google à l’ouverture.</span>'
+      : `<span class="rgp-cal-source">Agenda lu à l’instant${agenda.lu_a
+          ? ` (${esc(new Date(agenda.lu_a).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }))})` : ''}.</span>`;
+
+    return `${tete}<div class="rgp-cal">${colonnes}</div>${source}${piedRdv(dejaLa)}`;
+  };
+
+  const libelleSemaine = (du, au) => {
+    const m = (j) => new Date(`${j}T12:00:00Z`)
+      .toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', timeZone: 'UTC' });
+    return `${m(du)} → ${m(au)}`;
+  };
+
+  // ⚠ CE QUI EST DIT SOUS LA GRILLE EST LA MOITIÉ UTILE DE L'ÉCRAN : sans
+  // créneau choisi, il faut écrire que la fiche s'enregistre quand même —
+  // sinon on cherche le bouton qui n'existe pas.
+  const piedRdv = (dejaLa) => `
+    ${dejaLa.length ? `<div class="rgp-rdv-deja">
+      <span>Déjà prévu</span>
+      <ul>${dejaLa.slice(0, 3).map(c => `<li>Visite technique du ${esc(fmtDate(c.date_debut_prevue))}</li>`).join('')}</ul>
+    </div>` : ''}
+    <div class="rgp-rdv-choix ${v.rdv_jour ? 'est-pris' : ''}">
+      ${v.rdv_jour
+        ? `<b>Visite le ${esc(ditCreneau(v))}</b>
+           <button type="button" class="btn ghost sm" id="rgp-rdv-retirer">Retirer</button>
+           <p>Le rendez-vous sera créé dans l’agenda à l’enregistrement, et le
+              client recevra une confirmation par e-mail${v.email ? '.'
+                : ' <b>— mais aucune adresse e-mail n’est renseignée pour l’instant.</b>'}</p>`
+        : `<b>Aucun créneau choisi</b>
+           <p>La demande s’enregistre très bien sans rendez-vous : on rappelle, on
+              cale la visite plus tard.</p>`}
+    </div>`;
+
+  const RENDU = { projet: ecranProjet, rendezvous: ecranRendezVous, prospect: ecranProspect };
 
   const pied = () => `
     <div class="rgp-pied">
@@ -289,16 +465,83 @@ export function ficheProjetRgd({ dans, cible = null, apporteurs = null,
 
     const ecran = nomEcran();
     if (ecran === 'prospect') {
+      // Les champs du suivi vivent sur cet écran depuis le 01/10 : voir le
+      // bloc « Provenance et suivi » dans `ecranProspect`.
       ['raison_sociale', 'prenom', 'nom', 'telephone', 'email', 'adresse',
-        'code_postal', 'ville'].forEach(poser);
-    } else if (ecran === 'projet') {
-      ['superficie', 'adresse_chantier', 'projet_description'].forEach(poser);
-    } else {
-      ['recommandation', 'commentaire'].forEach(poser);
+        'code_postal', 'ville', 'recommandation', 'commentaire'].forEach(poser);
       const ap = dans.querySelector('#rgp-apporteur_id');
       if (ap) ap.onchange = () => { v.apporteur_id = ap.value; };
+      return;
     }
+    if (ecran === 'projet') {
+      ['superficie', 'adresse_chantier', 'projet_description'].forEach(poser);
+      return;
+    }
+
+    // --- l'écran rendez-vous
+    dans.querySelector('#rgp-sem-prec')?.addEventListener('click', () => {
+      agenda.semaine = decale(agenda.semaine, -7); chargerAgenda(true);
+    });
+    dans.querySelector('#rgp-sem-suiv')?.addEventListener('click', () => {
+      agenda.semaine = decale(agenda.semaine, 7); chargerAgenda(true);
+    });
+    // ⚠ CHANGER LA DURÉE NE RELIT PAS L'AGENDA : ce qui est occupé ne dépend
+    // pas de la durée qu'on cherche, seules les places libres se recalculent.
+    // Relire ferait un appel réseau à chaque clic sur « 1 h 30 ».
+    dans.querySelectorAll('[data-duree]').forEach(b2 => b2.onclick = () => {
+      v.rdv_duree = Number(b2.dataset.duree);
+      // ⚠ UN CRÉNEAU RETENU PEUT NE PLUS TENIR : passer de 1 h à 2 h sur un
+      // 17:30 déborderait la fermeture, ou mordrait sur le rendez-vous
+      // suivant. On le relâche plutôt que d'enregistrer un horaire impossible.
+      if (v.rdv_jour && !encorePossible()) { v.rdv_jour = ''; v.rdv_heure = ''; }
+      dessine();
+    });
+    dans.querySelectorAll('[data-jour][data-heure]').forEach(b2 => b2.onclick = () => {
+      const meme = v.rdv_jour === b2.dataset.jour && v.rdv_heure === b2.dataset.heure;
+      v.rdv_jour = meme ? '' : b2.dataset.jour;
+      v.rdv_heure = meme ? '' : b2.dataset.heure;
+      dessine();
+    });
+    dans.querySelector('#rgp-rdv-retirer')?.addEventListener('click', () => {
+      v.rdv_jour = ''; v.rdv_heure = ''; dessine();
+    });
+    chargerAgenda(false);
   };
+
+  /** Le créneau retenu tient-il encore, à la durée courante ? */
+  const encorePossible = () => {
+    if (!agenda.occupes || !v.rdv_jour || !v.rdv_heure) return true;
+    const occ = occupationDuJour(agenda.occupes, v.rdv_jour);
+    const [h, m] = v.rdv_heure.split(':').map(Number);
+    return placesLibres(occ, { duree: Number(v.rdv_duree) || 60 }).includes(h * 60 + m);
+  };
+
+  /**
+   * Va lire l'agenda, puis redessine.
+   *
+   * ⚠ ON NE REDESSINE QUE SI L'ÉCRAN EST ENCORE CELUI-LÀ : la lecture prend une
+   * seconde, et pendant ce temps on peut être reparti sur « Le prospect ». Un
+   * redessin aveugle y ramènerait la grille, en effaçant un nom en train d'être
+   * tapé.
+   */
+  async function chargerAgenda(force) {
+    if (agenda.charge && !force) return;
+    if (!force && agenda.occupes) return;
+    agenda.charge = true;
+    if (force) { agenda.occupes = null; agenda.erreur = null; dessine(); }
+    const du = agenda.semaine;
+    const r = await lireCreneaux({ du, au: decale(du, JOURS_SEMAINE - 1) });
+    // La semaine a pu changer pendant l'appel : on jette une réponse périmée
+    // plutôt que d'afficher les créneaux d'une autre semaine.
+    if (agenda.semaine !== du) return;
+    agenda.charge = false;
+    if (r.ok) {
+      agenda.occupes = r.occupes; agenda.lu_a = r.lu_a; agenda.demo = !!r.demo; agenda.erreur = null;
+    } else {
+      agenda.occupes = []; agenda.erreur = r.motif;
+    }
+    if (nomEcran() === 'rendezvous') dessine();
+  }
 
   async function enregistrer() {
     // ⚠ LE NOM ET UN MOYEN DE RAPPEL, RIEN DE PLUS, ET SEULEMENT À LA CRÉATION.
@@ -330,6 +573,18 @@ export function ficheProjetRgd({ dans, cible = null, apporteurs = null,
       ok.disabled = false; ok.textContent = libelle;
       return toast(`Non enregistré — ${r.motif}`, 'err');
     }
+    // ⚠ CE QUE LE RENDEZ-VOUS A DONNÉ SE DIT, MÊME QUAND TOUT VA BIEN : poser
+    // une visite envoie un mail à un client et crée une ligne dans l'agenda de
+    // quelqu'un. Un « Enregistré » muet laisserait se demander si c'est parti.
+    if (r.rdv) {
+      if (!r.rdv.ok) {
+        toast(`Fiche enregistrée, mais le rendez-vous n’a pas pu être pris — ${r.rdv.motif}`, 'warn');
+      } else if (r.rdv.manques?.length) {
+        toast(`Rendez-vous pris — ${r.rdv.manques.join(' ; ')}`, 'warn');
+      } else {
+        toast(`Rendez-vous pris${r.rdv.mail ? ' et confirmation envoyée' : ''}`);
+      }
+    }
     apres?.(r);
   }
 
@@ -352,7 +607,8 @@ export function nouvelleDemandeRgd(apporteurs, apres) {
     annuler: () => closeModal(),
     apres: () => { closeModal(); toast('Demande créée'); apres?.(); },
   });
-  // Le premier champ du premier écran : au téléphone, le prénom est ce qui
-  // arrive en premier.
+  // Le premier champ du premier écran. Ce n'est plus le prénom depuis le
+  // 01/10 : la première étape est « Le projet », et son premier champ est une
+  // rangée de puces — il n'y a donc rien à focaliser, et `?.` suffit.
   m.querySelector('#rgp-prenom')?.focus();
 }
