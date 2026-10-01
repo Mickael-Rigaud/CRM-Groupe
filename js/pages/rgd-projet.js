@@ -521,17 +521,24 @@ export function ficheProjetRgd({ dans, cible = null, apporteurs = null,
       const ap = dans.querySelector('#rgp-apporteur_id');
       if (ap) ap.onchange = () => { v.apporteur_id = ap.value; };
       const diff = dans.querySelector('#rgp-adresse_differente');
-      // ⚠ COCHER RECOPIE LE CHANTIER DANS LES CHAMPS, plutôt que de les ouvrir
-      // vides : on coche parce que l'adresse est PROCHE mais pas identique —
-      // un autre numéro dans la même rue, le plus souvent. Repartir de zéro
-      // ferait tout retaper, ce que la case était censée éviter.
+      // ⚠ COCHER VIDE LES TROIS CHAMPS (01/10/2026, demandé : « si on coche que
+      // l'adresse est différente ça supprime automatiquement le champ
+      // pré-rempli »). J'avais fait l'inverse — recopier le chantier pour
+      // n'avoir qu'un numéro à changer —, et c'est à côté : on coche pour
+      // saisir une AUTRE adresse, et un champ déjà rempli oblige à l'effacer
+      // avant de taper, à la main, trois fois.
+      //
+      // ⚠ SEUL LE CLIC VIDE, JAMAIS L'OUVERTURE DE LA FICHE. `onchange` ne part
+      // que sur un geste ; la case cochée d'office à l'ouverture, parce que le
+      // prospect habite ailleurs, ne passe pas par ici — sinon rouvrir une
+      // fiche effacerait l'adresse qu'elle porte.
       if (diff) diff.onchange = () => {
         v.adresse_differente = diff.checked;
-        if (diff.checked && !v.adresse.trim() && !v.code_postal.trim() && !v.ville.trim()) {
-          const ch = adresseChantier(v);
-          v.adresse = ch.adresse || ''; v.code_postal = ch.code_postal || ''; v.ville = ch.ville || '';
-        }
+        if (diff.checked) { v.adresse = ''; v.code_postal = ''; v.ville = ''; }
         dessine();
+        // Le curseur dans le premier des trois champs qu'on vient de vider :
+        // c'est la seule raison de cocher.
+        dans.querySelector('#rgp-adresse')?.focus();
       };
       return;
     }
