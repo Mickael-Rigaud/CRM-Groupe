@@ -55,7 +55,10 @@ export async function chargerCategories() {
     // s'exposer à republier une version vieille de dix minutes.
     projets: (c.projects || []).map(p => ({
       slug: p.slug, titre: p.title || '(sans titre)',
-      alaune: p.a_la_une === true, brouillon: p.brouillon === true,
+      // ⚠ `a_la_une` PORTE LE RANG, pas `true` : ce panneau ne fait que
+      // l'afficher, c'est l'écran « Mises en avant » qui l'écrit.
+      alaune: Number.isInteger(Number(p.a_la_une)) && Number(p.a_la_une) > 0 ? Number(p.a_la_une) : null,
+      brouillon: p.brouillon === true,
     })),
     neuve: false,
   }));
@@ -145,25 +148,20 @@ function editeur(etat) {
             </span>` : '<span class="cat-fleches vide"></span>'}
             <span class="cat-projet-nom">${esc(p.titre)}
               ${p.brouillon ? '<span class="cat-brouillon">Brouillon</span>' : ''}</span>
-            <button type="button" class="cat-etoile${p.alaune ? ' on' : ''}" data-alaune="${i}"
-              title="${p.alaune ? 'Retirer de la page d’accueil' : 'Mettre en avant sur la page d’accueil'}"
-              aria-pressed="${p.alaune ? 'true' : 'false'}">★</button>
+            ${p.alaune ? `<span class="cat-alaune" title="Mise en avant sur la page d’accueil">★ ${p.alaune}</span>` : ''}
           </div>`).join('')
         : '<p class="muted small">Aucun chantier dans cette catégorie.</p>'}
       </div>
-      <p class="muted small">L’étoile met le chantier <b>à la une sur la page d’accueil</b>.
-        ${compteAlaune()
-          ? `${compteAlaune()} chantier${compteAlaune() > 1 ? 's' : ''} en avant, toutes catégories confondues —
-             l’accueil en montre <b>cinq au plus</b>, dans l’ordre des catégories.`
-          : 'Sans aucune étoile, l’accueil montre les cinq premiers chantiers du site, comme aujourd’hui.'}</p>
+      <p class="muted small">⚠ <b>L’étoile se lit ici, elle ne se met pas ici.</b>
+        La page d’accueil se compose dans <b>« Mises en avant »</b>, à gauche : on y voit
+        les cinq vignettes d’un bloc et on les range, ce qu’une étoile posée catégorie par
+        catégorie ne permettait pas.</p>
 
       ${c.projets.length === 0 ? `
         <button type="button" class="btn danger" id="cat-suppr" data-arme="0">Supprimer cette catégorie</button>
         <p class="muted small">Une catégorie qui porte des chantiers ne se supprime pas :
           il faudrait décider où ils vont.</p>` : ''}
     </section>`;
-
-  const compteAlaune = () => etat.cats.reduce((n, c) => n + c.projets.filter(p => p.alaune).length, 0);
 
   function brancher(hote, opts = {}) {
     const { redessiner = () => {} } = opts;
@@ -203,12 +201,6 @@ function editeur(etat) {
     });
     hote.querySelectorAll('[data-pdescend]').forEach(b => b.onclick = () => {
       const i = Number(b.dataset.pdescend); relire(); bouger(laCat().projets, i, i + 1); redessiner();
-    });
-
-    hote.querySelectorAll('[data-alaune]').forEach(b => b.onclick = () => {
-      const p = laCat().projets[Number(b.dataset.alaune)];
-      p.alaune = !p.alaune;
-      refaire();
     });
 
     const tri = $('#cat-tri');
@@ -295,7 +287,10 @@ function editeur(etat) {
           const vrai = index.get(p.slug);
           if (!vrai) continue;           // disparu entre-temps : il n'existe plus
           index.delete(p.slug);
-          ordonnes.push(p.alaune ? { ...vrai, a_la_une: true } : retirerAlaune(vrai));
+          // ⚠ LE PROJET EST REPOSÉ TEL QUEL : `a_la_une` appartient à l'écran
+          // « Mises en avant », et deux écrans qui écrivent le même champ
+          // finissent par s'effacer l'un l'autre.
+          ordonnes.push(vrai);
         }
         // … puis ceux qu'on ne connaissait pas, à la fin, intacts.
         for (const reste of index.values()) ordonnes.push(reste);
@@ -331,12 +326,6 @@ function editeur(etat) {
     function nettoyer(c) {
       const o = { ...c };
       if (o.tri === undefined) delete o.tri;
-      return o;
-    }
-    function retirerAlaune(p) {
-      if (!p || p.a_la_une === undefined) return p;
-      const o = { ...p };
-      delete o.a_la_une;
       return o;
     }
   }

@@ -1809,6 +1809,45 @@ tr.btp-mission .btp-pts { color: var(--m-encre); }
 .rcl-rel-age, .rcl-rel-avant { display: block; font-size: 11px; line-height: 1.3; }
 .rcl-rel-age:empty, .rcl-rel-avant:empty { display: none; }
 
+/* ---- Les mises en avant de la page d'accueil ----
+   Panneau de `js/pages/rgd-accueil-edit.js`. Deux listes : ce qui est retenu,
+   dans l'ordre, et toute la bibliotheque dessous. Prefixe `.acc-`. */
+.acc-atelier { display: flex; flex-direction: column; gap: 16px; }
+.acc-tete h2 { margin: 0 0 4px; }
+.acc-choix, .acc-source { padding: 14px 16px; border: 1px solid var(--line);
+  border-radius: 10px; background: var(--card-2); }
+.acc-choix h3, .acc-source h3 { margin: 0 0 10px; font-size: 11px; font-weight: 800;
+  text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.acc-ligne { display: flex; align-items: center; gap: 8px; padding: 6px 8px;
+  border-radius: 8px; background: var(--card); margin-bottom: 3px; }
+/* Au-dela de la cinquieme, la ligne dit qu'elle ne s'affichera pas : elle
+   reste la, prete a remonter, mais elle ne doit pas se lire comme publiee. */
+.acc-ligne.est-hors { opacity: .55; }
+.acc-place { flex: 0 0 22px; height: 22px; border-radius: 999px; background: var(--accent);
+  color: #fff; font-size: 11px; font-weight: 800; line-height: 22px; text-align: center; }
+.acc-ligne.est-hors .acc-place { background: var(--line-strong); }
+.acc-nom { flex: 1; font-size: 12.5px; display: flex; flex-direction: column; gap: 1px; }
+.acc-nom > .muted { font-size: 11px; }
+.acc-retirer { width: 24px; height: 24px; padding: 0; border: 1px solid var(--line);
+  background: var(--card); border-radius: 999px; cursor: pointer; color: var(--muted); }
+.acc-retirer:hover { color: var(--red, #b3261e); border-color: var(--red, #b3261e); }
+.acc-avis { margin: 8px 0 0; padding: 8px 10px; border-radius: 8px; font-size: 12px;
+  background: var(--amber-soft, #fdf1dc); color: var(--amber-ink, #6b4410); }
+#acc-q { width: 100%; padding: 7px 10px; margin-bottom: 8px; border: 1px solid var(--line-strong);
+  border-radius: 8px; font-family: inherit; font-size: 13px;
+  background: var(--card); color: var(--text); }
+.acc-liste { display: flex; flex-direction: column; gap: 2px; max-height: 320px; overflow: auto; }
+.acc-item { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 0;
+  background: var(--card); border-radius: 8px; cursor: pointer; text-align: left;
+  font-family: inherit; color: var(--text); }
+.acc-item:hover { background: var(--accent-soft); }
+.acc-plus { flex: 0 0 22px; height: 22px; border-radius: 999px; border: 1px dashed var(--line-strong);
+  color: var(--muted); font-size: 13px; line-height: 20px; text-align: center; }
+.acc-item:hover .acc-plus { border-style: solid; border-color: var(--accent); color: var(--accent); }
+/* Dans le panneau des categories, l'etoile se LIT et ne se clique pas. */
+.cat-alaune { padding: 1px 7px; border-radius: 999px; font-size: 10px; font-weight: 800;
+  background: var(--amber-soft, #fdf1dc); color: var(--amber, #9a6412); }
+
 /* ---- L'organisation du site : categories, ordres, mises en avant ----
    Panneau de `js/pages/rgd-categories-edit.js`, rendu dans `.rea-panneau`.
    Prefixe `.cat-` : `.rea-` appartient a l'atelier des realisations, et deux

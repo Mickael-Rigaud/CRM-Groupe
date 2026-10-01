@@ -58,7 +58,7 @@ export const SEED_SITE = {
             title: 'Rénovation d’une salle de bain à Chantilly',
             url: 'https://rgdrenova.fr/nos-realisations/projet/?p=salle-de-bain-demo-chantilly',
             city: 'Chantilly (60)', surface: '6 m²', duration: '3 semaines', gamme: 'Signature',
-            realise_le: '2026-03', a_la_une: true,
+            realise_le: '2026-03', a_la_une: 1,
             description: 'Salle de bain entièrement repensée : douche à l’italienne, meuble double vasque et carrelage effet marbre. (Démonstration.)',
             notes: 'Douche italienne\nMeuble double vasque\nCarrelage effet marbre',
             images: [AV1, AP1],
@@ -173,7 +173,12 @@ export function deplierSite(cle, doc) {
         // échouer la publication entière du site pour un champ qui ne sert
         // qu'à ranger une liste.
         realise_le: /^\d{4}-(0[1-9]|1[0-2])$/.test(String(p.realise_le || '')) ? p.realise_le : null,
-        a_la_une: p.a_la_une === true,
+        // ⚠ `a_la_une` PORTE LE RANG dans le document (1 = première vignette) :
+        // la base en tire DEUX colonnes, le rang et un booléen dérivé. Un rang
+        // illisible devient `null` — on ne fait pas échouer la publication d'un
+        // site pour une place de vignette. Même expression qu'en SQL.
+        a_la_une_rang: /^[1-9][0-9]*$/.test(String(p.a_la_une || '')) ? Number(p.a_la_une) : null,
+        a_la_une: /^[1-9][0-9]*$/.test(String(p.a_la_une || '')),
         rang: lignes.length,
       });
     }

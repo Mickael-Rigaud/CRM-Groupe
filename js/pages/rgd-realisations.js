@@ -41,6 +41,7 @@ import { cadre, guard, lienPhoto, signalerPhotosCassees } from './rgd-espace.js'
 import { chargerEditeur } from './rgd-realisation-edit.js';
 import { chargerCarrousel } from './rgd-carrousel-edit.js';
 import { chargerCategories } from './rgd-categories-edit.js';
+import { chargerAccueil } from './rgd-accueil-edit.js';
 
 // Le nombre de photos, avant/après compris. C'est ce qui dit si une référence
 // est montrable ou si elle n'est qu'un titre.
@@ -231,6 +232,18 @@ export const rgdRealisationsPage = {
       draw();
     };
 
+    const ouvrirAccueil = async () => {
+      if (state.occupe) return;
+      state.occupe = true;
+      const r = await chargerAccueil();
+      state.occupe = false;
+      if (!r.ok) { toast(`Mises en avant indisponibles — ${r.motif}.`, 'err'); return; }
+      state.editeur = r.editeur;
+      state.vue = 'accueil';
+      armerGarde(true);
+      draw();
+    };
+
     const ouvrirCarrousel = async () => {
       if (state.occupe) return;
       state.occupe = true;
@@ -352,8 +365,12 @@ export const rgdRealisationsPage = {
                 <span class="rea-item-nom">Carrousel d’accueil</span>
                 <span class="rea-item-n">${images.length}</span>
               </button>
-              ${ecriture ? `<button type="button" class="rea-item${state.vue === 'categories' ? ' on' : ''}" data-categories>
-                <span class="rea-item-nom">Catégories et mises en avant</span>
+              ${ecriture ? `<button type="button" class="rea-item${state.vue === 'accueil' ? ' on' : ''}" data-accueil>
+                <span class="rea-item-nom">Mises en avant</span>
+                <span class="rea-item-n">${tous.filter(p => p.a_la_une).length || ''}</span>
+              </button>
+              <button type="button" class="rea-item${state.vue === 'categories' ? ' on' : ''}" data-categories>
+                <span class="rea-item-nom">Catégories</span>
                 <span class="rea-item-n">${cats.length}</span>
               </button>` : ''}
             </div>
@@ -393,6 +410,11 @@ export const rgdRealisationsPage = {
         if (!await quitterAtelier()) return;
         choisir('projet', b.dataset.projet);
       });
+      const acc = root.querySelector('[data-accueil]');
+      if (acc) acc.onclick = async () => {
+        if (!await quitterAtelier()) return;
+        ouvrirAccueil();
+      };
       const cate = root.querySelector('[data-categories]');
       if (cate) cate.onclick = async () => {
         if (!await quitterAtelier()) return;
