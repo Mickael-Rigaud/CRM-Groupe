@@ -465,9 +465,25 @@ export function etapesRgd() {
 // statut ne redate pas une relance déjà faite. On ne pose que ce qui est vide,
 // et la fiche permet de corriger à la main — c'est l'humain qui tranche quand
 // il sait mieux.
+// ⚠ LES TROIS COLONNES SE DÉCLARENT ICI, et les deux écrans les lisent : la
+// fiche en montre les trois, le tableau en corrige une. Une liste recopiée dans
+// un écran aurait dérivé au premier ajout.
+export const COL_RELANCE = ['relance_1_le', 'relance_2_le', 'relance_3_le'];
 const CHAMP_RELANCE = {
   relance_1: 'relance_1_le', relance_2: 'relance_2_le', relance_3: 'relance_3_le',
 };
+const RANG_DU_STATUT = { relance_1: 1, relance_2: 2, relance_3: 3 };
+
+// Le jour LOCAL. ⚠ Jamais `toISOString()` : celui-ci rend de l'UTC, et une
+// relance passée à 23 h serait datée du lendemain — même piège que les horaires
+// de l'agenda. Écrit une seule fois : il sert à POSER la date et à BORNER les
+// champs de saisie, et deux calculs du même jour finiraient par ne plus dire le
+// même jour, une nuit sur deux.
+export function aujourdhui() {
+  const d = new Date();
+  const p2 = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
+}
 
 export async function ecrireStatut({ uuid, cible, statut }) {
   const { db } = await import('./db.js');
@@ -478,14 +494,7 @@ export async function ecrireStatut({ uuid, cible, statut }) {
   const champDate = CHAMP_RELANCE[statut];
   if (champDate) {
     const ligne = db.byId(table, uuid);
-    // ⚠ Le jour LOCAL, pas `toISOString()` : celui-ci rend de l'UTC, et une
-    // relance passée à 23 h serait datée du lendemain. Même piège que les
-    // horaires de l'agenda.
-    if (!ligne?.[champDate]) {
-      const d = new Date();
-      const p2 = (n) => String(n).padStart(2, '0');
-      patch[champDate] = `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
-    }
+    if (!ligne?.[champDate]) patch[champDate] = aujourdhui();
   }
 
   // `db.update` remet la ligne dans le cache : il n'y a rien à avancer à la
@@ -495,15 +504,76 @@ export async function ecrireStatut({ uuid, cible, statut }) {
     .catch(e => ({ ok: false, motif: String(e.message || e).slice(0, 80) }));
 }
 
+/**
+ * La date d'une relance, corrigée à la main.
+ *
+ * ⚠ UNE SEULE PORTE POUR LES TROIS COLONNES, et ce n'est pas du rangement : la
+ * date se pose toute seule dans `ecrireStatut`, la fiche la corrige, et depuis
+ * le 01/10/2026 le tableau aussi — trois chemins sur la même colonne. Cet écran
+ * s'était déjà fabriqué un second chemin d'écriture pour le statut et les deux
+ * ont vécu séparément trois jours ; on ne le refait pas.
+ *
+ * ⚠ LE RANG EST VÉRIFIÉ CONTRE LA LISTE, jamais interpolé dans un nom de
+ * colonne : un rang venu du DOM désignerait une colonne inventée — la requête
+ * échouerait, ou pire toucherait autre chose. Même raison que la liste blanche
+ * des sous-traitants.
+ *
+ * ⚠ UNE RELANCE NE SE DATE PAS DANS LE FUTUR : c'est un appel qui a eu lieu, et
+ * une année tapée de travers donnerait un « il y a -340 j ». Le refus est ici
+ * et non dans l'écran, pour que les deux répondent pareil ; les champs portent
+ * `max` en plus, qui grise les jours à venir dans le calendrier mais **ne
+ * garantit rien** — un `max` dépassé rend la valeur invalide, il ne l'empêche
+ * pas, et la frappe au clavier passe outre.
+ *
+ * Un jour vide EFFACE la date : c'est le seul moyen de défaire une relance
+ * posée par un changement de statut fait par erreur.
+ */
+export async function majDateRelance({ uuid, cible, rang, jour }) {
+  const col = COL_RELANCE[Number(rang) - 1];
+  if (!col) return { ok: false, motif: `rang de relance inconnu (${rang})` };
+  if (jour && jour > aujourdhui()) {
+    return { ok: false, motif: 'une relance se date au jour de l’appel, pas dans le futur' };
+  }
+  const { db } = await import('./db.js');
+  const table = cible === 'demande' ? 'rgd_demandes' : 'rgd_clients';
+  try {
+    await db.update(table, uuid, { [col]: jour || null });
+    return { ok: true, colonne: col };
+  } catch (e) { return { ok: false, motif: String(e.message || e).slice(0, 90) }; }
+}
+
+/**
+ * Laquelle des trois relances le tableau propose de dater.
+ *
+ * ⚠ LE STATUT PASSE AVANT LES DATES : une fiche à « Relance 2 » dont on vient
+ * d'effacer la date doit reproposer R2, pas R1 — sinon on corrige la relance
+ * précédente en croyant corriger celle qu'on vient de faire. Sans statut de
+ * relance, on reprend la plus récente des dates posées, celle qu'on rattrape
+ * après coup. Et sur une fiche vierge, R1 : on peut relancer sans changer
+ * d'étape, le champ ne doit donc pas être mort.
+ */
+export function rangRelanceVise(ligne, statut) {
+  return RANG_DU_STATUT[statut]
+    || [3, 2, 1].find(n => ligne?.[COL_RELANCE[n - 1]])
+    || 1;
+}
+
 // La dernière relance d'une ligne, et depuis combien de jours. ⚠ On prend la
 // PLUS RÉCENTE des trois et non `relance_3_le` : une fiche peut être à la
 // relance 2, et une date posée à la main peut être postérieure à une autre.
+// ⚠ `rang` EST LE RANG DE LA COLONNE, PAS LE NOMBRE DE DATES POSÉES (corrigé le
+// 01/10/2026) : `dates.length` valait 1 sur une fiche où seule la relance 2
+// porte une date, et la pastille affichait « R1 ». Le cas était rare tant que
+// les dates se posaient toutes seules dans l'ordre ; il ne l'est plus depuis
+// qu'on les saisit à la main dans le tableau.
 export function derniereRelance(ligne) {
-  const dates = ['relance_1_le', 'relance_2_le', 'relance_3_le']
-    .map(c => ligne?.[c]).filter(Boolean).sort();
-  if (!dates.length) return null;
-  const jour = dates[dates.length - 1];
+  const posees = COL_RELANCE
+    .map((c, i) => ({ jour: ligne?.[c], rang: i + 1 }))
+    .filter(x => x.jour)
+    .sort((a, b) => (a.jour < b.jour ? -1 : a.jour > b.jour ? 1 : 0));
+  if (!posees.length) return null;
+  const { jour, rang } = posees[posees.length - 1];
   const d = new Date(`${jour}T12:00:00`);
   const jours = Math.round((Date.now() - d.getTime()) / 86400000);
-  return { jour, jours, rang: dates.length };
+  return { jour, jours, rang, nb: posees.length };
 }

@@ -48,7 +48,8 @@
 import { db } from '../data/db.js';
 import { esc, eur, fmtDate, fmtDateTime, openModal, toast, userName, daysSince } from '../ui.js';
 import { ETAPES_RGD, ORDRE_ETAPES, STATUT_DE_L_ETAPE, ecrireStatut,
-         montantDevisDe, etapeAvecMontant } from '../data/rgd-etapes.js';
+         montantDevisDe, etapeAvecMontant, COL_RELANCE, majDateRelance,
+         aujourdhui } from '../data/rgd-etapes.js';
 import { scope } from '../data/scope.js';
 import { formulaireModif, enregistrerModif, lireModif, refusDeModifier, valeursProjet }
   from './rgd-fiche-modif.js';
@@ -134,9 +135,13 @@ export const info = (icone, quoi, valeur, teinte) => valeur
 // dans le contexte du dossier.
 function blocRendezVous(rdvs) {
   if (!rdvs.length) return '';
-  const aujourdhui = new Date().toISOString().slice(0, 10);
+  // Le jour vient de `aujourdhui()`, pas de `toISOString()`. Deux raisons : ce
+  // dernier rend de l'UTC, donc avant 2 h du matin un rendez-vous du jour se
+  // comparait a la veille ; et un `const aujourdhui` local masquait dans cette
+  // fonction la fonction importee du meme nom — deux choses homonymes de types
+  // differents dans un fichier, c'est le genre d'ecart qui se paie plus tard.
   const lignes = rdvs.map((e) => {
-    const passe = String(e.day || '') < aujourdhui;
+    const passe = String(e.day || '') < aujourdhui();
     const quand = e.all_day || !e.starts_at
       ? fmtDate(e.day)
       : fmtDateTime(e.starts_at);
@@ -179,20 +184,20 @@ export function ouvrirFicheRgd(x, onChange) {
   // seul endroit où la date ne peut pas être oubliée. Ici on CORRIGE, parce
   // qu'on saisit souvent le lendemain de l'appel.
   //
-  // ⚠ CE N'EST PAS UN SECOND CHEMIN D'ÉCRITURE : on écrit la même colonne, par
-  // `db.update`, sans toucher au statut. Les deux disent des choses
-  // différentes — « où en est le dossier » et « quand a-t-on appelé » — et ne
-  // se déduisent pas l'une de l'autre : on peut relancer sans changer d'étape.
+  // ⚠ CE N'EST PAS UN SECOND CHEMIN D'ÉCRITURE : on passe par `majDateRelance`,
+  // la porte unique des trois colonnes, sans toucher au statut. Les deux disent
+  // des choses différentes — « où en est le dossier » et « quand a-t-on
+  // appelé » — et ne se déduisent pas l'une de l'autre : on peut relancer sans
+  // changer d'étape. ⚠ Elle écrivait par `db.update` en direct jusqu'au
+  // 01/10/2026 ; le tableau est devenu le troisième écrivain de la même
+  // colonne, et trois copies d'une règle dérivent encore plus vite que deux.
   //
   // ⚠ LE BLOC NE S'AFFICHE QUE S'IL Y A QUELQUE CHOSE À MONTRER OU À SAISIR :
   // un encadré « Relances » vide sur un chantier terminé n'apprend rien et
   // repousse l'historique sous la ligne de flottaison.
-  const RELANCES = [
-    ['relance_1_le', 'Relance 1'],
-    ['relance_2_le', 'Relance 2'],
-    ['relance_3_le', 'Relance 3'],
-  ];
-  const tableDeLaFiche = () => (x.cible === 'demande' ? 'rgd_demandes' : 'rgd_clients');
+  // ⚠ LA LISTE VIENT DE `rgd-etapes.js` : la recopier ici en ferait la seconde,
+  // et le tableau lit la première.
+  const RELANCES = COL_RELANCE.map((col, i) => [col, `Relance ${i + 1}`, i + 1]);
 
   const blocRelances = () => {
     if (x.cible !== 'demande' && x.cible !== 'client') return '';
@@ -200,11 +205,12 @@ export function ouvrirFicheRgd(x, onChange) {
     if (!garnies && !scope.canRgd) return '';
     return `<section class="rgdf-bloc rgdf-relances">
       <h3>Relances</h3>
-      ${RELANCES.map(([champ, titre]) => `
+      ${RELANCES.map(([champ, titre, rang]) => `
         <label class="rgdf-relance">
           <span>${esc(titre)}</span>
           ${scope.canRgd
-            ? `<input type="date" data-relance="${esc(champ)}" value="${esc(f[champ] || '')}">`
+            ? `<input type="date" data-relance="${rang}" max="${esc(aujourdhui())}"
+                 value="${esc(f[champ] || '')}">`
             : `<b>${f[champ] ? esc(fmtDate(f[champ])) : '—'}</b>`}
         </label>`).join('')}
       ${scope.canRgd ? `<p class="rgdf-source">La date se pose toute seule quand le statut
@@ -576,23 +582,23 @@ export function ouvrirFicheRgd(x, onChange) {
     // tableau des apports partenaires.
     m.querySelectorAll('[data-relance]').forEach(champ => {
       champ.onchange = async () => {
-        const col = champ.dataset.relance;
+        const rang = champ.dataset.relance;
+        const col = COL_RELANCE[Number(rang) - 1];
         // Vider le champ efface la date : c'est le seul moyen de défaire une
         // relance posée par un changement de statut fait par erreur.
         const valeur = champ.value || null;
         champ.disabled = true;
-        try {
-          await db.update(tableDeLaFiche(), f.id, { [col]: valeur });
+        const r = await majDateRelance({ uuid: f.id, cible: x.cible, rang, jour: valeur });
+        champ.disabled = false;
+        if (r.ok) {
           // ⚠ `db.update` REMPLACE la ligne du cache : sans ce report, la fiche
           // garderait une référence orpheline et réafficherait l'ancienne date
           // au prochain redessin — base juste, écran faux.
           f[col] = valeur;
           onChange?.();
-        } catch (e) {
+        } else {
           champ.value = f[col] || '';
-          toast(String(e.message || e).slice(0, 90), 'err');
-        } finally {
-          champ.disabled = false;
+          toast(r.motif, 'err');
         }
       };
     });

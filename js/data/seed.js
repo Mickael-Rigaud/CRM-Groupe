@@ -592,12 +592,18 @@ export const SEED = {
     { id: 'rc1', owner_id: 'u-charge', contact_id: 'c1', statut: 'prospect', statut_suivi: 'nouveau_prospect',
       source: 'meta_ads', meta_received_at: d(-6), meta_type_projet: 'Rénovation complète',
       meta_budget: '30 000 €', notes: '', maj: d(-6) },
+    // Trois dossiers portent des dates de relance : sans elles la colonne
+    // « Derniere relance » est vide de haut en bas, et ni l'ambre des deux
+    // semaines ni la ligne des relances precedentes ne s'essaient en demo.
     { id: 'rc2', owner_id: 'u-charge', contact_id: 'c9', statut: 'prospect', statut_suivi: 'relance_1',
+      relance_1_le: day(-3),
       source: 'meta_ads', meta_received_at: d(-2), meta_type_projet: 'Isolation',
       notes: 'Message laissé sur répondeur.', maj: d(-1) },
     { id: 'rc3', owner_id: 'u-mickael', contact_id: 'c12', statut: 'prospect', statut_suivi: 'relance_2',
+      relance_1_le: day(-26), relance_2_le: day(-5),
       source: 'Formulaire site', notes: '', maj: d(-4) },
     { id: 'rc4', owner_id: 'u-mickael', contact_id: 'c13', d1_id: 7001, statut: 'prospect', statut_suivi: 'relance_3',
+      relance_1_le: day(-45), relance_2_le: day(-31), relance_3_le: day(-22),
       source: 'manuel', notes: 'Ne répond plus depuis trois semaines.', maj: d(-9) },
     { id: 'rc5', owner_id: 'u-mickael', contact_id: 'c14', statut: 'qualifie', statut_suivi: 'rdv_planifie',
       source: 'google_calendar', notes: 'Fiche créée depuis le rendez-vous.', maj: d(-1) },

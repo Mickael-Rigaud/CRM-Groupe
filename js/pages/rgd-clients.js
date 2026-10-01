@@ -93,6 +93,7 @@ import { ORDRE_ETAPES, ETAPES_RGD, ETAPES_CLES, ETAPE_DU_STATUT, STATUT_DE_L_ETA
          etapeDeFiche, etapeDeDemande, estProspectParSource,
          joursDeVisite, statutsDeLEtape, statutSuiviLu,
          montantDevisDe, etapeAvecMontant, ecrireStatut, derniereRelance,
+         rangRelanceVise, majDateRelance, aujourdhui,
          visiteDeLaFiche } from '../data/rgd-etapes.js';
 import { db } from '../data/db.js';
 import { esc, eur, fmtDate, fmtDateTime, relDay, terms, hit, searchInput, bindSearch, restoreFocus } from '../ui.js';
@@ -299,16 +300,76 @@ const flechesEtape = (etape, ecriture) => {
 // ⚠ ON DIT LES JOURS, PAS SEULEMENT LA DATE : au téléphone la question est
 // « ça fait combien de temps ? », et personne ne compte les jours de tête entre
 // le 24 et aujourd'hui. Le rang (« R2 ») dit où on en est des trois relances.
-const celluleRelance = (ligne) => {
+// ⚠ « dans n j » EXISTE BIEN QUE LA SAISIE REFUSE LE FUTUR : une date déjà en
+// base peut l'être, et « il y a -340 j » ne se lit pas.
+// Le format du champ de saisie juste au-dessus (28/09/2026), pas celui de
+// `fmtDate` (« 28 sept. 2026 ») : deux écritures d'une date dans la même
+// cellule se lisent comme deux natures de date, et la forme longue passait à la
+// ligne dès qu'il y avait deux relances à rappeler.
+const jourCourt = (jour) => new Date(`${jour}T12:00:00`).toLocaleDateString('fr-FR');
+
+const anciennete = (jour) => {
+  const j = Math.round((Date.now() - new Date(`${jour}T12:00:00`).getTime()) / 86400000);
+  return j === 0 ? 'aujourd’hui' : j === 1 ? 'hier'
+    : j < 0 ? `dans ${-j} j` : `il y a ${j} j`;
+};
+
+// ⚠ LA DATE SE SAISIT DANS LE TABLEAU DEPUIS LE 01/10/2026, demandé : « je ne
+// veux pas être obligée d'ouvrir la fiche client pour sélectionner la date ».
+// On relance au téléphone en descendant cette liste : ouvrir une fiche pour
+// corriger un jour, la refermer, passer à la ligne suivante, c'est trois gestes
+// là où il en faut un, vingt-cinq fois de suite.
+//
+// ⚠ UN SEUL CHAMP, PAS TROIS : trois sélecteurs par ligne feraient
+// soixante-quinze champs sur une page, dont les deux tiers vides. Le champ
+// porte LA relance en cours (`rangRelanceVise`), les autres dates se lisent
+// dessous. La fiche garde les trois — c'est là qu'on rattrape une R1 jamais
+// datée.
+//
+// ⚠ LES DEUX LIGNES DE DESSOUS SONT TOUJOURS RENDUES, VIDES AU BESOIN, et le
+// CSS les efface par `:empty` : après une écriture on remet un `textContent`
+// au lieu de refabriquer la cellule. Refabriquer voudrait dire rebrancher le
+// gestionnaire, et remplacer le champ sous le doigt de qui vient d'y saisir.
+const celluleRelance = (ligne, statut, cible) => {
   const r = derniereRelance(ligne);
-  if (!r) return '<span class="muted">—</span>';
-  const quand = r.jours === 0 ? 'aujourd’hui'
-    : r.jours === 1 ? 'hier'
-    : `il y a ${r.jours} j`;
-  // Au-delà de deux semaines sans nouvelle, la relance se signale : c'est le
-  // moment où l'on perd le dossier sans s'en apercevoir.
-  return `<b class="rcl-relance${r.jours >= 14 ? ' est-vieux' : ''}">R${r.rang}</b>
-    ${esc(fmtDate(r.jour))} <span class="muted">(${esc(quand)})</span>`;
+  // Au-delà de deux semaines sans nouvelle, le rang se signale : c'est le
+  // moment où l'on perd le dossier sans s'en apercevoir. ⚠ Le signal se lit sur
+  // la relance LA PLUS RÉCENTE, pas sur le champ proposé : c'est le dossier qui
+  // refroidit, pas la case.
+  const froid = r && r.jours >= 14 ? ' est-vieux' : '';
+  if (!scope.canRgd) {
+    return r ? `<b class="rcl-relance${froid}">R${r.rang}</b> ${esc(fmtDate(r.jour))}
+      <span class="muted">(${esc(anciennete(r.jour))})</span>`
+      : '<span class="muted">—</span>';
+  }
+  const rang = rangRelanceVise(ligne, statut);
+  const jour = ligne[`relance_${rang}_le`] || '';
+  // Les relances d'avant, en lecture : la colonne dit « dernière relance », mais
+  // on appelle quelqu'un en sachant qu'on l'a déjà appelé deux fois. Les
+  // montrer coûte une ligne, les cacher coûte un aller-retour dans la fiche.
+  const autres = [1, 2, 3]
+    .filter(n => n !== rang && ligne[`relance_${n}_le`])
+    .map(n => `R${n} ${esc(jourCourt(ligne[`relance_${n}_le`]))}`)
+    .join(' · ');
+  return `<div class="rcl-rel-cell">
+    <div class="rcl-rel-ligne"><b class="rcl-relance${froid}">R${rang}</b>
+      <input type="date" class="rcl-rel-champ" value="${esc(jour)}"
+        max="${esc(aujourdhui())}" data-rel-uuid="${esc(ligne.id)}"
+        data-rel-cible="${esc(cible)}" data-rel-rang="${rang}"
+        aria-label="Date de la relance ${rang}"></div>
+    <span class="muted rcl-rel-age">${jour ? esc(anciennete(jour)) : ''}</span>
+    <span class="muted rcl-rel-avant">${autres}</span>
+  </div>`;
+};
+
+// Ce qui change dans la cellule après une écriture, et rien d'autre : la
+// durée écoulée, et l'ambre du rang. Le champ lui-même n'est pas touché.
+const rafraichirRelance = (champ, ligne, jour) => {
+  const cell = champ.closest('.rcl-rel-cell');
+  if (!cell) return;
+  cell.querySelector('.rcl-rel-age').textContent = jour ? anciennete(jour) : '';
+  const r = derniereRelance(ligne);
+  cell.querySelector('.rcl-relance').classList.toggle('est-vieux', !!(r && r.jours >= 14));
 };
 
 const pastilleProvenance = (cle) => {
@@ -907,14 +968,14 @@ export const rgdClientsPage = {
             <td class="rcl-statut-cell">${state.ecriture
               ? menuStatut(x.statut, x.cible, x.ligne.id) + flechesEtape(x.etape, true)
               : pastilleSuivi(x.statut)}</td>
-            ${surRelances ? `<td class="small">${celluleRelance(x.ligne)}</td>` : ''}
+            ${surRelances ? `<td class="small">${celluleRelance(x.ligne, x.statut, x.cible)}</td>` : ''}
             <td class="rcl-note">${champNote(x.ligne, x.cible)}</td>
             <td>${boutonSuppression(x.ligne)}</td>
           </tr>`; }).join('') || `<tr><td colspan="${10 + (surRdv ? 1 : 0) + (surRelances ? 1 : 0)}"><div class="empty">${esc(vide())}</div></td></tr>`}</tbody>
         </table>
         ${pagination()}
         <p class="small muted">${state.ecriture
-          ? 'Le statut et le commentaire se changent ici et sont enregistrés tout de suite. Ils ne repartent plus vers l’application RGD : le CRM en est la source.'
+          ? `Le statut${surRelances ? ', la date de relance' : ''} et le commentaire se changent ici et sont enregistrés tout de suite. Ils ne repartent plus vers l’application RGD : le CRM en est la source.`
           : 'Le statut et le commentaire sont lus, pas saisis : leur modification est réservée à l’équipe RGD.'}</p>
       </section>`;
 
@@ -1107,6 +1168,40 @@ export const rgdClientsPage = {
             // haut sur un texte court se lit comme un enregistrement réussi.
             ajusterNote(i);
             toast(`Commentaire non enregistré — ${r.motif}`, 'err');
+          }
+        };
+      });
+
+      // La date d'une relance, saisie dans la cellule. ⚠ AU `change`, PAS À LA
+      // FRAPPE, ET SANS REDESSINER : un champ date émet pendant qu'on le
+      // remplit, et un redessin du tableau ferait glisser la ligne sous la
+      // main — le statut peut l'envoyer dans un autre onglet. Même règle que
+      // le commentaire d'à côté.
+      root.querySelectorAll('.rcl-rel-champ').forEach(i => {
+        i.dataset.avant = i.value;
+        i.onchange = async () => {
+          const avant = i.dataset.avant;
+          const apres = i.value;
+          if (avant === apres) return;
+          // ⚠ LA LIGNE SE RETROUVE PAR L'INDEX DE SON `<tr>` : `db.update`
+          // REMPLACE la ligne du cache, donc sans report sur la référence que
+          // le tableau tient, le prochain redessin réafficherait l'ancienne
+          // date — base juste, écran faux. Piège déjà payé sur la fiche.
+          const x = lignesProspects[Number(i.closest('tr')?.dataset.fiche)];
+          i.disabled = true;
+          const r = await majDateRelance({
+            uuid: i.dataset.relUuid, cible: i.dataset.relCible,
+            rang: i.dataset.relRang, jour: apres || null,
+          });
+          i.disabled = false;
+          if (r.ok) {
+            i.dataset.avant = apres;
+            if (x?.ligne) x.ligne[r.colonne] = apres || null;
+            rafraichirRelance(i, x?.ligne || {}, apres);
+            toast(apres ? 'Date de relance enregistrée' : 'Date de relance effacée');
+          } else {
+            i.value = avant;
+            toast(`Date non enregistrée — ${r.motif}`, 'err');
           }
         };
       });
