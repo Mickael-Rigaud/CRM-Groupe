@@ -46,7 +46,7 @@ import { esc, openModal, closeModal, toast, fmtDate } from '../ui.js';
 import { DEMANDEUR, BIEN, RESIDENCE, TRAVAUX, BUDGETS, CONNU, listeTravaux,
          CONNU_RECOMMANDATION, CONNU_APPORTEUR } from '../data/rgd-formulaire.js';
 import { valeursProjet, valeursSuivi, personneDe, enregistrerProjet, ditCreneau,
-         adresseChantier } from '../data/rgd-projet.js';
+         adresseChantier, apercuRappel } from '../data/rgd-projet.js';
 import {
   lireCreneaux, occupationDuJour, placesLibres, hhmm, lundiDe,
   aujourdhuiParis, maintenantParis, DUREES,
@@ -140,7 +140,7 @@ export function ficheProjetRgd({ dans, cible = null, apporteurs = null,
     // STOCKÉE : vide à chaque ouverture, même sur une fiche qui en porte déjà
     // un. Le pré-remplir ferait recréer le même rappel à chaque
     // enregistrement, et il n'existe aucune colonne qui le porterait.
-    rappel_jour: '', rappel_heure: '',
+    rappel_jour: '', rappel_heure: '', rappel_objet: '',
   };
 
   // ⚠ LA CASE SE DEVINE À L'OUVERTURE, ET ELLE NE SE DEVINE QU'UNE FOIS. Une
@@ -387,8 +387,15 @@ export function ficheProjetRgd({ dans, cible = null, apporteurs = null,
             ${v.rappel_jour ? '' : 'disabled'}>
           ${v.rappel_jour ? '<button type="button" class="btn ghost sm" id="rgp-rappel-non">Retirer</button>' : ''}
         </div>
+        <!-- ⚠ L'OBJET N'APPARAIT QUE SI UNE DATE EST CHOISIE : sans date il
+             n'y a pas de rappel, donc rien a expliquer, et un champ de plus
+             sur un ecran qu'on remplit au telephone est un champ de trop. -->
+        ${v.rappel_jour ? `
+          <textarea id="rgp-rappel_objet" rows="2"
+            placeholder="Pourquoi le rappeler : relancer sur le devis, attendre le retour du syndic…"
+          >${esc(v.rappel_objet)}</textarea>` : ''}
         <p class="rgp-rappel-dit">${v.rappel_jour
-          ? `Une tâche « Rappeler ${esc(nomDit() || 'ce prospect')} » sera ajoutée à la to-do.`
+          ? `Dans la to-do : « <b>${esc(apercuRappel(v))}</b> ».`
           : 'Aucun rappel. Choisissez une date pour en poser un dans la to-do du CRM.'}</p>
         ${deja.length ? `<ul class="rgp-rappel-deja">${deja.slice(0, 3).map(a => `
           <li>Déjà prévu : ${esc(fmtDate(a.due_date))}${a.due_time ? ` à ${esc(a.due_time)}` : ''}
@@ -595,7 +602,7 @@ export function ficheProjetRgd({ dans, cible = null, apporteurs = null,
       dans.querySelectorAll('[data-rappel]').forEach(b2 => b2.onclick = () => {
         const j = decale(aujourdhuiParis(), Number(b2.dataset.rappel));
         v.rappel_jour = v.rappel_jour === j ? '' : j;
-        if (!v.rappel_jour) v.rappel_heure = '';
+        if (!v.rappel_jour) { v.rappel_heure = ''; v.rappel_objet = ''; }
         dessine();
       });
       const rj = dans.querySelector('#rgp-rappel_jour');
@@ -604,8 +611,18 @@ export function ficheProjetRgd({ dans, cible = null, apporteurs = null,
       if (rj) rj.onchange = () => { v.rappel_jour = rj.value; dessine(); };
       const rh = dans.querySelector('#rgp-rappel_heure');
       if (rh) rh.oninput = () => { v.rappel_heure = rh.value; };
+      const ro = dans.querySelector('#rgp-rappel_objet');
+      // ⚠ ON NE REDESSINE PAS A LA FRAPPE : le champ serait detruit et recree a
+      // chaque caractere, et le curseur partirait avec l'ancien — defaut deja
+      // vecu sur le montant des travaux de la fiche projet BTP. Seule la
+      // phrase d'apercu est remise a jour, en place.
+      if (ro) ro.oninput = () => {
+        v.rappel_objet = ro.value;
+        const dit = dans.querySelector('.rgp-rappel-dit');
+        if (dit) dit.innerHTML = `Dans la to-do : « <b>${esc(apercuRappel(v))}</b> ».`;
+      };
       dans.querySelector('#rgp-rappel-non')?.addEventListener('click', () => {
-        v.rappel_jour = ''; v.rappel_heure = ''; dessine();
+        v.rappel_jour = ''; v.rappel_heure = ''; v.rappel_objet = ''; dessine();
       });
 
       const diff = dans.querySelector('#rgp-adresse_differente');

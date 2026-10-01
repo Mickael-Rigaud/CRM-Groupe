@@ -759,7 +759,13 @@ button.esp-side-titre { background: none; border: 0; font-family: inherit; color
 .rgp-rappel-quand input[type="date"] { flex: 1 1 150px; min-width: 0; }
 .rgp-rappel-quand input[type="time"] { flex: 0 1 110px; }
 .rgp-rappel-quand input:disabled { background: var(--card-2); color: var(--muted-2); }
+.rgp-rappel textarea { width: 100%; padding: 7px 9px; font: inherit; font-size: 12.5px;
+  resize: vertical; border: 1px solid var(--line-strong); border-radius: 9px;
+  background: var(--card); color: var(--text); }
+.rgp-rappel textarea:focus { outline: none; border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft); }
 .rgp-rappel-dit { margin: 0; font-size: 11.5px; line-height: 1.45; color: var(--muted); }
+.rgp-rappel-dit b { color: var(--text); }
 .rgp-rappel-deja { margin: 2px 0 0; padding-left: 16px; font-size: 11.5px; color: var(--muted); }
 
 /* La case « adresse differente ». Pleine largeur, au-dessus des trois champs

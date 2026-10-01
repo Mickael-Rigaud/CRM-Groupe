@@ -338,6 +338,47 @@ export async function enregistrerProjet(x, v) {
 }
 
 /**
+ * Ce que la to-do affichera. ⚠ C'EST LE SEUL TEXTE QU'ON Y VOIT : la liste des
+ * tâches ne rend que `title` — `notes` est cherchable mais pas affichée, et ne
+ * se lit qu'en ouvrant la tâche (mesuré dans `today.js`). L'objet du rappel
+ * doit donc y monter, sinon « Rappeler Untel » ne dit jamais pourquoi.
+ *
+ * ⚠ ON NE REMET PAS LE NOM DEDANS : la ligne de la to-do affiche déjà le
+ * contact rattaché, à côté du titre. L'y répéter mangerait la moitié de la
+ * largeur pour une information déjà là.
+ *
+ * ⚠ UNE SEULE RÈGLE, PAS DEUX : le texte entier est ramené sur une ligne et
+ * coupé à 80 caractères. Prendre « la première ligne » puis couper ferait deux
+ * comportements à expliquer, et un titre vide sur un texte qui commence par un
+ * retour à la ligne. Le texte complet reste dans les notes, rien n'est perdu.
+ */
+const titreRappel = (v) => {
+  const brut = String(v.rappel_objet || '').replace(/\s+/g, ' ').trim();
+  if (!brut) return `Rappeler ${nomComplet(v) || 'ce prospect'}`;
+  return brut.length > 80 ? `${brut.slice(0, 79)}…` : brut;
+};
+
+/**
+ * Ce qu'on lira en ouvrant la tâche.
+ *
+ * ⚠ LES DEUX COMMENTAIRES NE DISENT PAS LA MÊME CHOSE, et c'est pourquoi les
+ * deux y sont : celui du rappel dit POURQUOI on rappelle, celui de la fiche dit
+ * ce qu'on sait de la personne (« à rappeler après 18 h »). Garder le second
+ * seul était le choix d'hier ; il perdait l'objet, qui est précisément ce que
+ * Mickael est venu ajouter.
+ */
+const notesRappel = (v) => {
+  const objet = txt(v.rappel_objet);
+  const fiche = txt(v.commentaire);
+  if (!objet) return fiche;
+  if (!fiche) return objet;
+  return `${objet}\n\n— Sur le prospect : ${fiche}`;
+};
+
+/** Le titre que la to-do affichera, pour le montrer avant d'enregistrer. */
+export const apercuRappel = (v) => titreRappel(v);
+
+/**
  * Pose le rappel dans la to-do du CRM.
  *
  * ⚠ DANS `activities`, LA VRAIE TABLE DES TÂCHES — pas dans une liste à part
@@ -349,11 +390,11 @@ export async function enregistrerProjet(x, v) {
  * (`tache_destinataire`) refuse un destinataire hors de ses structures, et
  * surtout personne n'a demandé à recevoir le rappel de quelqu'un d'autre.
  *
- * ⚠ LE COMMENTAIRE EST RECOPIÉ DANS LA TÂCHE, et c'est un INSTANTANÉ assumé :
- * quand le rappel sonne dans trois semaines, « rappeler après 18 h » est
- * précisément ce qu'il faut avoir sous les yeux, et aller le rechercher sur la
- * fiche est le geste qu'on ne fera pas. Il ne suivra pas une correction faite
- * ensuite sur la fiche — c'est le prix, et il est petit.
+ * ⚠ LES DEUX COMMENTAIRES SONT RECOPIÉS, et c'est un INSTANTANÉ assumé : quand
+ * le rappel sonne dans trois semaines, « relancer sur le devis » et « rappeler
+ * après 18 h » sont précisément ce qu'il faut avoir sous les yeux, et aller les
+ * rechercher sur la fiche est le geste qu'on ne fera pas. Ils ne suivront pas
+ * une correction faite ensuite sur la fiche — c'est le prix, et il est petit.
  *
  * ⚠ SON ÉCHEC NE REMET RIEN EN CAUSE : la fiche est enregistrée, le rendez-vous
  * pris. On le dit, on ne recommence pas.
@@ -367,10 +408,10 @@ async function poserRappel(v, { contactId, organisationId }) {
       organisation_id: organisationId || null,
       activity: 'rgd',
       type: 'relance',
-      title: `Rappeler ${nomComplet(v) || 'ce prospect'}`,
+      title: titreRappel(v),
       due_date: jour,
       due_time: txt(v.rappel_heure),
-      notes: txt(v.commentaire),
+      notes: notesRappel(v),
       assignee_id: scope.user?.id || null,
       done: false,
       created_by: scope.user?.id || null,
