@@ -3,6 +3,12 @@ import { db } from '../data/db.js';
 import { scope } from '../data/scope.js';
 import { ACTIVITY_TYPES, ACTIVITIES, PRIORITES } from '../data/schema.js';
 import { esc, openModal, closeModal, readForm, toast, isoDay, daysSince, relDay, userName, fmtDate } from '../ui.js';
+// ⚠ `valeursProjet` EST LA SEULE TRADUCTION fiche/demande → les champs du
+// projet, et elle vit dans un module de DONNÉES : l'importer ici ne crée aucun
+// cycle (aucun module de `js/data/` ne dépend d'une page). La recopier aurait
+// fait une seconde traduction, et l'écart ne se serait vu que sur un genre de
+// fiche — le piège que son propre en-tête décrit.
+import { valeursProjet } from '../data/rgd-projet.js';
 
 export const actType = (k) => ACTIVITY_TYPES.find(t => t.key === k) || { label: k, icon: '•' };
 
@@ -12,6 +18,64 @@ export function structureDe(a) {
   if (a?.activity && ACTIVITIES[a.activity]) return a.activity;
   const d = a?.deal_id && db.byId('deals', a.deal_id);
   return d?.activity && ACTIVITIES[d.activity] ? d.activity : null;
+}
+
+/**
+ * Ce que la tâche concerne : la personne, et le projet.
+ *
+ * Demandé le 01/10/2026, après un essai depuis une fiche projet : « quand je
+ * clique sur la tâche ou même en aperçu j'aimerais avoir les informations de la
+ * personne concernée et du projet ». Un rappel posé depuis une fiche porte bien
+ * son `contact_id`, mais ni la carte ni le formulaire n'en disaient rien — on
+ * lisait « Rappeler pour le devis » sans savoir qui rappeler.
+ *
+ * ⚠ LE TÉLÉPHONE EST LA RAISON D'ÊTRE DE CE BLOC. Une tâche de rappel sans le
+ * numéro oblige à ouvrir une autre fiche pour faire la seule chose qu'elle
+ * demande.
+ *
+ * ⚠ LE PROJET N'EST CHERCHÉ QUE POUR RGD, et sans jamais présumer du genre de
+ * la ligne : une personne peut être une fiche client ou une demande du site,
+ * et les deux ne portent pas les mêmes colonnes — d'où `valeursProjet`.
+ */
+export function contexteTache(a) {
+  if (!a) return null;
+  const c = a.contact_id ? db.byId('contacts', a.contact_id) : null;
+  const o = a.organisation_id ? db.byId('organisations', a.organisation_id) : null;
+  const d = a.deal_id ? db.byId('deals', a.deal_id) : null;
+
+  const personne = c ? `${c.first_name || ''} ${c.last_name || ''}`.trim() : (o?.name || '');
+  const tel = c?.phone || o?.phone || '';
+  const mail = c?.email || o?.email || '';
+
+  // La fiche RGD de cette personne, s'il y en a une. On regarde les deux
+  // tables : une demande du site n'a pas encore de fiche client.
+  let projet = '';
+  let fiche = null;
+  if (c || o) {
+    const colle = (l) => (c && l.contact_id === a.contact_id) || (o && l.organisation_id === a.organisation_id);
+    const cli = (db.t('rgd_clients') || []).find(colle);
+    const dem = cli ? null : (db.t('rgd_demandes') || []).find(colle);
+    fiche = cli ? { genre: 'fiche', ligne: cli } : dem ? { genre: 'demande', ligne: dem } : null;
+    if (fiche) {
+      const v = valeursProjet(fiche);
+      // `types_travaux` arrive en tableau, en JSON ou en texte selon l'âge de
+      // la ligne : on ne suppose pas, on regarde.
+      const travaux = Array.isArray(v.types_travaux) ? v.types_travaux.join(', ')
+        : String(v.types_travaux || '').replace(/^\[|\]$/g, '').replace(/"/g, '').replace(/,/g, ', ');
+      projet = [v.type_projet, travaux, v.budget_annonce, v.ville_chantier]
+        .map(x => String(x || '').trim()).filter(Boolean).join(' · ');
+    }
+  }
+
+  return {
+    personne, tel, mail, projet,
+    ville: c?.city || '',
+    affaire: d ? d.title : '',
+    // De quoi ouvrir la bonne fiche au clic, sans que ce module ait à
+    // connaître les écrans : l'appelant décide quoi en faire.
+    ficheRgd: fiche, contact: c, organisation: o, deal: d,
+    aQuelqueChose: !!(personne || projet || d),
+  };
 }
 
 export function activityForm(link = {}, existing = null, onSaved, onClose = null) {
@@ -109,7 +173,23 @@ export function activityForm(link = {}, existing = null, onSaved, onClose = null
         x.key === 'afaire' ? 'est-hors-liste' : ''}" data-prio="${esc(x.key)}">${esc(x.icon)} ${esc(x.label)}</button>`).join('')}
     </div>`;
 
+  // ⚠ IL S'AFFICHE AU-DESSUS DU TITRE, pas en bas : on ouvre une tâche de
+  // rappel pour savoir QUI rappeler, pas pour relire son intitulé.
+  const ctx = existing ? contexteTache(existing) : null;
+  const blocCtx = ctx && ctx.aQuelqueChose ? `<section class="taf-ctx">
+    ${ctx.personne ? `<p class="taf-ctx-l"><span>👤</span><b>${esc(ctx.personne)}</b>${
+      ctx.ville ? ` <span class="muted">${esc(ctx.ville)}</span>` : ''}</p>` : ''}
+    ${ctx.tel || ctx.mail ? `<p class="taf-ctx-l"><span>📞</span>${
+      ctx.tel ? `<a href="tel:${esc(String(ctx.tel).replace(/\s+/g, ''))}">${esc(ctx.tel)}</a>` : ''}${
+      ctx.tel && ctx.mail ? ' · ' : ''}${
+      ctx.mail ? `<a href="mailto:${esc(ctx.mail)}">${esc(ctx.mail)}</a>` : ''}</p>` : ''}
+    ${ctx.projet ? `<p class="taf-ctx-l"><span>🏠</span>${esc(ctx.projet)}</p>` : ''}
+    ${ctx.affaire ? `<p class="taf-ctx-l"><span>📁</span>${esc(ctx.affaire)}</p>` : ''}
+    ${ctx.ficheRgd || ctx.deal ? '<button type="button" class="taf-ctx-ouvrir" id="taf-ouvrir">Ouvrir la fiche →</button>' : ''}
+  </section>` : '';
+
   const corpsForm = `
+    ${blocCtx}
     <input class="taf-titre" type="text" name="title" required autocomplete="off"
       value="${esc(val('title'))}" placeholder="Que faut-il faire ?">
     ${ligne('🏷️', 'Type', `<select name="type" required>${selOptions('type')}</select>`)}
@@ -134,6 +214,18 @@ export function activityForm(link = {}, existing = null, onSaved, onClose = null
     form.querySelectorAll('#taf-prio [data-prio]').forEach(x => x.classList.toggle('on', x === b));
   });
   form.querySelector('.taf-titre')?.focus();
+  // ⚠ IMPORT PARESSEUX : les écrans de fiche importent `activity.js`, les
+  // charger ici en tête ferait un cycle. Au clic, le module est déjà là.
+  m.querySelector('#taf-ouvrir')?.addEventListener('click', async () => {
+    closeModal(true);
+    if (ctx.ficheRgd) {
+      const { ouvrirFicheRgd } = await import('./rgd-fiche.js');
+      ouvrirFicheRgd({ ...ctx.ficheRgd, cible: ctx.ficheRgd.genre === 'demande' ? 'demande' : 'client' }, onSaved);
+    } else if (ctx.deal) {
+      const { openDeal } = await import('./deal.js');
+      openDeal(ctx.deal.id, onSaved);
+    }
+  });
   form.onsubmit = async (e) => {
     e.preventDefault();
     const v = readForm(form, spec);

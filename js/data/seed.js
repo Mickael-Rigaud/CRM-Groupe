@@ -599,7 +599,14 @@ export const SEED = {
     // Trois dossiers portent des dates de relance : sans elles la colonne
     // « Derniere relance » est vide de haut en bas, et ni l'ambre des deux
     // semaines ni la ligne des relances precedentes ne s'essaient en demo.
+    // ⚠ CETTE FICHE PORTE LES CHAMPS DU PROJET, les autres non — et c'est
+    // volontaire : une tâche dont le projet est renseigné et une autre où il
+    // manque doivent toutes deux s'essayer. Sans celle-ci, le bloc « ce que la
+    // tâche concerne » ne montrait jamais sa ligne « projet ».
     { id: 'rc2', owner_id: 'u-charge', contact_id: 'c9', statut: 'prospect', statut_suivi: 'relance_1',
+      type_bien: 'Appartement', types_travaux: ['Salle de bain', 'Plomberie'],
+      budget_annonce: 'De 10 000 à 20 000 €', ville_chantier: 'Chantilly (60)',
+      adresse_chantier: '12 rue des Lilas',
       relance_1_le: day(-3),
       source: 'meta_ads', meta_received_at: d(-2), meta_type_projet: 'Isolation',
       notes: 'Message laissé sur répondeur.', maj: d(-1) },

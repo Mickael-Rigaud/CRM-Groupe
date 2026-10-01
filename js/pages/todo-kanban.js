@@ -21,7 +21,7 @@ import { db } from '../data/db.js';
 import { scope } from '../data/scope.js';
 import { ACTIVITIES } from '../data/schema.js';
 import { esc, daysSince, relDay, userName } from '../ui.js';
-import { actType, structureDe } from './activity.js';
+import { actType, structureDe, contexteTache } from './activity.js';
 
 const ecart = (a) => (a.due_date ? daysSince(a.due_date) : null);
 
@@ -55,9 +55,16 @@ function carte(a, recentes) {
   const d = a.deal_id && db.byId('deals', a.deal_id);
   const c = a.contact_id && db.byId('contacts', a.contact_id);
   const o = a.organisation_id && db.byId('organisations', a.organisation_id);
-  const ctx = d ? d.title
+  // Le dossier d'abord, la personne ensuite : sur une tâche d'affaire c'est
+  // l'affaire qu'on cherche, sur un rappel c'est la personne.
+  const ligneCtx = d ? d.title
     : c ? `${c.first_name || ''} ${c.last_name || ''}`.trim()
     : o ? o.name : '';
+  // ⚠ LE NUMÉRO EST SUR LA CARTE, pas seulement dans la tâche ouverte : « même
+  // en aperçu j'aimerais avoir les informations de la personne ». Une tâche de
+  // rappel qu'il faut ouvrir pour trouver le numéro demande un clic de plus
+  // pour la seule chose qu'elle sert à faire.
+  const ctx = contexteTache(a);
   const sousTaches = Array.isArray(a.checklist) ? a.checklist : [];
   const faites = sousTaches.filter(x => x && x.f).length;
 
@@ -69,7 +76,9 @@ function carte(a, recentes) {
       <p class="kb-titre">${t.icon} ${esc(a.title)}</p>
       ${recentes && recentes.has(a.id) ? `<button type="button" class="todo-annuler kb-annuler"
         data-annuler="${esc(a.id)}" title="Décocher : la tâche revient">↩ Annuler</button>` : ''}
-      ${ctx ? `<p class="kb-ctx">${esc(ctx)}</p>` : ''}
+      ${ligneCtx ? `<p class="kb-ctx">${esc(ligneCtx)}</p>` : ''}
+      ${ctx && ctx.tel ? `<p class="kb-tel"><a href="tel:${esc(String(ctx.tel).replace(/\s+/g, ''))}"
+        onclick="event.stopPropagation()">📞 ${esc(ctx.tel)}</a></p>` : ''}
       ${sousTaches.length ? `<p class="kb-checklist ${faites === sousTaches.length ? 'est-complete' : ''}">
         ☑ ${faites}/${sousTaches.length}</p>` : ''}
       <div class="kb-pied">

@@ -1922,6 +1922,28 @@ tr.btp-mission .btp-pts { color: var(--m-encre); }
 .taf-chip.est-hors-liste { border-style: dashed; }
 .taf-aide { margin: 4px 0 0; font-size: 11px; color: var(--muted); }
 
+/* ---- Ce que la tache concerne ----
+   Au-dessus du titre : on ouvre une tache de rappel pour savoir QUI rappeler,
+   pas pour relire son intitule. */
+.taf-ctx { padding: 11px 13px; margin-bottom: 14px; border-radius: 11px;
+  background: var(--card-2); border: 1px solid var(--line); }
+.taf-ctx-l { display: flex; align-items: baseline; gap: 8px; margin: 0 0 3px;
+  font-size: 12.5px; color: var(--text); }
+.taf-ctx-l:last-of-type { margin-bottom: 0; }
+.taf-ctx-l > span:first-child { flex: 0 0 16px; font-size: 12px; opacity: .8; }
+.taf-ctx-l a { color: var(--accent); text-decoration: none; font-weight: 650; }
+.taf-ctx-l a:hover { text-decoration: underline; }
+.taf-ctx-ouvrir { margin-top: 9px; padding: 5px 11px; border: 1px solid var(--line-strong);
+  border-radius: 999px; background: var(--card); cursor: pointer;
+  font-family: inherit; font-size: 12px; font-weight: 650; color: var(--text); }
+.taf-ctx-ouvrir:hover { border-color: var(--accent); color: var(--accent); }
+
+/* Le numero sur la carte : un rappel qu'il faut ouvrir pour trouver le numero
+   demande un clic de plus pour la seule chose qu'il sert a faire. */
+.kb-tel { margin: 3px 0 0; font-size: 11.5px; }
+.kb-tel a { color: var(--accent); text-decoration: none; font-weight: 650; }
+.kb-tel a:hover { text-decoration: underline; }
+
 /* ---- To do list : le tableau par structures (direction) ----
    Une colonne par structure, demande le 01/10/2026. Prefixe `.kb-` : `.todo-`
    appartient a la liste, et deux jeux de styles dans le meme ecran se
