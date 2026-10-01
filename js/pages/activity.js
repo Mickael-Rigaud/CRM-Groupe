@@ -233,7 +233,18 @@ export function activityForm(link = {}, existing = null, onSaved, onClose = null
   m.querySelector('#taf-ouvrir')?.addEventListener('click', async () => {
     if (ctx.ficheRgd) {
       const { ouvrirProspectRgd } = await import('./rgd-clients.js');
-      ouvrirProspectRgd(ctx.ficheRgd.ligne, ctx.ficheRgd.genre, onSaved);
+      // ⚠ LA TÂCHE EST RELUE À L'INSTANT DU RETOUR, pas capturée maintenant :
+      // on a pu la modifier entre-temps depuis la fiche (un rappel coché, par
+      // exemple), et rouvrir la copie d'il y a deux minutes réafficherait un
+      // état périmé. Si elle a disparu, on ne rouvre rien.
+      ouvrirProspectRgd(ctx.ficheRgd.ligne, ctx.ficheRgd.genre, onSaved, {
+        label: 'Retour à la tâche',
+        action: () => {
+          const frais = db.byId('activities', existing.id);
+          if (frais) activityForm({}, frais, onSaved, onClose);
+          else closeModal();
+        },
+      });
     } else if (ctx.deal) {
       const { openDeal } = await import('./deal.js');
       openDeal(ctx.deal.id, onSaved);

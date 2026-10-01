@@ -526,23 +526,23 @@ export function ficheDe(f, etapeDe) {
  * visites). Laisser l'appelant deviner, c'est l'obliger à charger quatre
  * tables pour ouvrir une fenêtre.
  */
-export function ouvrirProspectRgd(ligne, genre, onChange) {
+export function ouvrirProspectRgd(ligne, genre, onChange, retour = null) {
   if (genre === 'demande') {
-    ouvrirFicheRgd(demandeDe(ligne), onChange);
+    ouvrirFicheRgd(demandeDe(ligne), onChange, retour);
     return;
   }
-  ouvrirFicheDuClient(ligne, onChange);
+  ouvrirFicheDuClient(ligne, onChange, retour);
 }
 
 // Ouvrir la fiche d'une personne depuis n'importe quel écran de l'espace.
 // Elle recalcule l'étape elle-même : l'appelant n'a qu'une fiche sous la main,
 // pas les quatre tables, et le coût d'une seule lecture est nul.
-export function ouvrirFicheDuClient(f, onChange) {
+export function ouvrirFicheDuClient(f, onChange, retour = null) {
   const chantiers = scope.rgd('rgd_chantiers');
   const devis = scope.rgd('rgd_devis');
   const joursVisite = joursDeVisite(scope.rgd('agenda_events'));
   const etapeDe = (x) => etapeDeFiche(x, chantiers, devis, joursVisite);
-  ouvrirFicheRgd(ficheDe(f, etapeDe), onChange);
+  ouvrirFicheRgd(ficheDe(f, etapeDe), onChange, retour);
 }
 
 export const rgdClientsPage = {

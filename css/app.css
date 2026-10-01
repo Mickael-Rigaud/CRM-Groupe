@@ -1922,6 +1922,12 @@ tr.btp-mission .btp-pts { color: var(--m-encre); }
 .taf-chip.est-hors-liste { border-style: dashed; }
 .taf-aide { margin: 4px 0 0; font-size: 11px; color: var(--muted); }
 
+/* Le retour vers d'ou l'on vient, en tete de fiche. Discret : c'est une
+   sortie, pas une action du dossier. */
+.btn.ghost.sm.rgdf-retour { border-style: dashed; color: var(--muted); }
+.btn.ghost.sm.rgdf-retour:hover { border-style: solid; border-color: var(--accent);
+  color: var(--accent); }
+
 /* ---- Ce que la tache concerne ----
    Au-dessus du titre : on ouvre une tache de rappel pour savoir QUI rappeler,
    pas pour relire son intitule. */

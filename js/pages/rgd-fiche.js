@@ -185,7 +185,17 @@ function blocRendezVous(rdvs) {
   </div>`;
 }
 
-export function ouvrirFicheRgd(x, onChange) {
+/**
+ * `retour` — facultatif, `{ label, action }`. Ajoute un bouton en tête de
+ * fiche pour revenir d'où l'on vient.
+ *
+ * ⚠ C'EST L'APPELANT QUI SAIT D'OÙ ON VIENT, pas la fiche : elle s'ouvre
+ * depuis la liste des prospects, depuis un chantier, et depuis une tâche de la
+ * to do list. Lui faire deviner reviendrait à lui apprendre tous ses appelants.
+ * Demandé le 01/10/2026 : « rajoute un bouton retour à la tâche pour quitter
+ * la fiche ».
+ */
+export function ouvrirFicheRgd(x, onChange, retour = null) {
   let etapeCourante = x.etape;
   const f = x.ligne;
 
@@ -434,6 +444,7 @@ export function ouvrirFicheRgd(x, onChange) {
           </div>
           ${blocRendezVous(rdvs)}
         </div>
+        ${retour ? `<button type="button" class="btn ghost sm rgdf-retour" id="rgdf-retour">← ${esc(retour.label || 'Retour')}</button>` : ''}
         ${refusDeProjet(x)
           ? `<p class="rgdf-origine" title="${esc(refusDeProjet(x))}">Lecture seule</p>`
           : '<button type="button" class="btn ghost sm rgdf-modifier" id="rgdf-modifier">Modifier les informations</button>'}
@@ -581,6 +592,11 @@ export function ouvrirFicheRgd(x, onChange) {
     // RECONSTRUIT DERRIÈRE : voir l'en-tête du fichier. `onClose` ramène à la
     // fiche quand on referme par la croix ou par le fond — sans lui, les deux
     // gestes qu'on fait sans y penser feraient disparaître la fiche aussi.
+    // ⚠ PAS DE `closeModal` AVANT L'ACTION : `openModal` ferme pour
+    // REMPLACEMENT, et l'appelant rouvre sa propre fenêtre. Fermer d'abord
+    // ferait clignoter l'écran, et déclencherait le `onClose` de la fiche.
+    m.querySelector('#rgdf-retour')?.addEventListener('click', () => retour.action?.());
+
     const bModifier = m.querySelector('#rgdf-modifier');
     if (bModifier) bModifier.onclick = () => {
       const w = openModal(x.nom ? `Fiche projet — ${x.nom}` : 'Fiche projet',
