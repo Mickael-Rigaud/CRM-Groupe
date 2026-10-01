@@ -45,8 +45,8 @@ import { scope } from '../data/scope.js';
 import { esc, openModal, closeModal, toast, fmtDate } from '../ui.js';
 import { DEMANDEUR, BIEN, RESIDENCE, TRAVAUX, BUDGETS, CONNU, listeTravaux }
   from '../data/rgd-formulaire.js';
-import { valeursProjet, valeursSuivi, personneDe, enregistrerProjet, ditCreneau }
-  from '../data/rgd-projet.js';
+import { valeursProjet, valeursSuivi, personneDe, enregistrerProjet, ditCreneau,
+         adresseChantier } from '../data/rgd-projet.js';
 import {
   lireCreneaux, occupationDuJour, placesLibres, hhmm, lundiDe,
   aujourdhuiParis, maintenantParis, DUREES,
@@ -125,6 +125,8 @@ export function ficheProjetRgd({ dans, cible = null, apporteurs = null,
     types_travaux: listeTravaux(proj.types_travaux),
     budget_annonce: proj.budget_annonce || '',
     adresse_chantier: proj.adresse_chantier || '',
+    code_postal_chantier: proj.code_postal_chantier || '',
+    ville_chantier: proj.ville_chantier || '',
     projet_description: proj.projet_description || '',
     comment_connu: suivi.comment_connu || '',
     recommandation: suivi.recommandation || '',
@@ -133,7 +135,24 @@ export function ficheProjetRgd({ dans, cible = null, apporteurs = null,
     // Le créneau retenu. Vide tant qu'on n'a rien choisi — prendre un
     // rendez-vous n'est pas obligatoire pour noter une demande.
     rdv_jour: '', rdv_heure: '', rdv_duree: 60,
+    adresse_differente: false,
   };
+
+  // ⚠ LA CASE SE DEVINE À L'OUVERTURE, ET ELLE NE SE DEVINE QU'UNE FOIS. Une
+  // fiche dont le prospect habite ailleurs que son chantier doit rouvrir avec
+  // « adresse différente » DÉJÀ cochée — sinon le premier enregistrement
+  // recopierait l'adresse du chantier par-dessus la sienne, en silence.
+  // Les deux adresses vides, ou identiques, laissent la case décochée : c'est
+  // le cas courant, et c'est ce que la case est là pour éviter de retaper.
+  v.adresse_differente = (() => {
+    const ch = adresseChantier(v);
+    const rien = (a) => !a.adresse && !a.code_postal && !a.ville;
+    const sien = { adresse: v.adresse.trim(), code_postal: v.code_postal.trim(), ville: v.ville.trim() };
+    if (rien(sien) || rien(ch)) return false;
+    const pareil = (a, b2) => String(a || '').trim().toLowerCase() === String(b2 || '').trim().toLowerCase();
+    return !(pareil(sien.adresse, ch.adresse) && pareil(sien.code_postal, ch.code_postal)
+      && pareil(sien.ville, ch.ville));
+  })();
 
   // ⚠ CE QUI EST LU CHEZ GOOGLE NE VIT PAS DANS `v` : `v` est la saisie, ceci
   // est une lecture. La confondre avec la saisie ferait repartir une requête à
@@ -218,10 +237,16 @@ export function ficheProjetRgd({ dans, cible = null, apporteurs = null,
       ${zone('projet_description', 'Détails du projet', 4,
         'Ce qu’il y a à faire, pièce par pièce : l’état actuel, ce que la personne veut obtenir, ses délais, ce qui l’inquiète…')}
       ${puce('budget_annonce', 'Budget annoncé', BUDGETS)}
-      <!-- L'adresse du chantier n'est pas celle de la personne : un chantier se
-           fait souvent ailleurs que chez elle. Elle ne se saisissait qu'en
-           modification jusqu'au 01/10/2026. -->
-      ${champ('adresse_chantier', 'Adresse du chantier', { plein: true })}
+      <!-- ⚠ L'ADRESSE DU CHANTIER EST EN TROIS CHAMPS depuis le 01/10/2026
+           (demande du jour) et ce n'est pas qu'une affaire de saisie : le
+           chantier que le CRM ecrit porte adresse, code postal et ville en
+           trois colonnes. Avec un seul champ libre, la visite partait avec la
+           rue du chantier et le code postal DU PROSPECT. -->
+      <div class="rgp-adresse plein">
+        ${champ('adresse_chantier', 'Adresse du chantier')}
+        ${champ('code_postal_chantier', 'Code postal')}
+        ${champ('ville_chantier', 'Ville')}
+      </div>
     </div>`;
 
   // ⚠ L'ADRESSE TIENT SUR UNE SEULE LIGNE (demandé le 01/10/2026) : rue, code
@@ -234,11 +259,35 @@ export function ficheProjetRgd({ dans, cible = null, apporteurs = null,
             : champ('nom', 'Nom') + champ('prenom', 'Prénom')}
       ${champ('telephone', 'Téléphone', { type: 'tel', placeholder: '06 …' })}
       ${champ('email', 'E-mail', { type: 'email', placeholder: 'nom@exemple.fr' })}
-      <div class="rgp-adresse plein">
-        ${champ('adresse', 'Adresse')}
-        ${champ('code_postal', 'Code postal')}
-        ${champ('ville', 'Ville')}
-      </div>
+      <!-- ⚠ PRE-REMPLI DEPUIS LE CHANTIER, et la case dit quand ca ne l'est
+           pas (01/10/2026, demande du jour). Neuf fois sur dix la personne
+           habite la ou on intervient ; la faire retaper trois champs est du
+           travail pour rien. Decochee, les champs montrent l'adresse du
+           chantier EN LECTURE : on voit ce qui sera enregistre, et on ne peut
+           pas modifier une copie qui serait reecrite a l'enregistrement. -->
+      <label class="rgp-memeadresse plein">
+        <input type="checkbox" id="rgp-adresse_differente"
+          ${v.adresse_differente ? 'checked' : ''}>
+        <span>L’adresse du prospect est <b>différente</b> de celle du chantier</span>
+      </label>
+      ${(() => {
+        const ch = adresseChantier(v);
+        const vide = !ch.adresse && !ch.code_postal && !ch.ville;
+        if (v.adresse_differente || vide) {
+          return `<div class="rgp-adresse plein">
+            ${champ('adresse', 'Adresse')}
+            ${champ('code_postal', 'Code postal')}
+            ${champ('ville', 'Ville')}
+          </div>${vide && !v.adresse_differente
+            ? '<p class="rgp-note plein">Aucune adresse de chantier n’est renseignée : celle-ci reste la sienne.</p>'
+            : ''}`;
+        }
+        const lu = (lbl, val) => `<label class="mail-champ"><span>${esc(lbl)}</span>
+          <input value="${esc(val || '')}" disabled></label>`;
+        return `<div class="rgp-adresse plein est-reprise">
+          ${lu('Adresse', ch.adresse)}${lu('Code postal', ch.code_postal)}${lu('Ville', ch.ville)}
+        </div>`;
+      })()}
       ${aLeContexte ? puce('type_demandeur', 'Type de demandeur', DEMANDEUR) : ''}
 
       <!-- ⚠ CE QUI SUIT N'ÉTAIT PAS DANS LA LISTE DE MICKAEL, ET N'EST PAS
@@ -471,10 +520,24 @@ export function ficheProjetRgd({ dans, cible = null, apporteurs = null,
         'code_postal', 'ville', 'recommandation', 'commentaire'].forEach(poser);
       const ap = dans.querySelector('#rgp-apporteur_id');
       if (ap) ap.onchange = () => { v.apporteur_id = ap.value; };
+      const diff = dans.querySelector('#rgp-adresse_differente');
+      // ⚠ COCHER RECOPIE LE CHANTIER DANS LES CHAMPS, plutôt que de les ouvrir
+      // vides : on coche parce que l'adresse est PROCHE mais pas identique —
+      // un autre numéro dans la même rue, le plus souvent. Repartir de zéro
+      // ferait tout retaper, ce que la case était censée éviter.
+      if (diff) diff.onchange = () => {
+        v.adresse_differente = diff.checked;
+        if (diff.checked && !v.adresse.trim() && !v.code_postal.trim() && !v.ville.trim()) {
+          const ch = adresseChantier(v);
+          v.adresse = ch.adresse || ''; v.code_postal = ch.code_postal || ''; v.ville = ch.ville || '';
+        }
+        dessine();
+      };
       return;
     }
     if (ecran === 'projet') {
-      ['superficie', 'adresse_chantier', 'projet_description'].forEach(poser);
+      ['superficie', 'adresse_chantier', 'code_postal_chantier', 'ville_chantier',
+        'projet_description'].forEach(poser);
       return;
     }
 

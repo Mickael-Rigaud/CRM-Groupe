@@ -114,6 +114,8 @@ export function valeursProjet(x) {
     budget_annonce: f.budget || '',
     projet_description: f.projet_description || '',
     adresse_chantier: f.adresse_chantier || '',
+    code_postal_chantier: f.code_postal_chantier || '',
+    ville_chantier: f.ville_chantier || '',
   };
   return {
     type_projet: f.type_bien || '',
@@ -123,6 +125,8 @@ export function valeursProjet(x) {
     budget_annonce: f.budget_annonce || '',
     projet_description: f.projet_description || '',
     adresse_chantier: f.adresse_chantier || '',
+    code_postal_chantier: f.code_postal_chantier || '',
+    ville_chantier: f.ville_chantier || '',
   };
 }
 
@@ -158,10 +162,52 @@ const identite = (v, pro) => (pro
   ? { name: txt(v.raison_sociale) }
   : { first_name: txt(v.prenom), last_name: txt(v.nom) });
 
-const coordonnees = (v) => ({
-  email: txt(v.email), phone: txt(v.telephone), address: txt(v.adresse),
-  postal_code: txt(v.code_postal), city: txt(v.ville),
+/** L'adresse du chantier, en trois morceaux. */
+export const adresseChantier = (v) => ({
+  adresse: txt(v.adresse_chantier),
+  code_postal: txt(v.code_postal_chantier),
+  ville: txt(v.ville_chantier),
 });
+
+/**
+ * L'adresse du PROSPECT — celle du chantier tant qu'on n'a pas dit le contraire.
+ *
+ * Demandé le 01/10/2026 : « pour l'adresse du prospect je voudrais un champ
+ * pré-rempli de l'adresse du projet et une possibilité de cocher ou décocher si
+ * l'adresse est différente ». Neuf fois sur dix c'est la même, et la retaper
+ * est du travail pour rien.
+ *
+ * ⚠ UN CHANTIER SANS ADRESSE N'EFFACE PAS CELLE DU PROSPECT. Sans ce garde,
+ * ouvrir une fiche dont l'adresse du chantier n'a jamais été renseignée, puis
+ * enregistrer, VIDERAIT l'adresse du contact — en silence, et sur la table que
+ * les quatre structures partagent. On ne recopie que ce qui existe.
+ */
+export function adresseProspect(v) {
+  const ch = adresseChantier(v);
+  const propre = {
+    adresse: txt(v.adresse), code_postal: txt(v.code_postal), ville: txt(v.ville),
+  };
+  if (v.adresse_differente) return propre;
+  if (!ch.adresse && !ch.code_postal && !ch.ville) return propre;
+  return ch;
+}
+
+const coordonnees = (v) => {
+  const a = adresseProspect(v);
+  return {
+    email: txt(v.email), phone: txt(v.telephone),
+    address: a.adresse, postal_code: a.code_postal, city: a.ville,
+  };
+};
+
+// `rgd_demandes` porte l'identité EN DOUBLE du contact, sa propre adresse
+// comprise : elle suit donc la même règle que celle du contact, sinon le
+// tableau et la fiche afficheraient deux adresses différentes pour la même
+// personne.
+const adressePourLaDemande = (v) => {
+  const a = adresseProspect(v);
+  return { adresse: a.adresse, code_postal: a.code_postal, ville: a.ville };
+};
 
 /**
  * Créer une demande saisie à la main.
@@ -205,12 +251,14 @@ async function creer(v) {
     // Ne pas les remplir donnerait une ligne sans nom à l'écran.
     nom: txt(v.nom), prenom: txt(v.prenom),
     email: txt(v.email), telephone: txt(v.telephone),
-    adresse: txt(v.adresse), code_postal: txt(v.code_postal), ville: txt(v.ville),
+    ...adressePourLaDemande(v),
     type_demandeur: txt(v.type_demandeur),
     type_projet: txt(v.type_projet), type_intervention: txt(v.type_intervention),
     superficie: txt(v.superficie), types_travaux: travaux,
     budget: txt(v.budget_annonce), projet_description: txt(v.projet_description),
     adresse_chantier: txt(v.adresse_chantier),
+    code_postal_chantier: txt(v.code_postal_chantier),
+    ville_chantier: txt(v.ville_chantier),
     comment_connu: txt(v.comment_connu), recommandation: txt(v.recommandation),
     apporteur_id: txt(v.apporteur_id),
     commentaire_admin: txt(v.commentaire),
@@ -249,12 +297,14 @@ export async function enregistrerProjet(x, v) {
       await db.update('rgd_demandes', f.id, {
         nom: txt(v.nom), prenom: txt(v.prenom),
         email: txt(v.email), telephone: txt(v.telephone),
-        adresse: txt(v.adresse), code_postal: txt(v.code_postal), ville: txt(v.ville),
+        ...adressePourLaDemande(v),
         type_demandeur: txt(v.type_demandeur),
         type_projet: txt(v.type_projet), type_intervention: txt(v.type_intervention),
         superficie: txt(v.superficie), types_travaux: travaux,
         budget: txt(v.budget_annonce), projet_description: txt(v.projet_description),
         adresse_chantier: txt(v.adresse_chantier),
+        code_postal_chantier: txt(v.code_postal_chantier),
+        ville_chantier: txt(v.ville_chantier),
         comment_connu: txt(v.comment_connu), recommandation: txt(v.recommandation),
         apporteur_id: txt(v.apporteur_id),
         [note]: txt(v.commentaire),
@@ -270,6 +320,8 @@ export async function enregistrerProjet(x, v) {
         projet_description: txt(v.projet_description),
         budget_annonce: txt(v.budget_annonce),
         adresse_chantier: txt(v.adresse_chantier),
+        code_postal_chantier: txt(v.code_postal_chantier),
+        ville_chantier: txt(v.ville_chantier),
         type_bien: txt(v.type_projet),
         apporteur_id: txt(v.apporteur_id),
         [note]: txt(v.commentaire),
@@ -343,11 +395,20 @@ export function jourEnToutesLettres(jour) {
   return `${JOURS[d.getUTCDay()]} ${n === 1 ? '1er' : n} ${MOIS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
 }
 
-const adresseVisite = (v) =>
-  txt(v.adresse_chantier)
-  || [txt(v.adresse), [txt(v.code_postal), txt(v.ville)].filter(Boolean).join(' ')]
-    .filter(Boolean).join(', ')
-  || null;
+/**
+ * Où la visite a lieu, en une ligne pour Google.
+ *
+ * ⚠ C'EST L'ADRESSE DU CHANTIER, et à défaut celle du prospect — jamais un
+ * mélange des deux. Jusqu'au 01/10/2026 (après-midi) le chantier n'avait qu'un
+ * champ libre, et la visite partait avec la rue du chantier mais le CODE
+ * POSTAL ET LA VILLE DU PROSPECT : dès que les travaux étaient ailleurs que
+ * chez la personne, le chantier était rangé dans la mauvaise commune. Défaut
+ * introduit le matin même, trouvé en découpant l'adresse en trois.
+ */
+const uneLigne = (a) => [a.adresse, [a.code_postal, a.ville].filter(Boolean).join(' ')]
+  .filter(Boolean).join(', ') || null;
+
+const adresseVisite = (v) => uneLigne(adresseChantier(v)) || uneLigne(adresseProspect(v));
 
 /**
  * Ce que Mickael lira sur son téléphone en ouvrant le rendez-vous.
@@ -498,8 +559,14 @@ export async function poserRendezVous(v, { contactId, organisationId }) {
       const rep = await db.rpc('rgd_visite_planifiee', {
         p_event_id: eventId, p_jour: jour, p_titre: titre,
         p_contact: contactId || null, p_organisation: organisationId || null,
-        p_adresse: txt(v.adresse_chantier) || txt(v.adresse),
-        p_code_postal: txt(v.code_postal), p_ville: txt(v.ville),
+        // ⚠ LES TROIS MORCEAUX DU CHANTIER, pas ceux du prospect : voir
+        // `adresseVisite`. À défaut d'adresse de chantier on retombe sur celle
+        // du prospect, mais en entier — les trois ensemble, jamais panachés.
+        ...(() => {
+          const a = adresseChantier(v);
+          const r = (a.adresse || a.code_postal || a.ville) ? a : adresseProspect(v);
+          return { p_adresse: r.adresse, p_code_postal: r.code_postal, p_ville: r.ville };
+        })(),
         p_description: descriptionRendezVous(v),
       });
       if (rep?.ok === false) throw new Error(rep.error || 'refusé');
@@ -562,13 +629,16 @@ function avancerVue(x, v) {
   f.types_travaux = travaux;
   f.projet_description = txt(v.projet_description);
   f.adresse_chantier = txt(v.adresse_chantier);
+  f.code_postal_chantier = txt(v.code_postal_chantier);
+  f.ville_chantier = txt(v.ville_chantier);
   f.apporteur_id = txt(v.apporteur_id);
   f[COLONNE_NOTE(x.cible)] = txt(v.commentaire);
 
   if (x.genre === 'demande') {
     f.nom = txt(v.nom); f.prenom = txt(v.prenom);
     f.email = txt(v.email); f.telephone = txt(v.telephone);
-    f.adresse = txt(v.adresse); f.code_postal = txt(v.code_postal); f.ville = txt(v.ville);
+    const ap = adresseProspect(v);
+    f.adresse = ap.adresse; f.code_postal = ap.code_postal; f.ville = ap.ville;
     f.type_projet = txt(v.type_projet);
     f.budget = txt(v.budget_annonce);
     f.type_demandeur = txt(v.type_demandeur);
@@ -582,9 +652,9 @@ function avancerVue(x, v) {
 
   x.tel = txt(v.telephone) || '';
   x.email = txt(v.email) || '';
-  x.ville = txt(v.ville) || '';
-  x.adresse = [txt(v.adresse), [txt(v.code_postal), txt(v.ville)].filter(Boolean).join(' ')]
-    .filter(Boolean).join(', ');
+  const ap = adresseProspect(v);
+  x.ville = ap.ville || '';
+  x.adresse = uneLigne(ap) || '';
   const nomComplet = txt(v.raison_sociale)
     || [txt(v.prenom), txt(v.nom)].filter(Boolean).join(' ');
   if (nomComplet) x.nom = nomComplet;
