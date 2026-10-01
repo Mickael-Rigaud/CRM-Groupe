@@ -5,14 +5,13 @@
 // éléments de toutes les structures ». Pour la direction, cette vue REMPLACE
 // « Ma to do list » — c'est son choix explicite.
 //
-// ⚠ CE QU'ELLE MONTRE, ET CE QU'ELLE NE PEUT PAS MONTRER. Les policies RLS de
-// `activities` cloisonnent volontairement : une tâche rattachée à une affaire,
-// un contact ou une organisation est visible de qui voit le dossier — donc de
-// la direction. Un pense-bête personnel rattaché à RIEN reste privé, direction
-// comprise (migration 20260918100000, et l'en-tête de `today.js` le dit). Cette
-// vue montre donc tout le travail des dossiers, pas les notes intimes de
-// chacun. L'écran l'écrit sous les colonnes plutôt que de laisser croire à un
-// panorama complet.
+// ⚠ ELLE NE MONTRE QUE LES TÂCHES DE CELUI QUI REGARDE. « Chacun la sienne »
+// est la règle de cet écran depuis le début (en-tête de `today.js`) : même la
+// direction ne voit pas la to do list de son équipe. La première version de ce
+// tableau l'avait enfreinte en laissant entrer tout ce que la direction a le
+// droit de LIRE — ce qui n'est pas la même question que ce qu'elle doit VOIR
+// ici. Le filtre vit dans `today.js` ; ce fichier ne fait que ranger ce qu'on
+// lui donne, et il ne doit jamais aller chercher au-delà.
 //
 // ⚠ UNE COLONNE PAR STRUCTURE, ET UNE DE PLUS. « Sans structure » n'est pas un
 // repli technique : une tâche qui n'appartient à aucune activité est une tâche
@@ -134,7 +133,7 @@ export function kanbanHtml(taches, recentes) {
       </section>`;
     }).join('')}
   </div>
-  <p class="kb-note muted small">Les tâches rattachées à un dossier — affaire, client, entreprise —
-    sont visibles ici. Les pense-bêtes personnels rattachés à rien restent privés,
-    y compris pour la direction : c'est la règle posée en base, pas un filtre d'affichage.</p>`;
+  <p class="kb-note muted small">Vos tâches, rangées par structure.
+    Chacun a la sienne : personne ne voit celle des autres, direction comprise.
+    Pour confier une tâche, l'onglet « Envoyées » la suit sans la perdre de vue.</p>`;
 }

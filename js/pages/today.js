@@ -111,11 +111,19 @@ const ONGLETS = [
 ];
 
 // ⚠ POUR LA DIRECTION, LE TABLEAU REMPLACE « Ma to do list » — demandé ainsi le
-// 01/10/2026, pas ajouté à côté. Elle ne perd rien : ses propres tâches sont
-// dans le tableau, rangées sous leur structure.
-// Les autres gardent la liste : une seule colonne n'est pas un tableau.
-const ONGLET_KANBAN = { key: 'structures', label: 'Toutes les structures',
-  garde: () => true };
+// 01/10/2026, pas ajouté à côté. Les autres gardent la liste : une seule
+// colonne n'est pas un tableau.
+//
+// ⚠ ET IL NE MONTRE QUE MES TÂCHES, EXACTEMENT COMME LA LISTE QU'IL REMPLACE.
+// La première version portait `garde: () => true` : le tableau affichait alors
+// tout ce que la direction a le droit de voir, c'est-à-dire les tâches des
+// chargés d'affaires rattachées à un dossier. C'était enfreindre la règle
+// écrite en tête de ce fichier — « chacun la sienne », direction comprise —
+// et rappelée par Élodie le jour même. **Le garde est donc le MÊME que celui de
+// « Ma to do list »**, au mot près : ce qui change, c'est la mise en page, pas
+// ce qui entre.
+const ONGLET_KANBAN = { key: 'structures', label: 'Mes tâches par structure',
+  garde: (a, moi) => ONGLETS[0].garde(a, moi) };
 const ongletsDe = (direction) => (direction ? [ONGLET_KANBAN, ONGLETS[1]] : ONGLETS);
 
 export const todayPage = {

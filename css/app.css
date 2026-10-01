@@ -1926,12 +1926,15 @@ tr.btp-mission .btp-pts { color: var(--m-encre); }
    Une colonne par structure, demande le 01/10/2026. Prefixe `.kb-` : `.todo-`
    appartient a la liste, et deux jeux de styles dans le meme ecran se
    prefixent separement. */
-.kb-plateau { display: flex; gap: 14px; align-items: flex-start;
-  overflow-x: auto; padding: 2px 2px 10px; }
-/* ⚠ `min-width` ET `flex: 0 0 auto` : sans le second, les colonnes se
-   compriment au lieu de defiler, et cinq structures donnent cinq bandes
-   illisibles. */
-.kb-col { flex: 0 0 auto; width: 292px; display: flex; flex-direction: column;
+/* ⚠ LES COLONNES PRENNENT TOUTE LA LARGEUR (demande du 01/10/2026). Une grille
+   en `auto-fit` plutot qu'un defilement horizontal : les quatre structures
+   s'etalent sur l'ecran, et si la fenetre retrecit elles passent a la ligne au
+   lieu de se comprimer en bandes illisibles.
+   ⚠ `minmax(236px, 1fr)` : le minimum est ce qu'une carte supporte sans que son
+   titre se brise mot par mot — mesure, pas devine. */
+.kb-plateau { display: grid; gap: 14px; align-items: start;
+  grid-template-columns: repeat(auto-fit, minmax(236px, 1fr)); padding: 2px 2px 10px; }
+.kb-col { display: flex; flex-direction: column; min-width: 0;
   background: var(--card-2); border-radius: 14px; padding: 10px; }
 .kb-tete { padding: 2px 4px 10px; border-bottom: 2px solid var(--c); margin-bottom: 10px; }
 .kb-tete-haut { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
@@ -1978,10 +1981,9 @@ tr.btp-mission .btp-pts { color: var(--m-encre); }
 .kb-note { margin: 4px 2px 0; max-width: 70ch; }
 
 @media (max-width: 760px) {
-  /* Au doigt, un tableau qui defile horizontalement se manipule mal : les
-     colonnes s'empilent et gardent leurs en-tetes. */
-  .kb-plateau { flex-direction: column; overflow-x: visible; }
-  .kb-col { width: auto; align-self: stretch; }
+  /* Au doigt, une seule colonne : `auto-fit` les empilerait deja, on le dit
+     explicitement pour que le minimum ne force pas deux colonnes etroites. */
+  .kb-plateau { grid-template-columns: 1fr; }
 }
 
 /* ---- To do list : ce qui protege le travail ----
