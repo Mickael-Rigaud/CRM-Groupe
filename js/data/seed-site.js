@@ -140,6 +140,16 @@ export function deplierSite(cle, doc) {
       .filter(i => i && i.url)
       .map((i, rang) => ({ id: `car-${rang}`, url: i.url, legende: i.legende || '', rang }));
   }
+  // ⚠ LES CATÉGORIES SE DÉPLIENT AUSSI DEPUIS LE 01/10/2026, comme en SQL :
+  // avant, `rgd_categories` n'avait AUCUN écrivain et restait sur l'instantané
+  // de sa création. Une valeur de tri inconnue devient `null` au lieu de faire
+  // échouer la publication — l'écran peut changer avant la base.
+  const categories = (doc?.categories || [])
+    .filter(c => c && c.slug && c.name)
+    .map((c, rang) => ({
+      id: `cat-${c.slug}`, slug: c.slug, nom: c.name, description: c.description || null,
+      tri: c.tri === 'recent' || c.tri === 'ancien' ? c.tri : null, rang,
+    }));
   const lignes = [];
   for (const cat of doc?.categories || []) {
     for (const p of cat.projects || []) {
@@ -158,9 +168,16 @@ export function deplierSite(cle, doc) {
         // le portent pas, et les lire comme des brouillons les retirerait
         // toutes du site à la première publication.
         brouillon: p.brouillon === true,
+        // ⚠ LES TROIS CHAMPS DU 01/10/2026, dépliés comme en SQL. Une date mal
+        // formée est JETÉE plutôt que remontée en erreur : refuser ferait
+        // échouer la publication entière du site pour un champ qui ne sert
+        // qu'à ranger une liste.
+        realise_le: /^\d{4}-(0[1-9]|1[0-2])$/.test(String(p.realise_le || '')) ? p.realise_le : null,
+        a_la_une: p.a_la_une === true,
         rang: lignes.length,
       });
     }
   }
-  return lignes;
+  // Deux tables pour une clé : l'appelant range chacune à sa place.
+  return { realisations: lignes, categories };
 }

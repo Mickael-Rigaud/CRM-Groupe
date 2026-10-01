@@ -359,7 +359,11 @@ export const SEED = {
   // Le reflet des deux documents du site, déplié exactement comme le fait la
   // RPC en production : une seule source (`SEED_SITE`), deux vues. Les écrire
   // à la main à côté du document, c'est signer une divergence.
-  rgd_realisations: deplierSite('realisations', SEED_SITE.realisations),
+  // ⚠ `deplierSite` REND DEUX TABLES POUR LES RÉALISATIONS depuis le
+  // 01/10/2026, comme la RPC : les projets ET les catégories. Le carrousel,
+  // lui, n'en a qu'une — c'est pour ça que l'appel n'a pas la même forme.
+  rgd_realisations: deplierSite('realisations', SEED_SITE.realisations).realisations,
+  rgd_categories: deplierSite('realisations', SEED_SITE.realisations).categories,
   rgd_carrousel: deplierSite('carrousel', SEED_SITE.carrousel),
 
   // Quelques sous-traitants, pour que l'écran de conformité soit essayable

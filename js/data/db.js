@@ -185,9 +185,23 @@ const localAdapter = {
       // Le dépliage dans le MÊME geste que l'écriture, comme la RPC : l'écran
       // recharge la table juste après et doit y trouver la nouvelle version.
       // Garde-fou identique : un document vide ne vide pas le reflet.
-      const table = cle === 'carrousel' ? 'rgd_carrousel' : 'rgd_realisations';
-      const lignes = deplierSite(cle, docs[cle]);
-      if (lignes.length) { this.data[table] = lignes; this.save(); }
+      // ⚠ LE DÉPLIAGE REND DEUX TABLES DEPUIS LE 01/10/2026, comme la RPC :
+      // `rgd_categories` n'avait aucun écrivain et gardait l'instantané de sa
+      // création — une catégorie renommée dans le CRM restait à son ancien nom
+      // sur le site. Côté carrousel, rien n'a changé : une seule liste.
+      if (cle === 'carrousel') {
+        const images = deplierSite(cle, docs[cle]);
+        if (images.length) { this.data.rgd_carrousel = images; this.save(); }
+        return { ok: true, cle };
+      }
+      const { realisations, categories } = deplierSite(cle, docs[cle]);
+      // Garde-fou identique au SQL : un document vide ne vide pas le reflet,
+      // et c'est le NOMBRE DE CATÉGORIES qui le décide, là-bas comme ici.
+      if (categories.length) {
+        this.data.rgd_realisations = realisations;
+        this.data.rgd_categories = categories;
+        this.save();
+      }
       return { ok: true, cle };
     }
 

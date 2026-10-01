@@ -31,27 +31,6 @@ const slugifier = (s) => String(s || '').toLowerCase()
   .normalize('NFD').replace(/[̀-ͯ]/g, '')
   .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
 
-// ⚠ CE QUE CET ÉCRAN ENREGISTRE N'ARRIVE PAS ENCORE SUR LE SITE, ET IL LE DIT.
-// Constaté le 01/10/2026 en lisant la fonction qui sert le site : elle ne lit
-// PAS le document, elle reconstruit sa réponse champ par champ depuis les
-// tables du reflet (`rgd_categories`, `rgd_realisations`). Trois conséquences,
-// toutes invisibles depuis le CRM :
-//   — `a_la_une`, `realise_le` et `tri` n'ont aucune colonne : ils resteraient
-//     dans le document sans jamais sortir ;
-//   — `rgd_publier_site` ne touche pas du tout à `rgd_categories` : renommer,
-//     réordonner ou créer une catégorie ne change rien côté site ;
-//   — `rgd_categories` est donc un instantané figé des cinq catégories.
-// Il manque une migration (trois colonnes + le dépliage des catégories) et un
-// redéploiement de `site-realisations`. Tant que ce n'est pas fait, ce panneau
-// enregistre dans le document — rien n'est perdu — mais il ne publie pas.
-// ⚠ UN BOUTON QUI DIT « Publier sur le site » DOIT PUBLIER SUR LE SITE : à
-// défaut, c'est l'écran qui le dit, en toutes lettres et avant le clic.
-// À RETIRER le jour où la migration est passée, avec ce commentaire.
-const AVIS_SERVEUR = `<p class="cat-avis">⚠ <b>Ce que vous réglez ici est enregistré,
-  mais n’arrive pas encore sur rgdrenova.fr</b> : il manque une mise à jour côté serveur,
-  sans laquelle le site continue d’afficher les catégories et l’ordre d’aujourd’hui.
-  Rien n’est perdu — tout repartira dès qu’elle sera faite.</p>`;
-
 export const TRIS = [
   ['manuel', 'Dans l’ordre choisi ici'],
   ['recent', 'Du plus récent au plus ancien'],
@@ -98,7 +77,10 @@ function editeur(etat) {
         <button type="button" class="btn" id="cat-neuve">+ Nouvelle catégorie</button>
       </div>
 
-      ${AVIS_SERVEUR}
+      <p class="cat-avis">Créer une catégorie ici ne crée pas sa page sur le site :
+        le dossier <code>/nos-realisations/&lt;adresse&gt;/</code> est à déposer sur le serveur.
+        Tant qu'il n'y est pas, la catégorie reste invisible — une catégorie sans chantier
+        publié ne s'affiche nulle part.</p>
 
       <div class="cat-liste">
         ${etat.cats.map((x, i) => `
