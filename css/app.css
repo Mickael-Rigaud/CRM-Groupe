@@ -1928,6 +1928,44 @@ tr.btp-mission .btp-pts { color: var(--m-encre); }
 .btn.ghost.sm.rgdf-retour:hover { border-style: solid; border-color: var(--accent);
   color: var(--accent); }
 
+/* ---- Les elements d'une tache : sous-taches, pieces, commentaires ---- */
+.taf-elements { margin-top: 16px; display: flex; flex-direction: column; gap: 12px; }
+.taf-apres { margin-top: 14px; padding: 9px 11px; border-radius: 9px; background: var(--card-2); }
+.tel-bloc { padding: 12px 13px; border: 1px solid var(--line); border-radius: 11px;
+  background: var(--card-2); }
+.tel-tete { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.tel-tete h4 { margin: 0; font-size: 11px; font-weight: 800; text-transform: uppercase;
+  letter-spacing: .04em; color: var(--muted); }
+.tel-compte { padding: 1px 8px; border-radius: 999px; background: var(--card);
+  font-size: 10.5px; font-weight: 800; color: var(--muted); }
+.tel-compte.est-complete { background: var(--green-soft, #e7f6ef); color: var(--green); }
+.tel-sous { display: flex; align-items: center; gap: 8px; padding: 5px 7px; border-radius: 8px;
+  background: var(--card); margin-bottom: 3px; font-size: 12.5px; cursor: pointer; }
+.tel-sous.est-faite > span { text-decoration: line-through; color: var(--muted); }
+.tel-sous > span { flex: 1; }
+.tel-x { border: 0; background: none; cursor: pointer; color: var(--line-strong); font-size: 12px; }
+.tel-x:hover { color: var(--red); }
+.tel-ajout { display: flex; gap: 6px; margin-top: 6px; }
+.tel-ajout input { flex: 1; padding: 6px 10px; border: 1px solid var(--line-strong);
+  border-radius: 8px; font-family: inherit; font-size: 12.5px;
+  background: var(--card); color: var(--text); }
+.tel-aide { margin: 7px 0 0; font-size: 11px; color: var(--muted); }
+.tel-fil { list-style: none; margin: 10px 0 0; padding: 0; display: flex;
+  flex-direction: column; gap: 7px; }
+.tel-fil li { display: flex; flex-direction: column; gap: 2px; padding-left: 10px;
+  border-left: 2px solid var(--line); }
+.tel-fil-quand { font-size: 10.5px; color: var(--muted); }
+.tel-fil-texte { font-size: 12.5px; }
+.tel-pieces { list-style: none; margin: 0 0 8px; padding: 0; }
+.tel-pieces li { display: flex; align-items: baseline; gap: 8px; padding: 4px 0; font-size: 12.5px; }
+.tel-pieces a { color: var(--accent); text-decoration: none; font-weight: 650; }
+.tel-pieces a:hover { text-decoration: underline; }
+.tel-depot { display: block; padding: 9px; border: 1px dashed var(--line-strong);
+  border-radius: 9px; text-align: center; cursor: pointer; font-size: 12.5px;
+  color: var(--muted); background: var(--card); }
+.tel-depot:hover { border-color: var(--accent); color: var(--accent); }
+.tel-depot.est-occupe { opacity: .6; cursor: default; }
+
 /* ---- Ce que la tache concerne ----
    Au-dessus du titre : on ouvre une tache de rappel pour savoir QUI rappeler,
    pas pour relire son intitule. */

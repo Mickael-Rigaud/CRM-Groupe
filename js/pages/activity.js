@@ -9,6 +9,7 @@ import { esc, openModal, closeModal, readForm, toast, isoDay, daysSince, relDay,
 // fait une seconde traduction, et l'écart ne se serait vu que sur un genre de
 // fiche — le piège que son propre en-tête décrit.
 import { valeursProjet } from '../data/rgd-projet.js';
+import { monterElements } from './tache-elements.js';
 
 export const actType = (k) => ACTIVITY_TYPES.find(t => t.key === k) || { label: k, icon: '•' };
 
@@ -202,7 +203,11 @@ export function activityForm(link = {}, existing = null, onSaved, onClose = null
     </span>`)}
     ${ligne('🏢', 'Structure', `<select name="activity"><option value="">—</option>${selOptions('activity')}</select>`,
       'À quelle activité du groupe cette tâche appartient. C’est elle qui décide de sa colonne.')}
-    ${ligne('📝', 'Notes', `<textarea name="notes" rows="3" placeholder="Ce qu'il faut savoir avant de s'y mettre…">${esc(val('notes'))}</textarea>`)}`;
+    ${ligne('📝', 'Notes', `<textarea name="notes" rows="3" placeholder="Ce qu'il faut savoir avant de s'y mettre…">${esc(val('notes'))}</textarea>`)}
+    ${existing
+      ? '<div id="taf-elements" class="taf-elements"></div>'
+      : `<p class="taf-aide taf-apres">Sous-tâches, pièces jointes et commentaires s’ajoutent une fois la tâche
+         créée : une pièce jointe a besoin d’une tâche à laquelle se rattacher.</p>`}`;
 
   const m = openModal(existing ? 'Modifier la tâche' : 'Nouvelle tâche', `<form class="form taf" id="act-form">${corpsForm}
     <div class="form-actions">${existing ? '<button type="button" class="btn danger left" id="act-del" data-arme="0">Supprimer</button>' : ''}<button type="button" class="btn ghost" data-close>Annuler</button><button class="btn" type="submit">Enregistrer</button></div></form>`, { onClose });
@@ -213,6 +218,12 @@ export function activityForm(link = {}, existing = null, onSaved, onClose = null
     form.querySelector('[name="priority"]').value = b.dataset.prio;
     form.querySelectorAll('#taf-prio [data-prio]').forEach(x => x.classList.toggle('on', x === b));
   });
+  // ⚠ LES TROIS BLOCS NE S'OUVRENT QU'EN MODIFICATION : une pièce jointe et un
+  // commentaire ont besoin d'un identifiant auquel se rattacher, et une tâche
+  // qu'on est en train de créer n'en a pas encore.
+  const hoteElements = m.querySelector('#taf-elements');
+  const elements = hoteElements ? monterElements(hoteElements, existing) : null;
+
   form.querySelector('.taf-titre')?.focus();
   // ⚠ IMPORT PARESSEUX : les écrans de fiche importent `activity.js`, les
   // charger ici en tête ferait un cycle. Au clic, le module est déjà là.
@@ -254,7 +265,11 @@ export function activityForm(link = {}, existing = null, onSaved, onClose = null
     e.preventDefault();
     const v = readForm(form, spec);
     try {
-      if (existing) await db.update('activities', existing.id, v);
+      // ⚠ LA CHECKLIST PART AVEC LE FORMULAIRE, et pas à chaque coche : on
+      // coche trois cases d'affilée, écrire à chaque clic ferait trois appels.
+      // Les commentaires et les pièces jointes, eux, sont déjà partis — ce sont
+      // des ajouts, pas des corrections.
+      if (existing) await db.update('activities', existing.id, elements ? { ...v, checklist: elements.checklist() } : v);
       // `link` porte les rattachements (affaire, contact…) ; la saisie prime dessus,
       // sinon une clé absente de `link` écraserait ce que l'on vient de choisir.
       // `created_by` : qui envoie la tache. La colonne a auth.uid() pour defaut

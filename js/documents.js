@@ -6,7 +6,7 @@ import { esc, fmtDate, toast, confirm, userName } from './ui.js';
 
 export const DOC_CATEGORIES = ['Offre de prêt', "Tableau d'amortissement", 'Acte / compromis', 'Bail', 'État des lieux', 'Diagnostic', 'Devis', 'Facture', 'Assurance', 'Taxe / impôts', 'Relevé bancaire', 'Pièce d\'identité', 'Justificatif', 'Rapport', 'Photo', 'Autre'];
 const MAX_MB = 25;
-const ENTITY_LABEL = { properties: 'bien', loans: 'prêt', leases: 'bail', contacts: 'contact', organisations: 'entreprise', deals: 'affaire', broker_profiles: 'courtier' };
+const ENTITY_LABEL = { properties: 'bien', loans: 'prêt', leases: 'bail', contacts: 'contact', organisations: 'entreprise', deals: 'affaire', broker_profiles: 'courtier', activities: 'tâche' };
 
 const fmtSize = (n) => n > 1048576 ? (n / 1048576).toFixed(1) + ' Mo' : Math.max(1, Math.round(n / 1024)) + ' Ko';
 const icon = (mime = '', name = '') => /pdf/.test(mime) || /\.pdf$/i.test(name) ? '📄' : /^image\//.test(mime) ? '🖼' : /sheet|excel|csv/.test(mime) || /\.(xlsx?|csv)$/i.test(name) ? '📊' : /word|document/.test(mime) || /\.docx?$/i.test(name) ? '📝' : '📎';
