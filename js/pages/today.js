@@ -37,6 +37,11 @@ const rangDe = (a) => GROUPES.find(gr => gr.test(a, ecart(a)));
 // Une tâche qu'on vient de cocher ne s'efface pas sous les doigts : elle reste en
 // place, barrée, le temps de la relire et de se raviser. Passé ce délai elle rejoint
 // « Fait aujourd'hui », que la case de la barre d'outils affiche.
+// ⚠ ET PENDANT CE DÉLAI, LA LIGNE DIT CE QUI VA LUI ARRIVER. Sans ça, une
+// tâche cochée par un clic de trop disparaissait quinze secondes plus tard,
+// sans un mot, vers un rang que la barre d'outils masque par défaut : vue de
+// l'utilisateur, elle s'effaçait toute seule. La ligne porte donc « Annuler »
+// tant qu'elle est là.
 const GRACE_MS = 15000;
 const recentes = new Map(); // id de la tâche -> minuteur de disparition
 
@@ -88,6 +93,8 @@ function carte(a, pour = false) {
       ${pour ? `<span class="todo-pour"><i>→</i>${esc(userName(a.assignee_id))}${a.done ? ' · faite' : ''}</span>` : ''}
       ${quand}
     </div>
+    ${recentes.has(a.id) ? `<button type="button" class="todo-annuler" data-annuler="${a.id}"
+      title="Décocher : la tâche revient dans la liste">↩ Annuler</button>` : ''}
     <button class="icon-btn todo-editer" data-edit-act="${a.id}" title="Modifier">✎</button>
   </div>`;
 }
@@ -132,9 +139,12 @@ export const todayPage = {
 
       // Les fraîchement cochées restent à leur place au lieu de disparaître aussitôt.
       const retenues = vues.filter(a => !a.done || recentes.has(a.id)).filter(surStructure);
-      const faites = state.showDone
-        ? vues.filter(a => a.done && a.done_at && daysSince(a.done_at) === 0).filter(surStructure)
-        : [];
+      // ⚠ LE COMPTE SE FAIT MÊME QUAND LA CASE EST DÉCOCHÉE : c'est lui qui dit
+      // où est passée une tâche qu'on vient de cocher. Sans ce chiffre, la
+      // seule trace d'une tâche disparue était son absence.
+      const faitesDuJour = vues.filter(a => a.done && a.done_at && daysSince(a.done_at) === 0).filter(surStructure);
+      const faitesAujourdhui = faitesDuJour.length;
+      const faites = state.showDone ? faitesDuJour : [];
 
       const tri = (l) => l.slice().sort((x, y) => (x.due_date || '9999').localeCompare(y.due_date || '9999')
         || (x.due_time || '99').localeCompare(y.due_time || '99'));
@@ -162,7 +172,8 @@ export const todayPage = {
           ${searchInput('t-q', state, 'Rechercher une tâche…')}
           <span class="muted small">${retenues.filter(a => ecart(a) > 0 && !a.done).length} en retard · ${retenues.filter(a => ecart(a) === 0 && !a.done).length} aujourd&rsquo;hui</span>
           <span class="grow"></span>
-          <label class="check"><input type="checkbox" id="t-done" ${state.showDone ? 'checked' : ''}> Ce qui est fait</label>
+          <label class="check"><input type="checkbox" id="t-done" ${state.showDone ? 'checked' : ''}> Ce qui est fait${
+            faitesAujourdhui ? ` <b>(${faitesAujourdhui})</b>` : ''}</label>
           <button class="btn ghost" id="t-new">+ Tâche</button>
           <button class="btn" id="t-send">Envoyer une tâche</button>
         </div>
@@ -186,6 +197,14 @@ export const todayPage = {
         state.structure = state.structure === b.dataset.struct ? '' : b.dataset.struct; draw();
       });
       root.querySelector('#t-done').onchange = e => { state.showDone = e.target.checked; draw(); };
+      // Décocher depuis la ligne : le même chemin que la case, pour que
+      // l'annulation et la coche ne puissent pas diverger.
+      root.querySelectorAll('[data-annuler]').forEach(b => b.onclick = () => {
+        const cb = root.querySelector(`.todo-tache input[data-toggle="${b.dataset.annuler}"]`);
+        if (!cb) return;
+        cb.checked = false;
+        cb.dispatchEvent(new Event('change'));
+      });
       // Une tâche créée ici hérite de ce qui est à l'écran : la structure ouverte,
       // et le responsable — moi dans ma liste, à choisir dans « Envoyées ».
       const structureOuverte = () => (state.structure && state.structure !== '—' ? { activity: state.structure } : {});

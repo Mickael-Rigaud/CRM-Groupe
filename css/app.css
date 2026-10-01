@@ -1857,6 +1857,25 @@ tr.btp-mission .btp-pts { color: var(--m-encre); }
 .rcl-rel-age, .rcl-rel-avant { display: block; font-size: 11px; line-height: 1.3; }
 .rcl-rel-age:empty, .rcl-rel-avant:empty { display: none; }
 
+/* ---- To do list : ce qui protege le travail ----
+   ⚠ « Supprimer » et « Annuler » etaient a dix pixels l'un de l'autre, dans le
+   meme habillage blanc. L'un ferme la fenetre, l'autre detruisait la tache sans
+   confirmation : c'est la cause des taches « qui s'effacent toutes seules ».
+   Le bouton est rouge, SEPARE des deux autres, et demande deux clics. */
+.form-actions .btn.danger.left { margin-right: auto; }
+.form-actions .btn.danger { background: transparent; border-color: var(--red);
+  color: var(--red); }
+.form-actions .btn.danger:hover { background: var(--red-soft, #fdecea); }
+.form-actions .btn.danger.arme { background: var(--red); border-color: var(--red);
+  color: #fff; }
+
+/* Une tache cochee reste quinze secondes, le temps de se raviser — et elle le
+   DIT, sinon elle a l'air de s'effacer toute seule. */
+.todo-annuler { padding: 2px 9px; border: 1px solid var(--line-strong); border-radius: 999px;
+  background: var(--card); cursor: pointer; font-family: inherit; font-size: 11px;
+  font-weight: 700; color: var(--muted); white-space: nowrap; }
+.todo-annuler:hover { border-color: var(--accent); color: var(--accent); }
+
 /* ---- Les mises en avant de la page d'accueil ----
    Panneau de `js/pages/rgd-accueil-edit.js`. Deux listes : ce qui est retenu,
    dans l'ordre, et toute la bibliotheque dessous. Prefixe `.acc-`. */

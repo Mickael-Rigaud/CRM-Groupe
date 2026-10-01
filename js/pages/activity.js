@@ -46,8 +46,17 @@ export function activityForm(link = {}, existing = null, onSaved, onClose = null
       hint: 'À quelle activité du groupe cette tâche appartient.' },
     { key: 'notes', label: 'Notes', type: 'textarea', rows: 2 },
   ];
+  // ⚠ « SUPPRIMER » ET « ANNULER » ÉTAIENT À DIX PIXELS L'UN DE L'AUTRE, DANS
+  // LE MÊME HABILLAGE — fond blanc, même bordure, même encre. Mesuré le
+  // 01/10/2026 : Supprimer de 16 à 118 px, Annuler de 128 à 213. L'un ferme la
+  // fenêtre, l'autre DÉTRUIT la tâche, et il le faisait **sans aucune
+  // confirmation**. C'est la cause des tâches « qui s'effacent toutes seules » :
+  // il n'y avait pas de hasard, il y avait dix pixels.
+  //
+  // Trois choses changent, et aucune n'est décorative : le bouton est ROUGE,
+  // il est SÉPARÉ des deux autres, et il demande DEUX CLICS.
   const m = openModal(existing ? "Modifier l'activité" : 'Nouvelle activité', `<form class="form" id="act-form">${renderForm(spec, existing || {})}
-    <div class="form-actions">${existing ? '<button type="button" class="btn ghost left" id="act-del">Supprimer</button>' : ''}<button type="button" class="btn ghost" data-close>Annuler</button><button class="btn" type="submit">Enregistrer</button></div></form>`, { onClose });
+    <div class="form-actions">${existing ? '<button type="button" class="btn danger left" id="act-del" data-arme="0">Supprimer</button>' : ''}<button type="button" class="btn ghost" data-close>Annuler</button><button class="btn" type="submit">Enregistrer</button></div></form>`, { onClose });
   const form = m.querySelector('#act-form');
   form.onsubmit = async (e) => {
     e.preventDefault();
@@ -62,7 +71,28 @@ export function activityForm(link = {}, existing = null, onSaved, onClose = null
       closeModal(true); toast('Activité enregistrée'); onSaved?.();
     } catch (err) { toast(err.message, 'err'); }
   };
-  m.querySelector('#act-del')?.addEventListener('click', async () => { await db.remove('activities', existing.id); closeModal(true); toast('Activité supprimée'); onSaved?.(); });
+  // ⚠ DEUX CLICS SUR LE MÊME BOUTON, PAS DE `confirm()` : celui de `ui.js`
+  // appelle `closeModal(true)` et REMPLACE la fenêtre courante — le formulaire
+  // disparaîtrait avec la saisie en cours. Huitième occurrence du piège dans ce
+  // dépôt. Le bouton se désarme seul au bout de quatre secondes, pour qu'un
+  // bouton rouge oublié ne piège pas le clic suivant.
+  const suppr = m.querySelector('#act-del');
+  if (suppr) suppr.addEventListener('click', async () => {
+    if (suppr.dataset.arme !== '1') {
+      suppr.dataset.arme = '1';
+      suppr.textContent = 'Confirmer la suppression';
+      suppr.classList.add('arme');
+      setTimeout(() => {
+        if (!suppr.isConnected || suppr.dataset.arme !== '1') return;
+        suppr.dataset.arme = '0';
+        suppr.textContent = 'Supprimer';
+        suppr.classList.remove('arme');
+      }, 4000);
+      return;
+    }
+    await db.remove('activities', existing.id);
+    closeModal(true); toast('Tâche supprimée'); onSaved?.();
+  });
 }
 
 export async function toggleActivity(id, done) {
