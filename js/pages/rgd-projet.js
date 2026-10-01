@@ -387,16 +387,24 @@ export function ficheProjetRgd({ dans, cible = null, apporteurs = null,
             ${v.rappel_jour ? '' : 'disabled'}>
           ${v.rappel_jour ? '<button type="button" class="btn ghost sm" id="rgp-rappel-non">Retirer</button>' : ''}
         </div>
-        <!-- ⚠ L'OBJET N'APPARAIT QUE SI UNE DATE EST CHOISIE : sans date il
-             n'y a pas de rappel, donc rien a expliquer, et un champ de plus
-             sur un ecran qu'on remplit au telephone est un champ de trop. -->
-        ${v.rappel_jour ? `
-          <textarea id="rgp-rappel_objet" rows="2"
-            placeholder="Pourquoi le rappeler : relancer sur le devis, attendre le retour du syndic…"
-          >${esc(v.rappel_objet)}</textarea>` : ''}
-        <p class="rgp-rappel-dit">${v.rappel_jour
-          ? `Dans la to-do : « <b>${esc(apercuRappel(v))}</b> ».`
-          : 'Aucun rappel. Choisissez une date pour en poser un dans la to-do du CRM.'}</p>
+        <!-- ⚠ L'OBJET EST TOUJOURS LA, ET C'EST UNE CORRECTION (01/10/2026,
+             Mickael : « je n'ai pas de champs sous la date »). Je ne l'avais
+             affiche qu'une fois la date choisie, pour economiser une ligne sur
+             un ecran qu'on remplit au telephone. C'etait a cote : un champ
+             qu'on ne voit pas est un champ qui n'existe pas, et il venait
+             justement d'etre demande. On ne cache pas un champ derriere la
+             saisie d'un autre. -->
+        <textarea id="rgp-rappel_objet" rows="2"
+          placeholder="Pourquoi le rappeler : relancer sur le devis, attendre le retour du syndic…"
+        >${esc(v.rappel_objet)}</textarea>
+        <!-- ⚠ ET IL FAUT DIRE QUE SANS DATE RIEN NE PART : un objet saisi seul
+             serait jete en silence a l'enregistrement, ce qui est pire que le
+             champ cache. -->
+        <p class="rgp-rappel-dit ${!v.rappel_jour && v.rappel_objet.trim() ? 'est-manque' : ''}">${
+          v.rappel_jour ? `Dans la to-do : « <b>${esc(apercuRappel(v))}</b> ».`
+          : v.rappel_objet.trim()
+            ? 'Il manque la date : sans elle, ce rappel ne sera pas posé.'
+            : 'Aucun rappel. Choisissez une date pour en poser un dans la to-do du CRM.'}</p>
         ${deja.length ? `<ul class="rgp-rappel-deja">${deja.slice(0, 3).map(a => `
           <li>Déjà prévu : ${esc(fmtDate(a.due_date))}${a.due_time ? ` à ${esc(a.due_time)}` : ''}
             — ${esc(a.title)}</li>`).join('')}</ul>` : ''}
@@ -602,7 +610,7 @@ export function ficheProjetRgd({ dans, cible = null, apporteurs = null,
       dans.querySelectorAll('[data-rappel]').forEach(b2 => b2.onclick = () => {
         const j = decale(aujourdhuiParis(), Number(b2.dataset.rappel));
         v.rappel_jour = v.rappel_jour === j ? '' : j;
-        if (!v.rappel_jour) { v.rappel_heure = ''; v.rappel_objet = ''; }
+        if (!v.rappel_jour) v.rappel_heure = '';
         dessine();
       });
       const rj = dans.querySelector('#rgp-rappel_jour');
@@ -619,10 +627,23 @@ export function ficheProjetRgd({ dans, cible = null, apporteurs = null,
       if (ro) ro.oninput = () => {
         v.rappel_objet = ro.value;
         const dit = dans.querySelector('.rgp-rappel-dit');
-        if (dit) dit.innerHTML = `Dans la to-do : « <b>${esc(apercuRappel(v))}</b> ».`;
+        if (!dit) return;
+        // Les mêmes trois cas que le rendu, sinon la phrase et l'écran se
+        // contredisent dès qu'on tape sans avoir choisi de date.
+        const manque = !v.rappel_jour && v.rappel_objet.trim();
+        dit.classList.toggle('est-manque', !!manque);
+        dit.innerHTML = v.rappel_jour
+          ? `Dans la to-do : « <b>${esc(apercuRappel(v))}</b> ».`
+          : manque
+            ? 'Il manque la date : sans elle, ce rappel ne sera pas posé.'
+            : 'Aucun rappel. Choisissez une date pour en poser un dans la to-do du CRM.';
       };
+      // ⚠ RETIRER LA DATE N'EFFACE PLUS L'OBJET : le champ reste visible, donc
+      // effacer son contenu se verrait comme une perte — on vient d'écrire
+      // trois lignes et elles disparaissent sous les yeux. Sans date, rien
+      // n'est posé de toute façon, et la phrase le dit.
       dans.querySelector('#rgp-rappel-non')?.addEventListener('click', () => {
-        v.rappel_jour = ''; v.rappel_heure = ''; v.rappel_objet = ''; dessine();
+        v.rappel_jour = ''; v.rappel_heure = ''; dessine();
       });
 
       const diff = dans.querySelector('#rgp-adresse_differente');
