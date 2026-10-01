@@ -662,7 +662,12 @@ export const SEED = {
   // 24/09/2026. Elle se lit désormais « nouveau prospect » ; cette ligne est là
   // pour que la prochaine régression se voie sans ouvrir la production.
   rgd_demandes: [
-    { id: 'rd1', owner_id: 'u-charge', d1_id: 7101, prenom: 'Camille', nom: 'Vasseur', email: 'camille.vasseur@example.com',
+    // ⚠ CETTE DEMANDE PORTE UN `contact_id`, les autres non. C'est le cas réel
+    // d'une demande du site reprise dans l'annuaire — et le seul par lequel une
+    // tâche peut remonter jusqu'à elle. Sans lui, le bouton « Ouvrir la fiche »
+    // d'un rappel ne s'essayait que sur une fiche client, jamais sur une
+    // demande : les deux n'ont ni les mêmes colonnes ni la même étape.
+    { id: 'rd1', owner_id: 'u-charge', d1_id: 7101, contact_id: 'c12', prenom: 'Camille', nom: 'Vasseur', email: 'camille.vasseur@example.com',
       telephone: '06 39 98 00 21', ville: 'Tours', code_postal: '37000',
       adresse: '4 rue des Tanneurs', types_travaux: '["Isolation","Menuiseries"]',
       budget: '15 000 €', statut: 'nouveau_prospect', date_demande: d(-5),

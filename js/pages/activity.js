@@ -217,30 +217,23 @@ export function activityForm(link = {}, existing = null, onSaved, onClose = null
   // ⚠ IMPORT PARESSEUX : les écrans de fiche importent `activity.js`, les
   // charger ici en tête ferait un cycle. Au clic, le module est déjà là.
   //
-  // ⚠ C'EST LA FICHE PROJET QUI S'OUVRE, PAS LA FICHE DE LA PERSONNE
-  // (corrigé le 01/10/2026 : « je voudrais que ça ouvre exactement la fiche
-  // projet de rgd renova »). La première version appelait `ouvrirFicheRgd`,
-  // qui montre le dossier en lecture — alors qu'on vient d'un rappel pour
-  // COMPLÉTER le projet. C'est `ficheProjetRgd`, le même formulaire que le
-  // bouton « Modifier » de la fiche et que « + Nouvelle demande ».
+  // ⚠ CÔTÉ RGD, C'EST LA FICHE QUI S'OUVRE, PAS LE FORMULAIRE. J'avais lu
+  // « la fiche projet de RGD Renova » comme le formulaire de saisie, puis
+  // comme la fiche : c'est la **fiche** — celle qui montre le prospect, le
+  // projet, les rappels, l'historique et la frise des sept étapes. On arrive
+  // d'un rappel pour SAVOIR où en est le dossier ; corriger un champ est un
+  // second geste, et la fiche porte déjà son bouton « Modifier ».
   //
-  // ⚠ IL NE S'OUVRE PAS LUI-MÊME : il se monte dans un élément que l'appelant
-  // fournit (voir son en-tête), et c'est à nous d'ouvrir la fenêtre.
-  // ⚠ PAS DE `closeModal` AVANT : `openModal` ferme POUR REMPLACEMENT, ce qui
-  // n'appelle pas `onClose` — fermer d'abord déclencherait le retour de
-  // l'appelant, et sur la to do list cela redessinerait la page sous la
-  // fenêtre qu'on est en train d'ouvrir.
+  // ⚠ UNE DEMANDE DU SITE ET UNE FICHE CLIENT N'ONT NI LES MÊMES COLONNES NI
+  // LA MÊME ÉTAPE : `ouvrirProspectRgd` tranche, et c'est lui qui sait. Cet
+  // écran ne charge pas quatre tables pour ouvrir une fenêtre.
+  //
+  // ⚠ IMPORT PARESSEUX : les écrans de fiche importent `activity.js`, les
+  // charger ici en tête ferait un cycle. Au clic, le module est déjà là.
   m.querySelector('#taf-ouvrir')?.addEventListener('click', async () => {
     if (ctx.ficheRgd) {
-      const { ficheProjetRgd } = await import('./rgd-projet.js');
-      const w = openModal(ctx.personne ? `Fiche projet — ${ctx.personne}` : 'Fiche projet',
-        '<div id="rgp-hote"></div>', { wide: true });
-      ficheProjetRgd({
-        dans: w.querySelector('#rgp-hote'),
-        cible: ctx.ficheRgd,
-        annuler: () => closeModal(),
-        apres: () => { closeModal(); toast('Informations enregistrées'); onSaved?.(); },
-      });
+      const { ouvrirProspectRgd } = await import('./rgd-clients.js');
+      ouvrirProspectRgd(ctx.ficheRgd.ligne, ctx.ficheRgd.genre, onSaved);
     } else if (ctx.deal) {
       const { openDeal } = await import('./deal.js');
       openDeal(ctx.deal.id, onSaved);

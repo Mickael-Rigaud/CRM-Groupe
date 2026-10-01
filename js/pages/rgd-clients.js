@@ -452,6 +452,50 @@ const provenanceFiche = (f) => f.apporteur_id ? 'partenaire'
   : f.source === 'Formulaire site' ? 'site'
   : 'direct';
 
+// Deux formes cohabitent dans `types_travaux` : un tableau JSON pour les
+// lignes relevées de D1, du texte séparé par des virgules pour celles
+// qu'écrivent l'Edge Function et la saisie à la main.
+const travauxDe = (d) => {
+  const brut = String(d.types_travaux || '').trim();
+  if (!brut) return '';
+  if (!brut.startsWith('[')) return brut;
+  try { return JSON.parse(brut).join(', '); } catch { return brut; }
+};
+
+// ⚠ L'APPORTEUR PASSE AVANT TOUT LE RESTE. Un nom de partenaire est un fait
+// vérifiable ; « Recommandation » coché dans la liste d'à côté est une
+// catégorie, et c'est souvent la même chose dite plus vaguement. Le fait gagne
+// — sinon un prospect apporté par un partenaire nommé se rangerait en
+// « Recommandation », et le décompte des apports du partenaire ne le verrait
+// jamais.
+const provenanceDemande = (d) => d.apporteur_id ? 'partenaire'
+  : VIA(d.comment_connu) || (d.source === 'manuel' ? 'direct' : 'site');
+
+/**
+ * L'instantané d'une demande du site, pour la fiche.
+ *
+ * ⚠ ELLE ÉTAIT ÉCRITE DANS `render`, ET ELLE EN EST SORTIE LE 01/10/2026 —
+ * même raison que `ficheDe` en son temps : la to do list doit pouvoir ouvrir la
+ * fiche d'une demande depuis une tâche, et elle n'a pas les quatre tables sous
+ * la main. Une seconde copie aurait fini par décrire la demande autrement que
+ * la liste qui la range.
+ */
+export function demandeDe(d) {
+  return {
+    genre: 'demande', ligne: d, cible: 'demande',
+    provenance: provenanceDemande(d),
+    provenanceLabel: ditProvenance(provenanceDemande(d)).label,
+    etape: etapeDeDemande(d),
+    statutBrut: d.statut || 'nouveau_prospect',
+    recu: d.date_demande || '', nom: `${d.prenom || ''} ${d.nom || ''}`.trim(), type: null,
+    email: d.email, tel: d.telephone,
+    ville: d.ville, adresse: [d.adresse, [d.code_postal, d.ville].filter(Boolean).join(' ')]
+      .filter(Boolean).join(' '),
+    projet: travauxDe(d) || d.projet_description || d.type_projet, budget: d.budget,
+    statut: statutSuiviLu(d.statut) || 'nouveau_prospect',
+  };
+}
+
 export function ficheDe(f, etapeDe) {
   const q = qui(f);
   return {
@@ -471,6 +515,23 @@ export function ficheDe(f, etapeDe) {
     // changement fait depuis ce menu.
     statut: STATUT_DE_L_ETAPE[etapeDe(f)] || statutSuiviLu(f.statut_suivi) || 'nouveau_prospect',
   };
+}
+
+/**
+ * Ouvrir la fiche d'un prospect RGD depuis n'importe où, sans savoir d'avance
+ * si c'est une fiche client ou une demande du site.
+ *
+ * ⚠ LES DEUX GENRES N'ONT NI LES MÊMES COLONNES NI LA MÊME ÉTAPE : une demande
+ * se lit par `etapeDeDemande`, une fiche par les faits (chantiers, devis,
+ * visites). Laisser l'appelant deviner, c'est l'obliger à charger quatre
+ * tables pour ouvrir une fenêtre.
+ */
+export function ouvrirProspectRgd(ligne, genre, onChange) {
+  if (genre === 'demande') {
+    ouvrirFicheRgd(demandeDe(ligne), onChange);
+    return;
+  }
+  ouvrirFicheDuClient(ligne, onChange);
 }
 
 // Ouvrir la fiche d'une personne depuis n'importe quel écran de l'espace.
@@ -612,42 +673,8 @@ export const rgdClientsPage = {
       // répondait à une autre question que celle du titre, et le budget d'à
       // côté semblait porter sur l'achat de la maison. Les travaux d'abord,
       // la description ensuite, le bien en dernier recours.
-      //
-      // Deux formes cohabitent dans `types_travaux` : un tableau JSON pour les
-      // lignes relevées de D1, du texte séparé par des virgules pour celles
-      // qu'écrivent l'Edge Function et la saisie à la main.
-      const travauxDe = (d) => {
-        const brut = String(d.types_travaux || '').trim();
-        if (!brut) return '';
-        if (!brut.startsWith('[')) return brut;
-        try { return JSON.parse(brut).join(', '); } catch { return brut; }
-      };
-      // ⚠ L'APPORTEUR PASSE AVANT TOUT LE RESTE. Un nom de partenaire est un
-      // fait vérifiable ; « Recommandation » coché dans la liste d'à côté est
-      // une catégorie, et c'est souvent la même chose dite plus vaguement. Le
-      // fait gagne — sinon un prospect apporté par un partenaire nommé se
-      // rangerait en « Recommandation », et le décompte des apports du
-      // partenaire ne le verrait jamais.
-      const provenanceDemande = (d) => d.apporteur_id ? 'partenaire'
-        : VIA(d.comment_connu) || (d.source === 'manuel' ? 'direct' : 'site');
-
       const prospects = [
-        ...demandes.map(d => {
-          const nom = `${d.prenom || ''} ${d.nom || ''}`.trim();
-          return {
-            genre: 'demande', ligne: d, cible: 'demande',
-            provenance: provenanceDemande(d),
-            provenanceLabel: ditProvenance(provenanceDemande(d)).label,
-            etape: etapeDeDemande(d),
-            statutBrut: d.statut || 'nouveau_prospect',
-            recu: d.date_demande || '', nom, type: null,
-            email: d.email, tel: d.telephone,
-            ville: d.ville, adresse: [d.adresse, [d.code_postal, d.ville].filter(Boolean).join(' ')]
-              .filter(Boolean).join(' '),
-            projet: travauxDe(d) || d.projet_description || d.type_projet, budget: d.budget,
-            statut: statutSuiviLu(d.statut) || 'nouveau_prospect',
-          };
-        }),
+        ...demandes.map(demandeDe),
         ...fiches
           .filter(f => {
             const e = etapeDe(f);
