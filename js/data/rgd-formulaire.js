@@ -47,9 +47,23 @@ export const CORPS_METIER = ['Électricité', 'Maçonnerie', 'Isolation', 'Peint
 export const TRAVAUX = [...CHANTIERS, ...CORPS_METIER];
 export const BUDGETS = ['Moins de 20 000€', '20 000€ - 35 000€', '35 000€ - 50 000€',
   '50 000€ - 80 000€', '80 000€ - 120 000€', 'Plus de 120 000€'];
-export const CONNU = ['Recommandation', 'Recherche Google', 'Réseaux sociaux',
-  'Publicité (flyer, affichage, panneaux...)', 'Chantier vu sur place',
-  'BNI ou réseau professionnel'];
+// ⚠ DEUX DE CES VALEURS COMMANDENT UN CHAMP, d'où les constantes : la liste et
+// la condition qui l'écoute ne doivent pas pouvoir diverger sur une virgule.
+export const CONNU_RECOMMANDATION = 'Recommandation';
+export const CONNU_APPORTEUR = 'Partenaire / apporteur';
+
+// ⚠ REFAITE LE 01/10/2026, demandée mot pour mot. « Partenaire / apporteur »
+// entre — c'est la provenance la plus fréquente après le bouche-à-oreille et
+// elle n'était nulle part —, « Autre » ferme la liste, et les six tiennent sur
+// une seule ligne.
+//
+// ⚠ « Chantier vu sur place » et « BNI ou réseau professionnel » SORTENT de la
+// liste mais pas des données : le formulaire de rgdrenova.fr les propose
+// toujours, donc une demande du site peut encore les porter. Elle s'affichera
+// alors en bout de liste, cochée, en trait discontinu — la règle de
+// `avecLesPresentes`. On ne perd rien, on ne les propose plus à la saisie.
+export const CONNU = [CONNU_RECOMMANDATION, CONNU_APPORTEUR, 'Recherche Google',
+  'Réseaux sociaux', 'Publicité (flyer, affichage…)', 'Autre'];
 
 /**
  * Les types de travaux d'une ligne, quelle que soit la forme où ils dorment.

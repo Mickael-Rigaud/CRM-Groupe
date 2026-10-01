@@ -43,8 +43,8 @@
 // ce dépôt. Il n'y a donc aucune confirmation : le formulaire n'efface rien.
 import { scope } from '../data/scope.js';
 import { esc, openModal, closeModal, toast, fmtDate } from '../ui.js';
-import { DEMANDEUR, BIEN, RESIDENCE, TRAVAUX, BUDGETS, CONNU, listeTravaux }
-  from '../data/rgd-formulaire.js';
+import { DEMANDEUR, BIEN, RESIDENCE, TRAVAUX, BUDGETS, CONNU, listeTravaux,
+         CONNU_RECOMMANDATION, CONNU_APPORTEUR } from '../data/rgd-formulaire.js';
 import { valeursProjet, valeursSuivi, personneDe, enregistrerProjet, ditCreneau,
          adresseChantier } from '../data/rgd-projet.js';
 import {
@@ -136,6 +136,11 @@ export function ficheProjetRgd({ dans, cible = null, apporteurs = null,
     // rendez-vous n'est pas obligatoire pour noter une demande.
     rdv_jour: '', rdv_heure: '', rdv_duree: 60,
     adresse_differente: false,
+    // Le rappel à poser dans la to-do. ⚠ C'EST UNE ACTION, PAS UNE VALEUR
+    // STOCKÉE : vide à chaque ouverture, même sur une fiche qui en porte déjà
+    // un. Le pré-remplir ferait recréer le même rappel à chaque
+    // enregistrement, et il n'existe aucune colonne qui le porterait.
+    rappel_jour: '', rappel_heure: '',
   };
 
   // ⚠ LA CASE SE DEVINE À L'OUVERTURE, ET ELLE NE SE DEVINE QU'UNE FOIS. Une
@@ -204,10 +209,10 @@ export function ficheProjetRgd({ dans, cible = null, apporteurs = null,
   const avecLesPresentes = (liste, presentes) =>
     [...liste, ...presentes.filter(y => y && !liste.includes(y))];
 
-  const bloc = (cle, libelle, liste, retenues, multi) => `
+  const bloc = (cle, libelle, liste, retenues, multi, classe = '') => `
     <div class="mail-champ plein" data-champ="${cle}">
       <span>${esc(libelle)}${multi && retenues.length ? ` · ${retenues.length} sélectionné${retenues.length > 1 ? 's' : ''}` : ''}</span>
-      <div class="fa-chips" data-${multi ? 'puces' : 'puce'}="${cle}">
+      <div class="fa-chips ${classe}" data-${multi ? 'puces' : 'puce'}="${cle}">
         ${avecLesPresentes(liste, retenues).map(o => `
           <button type="button" class="fa-chip ${retenues.includes(o) ? 'on' : ''}${liste.includes(o) ? '' : ' est-hors-liste'}"
             data-val="${esc(o)}">${esc(o)}</button>`).join('')}
@@ -215,7 +220,8 @@ export function ficheProjetRgd({ dans, cible = null, apporteurs = null,
     </div>`;
 
   const puces = (cle, libelle, liste) => bloc(cle, libelle, liste, v[cle], true);
-  const puce = (cle, libelle, liste) => bloc(cle, libelle, liste, v[cle] ? [v[cle]] : [], false);
+  const puce = (cle, libelle, liste, classe = '') =>
+    bloc(cle, libelle, liste, v[cle] ? [v[cle]] : [], false, classe);
 
   // ------------------------------------------------------------- les écrans
   // ⚠ L'ORDRE DES CHAMPS EST CELUI QUE MICKAEL A ÉCRIT (01/10/2026), y compris
@@ -299,32 +305,96 @@ export function ficheProjetRgd({ dans, cible = null, apporteurs = null,
       <div class="rgp-second plein">
         <span>Provenance et suivi</span>
       </div>
-      ${aLeContexte ? puce('comment_connu', 'Connu via', CONNU) : ''}
-      ${aLeContexte && /recommand/i.test(v.comment_connu)
+      <!-- ⚠ LES SIX SUR UNE SEULE LIGNE (01/10/2026, demande du jour) : la
+           provenance se lit d'un coup d'oeil, elle ne se parcourt pas. -->
+      ${aLeContexte ? puce('comment_connu', 'Connu via', CONNU, 'rgp-uneligne') : ''}
+      ${aLeContexte && v.comment_connu === CONNU_RECOMMANDATION
         ? champ('recommandation', 'Recommandé par',
             { plein: true, placeholder: 'Nom de la personne ou du partenaire' })
         : ''}
-      <!-- ⚠ L'APPORTEUR PASSE DEVANT LE « CONNU VIA » DANS LA DECISION DE
-           PROVENANCE : un nom choisi ici est un fait, « Recommandation » dans
-           la liste d'a cote est une categorie. -->
+      <!-- ⚠ LA LISTE DES APPORTEURS N'APPARAIT QUE SUR « Partenaire /
+           apporteur » (demande du jour) — ET AUSSI DES QU'UN APPORTEUR EST
+           DEJA POSE, quelle que soit la provenance. Sans ce second cas, une
+           fiche ancienne rattachee a un apporteur mais dont le « connu via »
+           dit autre chose perdrait l'acces a son propre champ : on ne pourrait
+           plus ni le lire ni le corriger, alors que la fiche l'affiche. -->
+      ${aLeContexte && v.comment_connu !== CONNU_APPORTEUR && !v.apporteur_id ? '' : `
       <label class="mail-champ plein" data-champ="apporteur_id">
         <span>Apporté par</span>
         <select id="rgp-apporteur_id" name="apporteur_id">
           <option value="">—</option>
           ${choixApporteurs.map(([id, nom]) => `
             <option value="${esc(id)}"${id === v.apporteur_id ? ' selected' : ''}>${esc(nom)}</option>`).join('')}
-        </select></label>
-      <!-- ⚠ CE COMMENTAIRE-LA PARLE DE LA PERSONNE, pas du projet : ce qu'on
-           retient d'elle, son humeur, l'heure a laquelle la rappeler. Le projet
+        </select></label>`}
+      <!-- ⚠ LE COMMENTAIRE ET LE RAPPEL SONT COTE A COTE (demande du jour) :
+           on note ce qu'on retient de la personne et le moment ou on la
+           rappelle dans le meme geste, a la fin de l'appel.
+           ⚠ CE COMMENTAIRE-LA PARLE DE LA PERSONNE, pas du projet : le projet
            a deja le sien, a la premiere etape. C'est le meme champ que la
            colonne « Note » du tableau. Et SURTOUT PAS d'accent grave dans ce
-           commentaire : il refermerait le gabarit. -->
-      ${zone('commentaire', 'Commentaire', 3,
-        'Ce qu’il faut savoir sur elle : disponibilités, ton de l’échange, à rappeler quand…')}
+           commentaire HTML : il refermerait le gabarit. -->
+      <div class="rgp-duo plein">
+        ${zone('commentaire', 'Commentaire', 4,
+          'Ce qu’il faut savoir sur elle : disponibilités, ton de l’échange…')}
+        ${blocRappel()}
+      </div>
       ${aLeContexte ? '' : `<p class="rgp-note plein">Le type de demandeur, le « connu via » et
         la recommandation ne sont posés que sur une demande : cette fiche vient de
         l’application RGD, qui ne les porte pas.</p>`}
     </div>`;
+
+  // ------------------------------------------------------------- le rappel
+  //
+  // ⚠ IL VA DANS LA VRAIE TO-DO DU CRM (`activities`), pas dans une seconde
+  // liste à côté (01/10/2026, demandé : « un système où on peut planifier des
+  // rappels qui seront automatiquement inscrits dans la to do list du CRM
+  // Groupe »). C'est la table que lisent « Ma journée », la liste des tâches et
+  // les compteurs : y écrire est la seule façon que le rappel se voie là où on
+  // regarde le matin.
+  //
+  // ⚠ C'EST UNE ACTION, PAS UN CHAMP DE LA FICHE : rien en base ne porte « le
+  // rappel de cette fiche ». Le champ repart donc vide à chaque ouverture, et
+  // les rappels déjà posés se lisent dessous. Le pré-remplir recréerait le même
+  // rappel à chaque enregistrement.
+  const rappelsEnCours = () => {
+    const cid = f.contact_id;
+    const oid = f.organisation_id;
+    if (!x || (!cid && !oid)) return [];
+    return (scope.rgd('activities') || [])
+      .filter(a => !a.done && a.due_date
+        && ((cid && a.contact_id === cid) || (oid && a.organisation_id === oid)))
+      .sort((a, b) => String(a.due_date).localeCompare(String(b.due_date)));
+  };
+
+  // Les raccourcis. On raccroche et on pose un rappel : taper une date au
+  // clavier pour « dans trois jours » est plus long que de le dire.
+  const RACCOURCIS = [[1, 'Demain'], [3, 'Dans 3 j'], [7, 'Dans 1 sem.'], [30, 'Dans 1 mois']];
+
+  const blocRappel = () => {
+    const deja = rappelsEnCours();
+    const aujourdhui = aujourdhuiParis();
+    return `
+      <div class="mail-champ rgp-rappel" data-champ="rappel_jour">
+        <span>Rappel</span>
+        <div class="fa-chips rgp-uneligne">
+          ${RACCOURCIS.map(([n, lbl]) => `
+            <button type="button" class="fa-chip ${v.rappel_jour === decale(aujourdhui, n) ? 'on' : ''}"
+              data-rappel="${n}">${esc(lbl)}</button>`).join('')}
+        </div>
+        <div class="rgp-rappel-quand">
+          <input type="date" id="rgp-rappel_jour" value="${esc(v.rappel_jour)}" min="${aujourdhui}">
+          <input type="time" id="rgp-rappel_heure" value="${esc(v.rappel_heure)}"
+            ${v.rappel_jour ? '' : 'disabled'}>
+          ${v.rappel_jour ? '<button type="button" class="btn ghost sm" id="rgp-rappel-non">Retirer</button>' : ''}
+        </div>
+        <p class="rgp-rappel-dit">${v.rappel_jour
+          ? `Une tâche « Rappeler ${esc(nomDit() || 'ce prospect')} » sera ajoutée à la to-do.`
+          : 'Aucun rappel. Choisissez une date pour en poser un dans la to-do du CRM.'}</p>
+        ${deja.length ? `<ul class="rgp-rappel-deja">${deja.slice(0, 3).map(a => `
+          <li>Déjà prévu : ${esc(fmtDate(a.due_date))}${a.due_time ? ` à ${esc(a.due_time)}` : ''}
+            — ${esc(a.title)}</li>`).join('')}</ul>` : ''}
+      </div>`;
+  };
 
   // ---------------------------------------------------- l'écran rendez-vous
   //
@@ -520,6 +590,24 @@ export function ficheProjetRgd({ dans, cible = null, apporteurs = null,
         'code_postal', 'ville', 'recommandation', 'commentaire'].forEach(poser);
       const ap = dans.querySelector('#rgp-apporteur_id');
       if (ap) ap.onchange = () => { v.apporteur_id = ap.value; };
+      // Le rappel. ⚠ Les raccourcis POSENT une date dans le champ, ils ne le
+      // remplacent pas : on clique « Dans 3 j » puis on ajuste si besoin.
+      dans.querySelectorAll('[data-rappel]').forEach(b2 => b2.onclick = () => {
+        const j = decale(aujourdhuiParis(), Number(b2.dataset.rappel));
+        v.rappel_jour = v.rappel_jour === j ? '' : j;
+        if (!v.rappel_jour) v.rappel_heure = '';
+        dessine();
+      });
+      const rj = dans.querySelector('#rgp-rappel_jour');
+      // ⚠ `change` ET PAS `input` SUR UNE DATE : à la frappe, « 0002-01-01 »
+      // passe par le gestionnaire avant que l'année soit finie de taper.
+      if (rj) rj.onchange = () => { v.rappel_jour = rj.value; dessine(); };
+      const rh = dans.querySelector('#rgp-rappel_heure');
+      if (rh) rh.oninput = () => { v.rappel_heure = rh.value; };
+      dans.querySelector('#rgp-rappel-non')?.addEventListener('click', () => {
+        v.rappel_jour = ''; v.rappel_heure = ''; dessine();
+      });
+
       const diff = dans.querySelector('#rgp-adresse_differente');
       // ⚠ COCHER VIDE LES TROIS CHAMPS (01/10/2026, demandé : « si on coche que
       // l'adresse est différente ça supprime automatiquement le champ
@@ -654,6 +742,12 @@ export function ficheProjetRgd({ dans, cible = null, apporteurs = null,
       } else {
         toast(`Rendez-vous pris${r.rdv.mail ? ' et confirmation envoyée' : ''}`);
       }
+    }
+    // Le rappel se dit aussi : il crée une tâche dans la to-do de quelqu'un.
+    if (r.rappel && !r.rappel.ok) {
+      toast(`Le rappel n’a pas pu être posé — ${r.rappel.motif}`, 'warn');
+    } else if (r.rappel?.ok && !r.rdv) {
+      toast(`Rappel ajouté à la to-do pour le ${fmtDate(r.rappel.jour)}`);
     }
     apres?.(r);
   }

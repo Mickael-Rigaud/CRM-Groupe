@@ -285,7 +285,8 @@ export async function enregistrerProjet(x, v) {
       // contact, qui n'existe pas tant qu'elle n'est pas écrite. Et son échec
       // ne remet pas la fiche en cause — on a noté un prospect, c'est l'essentiel.
       const rdv = await avecRendezVous(v, { contactId: creee.contact?.id });
-      return { ok: true, creee, rdv };
+      const rappel = await poserRappel(v, { contactId: creee.contact?.id });
+      return { ok: true, creee, rdv, rappel };
     }
 
     const f = x.ligne;
@@ -329,11 +330,59 @@ export async function enregistrerProjet(x, v) {
     }
     if (p) await db.update(p.table, p.ligne.id, { ...identite(v, p.pro), ...coordonnees(v) });
     avancerVue(x, v);
-    const rdv = await avecRendezVous(v, {
-      contactId: f.contact_id || null, organisationId: f.organisation_id || null,
-    });
-    return { ok: true, rdv };
+    const cles = { contactId: f.contact_id || null, organisationId: f.organisation_id || null };
+    const rdv = await avecRendezVous(v, cles);
+    const rappel = await poserRappel(v, cles);
+    return { ok: true, rdv, rappel };
   } catch (e) { return echec(e); }
+}
+
+/**
+ * Pose le rappel dans la to-do du CRM.
+ *
+ * ⚠ DANS `activities`, LA VRAIE TABLE DES TÂCHES — pas dans une liste à part
+ * (01/10/2026, demandé : « un système où on peut planifier des rappels qui
+ * seront automatiquement inscrits dans la to do list du CRM Groupe »). C'est
+ * elle que lisent « Ma journée », l'écran des tâches et les compteurs.
+ *
+ * ⚠ LA TÂCHE EST POUR SOI, jamais pour un collègue : un déclencheur serveur
+ * (`tache_destinataire`) refuse un destinataire hors de ses structures, et
+ * surtout personne n'a demandé à recevoir le rappel de quelqu'un d'autre.
+ *
+ * ⚠ LE COMMENTAIRE EST RECOPIÉ DANS LA TÂCHE, et c'est un INSTANTANÉ assumé :
+ * quand le rappel sonne dans trois semaines, « rappeler après 18 h » est
+ * précisément ce qu'il faut avoir sous les yeux, et aller le rechercher sur la
+ * fiche est le geste qu'on ne fera pas. Il ne suivra pas une correction faite
+ * ensuite sur la fiche — c'est le prix, et il est petit.
+ *
+ * ⚠ SON ÉCHEC NE REMET RIEN EN CAUSE : la fiche est enregistrée, le rendez-vous
+ * pris. On le dit, on ne recommence pas.
+ */
+async function poserRappel(v, { contactId, organisationId }) {
+  const jour = txt(v.rappel_jour);
+  if (!jour) return null;
+  try {
+    await db.insert('activities', {
+      contact_id: contactId || null,
+      organisation_id: organisationId || null,
+      activity: 'rgd',
+      type: 'relance',
+      title: `Rappeler ${nomComplet(v) || 'ce prospect'}`,
+      due_date: jour,
+      due_time: txt(v.rappel_heure),
+      notes: txt(v.commentaire),
+      assignee_id: scope.user?.id || null,
+      done: false,
+      created_by: scope.user?.id || null,
+    });
+    // ⚠ RIEN À RECHARGER ICI, contrairement au rendez-vous : `db.insert` pose
+    // la ligne dans le cache ET appelle `emit()`, donc « Ma journée » et
+    // l'écran des tâches se redessinent seuls. C'est la RPC du rendez-vous qui
+    // ne le fait pas — une fonction de base écrit sans passer par le cache.
+    return { ok: true, jour, heure: txt(v.rappel_heure) };
+  } catch (e) {
+    return { ok: false, motif: String(e.message || e).slice(0, 140) };
+  }
 }
 
 // Appelée par `enregistrerProjet` quand un créneau a été choisi. Sans créneau
