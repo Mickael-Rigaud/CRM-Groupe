@@ -13,7 +13,8 @@
 //   Les documents — ils appartiennent aux affaires du CRM, pas aux fiches
 //   relevées de Cloudflare, qui n'en ont pas.
 //
-// ⚠ « MODIFIER » EXISTE DEPUIS LE 24/09/2026 (voir `rgd-fiche-modif.js`).
+// ⚠ « MODIFIER » OUVRE LA FICHE PROJET (voir `rgd-projet.js`, 01/10/2026 ;
+// un formulaire à part existait depuis le 24/09).
 // L'en-tête annonçait ici que l'espace RGD était en lecture seule et qu'un
 // formulaire serait écrasé au relevé suivant. C'était exact, et c'est
 // précisément pour ça que le formulaire écrit À LA SOURCE et non dans le
@@ -51,8 +52,8 @@ import { ETAPES_RGD, ORDRE_ETAPES, STATUT_DE_L_ETAPE, ecrireStatut,
          montantDevisDe, etapeAvecMontant, COL_RELANCE, majDateRelance,
          aujourdhui } from '../data/rgd-etapes.js';
 import { scope } from '../data/scope.js';
-import { formulaireModif, enregistrerModif, lireModif, refusDeModifier, valeursProjet }
-  from './rgd-fiche-modif.js';
+import { refusDeProjet, valeursProjet } from '../data/rgd-projet.js';
+import { ficheProjetRgd } from './rgd-projet.js';
 import { listeTravaux } from '../data/rgd-formulaire.js';
 import { rendezVousDeLaFiche, coordonneesDuRendezVous } from '../data/rgd-rdv.js';
 import { attribuerFicheRgd, proprietaireDeLaFiche } from './rgd-attribuer.js';
@@ -164,6 +165,12 @@ export function ouvrirFicheRgd(x, onChange) {
   // et l'annulation n'aurait eu nulle part où revenir. Les deux blocs
   // d'information cèdent donc la place au formulaire, et la reprennent après.
   let enModification = false;
+  // ⚠ L'ÉTAPE DE LA FICHE PROJET VIT ICI, PAS DANS LE FORMULAIRE. La fiche se
+  // redessine de l'extérieur — attribution, enregistrement, rendez-vous — et
+  // remonte alors un formulaire neuf ; un numéro d'étape gardé dedans
+  // repartirait à « Le prospect » à chaque fois, sous les yeux de quelqu'un qui
+  // en était à « Le suivi ».
+  const etatProjet = { pas: 1 };
   const f = x.ligne;
 
   const clefs = { contact_id: f.contact_id || null, organisation_id: f.organisation_id || null };
@@ -384,11 +391,11 @@ export function ouvrirFicheRgd(x, onChange) {
           </div>
           ${blocRendezVous(rdvs)}
         </div>
-        ${!enModification && !refusDeModifier(x)
+        ${!enModification && !refusDeProjet(x)
           ? '<button type="button" class="btn ghost sm rgdf-modifier" id="rgdf-modifier">Modifier les informations</button>'
-          : refusDeModifier(x)
-            ? `<p class="rgdf-origine" title="${esc(refusDeModifier(x))}">Lecture seule</p>` : ''}
-        <!-- Attribuer ne dépend pas de refusDeModifier : une fiche en lecture
+          : refusDeProjet(x)
+            ? `<p class="rgdf-origine" title="${esc(refusDeProjet(x))}">Lecture seule</p>` : ''}
+        <!-- Attribuer ne dépend pas de refusDeProjet : une fiche en lecture
              seule (un reflet de l'application RGD) se confie tout de même, car
              c'est le CRM qui décide qui la porte, pas le relevé. -->
         ${peutAttribuer
@@ -423,7 +430,7 @@ export function ouvrirFicheRgd(x, onChange) {
 
       <div class="rgdf-corps">
         <div class="rgdf-colonne">
-          ${enModification ? formulaireModif(x, { telephone: duRdv.telephone }) : `
+          ${enModification ? '<div id="rgdf-projet"></div>' : `
           <section class="rgdf-bloc">
             <h3>Le prospect</h3>
             ${(() => { const t = x.tel || duRdv.telephone;
@@ -529,29 +536,34 @@ export function ouvrirFicheRgd(x, onChange) {
     // ouverte devant la personne, il faut qu'elle voie le nouveau nom.
     if (bAttribuer) bAttribuer.onclick = () => attribuerFicheRgd(x, () => { dessine(); onChange?.(); }, dessine);
 
-    const formModif = m.querySelector('#rgdm');
-    if (formModif) {
-      m.querySelector('#rgdm-annuler').onclick = () => { enModification = false; dessine(); };
-      formModif.onsubmit = async (ev) => {
-        ev.preventDefault();
-        const ok = m.querySelector('#rgdm-ok');
-        ok.disabled = true; ok.textContent = 'Enregistrement…';
-        const r = await enregistrerModif(x, lireModif(formModif));
-        if (!r.ok) {
-          ok.disabled = false; ok.textContent = 'Enregistrer';
-          toast(`Non enregistré — ${r.motif}`, 'err');
-          return;
-        }
-        // ⚠ L'HISTORIQUE DIT QU'ON A TOUCHÉ, PAS CE QU'ON A ÉCRIT. Recopier les
-        // valeurs y mettrait des téléphones et des adresses, dans un fil que
-        // tout l'espace RGD peut lire — et la fiche les montre déjà.
-        await inscrire('note', 'Informations de la fiche modifiées');
-        enModification = false;
-        toast('Informations enregistrées');
-        dessine();
-        onChange?.();
-      };
+    // ⚠ LA FICHE PROJET EST MONTÉE APRÈS COUP, dans un élément que le gabarit
+    // réserve : elle se redessine toute seule à chaque changement d'étape du
+    // formulaire, ce qu'une chaîne de caractères ne sait pas faire.
+    const hote = m.querySelector('#rgdf-projet');
+    if (hote) {
+      ficheProjetRgd({
+        dans: hote, cible: x, propose: { telephone: duRdv.telephone }, etat: etatProjet,
+        annuler: () => { enModification = false; dessine(); },
+        apres: async () => {
+          // ⚠ L'HISTORIQUE DIT QU'ON A TOUCHÉ, PAS CE QU'ON A ÉCRIT. Recopier
+          // les valeurs y mettrait des téléphones et des adresses, dans un fil
+          // que tout l'espace RGD peut lire — et la fiche les montre déjà.
+          await inscrire('note', 'Informations de la fiche modifiées');
+          enModification = false;
+          toast('Informations enregistrées');
+          dessine();
+          onChange?.();
+        },
+      });
     }
+
+    // ⚠ LA FRISE SE FIGE PENDANT LA SAISIE, ET C'EST UNE PERTE ÉVITÉE, PAS UN
+    // VERROU DE PRINCIPE. Changer d'étape rappelle `dessine()`, qui reconstruit
+    // la fiche entière : le formulaire repart à zéro, et trois écrans de saisie
+    // partent avec lui. C'était déjà vrai de l'ancien formulaire, où ça ne
+    // coûtait qu'une colonne ; ça coûte maintenant tout ce qu'on vient de
+    // noter pendant un appel. « Annuler » ou « Enregistrer » rendent la frise.
+    m.querySelectorAll('[data-etape]').forEach(b => { b.disabled = enModification; });
 
     m.querySelectorAll('[data-etape]').forEach(b => b.onclick = async () => {
       const vers = b.dataset.etape;

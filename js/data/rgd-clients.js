@@ -42,19 +42,28 @@ import { db } from './db.js';
 const echec = (e) => ({ ok: false, motif: String(e.message || e).slice(0, 160) });
 
 /**
- * Le commentaire libre d'une fiche.
+ * Où dort le commentaire libre d'une fiche.
  *
  * Deux tables, deux noms de colonne — `notes` pour un client,
  * `commentaire_admin` pour une demande du site. Ce sont les noms d'origine, et
  * les renommer aurait cassé la lecture de l'écran pour un gain nul.
  *
+ * ⚠ DÉCLARÉ UNE SEULE FOIS, ET LA FICHE PROJET LE LIT AUSSI (01/10/2026) :
+ * depuis qu'elle porte le commentaire, deux écrans écrivent ce champ — le
+ * tableau Clients & prospects par `majNote`, la fiche projet dans son propre
+ * `update`. Chacun décidant du nom de colonne dans son coin, une note saisie
+ * d'un côté finirait par ne plus s'afficher de l'autre, et le défaut ne se
+ * verrait que sur un genre de fiche.
+ *
  * `cible` vaut `'demande'` ou autre chose, comme partout dans cet espace.
  */
+export const COLONNE_NOTE = (cible) => (cible === 'demande' ? 'commentaire_admin' : 'notes');
+
+/** Le commentaire libre d'une fiche, écrit depuis le tableau. */
 export async function majNote({ uuid, cible, valeur }) {
   const table = cible === 'demande' ? 'rgd_demandes' : 'rgd_clients';
-  const champ = cible === 'demande' ? 'commentaire_admin' : 'notes';
   try {
-    await db.update(table, uuid, { [champ]: valeur });
+    await db.update(table, uuid, { [COLONNE_NOTE(cible)]: valeur });
     return { ok: true };
   } catch (e) { return echec(e); }
 }

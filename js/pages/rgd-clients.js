@@ -102,7 +102,7 @@ import { cadre, guard } from './rgd-espace.js';
 import { majNote } from '../data/rgd-clients.js';
 import { toast } from '../ui.js';
 import { supprimerFiche, boutonSuppression } from './rgd-prospect-saisie.js';
-import { formulaireDemande } from './rgd-demande-saisie.js';
+import { nouvelleDemandeRgd } from './rgd-projet.js';
 import { ouvrirFicheRgd } from './rgd-fiche.js';
 
 const s_ = (n) => (n > 1 ? 's' : '');
@@ -1124,7 +1124,7 @@ export const rgdClientsPage = {
       // « Direct », et elle naît à la première étape. Le bouton ne s'affiche
       // donc que là : créé depuis « Chantier terminé », le prospect
       // apparaîtrait dans un autre onglet que celui qu'on regarde.
-      if (nouveau) nouveau.onclick = () => formulaireDemande(apporteurs, draw);
+      if (nouveau) nouveau.onclick = () => nouvelleDemandeRgd(apporteurs, draw);
 
       // Supprimer : le bouton n'existe que sur les fiches nees dans le CRM
       // (`boutonSuppression` ne rend rien autrement), et `supprimerProspect`

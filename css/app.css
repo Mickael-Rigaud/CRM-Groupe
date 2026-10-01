@@ -694,52 +694,37 @@ button.esp-side-titre { background: none; border: 0; font-family: inherit; color
   background: var(--card-2); border-left: 3px solid var(--line-strong);
   border-radius: 0 9px 9px 0; padding: 11px 13px; }
 
-/* ---- modifier les informations ---- */
-/* Le formulaire prend la place des deux blocs d'information, pas celle de la
-   fiche : ouvrir une fenetre par-dessus aurait ferme la fiche, et l'annulation
-   n'aurait eu nulle part ou revenir. Il reprend donc leur habillage — meme
-   carte, meme titre — pour qu'on voie qu'on modifie CES blocs-la. */
-.rgdm { display: flex; flex-direction: column; gap: 14px; }
-.rgdm-grille { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 14px; }
-.rgdm-champ { min-width: 0; display: flex; flex-direction: column; gap: 5px; }
-.rgdm-champ.est-large { grid-column: 1 / -1; }
-.rgdm-champ > label { font-size: 12px; font-weight: 600; color: var(--muted); }
-.rgdm-champ input, .rgdm-champ select, .rgdm-champ textarea {
-  border: 1px solid var(--line-strong); border-radius: 9px;
-  padding: 8px 11px; background: #fff; width: 100%; font: inherit; font-size: 14px; }
-.rgdm-champ textarea { resize: vertical; min-height: 68px; line-height: 1.45; }
-.rgdm-champ input:focus, .rgdm-champ select:focus, .rgdm-champ textarea:focus {
-  outline: none; border-color: var(--accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
-/* ---- les puces du projet ----
-   Memes formes qu'a la saisie d'une demande (.ndf-puce) : deux ecrans qui
-   posent la meme question doivent l'offrir pareil. Le style est redit ici
-   plutot que partage parce que la modale de saisie pose sa propre teinte par
-   bloc (--teinte), que la fiche n'a pas.
-   ⚠ LA CASE EST POSEE PAR-DESSUS SON LIBELLE, transparente : sans ça le clic
-   ne porterait que sur le carre natif, une cible de 13 px au bord gauche. */
-.rgdm-puces { display: flex; flex-wrap: wrap; gap: 7px; }
-.rgdm-puce { position: relative; }
-.rgdm-puce input { position: absolute; opacity: 0; width: 100%; height: 100%;
-  margin: 0; inset: 0; cursor: pointer; }
-.rgdm-puce span { display: block; padding: 7px 13px; border-radius: 999px;
-  border: 1px solid var(--line-strong); background: #fff; font-size: 13px;
-  font-weight: 500; color: var(--muted); cursor: pointer;
-  transition: all .18s cubic-bezier(.4,0,.2,1); }
-.rgdm-puce:hover span { border-color: var(--puce, var(--accent)); color: var(--text); }
-.rgdm-puce input:checked + span { background: var(--puce, var(--accent));
-  border-color: var(--puce, var(--accent)); color: #fff; font-weight: 600; }
-.rgdm-puce input:focus-visible + span {
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--puce, var(--accent)) 25%, transparent); }
-/* L'argent est vert partout ailleurs dans le CRM, et une seule puce se coche
-   sur cette ligne la ou les travaux en portent plusieurs : deux teintes disent
-   que ce ne sont pas deux questions du meme genre. */
-.rgdm-champ[data-champ="budget_annonce"] { --puce: var(--green); }
-/* Une valeur deja en base qui ne figure pas dans la liste standard : le trait
-   discontinu dit qu'elle vient d'ailleurs, sans la faire passer pour une
-   erreur — elle est vraie, c'est le vocabulaire qui a bouge. */
-.rgdm-puce.est-hors-liste span { border-style: dashed; }
-.rgdm-pied { display: flex; justify-content: flex-end; gap: 10px; }
+/* ---- LA FICHE PROJET DE RGD RENOVA (js/pages/rgd-projet.js) ----
+   Un seul formulaire pour les deux portes : « + Nouvelle demande » l'ouvre dans
+   une fenetre, « Modifier les informations » le rend DANS la fiche, a la place
+   de ses deux blocs. Il n'a donc presque pas de styles a lui : il emprunte ceux
+   de la fiche projet de BTP Expertise (`.mf-pas`, `.mf-grille`, `.mail-champ`,
+   `.fa-chip`), qui retombent deja sur `--accent` quand `--m` n'est pas pose.
+   Deux fiches projet qui se ressemblent s'apprennent une fois. */
+.rgp { display: flex; flex-direction: column; }
+/* ⚠ LES TROIS ETAPES SONT TOUTES CLIQUABLES, TOUT LE TEMPS, et le curseur doit
+   le dire. `.mf-pas-item` est en `cursor: default` chez BTP, ou l'etape a
+   venir se merite ; ici rien ne se merite — c'est ce qui remplace le « tout
+   sous les yeux » de l'ecran unique d'avant. */
+.rgp-pas .mf-pas-item { cursor: pointer; }
+.rgp .mf-grille { margin-bottom: 2px; }
+.rgp-note { margin: 10px 0 0; font-size: 12px; line-height: 1.45; color: var(--muted); }
+.rgp-note.plein { grid-column: 1 / -1; }
+/* ⚠ LE PIED S'ENROULE, et c'est mesure : a 390 px de large les quatre boutons
+   — Annuler, Retour, Suivant, Enregistrer — depassaient le formulaire, qui
+   debordait a son tour. Sans `flex-wrap`, c'est « Enregistrer » qui sort de
+   l'ecran, c'est-a-dire le seul bouton dont on ait vraiment besoin. */
+.rgp-pied { display: flex; align-items: center; flex-wrap: wrap; gap: 10px;
+  margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+.rgp-pied .grow { flex: 1; }
+/* En dessous de 420 px l'espaceur n'a plus de place a prendre : il forcerait
+   « Annuler » seul sur sa ligne et les trois autres en dessous. */
+@media (max-width: 420px) { .rgp-pied .grow { display: none; } }
+/* Un manque se signale LA OU IL EST. Un message en bas de page oblige a
+   chercher le champ dont il parle. */
+.rgp .mail-champ.est-manquant > span { color: var(--red); }
+.rgp .mail-champ.est-manquant input {
+  border-color: var(--red); box-shadow: 0 0 0 3px var(--red-soft); }
 /* ---- la fiche d'affaire, a la presentation de la fiche client RGD ----
    ⚠ `.rgdf-argent` PORTE LE CHIFFRE SOUS LE NOM, et il change de nature a
    l'engagement : budget annonce avant la lettre de mission, montant facture
@@ -970,7 +955,6 @@ button.esp-side-titre { background: none; border: 0; font-family: inherit; color
 /* Le bouton d'entree se tient dans l'en-tete, au-dessus des chiffres : c'est
    la premiere chose qu'on cherche quand on vient corriger quelque chose. */
 .rgdf-modifier { align-self: flex-start; margin-bottom: 12px; }
-@media (max-width: 560px) { .rgdm-grille { grid-template-columns: 1fr; } }
 
 /* ---- l'historique ---- */
 .rgdf-ajout { display: flex; gap: 8px; margin-bottom: 14px; }
@@ -997,117 +981,6 @@ button.esp-side-titre { background: none; border: 0; font-family: inherit; color
 .rgdf-fil li.rgdf-vide { color: var(--muted); font-size: 13px; }
 .rgdf-fil li.rgdf-vide::before { display: none; }
 
-/* LE FORMULAIRE DE NOUVELLE DEMANDE (js/pages/rgd-demande-saisie.js)
-   Il recueille les memes informations que le formulaire du site, mais il ne
-   lui ressemble pas — et c'est la correction du 23/09/2026. La premiere
-   version recopiait le site : deux etapes, un chemin en haut, un bouton
-   « Continuer ». Refusee, a raison. Un visiteur qu'on menage et un collegue
-   qui note pendant un appel n'ont pas besoin du meme objet : le premier veut
-   qu'on lui simplifie, le second veut TOUT VOIR. D'ou deux colonnes, la
-   personne a gauche, le projet a droite, et un seul bouton.
-
-   Rien ici ne reutilise `.field` : les intitules gris en petites capitales du
-   CRM conviennent a un formulaire d'administration, pas a une conversation
-   qu'on transcrit au telephone. */
-.ndf { display: block; }
-
-/* ---- les deux colonnes ---- */
-.ndf-colonnes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px; align-items: start; }
-/* ⚠ UNE TEINTE PAR BLOC, ET C'EST TOUT. Premiere version : deux cartes grises
-   sur fond blanc, seize champs blancs dedans — « un peu triste », a raison.
-   Mais la correction n'est pas de tout colorer : ce qu'on veut, c'est
-   DISTINGUER LES DEUX MOITIES d'un coup d'oeil, pour retrouver son champ sans
-   relire les intitules. Chaque bloc porte donc une teinte, une seule, qui
-   tient son filet du haut, son rond de titre et son degrade de fond — et les
-   champs restent blancs, parce que c'est dedans qu'on ecrit. */
-.ndf-bloc { --teinte: var(--accent); background: #fff;
-  border: 1px solid var(--line); border-top: 3px solid var(--teinte);
-  border-radius: 13px; padding: 15px 18px 18px; min-width: 0;
-  background-image: linear-gradient(180deg,
-    color-mix(in srgb, var(--teinte) 7%, #fff), #fff 110px); }
-.ndf-bloc.est-prospect { --teinte: var(--accent); }
-/* Le projet prend le bleu : c'est la couleur que la fiche donne deja au bien
-   et a la superficie, et deux ecrans qui parlent de la meme chose ont interet
-   a la dire de la meme facon. */
-.ndf-bloc.est-projet { --teinte: var(--blue); }
-
-/* ⚠ LE `h3` GLOBAL EST EN PETITES CAPITALES GRISES (voir plus haut). Sans
-   cette remise a zero, « Le prospect » et « Le projet » se liraient comme des
-   etiquettes de champ et non comme des titres de bloc. */
-.ndf-bloc > h3 { margin: 0 0 15px; font-size: 15px; letter-spacing: -.01em;
-  text-transform: none; color: var(--text);
-  display: flex; align-items: center; gap: 9px; }
-.ndf-rond { width: 28px; height: 28px; flex: 0 0 auto; border-radius: 50%;
-  display: grid; place-items: center;
-  background: color-mix(in srgb, var(--teinte) 14%, #fff); color: var(--teinte); }
-.ndf-rond svg { width: 16px; height: 16px; fill: none; stroke: currentColor;
-  stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-
-/* `minmax(0, 1fr)` et non `1fr` : sans le zero, une liste deroulante dont une
-   option est longue refuse de se reduire et deborde la colonne. */
-.ndf-grille { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 13px 14px; align-items: start; }
-.ndf-champ { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
-.ndf-champ.est-large { grid-column: 1 / -1; }
-.ndf-champ > label { font-size: 12.5px; font-weight: 600; color: var(--muted); }
-.ndf-champ input, .ndf-champ select, .ndf-champ textarea {
-  border: 1px solid var(--line-strong); border-radius: 10px; padding: 9px 12px;
-  background: #fff; width: 100%; font: inherit; font-size: 14px;
-  transition: border-color .15s ease, box-shadow .15s ease; }
-.ndf-champ textarea { resize: vertical; }
-/* Le champ qu'on remplit s'allume de la teinte de SON bloc : l'oeil sait dans
-   quelle moitie il est sans quitter le champ des yeux. */
-.ndf-champ input:focus, .ndf-champ select:focus, .ndf-champ textarea:focus {
-  outline: none; border-color: var(--teinte, var(--accent));
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--teinte, var(--accent)) 18%, transparent); }
-/* Un manque se signale LA OU IL EST. Un message en bas de page oblige a
-   chercher le champ dont il parle. */
-.ndf-champ.est-manquant > label { color: var(--red); }
-.ndf-champ.est-manquant input, .ndf-champ.est-manquant select {
-  border-color: var(--red); box-shadow: 0 0 0 3px var(--red-soft); }
-
-/* ---- les puces ---- */
-/* Le champ reste dans le gabarit — le clavier et les lecteurs d'ecran en ont
-   besoin — mais il ne se dessine pas : `appearance: none` seul laisserait un
-   carre vide, `display: none` le retirerait de la tabulation. */
-.ndf-puces { display: flex; flex-wrap: wrap; gap: 7px; }
-.ndf-puce { position: relative; }
-.ndf-puce input { position: absolute; opacity: 0; width: 100%; height: 100%;
-  margin: 0; inset: 0; cursor: pointer; }
-.ndf-puce span { display: block; padding: 7px 13px; border-radius: 999px;
-  border: 1px solid var(--line-strong); background: #fff; font-size: 13px;
-  font-weight: 500; color: var(--muted); cursor: pointer;
-  transition: all .18s cubic-bezier(.4,0,.2,1); }
-.ndf-puce:hover span { border-color: var(--puce, var(--teinte)); color: var(--text); }
-.ndf-puce input:checked + span { background: var(--puce, var(--teinte));
-  border-color: var(--puce, var(--teinte)); color: #fff; font-weight: 600;
-  transform: translateY(-1px);
-  box-shadow: 0 3px 10px -3px color-mix(in srgb, var(--puce, var(--teinte)) 55%, transparent); }
-.ndf-puce input:focus-visible + span {
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--puce, var(--teinte)) 25%, transparent); }
-/* ⚠ LE BUDGET EST VERT, PAS BLEU, et ce n'est pas de la decoration : c'est de
-   l'argent, et l'argent est vert partout ailleurs dans le CRM. Une seule puce
-   cochee sur cette ligne, alors que les travaux en portent plusieurs — deux
-   teintes disent que ce ne sont pas deux questions du meme genre. */
-[data-champ="budget"] { --puce: var(--green); }
-
-/* ---- le pied ---- */
-.ndf-pied { display: flex; align-items: center; gap: 12px; margin-top: 18px;
-  padding-top: 16px; border-top: 1px solid var(--line); flex-wrap: wrap; }
-.ndf-note { font-size: 12px; color: var(--muted); max-width: 46ch; line-height: 1.45; }
-/* ⚠ `hidden` NE SUFFIT PAS SUR UN `.btn`. La regle du navigateur pour
-   `[hidden]` est un `display: none` de specificite nulle, et `.btn { display:
-   inline-flex }` la bat. Vu a l'ecran le 23/09/2026 : les boutons caches
-   s'affichaient tous. */
-.ndf [hidden] { display: none; }
-
-@media (max-width: 900px) {
-  .ndf-colonnes { grid-template-columns: 1fr; }
-}
-@media (max-width: 560px) {
-  .ndf-grille { grid-template-columns: 1fr; }
-}
 
 /* LA FRISE ET L'ANNUAIRE SONT DEUX CHOSES, ET LA BARRE DOIT LE DIRE.
    Mis au bout de la frise, « Contacts » se lisait comme la huitieme etape
