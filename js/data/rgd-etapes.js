@@ -499,8 +499,12 @@ export async function ecrireStatut({ uuid, cible, statut }) {
 
   // `db.update` remet la ligne dans le cache : il n'y a rien à avancer à la
   // main, et le redessin la retrouve à sa place.
+  // ⚠ ELLE REND AUSSI LA LIGNE FRAÎCHE, et ce n'est pas un bonus : `db.update`
+  // REMPLACE la ligne du cache, donc celle que l'écran tenait est orpheline. Le
+  // tableau en a besoin pour redessiner la cellule des relances sans tout
+  // redessiner — la date que cette fonction vient de poser est dedans.
   return db.update(table, uuid, patch)
-    .then(() => ({ ok: true }))
+    .then(ligne => ({ ok: true, ligne }))
     .catch(e => ({ ok: false, motif: String(e.message || e).slice(0, 80) }));
 }
 
@@ -537,25 +541,29 @@ export async function majDateRelance({ uuid, cible, rang, jour }) {
   const { db } = await import('./db.js');
   const table = cible === 'demande' ? 'rgd_demandes' : 'rgd_clients';
   try {
-    await db.update(table, uuid, { [col]: jour || null });
-    return { ok: true, colonne: col };
+    const ligne = await db.update(table, uuid, { [col]: jour || null });
+    return { ok: true, colonne: col, ligne };
   } catch (e) { return { ok: false, motif: String(e.message || e).slice(0, 90) }; }
 }
 
 /**
- * Laquelle des trois relances le tableau propose de dater.
+ * Laquelle des trois relances le tableau propose de dater — `null` si aucune.
  *
- * ⚠ LE STATUT PASSE AVANT LES DATES : une fiche à « Relance 2 » dont on vient
- * d'effacer la date doit reproposer R2, pas R1 — sinon on corrige la relance
- * précédente en croyant corriger celle qu'on vient de faire. Sans statut de
- * relance, on reprend la plus récente des dates posées, celle qu'on rattrape
- * après coup. Et sur une fiche vierge, R1 : on peut relancer sans changer
- * d'étape, le champ ne doit donc pas être mort.
+ * ⚠ LE STATUT SEUL DÉCIDE, ET C'EST UNE DEMANDE DU 01/10/2026 : « propose la
+ * date de relance que quand on clique sur relance 1, relance 2 ou relance 3 ».
+ * Une première version repliait sur la dernière date posée, puis sur R1 — donc
+ * un champ de saisie vide sur CHAQUE ligne de l'onglet, y compris sur des
+ * dossiers que personne n'a jamais rappelés. Un champ proposé est une question
+ * posée : la poser sur un nouveau prospect invite à dater un appel qui n'a pas
+ * eu lieu, et met un rang (« R1 ») sur une fiche que rien ne range là.
+ *
+ * ⚠ CE N'EST PAS UNE RESTRICTION DE DROIT, C'EST L'ORDRE DES GESTES : on passe
+ * la fiche en relance, et la date apparaît — déjà posée au jour même par
+ * `ecrireStatut`, prête à être corrigée. Le menu de statut est dans la colonne
+ * d'à côté.
  */
-export function rangRelanceVise(ligne, statut) {
-  return RANG_DU_STATUT[statut]
-    || [3, 2, 1].find(n => ligne?.[COL_RELANCE[n - 1]])
-    || 1;
+export function rangRelanceDuStatut(statut) {
+  return RANG_DU_STATUT[statut] || null;
 }
 
 // La dernière relance d'une ligne, et depuis combien de jours. ⚠ On prend la

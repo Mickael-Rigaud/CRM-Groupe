@@ -93,7 +93,7 @@ import { ORDRE_ETAPES, ETAPES_RGD, ETAPES_CLES, ETAPE_DU_STATUT, STATUT_DE_L_ETA
          etapeDeFiche, etapeDeDemande, estProspectParSource,
          joursDeVisite, statutsDeLEtape, statutSuiviLu,
          montantDevisDe, etapeAvecMontant, ecrireStatut, derniereRelance,
-         rangRelanceVise, majDateRelance, aujourdhui,
+         rangRelanceDuStatut, majDateRelance, aujourdhui,
          visiteDeLaFiche } from '../data/rgd-etapes.js';
 import { db } from '../data/db.js';
 import { esc, eur, fmtDate, fmtDateTime, relDay, terms, hit, searchInput, bindSearch, restoreFocus } from '../ui.js';
@@ -322,9 +322,15 @@ const anciennete = (jour) => {
 //
 // ⚠ UN SEUL CHAMP, PAS TROIS : trois sélecteurs par ligne feraient
 // soixante-quinze champs sur une page, dont les deux tiers vides. Le champ
-// porte LA relance en cours (`rangRelanceVise`), les autres dates se lisent
+// porte LA relance en cours (`rangRelanceDuStatut`), les autres dates se lisent
 // dessous. La fiche garde les trois — c'est là qu'on rattrape une R1 jamais
 // datée.
+//
+// ⚠ ET IL N'APPARAÎT QUE SUR « Relance 1 · 2 · 3 », demandé le jour même : un
+// champ vide sur chaque ligne de l'onglet posait la question à des dossiers que
+// personne n'a jamais rappelés. Partout ailleurs la cellule se LIT — elle ne
+// disparaît pas : un prospect revenu à « À contacter » garde ses relances
+// passées, et les cacher les rendrait introuvables depuis la liste.
 //
 // ⚠ LES DEUX LIGNES DE DESSOUS SONT TOUJOURS RENDUES, VIDES AU BESOIN, et le
 // CSS les efface par `:empty` : après une écriture on remet un `textContent`
@@ -337,12 +343,12 @@ const celluleRelance = (ligne, statut, cible) => {
   // la relance LA PLUS RÉCENTE, pas sur le champ proposé : c'est le dossier qui
   // refroidit, pas la case.
   const froid = r && r.jours >= 14 ? ' est-vieux' : '';
-  if (!scope.canRgd) {
-    return r ? `<b class="rcl-relance${froid}">R${r.rang}</b> ${esc(fmtDate(r.jour))}
-      <span class="muted">(${esc(anciennete(r.jour))})</span>`
-      : '<span class="muted">—</span>';
-  }
-  const rang = rangRelanceVise(ligne, statut);
+  const lecture = () => (r
+    ? `<b class="rcl-relance${froid}">R${r.rang}</b> ${esc(fmtDate(r.jour))}
+       <span class="muted">(${esc(anciennete(r.jour))})</span>`
+    : '<span class="muted">—</span>');
+  const rang = rangRelanceDuStatut(statut);
+  if (!scope.canRgd || !rang) return lecture();
   const jour = ligne[`relance_${rang}_le`] || '';
   // Les relances d'avant, en lecture : la colonne dit « dernière relance », mais
   // on appelle quelqu'un en sachant qu'on l'a déjà appelé deux fois. Les
@@ -968,7 +974,7 @@ export const rgdClientsPage = {
             <td class="rcl-statut-cell">${state.ecriture
               ? menuStatut(x.statut, x.cible, x.ligne.id) + flechesEtape(x.etape, true)
               : pastilleSuivi(x.statut)}</td>
-            ${surRelances ? `<td class="small">${celluleRelance(x.ligne, x.statut, x.cible)}</td>` : ''}
+            ${surRelances ? `<td class="small rcl-rel-td">${celluleRelance(x.ligne, x.statut, x.cible)}</td>` : ''}
             <td class="rcl-note">${champNote(x.ligne, x.cible)}</td>
             <td>${boutonSuppression(x.ligne)}</td>
           </tr>`; }).join('') || `<tr><td colspan="${10 + (surRdv ? 1 : 0) + (surRelances ? 1 : 0)}"><div class="empty">${esc(vide())}</div></td></tr>`}</tbody>
@@ -1177,7 +1183,10 @@ export const rgdClientsPage = {
       // remplit, et un redessin du tableau ferait glisser la ligne sous la
       // main — le statut peut l'envoyer dans un autre onglet. Même règle que
       // le commentaire d'à côté.
-      root.querySelectorAll('.rcl-rel-champ').forEach(i => {
+      // ⚠ NOMMÉ PARCE QU'IL SE REBRANCHE : la cellule est refaite quand le
+      // statut passe en relance (voir plus bas), et un gestionnaire posé en
+      // boucle au rendu ne suivrait pas le champ qui vient de naître.
+      const lierChampRelance = (i) => {
         i.dataset.avant = i.value;
         i.onchange = async () => {
           const avant = i.dataset.avant;
@@ -1196,7 +1205,7 @@ export const rgdClientsPage = {
           i.disabled = false;
           if (r.ok) {
             i.dataset.avant = apres;
-            if (x?.ligne) x.ligne[r.colonne] = apres || null;
+            if (x && r.ligne) x.ligne = r.ligne;
             rafraichirRelance(i, x?.ligne || {}, apres);
             toast(apres ? 'Date de relance enregistrée' : 'Date de relance effacée');
           } else {
@@ -1204,7 +1213,8 @@ export const rgdClientsPage = {
             toast(`Date non enregistrée — ${r.motif}`, 'err');
           }
         };
-      });
+      };
+      root.querySelectorAll('.rcl-rel-champ').forEach(lierChampRelance);
 
       const t = root.querySelector('#rcl-type');
       if (t) t.onchange = () => { state.type = t.value; draw(); };
@@ -1247,6 +1257,22 @@ export const rgdClientsPage = {
           if (r.ok) {
             m.dataset.avant = apres;
             m.className = `statut-menu st-${apres}`;
+            // ⚠ LE CHAMP DE DATE APPARAÎT AVEC LE STATUT, ET RIEN NE LE
+            // REDESSINAIT : passer une fiche de « Nouveau prospect » à
+            // « Relance 1 » ne change pas d'onglet, donc le redessin complet
+            // n'a pas lieu — la date était posée en base et la cellule
+            // affichait encore « — ». On refait la seule cellule concernée, et
+            // on rebranche son champ.
+            const trStatut = m.closest('tr');
+            const tdRel = trStatut?.querySelector('.rcl-rel-td');
+            const xStatut = lignesProspects[Number(trStatut?.dataset.fiche)];
+            if (tdRel && xStatut) {
+              if (r.ligne) xStatut.ligne = r.ligne;
+              xStatut.statut = apres;
+              tdRel.innerHTML = celluleRelance(xStatut.ligne, apres, xStatut.cible);
+              const neuf = tdRel.querySelector('.rcl-rel-champ');
+              if (neuf) lierChampRelance(neuf);
+            }
             // Rien à avancer à la main : `db.update` a remplacé la ligne dans
             // le cache, et le redessin la retrouve à sa place.
             // ⚠ LA LIGNE GLISSE VERS SON NOUVEL ONGLET, ET CE N'EST PAS
