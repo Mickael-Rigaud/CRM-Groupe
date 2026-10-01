@@ -216,11 +216,31 @@ export function activityForm(link = {}, existing = null, onSaved, onClose = null
   form.querySelector('.taf-titre')?.focus();
   // ⚠ IMPORT PARESSEUX : les écrans de fiche importent `activity.js`, les
   // charger ici en tête ferait un cycle. Au clic, le module est déjà là.
+  //
+  // ⚠ C'EST LA FICHE PROJET QUI S'OUVRE, PAS LA FICHE DE LA PERSONNE
+  // (corrigé le 01/10/2026 : « je voudrais que ça ouvre exactement la fiche
+  // projet de rgd renova »). La première version appelait `ouvrirFicheRgd`,
+  // qui montre le dossier en lecture — alors qu'on vient d'un rappel pour
+  // COMPLÉTER le projet. C'est `ficheProjetRgd`, le même formulaire que le
+  // bouton « Modifier » de la fiche et que « + Nouvelle demande ».
+  //
+  // ⚠ IL NE S'OUVRE PAS LUI-MÊME : il se monte dans un élément que l'appelant
+  // fournit (voir son en-tête), et c'est à nous d'ouvrir la fenêtre.
+  // ⚠ PAS DE `closeModal` AVANT : `openModal` ferme POUR REMPLACEMENT, ce qui
+  // n'appelle pas `onClose` — fermer d'abord déclencherait le retour de
+  // l'appelant, et sur la to do list cela redessinerait la page sous la
+  // fenêtre qu'on est en train d'ouvrir.
   m.querySelector('#taf-ouvrir')?.addEventListener('click', async () => {
-    closeModal(true);
     if (ctx.ficheRgd) {
-      const { ouvrirFicheRgd } = await import('./rgd-fiche.js');
-      ouvrirFicheRgd({ ...ctx.ficheRgd, cible: ctx.ficheRgd.genre === 'demande' ? 'demande' : 'client' }, onSaved);
+      const { ficheProjetRgd } = await import('./rgd-projet.js');
+      const w = openModal(ctx.personne ? `Fiche projet — ${ctx.personne}` : 'Fiche projet',
+        '<div id="rgp-hote"></div>', { wide: true });
+      ficheProjetRgd({
+        dans: w.querySelector('#rgp-hote'),
+        cible: ctx.ficheRgd,
+        annuler: () => closeModal(),
+        apres: () => { closeModal(); toast('Informations enregistrées'); onSaved?.(); },
+      });
     } else if (ctx.deal) {
       const { openDeal } = await import('./deal.js');
       openDeal(ctx.deal.id, onSaved);
