@@ -192,7 +192,12 @@ function caParMois(paiements, d = new Date()) {
  * mois, elle sortirait du cadre et serait coupée — un SVG ne déborde pas.
  */
 function courbeCa(mois) {
-  if (!mois.length) return '<div class="empty">Aucune facture sur cet exercice.</div>';
+  // ⚠ UNE COURBE DE ZÉROS N'EST PAS UNE COURBE, et le cas est arrivé le
+  // 02/10/2026 : au lendemain du changement d'exercice il reste UN mois,
+  // à zéro, donc `mois.length` valait 1 et l'écran traçait une ligne plate
+  // avec une échelle inventée (`max` retombe à 1). On teste donc s'il y a
+  // quelque chose à tracer, pas s'il y a des mois.
+  if (!mois.some(m => m.ht)) return '<div class="empty">Aucune facture sur cet exercice.</div>';
   const L = 960, H = 260, bas = H - 34, gauche = 56, droite = 14;
   const large = L - gauche - droite, pas = large / mois.length;
   const max = Math.max(1, ...mois.map(m => m.ht));
@@ -266,10 +271,31 @@ export const rgdPilotagePage = {
 
       // CA DE L'EXERCICE — calculé, puis la correction manuelle par-dessus.
       // Les deux sont montrés : l'écart dit à quel point Costructor est en retard.
-      const calculeHt = paiements
-        .filter(p => p.statut !== 'annule' && p.date_facturation
-          && p.date_facturation >= ex.du && p.date_facturation <= ex.au)
+      const surExercice = (e) => paiements.filter(p => p.statut !== 'annule'
+        && p.date_facturation && p.date_facturation >= e.du && p.date_facturation <= e.au);
+      const facturesEx = surExercice(ex);
+      const calculeHt = facturesEx.reduce((t, p) => t + (Number(p.montant_ht) || 0), 0);
+
+      // ⚠ L'EXERCICE PRÉCÉDENT EST AFFICHÉ À CÔTÉ, ET CE N'EST PAS DU CONFORT
+      // (02/10/2026, signalé par Mickael : « pourquoi je n'ai plus le CA de
+      // Costructor ? »). Le 1er octobre, l'exercice bascule : le 30 septembre
+      // au soir la tuile affichait 382 620 €, le 1er au matin 0 € — et un
+      // grand zéro sur l'écran qu'on ouvre le matin se lit comme une panne,
+      // pas comme un compteur remis à l'heure. Rien n'était cassé ; il
+      // manquait la phrase qui le dit.
+      const exPrecedent = {
+        du: `${Number(ex.du.slice(0, 4)) - 1}-10-01`, au: `${Number(ex.au.slice(0, 4)) - 1}-09-30`,
+        label: `${Number(ex.du.slice(0, 4)) - 1}–${Number(ex.au.slice(0, 4)) - 1}`,
+      };
+      const precedentHt = surExercice(exPrecedent)
         .reduce((t, p) => t + (Number(p.montant_ht) || 0), 0);
+
+      // ⚠ LA CORRECTION MANUELLE NE PORTE AUCUNE ANNÉE, et c'est un piège à
+      // retardement : `manual_ca_ht_exercice` est une clé unique, donc une
+      // valeur saisie pour 2025–2026 s'afficherait telle quelle comme le CA de
+      // 2026–2027 dès le 1er octobre. Les deux clés sont vides aujourd'hui
+      // (vérifié en production), le trou n'a donc rien cassé — mais il faut le
+      // dire à l'écran plutôt que d'attendre la prochaine bascule.
       const corrigeHt = reglage('manual_ca_ht_exercice');
       const caHt = corrigeHt !== null ? Number(corrigeHt) : calculeHt;
       const corrige = corrigeHt !== null && Math.round(Number(corrigeHt)) !== Math.round(calculeHt);
@@ -281,8 +307,18 @@ export const rgdPilotagePage = {
       // toujours celui de juillet — avec l'air d'être à jour. Une donnée vieille
       // est plus dangereuse qu'une donnée absente, parce qu'elle se lit comme
       // fraîche : c'est la seule raison d'être de ce bloc.
-      const syncPaiements = scope.rgd('rgd_costructor_etat').find(e => e.ressource === 'payments');
-      const ageSync = syncPaiements?.dernier_succes ? daysSince(syncPaiements.dernier_succes) : null;
+      //
+      // ⚠ LA RESSOURCE S'APPELLE `invoices`, PAS `payments` — défaut trouvé le
+      // 02/10/2026 et introduit le 28/09, quand la ligne d'état `payments` a
+      // été SUPPRIMÉE (le sujet des encaissements est clos : l'API ne relie pas
+      // un encaissement à sa facture). Cet écran la cherchait toujours, ne la
+      // trouvait plus, et affichait donc depuis quatre jours une pastille
+      // ROUGE permanente — « Aucun relevé des paiements n'est enregistré » —
+      // alors que les factures sont relevées toutes les heures et l'ont encore
+      // été ce matin. Une alarme qui ne s'éteint jamais cesse d'être lue, et
+      // celle-ci se serait tue le jour où elle aurait eu quelque chose à dire.
+      const syncFactures = scope.rgd('rgd_costructor_etat').find(e => e.ressource === 'invoices');
+      const ageSync = syncFactures?.dernier_succes ? daysSince(syncFactures.dernier_succes) : null;
       const syncKo = ageSync === null || ageSync > 2;
       const dernierEncaissement = paiements
         .map(p => p.date_facturation).filter(Boolean).sort().at(-1) || null;
@@ -360,8 +396,14 @@ export const rgdPilotagePage = {
             <span class="muted">HT</span>
             ${corrige ? '<span class="chip amber">corrigé à la main</span>' : ''}
           </div>
-          <p class="small muted rgd-ca-sous">Moyenne mensuelle ${eur(moyenne)} HT sur
-            ${mois.length} mois écoulé${mois.length > 1 ? 's' : ''}.</p>
+          ${facturesEx.length ? `<p class="small muted rgd-ca-sous">Moyenne mensuelle ${eur(moyenne)} HT sur
+            ${mois.length} mois écoulé${mois.length > 1 ? 's' : ''}.${precedentHt
+              ? ` Exercice ${esc(exPrecedent.label)} : ${eur(precedentHt)} HT.` : ''}</p>`
+            : `<p class="rgd-ca-neuf">L’exercice <b>${esc(ex.label)}</b> a commencé le
+              1<sup>er</sup> octobre : <b>aucune facture n’y est encore enregistrée</b>, le
+              compteur repart donc de zéro.${precedentHt
+                ? ` L’exercice ${esc(exPrecedent.label)} s’est clos à <b>${eur(precedentHt)} HT</b>.`
+                : ''}</p>`}
           ${courbeCa(mois)}
           ${corrige ? `<p class="small">
             <b>Ce chiffre est saisi à la main</b> et masque le calcul, qui donne
@@ -372,6 +414,8 @@ export const rgdPilotagePage = {
             dernier relevé avant de conclure que tout va bien.
             Pour rendre la main au calcul : saisir <b>0</b> dans les
             <a href="#/rgd/reglages">réglages</a>.
+            <b>Elle ne porte aucune année</b> : elle a été saisie pour un exercice
+            et s’applique à celui-ci, à revérifier après chaque 1<sup>er</sup> octobre.
             <b>La courbe, elle, montre le calculé</b> — mois par mois, il n’existe pas
             de saisie manuelle, et lisser la correction sur douze mois inventerait
             une répartition que personne n’a constatée.</p>`
@@ -380,11 +424,11 @@ export const rgdPilotagePage = {
             Clients actifs déclarés : <b>${esc(reglage('manual_clients_actifs'))}</b>,
             également saisi à la main côté RGD.</p>` : ''}
           <p class="rgd-ca-frais small ${syncKo ? 'ko' : 'ok'}">
-            <span class="chip ${syncKo ? 'red' : 'green'}">${syncKo ? 'Encaissements en retard' : 'Encaissements à jour'}</span>
-            <span class="grow">${syncPaiements?.dernier_succes
-              ? `Dernier relevé Costructor des paiements ${esc(fmtDate(syncPaiements.dernier_succes))}${ageSync > 2
+            <span class="chip ${syncKo ? 'red' : 'green'}">${syncKo ? 'Factures en retard' : 'Factures à jour'}</span>
+            <span class="grow">${syncFactures?.dernier_succes
+              ? `Dernier relevé Costructor des factures ${esc(fmtDate(syncFactures.dernier_succes))}${ageSync > 2
                 ? `, il y a ${ageSync} jours : <b>le CA calculé est celui de cette date</b>, pas celui d’aujourd’hui.` : '.'}`
-              : 'Aucun relevé Costructor des paiements n’est enregistré : rien ne dit de quand date ce CA.'}
+              : 'Aucun relevé Costructor des factures n’est enregistré : rien ne dit de quand date ce CA.'}
             ${dernierEncaissement ? ` Dernière facture connue : ${esc(fmtDate(dernierEncaissement))}.` : ''}</span>
             <a href="#/rgd/costructor">Voir la synchronisation</a>
           </p>
