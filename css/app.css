@@ -5706,3 +5706,71 @@ textarea.ev-nu { resize: vertical; min-height: 40px; }
   .am-p-d { grid-template-columns: 1fr; }
   .am-b-annule { margin-left: 0; width: 100%; }
 }
+
+/* =====================================================================
+   DÉTAIL DU TARIF D'EXPERTISE  (.fp-t-*, .fp-coche)
+   ---------------------------------------------------------------------
+   Grille interne V2, posee le 02/10/2026. Le bloc `.fp-tarif` existait
+   deja et n'est pas touche : ce qui suit ne fait qu'AJOUTER le detail du
+   calcul, l'etat « sur devis » et la case a cocher.
+
+   ⚠ UN PRIX SANS SON DETAIL NE SE VERIFIE PAS. Le total vient d'une base
+   plus quatre supplements : c'est cette composition qu'on lit au client,
+   et c'est elle qui permet de voir qu'un critere manque.
+   ===================================================================== */
+
+/* Le bloc d'origine est une rangee ; avec le detail il doit empiler.
+   ⚠ ET LA NOTE DOIT PERDRE SON `flex: 1`. Elle vaut `flex: 1 1 240px` pour
+   occuper la place restante EN RANGEE ; passe en colonne, ce meme `1` la fait
+   grandir en HAUTEUR et ouvrait 280 px de vide entre la phrase et le detail du
+   calcul. Vu sur une capture, invisible dans le DOM - lequel etait juste. */
+.fp-tarif { flex-direction: column; align-items: stretch; }
+.fp-tarif .fp-tarif-prix { align-self: flex-start; }
+.fp-tarif .fp-tarif-note { flex: 0 0 auto; }
+
+/* ⚠ « SUR DEVIS » N'EST PAS UN PRIX : il ne prend donc pas la typographie
+   d'un montant. Le mettre en 27 px comme un chiffre le ferait lire comme
+   une valeur, alors que c'est un refus de chiffrer. */
+.fp-tarif-prix.est-devis b {
+  font-size: 19px; color: var(--amber); letter-spacing: 0;
+}
+
+.fp-t-detail {
+  margin-top: 12px; border-top: 1px dashed var(--line); padding-top: 10px;
+  display: grid; gap: 1px;
+}
+.fp-t-l {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 14px;
+  font-size: 12.5px; padding: 4px 0;
+}
+.fp-t-l > span { color: var(--muted); }
+.fp-t-l em {
+  font-style: normal; color: var(--muted-2); font-size: 11.5px; margin-left: 4px;
+}
+.fp-t-l > b {
+  flex: none; font-variant-numeric: tabular-nums; font-weight: 700; color: var(--text);
+}
+/* La ligne de base porte le tarif de depart : elle ouvre le calcul. */
+.fp-t-l:first-child > span { color: var(--text); font-weight: 600; }
+
+/* ⚠ LES DEUX ETATS QUI NE SONT PAS DES MONTANTS SE DISTINGUENT L'UN DE
+   L'AUTRE. « Sur devis » veut dire que la grille refuse de chiffrer ;
+   « a renseigner » veut dire qu'on n'a pas l'information. Les peindre
+   pareil ferait prendre un trou de saisie pour une decision tarifaire. */
+.fp-t-devis { color: var(--amber); font-weight: 700; }
+.fp-t-manque { color: var(--muted-2); font-weight: 600; font-style: italic; }
+.fp-t-l.est-devis > span { color: var(--amber); }
+.fp-t-l.est-manque > span { color: var(--muted-2); }
+
+.fp-t-aide { margin: 6px 0 0; font-size: 11.5px; color: var(--muted-2); line-height: 1.5; }
+
+/* ⚠ LE CHAMP DE SAISIE NE REVIENT QUE QUAND LA GRILLE NE TRANCHE PAS : il
+   est donc separe du detail, pour qu'on voie qu'il repond a ce qui
+   precede et non qu'il double le total. */
+.fp-t-saisie { margin-top: 12px; padding-top: 11px; border-top: 1px solid var(--line); }
+
+/* La case a cocher tient sur une ligne, pas en colonne comme un champ. */
+.fp-coche { display: flex; flex-direction: row; align-items: center; gap: 9px; }
+.fp-coche input { width: 17px; height: 17px; flex: none; margin: 0; accent-color: var(--accent); }
+.fp-coche > span { font-size: 13px; }
+.fp-coche em { font-style: normal; color: var(--muted-2); font-size: 12px; }

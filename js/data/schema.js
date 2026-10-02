@@ -27,18 +27,26 @@ export const NIVEAUX_BTP = [
   // ⚠ LES TARIFS SONT TTC, là où les précédents étaient HT : c'est ce que voit
   // le client. Le montant de l'affaire, lui, reste en HT (`amountLabel`) — les
   // deux ne se comparent pas directement.
-  // ⚠ Les POINTS mesurent la charge du chargé d'affaires, pas le prix. Faute
-  // d'un relevé de temps réel, ils suivent l'ordre des planchers tarifaires
-  // (750 < 900 < 1 200) : à recalibrer dès qu'il y aura des temps mesurés.
+  // ⚠ Les POINTS mesurent la charge du chargé d'affaires, pas le prix, et ils
+  // NE SUIVENT PLUS L'ORDRE DES TARIFS depuis la grille V2 (02/10/2026). Ils
+  // avaient été calés sur l'ordre des anciens planchers (750 < 900 < 1 200) ;
+  // les bases sont désormais 750 (pré-achat) < 800 (réception) < 990
+  // (désordres), alors que les points restent 2 / 1 / 3.
+  //
+  // ⚠ ON NE LES A PAS REALIGNÉS, ET C'EST VOLONTAIRE : ils répartissent les
+  // leads entre les chargés d'affaires, donc les changer déplacerait la charge
+  // du réseau — un effet de bord que personne n'a demandé. Ils restent à
+  // recalibrer sur des temps mesurés, pas sur des prix : un dossier cher n'est
+  // pas forcément un dossier long.
   { key: 'exp_preachat', label: 'Expertise pré-achat', mission: 'expertise', points: 2,
     contenu: 'Inspection technique du bien, identification des anomalies et des points de vigilance, travaux à anticiper, rapport de synthèse.',
-    tarif: 'À partir de 900 € TTC' },
+    tarif: 'À partir de 750 € TTC' },
   { key: 'exp_desordres', label: 'Expertise désordres & malfaçons', mission: 'expertise', points: 3,
     contenu: 'Constat des désordres, analyse des causes probables, préconisations techniques, rapport d’expertise détaillé.',
-    tarif: 'À partir de 1 200 € TTC' },
+    tarif: 'À partir de 990 € TTC' },
   { key: 'exp_reception', label: 'Assistance à réception de travaux', mission: 'expertise', points: 1,
     contenu: 'Contrôle des travaux réalisés, identification des défauts et des non-conformités apparentes, aide à la formulation des réserves, relevé des réserves.',
-    tarif: 'À partir de 750 € TTC' },
+    tarif: 'À partir de 800 € TTC' },
   { key: 'amo_ciblee', label: 'AMO ciblée', mission: 'amo', points: 3,
     contenu: 'Périmètre limité, peu de lots, durée courte, accompagnement contenu.', tarif: '5 à 8 % des travaux TTC' },
   { key: 'amo_etendue', label: 'AMO étendue', mission: 'amo', points: 5,
@@ -224,53 +232,191 @@ export const TYPOLOGIE_EXPERTISE = [
 // ⚠ TANT QUE `grille` EST VIDE, LE PRIX EST UN PLANCHER, et l'écran doit le
 // dire : un « à partir de » présenté comme un devis ferait annoncer un prix
 // qu'on ne tiendra pas.
+// ---- La grille tarifaire des expertises -----------------------------------
+//
+// ⚠ ELLE EST ADDITIVE, PAS TABULAIRE, et c'est ce qui a imposé de refaire la
+// structure (02/10/2026, grille interne V2 fournie par Mickael). La version
+// précédente attendait des lignes `{ prestation, surfaceMax, piecesMax, prix }` :
+// un prix par combinaison. La vraie grille est une BASE à laquelle s'ajoutent
+// des suppléments indépendants — surface, déplacement, analyse documentaire, et
+// un critère propre à chaque prestation. Aucune table de prix ne peut exprimer
+// ça sans énumérer les centaines de combinaisons.
+//
+// ⚠ LE NOMBRE DE PIÈCES NE TARIFE PLUS RIEN. Il avait été ajouté au formulaire
+// le 29/09 pour le tarif ; la grille V2 ne s'en sert pas. Le champ reste — il
+// décrit le bien et commande le schéma de repérage — mais il ne faut plus dire
+// qu'il entre dans le prix.
+//
+// ⚠ TOUT EST EN TTC, c'est ce que voit le client. Le montant de l'affaire reste
+// en HT, et les deux ne se comparent pas directement.
+//
+// Source : « BTP EXPERTISE - Grille tarifaire interne V2 », et ses trois
+// formules écrites en pied de page :
+//   Pré-achat  = 750 + surface + type de bien      + analyse doc. + déplacement
+//   Réception  = 800 + surface + montant travaux   + analyse doc. + déplacement
+//   Désordres  = 990 + surface + nombre désordres  + analyse doc. + déplacement
 export const TARIFS_EXPERTISE = {
-  // Ce que l'offre affiche aujourd'hui, par prestation.
-  planchers: { exp_preachat: 900, exp_desordres: 1200, exp_reception: 750 },
-  // La grille définitive se pose ici. Une ligne :
-  //   { prestation, surfaceMax, piecesMax, prix }
-  // `surfaceMax` et `piecesMax` sont des BORNES HAUTES, `null` = sans limite ;
-  // la première ligne qui contient le bien l'emporte, donc on les range du
-  // plus petit au plus grand.
-  grille: [],
+  base: { exp_preachat: 750, exp_reception: 800, exp_desordres: 990 },
+
+  // ⚠ DES BORNES HAUTES, rangées du plus petit au plus grand : la première qui
+  // contient la valeur l'emporte. `devis: true` n'est pas un supplément, c'est
+  // un REFUS DE CHIFFRER — voir plus bas.
+  surface: [
+    { max: 100, sup: 0, libelle: 'Jusqu’à 100 m²' },
+    { max: 150, sup: 150, libelle: '101 à 150 m²' },
+    { max: 250, sup: 300, libelle: '151 à 250 m²' },
+    { max: null, devis: true, libelle: 'Plus de 250 m²' },
+  ],
+
+  // La distance est un ALLER SIMPLE entre le point de départ habituel de
+  // l'expert et l'adresse de la mission. C'est la règle écrite sur la grille ;
+  // la compter en aller-retour doublerait le supplément.
+  deplacement: [
+    { max: 30, sup: 0, libelle: '0 à 30 km' },
+    { max: 50, sup: 50, libelle: '31 à 50 km' },
+    { max: 75, sup: 100, libelle: '51 à 75 km' },
+    { max: 100, sup: 150, libelle: '76 à 100 km' },
+    { max: null, devis: true, libelle: 'Plus de 100 km' },
+  ],
+
+  analyseDocumentaire: 200,
+
+  // Le critère propre à chaque prestation. `valeurs` compare un libellé,
+  // `seuils` compare un nombre.
+  specifique: {
+    exp_preachat: {
+      titre: 'Type de bien', champ: 'typeBien',
+      valeurs: [
+        { est: 'Appartement', sup: 0 },
+        { est: 'Maison', sup: 100 },
+        { est: 'Immeuble', devis: true },
+      ],
+    },
+    exp_reception: {
+      titre: 'Montant des travaux', champ: 'travaux', unite: '€',
+      seuils: [
+        { max: 50000, sup: 0, libelle: 'Jusqu’à 50 000 €' },
+        { max: 100000, sup: 150, libelle: '50 001 à 100 000 €' },
+        { max: 200000, sup: 300, libelle: '100 001 à 200 000 €' },
+        { max: null, devis: true, libelle: 'Plus de 200 000 €' },
+      ],
+    },
+    exp_desordres: {
+      titre: 'Nombre de désordres', champ: 'desordres',
+      seuils: [
+        { max: 3, sup: 0, libelle: '1 à 3 désordres' },
+        { max: 6, sup: 300, libelle: '4 à 6 désordres' },
+        { max: 10, sup: 600, libelle: '7 à 10 désordres' },
+        { max: null, devis: true, libelle: 'Plus de 10 désordres' },
+      ],
+    },
+  },
 };
 
 // Un nombre lu dans un champ libre : « 95 m² », « 95m2 », « environ 95 ».
 // ⚠ La surface et le nombre de pièces se saisissent à la main, au téléphone :
 // exiger un nombre pur ferait perdre l'information plutôt que de la ranger.
 export const nombreLu = (v) => {
-  const m = String(v ?? '').replace(',', '.').match(/\d+(?:\.\d+)?/);
+  const m = String(v ?? '').replace(/\s/g, '').replace(',', '.').match(/\d+(?:\.\d+)?/);
   return m ? Number(m[0]) : null;
 };
 
+// La ligne d'un barème de seuils qui contient la valeur.
+const palier = (seuils, valeur) =>
+  valeur == null ? null : seuils.find(s => s.max == null || valeur <= s.max) || null;
+
 /**
- * Le tarif d'une expertise, d'après la prestation et le bien.
+ * Le tarif d'une expertise, d'après la grille interne V2.
  *
- * Rend `null` tant qu'aucune prestation n'est choisie — un prix sans
- * prestation n'a pas de sens, et afficher un montant par défaut ferait lire un
- * devis que personne n'a établi.
+ * Rend `null` tant qu'aucune prestation n'est choisie — un prix sans prestation
+ * n'a pas de sens, et afficher un montant par défaut ferait lire un devis que
+ * personne n'a établi.
+ *
+ * ⚠ TROIS RÉSULTATS POSSIBLES, ET ILS NE SE CONFONDENT PAS.
+ *
+ *   `devis: true`   — la grille REFUSE de chiffrer (plus de 250 m², plus de
+ *                     100 km, immeuble, travaux > 200 000 €, plus de 10
+ *                     désordres). Ce n'est pas un prix très élevé, c'est
+ *                     l'absence de prix : afficher un montant ici annoncerait
+ *                     un tarif que le cabinet ne tiendra pas.
+ *
+ *   `complet: false` — il manque une information pour trancher un supplément.
+ *                     ⚠ UN CRITÈRE NON RENSEIGNÉ N'EST PAS « INCLUS » : une
+ *                     distance vide ne veut pas dire que le chantier est à
+ *                     moins de 30 km. Le total est alors PROVISOIRE, et
+ *                     `manque` dit ce qu'il reste à saisir.
+ *
+ *   `complet: true`  — le prix est celui de la grille, détail à l'appui.
+ *
+ * `lignes` porte le détail du calcul : un prix sans son détail ne se vérifie
+ * pas, et c'est ce que Mickael doit pouvoir lire au client.
  */
-export function tarifExpertise({ prestation, surface, pieces } = {}) {
+export function tarifExpertise({
+  prestation, surface, distanceKm, analyseDoc, typeBien, travaux, desordres,
+} = {}) {
   const cle = cleNiveau(prestation);
-  if (!cle || !(cle in TARIFS_EXPERTISE.planchers)) return null;
+  if (!cle || !(cle in TARIFS_EXPERTISE.base)) return null;
 
-  const s = nombreLu(surface);
-  const p = nombreLu(pieces);
-  const tient = (borne, valeur) => borne == null || (valeur != null && valeur <= borne);
+  const T = TARIFS_EXPERTISE;
+  const lignes = [{ titre: 'Tarif de base', detail: '', montant: T.base[cle] }];
+  const manque = [];
+  let total = T.base[cle];
+  let devis = null;
 
-  const ligne = TARIFS_EXPERTISE.grille.find((l) => cleNiveau(l.prestation) === cle
-    && tient(l.surfaceMax, s) && tient(l.piecesMax, p));
+  // Un barème commun : on ajoute, on signale un manque, ou on bascule en devis.
+  const ajouter = (titre, seuils, valeur, quandVide) => {
+    const p = palier(seuils, valeur);
+    if (!p) { manque.push(quandVide); lignes.push({ titre, detail: quandVide, manque: true }); return; }
+    if (p.devis) { devis = devis || `${titre} : ${p.libelle}`; lignes.push({ titre, detail: p.libelle, devis: true }); return; }
+    total += p.sup;
+    lignes.push({ titre, detail: p.libelle, montant: p.sup });
+  };
 
-  const ttc = ligne ? ligne.prix : TARIFS_EXPERTISE.planchers[cle];
+  ajouter('Surface', T.surface, nombreLu(surface), 'surface non renseignée');
+
+  // Le critère propre à la prestation.
+  const spec = T.specifique[cle];
+  if (spec?.seuils) {
+    const brut = spec.champ === 'desordres' ? desordres : travaux;
+    ajouter(spec.titre, spec.seuils, nombreLu(brut), `${spec.titre.toLowerCase()} non renseigné`);
+  } else if (spec?.valeurs) {
+    const v = String(typeBien || '').trim();
+    const l = spec.valeurs.find(x => x.est.toLowerCase() === v.toLowerCase());
+    if (!l) {
+      // ⚠ UN TYPE DE BIEN HORS GRILLE (« Local pro », « Autre ») N'EST PAS
+      // GRATUIT : la grille ne le prévoit pas, donc elle ne le chiffre pas.
+      // Lui appliquer le tarif « Appartement » inventerait un prix.
+      if (v) { devis = devis || `${spec.titre} : ${v}, hors grille`; lignes.push({ titre: spec.titre, detail: `${v} — hors grille`, devis: true }); }
+      else { manque.push('type de bien non renseigné'); lignes.push({ titre: spec.titre, detail: 'non renseigné', manque: true }); }
+    } else if (l.devis) {
+      devis = devis || `${spec.titre} : ${l.est}`;
+      lignes.push({ titre: spec.titre, detail: l.est, devis: true });
+    } else {
+      total += l.sup;
+      lignes.push({ titre: spec.titre, detail: l.est, montant: l.sup });
+    }
+  }
+
+  // ⚠ L'ANALYSE DOCUMENTAIRE EST UN OUI/NON, pas un seuil : laissée vide elle
+  // vaut « non », ce qui est le cas courant et n'invente aucun prix.
+  if (analyseDoc) {
+    total += T.analyseDocumentaire;
+    lignes.push({ titre: 'Analyse documentaire importante', detail: 'oui', montant: T.analyseDocumentaire });
+  }
+
+  ajouter('Déplacement', T.deplacement, nombreLu(distanceKm), 'distance non renseignée');
+
+  const ttc = devis ? null : total;
   return {
     ttc,
     // ⚠ LE HT EST UN CALCUL, PAS UNE DONNÉE : il découle du TTC au taux en
     // vigueur. L'écran le présente comme une suggestion, jamais comme le
     // montant retenu — c'est une saisie humaine qui tranche.
-    ht: Math.round((ttc / (1 + TVA_TAUX / 100)) * 100) / 100,
-    plancher: !ligne,
-    surfaceLue: s,
-    piecesLues: p,
+    ht: ttc == null ? null : Math.round((ttc / (1 + TVA_TAUX / 100)) * 100) / 100,
+    devis: !!devis, motifDevis: devis,
+    complet: !devis && manque.length === 0,
+    manque, lignes,
+    base: T.base[cle],
   };
 }
 

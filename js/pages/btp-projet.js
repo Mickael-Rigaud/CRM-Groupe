@@ -140,6 +140,14 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
     cotes: d.cotesBrutes || {},
     niveau: cleNiveau(f.niveau) || null,
     tarif: existing?.amount ?? '',
+    // ⚠ LES CRITÈRES DE LA GRILLE TARIFAIRE V2 (02/10/2026). Trois d'entre eux
+    // n'existaient pas : la distance, l'analyse documentaire et le montant des
+    // travaux à réceptionner. Le quatrième — le nombre de désordres — se DÉDUIT
+    // du schéma de repérage, et ne se saisit que pour s'en écarter.
+    distance_km: f.distance_km ?? d.distance_km ?? '',
+    analyse_doc: f.analyse_doc ?? d.analyse_doc ?? false,
+    travaux_montant: f.travaux_montant ?? d.travaux_montant ?? '',
+    nb_desordres: f.nb_desordres ?? d.nb_desordres ?? '',
 
     // AMO
     travaux: d.travaux || [], budget_ht: f.montant_travaux ?? d.budget_ht ?? '',
@@ -190,11 +198,34 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
   // propose, l'humain tranche. Laissé vide, on retient le HT qui découle du
   // tarif de la prestation — sinon une expertise partirait sans montant alors
   // que son prix est affiché juste au-dessus.
+  // ⚠ LE NOMBRE DE DÉSORDRES SE DÉDUIT DU SCHÉMA DE REPÉRAGE, il ne se
+  // redemande pas : les désordres sont déjà pointés espace par espace à
+  // l'étape D, et les ressaisir ouvrirait deux comptes qui divergeraient. Une
+  // valeur tapée à la main l'emporte quand même — on peut vouloir ne retenir
+  // que les désordres à expertiser, et non tout ce qui a été évoqué au
+  // téléphone.
+  const nbDesordres = () => {
+    const saisi = nombreLu(v.nb_desordres);
+    if (saisi != null) return saisi;
+    const n = compteEspaces().desordres;
+    return n > 0 ? n : null;
+  };
+
+  const argsTarif = () => ({
+    prestation: v.niveau, surface: v.surface,
+    distanceKm: v.distance_km, analyseDoc: v.analyse_doc,
+    typeBien: v.type_bien, travaux: v.travaux_montant, desordres: nbDesordres(),
+  });
+
   const montant = () => {
     if (v.mission === 'amo') return honorairesAmo(v.budget_ht, tauxRetenu()).ht || null;
     const saisi = Number(v.tarif);
     if (saisi) return saisi;
-    return tarifExpertise({ prestation: v.niveau, surface: v.surface, pieces: v.pieces })?.ht || null;
+    // ⚠ « SUR DEVIS » N'EST PAS UN PRIX, ET UN TOTAL INCOMPLET NON PLUS. Dans
+    // les deux cas `ht` est nul et l'affaire part SANS montant plutôt qu'avec
+    // un chiffre inventé — c'est le champ de saisie, rouvert par le bloc
+    // tarif, qui tranche alors.
+    return tarifExpertise(argsTarif())?.ht || null;
   };
 
   const nomComplet = () => [v.prenom, v.nom].filter(Boolean).join(' ').trim();
@@ -691,26 +722,100 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
   };
 
   // ------------------------------------------------- 2. le desordre et le tarif
-  // ⚠ LE TARIF SE CALCULE, IL NE SE DEVINE PAS. `tarifExpertise` lit la
-  // prestation, la surface et le nombre de pieces, et rend `null` tant qu'aucune
-  // prestation n'est choisie. La grille detaillee n'existe pas encore : tant
-  // qu'elle est vide, le prix affiche est le PLANCHER de l'offre, et le bloc le
-  // dit - un « a partir de » presente comme un devis ferait annoncer un prix
-  // qu'on ne tiendra pas.
+  // ⚠ LE TARIF SE CALCULE, IL NE SE DEVINE PAS. `tarifExpertise` applique la
+  // grille interne V2 : une base par prestation, plus la surface, le critère
+  // propre au métier, l'analyse documentaire et le déplacement.
+  //
+  // ⚠ TROIS RÉSULTATS, ET L'ÉCRAN NE LES CONFOND PAS.
+  //   « sur devis »   — la grille REFUSE de chiffrer (plus de 250 m², plus de
+  //                     100 km, immeuble, travaux > 200 000 €, plus de 10
+  //                     désordres). Afficher un montant ici annoncerait un prix
+  //                     que le cabinet ne tiendra pas.
+  //   total provisoire — il manque un critère. ⚠ UN CRITÈRE VIDE N'EST PAS
+  //                     « INCLUS » : une distance non saisie ne veut pas dire
+  //                     que le chantier est à moins de 30 km.
+  //   total ferme     — le prix de la grille, détail à l'appui.
+  //
+  // ⚠ LE DÉTAIL EST AFFICHÉ, PAS SEULEMENT LE TOTAL : un prix dont on ne voit
+  // pas la composition ne se vérifie pas, et c'est ce qu'on lit au client.
   const blocTarif = () => {
-    const t = tarifExpertise({ prestation: v.niveau, surface: v.surface, pieces: v.pieces });
+    const t = tarifExpertise(argsTarif());
     if (!t) {
       return `<div class="fp-tarif est-vide"><p class="fp-tarif-note">
         Le tarif s’affichera dès qu’une prestation sera choisie à l’étape <b>Mission</b>.</p></div>`;
     }
     const nom = niveauExp()?.label || '';
+
+    const lignes = t.lignes.map(l => {
+      const val = l.devis ? '<span class="fp-t-devis">sur devis</span>'
+        : l.manque ? '<span class="fp-t-manque">à renseigner</span>'
+        : l.montant ? esc('+ ' + eur(l.montant))
+        : (l.titre === 'Tarif de base' ? esc(eur(l.montant)) : 'inclus');
+      return `<div class="fp-t-l ${l.devis ? 'est-devis' : ''} ${l.manque ? 'est-manque' : ''}">
+        <span>${esc(l.titre)}${l.detail && !l.manque ? ` <em>${esc(l.detail)}</em>` : ''}</span>
+        <b>${val}</b></div>`;
+    }).join('');
+
+    const tete = t.devis
+      ? `<div class="fp-tarif-prix est-devis"><b>Sur devis</b></div>
+         <p class="fp-tarif-note"><b>${esc(nom)}</b> — la grille ne chiffre pas ce cas
+           (${esc(t.motifDevis)}). Le montant se fixe à la main, ci-dessous.</p>`
+      : `<div class="fp-tarif-prix"><b>${esc(eur(t.ttc))}</b><span>TTC</span></div>
+         <p class="fp-tarif-note"><b>${esc(nom)}</b> — ${t.complet
+            ? 'd’après la grille interne.'
+            : `total <b>provisoire</b> : il manque ${esc(t.manque.join(', '))}.`}
+           Soit environ <b>${esc(eur(t.ht))} HT</b> au taux de ${TVA_TAUX} %.</p>`;
+
+    // ⚠ LE CHAMP DE SAISIE NE REVIENT QUE QUAND LA GRILLE NE TRANCHE PAS. Il
+    // avait été retiré de l'écran le 30/09 parce qu'un montant libre à côté
+    // d'un tarif calculé fait hésiter ; mais sans lui, un dossier « sur devis »
+    // partirait sans montant et rien ne permettrait de le corriger.
+    const saisie = (t.devis || !t.complet) ? `
+      <label class="mail-champ plein fp-t-saisie"><span>Montant retenu HT
+        ${t.devis ? '(obligatoire : la grille ne chiffre pas ce cas)' : '(laisser vide pour garder le total ci-dessus)'}</span>
+        <input id="fp-tarif" value="${esc(v.tarif ?? '')}" inputmode="decimal"
+               placeholder="${t.devis ? 'Montant à convenir' : esc(String(t.ht ?? ''))}"></label>` : '';
+
     return `<div class="fp-tarif" style="${teinte()}">
-      <div class="fp-tarif-prix"><b>${esc(eur(t.ttc))}</b><span>TTC</span></div>
-      <p class="fp-tarif-note">${esc(nom)} — ${t.plancher
-        ? '<b>tarif plancher</b> de l’offre ; la grille détaillée n’est pas encore renseignée.'
-        : 'd’après la grille tarifaire.'}
-        Soit environ <b>${esc(eur(t.ht))} HT</b> au taux de ${TVA_TAUX} %.</p>
+      ${tete}
+      <div class="fp-t-detail">${lignes}</div>
+      ${saisie}
     </div>`;
+  };
+
+  // ⚠ ON NE DEMANDE QUE CE QUI MANQUE VRAIMENT. La surface et le type de bien
+  // sont déjà saisis à l'étape du bien, et le nombre de désordres se déduit du
+  // schéma de repérage : seuls la distance, l'analyse documentaire et — selon
+  // la prestation — le montant des travaux restent à poser.
+  //
+  // ⚠ LE CRITÈRE PROPRE À LA PRESTATION CHANGE AVEC ELLE : le montant des
+  // travaux ne concerne que la réception, le nombre de désordres que
+  // l'expertise désordres. Les afficher tous les deux ferait remplir des champs
+  // qui n'entrent dans aucun calcul.
+  const blocCriteres = () => {
+    const cle = niveauExp()?.key;
+    if (!cle) return '';
+    const deduit = compteEspaces().desordres;
+    const propre = cle === 'exp_reception'
+      ? champ('fp-travaux-montant', 'Montant des travaux à réceptionner',
+              v.travaux_montant, 'placeholder="80 000 €" inputmode="decimal"')
+      : cle === 'exp_desordres'
+        ? `<label class="mail-champ"><span>Nombre de désordres</span>
+            <input id="fp-nb-desordres" value="${esc(v.nb_desordres ?? '')}" inputmode="numeric"
+                   placeholder="${deduit ? esc(String(deduit)) : '3'}">
+            <em class="mf-champ-aide">${deduit
+              ? `${deduit} repéré${deduit > 1 ? 's' : ''} sur le schéma ci-dessus. Laissez vide pour garder ce compte.`
+              : 'Aucun désordre pointé sur le schéma : indiquez-le ici.'}</em></label>`
+        : '';
+    return `<div class="mf-grille">
+      ${champ('fp-distance', 'Distance aller (km)', v.distance_km, 'placeholder="25" inputmode="numeric"')}
+      ${propre}
+      <label class="mail-champ fp-coche">
+        <input type="checkbox" id="fp-analyse-doc" ${v.analyse_doc ? 'checked' : ''}>
+        <span>Analyse documentaire importante <em>+ 200 €</em></span></label>
+    </div>
+    <p class="fp-t-aide">La distance se compte en <b>aller simple</b>, depuis le point de
+      départ habituel de l'expert jusqu'à l'adresse de la mission.</p>`;
   };
 
   const ecranDesordreTarif = () => `
@@ -729,6 +834,7 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
     ${blocDepot()}
 
     <div class="mf-bloc-titre">G. Tarif de l'expertise</div>
+    ${blocCriteres()}
     ${blocTarif()}
 
     ${barre()}`;
@@ -1009,6 +1115,21 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
         corps.querySelector('#fp-note-espace')?.focus();
       });
       poser('#fp-description', 'description');
+      // ⚠ LES CRITÈRES DU TARIF S'ÉCRIVENT À LA FRAPPE MAIS NE REDESSINENT QU'AU
+      // `change` : recalculer le prix à chaque caractère ferait perdre le
+      // curseur au milieu d'un nombre, et « 2 » clignoterait avant « 25 ».
+      const critere = (sel, cle) => {
+        const el = corps.querySelector(sel);
+        if (!el) return;
+        el.oninput = () => { v[cle] = el.value; };
+        el.onchange = () => { v[cle] = el.value; dessine(); };
+      };
+      critere('#fp-distance', 'distance_km');
+      critere('#fp-travaux-montant', 'travaux_montant');
+      critere('#fp-nb-desordres', 'nb_desordres');
+      critere('#fp-tarif', 'tarif');
+      const coche = corps.querySelector('#fp-analyse-doc');
+      if (coche) coche.onchange = () => { v.analyse_doc = coche.checked; dessine(); };
       // ⚠ LE LIBELLÉ SE FABRIQUE ICI à partir des deux listes : c'est lui qu'on
       // enregistre (« Mars 2025 »), pas un format machine — voir `litApparition`.
       const majApparition = () => {
@@ -1161,6 +1282,15 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
         detail: v.description.trim() || null,
         problematique: (v.mission === 'amo' ? v.travaux : motifsDesEspaces()).join(', ') || null,
         date_visite: v.date_visite || null,
+        // ⚠ LES CRITÈRES DU TARIF SONT ENREGISTRÉS, pas seulement le résultat :
+        // sans eux, rouvrir la fiche repartirait d'un calcul vide et le montant
+        // affiché n'aurait plus de justification lisible. Ils vont dans
+        // `fields` et non dans la copie du questionnaire — c'est de la donnée
+        // qui sert à calculer, pas une réponse d'entretien.
+        distance_km: v.mission === 'expertise' ? (v.distance_km || null) : null,
+        analyse_doc: v.mission === 'expertise' ? !!v.analyse_doc : null,
+        travaux_montant: v.mission === 'expertise' ? (v.travaux_montant || null) : null,
+        nb_desordres: v.mission === 'expertise' ? (v.nb_desordres || null) : null,
         date_rapport: v.date_rapport || null,
         montant_travaux: v.mission === 'amo' ? (Number(v.budget_ht) || null) : null,
         taux_amo: v.mission === 'amo' ? tauxRetenu() : null,
