@@ -781,6 +781,46 @@ export const rgdClientsPage = {
           && (!statutFrise || x.statut === statutFrise)
           && hit([x.nom, x.email, x.tel, x.ville, x.adresse, x.projet], ts))
         .sort((a, b) => String(b.recu || '').localeCompare(String(a.recu || '')));
+
+      // ⚠ L'ONGLET « RDV » SE TRIE PAR DATE DE RENDEZ-VOUS, pas par date de
+      // réception (02/10/2026, demandé par Élodie). On y vient pour préparer
+      // ses visites : l'ordre d'arrivée des demandes n'a aucun rapport avec
+      // l'ordre dans lequel on va les voir.
+      //
+      // ⚠ C'EST LA MÊME DATE QUE CELLE DE LA COLONNE, et ce n'est pas un
+      // confort : elle vient du CHANTIER par `visiteDeLaFiche` — la date qui a
+      // rangé la fiche dans cet onglet. Trier sur l'agenda rapproché par le
+      // nom classerait une personne revue deux fois à une date que sa propre
+      // ligne ne montre pas.
+      //
+      // ⚠ CHRONOLOGIQUE CROISSANT, DONC LES VISITES PASSÉES EN TÊTE — et c'est
+      // voulu, pas un effet de bord. Une visite ne reste dans cet onglet que si
+      // l'agenda la confirme (`visiteEnCours`), soit au plus J-7 : ce sont les
+      // visites de la semaine écoulée qui n'ont pas encore de devis derrière,
+      // c'est-à-dire exactement celles qu'il faut relancer. L'écran les grise
+      // déjà (`.est-passe`), elles ne se confondent pas avec ce qui vient.
+      //
+      // ⚠ SANS DATE EN DERNIER, jamais en premier : une fiche dont on ne
+      // connaît aucune visite n'est pas « le prochain rendez-vous ».
+      //
+      // ⚠ LE JOUR SE CALCULE UNE FOIS PAR LIGNE, pas à chaque comparaison :
+      // `visiteDeLaFiche` parcourt tous les chantiers, et un `sort` l'appelle
+      // n·log(n) fois là où une table n'en demande que n.
+      if (state.vue === 'rdv') {
+        const jourDeVisite = (x) => {
+          if (x.cible === 'demande') return '';
+          const vis = visiteDeLaFiche(x.ligne, chantiers, joursVisite);
+          return vis ? String(vis.date_debut_prevue || vis.work_start_at || '').slice(0, 10) : '';
+        };
+        const jours = new Map(lignesProspects.map(x => [x, jourDeVisite(x)]));
+        // `sort` est stable : à date égale — et entre les fiches sans date —
+        // l'ordre de réception posé juste au-dessus est conservé.
+        lignesProspects.sort((a, b) => {
+          const ja = jours.get(a), jb = jours.get(b);
+          if (!ja !== !jb) return ja ? -1 : 1;
+          return ja.localeCompare(jb);
+        });
+      }
       // Les prospects filtrent leur `statut` dans `lignesProspects` ; ici il ne
       // reste que les fiches des étapes suivantes, qui portent `statut`.
       const champStatut = (x) => x.statut;

@@ -476,6 +476,16 @@ export const SEED = {
     // déjà un devis ne s'y affiche pas, le devis l'emportant sur le rendez-vous.
     // `rch6` est liée à son événement : date ET heure. `rch5` ne l'est pas :
     // date seule, « heure inconnue » — l'état d'une visite sur six en production.
+    // ⚠ UNE VISITE PASSÉE NE RESTE DANS L'ONGLET QUE SI L'AGENDA LA CONFIRME
+    // (`visiteEnCours`) : d'où l'événement `demo-visite-garnier` posé le même
+    // jour. Sans lui cette ligne disparaîtrait, et le cas « passé en tête du
+    // tri chronologique » ne serait pas éprouvable.
+    { id: 'rch7', deal_id: null, contact_id: 'c3', reference: 'Visite technique — Garnier',
+      ville: 'Amboise', statut_d1: 'visite_technique', date_debut_prevue: day(-2),
+      source_event_id: 'demo-visite-garnier', created_at: d(-40), updated_at: d(-3) },
+    { id: 'rch8', deal_id: null, contact_id: 'c4', reference: 'Visite technique — Petit',
+      ville: 'Tours', statut_d1: 'visite_technique', date_debut_prevue: day(21),
+      created_at: d(-1), updated_at: d(-1) },
     { id: 'rch5', deal_id: null, contact_id: 'c15', reference: 'Visite technique — Leclerc',
       ville: 'Tours', statut_d1: 'visite_technique', date_debut_prevue: day(3),
       created_at: d(-2), updated_at: d(-2) },
@@ -502,6 +512,23 @@ export const SEED = {
   // ⚠ `google_id` est ce que le chantier désigne par `source_event_id` : c'est
   // le lien exact, celui que le relevé pose, et pas un rapprochement par nom.
   agenda_events: [
+    // ⚠ UNE VISITE PASSÉE, ET ELLE N'EXISTE QUE PARCE QUE CET ÉVÉNEMENT EXISTE :
+    // `visiteEnCours` ne garde un jour révolu que si l'agenda le confirme
+    // (`joursDeVisite`). Sans cette ligne, le chantier `rch7` sortirait de
+    // l'onglet et le tri chronologique n'aurait aucun passé à placer en tête.
+    // ⚠ CELUI-CI DIT UNE RÈGLE QU'ON OUBLIE : dans la fenêtre relevée
+    // (J-7 → J+30), c'est l'AGENDA qui tranche, pas le chantier. `rch8` est daté
+    // de J+21 ; sans cet événement, `visiteEnCours` répond NON et la fiche
+    // tombe en « sans date » — elle reste dans l'onglet par son `statut_suivi`,
+    // mais le tri n'a rien à placer. Constaté en lisant l'ordre produit.
+    { id: 'rgd|demo-visite-petit|' + day(21), activity: 'rgd',
+      calendar_id: 'demo-rgd@group.calendar.google.com', google_id: 'demo-visite-petit',
+      title: 'Visite technique: M. Petit', location: 'Tours',
+      starts_at: d(21, 10), ends_at: d(21, 11), all_day: false, day: day(21) },
+    { id: 'rgd|demo-visite-garnier|' + day(-2), activity: 'rgd',
+      calendar_id: 'demo-rgd@group.calendar.google.com', google_id: 'demo-visite-garnier',
+      title: 'Visite technique: Mme Garnier', location: 'Amboise',
+      starts_at: d(-2, 11), ends_at: d(-2, 12), all_day: false, day: day(-2) },
     { id: 'rgd|demo-visite-bernard|' + day(1), activity: 'rgd',
       calendar_id: 'demo-rgd@group.calendar.google.com', google_id: 'demo-visite-bernard',
       title: 'Visite technique: Mme Bernard', location: '12 rue Nationale, Tours',
@@ -616,6 +643,21 @@ export const SEED = {
     { id: 'rc4', owner_id: 'u-mickael', contact_id: 'c13', d1_id: 7001, statut: 'prospect', statut_suivi: 'relance_3',
       relance_1_le: day(-45), relance_2_le: day(-31), relance_3_le: day(-22),
       source: 'manuel', notes: 'Ne répond plus depuis trois semaines.', maj: d(-9) },
+    // ⚠ CES TROIS FICHES ÉPROUVENT LE TRI DE L'ONGLET « RDV » (02/10/2026), et
+    // elles sont construites pour le DISTINGUER du tri par date de réception :
+    // avec deux dossiers déjà dans le bon ordre, un tri juste et un tri faux
+    // rendent la même liste, et le contrôle ne prouve rien.
+    //   `rc13` — reçue il y a longtemps, visite DEMAIN : elle doit remonter en
+    //            tête alors que l'ancien tri la mettait en bas ;
+    //   `rc14` — reçue hier, visite dans trois semaines : l'inverse ;
+    //   `rc15` — reçue hier, AUCUNE visite connue : elle doit finir dernière,
+    //            jamais première.
+    { id: 'rc13', owner_id: 'u-mickael', contact_id: 'c3', statut: 'qualifie', statut_suivi: 'rdv_planifie',
+      source: 'manuel', notes: 'Visite avancée à la demande du client.', maj: d(-40) },
+    { id: 'rc14', owner_id: 'u-mickael', contact_id: 'c4', statut: 'qualifie', statut_suivi: 'rdv_planifie',
+      source: 'site', notes: 'Disponible seulement après ses congés.', maj: d(-1) },
+    { id: 'rc15', owner_id: 'u-mickael', contact_id: 'c11', statut: 'qualifie', statut_suivi: 'rdv_planifie',
+      source: 'manuel', notes: 'Rendez-vous à caler, aucune date posée.', maj: d(-1) },
     { id: 'rc5', owner_id: 'u-mickael', contact_id: 'c14', statut: 'qualifie', statut_suivi: 'rdv_planifie',
       source: 'google_calendar', notes: 'Fiche créée depuis le rendez-vous.', maj: d(-1) },
     // Deux étapes plus loin, pour vérifier qu'aucun filtre de statut
