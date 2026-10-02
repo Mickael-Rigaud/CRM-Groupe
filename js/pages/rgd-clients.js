@@ -96,6 +96,7 @@ import { ORDRE_ETAPES, ETAPES_RGD, ETAPES_CLES, ETAPE_DU_STATUT, STATUT_DE_L_ETA
          rangRelanceDuStatut, majDateRelance, aujourdhui,
          visiteDeLaFiche } from '../data/rgd-etapes.js';
 import { sansNoteAuto } from '../data/rgd-projet.js';
+import { rendezVousDeLaFiche, coordonneesDuRendezVous } from '../data/rgd-rdv.js';
 import { db } from '../data/db.js';
 import { esc, eur, fmtDate, fmtDateTime, relDay, terms, hit, searchInput, bindSearch, restoreFocus } from '../ui.js';
 import { poserEspace } from './espace.js';
@@ -196,19 +197,63 @@ const menuStatut = (cle, cible, uuid) => {
 // ⚠ ENTRÉE Y FAIT UN RETOUR À LA LIGNE, et c'est voulu — un commentaire d'appel
 // s'écrit souvent en deux temps. L'enregistrement part au `change`, donc en
 // quittant le champ, exactement comme avant : le gestionnaire n'a pas changé.
-const champNote = (ligne, cible) => {
+// ⚠ LA COLONNE DIT LA MÊME CHOSE QUE LA FICHE (02/10/2026, demandé : « je veux
+// que ces commentaires là soient liés avec la colonne commentaire du
+// tableau »). Les deux écrivaient DÉJÀ la même colonne par `majNote` — c'est
+// l'AFFICHAGE qui divergeait depuis que la fiche reprend la description du
+// rendez-vous quand la note est vide : elle montrait « coordonnée du client…​ »
+// et le tableau un tiret, pour la même personne.
+//
+// ⚠ ON RÉUTILISE LES FONCTIONS DE LA FICHE, on ne refait pas le rapprochement :
+// `rendezVousDeLaFiche` connaît le lien exact par `source_event_id` et le repli
+// par le nom, et `coordonneesDuRendezVous` sait séparer le téléphone du reste.
+// Deux rapprochements écrits séparément auraient fini par ne plus désigner le
+// même rendez-vous, et l'écart ne se serait vu que sur une personne revue deux
+// fois.
+//
+// ⚠ RIEN N'EST ÉCRIT TANT QU'ON NE TAPE RIEN : le champ part au `change`, donc
+// un texte repris affiché n'entre en base qu'au premier mot modifié — même
+// règle que la fiche.
+const repriseDuRdv = (ligne, nom) => {
+  try {
+    // ⚠ LES CHANTIERS DE CETTE FICHE, JAMAIS TOUS, ET C'EST UN DÉFAUT VÉCU.
+    // `rendezVousDeLaFiche` construit l'ensemble des `source_event_id` de ce
+    // qu'on lui passe : en lui donnant la table entière, CHAQUE ligne du
+    // tableau récupérait TOUS les rendez-vous liés — Damien Rey affichait le
+    // commentaire de Thomas Petit, numéro de téléphone compris. Trouvé en
+    // lisant la colonne produite, invisible à la relecture du code.
+    //
+    // La fiche, elle, passait déjà ses seuls chantiers (`siens`) : c'est le
+    // contrat de la fonction, et il n'était écrit nulle part.
+    const miens = (scope.rgd('rgd_chantiers') || []).filter(c =>
+      (!!c.contact_id && c.contact_id === ligne.contact_id)
+      || (!!c.organisation_id && c.organisation_id === ligne.organisation_id));
+    if (!miens.length && ligne.source !== 'google_calendar') return '';
+    const rdv = rendezVousDeLaFiche(ligne, miens, scope.rgd('agenda_events'), nom)[0];
+    return rdv ? coordonneesDuRendezVous(rdv.description, nom).commentaire : '';
+  } catch (e) { return ''; }
+};
+
+const champNote = (ligne, cible, nom = '') => {
   // ⚠ LA NOTE DU ROBOT N'EST PAS UN COMMENTAIRE : « Créé automatiquement depuis
   // Google Agenda le … » occupait la colonne où l'on écrit ce qu'on retient
   // d'un appel. `sansNoteAuto` est la MÊME règle que la fiche et le formulaire
   // — une règle d'affichage appliquée à un seul endroit sur trois n'en est pas
   // une.
-  const v = sansNoteAuto(cible === 'demande' ? ligne.commentaire_admin : ligne.notes);
+  const propre = sansNoteAuto(cible === 'demande' ? ligne.commentaire_admin : ligne.notes);
+  const repris = propre ? '' : repriseDuRdv(ligne, nom);
+  const v = propre || repris;
+  const aide = repris
+    ? 'Repris du rendez-vous — le modifier l’enregistre sur la fiche'
+    : 'Commentaire';
   // ⚠ EN LECTURE SEULE AUSSI LE TEXTE S'ENROULE : `.rcl-note` porte le
   // `white-space` qu'il faut, sinon une longue note sortirait du tableau au
   // lieu d'être tronquée — et personne ne verrait qu'il en manque.
-  if (!scope.canRgd) return v ? `<span class="note-lue">${esc(v)}</span>` : '<span class="muted">—</span>';
-  return `<textarea class="note-champ" data-cible="${esc(cible)}"
-    data-uuid="${esc(ligne.id)}" rows="1"
+  if (!scope.canRgd) return v
+    ? `<span class="note-lue" title="${esc(aide)}">${esc(v)}</span>`
+    : '<span class="muted">—</span>';
+  return `<textarea class="note-champ ${repris ? 'est-repris' : ''}" data-cible="${esc(cible)}"
+    data-uuid="${esc(ligne.id)}" rows="1" title="${esc(aide)}"
     placeholder="Commentaire…" aria-label="Commentaire">${esc(v)}</textarea>`;
 };
 
@@ -943,7 +988,7 @@ export const rgdClientsPage = {
               <td>${esc(p?.tel || '—')}</td>
               <td class="muted">${esc(adresseDe(p))}</td>
               <td class="muted small">${f.maj ? esc(relDay(f.maj)) : '—'}</td>
-              <td class="rcl-note">${champNote(f, 'client')}</td>
+              <td class="rcl-note">${champNote(f, 'client', p ? [p.first_name, p.last_name].filter(Boolean).join(' ') : '')}</td>
               <td>${boutonSuppression(f)}</td>
             </tr>`;
           }).join('') || `<tr><td colspan="9"><div class="empty">${esc(vide())}</div></td></tr>`}</tbody>
@@ -1048,7 +1093,7 @@ export const rgdClientsPage = {
               ? menuStatut(x.statut, x.cible, x.ligne.id) + flechesEtape(x.etape, true)
               : pastilleSuivi(x.statut)}</td>
             ${surRelances ? `<td class="small rcl-rel-td">${celluleRelance(x.ligne, x.statut, x.cible)}</td>` : ''}
-            <td class="rcl-note">${champNote(x.ligne, x.cible)}</td>
+            <td class="rcl-note">${champNote(x.ligne, x.cible, x.nom)}</td>
             <td>${boutonSuppression(x.ligne)}</td>
           </tr>`; }).join('') || `<tr><td colspan="${10 + (surRdv ? 1 : 0) + (surRelances ? 1 : 0)}"><div class="empty">${esc(vide())}</div></td></tr>`}</tbody>
         </table>

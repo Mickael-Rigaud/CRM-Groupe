@@ -5797,3 +5797,11 @@ textarea.ev-nu { resize: vertical; min-height: 40px; }
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent);
 }
 .rgdf-note-champ:disabled { background: var(--card-2); color: var(--muted); }
+
+/* ⚠ UN COMMENTAIRE REPRIS DU RENDEZ-VOUS N'EST PAS ENCORE CELUI DE LA FICHE
+   (02/10/2026) : il vient de la description Google et n'entre en base qu'au
+   premier mot modifie. Il est donc legerement attenue — assez pour qu'on voie
+   que personne ne l'a ecrit ici, pas assez pour le rendre moins lisible que le
+   reste de la ligne. */
+.note-champ.est-repris { color: var(--muted); font-style: italic; }
+.note-champ.est-repris:focus { color: var(--text); font-style: normal; }
