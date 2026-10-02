@@ -42,6 +42,8 @@ import { chargerEditeur } from './rgd-realisation-edit.js';
 import { chargerCarrousel } from './rgd-carrousel-edit.js';
 import { chargerCategories } from './rgd-categories-edit.js';
 import { chargerAccueil } from './rgd-accueil-edit.js';
+import { chargerPrestations } from './rgd-prestations-edit.js';
+import { PRESTATIONS } from '../data/rgd-prestations.js';
 
 // Le nombre de photos, avant/après compris. C'est ce qui dit si une référence
 // est montrable ou si elle n'est qu'un titre.
@@ -70,6 +72,8 @@ const accueilVide = (n, ecriture) => `<div class="rea-vide">
     <li>Le nombre à droite de chaque ligne est son nombre de photos.</li>
     <li>Une étoile signale un avis client rattaché.</li>
     <li><b>Carrousel du site</b>, tout en haut, montre les images de la page d’accueil.</li>
+    <li><b>Visuels des prestations</b> porte les six curseurs avant/après de la page
+      « Nos prestations ».</li>
   </ul>
   ${ecriture ? `<p class="muted">Pour mettre un nouveau chantier en ligne :
     <b>+ Nouvelle réalisation</b>, en haut de la liste. Informations, description,
@@ -184,7 +188,19 @@ export const rgdRealisationsPage = {
     // Quitter l'atelier perd la saisie : un rechargement de page aussi. Le
     // garde-fou du navigateur ne couvre que ce dernier cas, la demande
     // ci-dessous couvre la navigation interne.
-    const garde = (e) => { e.preventDefault(); e.returnValue = ''; };
+    // ⚠ UN ATELIER QUI SAIT DIRE « RIEN N'A BOUGÉ » N'EST PAS RETENU — ni au
+    // rechargement, ni à la navigation interne. Seul celui des visuels de
+    // prestations le sait aujourd'hui (`sale`) : les trois autres n'exposent
+    // rien, le getter rend `undefined`, et la demande reste pour eux. On ouvre
+    // « Visuels des prestations » aussi souvent pour REGARDER ce qui est en
+    // ligne que pour changer une photo, et une question posée à chaque sortie,
+    // toujours pour rien, apprend à répondre oui sans la lire — le jour où
+    // elle protège vraiment quelque chose, elle ne protège plus rien.
+    const rienABougerDansLAtelier = () => state.editeur?.sale === false;
+    const garde = (e) => {
+      if (rienABougerDansLAtelier()) return;
+      e.preventDefault(); e.returnValue = '';
+    };
     const armerGarde = (on) => {
       window.removeEventListener('beforeunload', garde);
       if (on) window.addEventListener('beforeunload', garde);
@@ -192,7 +208,8 @@ export const rgdRealisationsPage = {
 
     const quitterAtelier = async () => {
       if (!state.editeur) return true;
-      if (!await demander('Quitter l’atelier ? Ce qui n’a pas été publié sera perdu.')) return false;
+      if (!rienABougerDansLAtelier()
+          && !await demander('Quitter l’atelier ? Ce qui n’a pas été publié sera perdu.')) return false;
       state.editeur = null; armerGarde(false);
       return true;
     };
@@ -240,6 +257,22 @@ export const rgdRealisationsPage = {
       if (!r.ok) { toast(`Mises en avant indisponibles — ${r.motif}.`, 'err'); return; }
       state.editeur = r.editeur;
       state.vue = 'accueil';
+      armerGarde(true);
+      draw();
+    };
+
+    // ⚠ LES VISUELS DES PRESTATIONS SONT UN ATELIER COMME LES AUTRES, pour la
+    // raison qui vaut déjà pour les catégories : ils republient un document du
+    // site. Le même chemin donne la demande avant de quitter, le garde-fou du
+    // rechargement de page et le gel du redessin pendant la saisie.
+    const ouvrirPrestations = async () => {
+      if (state.occupe) return;
+      state.occupe = true;
+      const r = await chargerPrestations();
+      state.occupe = false;
+      if (!r.ok) { toast(`Visuels indisponibles — ${r.motif}.`, 'err'); return; }
+      state.editeur = r.editeur;
+      state.vue = 'prestations';
       armerGarde(true);
       draw();
     };
@@ -372,6 +405,10 @@ export const rgdRealisationsPage = {
               <button type="button" class="rea-item${state.vue === 'categories' ? ' on' : ''}" data-categories>
                 <span class="rea-item-nom">Catégories</span>
                 <span class="rea-item-n">${cats.length}</span>
+              </button>
+              <button type="button" class="rea-item${state.vue === 'prestations' ? ' on' : ''}" data-prestations>
+                <span class="rea-item-nom">Visuels des prestations</span>
+                <span class="rea-item-n">${PRESTATIONS.length}</span>
               </button>` : ''}
             </div>
 
@@ -419,6 +456,11 @@ export const rgdRealisationsPage = {
       if (cate) cate.onclick = async () => {
         if (!await quitterAtelier()) return;
         ouvrirCategories();
+      };
+      const pres = root.querySelector('[data-prestations]');
+      if (pres) pres.onclick = async () => {
+        if (!await quitterAtelier()) return;
+        ouvrirPrestations();
       };
       const carr = root.querySelector('[data-carrousel]');
       if (carr) carr.onclick = async () => {

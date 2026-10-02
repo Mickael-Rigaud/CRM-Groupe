@@ -125,6 +125,19 @@ export const SEED_SITE = {
       { url: AV1, legende: 'Avant travaux — exemple' },
     ],
   },
+
+  // ⚠ LES VISUELS DES PRESTATIONS, DEPUIS LE 02/10/2026. Trois des six
+  // seulement : c'est exprès. Ce document est le seul des trois dont une
+  // entrée ABSENTE a un sens — « la page garde son image » — et une démo qui
+  // les porterait toutes les six n'essaierait jamais ce cas, qui est pourtant
+  // l'état réel du site le premier jour.
+  prestations: {
+    prestations: [
+      { id: 'isolation', avant: AV1, apres: AP1 },
+      { id: 'electricite', avant: AV2, apres: AP2 },
+      { id: 'plomberie', avant: AV1, apres: AP3 },
+    ],
+  },
 };
 
 /**
@@ -135,6 +148,12 @@ export const SEED_SITE = {
  * que c'est lui qui donne l'ordre du site, et que l'écran trie dessus.
  */
 export function deplierSite(cle, doc) {
+  // ⚠ LES PRESTATIONS NE SE DÉPLIENT PAS, ET CE N'EST PAS UN OUBLI : elles
+  // n'ont aucune table de reflet. Le document est lu tel quel par la porte
+  // publique du site, parce que douze adresses ne se cherchent ni ne se
+  // trient — leur déplier une table serait une table de plus à tenir pour
+  // rien. Même raisonnement, et même absence de branche, dans `rgd_publier_site`.
+  if (cle === 'prestations') return null;
   if (cle === 'carrousel') {
     return (doc?.images || [])
       .filter(i => i && i.url)

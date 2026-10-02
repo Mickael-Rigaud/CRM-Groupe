@@ -32,12 +32,19 @@
 // part. L'écran doit le dire avant de proposer « restaurer ».
 import { db } from './db.js';
 
-// ⚠ DEUX DOCUMENTS, UNE SEULE MÉCANIQUE. `rgd_site_documents` porte
-// `realisations` (5 catégories, 31 projets) ET `carrousel` (les images du
-// haut de la page d'accueil). Mêmes RPC, même remplacement en entier, même
-// unique niveau de retour arrière — les trois fonctions ci-dessous sont donc
-// écrites une fois et paramétrées par la clé. Les dédoubler ferait deux
-// endroits où corriger le jour où la mécanique bouge.
+// ⚠ TROIS DOCUMENTS, UNE SEULE MÉCANIQUE. `rgd_site_documents` porte
+// `realisations` (5 catégories, 31 projets), `carrousel` (les images du
+// haut de la page d'accueil) et, depuis le 02/10/2026, `prestations` (les six
+// curseurs avant/après de `/nos-prestations/`). Mêmes RPC, même remplacement
+// en entier, même unique niveau de retour arrière — les trois fonctions
+// ci-dessous sont donc écrites une fois et paramétrées par la clé. Les
+// dédoubler ferait deux endroits où corriger le jour où la mécanique bouge.
+//
+// ⚠ ELLES SONT EXPORTÉES depuis que `rgd-prestations.js` existe : ce document
+// a ses propres règles de validation et de mise en forme, qui n'ont rien à
+// faire ici, mais il passe par la MÊME porte. Une quatrième copie de
+// `db.rpc('rgd_publier_site')` aurait fini par ne plus traiter les erreurs
+// comme les trois autres.
 async function lireDoc(cle, valide) {
   try {
     // ⚠ On passe par `rgd_lire_site`, PAS par la fonction publique du site :
@@ -73,6 +80,11 @@ async function restaurerDoc(cle) {
     return { ok: false, motif: String(e.message || e).slice(0, 160) };
   }
 }
+
+// La mécanique commune, pour un document qui a ses propres règles ailleurs.
+export const lireDocSite = lireDoc;
+export const publierDocSite = publierDoc;
+export const restaurerDocSite = restaurerDoc;
 
 // Le document complet, lu à la source.
 export const lireRealisations = () =>

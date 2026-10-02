@@ -168,7 +168,9 @@ const localAdapter = {
   async rpc(nom, args = {}) {
     const cle = args.p_cle;
     if (nom === 'rgd_lire_site' || nom === 'rgd_publier_site' || nom === 'rgd_restaurer_site') {
-      if (cle !== 'realisations' && cle !== 'carrousel') throw new Error('document inconnu : ' + cle);
+      if (cle !== 'realisations' && cle !== 'carrousel' && cle !== 'prestations') {
+        throw new Error('document inconnu : ' + cle);
+      }
       const docs = this.docsSite();
       if (nom === 'rgd_lire_site') return structuredClone(docs[cle]);
 
@@ -189,6 +191,9 @@ const localAdapter = {
       // `rgd_categories` n'avait aucun écrivain et gardait l'instantané de sa
       // création — une catégorie renommée dans le CRM restait à son ancien nom
       // sur le site. Côté carrousel, rien n'a changé : une seule liste.
+      // ⚠ LES PRESTATIONS N'ONT PAS DE REFLET À REMPLIR : rien à déplier, et
+      // c'est aussi vrai côté base. Le document est servi tel quel au site.
+      if (cle === 'prestations') return { ok: true, cle };
       if (cle === 'carrousel') {
         const images = deplierSite(cle, docs[cle]);
         if (images.length) { this.data.rgd_carrousel = images; this.save(); }
