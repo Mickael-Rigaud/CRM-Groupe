@@ -155,12 +155,19 @@ function frisePipeline(etapes, poids) {
 
 
 /**
- * Le CA facturé mois par mois sur l'exercice.
+ * Le CA facturé mois par mois sur UN exercice donné.
+ *
  * ⚠ LES MOIS À VENIR NE SONT PAS RENDUS : une barre à zéro pour un mois qui
- * n'a pas eu lieu se lit comme un mois sans activité.
+ * n'a pas eu lieu se lit comme un mois sans activité. Sur un exercice CLOS la
+ * condition ne retire rien — ses douze mois sont tous derrière nous — et c'est
+ * ce qui permet de passer l'un ou l'autre à la même fonction.
+ *
+ * ⚠ L'EXERCICE EST UN PARAMÈTRE DEPUIS LE 02/10/2026 : il se déduisait de la
+ * date du jour, donc la courbe ne savait montrer QUE l'exercice en cours — et
+ * elle ne pouvait pas suivre la tuile le jour où celle-ci affiche le précédent.
  */
-function caParMois(paiements, d = new Date()) {
-  const debut = d.getMonth() >= 9 ? d.getFullYear() : d.getFullYear() - 1;
+function caParMois(paiements, ex, d = new Date()) {
+  const debut = Number(ex.du.slice(0, 4));
   const mois = [];
   for (let i = 0; i < 12; i++) {
     const m = new Date(debut, 9 + i, 1);
@@ -273,29 +280,45 @@ export const rgdPilotagePage = {
       // Les deux sont montrés : l'écart dit à quel point Costructor est en retard.
       const surExercice = (e) => paiements.filter(p => p.statut !== 'annule'
         && p.date_facturation && p.date_facturation >= e.du && p.date_facturation <= e.au);
-      const facturesEx = surExercice(ex);
-      const calculeHt = facturesEx.reduce((t, p) => t + (Number(p.montant_ht) || 0), 0);
 
-      // ⚠ L'EXERCICE PRÉCÉDENT EST AFFICHÉ À CÔTÉ, ET CE N'EST PAS DU CONFORT
-      // (02/10/2026, signalé par Mickael : « pourquoi je n'ai plus le CA de
-      // Costructor ? »). Le 1er octobre, l'exercice bascule : le 30 septembre
-      // au soir la tuile affichait 382 620 €, le 1er au matin 0 € — et un
-      // grand zéro sur l'écran qu'on ouvre le matin se lit comme une panne,
-      // pas comme un compteur remis à l'heure. Rien n'était cassé ; il
-      // manquait la phrase qui le dit.
+      // ⚠ TANT QUE LE NOUVEL EXERCICE NE PORTE AUCUNE FACTURE, ON AFFICHE LE
+      // PRÉCÉDENT (02/10/2026, demandé par Mickael : « tant qu'il n'y a pas de
+      // CA sur le nouvel exercice tu peux conserver l'ancien »). Le 1er octobre
+      // l'exercice bascule : le 30 au soir la tuile affichait 382 620 €, le 1er
+      // au matin 0 €, et un grand zéro sur l'écran qu'on ouvre le matin se lit
+      // comme une panne — « pourquoi je n'ai plus le CA de Costructor ? ».
+      //
+      // ⚠ LE BASCULEMENT SE FAIT TOUT SEUL, SUR UN FAIT ET NON SUR UNE DATE :
+      // dès la PREMIÈRE facture du nouvel exercice, c'est lui qui s'affiche.
+      // Un délai en jours (« les trois premières semaines d'octobre ») aurait
+      // été un réglage à retenir, et il aurait caché un vrai début d'activité.
+      //
+      // ⚠ ET L'ÉCRAN DIT QUEL EXERCICE IL MONTRE, à trois endroits — le titre,
+      // une pastille « clos », et la phrase sous le montant. Montrer l'ancien
+      // chiffre sans le nommer serait pire que le zéro : on lirait 382 620 €
+      // comme le chiffre de l'année en cours.
+      const exCourant = ex;
       const exPrecedent = {
         du: `${Number(ex.du.slice(0, 4)) - 1}-10-01`, au: `${Number(ex.au.slice(0, 4)) - 1}-09-30`,
         label: `${Number(ex.du.slice(0, 4)) - 1}–${Number(ex.au.slice(0, 4)) - 1}`,
       };
-      const precedentHt = surExercice(exPrecedent)
-        .reduce((t, p) => t + (Number(p.montant_ht) || 0), 0);
+      const facturesCourant = surExercice(exCourant);
+      const facturesPrecedent = surExercice(exPrecedent);
+      const surLePrecedent = facturesCourant.length === 0 && facturesPrecedent.length > 0;
+
+      const exVu = surLePrecedent ? exPrecedent : exCourant;
+      const facturesEx = surLePrecedent ? facturesPrecedent : facturesCourant;
+      const calculeHt = facturesEx.reduce((t, p) => t + (Number(p.montant_ht) || 0), 0);
+      const precedentHt = facturesPrecedent.reduce((t, p) => t + (Number(p.montant_ht) || 0), 0);
 
       // ⚠ LA CORRECTION MANUELLE NE PORTE AUCUNE ANNÉE, et c'est un piège à
       // retardement : `manual_ca_ht_exercice` est une clé unique, donc une
       // valeur saisie pour 2025–2026 s'afficherait telle quelle comme le CA de
       // 2026–2027 dès le 1er octobre. Les deux clés sont vides aujourd'hui
       // (vérifié en production), le trou n'a donc rien cassé — mais il faut le
-      // dire à l'écran plutôt que d'attendre la prochaine bascule.
+      // dire à l'écran plutôt que d'attendre la prochaine bascule. Tant qu'on
+      // montre l'exercice précédent, elle s'applique à LUI, ce qui est aussi
+      // l'exercice pour lequel elle a été saisie.
       const corrigeHt = reglage('manual_ca_ht_exercice');
       const caHt = corrigeHt !== null ? Number(corrigeHt) : calculeHt;
       const corrige = corrigeHt !== null && Math.round(Number(corrigeHt)) !== Math.round(calculeHt);
@@ -331,7 +354,7 @@ export const rgdPilotagePage = {
       const leads = demandes.filter(d => !d.statut || d.statut === 'nouvelle' || d.statut === 'en_attente');
 
       const clients = scope.rgd('rgd_clients');
-      const mois = caParMois(paiements);
+      const mois = caParMois(paiements, exVu);
       const moyenne = mois.length ? Math.round(caHt / mois.length) : 0;
       // Les sept étapes viennent du module commun : le pipeline et la liste
       // comptent forcément les mêmes personnes, y compris les gardes.
@@ -388,22 +411,23 @@ export const rgdPilotagePage = {
         <div class="rgd-duo">
 
         <section class="card rgd-ca">
-          <div class="card-head"><h2>Chiffre d’affaires ${esc(ex.label)}</h2>
+          <div class="card-head"><h2>Chiffre d’affaires ${esc(exVu.label)}</h2>
             <span class="grow"></span>
             <span class="muted small">exercice du 1<sup>er</sup> octobre au 30 septembre</span></div>
           <div class="rgd-ca-ligne">
             <b class="rgd-ca-montant">${eur(caHt)}</b>
             <span class="muted">HT</span>
+            ${surLePrecedent ? '<span class="chip muted">exercice clos</span>' : ''}
             ${corrige ? '<span class="chip amber">corrigé à la main</span>' : ''}
           </div>
+          ${!facturesCourant.length ? `<p class="rgd-ca-neuf">L’exercice
+              <b>${esc(exCourant.label)}</b> a commencé le 1<sup>er</sup> octobre et
+              <b>ne porte encore aucune facture</b>.${surLePrecedent
+                ? ` L’écran montre donc le dernier exercice clos, et basculera tout
+                  seul sur ${esc(exCourant.label)} dès la première facture.` : ''}</p>` : ''}
           ${facturesEx.length ? `<p class="small muted rgd-ca-sous">Moyenne mensuelle ${eur(moyenne)} HT sur
-            ${mois.length} mois écoulé${mois.length > 1 ? 's' : ''}.${precedentHt
-              ? ` Exercice ${esc(exPrecedent.label)} : ${eur(precedentHt)} HT.` : ''}</p>`
-            : `<p class="rgd-ca-neuf">L’exercice <b>${esc(ex.label)}</b> a commencé le
-              1<sup>er</sup> octobre : <b>aucune facture n’y est encore enregistrée</b>, le
-              compteur repart donc de zéro.${precedentHt
-                ? ` L’exercice ${esc(exPrecedent.label)} s’est clos à <b>${eur(precedentHt)} HT</b>.`
-                : ''}</p>`}
+            ${mois.length} mois${surLePrecedent ? '' : ` écoulé${mois.length > 1 ? 's' : ''}`}.${!surLePrecedent && precedentHt
+              ? ` Exercice ${esc(exPrecedent.label)} : ${eur(precedentHt)} HT.` : ''}</p>` : ''}
           ${courbeCa(mois)}
           ${corrige ? `<p class="small">
             <b>Ce chiffre est saisi à la main</b> et masque le calcul, qui donne
