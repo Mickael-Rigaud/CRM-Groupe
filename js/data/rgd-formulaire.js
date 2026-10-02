@@ -19,7 +19,19 @@
 // ⚠ UNE DEMANDE QUI LA PORTE DÉJÀ NE LA PERD PAS : le formulaire ajoute en
 // bout de liste, cochée et en trait discontinu, toute valeur présente en base
 // qu'il ne propose plus. C'est la règle de `avecLesPresentes`.
-export const DEMANDEUR = ['Propriétaire', 'Futur acquéreur'];
+// ⚠ « FUTUR ACQUÉREUR » SE PRÉCISE EN DEUX ÉTAPES (02/10/2026, demandé par
+// Élodie : « type de demandeur (propriétaire, offre d'achat, compromis
+// signé) »). Ce n'est pas un détail de vocabulaire : on ne lance pas des
+// travaux au même moment selon qu'une offre vient d'être acceptée ou qu'un
+// compromis est signé, et la question « qui me parle » devenait inutile dès
+// que la réponse était « quelqu'un qui n'a pas encore le bien ».
+//
+// ⚠ L'ANCIENNE VALEUR N'EST PAS PERDUE : deux fiches la portent (mesuré avant
+// de la retirer), et `avecLesPresentes` la rajoute en bout de liste, cochée,
+// en trait discontinu — comme « Particulier » (5 demandes du site) et « Je me
+// renseigne » (1). Une valeur retirée d'une liste sans ce filet cesse de
+// s'afficher, et le premier enregistrement l'efface.
+export const DEMANDEUR = ['Propriétaire', 'Offre d’achat', 'Compromis signé'];
 export const BIEN = ['Un appartement', 'Une maison', 'Un immeuble'];
 export const RESIDENCE = ['Une résidence principale', 'Une résidence secondaire',
   'Un investissement locatif'];
