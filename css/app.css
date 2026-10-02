@@ -5782,14 +5782,11 @@ textarea.ev-nu { resize: vertical; min-height: 40px; }
 .fp-coche em { font-style: normal; color: var(--muted-2); font-size: 12px; }
 
 /* ---- Le commentaire d'une fiche RGD s'écrit sur place (02/10/2026) --------
-   ⚠ DEUX TEXTES, UN SEUL CHAMP. Celui du rendez-vous vient de la description
-   Google et reste en LECTURE : le mettre dans le champ le recopierait dans
-   `notes` au premier enregistrement. Il est donc posé au-dessus, teinté, pour
-   qu'on voie qu'il n'appartient pas à la même source. */
-.rgdf-texte-rdv {
-  background: var(--card-2); border-left: 3px solid var(--line-strong);
-  padding: 8px 11px; border-radius: 0 8px 8px 0; margin-bottom: 4px;
-}
+   ⚠ UN SEUL CHAMP, ET IL PORTE AUSSI LE TEXTE DU RENDEZ-VOUS. Celui-ci
+   s'affichait d'abord en LECTURE au-dessus, teinté — `.rgdf-texte-rdv`, règle
+   retirée le jour même : on ne pouvait corriger dans l'agenda qu'un texte qu'on
+   voulait reprendre ici. La description reste chez Google, intacte ; c'est au
+   premier mot tapé que le commentaire devient celui de la fiche. */
 .rgdf-note-champ {
   width: 100%; padding: 8px 10px; border: 1px solid var(--line-strong);
   border-radius: 9px; font: inherit; font-size: 13px; line-height: 1.5;

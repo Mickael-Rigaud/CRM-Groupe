@@ -576,18 +576,53 @@ export function ouvrirFicheRgd(x, onChange, retour = null) {
             // n'apparaît qu'une fois rempli ne permet pas de le remplir.
             const ecrit = scope.canRgd;
             if (!commentaireSource && !ecrit) return '';
+
+            // ⚠ UN SEUL CHAMP, ET IL PORTE AUSSI LE TEXTE DU RENDEZ-VOUS
+            // (02/10/2026, demandé : « je veux avoir la possibilité de modifier
+            // le commentaire directement ici »). Celui-ci s'affichait en
+            // LECTURE au-dessus : ce que Mickael note dans la description
+            // Google — un téléphone, deux lignes sur le projet — ne pouvait
+            // donc se corriger que dans l'agenda, et le champ d'ici restait
+            // vide à côté d'un texte qu'on voulait reprendre.
+            //
+            // ⚠ CE QUI L'INTERDISAIT N'EXISTE PLUS, VÉRIFIÉ AVANT : la raison
+            // écrite était que `push_rgd_clients` repose `notes` à chaque
+            // relevé — « elle ne tiendrait pas une demi-heure ». Le lot 3 du
+            // 25/09 a coupé cette charge, et la fonction qui tourne le dit
+            // elle-même (« `notes` NE REVIENT PLUS »). Une raison périmée qui
+            // interdit encore quelque chose est pire qu'une absence de règle.
+            //
+            // ⚠ LE TEXTE DU RENDEZ-VOUS SERT DE VALEUR DE DÉPART, IL N'EST PAS
+            // RECOPIÉ TANT QU'ON NE TOUCHE À RIEN : le champ part au `change`,
+            // donc ouvrir une fiche et la refermer n'écrit rien. C'est au
+            // premier mot tapé que le commentaire devient le nôtre — et la
+            // description reste chez Google, qui n'a rien perdu.
+            const repris = !noteEcrite && duRdv.commentaire;
+            const valeur = noteEcrite || duRdv.commentaire || '';
+            // ⚠ ON NE PERD PAS LA DESCRIPTION QUAND LES DEUX EXISTENT. Une
+            // fiche peut porter sa propre note ET un rendez-vous dont la
+            // description dit autre chose — un téléphone, une précision prise
+            // depuis. Le champ ne montre que la nôtre ; sans ce rappel, la
+            // sienne cesserait d'être affichée nulle part, sans un mot.
+            // On ne le pose que si le texte n'est pas déjà sous les yeux.
+            const aRappeler = duRdv.commentaire && !repris
+              && !valeur.includes(duRdv.commentaire.trim());
             return `<section class="rgdf-bloc rgdf-commentaire">
               <h3>Commentaire</h3>
-              ${duRdv.commentaire ? `<p class="rgdf-texte rgdf-texte-rdv">${esc(duRdv.commentaire)}</p>
-                <p class="rgdf-source">Noté dans le rendez-vous
-                  « ${esc(rdv?.title || '')} »${rdv?.day ? ' du ' + esc(fmtDate(rdv.day)) : ''} —
-                  il se corrige dans Google Agenda.</p>` : ''}
+              ${aRappeler ? `<p class="rgdf-source">Le rendez-vous
+                « ${esc(rdv?.title || '')} » note aussi : « ${esc(duRdv.commentaire)} »
+                — il se corrige dans Google Agenda.</p>` : ''}
               ${ecrit
-                ? `<textarea class="rgdf-note-champ" id="rgdf-commentaire" rows="2"
-                     placeholder="Ce qu'on retient de l'appel…">${esc(noteEcrite)}</textarea>
-                   <p class="rgdf-source" id="rgdf-commentaire-etat">S'enregistre quand vous quittez le champ.</p>`
-                : (noteEcrite ? `<p class="rgdf-texte">${esc(noteEcrite)}</p>
-                   ${f.d1_id != null ? `<p class="rgdf-source">Saisi dans l’application RGD,
+                ? `<textarea class="rgdf-note-champ" id="rgdf-commentaire" rows="3">${esc(valeur)}</textarea>
+                   <p class="rgdf-source" id="rgdf-commentaire-etat">${repris
+                     ? `Repris du rendez-vous « ${esc(rdv?.title || '')} »${
+                        rdv?.day ? ' du ' + esc(fmtDate(rdv.day)) : ''} — le modifier ici
+                        l’enregistre dans la fiche.`
+                     : 'S’enregistre quand vous quittez le champ.'}</p>`
+                : (valeur ? `<p class="rgdf-texte">${esc(valeur)}</p>
+                   ${repris ? `<p class="rgdf-source">Noté dans le rendez-vous
+                     « ${esc(rdv?.title || '')} » — il se corrige dans Google Agenda.</p>`
+                     : f.d1_id != null ? `<p class="rgdf-source">Saisi dans l’application RGD,
                      qui en reste la source.</p>` : ''}` : '')}
             </section>`;
           })()}

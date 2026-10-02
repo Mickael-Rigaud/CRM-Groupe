@@ -485,6 +485,7 @@ export const SEED = {
       source_event_id: 'demo-visite-garnier', created_at: d(-40), updated_at: d(-3) },
     { id: 'rch8', deal_id: null, contact_id: 'c4', reference: 'Visite technique — Petit',
       ville: 'Tours', statut_d1: 'visite_technique', date_debut_prevue: day(21),
+      source_event_id: 'demo-visite-petit',
       created_at: d(-1), updated_at: d(-1) },
     { id: 'rch5', deal_id: null, contact_id: 'c15', reference: 'Visite technique — Leclerc',
       ville: 'Tours', statut_d1: 'visite_technique', date_debut_prevue: day(3),
@@ -521,9 +522,16 @@ export const SEED = {
     // de J+21 ; sans cet événement, `visiteEnCours` répond NON et la fiche
     // tombe en « sans date » — elle reste dans l'onglet par son `statut_suivi`,
     // mais le tri n'a rien à placer. Constaté en lisant l'ordre produit.
+    // ⚠ CELUI-CI PORTE UNE DESCRIPTION, et c'est le seul du jeu : c'est la
+    // forme REELLE d'un rendez-vous pris au telephone — Mickael pose le
+    // numero et deux lignes sur le projet dans la description de l'evenement,
+    // et c'est de la que la fiche tire son commentaire et son telephone.
+    // Sans elle, le bloc « Commentaire » de la fiche n'etait essayable que
+    // sur la production, dans son cas le plus courant.
     { id: 'rgd|demo-visite-petit|' + day(21), activity: 'rgd',
       calendar_id: 'demo-rgd@group.calendar.google.com', google_id: 'demo-visite-petit',
       title: 'Visite technique: M. Petit', location: 'Tours',
+      description: 'coordonnée du client: 06 39 98 00 04\nProjet: rénovation d’une salle de bain',
       starts_at: d(21, 10), ends_at: d(21, 11), all_day: false, day: day(21) },
     { id: 'rgd|demo-visite-garnier|' + day(-2), activity: 'rgd',
       calendar_id: 'demo-rgd@group.calendar.google.com', google_id: 'demo-visite-garnier',
@@ -654,8 +662,11 @@ export const SEED = {
     //            jamais première.
     { id: 'rc13', owner_id: 'u-mickael', contact_id: 'c3', statut: 'qualifie', statut_suivi: 'rdv_planifie',
       source: 'manuel', notes: 'Visite avancée à la demande du client.', maj: d(-40) },
+    // ⚠ SANS NOTE PROPRE, VOLONTAIREMENT : son commentaire vient de la
+    // description du rendez-vous. C'est le cas le plus courant en production
+    // et le seul qui montre le champ « repris du rendez-vous ».
     { id: 'rc14', owner_id: 'u-mickael', contact_id: 'c4', statut: 'qualifie', statut_suivi: 'rdv_planifie',
-      source: 'site', notes: 'Disponible seulement après ses congés.', maj: d(-1) },
+      source: 'site', notes: null, maj: d(-1) },
     { id: 'rc15', owner_id: 'u-mickael', contact_id: 'c11', statut: 'qualifie', statut_suivi: 'rdv_planifie',
       source: 'manuel', notes: 'Rendez-vous à caler, aucune date posée.', maj: d(-1) },
     { id: 'rc5', owner_id: 'u-mickael', contact_id: 'c14', statut: 'qualifie', statut_suivi: 'rdv_planifie',
