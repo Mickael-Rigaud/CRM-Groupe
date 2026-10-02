@@ -95,6 +95,7 @@ import { ORDRE_ETAPES, ETAPES_RGD, ETAPES_CLES, ETAPE_DU_STATUT, STATUT_DE_L_ETA
          montantDevisDe, etapeAvecMontant, ecrireStatut, derniereRelance,
          rangRelanceDuStatut, majDateRelance, aujourdhui,
          visiteDeLaFiche } from '../data/rgd-etapes.js';
+import { sansNoteAuto } from '../data/rgd-projet.js';
 import { db } from '../data/db.js';
 import { esc, eur, fmtDate, fmtDateTime, relDay, terms, hit, searchInput, bindSearch, restoreFocus } from '../ui.js';
 import { poserEspace } from './espace.js';
@@ -196,7 +197,12 @@ const menuStatut = (cle, cible, uuid) => {
 // s'écrit souvent en deux temps. L'enregistrement part au `change`, donc en
 // quittant le champ, exactement comme avant : le gestionnaire n'a pas changé.
 const champNote = (ligne, cible) => {
-  const v = (cible === 'demande' ? ligne.commentaire_admin : ligne.notes) || '';
+  // ⚠ LA NOTE DU ROBOT N'EST PAS UN COMMENTAIRE : « Créé automatiquement depuis
+  // Google Agenda le … » occupait la colonne où l'on écrit ce qu'on retient
+  // d'un appel. `sansNoteAuto` est la MÊME règle que la fiche et le formulaire
+  // — une règle d'affichage appliquée à un seul endroit sur trois n'en est pas
+  // une.
+  const v = sansNoteAuto(cible === 'demande' ? ligne.commentaire_admin : ligne.notes);
   // ⚠ EN LECTURE SEULE AUSSI LE TEXTE S'ENROULE : `.rcl-note` porte le
   // `white-space` qu'il faut, sinon une longue note sortirait du tableau au
   // lieu d'être tronquée — et personne ne verrait qu'il en manque.

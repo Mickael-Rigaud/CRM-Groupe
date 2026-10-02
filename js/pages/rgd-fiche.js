@@ -80,11 +80,14 @@ import { ETAPES_RGD, ORDRE_ETAPES, STATUT_DE_L_ETAPE, ecrireStatut,
          montantDevisDe, etapeAvecMontant, COL_RELANCE, derniereRelance,
          aujourdhui } from '../data/rgd-etapes.js';
 import { scope } from '../data/scope.js';
-import { refusDeProjet, valeursProjet, valeursSuivi } from '../data/rgd-projet.js';
+import { refusDeProjet, valeursProjet, valeursSuivi, sansNoteAuto } from '../data/rgd-projet.js';
 import { ficheProjetRgd } from './rgd-projet.js';
 import { listeTravaux } from '../data/rgd-formulaire.js';
 import { rendezVousDeLaFiche, coordonneesDuRendezVous } from '../data/rgd-rdv.js';
 import { attribuerFicheRgd, proprietaireDeLaFiche } from './rgd-attribuer.js';
+// La porte unique du commentaire, partagée avec le tableau : deux écritures de
+// la même colonne finiraient par ne plus appliquer les mêmes règles.
+import { majNote, COLONNE_NOTE } from '../data/rgd-clients.js';
 
 const ETAT_CHANTIER = {
   demarrage: { label: 'Préparé', ton: 'amber' },
@@ -311,9 +314,11 @@ export function ouvrirFicheRgd(x, onChange, retour = null) {
     // depuis Google Agenda le … » est déjà dit en toutes lettres dans le bloc
     // du projet : la répéter sous le titre « Commentaire » ferait passer pour un
     // mot de Mickael une phrase écrite par un robot.
-    const noteBrute = (x.genre === 'demande' ? f.commentaire_admin : f.notes) || '';
-    const noteEcrite = /^\s*Créé automatiquement depuis Google Agenda/i.test(noteBrute)
-      ? '' : noteBrute;
+    // ⚠ LE FILTRE ÉTAIT ANCRÉ AU DÉBUT DU TEXTE, et c'était trop étroit : dès
+    // qu'une ligne était écrite au-dessus, la note du robot repassait. Elle se
+    // retire désormais où qu'elle soit, par la règle partagée avec le tableau
+    // et le formulaire.
+    const noteEcrite = sansNoteAuto(x.genre === 'demande' ? f.commentaire_admin : f.notes);
     const commentaireSource = [duRdv.commentaire, noteEcrite].filter(Boolean).join('\n\n');
     const jours = x.recu ? daysSince(x.recu) : null;
     // ⚠ TROIS SOURCES POUR LE BUDGET, ET L'ORDRE EST CELUI DE LA CERTITUDE.
@@ -554,15 +559,38 @@ export function ouvrirFicheRgd(x, onChange, retour = null) {
         </div>
 
         <div class="rgdf-colonne">
-          ${commentaireSource ? `<section class="rgdf-bloc rgdf-commentaire">
-            <h3>Commentaire</h3>
-            <p class="rgdf-texte">${esc(commentaireSource)}</p>
-            ${duRdv.commentaire ? `<p class="rgdf-source">Noté dans le rendez-vous
-              « ${esc(rdv?.title || '')} »${rdv?.day ? ' du ' + esc(fmtDate(rdv.day)) : ''} —
-              il se corrige dans Google Agenda.</p>`
-              : f.d1_id != null ? `<p class="rgdf-source">Saisi dans l’application RGD,
-              qui en reste la source.</p>` : ''}
-          </section>` : ''}
+          ${(() => {
+            // ⚠ LE COMMENTAIRE S'ÉCRIT DEPUIS LA FICHE DEPUIS LE 02/10/2026
+            // (demandé : « je voudrais pouvoir modifier l'encadré des
+            // commentaires directement sans modifier la fiche »). Il fallait
+            // ouvrir le formulaire, aller à la troisième étape et enregistrer
+            // pour ajouter une phrase notée pendant un appel.
+            //
+            // ⚠ DEUX TEXTES COHABITENT ICI ET UN SEUL S'ÉCRIT. Celui du
+            // rendez-vous vient de la DESCRIPTION Google : il se corrige dans
+            // l'agenda, et le mettre dans le champ le recopierait dans `notes`
+            // au premier enregistrement — deux copies qui divergent, et la
+            // nôtre qui gagne. Il reste donc en lecture, au-dessus.
+            //
+            // ⚠ LE BLOC EXISTE MÊME VIDE quand on peut écrire : un encadré qui
+            // n'apparaît qu'une fois rempli ne permet pas de le remplir.
+            const ecrit = scope.canRgd;
+            if (!commentaireSource && !ecrit) return '';
+            return `<section class="rgdf-bloc rgdf-commentaire">
+              <h3>Commentaire</h3>
+              ${duRdv.commentaire ? `<p class="rgdf-texte rgdf-texte-rdv">${esc(duRdv.commentaire)}</p>
+                <p class="rgdf-source">Noté dans le rendez-vous
+                  « ${esc(rdv?.title || '')} »${rdv?.day ? ' du ' + esc(fmtDate(rdv.day)) : ''} —
+                  il se corrige dans Google Agenda.</p>` : ''}
+              ${ecrit
+                ? `<textarea class="rgdf-note-champ" id="rgdf-commentaire" rows="2"
+                     placeholder="Ce qu'on retient de l'appel…">${esc(noteEcrite)}</textarea>
+                   <p class="rgdf-source" id="rgdf-commentaire-etat">S'enregistre quand vous quittez le champ.</p>`
+                : (noteEcrite ? `<p class="rgdf-texte">${esc(noteEcrite)}</p>
+                   ${f.d1_id != null ? `<p class="rgdf-source">Saisi dans l’application RGD,
+                     qui en reste la source.</p>` : ''}` : '')}
+            </section>`;
+          })()}
 
           ${blocRappels()}
 
@@ -647,6 +675,36 @@ export function ouvrirFicheRgd(x, onChange, retour = null) {
         toast(`Étape non enregistrée — ${r.motif}`, 'err');
       }
     });
+
+    // ⚠ LE COMMENTAIRE S'ENREGISTRE AU `change`, SANS REDESSINER la fiche :
+    // un redessin remplacerait le champ sous le doigt de qui vient d'y écrire,
+    // et ferait remonter la page. On reporte la valeur sur `f` — `db.update`
+    // REMPLACE la ligne du cache, sans ce report le prochain rendu réafficherait
+    // l'ancien texte.
+    //
+    // ⚠ LA PORTE EST `majNote`, celle du tableau : c'est elle qui sait dans
+    // quelle colonne écrire selon la cible (`notes` ou `commentaire_admin`).
+    // Une seconde écriture directe aurait fait de la fiche un troisième
+    // écrivain de la même colonne — l'écran Clients s'était déjà fabriqué un
+    // chemin parallèle pour le statut, et les deux ont vécu séparément trois
+    // jours.
+    const champCom = m.querySelector('#rgdf-commentaire');
+    if (champCom) champCom.onchange = async () => {
+      const etat = m.querySelector('#rgdf-commentaire-etat');
+      const valeur = champCom.value.trim() || null;
+      champCom.disabled = true;
+      if (etat) etat.textContent = 'Enregistrement…';
+      const r = await majNote({ uuid: f.id, cible: x.cible, valeur });
+      champCom.disabled = false;
+      if (r.ok) {
+        f[COLONNE_NOTE(x.cible)] = valeur;
+        if (etat) etat.textContent = 'Enregistré.';
+        onChange?.();
+      } else {
+        if (etat) etat.textContent = 'S’enregistre quand vous quittez le champ.';
+        toast(r.motif, 'err');
+      }
+    };
 
     const form = m.querySelector('#rgdf-note');
     if (form) form.onsubmit = async (e) => {

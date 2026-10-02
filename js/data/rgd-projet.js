@@ -139,6 +139,31 @@ export function valeursProjet(x) {
  * « pas encore renseigné ». Une fiche client n'a pas de colonne pour eux : ce
  * n'est pas un oubli du CRM, c'est que la question ne lui a jamais été posée.
  */
+/**
+ * Un commentaire débarrassé de la note posée par le robot.
+ *
+ * ⚠ « Créé automatiquement depuis Google Agenda le … » N'EST PAS UN
+ * COMMENTAIRE : c'est `rgd_visites_depuis_agenda` qui l'écrit dans `notes` en
+ * créant la fiche. Sous le titre « Commentaire », elle passe pour un mot de
+ * Mickael, et elle occupe la place de ce qu'on aurait vraiment noté.
+ *
+ * ⚠ ELLE SE RETIRE OÙ QU'ELLE SOIT, PAS SEULEMENT EN TÊTE. La fiche la filtrait
+ * déjà, mais par un test ancré au début du texte : dès qu'on écrivait une ligne
+ * au-dessus, elle repassait — et elle restait de toute façon dans le tableau et
+ * dans le formulaire, qui ne filtraient rien. Une règle d'affichage appliquée à
+ * un seul endroit sur trois n'est pas une règle.
+ *
+ * ⚠ ON NE TOUCHE PAS AUX DONNÉES : la note dit quand et comment la fiche est
+ * née, ce qui a une valeur le jour où l'on se demande d'où elle sort. On cesse
+ * de l'afficher comme un commentaire, on ne l'efface pas de la base.
+ */
+const NOTE_AUTO = /^[ \t]*Cr[ée]{2}\s+automatiquement\s+depuis\s+Google\s+Agenda[^\r\n]*$/gim;
+
+export const sansNoteAuto = (texte) => String(texte || '')
+  .replace(NOTE_AUTO, '')
+  .replace(/\n{3,}/g, '\n\n')
+  .trim();
+
 export function valeursSuivi(x) {
   const f = x.ligne;
   if (x.genre === 'demande') return {
@@ -147,13 +172,22 @@ export function valeursSuivi(x) {
     comment_connu: f.comment_connu || '',
     recommandation: f.recommandation || '',
     apporteur_id: f.apporteur_id || '',
-    commentaire: f.commentaire_admin || '',
+    commentaire: sansNoteAuto(f.commentaire_admin),
   };
+  // ⚠ UNE FICHE CLIENT PORTE LE CONTEXTE DEPUIS LE 02/10/2026 (migration
+  // `20261002133202_rgd_clients_contexte_du_lead`). Ces trois champs
+  // disparaissaient faute de colonnes, et c'était écrit ici comme une limite
+  // assumée — mais un prospect devient client, et c'est précisément au moment
+  // où il signe qu'on ne pouvait plus corriger sa provenance. « Connu via » dit
+  // d'où vient le chiffre d'affaires : le masquer sur ceux qui ont signé le
+  // rendait inexploitable sur la seule population qui compte.
   return {
-    aLeContexte: false,
-    type_demandeur: '', comment_connu: '', recommandation: '',
+    aLeContexte: true,
+    type_demandeur: f.type_demandeur || '',
+    comment_connu: f.comment_connu || '',
+    recommandation: f.recommandation || '',
     apporteur_id: f.apporteur_id || '',
-    commentaire: f.notes || '',
+    commentaire: sansNoteAuto(f.notes),
   };
 }
 
@@ -334,6 +368,10 @@ export async function enregistrerProjet(x, v) {
         code_postal_chantier: txt(v.code_postal_chantier),
         ville_chantier: txt(v.ville_chantier),
         type_bien: txt(v.type_projet),
+        // Les trois champs de contexte, désormais portés par la table.
+        type_demandeur: txt(v.type_demandeur),
+        comment_connu: txt(v.comment_connu),
+        recommandation: txt(v.recommandation),
         apporteur_id: txt(v.apporteur_id),
         [note]: txt(v.commentaire),
       });

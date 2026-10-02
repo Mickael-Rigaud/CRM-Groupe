@@ -53,10 +53,12 @@ import { scope } from '../data/scope.js';
 import { esc, openModal, closeModal, toast, fmtDate } from '../ui.js';
 // ⚠ `aujourdhui` DE `rgd-etapes.js` N'EST PAS IMPORTÉ ICI, ET C'EST VOULU :
 // deux fonctions de ce fichier déclarent déjà un `const aujourdhui` local, qui
-// la MASQUERAIT sans un mot — le piège s'est déjà payé dans `rgd-fiche.js`. Le
-// `max` des champs se borne donc sur `aujourdhuiParis()`, et de toute façon
-// le vrai refus d'une date future est dans `majDateRelance`, pas à l'écran.
-import { COL_RELANCE, majDateRelance } from '../data/rgd-etapes.js';
+// la MASQUERAIT sans un mot — le piège s'est déjà payé dans `rgd-fiche.js`.
+//
+// ⚠ `COL_RELANCE` ET `majDateRelance` ONT QUITTÉ CE FICHIER LE 02/10/2026 avec
+// le bloc des relances (demandé par Élodie). Elles restent la porte unique des
+// trois colonnes, appelées par le tableau et par `ecrireStatut` : c'est le
+// FORMULAIRE qui ne les écrit plus, pas la règle qui disparaît.
 import { DEMANDEUR, BIEN, RESIDENCE, TRAVAUX, BUDGETS, CONNU, listeTravaux,
          CONNU_RECOMMANDATION, CONNU_APPORTEUR } from '../data/rgd-formulaire.js';
 import { valeursProjet, valeursSuivi, personneDe, enregistrerProjet, ditCreneau,
@@ -192,6 +194,27 @@ export function ficheProjetRgd({ dans, cible = null, apporteurs = null,
         && ((cid && c.contact_id === cid) || (oid && c.organisation_id === oid))
         && c.date_debut_prevue)
       .sort((a, b) => String(b.date_debut_prevue).localeCompare(String(a.date_debut_prevue)));
+  };
+
+  // ⚠ L'HEURE D'UNE VISITE DÉJÀ PRISE VIENT DE L'AGENDA, PAS DU CHANTIER
+  // (02/10/2026, demandé : « quand on veut modifier la fiche projet d'un
+  // prospect qui a déjà ou qui a déjà eu un rdv on rappelle la date et
+  // l'heure »). `date_debut_prevue` est un `date` : l'heure n'y est pas.
+  //
+  // ⚠ ON PASSE PAR `source_event_id`, LE LIEN EXACT, jamais par un
+  // rapprochement de noms : sur quelqu'un revu deux fois, le nom ramènerait
+  // l'heure d'un autre rendez-vous que celui qu'on affiche. Même règle que la
+  // colonne « Rendez-vous » de l'écran Clients.
+  //
+  // ⚠ SANS ÉVÉNEMENT LIÉ, ON LE DIT — on n'invente pas « 00:00 », qui se
+  // lirait comme un rendez-vous à minuit.
+  const heureDeLaVisite = (c) => {
+    if (!c?.source_event_id) return '';
+    const ev = (scope.rgd('agenda_events') || [])
+      .find(e => e.google_id === c.source_event_id);
+    if (!ev || ev.all_day || !ev.starts_at) return '';
+    return new Date(ev.starts_at)
+      .toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
   };
 
   const nomEcran = () => ECRANS[etatPas.pas - 1] || 'projet';
@@ -339,7 +362,6 @@ export function ficheProjetRgd({ dans, cible = null, apporteurs = null,
           ${choixApporteurs.map(([id, nom]) => `
             <option value="${esc(id)}"${id === v.apporteur_id ? ' selected' : ''}>${esc(nom)}</option>`).join('')}
         </select></label>`}
-      ${blocRelances()}
       <!-- ⚠ LE COMMENTAIRE ET LE RAPPEL SONT COTE A COTE (demande du jour) :
            on note ce qu'on retient de la personne et le moment ou on la
            rappelle dans le meme geste, a la fin de l'appel.
@@ -356,49 +378,6 @@ export function ficheProjetRgd({ dans, cible = null, apporteurs = null,
         la recommandation ne sont posés que sur une demande : cette fiche vient de
         l’application RGD, qui ne les porte pas.</p>`}
     </div>`;
-
-  // ----------------------------------------------------------- les relances
-  //
-  // ⚠ ELLES ONT QUITTÉ LA FICHE POUR LE FORMULAIRE LE 01/10/2026 (demandé :
-  // « dans le récap de la fiche enlève l'encadré des relances »). L'encadré
-  // part, les trois dates restent corrigeables — et c'est nécessaire : le
-  // tableau ne propose que la relance EN COURS, les deux autres s'y lisent
-  // sans se modifier. Sans ce bloc, une R1 jamais datée ne se rattrapait plus
-  // nulle part. La fiche, elle, les montre désormais en une ligne de lecture.
-  //
-  // ⚠ ELLES S'ÉCRIVENT AU `change`, PAS À « ENREGISTRER », et il faut le dire
-  // à l'écran : c'est le seul champ du formulaire qui parte tout seul. La
-  // raison est que la porte est `majDateRelance` et non `enregistrerProjet` —
-  // la date se pose aussi toute seule dans `ecrireStatut`, le tableau en
-  // corrige une, et une quatrième écriture de la même colonne par un autre
-  // chemin finirait par ne plus appliquer les mêmes règles (le refus d'une
-  // date future, le rang vérifié contre la liste).
-  //
-  // ⚠ RIEN SUR UNE CRÉATION : la ligne n'existe pas encore, il n'y a aucune
-  // relance à dater sur un prospect qu'on est en train de saisir.
-  const blocRelances = () => {
-    if (!x || (x.cible !== 'demande' && x.cible !== 'client')) return '';
-    const posees = COL_RELANCE.filter(c => f[c]).length;
-    if (!posees && !scope.canRgd) return '';
-    const borne = aujourdhuiParis();
-    return `
-      <div class="mail-champ plein rgp-relances">
-        <span>Relances</span>
-        <div class="rgp-relances-lignes">
-          ${COL_RELANCE.map((col, i) => `
-            <label class="rgp-relance">
-              <span>Relance ${i + 1}</span>
-              ${scope.canRgd
-                ? `<input type="date" data-relance="${i + 1}" max="${esc(borne)}"
-                     value="${esc(f[col] || '')}">`
-                : `<b>${f[col] ? esc(fmtDate(f[col])) : '—'}</b>`}
-            </label>`).join('')}
-        </div>
-        ${scope.canRgd ? `<p class="rgp-note">La date se pose toute seule quand le statut
-          passe en relance ; corrigez-la ici si vous saisissez après coup.
-          <b>Elle s’enregistre aussitôt</b>, sans attendre le bouton du bas.</p>` : ''}
-      </div>`;
-  };
 
   // ------------------------------------------------------------- le rappel
   //
@@ -558,7 +537,10 @@ export function ficheProjetRgd({ dans, cible = null, apporteurs = null,
   const piedRdv = (dejaLa) => `
     ${dejaLa.length ? `<div class="rgp-rdv-deja">
       <span>Déjà prévu</span>
-      <ul>${dejaLa.slice(0, 3).map(c => `<li>Visite technique du ${esc(fmtDate(c.date_debut_prevue))}</li>`).join('')}</ul>
+      <ul>${dejaLa.slice(0, 3).map(c => `<li>Visite technique du
+        <b>${esc(fmtDate(c.date_debut_prevue))}</b>${heureDeLaVisite(c)
+          ? ' à <b>' + esc(heureDeLaVisite(c)) + '</b>'
+          : ' <span class="muted">(heure inconnue)</span>'}</li>`).join('')}</ul>
     </div>` : ''}
     <div class="rgp-rdv-choix ${v.rdv_jour ? 'est-pris' : ''}">
       ${v.rdv_jour
@@ -567,9 +549,7 @@ export function ficheProjetRgd({ dans, cible = null, apporteurs = null,
            <p>Le rendez-vous sera créé dans l’agenda à l’enregistrement, et le
               client recevra une confirmation par e-mail${v.email ? '.'
                 : ' <b>— mais aucune adresse e-mail n’est renseignée pour l’instant.</b>'}</p>`
-        : `<b>Aucun créneau choisi</b>
-           <p>La demande s’enregistre très bien sans rendez-vous : on rappelle, on
-              cale la visite plus tard.</p>`}
+        : '<b>Aucun créneau choisi</b>'}
     </div>`;
 
   const RENDU = { projet: ecranProjet, rendezvous: ecranRendezVous, prospect: ecranProspect };
@@ -663,26 +643,6 @@ export function ficheProjetRgd({ dans, cible = null, apporteurs = null,
       const ap = dans.querySelector('#rgp-apporteur_id');
       if (ap) ap.onchange = () => { v.apporteur_id = ap.value; };
 
-      // ⚠ LES RELANCES PARTENT AU `change`, SANS REDESSINER. Un champ date
-      // émet à chaque chiffre tapé, d'où `change` ; et redessiner volerait le
-      // curseur au champ suivant, qu'on vient d'atteindre en quittant
-      // celui-ci. ⚠ `db.update` REMPLACE la ligne du cache : sans le report
-      // sur `f`, rouvrir le formulaire réafficherait l'ancienne date.
-      dans.querySelectorAll('[data-relance]').forEach(champ => {
-        champ.onchange = async () => {
-          const rang = Number(champ.dataset.relance);
-          const col = COL_RELANCE[rang - 1];
-          // Vider le champ EFFACE la date : c'est le seul moyen de défaire une
-          // relance posée par un changement de statut fait par erreur.
-          const jour = champ.value || null;
-          champ.disabled = true;
-          const r = await majDateRelance({ uuid: f.id, cible: x.cible, rang, jour });
-          champ.disabled = false;
-          if (r.ok) { f[col] = jour; return; }
-          champ.value = f[col] || '';
-          toast(r.motif, 'err');
-        };
-      });
       // Le rappel. ⚠ Les raccourcis POSENT une date dans le champ, ils ne le
       // remplacent pas : on clique « Dans 3 j » puis on ajuste si besoin.
       dans.querySelectorAll('[data-rappel]').forEach(b2 => b2.onclick = () => {
@@ -738,7 +698,31 @@ export function ficheProjetRgd({ dans, cible = null, apporteurs = null,
       // fiche effacerait l'adresse qu'elle porte.
       if (diff) diff.onchange = () => {
         v.adresse_differente = diff.checked;
-        if (diff.checked) { v.adresse = ''; v.code_postal = ''; v.ville = ''; }
+        if (diff.checked) {
+          // ⚠ ON MET DE CÔTÉ AVANT DE VIDER. Sans ça, cocher puis se raviser
+          // PERDAIT l'adresse du prospect dès que le chantier n'en a pas —
+          // trouvé à l'essai, sur une fiche dont l'adresse de chantier est
+          // vide : les trois champs partaient et rien ne les ramenait.
+          v._adresseAvant = { adresse: v.adresse, code_postal: v.code_postal, ville: v.ville };
+          v.adresse = ''; v.code_postal = ''; v.ville = '';
+        }
+        // ⚠ ET DÉCOCHER REPOSE CELLE DU CHANTIER (02/10/2026, demandé : « si on
+        // reclique dessus pour "même adresse" ça remet automatiquement
+        // l'adresse du projet »). L'enregistrement le faisait déjà — c'est
+        // `adresseProspect` qui tranche —, mais `v` restait vide : on cochait,
+        // on se ravisait, et les trois champs qu'on venait d'effacer restaient
+        // blancs sous les yeux. La valeur est désormais VRAIMENT reposée, donc
+        // ce qu'on voit est ce qui sera écrit.
+        else {
+          // Décocher repose l'adresse du CHANTIER — c'est ce que « même
+          // adresse » veut dire. À défaut, on rend ce qu'on avait mis de côté :
+          // un chantier sans adresse ne doit pas effacer celle du prospect.
+          const ch = adresseChantier(v);
+          const aUneAdresse = ch.adresse || ch.code_postal || ch.ville;
+          const remis = aUneAdresse ? ch : (v._adresseAvant || { adresse: '', code_postal: '', ville: '' });
+          v.adresse = remis.adresse || ''; v.code_postal = remis.code_postal || '';
+          v.ville = remis.ville || '';
+        }
         dessine();
         // Le curseur dans le premier des trois champs qu'on vient de vider :
         // c'est la seule raison de cocher.

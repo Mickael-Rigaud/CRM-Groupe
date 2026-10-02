@@ -5780,3 +5780,23 @@ textarea.ev-nu { resize: vertical; min-height: 40px; }
 .fp-coche input { width: 17px; height: 17px; flex: none; margin: 0; accent-color: var(--accent); }
 .fp-coche > span { font-size: 13px; }
 .fp-coche em { font-style: normal; color: var(--muted-2); font-size: 12px; }
+
+/* ---- Le commentaire d'une fiche RGD s'écrit sur place (02/10/2026) --------
+   ⚠ DEUX TEXTES, UN SEUL CHAMP. Celui du rendez-vous vient de la description
+   Google et reste en LECTURE : le mettre dans le champ le recopierait dans
+   `notes` au premier enregistrement. Il est donc posé au-dessus, teinté, pour
+   qu'on voie qu'il n'appartient pas à la même source. */
+.rgdf-texte-rdv {
+  background: var(--card-2); border-left: 3px solid var(--line-strong);
+  padding: 8px 11px; border-radius: 0 8px 8px 0; margin-bottom: 4px;
+}
+.rgdf-note-champ {
+  width: 100%; padding: 8px 10px; border: 1px solid var(--line-strong);
+  border-radius: 9px; font: inherit; font-size: 13px; line-height: 1.5;
+  resize: vertical; background: #fff; color: var(--text); min-height: 62px;
+}
+.rgdf-note-champ:focus {
+  outline: none; border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent);
+}
+.rgdf-note-champ:disabled { background: var(--card-2); color: var(--muted); }
