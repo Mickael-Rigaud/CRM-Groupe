@@ -58,6 +58,9 @@ export const TABLES = ['profiles', 'organisations', 'contacts', 'deals', 'activi
   // travail de rédaction qui n'existe nulle part ailleurs.
   'dtu_revisions',
   'rgd_apports',
+  // ⚠ `rgd_apports_sortants` est le SENS INVERSE : les affaires que RGD
+  // apporte à un partenaire. Saisie dans le CRM elle aussi, et jamais relevée.
+  'rgd_apports_sortants',
   'rgd_apporteurs', 'rgd_fournitures', 'rgd_realisations', 'rgd_carrousel',
   'rgd_reglages', 'rgd_clients', 'rgd_costructor_etat',
   'rgd_costructor_journal', 'rgd_costructor_ignores',

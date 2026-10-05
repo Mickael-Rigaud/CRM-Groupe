@@ -18,6 +18,10 @@
 // prospect ne peut être rattaché pour l'instant. Ses apports se saisissent dans
 // le tableau, qui ne dépend d'aucun identifiant de l'autre côté.
 import { db } from './db.js';
+// ⚠ LE JOUR COURANT EST IMPORTÉ, JAMAIS RECALCULÉ : `aujourdhui()` est écrit
+// une seule fois dans tout le projet, et il refuse `toISOString()` — celui-ci
+// rend de l'UTC, donc une ligne transmise à 23 h serait datée du lendemain.
+import { aujourdhui } from './rgd-etapes.js';
 
 const TABLE = 'rgd_apporteurs';
 
@@ -90,10 +94,15 @@ export const basculerActif = (id, actif) => majPartenaire(id, { actif: !!actif }
  * ⚠ ELLE EMPORTE SES APPORTS, et c'est explicite plutôt que laissé au
  * `on delete cascade` : la base l'a bien, mais le mode démo n'a aucune cascade
  * — une fiche partait et ses apports restaient, rattachés à personne.
+ *
+ * ⚠ ET SES AFFAIRES SORTANTES AVEC, pour la même raison (05/10/2026). La
+ * cascade est en base, vérifiée en préproduction ; c'est la démo qui laisserait
+ * les lignes derrière elle.
  */
 export async function supprimerPartenaire(id) {
   try {
     for (const a of apportsDe(id)) await db.remove('rgd_apports', a.id);
+    for (const a of sortantsDe(id)) await db.remove('rgd_apports_sortants', a.id);
     await db.remove(TABLE, id);
     return { ok: true };
   } catch (e) { return echec(e); }
@@ -156,5 +165,149 @@ export async function majApport(id, champs) {
 
 export async function supprimerApport(id) {
   try { await db.remove('rgd_apports', id); return { ok: true }; }
+  catch (e) { return echec(e); }
+}
+
+// ------------------------------------------- ce que RGD apporte à ses partenaires
+//
+// LE SENS INVERSE DES APPORTS (05/10/2026, demandé par Élodie : « un tableau
+// des affaires que RGD aurait pu apporter à ses partenaires »).
+//
+// ⚠ UNE AUTRE TABLE, PAS UNE COLONNE DE PLUS SUR `rgd_apports`. Celle-là dit
+// ce qu'un partenaire PRÉSENTE à RGD : son devis, la commission que RGD lui
+// doit. Ici tout est renversé — l'affaire naît chez RGD, et c'est RGD qui
+// attend la commission. Les deux sens dans la même table auraient obligé
+// chaque total de l'écran à préciser lequel il compte.
+//
+// ⚠ RIEN N'EST DEVINÉ. Une liste automatique des affaires « qui auraient pu »
+// intéresser un partenaire supposerait de savoir ce que chaque client achète :
+// au 05/10/2026, `type_demandeur` est renseigné sur 2 fiches sur 194 et un
+// budget sur 3. Elle aurait montré une ou deux lignes en ayant l'air complète.
+// La ligne se saisit, et l'écran dit ce qui la remplit.
+
+// ⚠ LA LISTE EST LE MIROIR DE LA CONTRAINTE `check` DE LA TABLE, et elle est
+// déclarée ICI et pas dans l'écran : le libellé, le ton et l'ordre de lecture
+// suivent la valeur. Deux déclarations auraient fini par proposer un état que
+// la base refuse.
+//
+// ⚠ UN SEUL AXE, ET `a_transmettre` EST LA RÉPONSE À LA DEMANDE : une ligne
+// qui y reste est exactement une affaire que RGD aurait pu apporter et ne lui
+// a pas passée. D'où `rang`, qui la fait remonter en tête de tableau — c'est
+// la seule colonne sur laquelle il y a quelque chose à faire.
+export const ETATS_SORTANT = {
+  a_transmettre: { label: 'À transmettre', ton: 'amber', rang: 0 },
+  transmise: { label: 'Transmise', ton: 'accent', rang: 1 },
+  gagnee: { label: 'Gagnée', ton: 'green', rang: 2 },
+  sans_suite: { label: 'Sans suite', ton: 'muted', rang: 3 },
+};
+
+const CHAMPS_SORTANT = ['apporteur_id', 'date_repere', 'client', 'objet',
+  'etat', 'transmise_le', 'montant_estime', 'commission', 'notes'];
+
+/** Ce que RGD a repéré pour un partenaire, du plus récent au plus ancien. */
+export const sortantsDe = (apporteurId) => db.t('rgd_apports_sortants')
+  .filter(a => a.apporteur_id === apporteurId)
+  .sort((a, b) => String(b.date_repere || '').localeCompare(String(a.date_repere || '')));
+
+/**
+ * L'ordre de lecture de l'écran, tous partenaires confondus.
+ *
+ * ⚠ CE QUI EST À TRANSMETTRE PASSE DEVANT, puis le plus récent. C'est une
+ * liste de gestes à faire avant d'être un historique — ranger par date seule
+ * enterrerait une affaire repérée il y a trois semaines sous celles d'hier.
+ * Le tri de `sort` est stable, donc l'ordre secondaire tient.
+ *
+ * ⚠ ELLE PREND SES LIGNES EN ARGUMENT ET NE LIT PAS `db` : l'écran les reçoit
+ * de `scope.rgd('rgd_apports_sortants')`, qui applique le miroir de la policy
+ * — `db.t()` rendrait le cache entier, donc les affaires de partenaires qu'un
+ * chargé d'affaires ne doit pas voir.
+ */
+export const trierSortants = (lignes) => (lignes || []).slice()
+  .sort((a, b) => String(b.date_repere || '').localeCompare(String(a.date_repere || '')))
+  .sort((a, b) => (ETATS_SORTANT[a.etat]?.rang ?? 9) - (ETATS_SORTANT[b.etat]?.rang ?? 9));
+
+/**
+ * Ce que RGD lui a apporté, et ce qu'il reste à lui passer.
+ *
+ * ⚠ LES MONTANTS NE PORTENT PAS SUR LA MÊME POPULATION, exactement comme
+ * `totauxDe` dans l'autre sens : le montant estimé compte dès qu'il est
+ * chiffré, quel que soit l'état ; la commission ne compte QUE sur une affaire
+ * `gagnee` — on n'attend pas de commission sur une affaire que le partenaire
+ * n'a pas signée, ni sur une affaire qu'on ne lui a même pas passée.
+ *
+ * ⚠ LE CALCUL PREND DES LIGNES, PAS UN PARTENAIRE, parce que l'écran en fait
+ * le total de TOUS les partenaires et la fiche celui d'un seul. Deux additions
+ * séparées auraient fini par ne plus compter la même chose, et l'écart ne se
+ * serait vu que sur un écran des deux.
+ */
+export function bilanDesSortants(lignes_) {
+  let lignes = 0, aTransmettre = 0, transmis = 0, estime = 0, commission = 0;
+  for (const a of (lignes_ || [])) {
+    lignes += 1;
+    estime += Number(a.montant_estime) || 0;
+    if (a.etat === 'a_transmettre') aTransmettre += 1;
+    if (a.etat === 'transmise' || a.etat === 'gagnee') transmis += 1;
+    if (a.etat === 'gagnee') commission += Number(a.commission) || 0;
+  }
+  return { lignes, aTransmettre, transmis, estime, commission };
+}
+
+/** Le même bilan, pour un partenaire. */
+export const bilanSortantsDe = (apporteurId) => bilanDesSortants(sortantsDe(apporteurId));
+
+/**
+ * Repérer une affaire pour un partenaire.
+ *
+ * ⚠ L'ÉTAT EST POSÉ ICI, ET PAS LAISSÉ AU `default` DE LA COLONNE — défaut
+ * trouvé à l'essai le 05/10/2026, pas à la relecture. Postgres remplit bien
+ * `a_transmettre` tout seul, mais le mode démo n'a aucune valeur par défaut :
+ * la ligne y naissait SANS état, le tableau l'affichait « À transmettre » par
+ * son repli d'affichage pendant que le bilan, lui, ne la comptait pas. Un
+ * écran qui se contredit sur la seule chose qu'on vient y lire.
+ *
+ * ⚠ `filtrer` passe APRÈS, pour qu'un état explicite l'emporte ; il ne pose que
+ * les clés réellement présentes, un appel sans état ne l'écrase donc pas.
+ */
+export async function creerSortant(champs) {
+  if (!champs.apporteur_id) return { ok: false, motif: 'affaire sans partenaire' };
+  try {
+    const ligne = await db.insert('rgd_apports_sortants', {
+      etat: 'a_transmettre',
+      ...filtrer(champs, CHAMPS_SORTANT),
+    });
+    return { ok: true, ligne };
+  } catch (e) { return echec(e); }
+}
+
+/**
+ * Modifier une ligne.
+ *
+ * ⚠ C'EST ICI QUE SE POSE LA DATE DE TRANSMISSION, pas dans l'écran : deux
+ * portes vers la même colonne finiraient par ne plus appliquer la même règle,
+ * et l'écran de la fiche n'est déjà pas le seul à écrire cette table.
+ *
+ * ⚠ ELLE EST SYMÉTRIQUE, comme `date_passage_termine` sur un chantier : posée
+ * au premier passage hors de « À transmettre », RETIRÉE si la ligne y revient.
+ * La garder ferait une ligne qui dit « pas encore transmise » en portant la
+ * date du jour où elle l'a été.
+ *
+ * ⚠ ET ELLE NE S'ÉCRASE PAS : passer de « Transmise » à « Gagnée » ne redate
+ * pas une transmission faite la semaine dernière.
+ */
+export async function majSortant(id, champs) {
+  try {
+    const patch = { ...filtrer(champs, CHAMPS_SORTANT), updated_at: new Date().toISOString() };
+    if ('etat' in patch && !('transmise_le' in champs)) {
+      const avant = db.byId('rgd_apports_sortants', id);
+      if (patch.etat === 'a_transmettre') patch.transmise_le = null;
+      else if (!avant?.transmise_le) patch.transmise_le = aujourdhui();
+    }
+    const ligne = await db.update('rgd_apports_sortants', id, patch);
+    return { ok: true, ligne };
+  } catch (e) { return echec(e); }
+}
+
+export async function supprimerSortant(id) {
+  try { await db.remove('rgd_apports_sortants', id); return { ok: true }; }
   catch (e) { return echec(e); }
 }

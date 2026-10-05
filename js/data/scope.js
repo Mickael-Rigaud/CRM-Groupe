@@ -155,6 +155,10 @@ export const scope = {
     rgd_missions: 'sous_traitant', rgd_st_commissions: 'sous_traitant',
     rgd_st_paiements: 'sous_traitant', rgd_st_pieces: 'sous_traitant',
     rgd_apports: 'apporteur',
+    // Le sens inverse — ce que RGD apporte au partenaire — pend du même
+    // partenaire, donc du même propriétaire. Miroir de
+    // `rgd_apports_sortants_acces`.
+    rgd_apports_sortants: 'apporteur',
   },
 
   rgdVoitLigne(table, r) {
