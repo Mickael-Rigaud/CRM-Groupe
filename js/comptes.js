@@ -75,6 +75,40 @@ export async function ouvrirAgendas(profil_id, { inclure_personnels = false } = 
   return rep;
 }
 
+/**
+ * Créer l'agenda Google propre à une personne dans une structure.
+ *
+ * Demandé par Élodie le 05/10/2026 : « je veux que les chargés d'affaires de RGD
+ * Renova aient leur propre Google Agenda avec leurs mails ».
+ *
+ * ⚠ UN AGENDA CRÉÉ POUR ELLE, PAS SON AGENDA PERSONNEL. Prendre son calendrier
+ * privé ferait entrer ses rendez-vous personnels dans le CRM — et demanderait
+ * qu'elle le partage elle-même, son adresse étant hors du domaine. On crée donc
+ * un agenda que le cabinet possède et on le lui partage en écriture : il
+ * apparaît dans son Google, le CRM le lit parce qu'il est à nous.
+ *
+ * ⚠ ELLE NE CRÉE JAMAIS DEUX FOIS : si la personne en a déjà un pour cette
+ * structure, le serveur le rend tel quel (`deja: true`) sans rien fabriquer.
+ */
+export async function creerAgendaPersonnel(profil_id, structure) {
+  if (CONFIG.DEMO) throw new Error('Mode démo : aucun agenda n’est créé.');
+  const jeton = await db.accessToken();
+  if (!jeton) throw new Error('Session expirée : reconnectez-vous.');
+
+  const r = await fetch(`${CONFIG.SUPABASE_URL}/functions/v1/agenda-personnel`, {
+    method: 'POST',
+    headers: {
+      apikey: CONFIG.SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${jeton}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ profil_id, structure }),
+  });
+  const rep = await r.json().catch(() => ({}));
+  if (!r.ok || rep.ok === false) throw new Error(rep.erreur || `Erreur ${r.status}`);
+  return rep;
+}
+
 // Renvoyer à quelqu'un son lien pour créer son espace.
 //
 // ⚠ ON NE DIT PAS « INVITATION » À L'UTILISATEUR (29/09/2026, demandé par

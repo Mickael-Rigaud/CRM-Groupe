@@ -1,7 +1,7 @@
 // Paramètres : utilisateurs et droits, import CSV, référentiel, entrée des leads (Make), démo.
 import { CONFIG } from '../config.js';
 import { db } from '../data/db.js';
-import { creerCompte, renvoyerLienAcces, supprimerCompte, ouvrirAgendas } from '../comptes.js';
+import { creerCompte, renvoyerLienAcces, supprimerCompte, ouvrirAgendas, creerAgendaPersonnel } from '../comptes.js';
 import { scope } from '../data/scope.js';
 import { ACTIVITIES, ACTIVITY_KEYS, CHANNELS, ROLES, ROLES_ATTRIBUABLES, LOST_REASONS, ACTIVITY_TYPES } from '../data/schema.js';
 import { esc, toast, openModal, closeModal, renderForm, readForm, confirm, csvDownload } from '../ui.js';
@@ -169,6 +169,20 @@ export const settingsPage = {
                 ? 'Cette personne ne verra que ses propres affaires, et seulement dans ces structures.'
                 : 'Sans structure, la personne ne verrait aucune donnée : choisissez-en au moins une.'}</p>
 
+          ${edition && !db.demo && v.structures.length ? `
+            <div class="mf-bloc-titre">Son agenda</div>
+            <!-- Un agenda PROPRE a la personne, cree par le cabinet et partage
+                 avec elle en ecriture : il apparait dans son Google, le CRM le
+                 lit parce qu'il nous appartient, et sa vie privee reste la
+                 sienne. Un agenda par structure qu'elle porte. -->
+            <div class="fa-chips" data-agendas>
+              ${v.structures.map(k => `<button type="button" class="btn ghost sm"
+                data-agenda="${k}">Créer son agenda ${esc(ACTIVITIES[k].label)}</button>`).join('')}
+            </div>
+            <p class="mf-aide">Elle recevra une invitation Google à accepter. S'il existe déjà, rien n'est recréé.</p>
+            <div id="u-agenda-perso"></div>
+          ` : ''}
+
           ${edition ? `
             <div class="mf-bloc-titre">État du compte</div>
             <div class="mf-seg">
@@ -218,6 +232,27 @@ export const settingsPage = {
           const mail = zone.querySelector('#u-mail'); if (!edition) mail.oninput = () => { v.email = mail.value; };
           zone.querySelector('#u-ok').onclick = valider;
           zone.querySelector('#u-suppr')?.addEventListener('click', supprimer);
+          /* ⚠ LE RETOUR S'ÉCRIT DANS UN BLOC À PART, PAS DANS UN `toast` : il
+             porte l'identifiant du calendrier créé, qu'on peut vouloir relire —
+             un message qui s'efface au bout de trois secondes le perdrait. */
+          zone.querySelectorAll('[data-agenda]').forEach(b => b.onclick = async () => {
+            const k = b.dataset.agenda;
+            const cible = zone.querySelector('#u-agenda-perso');
+            b.disabled = true; b.textContent = 'Création…';
+            try {
+              const r = await creerAgendaPersonnel(profil.id, k);
+              cible.innerHTML = r.deja
+                ? `<p class="mf-aide">Elle a déjà un agenda ${esc(ACTIVITIES[k].label)}.<br>
+                   <span class="small muted">${esc(r.calendrier)}</span></p>`
+                : `<p class="mf-aide ok">Agenda « ${esc(r.nom)} » créé.
+                   ${r.partage ? 'Une invitation Google lui est partie.' : 'Le partage a échoué : ' + esc(r.motif_partage || '')}
+                   ${r.reglage === 'ajoute' ? 'Il est raccordé au relevé.' : 'Raccordement : ' + esc(r.reglage)}<br>
+                   <span class="small muted">${esc(r.calendrier)}</span></p>`;
+            } catch (e) {
+              cible.innerHTML = `<p class="mf-aide attention">${esc(e.message)}</p>`;
+            }
+            b.disabled = false; b.textContent = `Créer son agenda ${ACTIVITIES[k].label}`;
+          });
           zone.querySelector('#u-agendas-ouvrir')?.addEventListener('click', async (ev) => {
             const b = ev.currentTarget;
             b.disabled = true; b.textContent = 'Ouverture…';
