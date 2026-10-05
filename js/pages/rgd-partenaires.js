@@ -54,10 +54,11 @@ import { poserEspace } from './espace.js';
 import { cadre, guard } from './rgd-espace.js';
 import { creerPartenaire, majPartenaire, supprimerPartenaire,
          apportsDe, equipeDe, totauxDe, creerApport, majApport, supprimerApport,
-         // Le sens inverse, depuis le 05/10/2026 : ce que RGD apporte à ses
-         // partenaires. `ETATS_SORTANT` vient du module de données et non d'ici
-         // — c'est le miroir de la contrainte `check` de la table.
-         ETATS_SORTANT, sortantsDe, trierSortants, bilanSortantsDe, bilanDesSortants,
+         // Le sens inverse, depuis le 05/10/2026 : ce que RGD a apporté à ses
+         // partenaires. Pas de liste d'états à importer — la table porte la même
+         // `issue` que sa jumelle, et c'est `ISSUES`, ci-dessous, qui habille
+         // les deux.
+         sortantsDe, trierSortants, bilanSortantsDe, bilanDesSortants,
          creerSortant, majSortant, supprimerSortant }
   from '../data/rgd-partenaires.js';
 // ⚠ LE JOUR COURANT EST IMPORTÉ, pas recalculé : `aujourdhui()` refuse
@@ -301,17 +302,29 @@ const corpsApports = (siens) => siens.map(x => ligneApport(x)).join('')
   || '<tr class="pat-vide"><td colspan="7"><div class="empty">Aucun apport. Ajoutez une ligne pour commencer.</div></td></tr>';
 
 
-// --------------------------------------- ce que RGD apporte à ses partenaires
+// --------------------------------------- ce que RGD a apporté à ses partenaires
 //
-// LE SENS INVERSE DU TABLEAU CI-DESSUS (05/10/2026, demandé par Élodie : « un
-// tableau des affaires que RGD aurait pu apporter à ses partenaires »).
+// LE SENS INVERSE DU TABLEAU CI-DESSUS (05/10/2026, demandé par Élodie).
 //
-// ⚠ « AURAIT PU » EST UN ÉTAT, PAS UN CALCUL. Une liste devinée depuis la base
-// supposerait de savoir ce que chaque client achète : `type_demandeur` est
-// renseigné sur 2 fiches sur 194, un budget sur 3 — mesuré avant d'écrire une
-// ligne de code. Elle aurait montré une ou deux lignes en ayant l'air complète,
-// ce qui est pire qu'un tableau vide. Une ligne qui reste « À transmettre » EST
-// l'affaire qu'on aurait pu lui apporter, et c'est elle que l'écran met en tête.
+// ⚠ C'EST UN REGISTRE DE CE QUI A EU LIEU, et c'est une correction du jour
+// même : « ce n'est pas "affaires que RGD peut apporter" mais plus "affaires
+// que RGD Renova a apporté" ». La première version était tournée vers l'avenir
+// — un état « À transmettre » par défaut, un tri qui remontait ce qui n'avait
+// pas encore été passé, une date de transmission posée au franchissement.
+// **Ne pas y revenir sans en reparler** : ce que RGD aurait PU apporter est une
+// autre question, et elle demanderait une autre colonne.
+//
+// ⚠ LE TABLEAU EST LE JUMEAU DE CELUI DES APPORTS, pas un cousin : même date,
+// même client, même `ISSUES` (Gagné · Perdu · Pas tranché), même règle de
+// commission. C'est pour ça qu'on réutilise `ISSUES` tel quel — une seconde
+// liste d'états aurait fini par ne plus dire la même chose que celle d'en face.
+// La seule colonne de plus est « Ce que RGD lui a apporté ».
+//
+// ⚠ LES CHAMPS SONT LIBRES (demandé le même jour : « je voudrais quelque chose
+// de plus libre dans les champs du formulaire »). Seul le partenaire est exigé
+// — c'est la clé étrangère. La date se propose à aujourd'hui et se change, le
+// reste peut rester vide et se compléter plus tard, et « ce que RGD lui a
+// apporté » est une zone de texte qui grandit avec ce qu'on y écrit.
 //
 // ⚠ LE TABLEAU DE L'ÉCRAN NE S'ÉDITE PAS, CELUI DE LA FICHE SI, et ce n'est pas
 // une inégalité de confort : toute écriture appelle `emit()`, donc le `refresh`
@@ -324,26 +337,39 @@ const corpsApports = (siens) => siens.map(x => ligneApport(x)).join('')
 // entrants qui l'ont quittée le 25/09 (« je le veux dans la fiche partenaire »).
 // La raison d'alors ne s'applique pas ici : on lisait une liste commune pour
 // savoir ce qu'UN partenaire a rapporté, ce qui demandait de le retrouver
-// d'abord. Dans ce sens-ci la question est justement transversale — à qui
-// doit-on encore quelque chose ? — et elle ne se lit pas fiche par fiche.
+// d'abord. Dans ce sens-ci la question est transversale — qu'est-ce que RGD a
+// apporté, et à qui — et elle ne se lit pas fiche par fiche.
 
-const etatOptions = (valeur) => Object.entries(ETATS_SORTANT)
-  .map(([k, e]) => `<option value="${k}"${valeur === k ? ' selected' : ''}>${esc(e.label)}</option>`)
+const issueOptions = (valeur) => ['<option value=""'
+  + (valeur ? '' : ' selected') + '>Pas tranché</option>']
+  .concat(Object.entries(ISSUES).map(([k, e]) =>
+    `<option value="${k}"${valeur === k ? ' selected' : ''}>${esc(e.label)}</option>`))
   .join('');
 
-// La date de transmission n'a pas de colonne : elle se lit sous l'état, qui est
-// la seule chose dont elle dépende. Une colonne de plus pour une date qui
-// n'existe que sur deux états sur quatre aurait été vide une ligne sur deux.
-const sousEtat = (x) => x.transmise_le
-  ? `<div class="s muted">le ${esc(fmtDate(x.transmise_le))}</div>` : '';
-
+// ⚠ UNE ZONE DE TEXTE, PAS UN CHAMP D'UNE LIGNE. Ce qu'on a apporté à quelqu'un
+// se raconte en une phrase (« le financement du projet, elle avait un compromis
+// signé ») : dans un `input`, tout ce qui dépasse vit derrière un défilement
+// horizontal invisible — le texte est là, mais illisible sans cliquer dedans et
+// parcourir au clavier. Même défaut, même remède que la colonne Commentaire de
+// l'écran Clients le 30/09.
+//
+// ⚠ ENTRÉE Y FAIT UN RETOUR À LA LIGNE, et l'enregistrement part toujours au
+// `change`, donc en quittant le champ.
 const ligneSortant = (x) => `<tr data-slig="${esc(String(x.id))}">
-  <td><input type="date" data-schamp="date_repere" value="${esc(x.date_repere || '')}"></td>
+  <td><input type="date" data-schamp="date_apport" value="${esc(x.date_apport || '')}"></td>
   <td><input data-schamp="client" value="${esc(x.client || '')}" placeholder="Nom du client"></td>
-  <td><input data-schamp="objet" value="${esc(x.objet || '')}"
-      placeholder="Financement, plans, fourniture…"></td>
-  <td><select data-schamp="etat">${etatOptions(x.etat || 'a_transmettre')}</select>
-    ${sousEtat(x)}</td>
+  <!-- ⚠ LE COMMENTAIRE EST DANS LA MEME CELLULE, SOUS CE QU'ON A APPORTE, et
+       ce n'est pas du rangement : le formulaire le propose, donc il doit se
+       relire et se corriger quelque part. Un champ qu'on ne voit pas est un
+       champ qui n'existe pas, et le premier enregistrement fait de son absence
+       une verite. Une colonne a lui aurait coute de la largeur a tout le monde
+       pour un texte souvent vide ; dessous, il ne prend la place que lorsqu'il
+       porte quelque chose. -->
+  <td><textarea class="pas-libre" rows="1" data-schamp="objet"
+      placeholder="Ce qu’on lui a apporté…">${esc(x.objet || '')}</textarea>
+    <textarea class="pas-libre pas-note" rows="1" data-schamp="notes"
+      placeholder="Commentaire…">${esc(x.notes || '')}</textarea></td>
+  <td><select data-schamp="issue">${issueOptions(x.issue || '')}</select></td>
   <td><input type="number" step="100" data-schamp="montant_estime"
       value="${x.montant_estime != null ? esc(String(x.montant_estime)) : ''}" placeholder="€"></td>
   <td><input type="number" step="10" data-schamp="commission"
@@ -352,25 +378,44 @@ const ligneSortant = (x) => `<tr data-slig="${esc(String(x.id))}">
 </tr>`;
 
 const corpsSortants = (lignes) => lignes.map(x => ligneSortant(x)).join('')
-  || `<tr class="pat-vide"><td colspan="7"><div class="empty">Rien de repéré pour lui.
-       Ajoutez une ligne dès qu’une affaire de RGD peut l’intéresser.</div></td></tr>`;
+  || `<tr class="pat-vide"><td colspan="7"><div class="empty">Rien d’apporté pour l’instant.
+       Ajoutez une ligne dès que RGD lui a passé une affaire.</div></td></tr>`;
+
+// La hauteur suit le contenu.
+//
+// ⚠ `scrollHeight` SE LIT APRÈS AVOIR REMIS LA HAUTEUR À ZÉRO : sans cette
+// remise, un champ qu'on raccourcit garderait la hauteur qu'il avait au plus
+// long.
+//
+// ⚠ ET IL FAUT Y AJOUTER LES BORDURES, défaut mesuré à l'écran : `scrollHeight`
+// compte le contenu et les marges intérieures, **pas** les bordures, alors que
+// la hauteur posée est interprétée en `border-box`, qui les compte. Deux pixels
+// manquaient, donc la dernière ligne restait rognée — assez peu pour ne pas se
+// voir, assez pour couper les jambages. On lit l'épaisseur plutôt que d'écrire
+// « + 2 » : une bordure qui change d'épaisseur un jour ne doit pas rouvrir ce
+// défaut.
+function calerHauteur(champ) {
+  champ.style.height = 'auto';
+  const bordures = champ.offsetHeight - champ.clientHeight;
+  champ.style.height = `${Math.min(champ.scrollHeight + bordures, 180)}px`;
+}
 
 // Le bilan, en une phrase. Ce qui vaut zéro ne s'écrit pas : « 0 € de
-// commission attendue » sur une ligne juste repérée se lit comme un reproche.
+// commission attendue » sur une ligne qu'on vient de poser se lit comme un
+// reproche.
 //
-// ⚠ LA PHRASE DU VIDE EST FOURNIE PAR L'APPELANT, et ce n'est pas un détail :
-// la même fonction sert la fiche d'UN partenaire et le tableau de TOUS. « Aucune
-// affaire repérée pour lui » s'affichait sur l'écran commun, où il n'y a pas de
-// « lui » — vu à l'écran, pas en relisant le code.
-const phraseBilan = (b, siVide = 'Aucune affaire repérée pour lui.') => [
-  b.aTransmettre ? `<b>${b.aTransmettre}</b> à transmettre` : '',
-  b.transmis ? `${b.transmis} transmise${b.transmis > 1 ? 's' : ''}` : '',
+// ⚠ LA PHRASE DU VIDE EST FOURNIE PAR L'APPELANT : la même fonction sert la
+// fiche d'UN partenaire et le tableau de TOUS. « Rien d'apporté à ce partenaire »
+// s'affichait sur l'écran commun, où il n'y a pas de « ce partenaire ».
+const phraseBilan = (b, siVide = 'Rien d’apporté à ce partenaire pour le moment.') => [
+  b.apports ? `<b>${b.apports}</b> affaire${b.apports > 1 ? 's' : ''} apportée${b.apports > 1 ? 's' : ''}` : '',
+  b.gagnes ? `${b.gagnes} gagnée${b.gagnes > 1 ? 's' : ''}` : '',
   b.estime ? `${esc(eur(b.estime))} estimés` : '',
   b.commission ? `${esc(eur(b.commission))} de commission attendue` : '',
 ].filter(Boolean).join(' · ') || siVide;
 
 /**
- * Le tableau des sortants dans la fiche : mêmes gestes que celui des apports.
+ * Le tableau des apports sortants dans la fiche : mêmes gestes que son jumeau.
  *
  * ⚠ ON NE REDESSINE PAS LA FICHE À CHAQUE CELLULE, même raison que pour les
  * apports : `change` part quand on QUITTE le champ, souvent pour aller au
@@ -390,7 +435,7 @@ function brancherSortants(m, a, apres) {
   const majBilan = () => {
     const b = bilanSortantsDe(a.id);
     const n = m.querySelector('#pa-sn');
-    if (n) n.textContent = String(b.lignes);
+    if (n) n.textContent = String(b.apports);
     const p = m.querySelector('#pa-sbilan');
     if (p) p.innerHTML = phraseBilan(b);
   };
@@ -406,6 +451,15 @@ function brancherSortants(m, a, apres) {
     corps.querySelectorAll('[data-slig]').forEach(tr => {
       const ligneId = tr.dataset.slig;
 
+      // Les zones de texte prennent leur hauteur au rendu, puis à chaque
+      // frappe. ⚠ `querySelectorAll` ET NON `querySelector` : la cellule en
+      // porte DEUX depuis que le commentaire s'y lit, et n'en caler qu'une
+      // laisserait la seconde rognée à une ligne.
+      tr.querySelectorAll('.pas-libre').forEach(libre => {
+        calerHauteur(libre);
+        libre.oninput = () => calerHauteur(libre);
+      });
+
       tr.querySelectorAll('[data-schamp]').forEach(el => {
         el.onchange = async () => {
           const cle = el.dataset.schamp;
@@ -416,17 +470,6 @@ function brancherSortants(m, a, apres) {
           const r = await majSortant(ligneId, { [cle]: valeur });
           if (!r.ok) return toast(`Non enregistré — ${r.motif}`, 'err');
           dire('Enregistré');
-
-          // ⚠ CHANGER L'ÉTAT DÉPLACE LA DATE DE TRANSMISSION, posée ou retirée
-          // par `majSortant`. On refait la seule ligne qui la porte, SOUS le
-          // menu, sans refabriquer la cellule : la refaire en entier
-          // remplacerait le menu que la personne vient d'utiliser et
-          // demanderait de rebrancher son gestionnaire.
-          if (cle === 'etat') {
-            const cellule = el.closest('td');
-            cellule.querySelector('.s')?.remove();
-            if (r.ligne?.transmise_le) el.insertAdjacentHTML('afterend', sousEtat(r.ligne));
-          }
           majBilan();
           apres?.();
         };
@@ -445,9 +488,10 @@ function brancherSortants(m, a, apres) {
 
   const bAjout = m.querySelector('#pa-sajout');
   if (bAjout) bAjout.onclick = async () => {
-    // Une ligne neuve est repérée aujourd'hui et reste à transmettre : c'est
-    // l'état par défaut de la colonne, rien à poser ici.
-    const r = await creerSortant({ apporteur_id: a.id, date_repere: aujourdhui() });
+    // ⚠ SEULE LA DATE EST PROPOSÉE, et elle se change : c'est le seul champ
+    // dont la bonne valeur est devinable. L'issue reste vide — « pas tranché »
+    // est l'état d'une affaire qu'on vient de passer.
+    const r = await creerSortant({ apporteur_id: a.id, date_apport: aujourdhui() });
     if (!r.ok) return toast(`Ligne non ajoutée — ${r.motif}`, 'err');
     redessinerCorps();
     corps.querySelector(`[data-slig="${CSS.escape(String(r.ligne.id))}"] [data-schamp="client"]`)?.focus();
@@ -455,18 +499,23 @@ function brancherSortants(m, a, apres) {
 }
 
 /**
- * Repérer une affaire depuis l'écran, pour un partenaire qu'on choisit.
+ * Enregistrer une affaire apportée depuis l'écran, pour un partenaire qu'on
+ * choisit.
+ *
+ * ⚠ TOUS LES CHAMPS SONT LÀ ET AUCUN N'EST EXIGÉ, sauf le partenaire (05/10/2026,
+ * demandé : « je voudrais quelque chose de plus libre dans les champs du
+ * formulaire »). La première version n'en posait que quatre et renvoyait dans
+ * la fiche pour le reste : un formulaire qui ne sait pas tout prendre oblige à
+ * finir ailleurs ce qu'on avait sous la main.
  *
  * ⚠ UNE FENÊTRE ICI, ET UNE LIGNE VIDE DANS LA FICHE : ce ne sont pas deux
  * façons de faire la même chose. Dans la fiche le partenaire est connu, donc
  * une ligne vide suffit ; depuis l'écran il reste à désigner, et il n'y a pas
- * de cellule où le faire — la colonne « Partenaire » du tableau de l'écran est
- * en lecture, comme le reste.
+ * de cellule où le faire — le tableau de l'écran est en lecture.
  *
  * ⚠ TOUS LES PARTENAIRES SONT PROPOSÉS, fournisseurs compris : on envoie un
  * client chez un fournisseur de cuisines aussi bien que chez un courtier. Les
- * inactifs le sont aussi, et le disent — on peut repérer une affaire pour
- * quelqu'un qu'on s'apprête à réactiver.
+ * inactifs le sont aussi, et le disent.
  */
 function nouveauSortant(apres, apporteurIdDefaut = '') {
   const tous = scope.rgd('rgd_apporteurs').slice()
@@ -480,47 +529,66 @@ function nouveauSortant(apres, apporteurIdDefaut = '') {
 
   const html = `
     <form id="pa-sform" class="paf">
-      ${bloc('L’affaire', `
+      ${bloc('L’affaire apportée', `
         <label class="paf-champ">
           <span>Partenaire</span>
           <select name="apporteur_id" required>
             <option value="">Choisir…</option>${options}
           </select>
         </label>
+        ${champ('date_apport', 'Date de l’apport', aujourdhui(), { type: 'date' })}
         ${champ('client', 'Client', '', { placeholder: 'Nom du client' })}
-        ${champ('objet', 'Ce qu’on peut lui confier', '',
-          { large: true, placeholder: 'Financement du projet, plans, fourniture de la cuisine…' })}
-        ${champ('montant_estime', 'Montant estimé pour lui (€)', '', { type: 'number' })}`)}
-      <p class="paf-mot">Elle est repérée aujourd’hui et reste <b>à transmettre</b>
-        jusqu’à ce que vous disiez le contraire depuis la fiche du partenaire.</p>
+        <label class="paf-champ est-large"><span>Ce que RGD lui a apporté</span>
+          <textarea name="objet" rows="3"
+            placeholder="Le financement du projet, des plans, la fourniture de la cuisine… écrivez librement."></textarea></label>`)}
+
+      ${bloc('Où ça en est', `
+        ${liste('issue', 'Issue',
+          [['', 'Pas tranché']].concat(Object.entries(ISSUES).map(([k, e]) => [k, e.label])), '')}
+        ${champ('montant_estime', 'Montant estimé pour lui (€)', '', { type: 'number' })}
+        ${champ('commission', 'Commission attendue (€)', '', { type: 'number' })}
+        <label class="paf-champ est-large"><span>Commentaire</span>
+          <textarea name="notes" rows="2"
+            placeholder="Ce qu’il faut se rappeler sur cette affaire."></textarea></label>`)}
+
+      <p class="paf-mot">Seul le <b>partenaire</b> est obligatoire. Tout le reste
+        peut rester vide et se compléter plus tard depuis sa fiche.</p>
       <div class="paf-pied">
         <button type="button" class="btn ghost" id="pa-sannuler">Annuler</button>
         <span class="grow"></span>
-        <button type="submit" class="btn primary">Repérer l’affaire</button>
+        <button type="submit" class="btn primary">Enregistrer l’apport</button>
       </div>
     </form>`;
 
-  openModal('Repérer une affaire pour un partenaire', html, { wide: true, onOpen: (m) => {
+  openModal('Une affaire apportée à un partenaire', html, { wide: true, onOpen: (m) => {
     m.querySelector('#pa-sannuler').onclick = () => closeModal();
     m.querySelector('#pa-sform').onsubmit = async (e) => {
       e.preventDefault();
       const f = new FormData(e.target);
       const lu = (k) => String(f.get(k) || '').trim();
-      const montant = lu('montant_estime');
+      // ⚠ UN CHAMP VIDE PART À `null`, jamais à `''` : une chaîne vide en base
+      // ne se distingue plus d'une valeur qu'on n'a jamais remplie. Même règle
+      // que le formulaire du partenaire, juste au-dessus.
+      const ou = (v) => (v === '' ? null : v);
+      const nb = (v) => (v === '' ? null : Number(v));
       const r = await creerSortant({
         apporteur_id: lu('apporteur_id'),
-        date_repere: aujourdhui(),
-        client: lu('client') || null,
-        objet: lu('objet') || null,
-        montant_estime: montant === '' ? null : Number(montant),
+        date_apport: ou(lu('date_apport')),
+        client: ou(lu('client')),
+        objet: ou(lu('objet')),
+        issue: ou(lu('issue')),
+        montant_estime: nb(lu('montant_estime')),
+        commission: nb(lu('commission')),
+        notes: ou(lu('notes')),
       });
       if (!r.ok) return toast(`Non enregistré — ${r.motif}`, 'err');
       closeModal();
-      toast('Affaire repérée');
+      toast('Apport enregistré');
       apres?.();
     };
   } });
 }
+
 /**
  * La fiche d'un partenaire.
  *
@@ -635,7 +703,7 @@ function ouvrirFichePartenaire(id, apres, opts = {}) {
         </section>
 
         <section class="rgdf-bloc rgdf-large" id="pa-sortants">
-          <h3>Ce que RGD lui apporte <span class="rgdf-compte" id="pa-sn">${sortants.length}</span></h3>
+          <h3>Ce que RGD lui a apporté <span class="rgdf-compte" id="pa-sn">${sortants.length}</span></h3>
           <p class="pas-bilan" id="pa-sbilan">${phraseBilan(bil)}</p>
           <div class="table-wrap pat-wrap">
             <table class="pat pas">
@@ -646,8 +714,8 @@ function ouvrirFichePartenaire(id, apres, opts = {}) {
                    est écrit sous le tableau. Sur l'écran, où la place existe,
                    l'intitulé reste entier. AUCUN ACCENT GRAVE ICI : il
                    refermerait le gabarit, et l'écran resterait blanc. -->
-              <thead><tr><th>Repérée le</th><th>Client</th><th>Ce qu’on peut lui confier</th>
-                <th>État</th><th class="num">Montant estimé</th>
+              <thead><tr><th>Date</th><th>Client</th><th>Ce que RGD lui a apporté</th>
+                <th>Issue</th><th class="num">Montant estimé</th>
                 <th class="num">Commission</th><th></th></tr></thead>
               <tbody id="pa-scorps">${corpsSortants(sortants)}</tbody>
             </table>
@@ -657,10 +725,11 @@ function ouvrirFichePartenaire(id, apres, opts = {}) {
             <span class="grow"></span>
             <span class="small muted" id="pa-setat"></span>
           </div>` : ''}
-          <p class="rgdf-source">Une ligne reste <b>à transmettre</b> tant que l’affaire ne
-            lui a pas été passée : ce sont celles-là qu’on aurait pu lui apporter. La date de
-            transmission se pose toute seule au changement d’état, et la commission n’entre
-            dans le bilan que sur une affaire <b>gagnée</b> par lui.</p>
+          <p class="rgdf-source">Chaque cellule s’enregistre quand vous en sortez.
+            « Ce que RGD lui a apporté » et le <b>commentaire</b> juste dessous s’écrivent
+            librement, sur autant de lignes qu’il faut. L’issue peut rester sur
+            <b>Pas tranché</b> : on note l’apport le jour où on le fait, avant de savoir.
+            La commission n’entre dans le bilan que sur une affaire <b>gagnée</b> par lui.</p>
         </section>
       </div>`;
 
@@ -891,9 +960,9 @@ export const rgdPartenairesPage = {
       // rendu le cache entier, donc les affaires de partenaires qu'un chargé
       // d'affaires n'a pas à voir.
       //
-      // ⚠ LA RECHERCHE ATTRAPE AUSSI LE CLIENT ET L'OBJET, pas seulement le
-      // partenaire : on cherche « Chevalier » pour savoir si on a pensé à la
-      // passer à quelqu'un. Une ligne peut donc apparaître ici alors que son
+      // ⚠ LA RECHERCHE ATTRAPE AUSSI LE CLIENT ET CE QU'ON LUI A APPORTÉ, pas
+      // seulement le partenaire : on cherche « Chevalier » pour retrouver à qui
+      // on l'a passée. Une ligne peut donc apparaître ici alors que son
       // partenaire ne figure dans aucune des trois sections du dessus — c'est
       // voulu, la question posée n'est pas la même.
       const sectionSortants = () => {
@@ -910,25 +979,31 @@ export const rgdPartenairesPage = {
 
         const ligneS = (x) => {
           const p = parId.get(String(x.apporteur_id));
-          const e = ETATS_SORTANT[x.etat] || ETATS_SORTANT.a_transmettre;
+          // ⚠ PAS D'ISSUE SE DIT « Pas tranché », jamais un tiret : on saisit
+          // l'apport le jour où on le fait, avant de savoir — c'est une réponse,
+          // pas une case oubliée. Même convention qu'en face.
+          const e = ISSUES[x.issue];
+          const issue = e
+            ? `<span class="chip ${e.ton}">${esc(e.label)}</span>`
+            : '<span class="chip muted">Pas tranché</span>';
           // ⚠ LA COMMISSION S'AFFICHE EN GRIS QUAND ELLE NE COMPTE PAS. Une
-          // ligne pas encore gagnée peut déjà porter le montant convenu : le
-          // cacher ferait croire qu'il n'a pas été saisi, le mettre en gras le
+          // affaire pas encore gagnée peut déjà porter le montant convenu : le
+          // cacher ferait croire qu'il n'a pas été noté, le mettre en gras le
           // ferait lire comme un dû. Le total, lui, ne prend que les gagnées.
           const com = x.commission
-            ? (x.etat === 'gagnee'
+            ? (x.issue === 'gagne'
               ? `<b>${esc(eur(x.commission))}</b>`
               : `<span class="muted">${esc(eur(x.commission))}</span>`)
             : '<span class="muted">—</span>';
           return `<tr data-vers-sortants="${esc(String(x.apporteur_id))}">
             <td><b>${esc(nomDe(p))}</b>${p.profession
               ? `<div class="s muted">${esc(p.profession)}</div>` : ''}</td>
-            <td class="pa-serre">${x.date_repere
-              ? esc(fmtDate(x.date_repere)) : '<span class="muted">—</span>'}</td>
+            <td class="pa-serre">${x.date_apport
+              ? esc(fmtDate(x.date_apport)) : '<span class="muted">—</span>'}</td>
             <td>${x.client ? esc(x.client) : '<span class="muted">—</span>'}</td>
-            <td>${x.objet ? esc(x.objet) : '<span class="muted">—</span>'}</td>
-            <td><span class="chip ${e.ton}">${esc(e.label)}</span>${x.transmise_le
-              ? `<div class="s muted">le ${esc(fmtDate(x.transmise_le))}</div>` : ''}</td>
+            <td>${x.objet ? esc(x.objet) : '<span class="muted">—</span>'}${x.notes
+              ? `<div class="s muted">${esc(x.notes)}</div>` : ''}</td>
+            <td class="pa-serre">${issue}</td>
             <td class="num">${x.montant_estime
               ? esc(eur(x.montant_estime)) : '<span class="muted">—</span>'}</td>
             <td class="num">${com}</td>
@@ -942,29 +1017,29 @@ export const rgdPartenairesPage = {
         return `
         <section class="card pa-sect" style="--pa-trait:var(--green)">
           <div class="pa-head">
-            <h3>Affaires que RGD peut apporter</h3>
+            <h3>Affaires apportées par RGD Renova</h3>
             <span class="pa-compte" style="background:var(--green)">${lignes.length}</span>
             <span class="grow"></span>
             ${state.ecriture
-              ? '<button type="button" class="btn primary" id="pa-reperer">+ Repérer une affaire</button>'
+              ? '<button type="button" class="btn primary" id="pa-reperer">+ Une affaire apportée</button>'
               : ''}
           </div>
           ${resume ? `<p class="pa-note">${resume}</p>` : ''}
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Partenaire</th><th>Repérée le</th><th>Client</th>
-                <th>Ce qu’on peut lui confier</th><th>État</th>
+              <thead><tr><th>Partenaire</th><th>Date</th><th>Client</th>
+                <th>Ce que RGD lui a apporté</th><th>Issue</th>
                 <th class="num">Montant estimé</th><th class="num">Commission attendue</th></tr></thead>
               <tbody>${lignes.map(ligneS).join('')
                 || `<tr><td colspan="7"><div class="empty">${state.q
-                  ? 'Aucune affaire repérée ne correspond à cette recherche.'
-                  : 'Rien de repéré pour l’instant. Notez ici une affaire de RGD qui peut '
-                    + 'intéresser un partenaire — un financement pour un courtier, des plans '
-                    + 'pour un architecte, une cuisine pour un fournisseur.'}</div></td></tr>`}</tbody>
+                  ? 'Aucune affaire apportée ne correspond à cette recherche.'
+                  : 'Rien d’enregistré pour l’instant. Notez ici les affaires que RGD a '
+                    + 'passées à un partenaire — un financement à un courtier, des plans à '
+                    + 'un architecte, une cuisine à un fournisseur.'}</div></td></tr>`}</tbody>
             </table>
           </div>
-          <p class="pa-note">Celles qui restent <b>à transmettre</b> sont les affaires qu’on
-            aurait pu apporter et qui ne l’ont pas été. ${state.ecriture
+          <p class="pa-note">La commission n’entre dans le total que sur une affaire
+            <b>gagnée</b> par le partenaire. ${state.ecriture
               ? 'Un clic sur une ligne ouvre la fiche du partenaire, où elles se modifient.'
               : 'Lecture seule.'}</p>
         </section>`;

@@ -5860,29 +5860,54 @@ textarea.ev-nu { resize: vertical; min-height: 40px; }
 .note-champ.est-repris { color: var(--muted); font-style: italic; }
 .note-champ.est-repris:focus { color: var(--text); font-style: normal; }
 
-/* ---- ce que RGD apporte a ses partenaires (05/10/2026) ---- */
+/* ---- ce que RGD a apporte a ses partenaires (05/10/2026) ---- */
 /* Le tableau de la fiche REPREND `.pat` — memes champs, meme croix, meme pied :
-   deux habillages pour deux tableaux jumeaux auraient divergé au premier
-   reglage. Seules ses deux premieres colonnes ne tombent pas dans le meme
-   ordre (la date passe devant le texte libre), d'ou ces deux regles.
+   c'est le jumeau de celui des apports, et deux habillages pour deux tableaux
+   jumeaux auraient diverge au premier reglage. Seules ses deux premieres
+   colonnes ne tombent pas dans le meme ordre (la date passe devant le texte
+   libre), d'ou ces deux regles.
 
    ⚠ LA DOUBLE CLASSE N'EST PAS DECORATIVE : `.pat th:nth-child(1)` pese (0,2,1)
    et `.pas th:nth-child(1)` exactement autant, donc seul l'ordre dans le
    fichier trancherait — un jour ou l'autre ces lignes remonteraient. `.pas.pat`
-   pese (0,3,1) et gagne quoi qu'il arrive. */
+   pese (0,3,1) et gagne quoi qu'il arrive.
+
+   La colonne 4 porte « Pas tranche », exactement comme sa jumelle : les 132 px
+   de `.pat` lui vont, rien a redire ici. (La version du matin portait « A
+   transmettre » et demandait un `min-width` de 152 px.) */
 .pas.pat th:nth-child(1), .pas.pat td:nth-child(1) { width: 130px; min-width: 0; }
-.pas.pat th:nth-child(2), .pas.pat td:nth-child(2) { width: 20%; min-width: 155px; }
-/* ⚠ UN `min-width`, PAS SEULEMENT UN `width` : en `table-layout: auto` la
-   largeur n'est qu'un souhait, et la colonne retombait a 102 px — « À
-   transmettre » se lisait « À transmi ». Le meme defaut que « Pas tranche »
-   quelques lignes plus haut, avec un libelle plus long.
-   ⚠ ET IL NE SE MESURE PAS SUR `select.scrollWidth`, qui ne dit rien de la
-   largeur du texte d'une option : il repondait « ca tient » sur une capture ou
-   le mot etait coupe. C'est l'image qui l'a dit. */
-.pas.pat th:nth-child(4), .pas.pat td:nth-child(4) { width: 152px; min-width: 152px; }
-/* La date de transmission vit SOUS le menu d'etat, dans la meme cellule : une
-   colonne de plus aurait ete vide sur deux etats sur quatre. */
-.pas.pat td:nth-child(4) .s { margin-top: 3px; }
+/* ⚠ LE CLIENT PREND MOINS QUE CHEZ SA JUMELLE, et c'est mesure : la colonne
+   suivante porte ici du texte libre, et a 20 % le nom prenait 198 px pendant
+   que la phrase s'entassait sur 212. Un nom tient en deux mots, pas une
+   phrase. */
+.pas.pat th:nth-child(2), .pas.pat td:nth-child(2) { width: 140px; min-width: 120px; }
+
+/* ⚠ « CE QUE RGD LUI A APPORTE » EST UNE ZONE DE TEXTE, PAS UN CHAMP D'UNE
+   LIGNE, et c'est demande : « je voudrais quelque chose de plus libre dans les
+   champs du formulaire ». Dans un `input`, tout ce qui depasse vit derriere un
+   defilement horizontal invisible. Pas de `rows` fixe non plus : `calerHauteur`
+   cale la hauteur sur le contenu, sinon on remplace un defilement horizontal
+   par un vertical dans une case plus petite encore. Meme remede que la colonne
+   Commentaire de l'ecran Clients. */
+/* ⚠ `.pat input, .pat select` NE L'ATTRAPE PAS — le selecteur ne nomme pas
+   `textarea`, donc la zone de texte gardait l'habillage par defaut du
+   navigateur : 2 px de marge interieure la ou ses voisines en ont 6, et son
+   texte ne tombait pas a la meme hauteur qu'elles dans la meme ligne. On
+   recopie donc l'habillage de ses voisines, a l'identique. */
+.pas.pat textarea {
+  width: 100%; min-width: 0; display: block; font: inherit; font-size: 13.5px;
+  padding: 6px 8px; border-radius: 7px; background: transparent;
+  border: 1px solid transparent; color: var(--text);
+  resize: none; overflow: hidden; line-height: 1.35; }
+/* Le commentaire se lit comme une note sous ce qu'on a apporte : plus petit,
+   plus gris. Il reste un vrai champ, pas un affichage. */
+.pas.pat textarea.pas-note { font-size: 12px; color: var(--muted); margin-top: 1px; }
+.pas.pat textarea.pas-note:focus { color: var(--text); }
+.pas.pat textarea::placeholder { color: var(--muted); opacity: .7; }
+.pas.pat textarea:hover { border-color: var(--line); background: #fff; }
+.pas.pat textarea:focus { outline: none; background: #fff;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent); }
 
 /* Le bilan en une phrase, sous le titre du bloc. Il n'est pas en tuiles : les
    quatre tuiles de l'en-tete disent ce que le partenaire RAPPORTE, et deux
@@ -5897,7 +5922,7 @@ textarea.ev-nu { resize: vertical; min-height: 40px; }
 
 /* Une ligne d'affaire s'ouvre comme une ligne de partenaire, et se signale de
    la meme facon. ⚠ L'ATTRIBUT PORTE LA REGLE, PAS LA SECTION : sans lui, la
-   ligne « rien de repere pour l'instant » prendrait le curseur d'un lien et
+   ligne « rien d'enregistre pour l'instant » prendrait le curseur d'un lien et
    inviterait a cliquer sur du vide. */
 .pa-sect tbody tr[data-vers-sortants] { cursor: pointer; }
 .pa-sect tbody tr[data-vers-sortants]:hover { background: var(--card-2); }
@@ -5906,6 +5931,6 @@ textarea.ev-nu { resize: vertical; min-height: 40px; }
    distribuait seulement au plus large. Constate a l'ecran, pas devine. */
 .pa-sect td.pa-serre { white-space: nowrap; }
 
-/* Un mot d'explication dans le formulaire de reperage, au-dessus du pied. */
+/* Un mot d'explication dans le formulaire, au-dessus du pied. */
 .paf-mot { margin: 2px 0 0; font-size: 12px; color: var(--muted); }
 .paf-mot b { color: var(--text); }

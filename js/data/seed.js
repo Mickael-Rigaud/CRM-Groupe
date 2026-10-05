@@ -423,35 +423,44 @@ export const SEED = {
       issue: 'gagne', montant_devis: 29000, montant_commission: 1450 },
   ],
 
-  // Le sens inverse : ce que RGD apporte (ou pourrait apporter) a ses
-  // partenaires. Sans ces lignes, le tableau de l'ecran Partenaires et le bloc
-  // de la fiche ne s'essayaient que sur la production.
+  // Le sens inverse : ce que RGD A APPORTE a ses partenaires. Sans ces lignes,
+  // le tableau de l'ecran Partenaires et le bloc de la fiche ne s'essayaient
+  // que sur la production.
   //
-  // Les quatre etats sont couverts, et deux cas distinguent le juste du faux :
-  //  · `srt1` est a transmettre AVEC une commission saisie — elle ne doit PAS
-  //    entrer dans le total, on ne touche rien sur une affaire qu'on n'a meme
-  //    pas passee ;
-  //  · `srt3` est transmise mais pas gagnee — sa commission non plus.
-  // Seule `srt2` compte, soit 700 € sur la fiche de Claire Vasseur.
+  // Memes colonnes que `rgd_apports` en face, `issue` comprise — et deux cas
+  // distinguent ici le juste du faux :
+  //  · `srt2` et `srt3` portent une commission SANS etre gagnees : elle ne doit
+  //    PAS entrer dans le total, on n'attend rien d'une affaire que le
+  //    partenaire n'a pas signee ;
+  //  · `srt4` est perdue, sa ligne reste au registre.
+  // Seule `srt1` compte, soit 700 € sur la fiche de Claire Vasseur.
   //
-  // `srt5` est sur un FOURNISSEUR : on envoie un client chez lui comme chez un
+  // `srt5` est sur un FOURNISSEUR : on lui envoie un client comme a un
   // courtier, et c'est ce qui prouve que le tableau ne se limite pas aux
   // apporteurs. Les clients sont ceux des apports, dans l'autre sens : la meme
   // famille peut arriver par un partenaire et repartir vers un autre.
+  //
+  // Les textes de `objet` sont des PHRASES, pas des etiquettes : c'est ce qui
+  // met a l'epreuve la zone de texte qui grandit avec son contenu.
   rgd_apports_sortants: [
-    { id: 'srt1', apporteur_id: 'ap1', date_repere: '2026-09-19', client: 'Mme Chevalier',
-      objet: 'Financement des travaux', etat: 'a_transmettre',
-      montant_estime: 63500, commission: 500 },
-    { id: 'srt2', apporteur_id: 'ap1', date_repere: '2026-08-18', client: 'Famille Ferrand',
-      objet: 'Pret travaux et regroupement de credits', etat: 'gagnee',
-      transmise_le: '2026-08-20', montant_estime: 142000, commission: 700 },
-    { id: 'srt3', apporteur_id: 'ap2', date_repere: '2026-09-24', client: 'SCI du Pre Long',
-      objet: 'Plans de la surelevation', etat: 'transmise',
-      transmise_le: '2026-09-25', montant_estime: 9000, commission: 450 },
-    { id: 'srt4', apporteur_id: 'ap2', date_repere: '2026-07-05', client: 'M. Delaunay',
-      objet: 'Plans — le client a renonce', etat: 'sans_suite', montant_estime: 7000 },
-    { id: 'srt5', apporteur_id: 'ap4', date_repere: '2026-09-30', client: 'Famille Renard',
-      objet: 'Fourniture de la cuisine', etat: 'a_transmettre', montant_estime: 11000 },
+    { id: 'srt1', apporteur_id: 'ap1', date_apport: '2026-08-18', client: 'Famille Ferrand',
+      objet: 'Le financement du projet : compromis signe, pas encore de pret.',
+      issue: 'gagne', montant_estime: 142000, commission: 700,
+      // Le commentaire se relit SOUS ce qu'on a apporte, dans la meme
+      // cellule : sans cette ligne de demo, le champ du formulaire
+      // s'enregistrait sans que rien ne le reaffiche.
+      notes: 'Commission versee a la signature, pas au depot du dossier.' },
+    { id: 'srt2', apporteur_id: 'ap1', date_apport: '2026-09-19', client: 'Mme Chevalier',
+      objet: 'Le financement des 63 500 € de travaux, elle cherchait une banque.',
+      issue: null, montant_estime: 63500, commission: 500 },
+    { id: 'srt3', apporteur_id: 'ap2', date_apport: '2026-09-24', client: 'SCI du Pre Long',
+      objet: 'Les plans de la surelevation et le depot du permis.',
+      issue: null, montant_estime: 9000, commission: 450 },
+    { id: 'srt4', apporteur_id: 'ap2', date_apport: '2026-07-05', client: 'M. Delaunay',
+      objet: 'Des plans pour l\'extension. Le client a renonce au chantier.',
+      issue: 'perdu', montant_estime: 7000 },
+    { id: 'srt5', apporteur_id: 'ap4', date_apport: '2026-09-30', client: 'Famille Renard',
+      objet: 'La fourniture de la cuisine.', issue: null, montant_estime: 11000 },
   ],
 
   rgd_sous_traitants: [
