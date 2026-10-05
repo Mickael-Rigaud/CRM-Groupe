@@ -18,10 +18,8 @@
 // qu'on a oublié de ranger, et la voir est précisément l'intérêt du tableau.
 // Elle ne s'affiche que si elle porte quelque chose.
 import { db } from '../data/db.js';
-import { scope } from '../data/scope.js';
-import { ACTIVITIES } from '../data/schema.js';
 import { esc, daysSince, relDay, userName } from '../ui.js';
-import { actType, structureDe, contexteTache } from './activity.js';
+import { actType, structureDe, contexteTache, structuresDeLUtilisateur } from './activity.js';
 
 const ecart = (a) => (a.due_date ? daysSince(a.due_date) : null);
 
@@ -103,11 +101,22 @@ function carte(a, recentes) {
  * cette fonction range, elle ne décide pas de ce qui entre.
  */
 export function kanbanHtml(taches, recentes) {
-  const colonnes = Object.values(ACTIVITIES)
-    .filter(a => scope.activityKeys.includes(a.key))
+  // ⚠ LES COLONNES VIENNENT DE `structuresDeLUtilisateur`, PAS DE `ACTIVITIES` :
+  // depuis le 05/10/2026 une tâche peut appartenir à un MODULE — la gestion
+  // locative — qui n'est pas une activité et n'a ni espace ni pipeline. La
+  // liste est écrite une seule fois, dans `activity.js`, et sert aussi aux
+  // pastilles de « Ma to do list » et au formulaire de tâche.
+  const colonnes = structuresDeLUtilisateur()
     .map(a => ({ cle: a.key, nom: a.label, court: a.short, couleur: a.color, encre: a.accent,
                  l: taches.filter(t => structureDe(t) === a.key) }));
-  const orphelines = taches.filter(t => !structureDe(t));
+  // ⚠ « SANS STRUCTURE » RAMASSE TOUT CE QU'AUCUNE COLONNE N'A PRIS, et plus
+  // seulement les tâches sans structure du tout. Le test d'avant — `!structureDe`
+  // — laissait DISPARAÎTRE une tâche rangée dans une structure que celui qui
+  // regarde ne porte pas : elle n'entrait dans aucune colonne et n'était pas
+  // orpheline. Muet, et d'autant plus probable maintenant qu'un module s'ajoute
+  // aux quatre structures.
+  const placees = new Set(colonnes.flatMap(c => c.l));
+  const orphelines = taches.filter(t => !placees.has(t));
   if (orphelines.length) {
     colonnes.push({ cle: '', nom: 'Sans structure', court: '—', couleur: '#8a8fa3', encre: '#5b6070', l: orphelines });
   }

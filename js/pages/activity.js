@@ -1,7 +1,8 @@
 // Activités (tâches / RDV) : formulaire, liste, clôture.
 import { db } from '../data/db.js';
 import { scope } from '../data/scope.js';
-import { ACTIVITY_TYPES, ACTIVITIES, PRIORITES } from '../data/schema.js';
+import { ACTIVITY_TYPES, ACTIVITIES, MODULES_TACHE, STRUCTURES_TACHE,
+         PRIORITES } from '../data/schema.js';
 import { esc, openModal, closeModal, readForm, toast, isoDay, daysSince, relDay, userName, fmtDate } from '../ui.js';
 // ⚠ `valeursProjet` EST LA SEULE TRADUCTION fiche/demande → les champs du
 // projet, et elle vit dans un module de DONNÉES : l'importer ici ne crée aucun
@@ -15,11 +16,34 @@ export const actType = (k) => ACTIVITY_TYPES.find(t => t.key === k) || { label: 
 
 // À quelle structure se rattache une tâche : celle choisie sur la tâche, sinon celle
 // de l'affaire liée. Une tâche isolée peut donc porter une structure sans affaire.
+//
+// ⚠ ELLE RECONNAÎT AUSSI LES MODULES — la gestion locative depuis le 05/10/2026
+// — et SANS regarder le droit de celui qui lit. Une tâche ne cesse pas d'avoir
+// une structure parce qu'on n'a pas le module : elle cesserait d'apparaître, et
+// la perte serait muette. C'est à l'écran de décider quelles colonnes il
+// propose, pas à cette fonction de décider ce qui existe.
+//
+// ⚠ L'AFFAIRE, ELLE, RESTE UNE ACTIVITÉ : `deals.activity` n'admet que les
+// quatre structures, un module n'a pas d'affaires.
 export function structureDe(a) {
-  if (a?.activity && ACTIVITIES[a.activity]) return a.activity;
+  if (a?.activity && STRUCTURES_TACHE[a.activity]) return a.activity;
   const d = a?.deal_id && db.byId('deals', a.deal_id);
   return d?.activity && ACTIVITIES[d.activity] ? d.activity : null;
 }
+
+/**
+ * Les structures qu'une tâche peut porter, POUR CELUI QUI REGARDE : ses
+ * structures, plus les modules dont il a le droit.
+ *
+ * ⚠ ÉCRITE UNE FOIS, lue par la liste, ses pastilles, le tableau en colonnes et
+ * le formulaire de tâche. Quatre copies de « mes structures plus le locatif si
+ * j'y ai droit » auraient fini par ne plus s'accorder, et l'écart ne se serait
+ * vu que sur un des quatre écrans.
+ */
+export const structuresDeLUtilisateur = () => [
+  ...Object.values(ACTIVITIES).filter(x => scope.activityKeys.includes(x.key)),
+  ...Object.values(MODULES_TACHE).filter(m => scope[m.droit] === true),
+];
 
 /**
  * Ce que la tâche concerne : la personne, et le projet.
@@ -106,7 +130,7 @@ export function activityForm(link = {}, existing = null, onSaved, onClose = null
     { key: 'due_date', label: 'Échéance', type: 'date', required: true, half: true, value: isoDay() },
     { key: 'due_time', label: 'Heure (optionnel)', type: 'time', half: true },
     { key: 'activity', label: 'Structure', type: 'select', half: true,
-      options: Object.values(ACTIVITIES).filter(a => scope.activityKeys.includes(a.key)).map(a => [a.key, a.label]),
+      options: structuresDeLUtilisateur().map(a => [a.key, a.label]),
       value: existing?.activity || structureDe({ ...link, ...(existing || {}) }) || '',
       hint: 'À quelle activité du groupe cette tâche appartient.' },
     { key: 'notes', label: 'Notes', type: 'textarea', rows: 2 },

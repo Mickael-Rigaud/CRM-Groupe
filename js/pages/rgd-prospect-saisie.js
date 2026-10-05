@@ -231,9 +231,18 @@ function rattachements(contactId) {
   const idsAffaires = new Set(affaires.map(d => d.id));
   const devis = db.t('rgd_devis').filter(d => d.contact_id === contactId);
   const chantiers = db.t('rgd_chantiers').filter(c => idsAffaires.has(c.deal_id));
-  const idsChantiers = new Set(chantiers.map(c => c.id));
-  // Un paiement se rattache à son chantier, jamais directement au client.
-  const paiements = db.t('rgd_paiements').filter(p => idsChantiers.has(p.chantier_id));
+  // ⚠ UN PAIEMENT PEND DE L'AFFAIRE, PAS DU CHANTIER, et ce garde-fou était
+  // MORT depuis qu'il existe : il lisait `p.chantier_id`, une colonne que
+  // `rgd_paiements` n'a pas — relevé le 05/10/2026, la table porte `deal_id`.
+  // `undefined` n'étant dans aucun ensemble, le compte valait toujours zéro :
+  // une fiche portant des paiements mais ni devis ni chantier se serait
+  // supprimée sans un mot, en les orphelinant.
+  //
+  // ⚠ ET C'EST LE CAS LE PLUS COURANT DE LA BASE, pas un cas d'école : 89
+  // paiements sur 165 n'ont aucun chantier — ils viennent de Costructor avec
+  // une référence client seule. Les rattacher par le chantier les rendait donc
+  // invisibles deux fois.
+  const paiements = db.t('rgd_paiements').filter(p => idsAffaires.has(p.deal_id));
 
   const detail = [
     [devis.length, 'devis', 'devis'],

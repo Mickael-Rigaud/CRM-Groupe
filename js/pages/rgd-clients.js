@@ -942,11 +942,23 @@ export const rgdClientsPage = {
           ${state.page === pages ? 'disabled' : ''}>Suivant</button>
       </div>`;
 
+      // ⚠ LA COLONNE DE LA CORBEILLE RESTE COLLEE A DROITE (05/10/2026,
+      // demande par Elodie : « je voudrais avoir la possibilite de supprimer
+      // les prospects »). Le bouton EXISTAIT depuis le 25/09 — il etait
+      // simplement hors de l'ecran : sur l'onglet « Nouvelle demande », qui
+      // porte une colonne de plus, le tableau deborde de 96 px et la
+      // corbeille tombait a x=1491 dans une fenetre de 1500. Mesure, pas
+      // devine. Il fallait faire defiler le tableau lateralement pour la
+      // trouver, et rien ne disait qu'elle etait la.
+      //
+      // ⚠ CE N'EST PAS UNE FONCTION NEUVE, c'est la meme porte rendue
+      // atteignable : `supprimerFiche` garde son refus sur les fiches qui
+      // portent des devis ou des chantiers, et sa pierre tombale.
       // ---------- les deux tableaux ----------
       const tableauFiches = () => `<section class="card table-wrap">
         <table>
           <thead><tr><th>Nom, prénom</th><th>Type</th><th>Statut</th><th>Email</th>
-            <th>Téléphone</th><th>Adresse</th><th>Maj</th><th>Commentaire</th><th></th></tr></thead>
+            <th>Téléphone</th><th>Adresse</th><th>Maj</th><th>Commentaire</th><th class="rcl-suppr"></th></tr></thead>
           <tbody>${tranche(lignesFiches).map(({ f, p }) => {
             const ap = f.apporteur_id && apporteurs.find(a => a.id === f.apporteur_id);
             return `<tr>
@@ -962,7 +974,7 @@ export const rgdClientsPage = {
               <td class="muted">${esc(adresseDe(p))}</td>
               <td class="muted small">${f.maj ? esc(relDay(f.maj)) : '—'}</td>
               <td class="rcl-note">${champNote(f, 'client')}</td>
-              <td>${boutonSuppression(f)}</td>
+              <td class="rcl-suppr">${boutonSuppression(f)}</td>
             </tr>`;
           }).join('') || `<tr><td colspan="9"><div class="empty">${esc(vide())}</div></td></tr>`}</tbody>
         </table>
@@ -1036,7 +1048,7 @@ export const rgdClientsPage = {
             ${surRdv ? '<th>Rendez-vous</th>' : ''}
             <th>Projet</th><th>${surMontant ? 'Montant HT' : 'Budget'}</th><th>Ville</th><th>Statut</th>
             ${surRelances ? '<th>Dernière relance</th>' : ''}
-            <th>Commentaire</th><th></th></tr></thead>
+            <th>Commentaire</th><th class="rcl-suppr"></th></tr></thead>
           <!-- ⚠ L'INDEX EST CELUI DE LA LISTE ENTIERE, PAS DE LA PAGE.
                L'attribut data-fiche sert au clic, qui relit la liste entiere.
                Numeroter la tranche a partir de zero ferait ouvrir, en page 2,
@@ -1067,7 +1079,7 @@ export const rgdClientsPage = {
               : pastilleSuivi(x.statut)}</td>
             ${surRelances ? `<td class="small rcl-rel-td">${celluleRelance(x.ligne, x.statut, x.cible)}</td>` : ''}
             <td class="rcl-note">${champNote(x.ligne, x.cible)}</td>
-            <td>${boutonSuppression(x.ligne)}</td>
+            <td class="rcl-suppr">${boutonSuppression(x.ligne)}</td>
           </tr>`; }).join('') || `<tr><td colspan="${10 + (surRdv ? 1 : 0) + (surRelances ? 1 : 0)}"><div class="empty">${esc(vide())}</div></td></tr>`}</tbody>
         </table>
         ${pagination()}

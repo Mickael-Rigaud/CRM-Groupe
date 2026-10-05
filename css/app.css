@@ -5959,3 +5959,21 @@ textarea.ev-nu { resize: vertical; min-height: 40px; }
 .rgdf-rap-pied .btn[disabled] { opacity: .5; cursor: default; }
 /* La liste des rappels deja poses prend de l'air sous le champ. */
 .rgdf-rappels .mail-champ + ul { margin-top: 14px; }
+
+/* ---- la corbeille reste atteignable (05/10/2026) ---- */
+/* ⚠ ELLE ETAIT HORS DE L'ECRAN, PAS ABSENTE. Le bouton existe depuis le
+   25/09 ; sur l'onglet « Nouvelle demande », qui porte une colonne de plus,
+   le tableau deborde de 96 px et la corbeille tombait a x=1491 dans une
+   fenetre de 1500 — mesure, pas devine. Il fallait faire defiler le tableau
+   lateralement pour la trouver, et rien ne disait qu'elle etait la.
+
+   ⚠ UN FOND OPAQUE EST OBLIGATOIRE sur une cellule collee : sans lui, les
+   colonnes defilent EN DESSOUS et se lisent au travers. Il doit suivre le
+   survol de la ligne, sinon la case reste blanche sur une ligne grisee.
+
+   ⚠ ET L'EN-TETE AUSSI : `th` n'a aucun fond propre dans ce projet, il herite
+   de la carte. Colle sans fond, il laisserait passer le texte des colonnes
+   qui glissent dessous. */
+.rcl-suppr { position: sticky; right: 0; z-index: 1; background: var(--card);
+  box-shadow: -10px 0 10px -10px rgba(16, 17, 43, .22); }
+tr.click:hover td.rcl-suppr { background: var(--card-2); }

@@ -1094,6 +1094,39 @@ export const ACTIVITIES = {
 
 export const ACTIVITY_KEYS = Object.keys(ACTIVITIES);
 
+// ⚠ UNE TÂCHE PEUT APPARTENIR À UN MODULE, PAS SEULEMENT À UNE STRUCTURE
+// (05/10/2026, demandé par Élodie : « pour la to do list rajoute la structure
+// gestion locative »).
+//
+// ⚠ ELLE N'EST SURTOUT PAS ENTRÉE DANS `ACTIVITIES`, et c'est le choix central.
+// Une activité y gagne d'un seul coup un espace dans le menu Pilotage, un
+// pipeline (`#/pipeline/<clé>`), une couleur de marque que `applyBrand` pose
+// sur `--accent`, une colonne dans l'entonnoir de `chiffres.js` et une ligne
+// dans `profiles.activities`. La gestion locative n'a rien de tout cela : elle
+// n'a pas d'affaires, elle a des baux. L'y mettre aurait ouvert cinq portes
+// pour en demander une.
+//
+// ⚠ LE DROIT N'EST PAS `activities[]` MAIS `rental_access`, d'où `droit` : le
+// nom du getter de `scope` qui tranche. Le lire ici plutôt que de recopier la
+// condition dans les quatre écrans qui rangent une tâche — la liste, ses
+// pastilles, le tableau en colonnes et le formulaire — est tout l'intérêt de
+// cette déclaration : quatre copies auraient fini par ne plus s'accorder.
+export const MODULES_TACHE = {
+  locatif: {
+    key: 'locatif', label: 'Gestion locative', short: 'Locatif',
+    color: '#12805C', accent: '#12805C', on: '#06301F', accent2: '#0E6A4C',
+    soft: '#E3F3EB', ink: '#0B4D37',
+    droit: 'canRental',
+  },
+};
+
+// Tout ce qu'une tâche peut porter dans `activities.activity` — le miroir exact
+// de la contrainte `check` de la table (migration `taches_gestion_locative`).
+// ⚠ ELLE NE FILTRE AUCUN DROIT : elle sert à RECONNAÎTRE la structure d'une
+// tâche. Une tâche ne doit pas cesser d'avoir une structure parce que celui qui
+// la regarde n'a pas le module — elle cesserait d'apparaître, sans un mot.
+export const STRUCTURES_TACHE = { ...ACTIVITIES, ...MODULES_TACHE };
+
 // Une affaire encore en attente du premier entretien. Une activite qui ne declare
 // pas `avantEntretien` n'a pas cette notion : la fonction repond alors non, et rien
 // ne change pour elle — c'est voulu, seul BTP Expertise sépare sa base en deux.

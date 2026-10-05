@@ -13,9 +13,10 @@
 // c'est le pense-bete rattache a rien.
 import { db } from '../data/db.js';
 import { scope } from '../data/scope.js';
-import { ACTIVITIES } from '../data/schema.js';
+import { STRUCTURES_TACHE } from '../data/schema.js';
 import { esc, daysSince, fmtDate, relDay, userName, searchInput, bindSearch, restoreFocus, terms, hit } from '../ui.js';
-import { actType, bindActivityRows, activityForm, nextActivity, structureDe, toggleActivity } from './activity.js';
+import { actType, bindActivityRows, activityForm, nextActivity, structureDe,
+         toggleActivity, structuresDeLUtilisateur } from './activity.js';
 import { kanbanHtml } from './todo-kanban.js';
 import { openDeal } from './deal.js';
 
@@ -67,7 +68,10 @@ function carte(a, pour = false) {
   const j = ecart(a);
   const t = actType(a.type);
   const s = structureDe(a);
-  const act = s ? ACTIVITIES[s] : null;
+  // ⚠ `STRUCTURES_TACHE` ET PAS `ACTIVITIES` : une tâche de gestion locative
+  // porte une structure qui n'est pas une activité, et `ACTIVITIES[s]` aurait
+  // rendu `undefined` — la ligne perdait sa couleur et son nom de structure.
+  const act = s ? STRUCTURES_TACHE[s] : null;
   const d = a.deal_id && db.byId('deals', a.deal_id);
   const c = a.contact_id && db.byId('contacts', a.contact_id);
   const o = a.organisation_id && db.byId('organisations', a.organisation_id);
@@ -140,8 +144,16 @@ export const todayPage = {
       const onglet = onglets.find(o => o.key === state.onglet) || onglets[0];
       const surTableau = onglet.key === 'structures';
       const ts = terms(state.q);
+      // ⚠ « — » RAMASSE TOUT CE QU'AUCUNE PASTILLE NE PORTE, pas seulement les
+      // tâches sans structure du tout : une tâche rangée dans une structure que
+      // celui qui regarde ne porte pas — un module dont il n'a pas le droit, une
+      // structure qui n'est pas la sienne — n'était comptée nulle part, et la
+      // somme des pastilles ne faisait pas le total. Même règle que la colonne
+      // « Sans structure » du tableau.
+      const miennes = new Set(structuresDeLUtilisateur().map(x => x.key));
+      const rangeeAilleurs = (a) => !miennes.has(structureDe(a));
       const surStructure = (a) => !state.structure
-        || (state.structure === '—' ? !structureDe(a) : structureDe(a) === state.structure);
+        || (state.structure === '—' ? rangeeAilleurs(a) : structureDe(a) === state.structure);
 
       // Le compteur de chaque onglet se lit avant tout filtre : il dit ce qu'il y a
       // derriere, pas ce qui reste une fois la recherche tapee.
@@ -154,10 +166,11 @@ export const todayPage = {
 
       // Les pastilles de structure ignorent le filtre de structure : sinon il ne
       // resterait plus rien à comparer une fois l'une d'elles ouverte.
-      const parStructure = Object.values(ACTIVITIES)
-        .filter(a => scope.activityKeys.includes(a.key))
+      // Mêmes structures que les colonnes du tableau : la liste est écrite une
+      // seule fois, dans `activity.js`.
+      const parStructure = structuresDeLUtilisateur()
         .map(a => ({ ...a, n: ouvertes.filter(t => structureDe(t) === a.key).length }));
-      const sansStructure = ouvertes.filter(a => !structureDe(a)).length;
+      const sansStructure = ouvertes.filter(rangeeAilleurs).length;
 
       // Les fraîchement cochées restent à leur place au lieu de disparaître aussitôt.
       const retenues = vues.filter(a => !a.done || recentes.has(a.id)).filter(surStructure);

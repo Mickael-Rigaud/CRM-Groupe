@@ -81,6 +81,13 @@ export const SEED = {
     { id: 'd13', title: 'Pack complet — Boulangerie Dupuis', activity: 'propulsion', stage: 'onboarding', status: 'won', contact_id: 'c5', organisation_id: 'o3', owner_id: 'u-stephanie', amount: 5400, channel: 'Réseau professionnel', fields: { activite_client: 'Boulangerie', prestations: 'Pack complet', montant_mensuel: 450, duree_mois: 12, date_demarrage: day(-250) }, stage_history: [{ stage: 'lead', at: d(-270) }, { stage: 'proposition', at: d(-262) }, { stage: 'onboarding', at: d(-255) }], created_at: d(-270), won_at: d(-255), closed_at: d(-255), stage_changed_at: d(-255) },
   ],
   activities: [
+    // ⚠ CELLES-CI PORTENT UN MODULE, PAS UNE STRUCTURE (`activity: 'locatif'`,
+    // 05/10/2026). Sans elles, la colonne « Gestion locative » du tableau et sa
+    // pastille dans la liste restaient vides : on ne voyait ni la couleur, ni le
+    // compte, ni le « + » qui cree dedans. Elles n'ont ni affaire ni contact —
+    // une tache de gestion locative se rattache a un bail, pas a un prospect.
+    { id: 'a0a', activity: 'locatif', type: 'relance', title: 'Relancer le loyer de septembre — M. Said', due_date: day(-1), done: false, assignee_id: 'u-mickael', created_at: d(-4) },
+    { id: 'a0b', activity: 'locatif', type: 'pieces', title: 'Demander l attestation d assurance habitation', due_date: day(4), done: false, assignee_id: 'u-mickael', created_at: d(-1) },
     { id: 'a1', deal_id: 'd1', contact_id: 'c1', type: 'visite', title: 'Visite chantier rue Nationale', due_date: day(1), due_time: '10:00', done: false, assignee_id: 'u-mickael', created_at: d(-3) },
     { id: 'a2', deal_id: 'd2', contact_id: 'c8', type: 'relance', title: 'Relancer devis salle de bain', due_date: day(-2), done: false, assignee_id: 'u-mickael', created_at: d(-6) },
     { id: 'a3', deal_id: 'd4', contact_id: 'c9', type: 'appel', title: 'Appeler le prospect (lead Meta)', due_date: day(0), due_time: '09:30', done: false, assignee_id: 'u-charge', created_at: d(-2) },
