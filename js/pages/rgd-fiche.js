@@ -80,7 +80,17 @@ import { ETAPES_RGD, ORDRE_ETAPES, STATUT_DE_L_ETAPE, ecrireStatut,
          montantDevisDe, etapeAvecMontant, COL_RELANCE, derniereRelance,
          aujourdhui } from '../data/rgd-etapes.js';
 import { scope } from '../data/scope.js';
-import { refusDeProjet, valeursProjet, valeursSuivi, sansNoteAuto } from '../data/rgd-projet.js';
+import { refusDeProjet, valeursProjet, valeursSuivi, sansNoteAuto,
+  // ⚠ LA MÊME PORTE QUE LE FORMULAIRE : `poserRappel` porte le titre coupé
+  // à 80 caractères, les deux commentaires rassemblés dans les notes et la
+  // tâche assignée à soi-même. Un second `db.insert` ici aurait recopié
+  // trois règles qui auraient fini par diverger.
+         poserRappel, apercuRappel } from '../data/rgd-projet.js';
+// Le jour courant de Paris et le décalage en jours : écrits une seule fois
+// chacun, et importés plutôt que recalculés — `toISOString()` rend de l'UTC,
+// et un rappel posé à 23 h serait daté du lendemain.
+import { aujourdhuiParis } from '../data/rgd-creneaux.js';
+import { decale } from '../data/evenements.js';
 import { ficheProjetRgd } from './rgd-projet.js';
 import { listeTravaux } from '../data/rgd-formulaire.js';
 import { rendezVousDeLaFiche, coordonneesDuRendezVous } from '../data/rgd-rdv.js';
@@ -252,18 +262,165 @@ export function ouvrirFicheRgd(x, onChange, retour = null) {
       .sort((a, b) => String(a.due_date).localeCompare(String(b.due_date)));
   };
 
-  const blocRappels = () => {
+  // ------------------------------------------------------------- le rappel
+  //
+  // ⚠ ON POSE UN RAPPEL DEPUIS LA FICHE DEPUIS LE 05/10/2026 (demandé par
+  // Élodie : « en dessous de historique je voudrais avoir le système de rappel
+  // relié à la to do list »). Jusque-là la fiche ne faisait que LIRE les
+  // rappels ouverts : pour en poser un il fallait ouvrir le formulaire,
+  // traverser trois écrans et enregistrer — alors qu'on décide de rappeler
+  // quelqu'un en lisant sa fiche, pas en la modifiant.
+  //
+  // ⚠ IL VA DANS `activities`, LA VRAIE TO-DO DU CRM, par `poserRappel` —
+  // LA MÊME fonction que le formulaire, exportée pour l'occasion. Un second
+  // `db.insert` aurait recopié le titre coupé à 80 caractères, les deux
+  // commentaires rassemblés dans les notes et l'assignation à soi-même : trois
+  // règles qui auraient fini par diverger.
+  //
+  // ⚠ C'EST UNE ACTION, PAS UN CHAMP DE LA FICHE : rien en base ne porte « le
+  // rappel de cette fiche ». Les champs repartent donc vides après chaque pose,
+  // et les rappels déjà posés se lisent dessous.
+  //
+  // ⚠ MAIS LA SAISIE EN COURS SURVIT AUX REDESSINS, et c'est pour ça que `rap`
+  // vit hors de `dessine()` : la fiche se reconstruit à chaque enregistrement
+  // venu d'ailleurs (attribution, modification), et une date choisie repartirait
+  // à zéro sous les yeux de qui vient de la poser.
+  const rap = { jour: '', heure: '', objet: '' };
+
+  const RACCOURCIS = [[1, 'Demain'], [3, 'Dans 3 j'], [7, 'Dans 1 sem.'], [30, 'Dans 1 mois']];
+
+  // Ce que la to-do affichera, demandé à la même fonction que le formulaire.
+  const apercu = () => apercuRappel({ rappel_objet: rap.objet, nom: x.nom });
+
+  const phraseRappel = () => (rap.jour
+    ? `Dans la to-do : « <b>${esc(apercu())}</b> ».`
+    : rap.objet.trim()
+      ? 'Il manque la date : sans elle, ce rappel ne sera pas posé.'
+      : 'Aucun rappel. Choisissez une date pour en poser un dans la to-do du CRM.');
+
+  const blocRappel = () => {
     const liste = rappelsOuverts();
-    if (!liste.length) return '';
-    return `<section class="rgdf-bloc rgdf-rappels">
-      <h3>Rappels <span class="rgdf-compte">${liste.length}</span></h3>
-      <ul>${liste.slice(0, 6).map(a => `<li>
+    // ⚠ LE BLOC EXISTE MÊME SANS RAPPEL EN COURS quand on peut écrire : c'est
+    // un endroit où l'on POSE, pas seulement une liste. L'ancienne version
+    // disparaissait quand il n'y avait rien — donc exactement quand on voulait
+    // en créer le premier.
+    if (!aUneAncre || (!scope.canRgd && !liste.length)) return '';
+    const jour0 = aujourdhuiParis();
+    return `<section class="rgdf-bloc rgdf-rappels" id="rgdf-rappel">
+      <h3>Rappel${liste.length ? ` <span class="rgdf-compte">${liste.length}</span>` : ''}</h3>
+      ${scope.canRgd ? `
+      <div class="mail-champ rgp-rappel">
+        <div class="fa-chips rgp-uneligne">
+          ${RACCOURCIS.map(([n, lbl]) => `
+            <button type="button" class="fa-chip ${rap.jour === decale(jour0, n) ? 'on' : ''}"
+              data-rap="${n}">${esc(lbl)}</button>`).join('')}
+        </div>
+        <div class="rgp-rappel-quand">
+          <input type="date" id="rgdf-rap-jour" value="${esc(rap.jour)}" min="${esc(jour0)}">
+          <input type="time" id="rgdf-rap-heure" value="${esc(rap.heure)}" ${rap.jour ? '' : 'disabled'}>
+          <button type="button" class="btn ghost sm" id="rgdf-rap-non"
+            ${rap.jour ? '' : 'hidden'}>Retirer</button>
+        </div>
+        <textarea id="rgdf-rap-objet" rows="2"
+          placeholder="Pourquoi le rappeler : relancer sur le devis, attendre le retour du syndic…"
+        >${esc(rap.objet)}</textarea>
+        <p class="rgp-rappel-dit ${!rap.jour && rap.objet.trim() ? 'est-manque' : ''}"
+          id="rgdf-rap-dit">${phraseRappel()}</p>
+        <div class="rgdf-rap-pied">
+          <button type="button" class="btn sm" id="rgdf-rap-poser" ${rap.jour ? '' : 'disabled'}
+            >Poser le rappel</button>
+        </div>
+      </div>` : ''}
+      ${liste.length ? `<ul>${liste.slice(0, 6).map(a => `<li>
         <span class="rgdf-quand">${esc(fmtDate(a.due_date))}${a.due_time ? ` à ${esc(a.due_time)}` : ''}</span>
         <span class="rgdf-dit">${esc(a.title || 'Rappel')}</span>
       </li>`).join('')}</ul>
-      <p class="rgdf-source">Ils se cochent dans la to-do du CRM.</p>
+      <p class="rgdf-source">Ils se cochent dans la to-do du CRM.</p>` : ''}
     </section>`;
   };
+
+  /**
+   * Brancher le bloc. ⚠ ON NE REDESSINE PAS LA FICHE À CHAQUE TOUCHE : la date,
+   * l'heure et l'objet se répercutent EN PLACE — la phrase, l'état du champ
+   * d'heure, les pastilles, les deux boutons. Un redessin remplacerait la zone
+   * de texte sous le doigt de qui vient d'y écrire, et ferait remonter la page
+   * au moment précis où l'on vise « Poser ».
+   */
+  const lierRappel = (m) => {
+    const bloc = m.querySelector('#rgdf-rappel');
+    if (!bloc) return;
+    const cJour = bloc.querySelector('#rgdf-rap-jour');
+    if (!cJour) return;                       // lecture seule : rien à brancher
+    const cHeure = bloc.querySelector('#rgdf-rap-heure');
+    const cObjet = bloc.querySelector('#rgdf-rap-objet');
+    const dit = bloc.querySelector('#rgdf-rap-dit');
+    const bNon = bloc.querySelector('#rgdf-rap-non');
+    const bPoser = bloc.querySelector('#rgdf-rap-poser');
+    const jour0 = aujourdhuiParis();
+
+    const refaire = () => {
+      cJour.value = rap.jour;
+      cHeure.value = rap.heure;
+      cHeure.disabled = !rap.jour;
+      bNon.hidden = !rap.jour;
+      bPoser.disabled = !rap.jour;
+      dit.innerHTML = phraseRappel();
+      dit.classList.toggle('est-manque', !rap.jour && !!rap.objet.trim());
+      bloc.querySelectorAll('[data-rap]').forEach(b =>
+        b.classList.toggle('on', rap.jour === decale(jour0, Number(b.dataset.rap))));
+    };
+
+    // ⚠ LES RACCOURCIS POSENT LA DATE SANS REMPLACER CE QUI EST LÀ : on clique,
+    // puis on ajuste. Recliquer sur celui qui est déjà pris le retire — c'est le
+    // seul moyen de revenir à « pas de rappel » sans viser le petit bouton.
+    bloc.querySelectorAll('[data-rap]').forEach(b => b.onclick = () => {
+      const vise = decale(jour0, Number(b.dataset.rap));
+      rap.jour = rap.jour === vise ? '' : vise;
+      if (!rap.jour) rap.heure = '';
+      refaire();
+    });
+
+    // ⚠ `change` ET PAS `input` SUR LA DATE : à la frappe, « 0002-01-01 » passe
+    // par le gestionnaire avant que l'année soit finie.
+    cJour.onchange = () => { rap.jour = cJour.value; if (!rap.jour) rap.heure = ''; refaire(); };
+    cHeure.onchange = () => { rap.heure = cHeure.value; };
+    cObjet.oninput = () => {
+      rap.objet = cObjet.value;
+      dit.innerHTML = phraseRappel();
+      dit.classList.toggle('est-manque', !rap.jour && !!rap.objet.trim());
+    };
+    bNon.onclick = () => { rap.jour = ''; rap.heure = ''; refaire(); };
+
+    bPoser.onclick = async () => {
+      if (!rap.jour) return;
+      bPoser.disabled = true;
+      // ⚠ LE COMMENTAIRE DE LA FICHE PART AVEC, comme depuis le formulaire :
+      // `poserRappel` le range sous « — Sur le prospect : … » dans les notes de
+      // la tâche. Quand le rappel sonne dans trois semaines, c'est ce qu'il faut
+      // avoir sous les yeux — et on n'ira pas le rechercher.
+      const r = await poserRappel({
+        rappel_jour: rap.jour,
+        rappel_heure: rap.heure,
+        rappel_objet: rap.objet,
+        commentaire: sansNoteAuto(x.genre === 'demande' ? f.commentaire_admin : f.notes),
+        // ⚠ `x` PORTE LE NOM ENTIER, PAS LE COUPLE PRÉNOM/NOM : `nomComplet`
+        // joint ce qu'on lui donne, donc un seul champ suffit et deux
+        // inventeraient un découpage que la fiche ne connaît pas.
+        nom: x.nom,
+      }, { contactId: clefs.contact_id, organisationId: clefs.organisation_id });
+      bPoser.disabled = false;
+      if (!r || !r.ok) return toast(r ? `Rappel non posé — ${r.motif}` : 'Rappel non posé', 'err');
+      rap.jour = ''; rap.heure = ''; rap.objet = '';
+      toast('Rappel posé dans la to-do');
+      // ⚠ ON REDESSINE ICI, ET SEULEMENT ICI : la liste des rappels ouverts
+      // vient de changer, et le compteur du titre avec. `db.insert` a déjà
+      // prévenu le reste de l'application — c'est la fiche qui ne s'écoute pas
+      // elle-même.
+      dessine();
+      onChange?.();
+    };
+  };
+
 
   const dessine = () => {
     const devis = x.genre === 'fiche' ? siens(scope.rgd('rgd_devis'), f) : [];
@@ -318,8 +475,20 @@ export function ouvrirFicheRgd(x, onChange, retour = null) {
     // qu'une ligne était écrite au-dessus, la note du robot repassait. Elle se
     // retire désormais où qu'elle soit, par la règle partagée avec le tableau
     // et le formulaire.
+    // ⚠ « COMMENTAIRE » NE PORTE QUE CE QUE NOUS ÉCRIVONS, DEPUIS LE
+    // 05/10/2026 (demandé par Élodie : « dans commentaires, je ne veux que les
+    // commentaires que nous laissons. enlève le récap du google agenda »). La
+    // description du rendez-vous Google y entrait de deux façons — en valeur de
+    // départ du champ quand la note était vide, et en rappel gris au-dessus — et
+    // les deux donnaient à lire comme un mot de l'équipe un texte que personne
+    // n'avait écrit ici. **Ne pas les remettre.**
+    //
+    // ⚠ CE QUI RESTE DU RENDEZ-VOUS : son TÉLÉPHONE, qui continue d'alimenter la
+    // ligne Téléphone du bloc de contact. C'est une coordonnée, pas un
+    // commentaire — et c'est pour elle que `coordonneesDuRendezVous` existe.
+    // ⚠ ET RIEN N'EST PERDU : la description vit chez Google, où elle se
+    // corrige, et l'encadré des rendez-vous de l'en-tête y renvoie.
     const noteEcrite = sansNoteAuto(x.genre === 'demande' ? f.commentaire_admin : f.notes);
-    const commentaireSource = [duRdv.commentaire, noteEcrite].filter(Boolean).join('\n\n');
     const jours = x.recu ? daysSince(x.recu) : null;
     // ⚠ TROIS SOURCES POUR LE BUDGET, ET L'ORDRE EST CELUI DE LA CERTITUDE.
     // `budget_travaux` est le budget SAISI dans le CRM : il n'existe que sur une
@@ -566,16 +735,16 @@ export function ouvrirFicheRgd(x, onChange, retour = null) {
             // ouvrir le formulaire, aller à la troisième étape et enregistrer
             // pour ajouter une phrase notée pendant un appel.
             //
-            // ⚠ DEUX TEXTES COHABITENT ICI ET UN SEUL S'ÉCRIT. Celui du
-            // rendez-vous vient de la DESCRIPTION Google : il se corrige dans
-            // l'agenda, et le mettre dans le champ le recopierait dans `notes`
-            // au premier enregistrement — deux copies qui divergent, et la
-            // nôtre qui gagne. Il reste donc en lecture, au-dessus.
+            // ⚠ UN SEUL TEXTE ICI DEPUIS LE 05/10/2026 : LE NÔTRE. La
+            // description du rendez-vous Google n'y entre plus, ni comme valeur
+            // de départ du champ, ni comme rappel gris au-dessus — le détail et
+            // la raison sont à la déclaration de `noteEcrite`, plus haut.
+            // **Ne pas les remettre.**
             //
             // ⚠ LE BLOC EXISTE MÊME VIDE quand on peut écrire : un encadré qui
             // n'apparaît qu'une fois rempli ne permet pas de le remplir.
             const ecrit = scope.canRgd;
-            if (!commentaireSource && !ecrit) return '';
+            if (!noteEcrite && !ecrit) return '';
 
             // ⚠ UN SEUL CHAMP, ET IL PORTE AUSSI LE TEXTE DU RENDEZ-VOUS
             // (02/10/2026, demandé : « je veux avoir la possibilité de modifier
@@ -592,42 +761,16 @@ export function ouvrirFicheRgd(x, onChange, retour = null) {
             // elle-même (« `notes` NE REVIENT PLUS »). Une raison périmée qui
             // interdit encore quelque chose est pire qu'une absence de règle.
             //
-            // ⚠ LE TEXTE DU RENDEZ-VOUS SERT DE VALEUR DE DÉPART, IL N'EST PAS
-            // RECOPIÉ TANT QU'ON NE TOUCHE À RIEN : le champ part au `change`,
-            // donc ouvrir une fiche et la refermer n'écrit rien. C'est au
-            // premier mot tapé que le commentaire devient le nôtre — et la
-            // description reste chez Google, qui n'a rien perdu.
-            const repris = !noteEcrite && duRdv.commentaire;
-            const valeur = noteEcrite || duRdv.commentaire || '';
-            // ⚠ ON NE PERD PAS LA DESCRIPTION QUAND LES DEUX EXISTENT. Une
-            // fiche peut porter sa propre note ET un rendez-vous dont la
-            // description dit autre chose — un téléphone, une précision prise
-            // depuis. Le champ ne montre que la nôtre ; sans ce rappel, la
-            // sienne cesserait d'être affichée nulle part, sans un mot.
-            // On ne le pose que si le texte n'est pas déjà sous les yeux.
-            const aRappeler = duRdv.commentaire && !repris
-              && !valeur.includes(duRdv.commentaire.trim());
             return `<section class="rgdf-bloc rgdf-commentaire">
               <h3>Commentaire</h3>
-              ${aRappeler ? `<p class="rgdf-source">Le rendez-vous
-                « ${esc(rdv?.title || '')} » note aussi : « ${esc(duRdv.commentaire)} »
-                — il se corrige dans Google Agenda.</p>` : ''}
               ${ecrit
-                ? `<textarea class="rgdf-note-champ" id="rgdf-commentaire" rows="3">${esc(valeur)}</textarea>
-                   <p class="rgdf-source" id="rgdf-commentaire-etat">${repris
-                     ? `Repris du rendez-vous « ${esc(rdv?.title || '')} »${
-                        rdv?.day ? ' du ' + esc(fmtDate(rdv.day)) : ''} — le modifier ici
-                        l’enregistre dans la fiche.`
-                     : 'S’enregistre quand vous quittez le champ.'}</p>`
-                : (valeur ? `<p class="rgdf-texte">${esc(valeur)}</p>
-                   ${repris ? `<p class="rgdf-source">Noté dans le rendez-vous
-                     « ${esc(rdv?.title || '')} » — il se corrige dans Google Agenda.</p>`
-                     : f.d1_id != null ? `<p class="rgdf-source">Saisi dans l’application RGD,
+                ? `<textarea class="rgdf-note-champ" id="rgdf-commentaire" rows="3">${esc(noteEcrite)}</textarea>
+                   <p class="rgdf-source" id="rgdf-commentaire-etat">S’enregistre quand vous quittez le champ.</p>`
+                : (noteEcrite ? `<p class="rgdf-texte">${esc(noteEcrite)}</p>
+                   ${f.d1_id != null ? `<p class="rgdf-source">Saisi dans l’application RGD,
                      qui en reste la source.</p>` : ''}` : '')}
             </section>`;
           })()}
-
-          ${blocRappels()}
 
           <section class="rgdf-bloc rgdf-suivi">
             <h3>Historique <span class="rgdf-compte">${evs.length}</span></h3>
@@ -645,11 +788,15 @@ export function ouvrirFicheRgd(x, onChange, retour = null) {
                 : '<li class="rgdf-vide">Rien d’enregistré pour l’instant.</li>'}
             </ol>
           </section>
+
+          ${blocRappel()}
         </div>
       </div>`;
 
     const m = openModal('', html, { wide: true, onClose: () => onChange?.() });
     m.classList.add('rgdf');
+
+    lierRappel(m);
 
     // ⚠ LE FORMULAIRE S'OUVRE DANS SA PROPRE FENÊTRE, ET LA FICHE SE
     // RECONSTRUIT DERRIÈRE : voir l'en-tête du fichier. `onClose` ramène à la

@@ -5942,3 +5942,20 @@ textarea.ev-nu { resize: vertical; min-height: 40px; }
 /* Un mot d'explication dans le formulaire, au-dessus du pied. */
 .paf-mot { margin: 2px 0 0; font-size: 12px; color: var(--muted); }
 .paf-mot b { color: var(--text); }
+
+/* ---- le rappel posé depuis la fiche (05/10/2026) ---- */
+/* Le bloc reprend l'habillage du meme champ dans le formulaire (`.rgp-rappel`,
+   `.rgp-rappel-quand`, `.rgp-rappel-dit`) : deux presentations pour un meme
+   geste s'apprendraient deux fois. Seul le pied est a lui — le formulaire pose
+   le rappel en s'enregistrant, la fiche a besoin d'un bouton. */
+/* ⚠ SIXIEME OCCURRENCE DU PIEGE `[hidden]`, et mesuree a l'ecran : `.btn` pose
+   `display: inline-flex` (0,1,0) et ecrase `[hidden]`, de specificite NULLE.
+   Le bouton « Retirer » restait affiche sans date, et le controle le disait
+   cache — `element.hidden` valait bien `true`, c'est le RENDU qui ne suivait
+   pas. On lit le `display` calcule, jamais la propriete. */
+.rgp-rappel-quand .btn[hidden] { display: none; }
+
+.rgdf-rap-pied { display: flex; justify-content: flex-end; margin-top: 2px; }
+.rgdf-rap-pied .btn[disabled] { opacity: .5; cursor: default; }
+/* La liste des rappels deja poses prend de l'air sous le champ. */
+.rgdf-rappels .mail-champ + ul { margin-top: 14px; }

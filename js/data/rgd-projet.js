@@ -447,7 +447,13 @@ export const apercuRappel = (v) => titreRappel(v);
  * ⚠ SON ÉCHEC NE REMET RIEN EN CAUSE : la fiche est enregistrée, le rendez-vous
  * pris. On le dit, on ne recommence pas.
  */
-async function poserRappel(v, { contactId, organisationId }) {
+// ⚠ EXPORTÉE DEPUIS LE 05/10/2026 : la FICHE pose un rappel elle aussi, sous
+// son historique (« en dessous de historique je voudrais avoir le système de
+// rappel relié à la to do list »). Elle appelle CETTE fonction, jamais un
+// second `db.insert` : le titre coupé à 80 caractères, les deux commentaires
+// recopiés dans les notes, la tâche assignée à soi — tout cela est la règle du
+// rappel, et une seconde copie aurait fini par ne plus l'appliquer pareil.
+export async function poserRappel(v, { contactId, organisationId }) {
   const jour = txt(v.rappel_jour);
   if (!jour) return null;
   try {
