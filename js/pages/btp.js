@@ -67,6 +67,14 @@ const activities = () => {
 // faudra `#/btp/checklist-expertise`. Le menu peut s'emboîter, pas l'adresse.
 const ONGLETS = [
   { hash: '#/btp', label: 'Tableau de bord' },
+  // ⚠ IL A QUITTÉ LE GROUPE « MISSIONS » LE 05/10/2026, demandé par Élodie :
+  // « je voudrais que "chargés d'affaires" soit en dessous de tableau de
+  // bord ». Il y était rangé parce qu'une mission se confie à quelqu'un —
+  // mais cet écran ne porte pas des missions : il porte le réseau, sa charge,
+  // le barème de points et la grille de rémunération. On l'ouvre pour
+  // RÉPARTIR, pas pour travailler un dossier, et c'est ce qui le met à côté
+  // du tableau de bord plutôt que dans la pile des deux métiers.
+  { hash: '#/btp/charges', label: "Chargés d'affaires" },
   // Deux métiers, deux déroulés, et qui les porte : c'est le travail du jour.
   // ⚠ CHAQUE MÉTIER PORTE SES TROIS ÉCRANS — pipeline, check-list, rapport —
   // au lieu de six entrées à plat dont rien ne dirait laquelle est à qui.
@@ -79,7 +87,6 @@ const ONGLETS = [
       { hash: '#/btp/amo-checklist', label: 'Check-list' },
       { hash: '#/btp/amo-rapport', label: 'Rapport' },
     ] },
-    { hash: '#/btp/charges', label: "Chargés d'affaires" },
   ] },
   // Ce qui alimente le cabinet : les clients à venir, et les gens à recruter.
   { label: 'Prospection', sous: [
