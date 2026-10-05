@@ -1326,17 +1326,21 @@ const pageMission = (mission) => ({
         .sort((x, y) => (y.amount || 0) - (x.amount || 0));
       const points = siennes.reduce((t, d) => t + pointsDe(d), 0);
 
+      /* ⚠ LE PIPELINE EST EN TÊTE, AVANT LES TUILES ET LES OBJECTIFS
+         (05/10/2026, demandé par Élodie : « je voudrais que dans les écrans
+         expertise et AMO, les pipelines soient tout en haut de la page pour
+         avoir un visuel sur l'ensemble des affaires en cours »). Même arbitrage
+         que la vue d'ensemble de RGD le 25/09 : on n'ouvre pas cet écran le
+         matin pour lire un montant, mais pour voir où en sont les affaires —
+         le CA potentiel ne bouge pas d'un jour à l'autre, le pipeline si.
+         ⚠ LE BANDEAU DU MÉTIER RESTE AU-DESSUS : il tient sur une ligne et dit
+         sur lequel des deux pipelines on se trouve, ce qu'un kanban nu ne dirait
+         pas. ⚠ LES TUILES NE SONT PAS RETIRÉES : la consigne « pas de chiffres
+         clés en tête » vaut pour l'espace RGD, pas pour BTP, et personne ne l'a
+         demandé ici. */
       root.innerHTML = cadre(MISSIONS[mission].hash, `Missions — ${MISSIONS[mission].titre}`, `
         <div class="btp-page-mission" style="${teinteMission(mission)}">
         <div class="btp-bandeau">${marqueMission(mission)}<b>${esc(couleurMission(mission).label)}</b><span>${esc(mission === 'amo' ? HONORAIRES_AMO.taux + ', minimum ' + eur(HONORAIRES_AMO.minimum) + ' HT' : 'Constat, analyse et rapport')}</span></div>
-        <div class="esp-kpis">
-          ${kpi({ label: 'Missions en cours', valeur: siennes.length, sous: `${points} point${points > 1 ? 's' : ''} de charge`, icone: '🏗', ton: 'accent', href: MISSIONS[mission].hash })}
-          ${kpi({ label: 'CA potentiel HT', valeur: eur(potentiel), sous: 'sur les missions ouvertes', icone: '📈', ton: 'green', href: MISSIONS[mission].hash })}
-          ${kpi({ label: 'Sans niveau', valeur: siennes.filter(d => !niveauDe(d)).length, sous: 'ne pèsent aucun point', icone: '⚠', ton: 'amber', href: MISSIONS[mission].hash })}
-        </div>
-
-        ${carteObjectifs(state)}
-
         <div class="card">
           <div class="card-head"><h2>Pipeline ${esc(MISSIONS[mission].titre)}</h2>
             <span class="grow"></span>
@@ -1350,6 +1354,14 @@ const pageMission = (mission) => ({
               <button type="button" class="btn ghost sm" data-replacer="${d.id}">Replacer dans ${esc(MISSIONS[mission].titre)}</button></li>`).join('')}</ul>
           </div>` : ''}
         </div>
+
+        <div class="esp-kpis">
+          ${kpi({ label: 'Missions en cours', valeur: siennes.length, sous: `${points} point${points > 1 ? 's' : ''} de charge`, icone: '🏗', ton: 'accent', href: MISSIONS[mission].hash })}
+          ${kpi({ label: 'CA potentiel HT', valeur: eur(potentiel), sous: 'sur les missions ouvertes', icone: '📈', ton: 'green', href: MISSIONS[mission].hash })}
+          ${kpi({ label: 'Sans niveau', valeur: siennes.filter(d => !niveauDe(d)).length, sous: 'ne pèsent aucun point', icone: '⚠', ton: 'amber', href: MISSIONS[mission].hash })}
+        </div>
+
+        ${carteObjectifs(state)}
 
         <div class="card">
           <div class="card-head"><h2>Les missions</h2>
