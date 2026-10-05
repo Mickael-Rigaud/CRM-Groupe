@@ -33,6 +33,48 @@ export async function creerCompte({ email, full_name, role, activities }) {
   return rep;
 }
 
+/**
+ * Ouvrir à quelqu'un les agendas Google des structures qu'il porte.
+ *
+ * Demandé par Élodie le 05/10/2026 : « lorsque l'on crée un nouveau profil, que
+ * ce soit son mail qui soit synchronisé au Google Agenda » — au sens, précisé
+ * avec elle, de « qu'elle voie les rendez-vous de ses structures dans son
+ * propre agenda ».
+ *
+ * ⚠ L'AUTRE SENS N'EST PAS AUTOMATISABLE, et c'est ce qui a tranché : faire
+ * remonter l'agenda PERSONNEL de quelqu'un dans le CRM exige que cette personne
+ * le partage depuis son compte Google. Cinq des six profils sont sur gmail.com
+ * ou hotmail.fr, hors du domaine : aucun compte de service ne peut s'accorder
+ * ce droit. Ici c'est l'inverse — les agendas sont à nous, donc on peut les
+ * ouvrir.
+ *
+ * ⚠ LE NAVIGATEUR NE DIT PAS QUELS AGENDAS : il nomme une personne, le serveur
+ * lit ses structures dans la base. Envoyer la liste depuis l'écran reviendrait
+ * à laisser ouvrir n'importe quel agenda à n'importe qui.
+ *
+ * ⚠ SON ÉCHEC NE REMET RIEN EN CAUSE : le compte est créé, la personne a son
+ * lien. Un agenda mal réglé se rattrape d'un bouton, et la fonction est
+ * idempotente — chez Google, reposer une règle qui existe la met à jour.
+ */
+export async function ouvrirAgendas(profil_id, { inclure_personnels = false } = {}) {
+  if (CONFIG.DEMO) throw new Error('Mode démo : aucun agenda n’est ouvert.');
+  const jeton = await db.accessToken();
+  if (!jeton) throw new Error('Session expirée : reconnectez-vous.');
+
+  const r = await fetch(`${CONFIG.SUPABASE_URL}/functions/v1/agenda-partager`, {
+    method: 'POST',
+    headers: {
+      apikey: CONFIG.SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${jeton}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ profil_id, inclure_personnels }),
+  });
+  const rep = await r.json().catch(() => ({}));
+  if (!r.ok || rep.ok === false) throw new Error(rep.erreur || `Erreur ${r.status}`);
+  return rep;
+}
+
 // Renvoyer à quelqu'un son lien pour créer son espace.
 //
 // ⚠ ON NE DIT PAS « INVITATION » À L'UTILISATEUR (29/09/2026, demandé par
