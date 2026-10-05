@@ -155,10 +155,10 @@ export const scope = {
     rgd_missions: 'sous_traitant', rgd_st_commissions: 'sous_traitant',
     rgd_st_paiements: 'sous_traitant', rgd_st_pieces: 'sous_traitant',
     rgd_apports: 'apporteur',
-    // Le sens inverse — ce que RGD apporte au partenaire — pend du même
-    // partenaire, donc du même propriétaire. Miroir de
-    // `rgd_apports_sortants_acces`.
-    rgd_apports_sortants: 'apporteur',
+    // Le sens inverse — ce que RGD a apporté au partenaire — pend du même
+    // partenaire, donc du même propriétaire. ⚠ MAIS SON PARTENAIRE PEUT N'ÊTRE
+    // QU'UN NOM, sans fiche d'annuaire : d'où un cas à lui, et non `apporteur`.
+    rgd_apports_sortants: 'apporteur_ou_libre',
   },
 
   rgdVoitLigne(table, r) {
@@ -170,6 +170,18 @@ export const scope = {
       case 'affaire': return !!r.deal_id && this.canSeeDeal(db.byId('deals', r.deal_id));
       case 'sous_traitant': return db.byId('rgd_sous_traitants', r.sous_traitant_id)?.owner_id === this.user.id;
       case 'apporteur': return db.byId('rgd_apporteurs', r.apporteur_id)?.owner_id === this.user.id;
+      // ⚠ SANS FICHE D'ANNUAIRE, LA LIGNE RESTE VISIBLE — à l'inverse du cas
+      // `affaire` juste au-dessus, et pour une raison qui n'est pas la même.
+      // Un apport sortant peut désigner quelqu'un qui n'est pas fiché : son nom
+      // est alors du texte libre, et il n'y a aucun propriétaire à lire. La
+      // cacher la rendrait invisible à celui qui vient de l'écrire, alors que la
+      // policy, elle, la rend à tout le monde (`has_activity('rgd')`, sans
+      // filtre par personne) — ce filtre-ci est plus strict qu'elle, pas
+      // l'inverse. Un paiement sans affaire, lui, a bien un propriétaire : on
+      // ne sait simplement pas lequel, et c'est pourquoi il reste à la direction.
+      case 'apporteur_ou_libre':
+        return !r.apporteur_id
+          || db.byId('rgd_apporteurs', r.apporteur_id)?.owner_id === this.user.id;
       default: return true;
     }
   },

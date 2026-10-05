@@ -461,6 +461,15 @@ export const SEED = {
       issue: 'perdu', montant_estime: 7000 },
     { id: 'srt5', apporteur_id: 'ap4', date_apport: '2026-09-30', client: 'Famille Renard',
       objet: 'La fourniture de la cuisine.', issue: null, montant_estime: 11000 },
+    // ⚠ CELLE-CI N'A PAS DE FICHE D'ANNUAIRE : son partenaire est un NOM, en
+    // texte libre (`apporteur_id` nul). Sans elle, rien n'eprouvait le cas
+    // demande le 05/10 — ni l'affichage du nom, ni le filtre de l'ecran qui
+    // jetait ces lignes, ni le formulaire qui est leur SEULE porte de
+    // correction : elle n'apparait dans la fiche d'aucun partenaire.
+    { id: 'srt6', apporteur_id: null, partenaire: 'Maitre Berthier, notaire a Senlis',
+      date_apport: '2026-09-12', client: 'SCI des Ormes',
+      objet: 'La vente du lot une fois les travaux termines.',
+      issue: null, montant_estime: 3200 },
   ],
 
   rgd_sous_traitants: [

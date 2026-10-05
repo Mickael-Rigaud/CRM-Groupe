@@ -498,32 +498,56 @@ function brancherSortants(m, a, apres) {
   };
 }
 
+// À qui l'affaire a été apportée, pour l'affichage et pour la recherche.
+//
+// ⚠ LA FICHE L'EMPORTE SUR LE TEXTE : une ligne rattachée à l'annuaire affiche
+// le nom de la fiche, jamais une saisie libre restée à côté. Écrit une fois et
+// lu par le tableau ET par le filtre de recherche — deux lectures séparées
+// auraient fini par ne pas désigner le même.
+const destinataire = (x, parId) => {
+  const p = parId.get(String(x.apporteur_id));
+  return p ? nomDe(p) : String(x.partenaire || '').trim();
+};
+
+const VALEUR_LIBRE = '__libre__';
+
 /**
- * Enregistrer une affaire apportée depuis l'écran, pour un partenaire qu'on
- * choisit.
+ * Le formulaire d'une affaire apportée : création ET modification.
  *
- * ⚠ TOUS LES CHAMPS SONT LÀ ET AUCUN N'EST EXIGÉ, sauf le partenaire (05/10/2026,
- * demandé : « je voudrais quelque chose de plus libre dans les champs du
- * formulaire »). La première version n'en posait que quatre et renvoyait dans
- * la fiche pour le reste : un formulaire qui ne sait pas tout prendre oblige à
- * finir ailleurs ce qu'on avait sous la main.
+ * ⚠ LE DESTINATAIRE N'EST PAS FORCÉMENT DANS L'ANNUAIRE (05/10/2026 : « pour
+ * les partenaires ce ne sera pas forcément les partenaires inscrits juste
+ * au-dessus »). La liste porte donc une entrée « Un autre, pas dans la liste »
+ * qui ouvre un champ de texte.
  *
- * ⚠ UNE FENÊTRE ICI, ET UNE LIGNE VIDE DANS LA FICHE : ce ne sont pas deux
- * façons de faire la même chose. Dans la fiche le partenaire est connu, donc
- * une ligne vide suffit ; depuis l'écran il reste à désigner, et il n'y a pas
- * de cellule où le faire — le tableau de l'écran est en lecture.
+ * ⚠ UN CHOIX EXPLICITE, PAS UNE DEVINETTE. Un champ libre avec une `datalist`
+ * aurait fait la même chose en un contrôle — mais il aurait fallu DEVINER, à
+ * partir du texte tapé, s'il désigne une fiche : « Vasseur » rattache-t-il à
+ * Claire Vasseur, ou crée-t-il un partenaire du même nom ? Se tromper là casse
+ * le lien qui fait entrer l'apport dans les totaux d'une fiche, et le défaut ne
+ * se verrait que plus tard, sur un total trop bas.
  *
- * ⚠ TOUS LES PARTENAIRES SONT PROPOSÉS, fournisseurs compris : on envoie un
- * client chez un fournisseur de cuisines aussi bien que chez un courtier. Les
- * inactifs le sont aussi, et le disent.
+ * ⚠ ET ON NE GARDE JAMAIS LES DEUX : choisir une fiche efface le texte libre,
+ * et inversement. Une ligne qui porte les deux poserait « lequel est le vrai ? »
+ * à chaque lecture — la contrainte de la table dit « l'un OU l'autre », l'écran
+ * ne doit pas écrire autre chose.
+ *
+ * ⚠ ON MODIFIE DEPUIS L'ÉCRAN, et c'est la seule porte pour une ligne dont le
+ * destinataire n'est pas fiché : elle n'apparaît dans AUCUNE fiche, donc le
+ * tableau de la fiche ne peut pas la corriger. Un clic sur une ligne ouvre donc
+ * ce formulaire, pour toutes les lignes — deux comportements selon que le
+ * partenaire est fiché ou non auraient été impossibles à deviner.
  */
-function nouveauSortant(apres, apporteurIdDefaut = '') {
+function formulaireSortant(ligne, apres) {
+  const modif = !!ligne;
   const tous = scope.rgd('rgd_apporteurs').slice()
     .sort((x, y) => nomDe(x).localeCompare(nomDe(y), 'fr'));
-  if (!tous.length) return toast('Aucun partenaire à qui apporter une affaire.', 'err');
+
+  const choisi = modif && ligne.apporteur_id ? String(ligne.apporteur_id)
+    : (modif ? VALEUR_LIBRE : '');
+  const v = modif ? ligne : {};
 
   const options = tous.map(p => `<option value="${esc(String(p.id))}"${
-    String(p.id) === String(apporteurIdDefaut) ? ' selected' : ''}>${esc(nomDe(p))}${
+    String(p.id) === choisi ? ' selected' : ''}>${esc(nomDe(p))}${
     p.societe || p.raison_sociale ? ` — ${esc(p.societe || p.raison_sociale)}` : ''}${
     estActif(p) ? '' : ' (inactif)'}</option>`).join('');
 
@@ -532,61 +556,112 @@ function nouveauSortant(apres, apporteurIdDefaut = '') {
       ${bloc('L’affaire apportée', `
         <label class="paf-champ">
           <span>Partenaire</span>
-          <select name="apporteur_id" required>
-            <option value="">Choisir…</option>${options}
+          <select name="apporteur_id" id="pa-squi" required>
+            <option value=""${choisi ? '' : ' selected'}>Choisir…</option>
+            ${options}
+            <option value="${VALEUR_LIBRE}"${choisi === VALEUR_LIBRE ? ' selected' : ''}
+              >Un autre, pas dans la liste…</option>
           </select>
         </label>
-        ${champ('date_apport', 'Date de l’apport', aujourdhui(), { type: 'date' })}
-        ${champ('client', 'Client', '', { placeholder: 'Nom du client' })}
+        <label class="paf-champ" id="pa-slibre" ${choisi === VALEUR_LIBRE ? '' : 'hidden'}>
+          <span>Son nom</span>
+          <input name="partenaire" value="${esc(v.partenaire || '')}"
+            placeholder="Un confrère, un artisan, une agence…">
+        </label>
+        ${champ('date_apport', 'Date de l’apport', v.date_apport || aujourdhui(), { type: 'date' })}
+        ${champ('client', 'Client', v.client, { placeholder: 'Nom du client' })}
         <label class="paf-champ est-large"><span>Ce que RGD lui a apporté</span>
           <textarea name="objet" rows="3"
-            placeholder="Le financement du projet, des plans, la fourniture de la cuisine… écrivez librement."></textarea></label>`)}
+            placeholder="Le financement du projet, des plans, la fourniture de la cuisine… écrivez librement.">${esc(v.objet || '')}</textarea></label>`)}
 
       ${bloc('Où ça en est', `
         ${liste('issue', 'Issue',
-          [['', 'Pas tranché']].concat(Object.entries(ISSUES).map(([k, e]) => [k, e.label])), '')}
-        ${champ('montant_estime', 'Montant estimé pour lui (€)', '', { type: 'number' })}
-        ${champ('commission', 'Commission attendue (€)', '', { type: 'number' })}
+          [['', 'Pas tranché']].concat(Object.entries(ISSUES).map(([k, e]) => [k, e.label])),
+          v.issue || '')}
+        ${champ('montant_estime', 'Montant estimé pour lui (€)',
+          v.montant_estime != null ? String(v.montant_estime) : '', { type: 'number' })}
+        ${champ('commission', 'Commission attendue (€)',
+          v.commission != null ? String(v.commission) : '', { type: 'number' })}
         <label class="paf-champ est-large"><span>Commentaire</span>
           <textarea name="notes" rows="2"
-            placeholder="Ce qu’il faut se rappeler sur cette affaire."></textarea></label>`)}
+            placeholder="Ce qu’il faut se rappeler sur cette affaire.">${esc(v.notes || '')}</textarea></label>`)}
 
       <p class="paf-mot">Seul le <b>partenaire</b> est obligatoire. Tout le reste
-        peut rester vide et se compléter plus tard depuis sa fiche.</p>
+        peut rester vide et se compléter plus tard.</p>
       <div class="paf-pied">
-        <button type="button" class="btn ghost" id="pa-sannuler">Annuler</button>
+        ${modif ? '<button type="button" class="btn ghost danger" id="pa-ssuppr">Supprimer</button>' : ''}
         <span class="grow"></span>
-        <button type="submit" class="btn primary">Enregistrer l’apport</button>
+        <button type="button" class="btn ghost" id="pa-sannuler">Annuler</button>
+        <button type="submit" class="btn primary">${modif ? 'Enregistrer' : 'Enregistrer l’apport'}</button>
       </div>
     </form>`;
 
-  openModal('Une affaire apportée à un partenaire', html, { wide: true, onOpen: (m) => {
-    m.querySelector('#pa-sannuler').onclick = () => closeModal();
-    m.querySelector('#pa-sform').onsubmit = async (e) => {
-      e.preventDefault();
-      const f = new FormData(e.target);
-      const lu = (k) => String(f.get(k) || '').trim();
-      // ⚠ UN CHAMP VIDE PART À `null`, jamais à `''` : une chaîne vide en base
-      // ne se distingue plus d'une valeur qu'on n'a jamais remplie. Même règle
-      // que le formulaire du partenaire, juste au-dessus.
-      const ou = (v) => (v === '' ? null : v);
-      const nb = (v) => (v === '' ? null : Number(v));
-      const r = await creerSortant({
-        apporteur_id: lu('apporteur_id'),
-        date_apport: ou(lu('date_apport')),
-        client: ou(lu('client')),
-        objet: ou(lu('objet')),
-        issue: ou(lu('issue')),
-        montant_estime: nb(lu('montant_estime')),
-        commission: nb(lu('commission')),
-        notes: ou(lu('notes')),
-      });
-      if (!r.ok) return toast(`Non enregistré — ${r.motif}`, 'err');
-      closeModal();
-      toast('Apport enregistré');
-      apres?.();
-    };
-  } });
+  openModal(modif ? 'Modifier une affaire apportée' : 'Une affaire apportée à un partenaire',
+    html, { wide: true, onOpen: (m) => {
+      const qui = m.querySelector('#pa-squi');
+      const libre = m.querySelector('#pa-slibre');
+      const nom = libre.querySelector('[name="partenaire"]');
+
+      // ⚠ `hidden` NE SUFFIT PAS SEUL, ET JE L'AVAIS ÉCRIT LE CONTRAIRE ICI :
+      // `.paf-champ` pose `display: flex`, qui pèse (0,1,0) contre la
+      // spécificité NULLE de `[hidden]` — le champ restait affiché. Cinquième
+      // occurrence du même piège dans ce dépôt. Une règle `.paf-champ[hidden]`
+      // a été ajoutée à la feuille ; sans elle, ce `hidden` ne cache rien.
+      const montrer = () => {
+        const estLibre = qui.value === VALEUR_LIBRE;
+        libre.hidden = !estLibre;
+        if (estLibre) nom.focus();
+      };
+      qui.onchange = montrer;
+
+      m.querySelector('#pa-sannuler').onclick = () => closeModal();
+
+      const bSuppr = m.querySelector('#pa-ssuppr');
+      if (bSuppr) armerCroix(bSuppr, async () => {
+        const r = await supprimerSortant(ligne.id);
+        if (!r.ok) return toast(`Non supprimé — ${r.motif}`, 'err');
+        closeModal();
+        toast('Affaire retirée du registre');
+        apres?.();
+      }, { repos: 'Supprimer', arme: 'Confirmer la suppression',
+           classe: 'danger-plein', titre: 'Retirer cette affaire du registre' });
+
+      m.querySelector('#pa-sform').onsubmit = async (e) => {
+        e.preventDefault();
+        const f = new FormData(e.target);
+        const lu = (k) => String(f.get(k) || '').trim();
+        // ⚠ UN CHAMP VIDE PART À `null`, jamais à `''` : une chaîne vide en base
+        // ne se distingue plus d'une valeur qu'on n'a jamais remplie. Même règle
+        // que le formulaire du partenaire, plus haut.
+        const ou = (x) => (x === '' ? null : x);
+        const nb = (x) => (x === '' ? null : Number(x));
+
+        const estLibre = lu('apporteur_id') === VALEUR_LIBRE;
+        const nomLibre = estLibre ? lu('partenaire') : '';
+        if (estLibre && !nomLibre) return toast('Il manque le nom du partenaire', 'warn');
+
+        const champs = {
+          // L'un OU l'autre, jamais les deux : le champ qui ne sert pas part à
+          // `null`, y compris en modification — c'est ainsi qu'une ligne passée
+          // d'un nom libre à une fiche ne garde pas l'ancien texte.
+          apporteur_id: estLibre ? null : ou(lu('apporteur_id')),
+          partenaire: estLibre ? nomLibre : null,
+          date_apport: ou(lu('date_apport')),
+          client: ou(lu('client')),
+          objet: ou(lu('objet')),
+          issue: ou(lu('issue')),
+          montant_estime: nb(lu('montant_estime')),
+          commission: nb(lu('commission')),
+          notes: ou(lu('notes')),
+        };
+
+        const r = modif ? await majSortant(ligne.id, champs) : await creerSortant(champs);
+        if (!r.ok) return toast(`Non enregistré — ${r.motif}`, 'err');
+        closeModal();
+        toast(modif ? 'Modifications enregistrées' : 'Apport enregistré');
+        apres?.();
+      };
+    } });
 }
 
 /**
@@ -605,13 +680,8 @@ function nouveauSortant(apres, apporteurIdDefaut = '') {
  * droite vide sans que rien ne le signale. Les sept colonnes du tableau, elles,
  * ne tiennent pas dans une demi-largeur : il prend la ligne entière.
  */
-function ouvrirFichePartenaire(id, apres, opts = {}) {
+function ouvrirFichePartenaire(id, apres) {
   let enModification = false;
-  // ⚠ ON NE SE POSE SUR LE TABLEAU DES SORTANTS QU'À LA PREMIÈRE OUVERTURE :
-  // `dessine()` est rappelé à chaque enregistrement, et refaire défiler la
-  // fenêtre à ce moment-là déplacerait la fiche sous la main de qui vient de
-  // modifier un champ en haut.
-  let aPositionner = opts.vers === 'sortants';
 
   // ⚠ CHAQUE REDESSIN ROUVRE LA MODALE, il n'écrase pas son contenu :
   // `openModal` construit l'en-tête ET le corps, donc un `innerHTML` posé sur
@@ -747,11 +817,6 @@ function ouvrirFichePartenaire(id, apres, opts = {}) {
 
     if (ecriture && !enModification) brancherTableau(m, a, apres);
     if (ecriture && !enModification) brancherSortants(m, a, apres);
-
-    if (aPositionner && !enModification) {
-      aPositionner = false;
-      m.querySelector('#pa-sortants')?.scrollIntoView({ block: 'center' });
-    }
   };
 
   dessine();
@@ -773,20 +838,29 @@ function ouvrirFichePartenaire(id, apres, opts = {}) {
  * deux tableaux de la fiche — ce qu'il apporte, ce que RGD lui apporte — ont la
  * même croix, et deux copies d'un garde-fou n'en restent une que jusqu'au jour
  * où l'on n'en corrige qu'une.
+ *
+ * ⚠ LES LIBELLÉS SONT DES PARAMÈTRES, et ce n'est pas de la souplesse gratuite :
+ * le même garde-fou sert une croix de tableau et un bouton « Supprimer » de
+ * formulaire. Avec un libellé en dur, le bouton du formulaire se serait changé
+ * en « ✕ » au bout de quatre secondes, sans que rien ne le signale.
  */
-function armerCroix(x, agir) {
+function armerCroix(x, agir, opts = {}) {
+  const repos = opts.repos || '✕';
+  const arme = opts.arme || 'Confirmer';
+  const classe = opts.classe || 'est-arme';
+  const titre = opts.titre || 'Supprimer la ligne';
   x.onclick = async () => {
     if (x.dataset.arme !== '1') {
       x.dataset.arme = '1';
-      x.classList.add('est-arme');
-      x.textContent = 'Confirmer';
+      x.classList.add(classe);
+      x.textContent = arme;
       x.title = 'Cliquez à nouveau pour supprimer';
       clearTimeout(x._t);
       x._t = setTimeout(() => {
         x.dataset.arme = '';
-        x.classList.remove('est-arme');
-        x.textContent = '✕';
-        x.title = 'Supprimer la ligne';
+        x.classList.remove(classe);
+        x.textContent = repos;
+        x.title = titre;
       }, 4000);
       return;
     }
@@ -954,23 +1028,30 @@ export const rgdPartenairesPage = {
         </section>`;
       };
 
-      // ⚠ LA VISIBILITÉ D'UNE LIGNE VIENT DE SON PARTENAIRE, jamais d'elle-même :
-      // `scope.rgd` range `rgd_apports_sortants` sous `apporteur` dans
-      // `RGD_PORTEFEUILLE`, miroir exact de la policy. Un `db.t()` direct aurait
-      // rendu le cache entier, donc les affaires de partenaires qu'un chargé
-      // d'affaires n'a pas à voir.
+      // ⚠ LA VISIBILITÉ D'UNE LIGNE VIENT DE SON PARTENAIRE : `scope.rgd` range
+      // `rgd_apports_sortants` dans `RGD_PORTEFEUILLE`, miroir de la policy. Un
+      // `db.t()` direct aurait rendu le cache entier, donc les affaires de
+      // partenaires qu'un chargé d'affaires n'a pas à voir.
       //
-      // ⚠ LA RECHERCHE ATTRAPE AUSSI LE CLIENT ET CE QU'ON LUI A APPORTÉ, pas
-      // seulement le partenaire : on cherche « Chevalier » pour retrouver à qui
-      // on l'a passée. Une ligne peut donc apparaître ici alors que son
-      // partenaire ne figure dans aucune des trois sections du dessus — c'est
-      // voulu, la question posée n'est pas la même.
+      // ⚠ UNE LIGNE DONT LE PARTENAIRE N'EST PAS FICHÉ RESTE AFFICHÉE, et c'est
+      // la moitié de la demande du 05/10 : son nom est du texte libre, elle ne
+      // pend d'aucune fiche de l'annuaire. Le filtre d'avant la jetait, puisqu'il
+      // exigeait de retrouver `apporteur_id` dans la liste — elle aurait été
+      // écrite puis invisible.
+      //
+      // ⚠ LA RECHERCHE ATTRAPE AUSSI LE CLIENT, CE QU'ON LUI A APPORTÉ ET LE NOM
+      // LIBRE, pas seulement les partenaires de l'annuaire : on cherche
+      // « Chevalier » pour retrouver à qui on l'a passée. Une ligne peut donc
+      // apparaître ici alors que son partenaire ne figure dans aucune des trois
+      // sections du dessus — c'est voulu, la question posée n'est pas la même.
       const sectionSortants = () => {
         const parId = new Map(tous.map(p => [String(p.id), p]));
         const vusIds = new Set(vus.map(p => String(p.id)));
         const lignes = trierSortants(scope.rgd('rgd_apports_sortants')).filter(x => {
-          if (!parId.has(String(x.apporteur_id))) return false;
-          return vusIds.has(String(x.apporteur_id)) || hit([x.client, x.objet], ts);
+          const fiche = parId.has(String(x.apporteur_id));
+          if (x.apporteur_id && !fiche) return false;   // fiche hors de ma portée
+          return (fiche && vusIds.has(String(x.apporteur_id)))
+            || hit([x.client, x.objet, x.partenaire], ts);
         });
         // Rien à résumer, rien à écrire : le message du tableau vide dit déjà
         // à quoi sert ce bloc, et une phrase de bilan au-dessus de lui ferait
@@ -995,8 +1076,12 @@ export const rgdPartenairesPage = {
               ? `<b>${esc(eur(x.commission))}</b>`
               : `<span class="muted">${esc(eur(x.commission))}</span>`)
             : '<span class="muted">—</span>';
-          return `<tr data-vers-sortants="${esc(String(x.apporteur_id))}">
-            <td><b>${esc(nomDe(p))}</b>${p.profession
+          // ⚠ LE MÉTIER NE S'AFFICHE QUE SOUS UNE FICHE DE L'ANNUAIRE : un nom
+          // libre n'en a pas, et c'est la seule différence visible entre les
+          // deux. On ne le marque pas davantage — « hors annuaire » se lirait
+          // comme un reproche sur une ligne que rien n'oblige à ficher.
+          return `<tr data-sortant="${esc(String(x.id))}">
+            <td><b>${esc(destinataire(x, parId) || '—')}</b>${p && p.profession
               ? `<div class="s muted">${esc(p.profession)}</div>` : ''}</td>
             <td class="pa-serre">${x.date_apport
               ? esc(fmtDate(x.date_apport)) : '<span class="muted">—</span>'}</td>
@@ -1040,7 +1125,8 @@ export const rgdPartenairesPage = {
           </div>
           <p class="pa-note">La commission n’entre dans le total que sur une affaire
             <b>gagnée</b> par le partenaire. ${state.ecriture
-              ? 'Un clic sur une ligne ouvre la fiche du partenaire, où elles se modifient.'
+              ? 'Un clic sur une ligne l’ouvre pour la modifier. Le partenaire n’est pas '
+                + 'forcément dans l’annuaire : son nom peut s’écrire librement.'
               : 'Lecture seule.'}</p>
         </section>`;
       };
@@ -1074,15 +1160,21 @@ export const rgdPartenairesPage = {
       root.querySelectorAll('[data-partenaire]').forEach(tr => tr.onclick = () =>
         ouvrirFichePartenaire(tr.dataset.partenaire, draw));
 
-      // ⚠ UN ATTRIBUT À PART, ET PAS `data-partenaire` : la même fiche s'ouvre,
-      // mais posée sur le tableau des sortants. Arriver en haut de la fiche
-      // après avoir cliqué une ligne d'affaire obligerait à faire défiler pour
-      // retrouver celle qu'on vient de désigner.
-      root.querySelectorAll('[data-vers-sortants]').forEach(tr => tr.onclick = () =>
-        ouvrirFichePartenaire(tr.dataset.versSortants, draw, { vers: 'sortants' }));
+      // ⚠ UN CLIC SUR UNE AFFAIRE OUVRE L'AFFAIRE, PAS LA FICHE DU PARTENAIRE
+      // (corrigé le 05/10/2026). La version d'avant ouvrait la fiche, posée sur
+      // son tableau — ce qui ne marche QUE si le partenaire en a une. Depuis que
+      // son nom peut être du texte libre, une ligne sur deux n'aurait eu aucune
+      // porte pour se corriger ou se supprimer. Deux comportements selon que le
+      // partenaire est fiché ou non auraient été impossibles à deviner, donc le
+      // clic ouvre toujours la même chose : la ligne.
+      const sortantsParId = new Map(scope.rgd('rgd_apports_sortants').map(x => [String(x.id), x]));
+      root.querySelectorAll('[data-sortant]').forEach(tr => tr.onclick = () => {
+        const l = sortantsParId.get(tr.dataset.sortant);
+        if (l) formulaireSortant(l, draw);
+      });
 
       const bRep = root.querySelector('#pa-reperer');
-      if (bRep) bRep.onclick = () => nouveauSortant(draw);
+      if (bRep) bRep.onclick = () => formulaireSortant(null, draw);
     };
 
     draw();

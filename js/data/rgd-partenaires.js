@@ -188,7 +188,12 @@ export async function supprimerApport(id) {
 // au 05/10/2026, `type_demandeur` est renseigné sur 2 fiches sur 194 et un
 // budget sur 3. Elle aurait montré une ou deux lignes en ayant l'air complète.
 
-const CHAMPS_SORTANT = ['apporteur_id', 'date_apport', 'client', 'objet',
+// ⚠ `partenaire` N'EST PAS UN SECOND APPORTEUR : c'est le nom de celui qui n'a
+// PAS de fiche dans l'annuaire, en texte libre (05/10/2026 : « pour les
+// partenaires ce ne sera pas forcément les partenaires inscrits juste
+// au-dessus »). Quand `apporteur_id` est là, c'est lui qui fait foi — sinon la
+// ligne n'apparaîtrait dans aucune fiche et n'entrerait dans aucun total.
+const CHAMPS_SORTANT = ['apporteur_id', 'partenaire', 'date_apport', 'client', 'objet',
   'issue', 'montant_estime', 'commission', 'notes'];
 
 /** Ce que RGD a apporté à un partenaire, du plus récent au plus ancien. */
@@ -245,17 +250,26 @@ export const bilanSortantsDe = (apporteurId) => bilanDesSortants(sortantsDe(appo
 /**
  * Enregistrer une affaire apportée.
  *
- * ⚠ AUCUN CHAMP N'EST EXIGÉ SAUF LE PARTENAIRE, qui est la clé étrangère. La
- * date, le client, ce qu'on lui a apporté, l'issue, les montants : tout peut
- * rester vide et se compléter plus tard. Demandé le 05/10/2026 — « je voudrais
- * quelque chose de plus libre dans les champs du formulaire ».
+ * ⚠ AUCUN CHAMP N'EST EXIGÉ SAUF LE DESTINATAIRE. La date, le client, ce qu'on
+ * lui a apporté, l'issue, les montants : tout peut rester vide et se compléter
+ * plus tard. Demandé le 05/10/2026 — « je voudrais quelque chose de plus libre
+ * dans les champs du formulaire ».
  *
- * ⚠ ET L'ISSUE N'A PLUS DE VALEUR PAR DÉFAUT : `null` se lit « pas tranché »,
- * comme en face. La version du matin posait un état d'office ici, parce que le
- * mode démo n'a aucun `default` de colonne ; il n'y a plus d'état à poser.
+ * ⚠ ET LE DESTINATAIRE, C'EST UNE FICHE **OU** UN NOM : `apporteur_id` quand il
+ * est dans l'annuaire, `partenaire` en texte libre sinon. Le garde teste les
+ * DEUX — n'en tester qu'un referait, côté code, le `not null` que la migration
+ * vient de retirer. Même règle que la contrainte `check` de la table, et c'est
+ * elle qui fait foi : celui-ci sert à répondre proprement plutôt qu'à laisser
+ * remonter une erreur de base.
+ *
+ * ⚠ L'ISSUE N'A PAS DE VALEUR PAR DÉFAUT : `null` se lit « pas tranché », comme
+ * en face. La version du matin posait un état d'office ici, parce que le mode
+ * démo n'a aucun `default` de colonne ; il n'y a plus d'état à poser.
  */
 export async function creerSortant(champs) {
-  if (!champs.apporteur_id) return { ok: false, motif: 'affaire sans partenaire' };
+  if (!champs.apporteur_id && !String(champs.partenaire || '').trim()) {
+    return { ok: false, motif: 'affaire sans destinataire' };
+  }
   try {
     const ligne = await db.insert('rgd_apports_sortants', filtrer(champs, CHAMPS_SORTANT));
     return { ok: true, ligne };

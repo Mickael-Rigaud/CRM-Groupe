@@ -5924,12 +5924,20 @@ textarea.ev-nu { resize: vertical; min-height: 40px; }
    la meme facon. ⚠ L'ATTRIBUT PORTE LA REGLE, PAS LA SECTION : sans lui, la
    ligne « rien d'enregistre pour l'instant » prendrait le curseur d'un lien et
    inviterait a cliquer sur du vide. */
-.pa-sect tbody tr[data-vers-sortants] { cursor: pointer; }
-.pa-sect tbody tr[data-vers-sortants]:hover { background: var(--card-2); }
+.pa-sect tbody tr[data-sortant] { cursor: pointer; }
+.pa-sect tbody tr[data-sortant]:hover { background: var(--card-2); }
 
 /* Une date ne se coupe pas en deux lignes : la table a la place, elle la
    distribuait seulement au plus large. Constate a l'ecran, pas devine. */
 .pa-sect td.pa-serre { white-space: nowrap; }
+
+/* ⚠ `[hidden]` EST UN `display: none` DE SPECIFICITE NULLE, et `.paf-champ`
+   pose `display: flex` (0,1,0) : il l'ecrase. Le champ « Son nom » du
+   formulaire d'apport restait donc affiche, cache ou pas. Cinquieme occurrence
+   du meme piege dans ce depot — voir `.ndf [hidden]`, `.rgdf-corps[hidden]`,
+   `.pill-tabs[hidden]`. Une verification qui lit `element.hidden` ne le voit
+   PAS : la propriete change, le rendu non. */
+.paf-champ[hidden] { display: none; }
 
 /* Un mot d'explication dans le formulaire, au-dessus du pied. */
 .paf-mot { margin: 2px 0 0; font-size: 12px; color: var(--muted); }
