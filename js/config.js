@@ -14,5 +14,11 @@ export const CONFIG = {
   // (`COSTRUCTOR_API_KEY`, `GOOGLE_SA_JSON`), lus par les fonctions serveur.
   // Ne pas les remettre : `#/rgd/app` mène désormais à la vue d'ensemble,
   // pour qu'un ancien signet arrive quelque part au lieu de tomber à vide.
+  // Clé PUBLIQUE des notifications du téléphone (Web Push, VAPID). Publique par
+  // conception : le navigateur la présente au service de notifications pour
+  // dire « n'accepte que les messages signés par cette clé ». La clé privée qui
+  // signe vit dans le coffre de la base et n'est lue que par l'Edge Function
+  // `rappels-echeances`. Changer l'une sans l'autre rend tous les abonnements muets.
+  VAPID_PUBLIC_KEY: 'BAcE9zggcpYkO4lI98qOm5UmVny54nI3zFZl-ALWgv5friK213pYbdjkUJY5M_pTKirs9URKqKnL9jSZI55pFnk',
   get DEMO() { return !this.SUPABASE_URL || !this.SUPABASE_ANON_KEY; },
 };

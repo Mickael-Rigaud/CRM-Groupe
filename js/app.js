@@ -8,6 +8,7 @@ import { pages } from './pages/index.js';
 import { messagesNonLus, monterBulle } from './pages/messagerie.js';
 import { icon } from './icons.js';
 import { surveillerVersion } from './maj.js';
+import { monterRappels, demonterRappels } from './rappels.js';
 
 
 // ⚠ L'ADRESSE D'ARRIVÉE EST CAPTURÉE ICI, AVANT TOUT LE RESTE, ET C'EST CE QUI
@@ -242,7 +243,7 @@ function renderTiroir(gs, here, hash, u, ini) {
     await db.signOut(); location.hash = ''; scope.set(null);
     navState.open = null; navState.tiroir = false;
     document.body.classList.remove('tiroir-ouvert');
-    document.getElementById('msg-bulle')?.remove(); renderLogin();
+    document.getElementById('msg-bulle')?.remove(); demonterRappels(); renderLogin();
   });
 }
 
@@ -338,7 +339,7 @@ function renderNav() {
   univ.querySelector('#burger').onclick = () => { navState.tiroir = !navState.tiroir; navState.open = null; renderNav(); };
   univ.querySelector('#me-btn').onclick = () => { navState.open = navState.open === '__me' ? null : '__me'; renderNav(); };
   univ.querySelector('#pwd')?.addEventListener('click', () => { closeMenu(); passwordForm(false); });
-  univ.querySelector('#logout')?.addEventListener('click', async () => { await db.signOut(); location.hash = ''; scope.set(null); navState.open = null; document.getElementById('msg-bulle')?.remove(); renderLogin(); });
+  univ.querySelector('#logout')?.addEventListener('click', async () => { await db.signOut(); location.hash = ''; scope.set(null); navState.open = null; document.getElementById('msg-bulle')?.remove(); demonterRappels(); renderLogin(); });
   // Un univers ouvert conduit à son premier écran ; la bande 2 fait le reste
   univ.querySelectorAll('[data-univ]').forEach(a => a.onclick = () => { navState.open = null; });
 }
@@ -465,6 +466,8 @@ async function start(user) {
   // d'un écran à l'autre, donc un message en cours de frappe survit à une
   // vérification dans une fiche.
   monterBulle(document.body);
+  // Les échéances des tâches, au-dessus de la bulle : voir js/rappels.js.
+  monterRappels(document.body);
   probeLogos();
   unsubscribe?.();
   unsubscribe = db.onChange(() => { renderNav(); current?.refresh?.(); });

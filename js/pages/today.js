@@ -113,13 +113,16 @@ function carte(a, pour = false) {
 // Les deux onglets, et ce que chacun retient.
 // Une tache que j'ai ecrite sans l'assigner reste chez moi : personne d'autre ne
 // l'a prise, ce n'est pas une tache « envoyee ».
+// ⚠ UNE TÂCHE PARTAGÉE AVEC MOI EST AUSSI LA MIENNE (06/10/2026) : c'est le
+// sens du partage. « Chacun la sienne » n'est pas rompu — le responsable l'a
+// confiée nommément, ce n'est pas la direction qui lit la to-do d'un autre.
+// Exportée pour le pop-up des échéances (`js/rappels.js`) : il doit montrer
+// exactement les tâches de « Ma to do list », pas une seconde définition.
+export const estMaTache = (a, moi) => a.assignee_id === moi || a.shared_with === moi
+  || (!a.assignee_id && a.created_by === moi);
+
 const ONGLETS = [
-  { key: 'mienne', label: 'Ma to do list',
-    // ⚠ UNE TÂCHE PARTAGÉE AVEC MOI EST AUSSI LA MIENNE (06/10/2026) : c'est le
-    // sens du partage. « Chacun la sienne » n'est pas rompu — le responsable l'a
-    // confiée nommément, ce n'est pas la direction qui lit la to-do d'un autre.
-    garde: (a, moi) => a.assignee_id === moi || a.shared_with === moi
-      || (!a.assignee_id && a.created_by === moi) },
+  { key: 'mienne', label: 'Ma to do list', garde: estMaTache },
   { key: 'envoyees', label: 'Envoyées',
     garde: (a, moi) => a.created_by === moi && !!a.assignee_id && a.assignee_id !== moi },
 ];
