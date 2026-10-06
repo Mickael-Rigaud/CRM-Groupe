@@ -17,7 +17,7 @@ import { STRUCTURES_TACHE } from '../data/schema.js';
 import { esc, daysSince, fmtDate, relDay, userName, searchInput, bindSearch, restoreFocus, terms, hit } from '../ui.js';
 import { actType, bindActivityRows, activityForm, nextActivity, structureDe,
          toggleActivity, structuresDeLUtilisateur } from './activity.js';
-import { kanbanHtml } from './todo-kanban.js';
+import { kanbanHtml, dossiersDe, carteDossier } from './todo-kanban.js';
 import { openDeal } from './deal.js';
 
 // Les trois rangs de la liste, dans l'ordre où ils se lisent. Ils reprennent les
@@ -186,6 +186,20 @@ export const todayPage = {
       const pour = onglet.key === 'envoyees';
       const groupes = GROUPES.map(gr => ({ ...gr, l: retenues.filter(a => rangDe(a) === gr) })).filter(gr => gr.l.length);
 
+      // ⚠ LES DOSSIERS EN ATTENTE SONT AUSSI DANS LA LISTE, et pas seulement dans
+      // le tableau de la direction. La demande du 06/10/2026 disait « colonne »,
+      // mais ce sont les CHARGÉS D'AFFAIRES qui écrivent les devis et les missions,
+      // et eux n'ont pas le tableau : ne les mettre que là aurait livré la
+      // fonction à tout le monde sauf à ceux qui en ont l'usage. Même source,
+      // même carte, même filtre de structure — seule la mise en page change.
+      // ⚠ L'ONGLET « Envoyées » N'EN PORTE PAS : il montre ce qu'on a confié à
+      // quelqu'un d'autre, et un dossier n'est confié à personne.
+      const dossiers = (surTableau || onglet.key !== 'mienne' || state.structure === '—')
+        ? []
+        : structuresDeLUtilisateur()
+            .filter(a => !state.structure || state.structure === a.key)
+            .flatMap(a => dossiersDe(a.key));
+
       const sansProchaine = onglet.key === 'mienne'
         ? scope.deals().filter(d => d.status === 'open' && d.owner_id === moi && !nextActivity(d.id)
             && (!state.structure || state.structure === '—' || d.activity === state.structure))
@@ -218,9 +232,11 @@ export const todayPage = {
         ${surTableau
           ? kanbanHtml([...retenues, ...faites], recentes)
           : `<section class="card todo-liste">
+          ${dossiers.length ? `<div class="todo-groupe dossiers">Dossiers en attente<i>${dossiers.length}</i></div>
+            <div class="todo-dossiers">${dossiers.map(carteDossier).join('')}</div>` : ''}
           ${groupes.map(gr => `<div class="todo-groupe ${gr.key}">${gr.titre}<i>${gr.l.filter(a => !a.done).length}</i></div>${tri(gr.l).map(a => carte(a, pour)).join('')}`).join('')}
           ${faites.length ? `<div class="todo-groupe fait">Fait aujourd&rsquo;hui<i>${faites.length}</i></div>${tri(faites).map(a => carte(a, pour)).join('')}` : ''}
-          ${!retenues.length && !faites.length ? `<div class="empty">${onglet.key === 'mienne'
+          ${!retenues.length && !faites.length && !dossiers.length ? `<div class="empty">${onglet.key === 'mienne'
             ? 'Rien à faire — tout est à jour.'
             : 'Aucune tâche envoyée. Le bouton « Envoyer une tâche » sert à en confier une.'}</div>` : ''}
         </section>`}
@@ -262,6 +278,26 @@ export const todayPage = {
           if (a) activityForm({}, a, draw);
         };
         el.onclick = (e) => { if (e.target.closest('label, input, button, a')) return; ouvrir(); };
+        el.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ouvrir(); } };
+      });
+      // ⚠ UNE CARTE DE DOSSIER OUVRE LA FICHE, PAS UN FORMULAIRE DE TÂCHE : ce
+      // n'est pas une tâche, elle ne vit dans aucune table de tâches, et il n'y a
+      // rien à y cocher. On arrive d'ici pour écrire le devis ou la mission, donc
+      // on veut la fiche.
+      // ⚠ IMPORT PARESSEUX de l'écran Clients : les écrans de fiche importent
+      // `activity.js`, les charger en tête ferait un cycle — même raison que dans
+      // `activity.js` lui-même.
+      root.querySelectorAll('.kb-dossier[data-dossier]').forEach(el => {
+        const ouvrir = async () => {
+          const { dossier: genre, dossierId } = el.dataset;
+          if (genre === 'deal') { openDeal(dossierId, draw); return; }
+          const table = genre === 'demande' ? 'rgd_demandes' : 'rgd_clients';
+          const ligne = db.byId(table, dossierId);
+          if (!ligne) { draw(); return; }
+          const { ouvrirProspectRgd } = await import('./rgd-clients.js');
+          ouvrirProspectRgd(ligne, genre, draw);
+        };
+        el.onclick = ouvrir;
         el.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ouvrir(); } };
       });
       // Le « + » d'une colonne crée dans SA structure : c'est tout l'intérêt

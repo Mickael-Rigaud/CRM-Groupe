@@ -2014,6 +2014,25 @@ tr.btp-mission .btp-pts { color: var(--m-encre); }
 .kb-pile { display: flex; flex-direction: column; gap: 8px; }
 .kb-vide { margin: 6px 2px; font-size: 12px; color: var(--muted); }
 
+/* Les dossiers en attente. Ils ne se cochent pas : pas de case, pas de pied, un
+   liseré plus epais a leur propre couleur (--d, posee en ligne) pour qu'on ne les
+   confonde pas avec une tache. L'intertitre separe les deux piles — sans lui, une
+   carte sans case se lirait comme une tache dont la case a disparu. */
+.kb-sous-titre { margin: 4px 2px 0; font-size: 10px; font-weight: 800;
+  letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.kb-sous-titre:first-child { margin-top: 0; }
+.kb-dossier { padding: 10px 12px; border-radius: 11px;
+  background: var(--card); border: 1px solid var(--line);
+  border-left: 4px solid var(--d); cursor: pointer;
+  transition: transform .12s ease, box-shadow .12s ease; }
+.kb-dossier:hover, .kb-dossier:focus-visible { transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(16, 18, 40, .10); outline: none; border-color: var(--line-strong); }
+.kb-d-nom { margin: 0; font-size: 13px; font-weight: 650; line-height: 1.35; color: var(--text);
+  overflow-wrap: anywhere; }
+.kb-d-etat { margin: 3px 0 0; font-size: 11.5px; font-weight: 700; color: var(--d); }
+.kb-d-age { font-weight: 600; color: var(--muted); }
+.kb-dossier.est-vieux .kb-d-age { color: var(--amber); font-weight: 700; }
+
 /* La carte : fond blanc sur la colonne teintee, un liseré a gauche a la
    couleur de la structure, et elle se souleve au survol. */
 .kb-carte { display: flex; gap: 9px; padding: 11px 12px; border-radius: 11px;
@@ -2732,6 +2751,14 @@ a.fp-fichier-nom { color: var(--m-encre); }
 .todo-groupe.urgent i { background: var(--red-soft); color: var(--red); }
 .todo-groupe.afaire { color: var(--accent-ink); }
 .todo-groupe.afaire::before { background: var(--accent); }
+
+/* Les dossiers en attente, en liste. Memes cartes que dans le tableau — une
+   seule mise en forme a tenir — mais rangees en grille souple : la liste est
+   large, une carte par ligne y gaspillerait la place que les taches exploitent. */
+.todo-groupe.dossiers { color: var(--muted-2); }
+.todo-dossiers { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 14px 12px;
+  border-bottom: 1px solid var(--line); }
+.todo-dossiers .kb-dossier { flex: 1 1 240px; max-width: 340px; }
 
 /* La ligne. Elle n'a ni contour ni fond propre : un filet de couleur a gauche,
    un trait de separation en bas, et c'est tout. Ce qui prenait une carte de

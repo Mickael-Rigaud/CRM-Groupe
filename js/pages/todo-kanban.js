@@ -18,7 +18,10 @@
 // qu'on a oublié de ranger, et la voir est précisément l'intérêt du tableau.
 // Elle ne s'affiche que si elle porte quelque chose.
 import { db } from '../data/db.js';
-import { esc, daysSince, relDay, userName } from '../ui.js';
+import { scope } from '../data/scope.js';
+import { stageOf } from '../data/schema.js';
+import { etapeDeFiche, etapeDeDemande, joursDeVisite } from '../data/rgd-etapes.js';
+import { esc, daysSince, relDay, userName, fmtDate } from '../ui.js';
 import { actType, structureDe, contexteTache, structuresDeLUtilisateur } from './activity.js';
 
 const ecart = (a) => (a.due_date ? daysSince(a.due_date) : null);
@@ -93,6 +96,112 @@ function carte(a, recentes) {
   </article>`;
 }
 
+// ———————————————————————————————————————————————————————————————————————————
+// LES DOSSIERS QUI ATTENDENT UNE ÉCRITURE
+//
+// Demandé par Mickael le 06/10/2026 : « je voudrais que les "devis en cours" de
+// clients & prospects du tableau de bord rgd renova soient dans la to do list du
+// crm groupe dans la colonne rgd renova », « que les fiches dans "rédaction en
+// cours" de expertise soient […] dans la colonne btp expertise en violet », « que
+// les fiches dans "rédaction mission AMO" soient […] en jaune ».
+//
+// ⚠ CE NE SONT PAS DES TÂCHES, ET ON N'EN CRÉE AUCUNE. Écrire une ligne dans
+// `activities` à chaque dossier arrivé à l'étape aurait demandé de désigner un
+// destinataire que personne n'a nommé, aurait fait un doublon au second passage
+// par l'étape, et aurait laissé une tâche morte derrière chaque dossier qui
+// avance. Un ÉTAT n'est pas une tâche : il se relit à chaque rendu, depuis les
+// dossiers eux-mêmes. Rien n'est écrit, donc rien ne se périme.
+//
+// ⚠ ELLES NE SE COCHENT PAS, et c'est la raison de la carte à part. On ne « fait »
+// pas un devis en cours : on l'envoie, et c'est le changement d'étape — depuis la
+// fiche, où il s'écrit déjà — qui le retire d'ici. Une case à cocher aurait promis
+// un geste qui n'existe pas.
+//
+// ⚠ CE QUI ENTRE EST CE QU'ON A LE DROIT DE VOIR, pas ce dont on est responsable.
+// C'est le seul endroit du tableau où « chacun la sienne » ne s'applique pas, et
+// ce n'est pas un relâchement : cette règle vise les TÂCHES, le pense-bête
+// personnel. Un dossier au stade du devis est un état d'affaire, que le pipeline
+// montre déjà à qui peut le lire — le cacher ici aurait vidé l'encadré pour celui
+// qui l'a demandé. `scope.rgd()` et `scope.deals()` sont les miroirs des policies :
+// un chargé d'affaires n'y voit toujours que son portefeuille.
+//
+// ⚠ LES DEUX TEINTES SONT ÉCRITES ICI ET NON PRISES DANS LES VARIABLES DU CRM :
+// `--violet` y vaut #E24C86, qui est un rose, et `--amber` #A96C10, qui est un
+// brun. Ni l'un ni l'autre ne dit « violet » ni « jaune ».
+const VIOLET = '#6D28D9';
+const JAUNE = '#C98A00';
+
+// Les deux étapes BTP suivies, et la couleur demandée pour chacune. Elles vivent
+// dans la MÊME colonne : c'est la couleur qui les distingue, l'intitulé venant de
+// `stageOf` et donc du pipeline — renommer une étape renomme la carte.
+const SUIVIS_BTP = { mission_realisee: VIOLET, amo_cadrage: JAUNE };
+
+// Le nom derrière une ligne RGD : un particulier est un contact, un professionnel
+// une organisation, et une demande du site porte ses propres colonnes quand ni
+// l'un ni l'autre n'a été créé.
+const nomDeFiche = (f) => {
+  const c = f.contact_id && db.byId('contacts', f.contact_id);
+  if (c) return `${c.first_name || ''} ${c.last_name || ''}`.trim() || 'Sans nom';
+  const o = f.organisation_id && db.byId('organisations', f.organisation_id);
+  if (o) return o.name || 'Sans nom';
+  return `${f.prenom || ''} ${f.nom || ''}`.trim() || 'Fiche sans nom';
+};
+
+// ⚠ L'ÉTAPE SE RECALCULE, ON NE LIT PAS `statut_suivi`. L'écran Clients & prospects
+// range ses onglets par l'ÉTAPE — « quand les faits ont pris de l'avance, c'est
+// l'étape qui dit vrai » — et lire la valeur brute ferait apparaître ici des fiches
+// que l'onglet « Devis en cours » ne montre pas, et manquer celles qu'il montre.
+// Une seule définition, celle de `rgd-etapes.js`.
+function dossiersRgd() {
+  if (!scope.canRgd) return [];
+  const chantiers = scope.rgd('rgd_chantiers');
+  const devis = scope.rgd('rgd_devis');
+  const jours = joursDeVisite(scope.rgd('agenda_events'));
+  const couleur = '#FD7A2D';
+  const cartes = [];
+  // ⚠ AUCUNE ANCIENNETÉ SUR UNE FICHE CLIENT : `rgd_clients` n'a ni `created_at`
+  // ni `updated_at` — vérifié colonne par colonne. `synced_at` est l'heure du
+  // dernier relevé, pas celle du passage au devis : l'afficher ferait lire « depuis
+  // 0 j » sur un dossier qui traîne depuis trois semaines. Mieux vaut ne rien dire
+  // que dire faux. La date de la demande, elle, existe.
+  for (const f of scope.rgd('rgd_clients')) {
+    if (etapeDeFiche(f, chantiers, devis, jours) !== 'devis_encours') continue;
+    cartes.push({ id: f.id, genre: 'client', nom: nomDeFiche(f), libelle: 'Devis en cours', couleur });
+  }
+  for (const d of scope.rgd('rgd_demandes')) {
+    if (etapeDeDemande(d) !== 'devis_encours') continue;
+    cartes.push({ id: d.id, genre: 'demande', nom: nomDeFiche(d), libelle: 'Devis en cours', couleur });
+  }
+  return cartes;
+}
+
+// Une affaire PERDUE OU GAGNÉE ne figure pas : elle n'attend plus rien, et une
+// mission gagnée dont l'étape est restée en rédaction remonterait pour toujours.
+const dossiersBtp = () => scope.deals()
+  .filter(d => d.activity === 'btp' && d.status === 'open' && SUIVIS_BTP[d.stage])
+  .map(d => ({ id: d.id, genre: 'deal', nom: d.title || 'Affaire sans titre',
+               libelle: stageOf(d.activity, d.stage)?.label || d.stage, couleur: SUIVIS_BTP[d.stage],
+               depuis: d.stage_changed_at || d.created_at }));
+
+export const dossiersDe = (cle) => (cle === 'rgd' ? dossiersRgd() : cle === 'btp' ? dossiersBtp() : []);
+
+// ⚠ L'ANCIENNETÉ EST LA MOITIÉ DE L'INFORMATION QUAND ON L'A : une mission en
+// rédaction depuis trois jours ne se lit pas comme une mission en rédaction depuis
+// trois semaines, et c'est la seconde qu'on vient chercher ici. Elle passe en ambre
+// au-delà de deux semaines, le même seuil que la colonne « Dernière relance » de
+// l'écran Clients. Une carte sans date exacte n'en affiche aucune — voir plus haut.
+export function carteDossier(x) {
+  const j = x.depuis ? daysSince(x.depuis) : null;
+  const vieux = j !== null && j > 14;
+  return `<article class="kb-dossier${vieux ? ' est-vieux' : ''}" style="--d:${x.couleur}"
+    data-dossier="${esc(x.genre)}" data-dossier-id="${esc(x.id)}" tabindex="0"
+    title="${esc(x.libelle)}${x.depuis ? ` — depuis le ${fmtDate(x.depuis)}` : ''}">
+    <p class="kb-d-nom">${esc(x.nom)}</p>
+    <p class="kb-d-etat">${esc(x.libelle)}${
+      j !== null ? ` <span class="kb-d-age">· depuis ${j <= 0 ? "aujourd’hui" : `${j} j`}</span>` : ''}</p>
+  </article>`;
+}
+
 /**
  * Le tableau entier. Rend le HTML ; le branchement est fait par l'appelant,
  * qui tient déjà les gestionnaires de coche et de modification.
@@ -108,7 +217,8 @@ export function kanbanHtml(taches, recentes) {
   // pastilles de « Ma to do list » et au formulaire de tâche.
   const colonnes = structuresDeLUtilisateur()
     .map(a => ({ cle: a.key, nom: a.label, court: a.short, couleur: a.color, encre: a.accent,
-                 l: taches.filter(t => structureDe(t) === a.key) }));
+                 l: taches.filter(t => structureDe(t) === a.key),
+                 d: dossiersDe(a.key) }));
   // ⚠ « SANS STRUCTURE » RAMASSE TOUT CE QU'AUCUNE COLONNE N'A PRIS, et plus
   // seulement les tâches sans structure du tout. Le test d'avant — `!structureDe`
   // — laissait DISPARAÎTRE une tâche rangée dans une structure que celui qui
@@ -118,7 +228,7 @@ export function kanbanHtml(taches, recentes) {
   const placees = new Set(colonnes.flatMap(c => c.l));
   const orphelines = taches.filter(t => !placees.has(t));
   if (orphelines.length) {
-    colonnes.push({ cle: '', nom: 'Sans structure', court: '—', couleur: '#8a8fa3', encre: '#5b6070', l: orphelines });
+    colonnes.push({ cle: '', nom: 'Sans structure', court: '—', couleur: '#8a8fa3', encre: '#5b6070', l: orphelines, d: [] });
   }
 
   const tri = (l) => l.slice().sort((x, y) => {
@@ -142,16 +252,22 @@ export function kanbanHtml(taches, recentes) {
               title="Nouvelle tâche dans ${esc(c.nom)}">+</button>
           </div>
           <p class="kb-compte">${ouvertes.length} tâche${ouvertes.length > 1 ? 's' : ''}${
+            c.d.length ? ` · ${c.d.length} dossier${c.d.length > 1 ? 's' : ''}` : ''}${
             tard ? ` · <b class="est-tard">${tard} en retard</b>` : ''}</p>
         </header>
         <div class="kb-pile">
-          ${tri(c.l).map(t => carte(t, recentes)).join('')
-            || '<p class="kb-vide">Rien ici.</p>'}
+          ${c.d.length ? `<p class="kb-sous-titre">Dossiers en attente</p>${c.d.map(carteDossier).join('')}` : ''}
+          ${c.l.length
+            ? `${c.d.length ? '<p class="kb-sous-titre">Tâches</p>' : ''}${tri(c.l).map(t => carte(t, recentes)).join('')}`
+            : (c.d.length ? '' : '<p class="kb-vide">Rien ici.</p>')}
         </div>
       </section>`;
     }).join('')}
   </div>
   <p class="kb-note muted small">Vos tâches, rangées par structure.
     Chacun a la sienne : personne ne voit celle des autres, direction comprise.
-    Pour confier une tâche, l'onglet « Envoyées » la suit sans la perdre de vue.</p>`;
+    Pour confier une tâche, l'onglet « Envoyées » la suit sans la perdre de vue.
+    Les <b>dossiers en attente</b> ne sont pas des tâches : ce sont les affaires arrêtées
+    à une étape d'écriture, relues à chaque ouverture. Elles ne se cochent pas —
+    un clic ouvre la fiche, et c'est l'étape qui les retire d'ici.</p>`;
 }

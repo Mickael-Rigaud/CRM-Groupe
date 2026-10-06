@@ -92,6 +92,14 @@ export const SEED = {
     // carte se serait affichée avant la signature sur une mission signée, et le
     // bloc de facturation serait apparu sur une colonne qui ne le mérite plus.
     { id: 'd8b', title: 'Rénovation lourde — SCI Les Tilleuls', activity: 'btp', stage: 'amo_consultation', status: 'open', organisation_id: 'o4', owner_id: 'u-mickael', amount: 14000, channel: 'Réseau professionnel', fields: { type_mission: 'amo', problematique: 'Assistance à maîtrise d’ouvrage', type_bien: 'Immeuble', contexte: 'Rénovation lourde' }, stage_history: [{ stage: 'lead', at: d(-70) }, { stage: 'rdv1', at: d(-62) }, { stage: 'amo_programme', at: d(-50) }, { stage: 'amo_cadrage', at: d(-44) }, { stage: 'amo_contrat', at: d(-38) }, { stage: 'amo_consultation', at: d(-20) }], created_at: d(-70), stage_changed_at: d(-20) },
+    // ⚠ LES DEUX DOSSIERS QUI ALIMENTENT LA TO DO LIST (06/10/2026). Le tableau
+    // en colonnes montre les affaires arrêtées à une étape d'écriture : sans ces
+    // deux-là, ni la carte violette (« Rédaction en cours », expertise) ni la
+    // jaune (« Rédaction mission AMO ») ne s'essayaient hors production — où il
+    // n'y en a aucune non plus. La première est VIEILLE DE PLUS DE DEUX SEMAINES,
+    // c'est elle qui éprouve l'ambre de l'ancienneté ; la seconde est fraîche.
+    { id: 'd8c', title: 'Infiltrations toiture — Faure', activity: 'btp', stage: 'mission_realisee', status: 'open', contact_id: 'c12', owner_id: 'u-mickael', amount: 990, channel: 'Recommandation client', fields: { type_mission: 'expertise', niveau: 'exp_desordres', problematique: 'Infiltrations', type_bien: 'Maison', contexte: 'Particulier', date_visite: day(-24) }, stage_history: [{ stage: 'lead', at: d(-40) }, { stage: 'rdv1', at: d(-36) }, { stage: 'qualifie', at: d(-33) }, { stage: 'proposition', at: d(-30) }, { stage: 'rdv', at: d(-24) }, { stage: 'mission_realisee', at: d(-22) }], created_at: d(-40), stage_changed_at: d(-22) },
+    { id: 'd8d', title: 'Extension — Copropriété Bellevue', activity: 'btp', stage: 'amo_cadrage', status: 'open', organisation_id: 'o1', owner_id: 'u-mickael', amount: 6400, channel: 'Prospection directe', fields: { type_mission: 'amo', problematique: 'Assistance à maîtrise d’ouvrage', type_bien: 'Immeuble', contexte: 'Entreprise' }, stage_history: [{ stage: 'lead', at: d(-18) }, { stage: 'rdv1', at: d(-14) }, { stage: 'amo_programme', at: d(-8) }, { stage: 'amo_cadrage', at: d(-4) }], created_at: d(-18), stage_changed_at: d(-4) },
     { id: 'd8', title: 'Malfaçons carrelage — Marchand', activity: 'btp', stage: 'rapport_remis', status: 'won', contact_id: 'c10', owner_id: 'u-mickael', amount: 1200, channel: 'Partenaire / apporteur', referrer_org_id: 'o2', fields: { problematique: 'Malfaçons', type_bien: 'Appartement', contexte: 'Litige', date_visite: day(-30), date_rapport: day(-20) }, stage_history: [{ stage: 'lead', at: d(-60) }, { stage: 'rdv', at: d(-50) }, { stage: 'proposition', at: d(-45) }, { stage: 'mission_planifiee', at: d(-40) }, { stage: 'rapport_remis', at: d(-20) }], created_at: d(-60), won_at: d(-40), closed_at: d(-40), stage_changed_at: d(-20) },
     { id: 'd9', title: 'Crédit immo — Lemaire', activity: 'courtage', stage: 'pieces', status: 'open', contact_id: 'c7', owner_id: 'u-mickael', amount: 2100, channel: 'Site internet direct', fields: { type_financement: 'Crédit immobilier', montant_projet: 240000, montant_financement: 210000, apport: 30000, objectif: 'Résidence principale', pieces_manquantes: 'Avis d\'imposition 2025, 3 derniers bulletins' }, stage_history: [{ stage: 'lead', at: d(-20) }, { stage: 'rdv', at: d(-12) }, { stage: 'pieces', at: d(-10) }], created_at: d(-20), stage_changed_at: d(-10) },
     { id: 'd10', title: 'Regroupement crédits — Blanc', activity: 'courtage', stage: 'lead', status: 'open', contact_id: 'c11', owner_id: 'u-mickael', amount: 1500, channel: 'Meta Ads', campaign: 'RAC-Regroupement-Sept26', fields: { type_financement: 'Regroupement de crédits' }, stage_history: [{ stage: 'lead', at: d(-1) }], created_at: d(-1), stage_changed_at: d(-1) },
@@ -772,6 +780,17 @@ export const SEED = {
       source: 'google_calendar', notes: '', maj: d(-1) },
     { id: 'rc7', owner_id: 'u-mickael', contact_id: 'c8', statut: 'client', statut_suivi: 'devis_envoye',
       source: 'manuel', notes: '', maj: d(-8) },
+    // ⚠ LES DEUX FICHES « DEVIS EN COURS » ALIMENTENT LA TO DO LIST (06/10/2026).
+    // Le tableau en colonnes montre dans la colonne RGD Renova ce qui est arrêté à
+    // cette étape ; sans elles l'encadré « Dossiers en attente » restait vide en
+    // démo, et son seul essai possible était la production. L'une est un
+    // particulier, l'autre une organisation : le nom se lit sur deux tables, et
+    // l'écart ne se serait vu que sur un genre de fiche.
+    { id: 'rc16', owner_id: 'u-mickael', contact_id: 'c13', statut: 'prospect', statut_suivi: 'devis_en_cours',
+      source: 'manuel', notes: 'Chiffrage en cours, devis à envoyer.', maj: d(-5) },
+    { id: 'rc17', owner_id: 'u-charge', organisation_id: 'o6', statut: 'prospect', statut_suivi: 'devis_en_cours',
+      source: 'site', notes: '', maj: d(-2) },
+
     // ⚠ CELLES-CI PORTENT UN `costructor_id`, ET C'EST CE QUI LES FAIT ENTRER
     // DANS « TOUS LES CONTACTS ». L'annuaire ne montre que les fiches connues
     // de Costructor (`fiches.filter(f => f.costructor_id)`) : sans cette clef,
