@@ -2089,6 +2089,19 @@ tr.btp-mission .btp-pts { color: var(--m-encre); }
 .kb-sous.est-complete .kb-sous-compte { color: var(--green); }
 .kb-sous.est-complete .kb-sous-barre { background: color-mix(in srgb, var(--green) 20%, var(--card)); }
 .kb-sous.est-complete .kb-sous-barre > span { background: var(--green); }
+
+/* Le meme bloc sous une ligne de la liste : il passe sous le titre (la ligne
+   s'enroule, le bloc prend toute la largeur), aligne sur le texte et non sur
+   la case, et ses sous-taches se rangent cote a cote au lieu de s'empiler —
+   une liste se parcourt du regard, chaque tache doit rester basse. */
+.todo-tache.a-sous { flex-wrap: wrap; row-gap: 0; }
+.todo-tache .kb-sous.en-ligne { order: 3; flex: 1 1 100%; max-width: 640px; margin: 3px 0 2px 31px;
+  padding: 6px 9px 5px; }
+.kb-sous.en-ligne .kb-sous-tete { justify-content: flex-start; }
+.kb-sous.en-ligne .kb-sous-barre { margin-top: 4px; }
+.kb-sous.en-ligne .kb-sous-liste { display: flex; flex-wrap: wrap; gap: 2px 16px; margin-top: 5px; }
+.kb-sous.en-ligne .kb-sous-liste li { min-width: 0; }
+.kb-sous.en-ligne .kb-sous-liste li.kb-sous-plus { padding-left: 0; align-self: center; }
 .kb-pied { display: flex; align-items: center; gap: 6px; margin-top: 9px; }
 .kb-etiq { padding: 1px 7px; border-radius: 999px; font-size: 10px; font-weight: 800;
   text-transform: uppercase; letter-spacing: .02em; }

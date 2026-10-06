@@ -104,9 +104,12 @@ export function contexteTache(a) {
 }
 
 /**
- * Les deux petites marques d'une tâche, communes à la liste et au tableau :
- * l'avancement des sous-tâches et le partage. Le partage dit l'AUTRE personne —
- * « avec X » pour qui l'a partagée, « de X » pour qui la reçoit.
+ * La marque de partage d'une tâche, dans la liste : elle dit l'AUTRE personne —
+ * « avec X » pour qui l'a partagée, « de X » pour qui la reçoit. La pastille
+ * « ☑ n/m » des sous-tâches est partie le 06/10/2026 : la ligne porte désormais
+ * le bloc complet, cochable (`blocSousTaches` de `todo-kanban.js`), et deux
+ * compteurs sur la même ligne se liraient comme deux choses. Elle reste sur une
+ * tâche FAITE, qui n'affiche plus le bloc.
  */
 export function marquesTache(a) {
   const l = Array.isArray(a.checklist) ? a.checklist : [];
@@ -114,7 +117,7 @@ export function marquesTache(a) {
   const moi = scope.user?.id;
   const avec = !a.shared_with ? ''
     : a.shared_with === moi ? `de ${userName(a.assignee_id || a.created_by)}` : `avec ${userName(a.shared_with)}`;
-  return (l.length ? ` <span class="todo-sous ${faites === l.length ? 'est-complete' : ''}" title="Sous-tâches faites">☑ ${faites}/${l.length}</span>` : '')
+  return (a.done && l.length ? ` <span class="todo-sous ${faites === l.length ? 'est-complete' : ''}" title="Sous-tâches faites">☑ ${faites}/${l.length}</span>` : '')
     + (avec ? ` <span class="todo-partage" title="Tâche partagée">🤝 ${esc(avec)}</span>` : '');
 }
 

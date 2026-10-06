@@ -115,13 +115,20 @@ function carte(a, recentes) {
 // décoche : sans ce délai elle disparaissait au clic, et un clic de travers
 // n'avait plus d'autre réparation que d'ouvrir la tâche. Même délai que la
 // tâche elle-même (`GRACE_MS` de `today.js`).
+// ⚠ LA VUE EN LISTE DES CHARGÉS D'AFFAIRES PORTE LE MÊME BLOC (06/10/2026,
+// « fais pareil pour la vue en liste ») : exporté et non recopié, avec une seule
+// fonction d'écriture — deux copies d'une coche finissent par ne plus écrire la
+// même chose. `enLigne` ne change que la mise en page ; `teinte` sert la ligne
+// d'une tâche sans structure, qui n'a pas de `--c`.
 const RESTANTES_VISIBLES = 3;
 const DELAI_SOUS_MS = 15000;
 const sousRecentes = new Map(); // `${id}|${rang}` → minuteur
 const cleSous = (id, i) => `${id}|${i}`;
 
-function blocSousTaches(a, sousTaches, faites) {
+export function blocSousTaches(a, sousTaches = Array.isArray(a.checklist) ? a.checklist : [],
+  faites = sousTaches.filter(x => x && x.f).length, { enLigne = false, teinte = '' } = {}) {
   const total = sousTaches.length;
+  if (!total) return '';
   const lignes = sousTaches.map((x, i) => ({ t: x?.t || '', f: !!x?.f, i }));
   const restantes = lignes.filter(x => !x.f);
   const complete = restantes.length === 0;
@@ -131,7 +138,8 @@ function blocSousTaches(a, sousTaches, faites) {
   const gardees = new Set(restantes.slice(0, RESTANTES_VISIBLES).map(x => x.i));
   const vues = lignes.filter(x => gardees.has(x.i) || (x.f && sousRecentes.has(cleSous(a.id, x.i))));
   const reste = restantes.length - gardees.size;
-  return `<div class="kb-sous ${complete ? 'est-complete' : ''}">
+  return `<div class="kb-sous ${complete ? 'est-complete' : ''} ${enLigne ? 'en-ligne' : ''}"${
+    teinte ? ` style="--c:${teinte}"` : ''}>
     <div class="kb-sous-tete">
       <span class="kb-sous-reste">${complete ? '✓ Tout est fait'
         : `${restantes.length} sous-tâche${restantes.length > 1 ? 's' : ''} à faire`}</span>
@@ -147,9 +155,9 @@ function blocSousTaches(a, sousTaches, faites) {
   </div>`;
 }
 
-/** Branche les cases des sous-tâches du tableau. Appelée après chaque rendu. */
+/** Branche les cases des sous-tâches (tableau et liste). Appelée après chaque rendu. */
 export function lierSousTaches(root, redessiner) {
-  root.querySelectorAll('.kb-carte input[data-sous]').forEach(cb => cb.onchange = async () => {
+  root.querySelectorAll('input[data-sous]').forEach(cb => cb.onchange = async () => {
     const id = cb.dataset.sous;
     const rang = Number(cb.dataset.rang);
     const tache = db.byId('activities', id);

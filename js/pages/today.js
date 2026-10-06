@@ -17,7 +17,7 @@ import { STRUCTURES_TACHE } from '../data/schema.js';
 import { esc, daysSince, fmtDate, relDay, userName, searchInput, bindSearch, restoreFocus, terms, hit } from '../ui.js';
 import { actType, bindActivityRows, activityForm, nextActivity, structureDe,
          toggleActivity, structuresDeLUtilisateur, marquesTache } from './activity.js';
-import { kanbanHtml, dossiersDe, carteDossier, lierSousTaches, oublierSousTaches } from './todo-kanban.js';
+import { kanbanHtml, dossiersDe, carteDossier, lierSousTaches, oublierSousTaches, blocSousTaches } from './todo-kanban.js';
 import { openDeal } from './deal.js';
 
 // Les trois rangs de la liste, dans l'ordre où ils se lisent. Ils reprennent les
@@ -88,7 +88,12 @@ function carte(a, pour = false) {
         j === 0 ? "Aujourd'hui" : esc(relDay(a.due_date))}${a.due_time ? ' · ' + esc(a.due_time) : ''}</span>`
     : '<span class="todo-quand vide">—</span>';
 
-  return `<div class="todo-tache ${a.done ? 'done' : ''} ${recentes.has(a.id) ? 'recente' : ''} ${a.priority === 'urgent' && !a.done ? 'urgent' : ''}" ${act ? `style="--c:${act.color};--b:${act.accent};--bt:${act.on}"` : ''}>
+  // Les sous-tâches passent sous la ligne, cochables comme sur le tableau ; une
+  // tâche faite n'en montre plus — il n'y a plus rien à y cocher.
+  const sous = a.done ? '' : blocSousTaches(a, undefined, undefined,
+    { enLigne: true, teinte: act ? '' : 'var(--accent)' });
+
+  return `<div class="todo-tache ${sous ? 'a-sous' : ''} ${a.done ? 'done' : ''} ${recentes.has(a.id) ? 'recente' : ''} ${a.priority === 'urgent' && !a.done ? 'urgent' : ''}" ${act ? `style="--c:${act.color};--b:${act.accent};--bt:${act.on}"` : ''}>
     <label class="todo-case" title="${a.done ? 'Rouvrir' : 'Marquer comme fait'}">
       <input type="checkbox" ${a.done ? 'checked' : ''} data-toggle="${a.id}"><span></span></label>
     <b class="todo-t">${t.icon} ${esc(a.title)}${marquesTache(a)}</b>
@@ -101,6 +106,7 @@ function carte(a, pour = false) {
     ${recentes.has(a.id) ? `<button type="button" class="todo-annuler" data-annuler="${a.id}"
       title="Décocher : la tâche revient dans la liste">↩ Annuler</button>` : ''}
     <button class="icon-btn todo-editer" data-edit-act="${a.id}" title="Modifier">✎</button>
+    ${sous}
   </div>`;
 }
 
