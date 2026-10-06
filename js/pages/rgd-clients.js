@@ -1131,6 +1131,26 @@ export const rgdClientsPage = {
         </div>`;
       };
 
+      // ⚠ À QUI EST CE DOSSIER, LU SANS OUVRIR LA FICHE (06/10/2026, demandé :
+      // « avec une mention lead Antoine »). Sans cette colonne, le filtre d'à
+      // côté serait le seul moyen de le savoir — on lirait une liste sans pouvoir
+      // dire de qui elle est.
+      //
+      // ⚠ « À ATTRIBUER » N'EST PAS UN TIRET : un dossier sans responsable est un
+      // dossier qui attend quelqu'un, et un tiret ne dit pas qu'il y a quelque
+      // chose à faire. Même règle que la pile des leads BTP depuis le 18/09.
+      // « Leads de Mickael » mais « Leads d’Antoine » : une liste déroulante se
+      // lit à voix basse, et un « de Antoine » accroche l'œil à chaque ouverture.
+      // On garde le nom ENTIER — le prénom seul rend « Leads de Chargé » sur un
+      // compte nommé par sa fonction.
+      const deQui = (nom) => (/^[aeiouyéèêh]/i.test(nom) ? 'd’' + nom : 'de ' + nom);
+
+      const celluleResponsable = (f) => {
+        const u = f.owner_id && db.byId('profiles', f.owner_id);
+        if (!u) return '<span class="chip amber" title="Personne n’en est responsable">À attribuer</span>';
+        return `<span class="${u.role === 'direction' ? 'muted' : ''}">${esc(u.full_name || '—')}</span>`;
+      };
+
       const tableauProspects = () => `<section class="card table-wrap">
         ${barreLot()}
         ${bandeauTotal()}
@@ -1141,7 +1161,8 @@ export const rgdClientsPage = {
                 && lignesProspects.length ? ' checked' : ''}></th>` : ''}
             <th>Reçu</th><th>Provenance</th><th>Nom</th><th>Contact</th>
             ${surRdv ? '<th>Rendez-vous</th>' : ''}
-            <th>Projet</th><th>${surMontant ? 'Montant HT' : 'Budget'}</th><th>Ville</th><th>Statut</th>
+            <th>Projet</th><th>${surMontant ? 'Montant HT' : 'Budget'}</th><th>Ville</th>
+            ${peutAttribuer ? '<th>Responsable</th>' : ''}<th>Statut</th>
             ${surRelances ? '<th>Dernière relance</th>' : ''}
             <th>Commentaire</th><th class="rcl-suppr"></th></tr></thead>
           <!-- ⚠ L'INDEX EST CELUI DE LA LISTE ENTIERE, PAS DE LA PAGE.
@@ -1171,13 +1192,14 @@ export const rgdClientsPage = {
                   : '<span class="muted">—</span>')
               : esc(String(x.budget || '—').trim())}</td>
             <td class="muted">${esc(x.ville || '—')}</td>
+            ${peutAttribuer ? `<td class="small">${celluleResponsable(x.ligne)}</td>` : ''}
             <td class="rcl-statut-cell">${state.ecriture
               ? menuStatut(x.statut, x.cible, x.ligne.id) + flechesEtape(x.etape, true)
               : pastilleSuivi(x.statut)}</td>
             ${surRelances ? `<td class="small rcl-rel-td">${celluleRelance(x.ligne, x.statut, x.cible)}</td>` : ''}
             <td class="rcl-note">${champNote(x.ligne, x.cible)}</td>
             <td class="rcl-suppr">${boutonSuppression(x.ligne)}</td>
-          </tr>`; }).join('') || `<tr><td colspan="${10 + (surRdv ? 1 : 0) + (surRelances ? 1 : 0) + (peutAttribuer ? 1 : 0)}"><div class="empty">${esc(vide())}</div></td></tr>`}</tbody>
+          </tr>`; }).join('') || `<tr><td colspan="${10 + (surRdv ? 1 : 0) + (surRelances ? 1 : 0) + (peutAttribuer ? 2 : 0)}"><div class="empty">${esc(vide())}</div></td></tr>`}</tbody>
         </table>
         ${pagination()}
         <p class="small muted">${state.ecriture
@@ -1244,6 +1266,17 @@ export const rgdClientsPage = {
         <div class="toolbar">
           ${searchInput('rcl-q', state, surDemande
             ? 'Recherche nom, email, ville, projet…' : 'Rechercher nom, email, téléphone…')}
+          ${!surCorbeille && peutAttribuer ? `<select id="rcl-resp" aria-label="Responsable"
+            class="${scope.vueRgd !== 'direction' ? 'actif' : ''}"
+            title="À qui sont les dossiers affichés">
+            <!-- La direction d'abord : c'est la liste qu'on travaille. Les
+                 personnes ensuite, et « tous » entre les deux pour repasser au
+                 complet sans chercher. -->
+            <option value="direction"${scope.vueRgd === 'direction' ? ' selected' : ''}>Leads de la direction</option>
+            <option value=""${!scope.vueRgd ? ' selected' : ''}>Tous les leads</option>
+            ${scope.candidatsRgd().map(u => `<option value="${esc(u.id)}"${
+              scope.vueRgd === u.id ? ' selected' : ''}>Leads ${esc(deQui(u.full_name || 'ce membre'))}</option>`).join('')}
+          </select>` : ''}
           ${surCorbeille ? '' : surFrise ? `<select id="rcl-prov" aria-label="Provenance" class="${state.provenance ? 'actif' : ''}">
             <!-- ⚠ TOUS LES COMPTES PORTENT SUR LA MÊME POPULATION, y compris
                  celui de « Toutes ». Il comptait la frise ENTIÈRE pendant que
@@ -1324,6 +1357,18 @@ export const rgdClientsPage = {
       if (prec) prec.onclick = () => allerPage(state.page - 1);
       const suiv = root.querySelector('#rcl-suiv');
       if (suiv) suiv.onclick = () => allerPage(state.page + 1);
+
+      // ⚠ LE FILTRE ET LE SÉLECTEUR DE L'EN-TÊTE SONT LE MÊME RÉGLAGE, pas deux :
+      // ils écrivent tous les deux `scope.poserVueRgd`, et `draw()` reconstruit la
+      // coquille, donc les deux montrent toujours la même valeur. Deux filtres qui
+      // peuvent se contredire sur le même écran sont une question posée deux fois.
+      const selResp = root.querySelector('#rcl-resp');
+      if (selResp) selResp.onchange = () => {
+        scope.poserVueRgd(selResp.value);
+        state.selection = new Set();
+        state.page = 1;
+        draw();
+      };
 
       const selProv = root.querySelector('#rcl-prov');
       if (selProv) selProv.onchange = () => { state.provenance = selProv.value; draw(); };

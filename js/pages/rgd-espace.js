@@ -123,18 +123,14 @@ const bandeauVue = () => {
   const vue = vueChoisie();
   if (!vue) return '';
 
-  if (vue === 'direction') {
-    const n = horsDeLaVue();
-    if (!n) return '';
-    return `<div class="alert esp-vue-bandeau"><b>👁</b><div>
-      <b>Vous voyez les dossiers de la direction et ceux qui n’ont pas encore de
-      responsable.</b> ${n} dossier${n > 1 ? 's' : ''} confié${n > 1 ? 's' : ''} à
-      l’équipe ${n > 1 ? 'ne sont' : 'n’est'} pas affiché${n > 1 ? 's' : ''} ici —
-      ${n > 1 ? 'ils ne sont' : 'il n’est'} pas supprimé${n > 1 ? 's' : ''} :
-      changez la <b>Vue</b> en haut à droite pour la personne, ou pour
-      « Toute l’équipe ».
-      </div></div>`;
-  }
+  // ⚠ RIEN À DIRE SUR LA VUE PAR DÉFAUT (retiré le 06/10/2026, demandé :
+  // « enlève cette mention en haut, je t'ai dit que c'est forcément la direction
+  // le responsable donc pas besoin de le mentionner »). Un bandeau qui s'affiche
+  // à chaque ouverture pour énoncer l'état normal cesse d'être lu, et il occupe la
+  // place de ce qu'on vient voir. **Ne pas le remettre** : ce qui manquait —
+  // savoir à qui est un dossier et retrouver celui d'un autre — se dit mieux
+  // dans le tableau, par une colonne et un filtre.
+  if (vue === 'direction') return '';
 
   const u = db.byId('profiles', vue);
   return `<div class="alert esp-vue-bandeau"><b>👁</b><div>
@@ -146,8 +142,18 @@ const bandeauVue = () => {
     </div></div>`;
 };
 
+// ⚠ LE BANDEAU NE S'AFFICHE PAS SUR CLIENTS & PROSPECTS, et ce n'est pas une
+// exception de confort : cet écran porte déjà un filtre « Leads de… » et une
+// colonne « Responsable » sur chaque ligne. Il dit donc à qui est ce qu'on
+// regarde, mieux et plus précisément qu'une phrase en tête. Ailleurs — la vue
+// d'ensemble, le Pipeline — rien ne le dit, et des chiffres qui ne sont pas
+// ceux de l'entreprise se lisent comme une entreprise au ralenti.
+const SANS_BANDEAU = ['#/rgd/clients'];
+
 export const cadre = (actif, titre, corps) => coquilleEspace({
-  actif, titre, corps: bandeauVue() + corps, commandes: selecteurVue(),
+  actif, titre,
+  corps: (SANS_BANDEAU.includes(actif) ? '' : bandeauVue()) + corps,
+  commandes: selecteurVue(),
   cle: KEY, marque: act().label, baseline: 'Rénovation tous corps d’état', onglets: ONGLETS,
 });
 
