@@ -39,7 +39,7 @@ import { scope } from '../data/scope.js';
 import { esc, eur, isoDay, fmtDate, daysSince } from '../ui.js';
 import { poserEspace } from './espace.js';
 import { cadre, guard, KEY } from './rgd-espace.js';
-import { etapesRgd } from '../data/rgd-etapes.js';
+import { etapesRgd, ETAPES_HORS_CYCLE } from '../data/rgd-etapes.js';
 
 // L'exercice comptable de RGD Renova : 1er octobre → 30 septembre, aligné sur
 // Costructor. Ce n'est pas l'année civile, et s'y tromper décale tout le CA.
@@ -72,7 +72,7 @@ const exercice = (d = new Date()) => {
 const COULEURS = {
   demande: '#9CA3AF', rdv: '#2A6FBF', devis_encours: '#B45C00',
   devis_accepte: '#FD7A2C', chantier_encours: '#22C55E',
-  chantier_termine: '#059669', archives: '#B91C1C',
+  chantier_termine: '#059669', archives: '#B91C1C', indesirable: '#7F1D1D',
 };
 
 /**
@@ -360,7 +360,7 @@ export const rgdPilotagePage = {
       // comptent forcément les mêmes personnes, y compris les gardes.
       const etapes = etapesRgd().map(e => ({
         ...e, cle: e.key, couleur: COULEURS[e.key] || 'var(--accent)',
-        hors: e.key === 'archives',
+        hors: ETAPES_HORS_CYCLE.includes(e.key),
       }));
       const totalEtapes = etapes.filter(e => !e.hors).reduce((t, e) => t + e.n, 0);
 

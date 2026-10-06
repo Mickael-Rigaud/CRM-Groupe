@@ -67,7 +67,18 @@ export const ETAPES_RGD = [
   { key: 'chantier_termine', label: 'Chantier terminé',
     titre: 'Plus aucun chantier en cours chez cette personne' },
   { key: 'archives', label: 'Archivés', titre: 'Perdus et mis de côté' },
+  // ⚠ « CLIENTS INDÉSIRABLES » (06/10/2026, demandé : « une case clients
+  // indésirables et une ligne dans la liste déroulante du statut »). Comme les
+  // archives, HORS DU CYCLE : on n'y avance pas, on y range quelqu'un avec qui
+  // on ne veut plus travailler. Ce n'est PAS « perdu » : un perdu peut revenir
+  // demain avec un autre projet, un indésirable doit se reconnaître le jour où
+  // il rappelle — d'où un onglet à lui plutôt qu'une ligne noyée dans les
+  // archives.
+  { key: 'indesirable', label: 'Clients indésirables', titre: 'Clients avec qui on ne travaille plus' },
 ];
+// Les étapes HORS du cycle : on n'y avance pas, on y range. Écrites une fois
+// pour que la frise de la fiche, les flèches et le pipeline les écartent pareil.
+export const ETAPES_HORS_CYCLE = ['archives', 'indesirable'];
 export const ETAPES_CLES = ETAPES_RGD.map(e => e.key);
 
 // Le statut de suivi du tableau de bord RGD range une à une sur ces étapes :
@@ -87,6 +98,7 @@ export const ETAPE_DU_STATUT = {
   chantier_en_cours: 'chantier_encours',
   chantier_termine: 'chantier_termine',
   perdu: 'archives',
+  indesirable: 'indesirable',
 };
 
 // L'inverse : le statut que porte une étape. « demande » n'y figure pas, et
@@ -100,6 +112,7 @@ export const STATUT_DE_L_ETAPE = {
   chantier_encours: 'chantier_en_cours',
   chantier_termine: 'chantier_termine',
   archives: 'perdu',
+  indesirable: 'indesirable',
 };
 
 // ⚠ « REJETÉE » N'EST PAS UN STATUT DE LA FRISE, ET IL SE LIT « NOUVEAU PROSPECT ».
@@ -367,6 +380,9 @@ export function visiteDeLaFiche(f, chantiers, joursVisite) {
 // pour que l'appelant qui en tient déjà une copie ne la relise pas à chaque
 // ligne — `etapesRgd()` ci-dessous les lit une fois pour toutes.
 export function etapeDeFiche(f, chantiers, devis, joursVisite) {
+  // Indésirable passe AVANT tout, perdu compris : c'est un jugement sur la
+  // personne, et aucun chantier ni devis ne doit le faire oublier.
+  if (f.statut_suivi === 'indesirable') return 'indesirable';
   if (f.statut === 'perdu' || f.statut_suivi === 'perdu') return 'archives';
   // Lu, pas brut : « rejetee » se lit « nouveau_prospect », donc il passe par
   // `etapeParLesFaits` comme lui au lieu de tomber dans le repli « demande ».
@@ -387,6 +403,7 @@ export function etapeDeFiche(f, chantiers, devis, joursVisite) {
 // L'étape d'une demande du formulaire du site. Elle n'a ni devis ni chantier
 // rattaché : son statut seul décide.
 export function etapeDeDemande(d) {
+  if (d.statut === 'indesirable') return 'indesirable';
   if (d.statut === 'perdu') return 'archives';
   return ETAPE_DU_STATUT[d.statut] || 'demande';
 }

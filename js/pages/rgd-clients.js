@@ -89,7 +89,7 @@ import { scope } from '../data/scope.js';
 // Le pipeline de la vue d'ensemble les lit aussi : les garder dans cet écran
 // obligerait l'autre à les recopier, et deux copies dérivent toujours. Ce
 // fichier n'en garde que l'usage.
-import { ORDRE_ETAPES, ETAPES_RGD, ETAPES_CLES, ETAPE_DU_STATUT, STATUT_DE_L_ETAPE,
+import { ORDRE_ETAPES, ETAPES_RGD, ETAPES_CLES, ETAPE_DU_STATUT, STATUT_DE_L_ETAPE, ETAPES_HORS_CYCLE,
          etapeDeFiche, etapeDeDemande, estProspectParSource,
          joursDeVisite, statutsDeLEtape, statutSuiviLu,
          montantDevisDe, etapeAvecMontant, ecrireStatut, derniereRelance,
@@ -133,6 +133,8 @@ const STATUTS_SUIVI = [
   { key: 'chantier_en_cours', label: 'Chantier en cours',   ton: 'green' },
   { key: 'chantier_termine',  label: 'Chantier terminé',    ton: 'green' },
   { key: 'perdu',             label: 'Perdu',               ton: 'red' },
+  // Range la fiche dans l'onglet « Clients indésirables » (rgd-etapes.js).
+  { key: 'indesirable',       label: 'Client indésirable',  ton: 'red' },
 ];
 
 // Les statuts de FICHE, qui sont autre chose : ils disent ce qu'est la
@@ -312,8 +314,9 @@ const VIA = (txt) => {
 const flechesEtape = (etape, ecriture) => {
   if (!ecriture) return '';
   const i = ORDRE_ETAPES.indexOf(etape);
-  // « Archivés » est hors du cycle : depuis là, le retour ramène au début.
-  const avant = etape === 'archives' ? 'a_contacter'
+  // « Archivés » et « Clients indésirables » sont hors du cycle : depuis là,
+  // le retour ramène au début.
+  const avant = ETAPES_HORS_CYCLE.includes(etape) ? 'a_contacter'
     : i > 0 ? STATUT_DE_L_ETAPE[ORDRE_ETAPES[i - 1]] || 'a_contacter' : null;
   if (!avant) return '';
   return `<span class="rcl-fleches">
@@ -664,8 +667,11 @@ export const rgdClientsPage = {
       // fiches d'un même client, une seule porte le chantier, et c'est l'autre
       // qui survivait au hasard de l'ordre de la liste. Constaté le
       // 23/09/2026 sur un jeu d'essai — deux « Alain Bernard », deux réponses.
+      // « Indésirable » l'emporte sur tout : une seule de ses fiches marquée
+      // suffit, sinon le doublon resté « en cours » le ferait réapparaître
+      // dans la liste qu'on travaille.
       const RANG = ['archives', 'devis_encours', 'devis_accepte',
-                    'chantier_termine', 'chantier_encours'];
+                    'chantier_termine', 'chantier_encours', 'indesirable'];
       const rangDe = (f) => RANG.indexOf(etapeDe(f));
       const meilleures = new Map();
       for (const f of contacts) {
@@ -1222,6 +1228,7 @@ export const rgdClientsPage = {
           chantier_encours: 'Aucun chantier en cours.',
           chantier_termine: 'Aucun chantier terminé.',
           archives: 'Aucun contact perdu.',
+          indesirable: 'Aucun client indésirable.',
         })[state.vue] || 'Personne à cette étape.';
       }
 
@@ -1592,7 +1599,7 @@ export const rgdClientsPage = {
               // si l'affaire avance, vers la gauche si elle recule.
               const av = ORDRE_ETAPES.indexOf(state.vue);
               const ap = ORDRE_ETAPES.indexOf(versEtape);
-              const versLaDroite = versEtape === 'archives' || ap > av;
+              const versLaDroite = ETAPES_HORS_CYCLE.includes(versEtape) || ap > av;
               if (tr) tr.classList.add(versLaDroite ? 'rcl-part-droite' : 'rcl-part-gauche');
               cible?.classList.add('rcl-arrive');
               // On redessine APRÈS l'animation : redessiner tout de suite

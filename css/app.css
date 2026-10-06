@@ -1233,6 +1233,9 @@ button.esp-side-titre { background: none; border: 0; font-family: inherit; color
   background: var(--green-soft); border-color: color-mix(in srgb, var(--green) 35%, transparent); color: var(--green); }
 .statut-menu.st-perdu { background: var(--red-soft);
   border-color: color-mix(in srgb, var(--red) 35%, transparent); color: var(--red); }
+/* Client indesirable : plus fonce que « perdu », plein, pour qu'on ne confonde
+   pas les deux d'un coup d'oeil — l'un peut revenir, l'autre non. */
+.chip.st-indesirable, .statut-menu.st-indesirable { background: #7F1D1D; border-color: #7F1D1D; color: #fff; }
 
 /* ---------- Formations : un parcours en trois niveaux ----------
    Refait le 24/09/2026 sur la maquette de Mickael. L'accordéon d'avant cachait

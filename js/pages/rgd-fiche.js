@@ -76,7 +76,7 @@
 import { db } from '../data/db.js';
 import { esc, eur, fmtDate, fmtDateTime, openModal, closeModal, toast, userName,
          daysSince } from '../ui.js';
-import { ETAPES_RGD, ORDRE_ETAPES, STATUT_DE_L_ETAPE, ecrireStatut,
+import { ETAPES_RGD, ETAPES_HORS_CYCLE, ORDRE_ETAPES, STATUT_DE_L_ETAPE, ecrireStatut,
          montantDevisDe, etapeAvecMontant, COL_RELANCE, derniereRelance,
          aujourdhui } from '../data/rgd-etapes.js';
 import { scope } from '../data/scope.js';
@@ -429,6 +429,7 @@ export function ouvrirFicheRgd(x, onChange, retour = null) {
       : [];
     const i = ORDRE_ETAPES.indexOf(etapeCourante);
     const perdu = etapeCourante === 'archives';
+    const indesirable = etapeCourante === 'indesirable';
     // Qui porte la fiche, et qui a le droit de le changer. Seules les fiches
     // du portefeuille RGD — une demande du site, un client — se confient ; les
     // autres écrans qui ouvrent cette même fiche n'ont pas de propriétaire à
@@ -604,7 +605,8 @@ export function ouvrirFicheRgd(x, onChange, retour = null) {
             <h2>${esc(x.nom || '(sans nom)')}</h2>
             <div class="rgdf-meta">
               <span class="rgdf-tag">${esc(x.provenanceLabel || x.provenance)}</span>
-              <span class="rgdf-tag ${perdu ? 'est-perdu' : 'est-etape'}">${esc(perdu ? 'Perdu' : nomEtape(etapeCourante))}</span>
+              <span class="rgdf-tag ${perdu || indesirable ? 'est-perdu' : 'est-etape'}">${esc(
+                perdu ? 'Perdu' : indesirable ? 'Client indésirable' : nomEtape(etapeCourante))}</span>
               ${x.recu ? `<span class="rgdf-tag">Reçu le ${esc(fmtDate(x.recu))}</span>` : ''}
               <!-- Qui porte la fiche. « À attribuer » plutôt qu'un tiret : un
                    tiret ne dit pas qu'il y a quelque chose à faire — c'est la
@@ -641,11 +643,11 @@ export function ouvrirFicheRgd(x, onChange, retour = null) {
       <!-- La frise est le seul levier : cliquer une etape ecrit le statut.
            Pas de bouton « enregistrer », il laisserait croire qu'on peut
            changer d'avis alors que l'ecriture part a la source aussitot. -->
-      <div class="rgdf-piste ${perdu ? 'est-perdu' : ''}">
+      <div class="rgdf-piste ${perdu || indesirable ? 'est-perdu' : ''}">
         <div class="rgdf-jalons">
           <div class="rgdf-rail"><span style="width:${i <= 0 ? 0
             : Math.round((i / (ORDRE_ETAPES.length - 1)) * 100)}%"></span></div>
-          ${ETAPES_RGD.filter(e => e.key !== 'archives').map((e, n) => `
+          ${ETAPES_RGD.filter(e => !ETAPES_HORS_CYCLE.includes(e.key)).map((e, n) => `
             <button data-etape="${e.key}" title="${esc(e.titre)}"
               class="${e.key === etapeCourante ? 'cur' : (i >= 0 && n < i) ? 'past' : ''}">
               <i></i><span>${esc(e.label)}</span>
@@ -653,6 +655,8 @@ export function ouvrirFicheRgd(x, onChange, retour = null) {
         </div>
         <button data-etape="archives" class="rgdf-bouton-perdu ${perdu ? 'cur' : ''}"
           title="Perdu ou mis de côté">Perdu</button>
+        <button data-etape="indesirable" class="rgdf-bouton-perdu ${indesirable ? 'cur' : ''}"
+          title="Client avec qui on ne travaille plus">Indésirable</button>
       </div>
 
       <div class="rgdf-corps">
