@@ -155,7 +155,13 @@ export const scope = {
   // serveur — montre le même cloisonnement.
   rgdCorbeille() {
     if (!this.canSupprimerFicheRgd) return [];
-    return db.t('rgd_corbeille');
+    const lignes = db.t('rgd_corbeille');
+    // ⚠ ELLE SUIT LA VUE PAR CHARGÉ D'AFFAIRES, et c'est la cohérence qui
+    // l'exige : regarder l'espace comme quelqu'un et y voir les fiches
+    // supprimées d'un autre ferait mentir le bandeau. Le propriétaire se lit
+    // dans la copie gardée — la fiche, elle, n'existe plus.
+    const vue = this.vueRgd;
+    return vue ? lignes.filter(x => x.fiche?.owner_id === vue) : lignes;
   },
 
   // À quoi se reconnaît le propriétaire d'une ligne, table par table. Quatre
@@ -205,9 +211,69 @@ export const scope = {
     }
   },
 
+  // ⚠ REGARDER L'ESPACE RGD COMME QUELQU'UN D'AUTRE (06/10/2026, demandé par
+  // Élodie : « je voudrais que chaque chargé d'affaires ait sa propre base de
+  // données, mais il faudrait que la direction puisse voir toutes les
+  // informations du tableau de bord de chaque chargé d'affaires »).
+  //
+  // ⚠ CE N'EST PAS SE CONNECTER À SA PLACE, et la différence n'est pas théorique :
+  // l'usurpation ferait signer ses écritures par quelqu'un d'autre, et
+  // l'historique — qui a changé ce statut, qui a posé ce rappel — cesserait de
+  // dire la vérité. Ici seule la POPULATION REGARDÉE change ; les droits, les
+  // boutons et la signature restent ceux de la direction.
+  //
+  // ⚠ C'EST UN SEUL POINT DE PASSAGE, ET C'EST TOUT L'INTÉRÊT : `scope.rgd()`
+  // est lu par la vue d'ensemble, Clients & prospects, le Pipeline, les
+  // Partenaires et les Sous-traitants. Filtrer ici les sert tous sans en
+  // retoucher un seul, et aucun ne peut « oublier » de suivre.
+  //
+  // ⚠ UNE TABLE SANS PROPRIÉTAIRE RESTE GLOBALE (agenda, réglages, état de la
+  // synchronisation, documents du site) : elle n'est pas dans
+  // `RGD_PORTEFEUILLE`, donc elle n'a personne à qui appartenir. Le bandeau de
+  // l'écran le dit, plutôt que de laisser croire à un filtre qui porterait sur
+  // tout.
+  CLE_VUE_RGD: 'crm_rgd_vue_charge',
+
+  get vueRgd() {
+    if (!this.isDirection) return null;
+    try { return localStorage.getItem(this.CLE_VUE_RGD) || null; }
+    catch { return null; }
+  },
+
+  poserVueRgd(id) {
+    try {
+      if (id) localStorage.setItem(this.CLE_VUE_RGD, id);
+      else localStorage.removeItem(this.CLE_VUE_RGD);
+    } catch { /* navigation privée : la vue ne se mémorise pas, elle marche quand même */ }
+  },
+
+  // Le même raisonnement que `rgdVoitLigne`, mais pour QUELQU'UN D'AUTRE.
+  // ⚠ IL NE RÉUTILISE PAS `canSeeDeal` : celle-ci répond « oui » d'emblée à la
+  // direction, donc elle ne filtrerait rien ici — c'est précisément la
+  // direction qui regarde.
+  rgdVoitLignePour(table, r, qui) {
+    switch (this.RGD_PORTEFEUILLE[table]) {
+      case 'moi': return r.owner_id === qui;
+      case 'affaire': return !!r.deal_id && db.byId('deals', r.deal_id)?.owner_id === qui;
+      case 'sous_traitant': return db.byId('rgd_sous_traitants', r.sous_traitant_id)?.owner_id === qui;
+      case 'apporteur': return db.byId('rgd_apporteurs', r.apporteur_id)?.owner_id === qui;
+      // Même nuance que dans `rgdVoitLigne` : sans fiche d'annuaire, la ligne
+      // n'a aucun propriétaire à lire. Elle reste visible dans toutes les vues
+      // plutôt que d'appartenir à personne et de disparaître de toutes.
+      case 'apporteur_ou_libre':
+        return !r.apporteur_id
+          || db.byId('rgd_apporteurs', r.apporteur_id)?.owner_id === qui;
+      default: return true;
+    }
+  },
+
   rgd(table) {
     if (!this.canRgd) return [];
     const lignes = db.t(table);
+    const vue = this.vueRgd;
+    if (vue && this.RGD_PORTEFEUILLE[table]) {
+      return lignes.filter(r => this.rgdVoitLignePour(table, r, vue));
+    }
     if (this.isDirection || !this.RGD_PORTEFEUILLE[table]) return lignes;
     return lignes.filter(r => this.rgdVoitLigne(table, r));
   },

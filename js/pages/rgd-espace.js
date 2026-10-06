@@ -7,6 +7,8 @@
 import { scope } from '../data/scope.js';
 import { ACTIVITIES } from '../data/schema.js';
 import { coquilleEspace } from './espace.js';
+import { db } from '../data/db.js';
+import { esc } from '../ui.js';
 
 export const KEY = 'rgd';
 export const act = () => ACTIVITIES[KEY];
@@ -73,10 +75,74 @@ export const ONGLETS = [
   ] },
 ];
 
+// ⚠ REGARDER L'ESPACE COMME UN CHARGÉ D'AFFAIRES (06/10/2026, demandé par
+// Élodie). Le sélecteur est dans l'EN-TÊTE de la coquille, donc présent sur les
+// treize écrans de l'espace : le filtre vit dans `scope.rgd()`, un seul point de
+// passage, et tous les écrans suivent sans être retouchés.
+//
+// ⚠ IL N'EXISTE QUE POUR LA DIRECTION. Pour un chargé d'affaires il n'y a rien
+// à choisir : il ne voit que ses dossiers, et lui proposer une liste de
+// collègues ferait croire à un accès qu'il n'a pas.
+//
+// ⚠ LE BANDEAU N'EST PAS DE LA DÉCORATION. Un filtre qui se mémorise d'une
+// session à l'autre se fait oublier, et on finit par lire « il n'y a que trois
+// chantiers » en croyant regarder l'entreprise entière. Il dit QUI on regarde,
+// et ce que le filtre ne porte PAS.
+const vueChoisie = () => (scope.isDirection ? scope.vueRgd : null);
+
+const selecteurVue = () => {
+  if (!scope.isDirection) return '';
+  const vue = scope.vueRgd;
+  const gens = scope.candidatsRgd();
+  return `<label class="esp-vue${vue ? ' est-filtree' : ''}">
+    <span>Vue</span>
+    <select id="rgd-vue-charge" aria-label="Regarder l’espace comme">
+      <option value="">Toute l’équipe</option>
+      ${gens.map(u => `<option value="${esc(u.id)}"${vue === u.id ? ' selected' : ''}>${
+        esc(u.full_name || u.email || 'sans nom')}</option>`).join('')}
+    </select></label>`;
+};
+
+const bandeauVue = () => {
+  const vue = vueChoisie();
+  if (!vue) return '';
+  const u = db.byId('profiles', vue);
+  return `<div class="alert esp-vue-bandeau"><b>👁</b><div>
+    <b>Vous regardez l’espace comme ${esc(u?.full_name || 'ce membre de l’équipe')}.</b>
+    Les dossiers, partenaires et sous-traitants affichés sont les siens, et les
+    chiffres sont calculés sur eux seuls. Ce qui n’appartient à personne —
+    l’agenda, les réglages, l’état de la synchronisation — reste commun.
+    Vos droits ne changent pas : ce que vous écrivez reste signé de votre nom.
+    </div></div>`;
+};
+
 export const cadre = (actif, titre, corps) => coquilleEspace({
-  actif, titre, corps,
+  actif, titre, corps: bandeauVue() + corps, commandes: selecteurVue(),
   cle: KEY, marque: act().label, baseline: 'Rénovation tous corps d’état', onglets: ONGLETS,
 });
+
+// ⚠ L'ÉCOUTEUR EST POSÉ UNE SEULE FOIS, SUR LE DOCUMENT, et pas sur le champ :
+// l'en-tête est réécrit à chaque `draw()` d'un écran, donc un gestionnaire
+// attaché au `<select>` disparaîtrait au premier redessin — et le sélecteur
+// cesserait de répondre sans que rien ne le dise. Même remède que le pliage du
+// menu.
+//
+// ⚠ ON RE-ROUTE, ON NE RECHARGE PAS : `route()` écoute `hashchange`, donc un
+// événement suffit à refaire l'écran courant avec le nouveau filtre. Un
+// `location.reload()` reprendrait toutes les données pour un changement qui ne
+// touche qu'un filtre d'affichage.
+let vueEcoutee = false;
+function ecouterLaVue() {
+  if (vueEcoutee) return;
+  vueEcoutee = true;
+  document.addEventListener('change', (e) => {
+    const sel = e.target.closest('#rgd-vue-charge');
+    if (!sel) return;
+    scope.poserVueRgd(sel.value || null);
+    window.dispatchEvent(new Event('hashchange'));
+  });
+}
+ecouterLaVue();
 
 // LE BANDEAU « CES ÉCRANS LISENT… » A ÉTÉ RETIRÉ le 22/09/2026.
 // Il s'affichait en tête de chaque écran de l'espace et répétait la même

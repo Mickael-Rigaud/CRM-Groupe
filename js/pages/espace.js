@@ -123,7 +123,12 @@ const entreeOnglet = (o, actif) => {
 // `data-espace` permet de styler UNE structure sans toucher aux trois autres :
 // cette coquille est partagée par RGD, BTP, le courtage et Propulsion, et une
 // couleur changée ici les repeindrait toutes.
-export function coquilleEspace({ cle, marque, baseline = '', onglets, actif, titre, corps }) {
+// ⚠ `commandes` EST UN EMPLACEMENT, PAS UNE FONCTION : la coquille sert quatre
+// structures, et seule RGD y pose quelque chose aujourd'hui (le sélecteur de vue
+// par chargé d'affaires). Les trois autres passent `undefined` et ne bougent pas.
+// Il vit dans l'EN-TÊTE, à côté de la date : un réglage qui change ce que montre
+// l'écran entier n'a pas sa place dans le corps d'un seul écran.
+export function coquilleEspace({ cle, marque, baseline = '', onglets, actif, titre, corps, commandes = '' }) {
   // Un écran qui désigne un onglet inexistant n'échoue pas : il s'affiche avec
   // un menu où RIEN n'est marqué, et personne ne sait plus où il se trouve.
   // C'est arrivé le 21/09/2026 — la vue d'ensemble RGD déclarait
@@ -170,6 +175,7 @@ export function coquilleEspace({ cle, marque, baseline = '', onglets, actif, tit
     <div class="esp-main">
       <header class="esp-head">
         <h1>${esc(titre)}</h1>
+        ${commandes}
         <div class="datepill"><span>Aujourd&rsquo;hui</span>${DATE_DU_JOUR()}</div>
       </header>
       <div class="esp-body">${corps}</div>
