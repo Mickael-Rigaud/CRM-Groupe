@@ -94,18 +94,48 @@ const selecteurVue = () => {
   if (!scope.isDirection) return '';
   const vue = scope.vueRgd;
   const gens = scope.candidatsRgd();
-  return `<label class="esp-vue${vue ? ' est-filtree' : ''}">
+  // ⚠ L'ORDRE DES ENTRÉES EST CELUI DE L'USAGE : la vue de travail d'abord,
+  // puis la vue d'ensemble, puis les personnes. « Toute l'équipe » en tête
+  // ferait de l'exception le premier choix proposé.
+  return `<label class="esp-vue${vue !== 'direction' ? ' est-filtree' : ''}">
     <span>Vue</span>
     <select id="rgd-vue-charge" aria-label="Regarder l’espace comme">
-      <option value="">Toute l’équipe</option>
+      <option value="direction"${vue === 'direction' ? ' selected' : ''}>La direction</option>
+      <option value=""${!vue ? ' selected' : ''}>Toute l’équipe</option>
       ${gens.map(u => `<option value="${esc(u.id)}"${vue === u.id ? ' selected' : ''}>${
         esc(u.full_name || u.email || 'sans nom')}</option>`).join('')}
     </select></label>`;
 };
 
+// Combien de dossiers la vue courante met de côté. ⚠ LE CHIFFRE EST LA MOITIÉ
+// DU MESSAGE : « des dossiers sont ailleurs » se lit comme une généralité,
+// « 37 dossiers sont ailleurs » se vérifie et se clique.
+const horsDeLaVue = () => {
+  const total = db.t('rgd_clients').length + db.t('rgd_demandes').length;
+  const vus = scope.rgd('rgd_clients').length + scope.rgd('rgd_demandes').length;
+  return Math.max(0, total - vus);
+};
+
+// ⚠ LE BANDEAU NE S'AFFICHE QUE QUAND LA VUE CACHE QUELQUE CHOSE. Sur
+// « Toute l'équipe » il n'y a rien à prévenir ; sur les deux autres si, et c'est
+// là qu'une liste incomplète se lit comme une entreprise au ralenti.
 const bandeauVue = () => {
   const vue = vueChoisie();
   if (!vue) return '';
+
+  if (vue === 'direction') {
+    const n = horsDeLaVue();
+    if (!n) return '';
+    return `<div class="alert esp-vue-bandeau"><b>👁</b><div>
+      <b>Vous voyez les dossiers de la direction et ceux qui n’ont pas encore de
+      responsable.</b> ${n} dossier${n > 1 ? 's' : ''} confié${n > 1 ? 's' : ''} à
+      l’équipe ${n > 1 ? 'ne sont' : 'n’est'} pas affiché${n > 1 ? 's' : ''} ici —
+      ${n > 1 ? 'ils ne sont' : 'il n’est'} pas supprimé${n > 1 ? 's' : ''} :
+      changez la <b>Vue</b> en haut à droite pour la personne, ou pour
+      « Toute l’équipe ».
+      </div></div>`;
+  }
+
   const u = db.byId('profiles', vue);
   return `<div class="alert esp-vue-bandeau"><b>👁</b><div>
     <b>Vous regardez l’espace comme ${esc(u?.full_name || 'ce membre de l’équipe')}.</b>
@@ -138,7 +168,11 @@ function ecouterLaVue() {
   document.addEventListener('change', (e) => {
     const sel = e.target.closest('#rgd-vue-charge');
     if (!sel) return;
-    scope.poserVueRgd(sel.value || null);
+    // ⚠ LA CHAÎNE VIDE EST UN CHOIX, PAS UNE ABSENCE : « Toute l'équipe » se
+    // stocke en chaîne vide, et `vueRgd` ne retombe sur « La direction » que
+    // lorsque la clé n'existe PAS. Les confondre rendrait « Toute l'équipe »
+    // impossible à choisir : le réglage reviendrait au défaut au redessin suivant.
+    scope.poserVueRgd(sel.value);
     window.dispatchEvent(new Event('hashchange'));
   });
 }

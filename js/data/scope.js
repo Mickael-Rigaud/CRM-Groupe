@@ -161,7 +161,11 @@ export const scope = {
     // supprimées d'un autre ferait mentir le bandeau. Le propriétaire se lit
     // dans la copie gardée — la fiche, elle, n'existe plus.
     const vue = this.vueRgd;
-    return vue ? lignes.filter(x => x.fiche?.owner_id === vue) : lignes;
+    if (!vue) return lignes;
+    if (vue === 'direction') {
+      return lignes.filter(x => !x.fiche?.owner_id || this.estDeLaDirection(x.fiche.owner_id));
+    }
+    return lignes.filter(x => x.fiche?.owner_id === vue);
   },
 
   // À quoi se reconnaît le propriétaire d'une ligne, table par table. Quatre
@@ -234,16 +238,69 @@ export const scope = {
   // tout.
   CLE_VUE_RGD: 'crm_rgd_vue_charge',
 
+  // ⚠ LA VUE PAR DÉFAUT DE LA DIRECTION EST « LA DIRECTION », PAS « TOUT »
+  // (06/10/2026, demandé par Élodie : « si on les attribue à une autre personne,
+  // je voudrais que le lead disparaisse du tableau de la direction sans pour
+  // autant être supprimé — je voudrais que la direction puisse y avoir accès »).
+  // Confier un dossier doit le faire SORTIR de la liste qu'on travaille ; sinon
+  // la répartition ne soulage rien, elle ajoute une colonne.
+  //
+  // ⚠ « SANS RESPONSABLE » VEUT DÉJÀ DIRE « À LA DIRECTION », et c'est ce qui
+  // évite de choisir entre Mickael et Élodie comme destinataire par défaut : un
+  // lead du site arrive orphelin (`rgd_demande_depuis_deal` ne pose pas
+  // d'`owner_id`, vérifié), donc il tombe dans cette vue tout seul — et il y
+  // reste marqué « À attribuer », ce qu'un propriétaire posé d'office effacerait.
+  //
+  // ⚠ C'EST LA DIRECTION ENTIÈRE, PAS « MES DOSSIERS » : avec 191 fiches sur 194
+  // au nom de Mickael, une vue par personne viderait l'écran de l'autre. La
+  // question posée était « confié à quelqu'un d'autre », pas « confié à un
+  // collègue de la direction ».
+  //
+  // Trois valeurs : `'direction'` (le défaut), `null` (toute l'équipe, stocké
+  // en chaîne vide) ou l'identifiant d'une personne.
   get vueRgd() {
     if (!this.isDirection) return null;
-    try { return localStorage.getItem(this.CLE_VUE_RGD) || null; }
-    catch { return null; }
+    try {
+      const v = localStorage.getItem(this.CLE_VUE_RGD);
+      return v === null ? 'direction' : (v || null);
+    } catch { return 'direction'; }
+  },
+
+  estDeLaDirection(id) {
+    return !!id && db.byId('profiles', id)?.role === 'direction';
+  },
+
+  // Le propriétaire d'une ligne, table par table — `null` quand personne ne la
+  // porte. ⚠ UNE TABLE COMMUNE REND `undefined` : elle n'appartient à personne
+  // et ne se filtre pas, ce qui n'est pas la même chose qu'appartenir à personne.
+  rgdProprietaire(table, r) {
+    switch (this.RGD_PORTEFEUILLE[table]) {
+      case 'moi': return r.owner_id || null;
+      case 'affaire': return (r.deal_id && db.byId('deals', r.deal_id)?.owner_id) || null;
+      case 'sous_traitant': return db.byId('rgd_sous_traitants', r.sous_traitant_id)?.owner_id || null;
+      case 'apporteur': return db.byId('rgd_apporteurs', r.apporteur_id)?.owner_id || null;
+      case 'apporteur_ou_libre':
+        return (r.apporteur_id && db.byId('rgd_apporteurs', r.apporteur_id)?.owner_id) || null;
+      default: return undefined;
+    }
+  },
+
+  // ⚠ UNE LIGNE SANS PROPRIÉTAIRE EST À LA DIRECTION, et ce n'est pas un repli
+  // commode : c'est là qu'arrivent les leads neufs. Les laisser hors de cette
+  // vue les ferait disparaître de partout.
+  rgdEstDeLaDirection(table, r) {
+    const p = this.rgdProprietaire(table, r);
+    return p === null || this.estDeLaDirection(p);
   },
 
   poserVueRgd(id) {
     try {
-      if (id) localStorage.setItem(this.CLE_VUE_RGD, id);
-      else localStorage.removeItem(this.CLE_VUE_RGD);
+      // ⚠ LA CHAÎNE VIDE EST UN CHOIX — « Toute l'équipe » —, pas une absence de
+      // choix. La retirer ferait retomber sur « La direction » au redessin
+      // suivant : l'option serait proposée et impossible à garder. Seul `null`
+      // efface le réglage et rend la main au défaut.
+      if (id == null) localStorage.removeItem(this.CLE_VUE_RGD);
+      else localStorage.setItem(this.CLE_VUE_RGD, id);
     } catch { /* navigation privée : la vue ne se mémorise pas, elle marche quand même */ }
   },
 
@@ -272,7 +329,9 @@ export const scope = {
     const lignes = db.t(table);
     const vue = this.vueRgd;
     if (vue && this.RGD_PORTEFEUILLE[table]) {
-      return lignes.filter(r => this.rgdVoitLignePour(table, r, vue));
+      return lignes.filter(r => (vue === 'direction'
+        ? this.rgdEstDeLaDirection(table, r)
+        : this.rgdVoitLignePour(table, r, vue)));
     }
     if (this.isDirection || !this.RGD_PORTEFEUILLE[table]) return lignes;
     return lignes.filter(r => this.rgdVoitLigne(table, r));
