@@ -3,7 +3,7 @@ import { db } from '../data/db.js';
 import { scope } from '../data/scope.js';
 import { ACTIVITY_TYPES, ACTIVITIES, MODULES_TACHE, STRUCTURES_TACHE,
          PRIORITES } from '../data/schema.js';
-import { esc, openModal, closeModal, readForm, toast, isoDay, daysSince, relDay, userName, fmtDate } from '../ui.js';
+import { esc, openModal, closeModal, readForm, toast, daysSince, relDay, userName, fmtDate } from '../ui.js';
 // ⚠ `valeursProjet` EST LA SEULE TRADUCTION fiche/demande → les champs du
 // projet, et elle vit dans un module de DONNÉES : l'importer ici ne crée aucun
 // cycle (aucun module de `js/data/` ne dépend d'une page). La recopier aurait
@@ -151,7 +151,13 @@ export function activityForm(link = {}, existing = null, onSaved, onClose = null
     { key: 'priority', label: 'Degré de traitement', type: 'select', half: true,
       options: PRIORITES.map(p => [p.key, `${p.icon} ${p.label}`]),
       hint: 'À laisser vide pour une tâche ordinaire : elle se range alors à son échéance.' },
-    { key: 'due_date', label: 'Échéance', type: 'date', required: true, half: true, value: isoDay() },
+    // ⚠ L'ÉCHÉANCE EST FACULTATIVE ET NAÎT VIDE DEPUIS LE 06/10/2026 (demandé :
+    // « ne pas remplir automatiquement la date du jour, et si on n'en met pas on
+    // peut enregistrer quand même »). La date du jour posée d'office mentait :
+    // toute tâche créée sans y penser devenait « à faire aujourd'hui », puis « en
+    // retard » le lendemain, et sonnait dans le pop-up des échéances. La colonne
+    // est nullable en base ; une tâche sans date se range « À faire ».
+    { key: 'due_date', label: 'Échéance', type: 'date', half: true },
     { key: 'due_time', label: 'Heure (optionnel)', type: 'time', half: true },
     { key: 'activity', label: 'Structure', type: 'select', half: true,
       options: structuresDeLUtilisateur().map(a => [a.key, a.label]),
@@ -265,7 +271,7 @@ export function activityForm(link = {}, existing = null, onSaved, onClose = null
       <select name="shared_with" title="Partagée avec"><option value="">Pas de partage</option>${selOptions('shared_with')}</select>
     </span>`, 'Le partage donne à voir et à modifier la tâche, pas à la supprimer. Elle reste comptée chez le responsable.')}
     ${ligne('📅', 'Échéance', `<span class="taf-duo">
-      <input type="date" name="due_date" required value="${esc(val('due_date'))}">
+      <input type="date" name="due_date" value="${esc(val('due_date'))}" title="Échéance (facultative)">
       <input type="time" name="due_time" value="${esc(val('due_time'))}" title="Heure (optionnel)">
     </span>`)}
     ${ligne('🏢', 'Structure', `<select name="activity"><option value="">—</option>${selOptions('activity')}</select>`,
@@ -330,6 +336,9 @@ export function activityForm(link = {}, existing = null, onSaved, onClose = null
     // Une colonne uuid ne prend pas la chaîne vide ; et partager avec le
     // responsable lui-même ne veut rien dire.
     if (!v.shared_with || v.shared_with === v.assignee_id) v.shared_with = null;
+    // Une colonne `date` ne prend pas la chaîne vide non plus ; et une heure sans
+    // jour ne désigne aucun moment, elle partirait avec la date.
+    if (!v.due_date) { v.due_date = null; v.due_time = null; }
     v.checklist = elements.checklist();
     v.notes = elements.notes();
     try {
