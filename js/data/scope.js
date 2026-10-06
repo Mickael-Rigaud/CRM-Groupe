@@ -139,6 +139,25 @@ export const scope = {
   get canBtp() { return this.activityKeys.includes('btp'); },
   get canRgd() { return this.activityKeys.includes('rgd'); },
 
+  // ⚠ SUPPRIMER UNE FICHE RGD EST UN GESTE DE DIRECTION depuis le 06/10/2026
+  // (demandé par Élodie : « la suppression n'est que pour les profils direction
+  // pas les chargés d'affaires »). Miroir EXACT du garde de
+  // `rgd_supprimer_fiche`, qui refuse côté base — un bouton caché n'est pas un
+  // droit retiré ; l'écran évite seulement d'offrir ce qui échouerait.
+  get canSupprimerFicheRgd() { return this.isDirection && this.canRgd; },
+
+  // ⚠ `rgd_corbeille` (06/10/2026) GARDE LE CONTENU des fiches supprimées —
+  // la ligne entière, l'affaire et le chantier emportés, qui a supprimé et
+  // quand. C'est la pièce qui manquait pour qu'une erreur se répare :
+  // `rgd_suppressions`, elle, ne porte qu'un identifiant et n'a jamais servi
+  // qu'à empêcher une fiche de revenir. Sa policy ne la rend qu'à la direction ;
+  // ce filtre dit la même chose, pour que le mode démo — qui n'a pas de
+  // serveur — montre le même cloisonnement.
+  rgdCorbeille() {
+    if (!this.canSupprimerFicheRgd) return [];
+    return db.t('rgd_corbeille');
+  },
+
   // À quoi se reconnaît le propriétaire d'une ligne, table par table. Quatre
   // tables le portent elles-mêmes ; les autres le tiennent de ce dont elles
   // pendent — une affaire, un sous-traitant, un apporteur. Aucune ne porte

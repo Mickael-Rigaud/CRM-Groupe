@@ -81,9 +81,32 @@ export async function majNote({ uuid, cible, valeur }) {
  * elle ne l'est que pour une fiche qui venait de l'application RGD. Une fiche
  * née ici n'a rien à empêcher de revenir.
  */
-export async function supprimerFicheRgd(source, id) {
+export async function supprimerFicheRgd(source, id, forcer = false) {
   try {
-    const r = await db.rpc('rgd_supprimer_fiche', { p_source: source, p_id: id });
+    const r = await db.rpc('rgd_supprimer_fiche',
+      { p_source: source, p_id: id, p_forcer: !!forcer });
+    // ⚠ UN REFUS N'EST PAS UNE ERREUR, ET LE DÉTAIL COMPTE : la fonction rend
+    // `{ ok: false, motif: 'rattachements', devis, paiements, chantiers,
+    // autres }` pour que l'écran NOMME ce qui bloque et propose de forcer. Le
+    // réduire à une chaîne ferait reposer la question sur rien.
+    if (r?.ok === false) return { ok: false, motif: r.error || r.motif || 'refusé', refus: r };
+    return { ok: true, donnees: r };
+  } catch (e) { return echec(e); }
+}
+
+/**
+ * Remettre une fiche prise dans la corbeille.
+ *
+ * ⚠ ELLE REMET AUSSI L'AFFAIRE ET LE CHANTIER emportés avec elle, et
+ * désarchive le contact — mais SEULEMENT si c'est la suppression qui l'avait
+ * archivé. La corbeille garde la réponse : sans elle, restaurer sortirait des
+ * archives une fiche que quelqu'un y avait rangée exprès.
+ *
+ * ⚠ LA RESTAURATION EST RÉSERVÉE À LA DIRECTION, côté base comme ici.
+ */
+export async function restaurerFicheRgd(corbeilleId) {
+  try {
+    const r = await db.rpc('rgd_restaurer_fiche', { p_corbeille: corbeilleId });
     if (r?.ok === false) return { ok: false, motif: r.error || 'refusé' };
     return { ok: true, donnees: r };
   } catch (e) { return echec(e); }

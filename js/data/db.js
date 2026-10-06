@@ -3,6 +3,7 @@
 // passent par l'adaptateur puis mettent le cache à jour.
 import { CONFIG } from '../config.js';
 import { SEED, SEED_USERS } from './seed.js';
+import { estUnRendezVousRgd } from './schema.js';
 import { SEED_SITE, deplierSite } from './seed-site.js';
 
 export const TABLES = ['profiles', 'organisations', 'contacts', 'deals', 'activities', 'events', 'settings',
@@ -62,6 +63,10 @@ export const TABLES = ['profiles', 'organisations', 'contacts', 'deals', 'activi
   // apporte à un partenaire. Saisie dans le CRM elle aussi, et jamais relevée.
   'rgd_apports_sortants',
   'rgd_apporteurs', 'rgd_fournitures', 'rgd_realisations', 'rgd_carrousel',
+  // ⚠ `rgd_corbeille` est la seule table du CRM qui porte des lignes MORTES :
+  // le contenu des fiches supprimées, pour pouvoir les remettre. Sa policy ne
+  // la rend qu'à la direction, donc un chargé d'affaires la charge vide.
+  'rgd_corbeille',
   'rgd_reglages', 'rgd_clients', 'rgd_costructor_etat',
   'rgd_costructor_journal', 'rgd_costructor_ignores',
   // messagerie interne (canaux par structure + conversations privées)
@@ -120,18 +125,19 @@ const CLE_PRIMAIRE = {
 };
 
 // ---------- Adaptateur local (démo) ----------
-// ⚠ CE QUI FAIT QU'UN CHANTIER EST UN SIMPLE RENDEZ-VOUS, et non du travail
-// qui porte de l'argent. Double du `not exists` de `rgd_supprimer_fiche` : si la
-// liste change en base, elle change ici aussi.
-const estSimpleRdv = (c) => c.statut_d1 === 'visite_technique'
-  && c.montant_ht == null && c.montant_ttc == null
-  && c.d1_id == null && c.costructor_id == null;
-
 // Les tables dont une ligne suffit a retenir une affaire. Memes noms, meme ordre
 // que dans la fonction SQL.
 const PORTEURS_AFFAIRE = [
   'rgd_devis', 'rgd_paiements', 'rgd_fournitures', 'rgd_missions',
   'rgd_st_paiements', 'rgd_st_commissions', 'henrri_documents',
+];
+
+// Celles qui comptent dans « autres » quand on dit ce qui restera sans fiche :
+// les mêmes, moins les devis et les paiements, qui sont nommés à part parce
+// qu'ils portent de l'argent qu'on lit dans les totaux.
+const PORTEURS_AUTRES = [
+  'rgd_fournitures', 'rgd_missions', 'rgd_st_paiements',
+  'rgd_st_commissions', 'henrri_documents',
 ];
 
 const localAdapter = {
@@ -359,16 +365,24 @@ const localAdapter = {
       return { ok: true, id: d.id, ancien_statut: ancien, date_signature: d.date_signature };
     }
 
-    // ── La suppression d'une fiche, depuis le 25/09/2026 ──────────────────
-    // ⚠ DOUBLE DU SQL, même règle que les trois ci-dessus.
+    // ── Supprimer une fiche, et la garder dans la corbeille ───────────────
+    // ⚠ DOUBLE DU SQL de `rgd_supprimer_fiche`, même règle que les trois
+    // ci-dessus : si les bornes bougent en base, elles bougent ici aussi.
     //
-    // ⚠ LA PIERRE TOMBALE EST REJOUÉE ICI ALORS QUE LA DÉMO N'A AUCUN RELEVÉ,
+    // ⚠ LA PIERRE TOMBALE EST REJOUÉE ALORS QUE LA DÉMO N'A AUCUN RELEVÉ,
     // et ce n'est pas du zèle : c'est la seule partie du geste qu'on puisse
     // éprouver avant la production. En l'omettant, la démo montrerait une
     // suppression qui marche là où la vraie ferait revenir la fiche une
-    // demi-heure plus tard — exactement le défaut silencieux que la fonction
-    // existe pour empêcher.
+    // demi-heure plus tard.
+    //
+    // ⚠ ET LE RÔLE EST VÉRIFIÉ ICI AUSSI : sans ça la démo laisserait un
+    // chargé d'affaires supprimer, c'est-à-dire qu'elle montrerait l'absence
+    // d'un cloisonnement qui existe. Le pire des deux mondes pour une
+    // démonstration.
     if (nom === 'rgd_supprimer_fiche') {
+      if (this.monRole() !== 'direction') {
+        throw new Error("la suppression d'une fiche est réservée à la direction");
+      }
       if (!['clients', 'demandes'].includes(args.p_source)) {
         throw new Error('source inconnue : ' + args.p_source);
       }
@@ -376,11 +390,77 @@ const localAdapter = {
       const lignes = this.data[table] || [];
       const i = lignes.findIndex(x => x.id === args.p_id);
       if (i < 0) return { ok: false, error: 'fiche introuvable' };
-      const d1 = lignes[i].d1_id ?? null;
-      // On relit le contact AVANT de retirer la fiche : apres, le lien n'existe
-      // plus et le rendez-vous serait introuvable. Meme ordre que le SQL.
-      const contact = lignes[i].contact_id ?? null;
+
+      // On lit TOUT avant de toucher à quoi que ce soit : après, ni le contenu
+      // ni le lien vers le contact n'existent plus. Même ordre que le SQL.
+      const fiche = { ...lignes[i] };
+      const contact = fiche.contact_id ?? null;
+      const d1 = fiche.d1_id ?? null;
+      const c = contact ? (this.data.contacts || []).find(x => x.id === contact) : null;
+      const nomFiche = [c?.first_name, c?.last_name].filter(Boolean).join(' ')
+        || c?.email || 'fiche sans nom';
+
+      const siennes = (this.data.deals || []).filter(d => d.contact_id === contact);
+      const ids = new Set(siennes.map(d => d.id));
+      const parAffaire = (n) => (this.data[n] || []).filter(x => ids.has(x.deal_id)).length;
+      const devis = (this.data.rgd_devis || [])
+        .filter(x => x.contact_id === contact || ids.has(x.deal_id)).length;
+      const paiements = parAffaire('rgd_paiements');
+      const chantiers = (this.data.rgd_chantiers || [])
+        .filter(x => ids.has(x.deal_id) && !estUnRendezVousRgd(x)).length;
+      const autres = PORTEURS_AUTRES.reduce((n, nom2) => n + parAffaire(nom2), 0);
+      const pend = devis + paiements + chantiers + autres;
+      const orphelins = { devis, paiements, chantiers, autres };
+
+      // ⚠ LE REFUS REND UN OBJET, IL NE LÈVE PAS D'ERREUR : l'écran doit
+      // pouvoir NOMMER ce qui bloque et proposer de forcer.
+      if (!args.p_forcer && pend > 0) {
+        return { ok: false, motif: 'rattachements', ...orphelins };
+      }
+
+      // Les affaires qui ne portent QUE le rendez-vous. Trois bornes, les
+      // mêmes qu'en base : chez RGD, sans montant à elles, et qui portent
+      // vraiment un rendez-vous.
+      const reste = (this.data.rgd_clients || []).filter(x => x.contact_id === contact && x.id !== args.p_id).length
+        + (this.data.rgd_demandes || []).filter(x => x.contact_id === contact && x.id !== args.p_id).length;
+      let vides = [];
+      if (contact != null && reste === 0) {
+        const porte = (id) => PORTEURS_AFFAIRE.some(
+          (n) => (this.data[n] || []).some(x => x.deal_id === id))
+          || (this.data.rgd_chantiers || []).some(
+            x => x.deal_id === id && !estUnRendezVousRgd(x));
+        const porteUnRdv = (id) => (this.data.rgd_chantiers || []).some(x => x.deal_id === id);
+        vides = siennes
+          .filter(d => d.activity === 'rgd' && !(d.amount || 0)
+            && porteUnRdv(d.id) && !porte(d.id))
+          .map(d => d.id);
+      }
+
+      const affairesGardees = (this.data.deals || []).filter(d => vides.includes(d.id));
+      const chantiersGardes = (this.data.rgd_chantiers || []).filter(x => vides.includes(x.deal_id));
+
+      // Le contact : archivé seulement s'il ne lui reste aucune fiche, et
+      // seulement s'il ne l'était pas déjà. La corbeille garde la réponse,
+      // sinon restaurer sortirait des archives une fiche rangée exprès.
+      let archive = false;
+      if (c && reste === 0 && !c.archived_at) {
+        c.archived_at = new Date().toISOString();
+        archive = true;
+      }
+
+      const ligneCorbeille = {
+        id: uid(), source: args.p_source, fiche_id: args.p_id, contact_id: contact,
+        nom: nomFiche, fiche, affaires: affairesGardees.map(d => ({ ...d })),
+        chantiers: chantiersGardes.map(x => ({ ...x })), orphelins,
+        forcee: !!args.p_forcer && pend > 0, contact_archive: archive,
+        supprime_le: new Date().toISOString(), par: this.moi()?.id || null,
+        restauree_le: null, restauree_par: null,
+      };
+      this.data.rgd_corbeille = this.data.rgd_corbeille || [];
+      this.data.rgd_corbeille.push(ligneCorbeille);
+
       lignes.splice(i, 1);
+
       if (d1 != null) {
         this.data.rgd_suppressions = this.data.rgd_suppressions || [];
         const dejaLa = this.data.rgd_suppressions
@@ -391,48 +471,67 @@ const localAdapter = {
           });
         }
       }
-      // ⚠ LE RENDEZ-VOUS PART AVEC LA FICHE, comme en base depuis le
-      // 06/10/2026 : `rgd_visite_planifiee` fabrique une affaire ET un chantier
-      // pour porter une visite technique, et le garde-fou de l'ecran refusait
-      // « 1 chantier » sans regarder lequel. On ne retire qu'une affaire dont
-      // RIEN d'autre ne depend, et seulement si le contact n'a plus de fiche.
-      let affaires = 0;
-      if (contact != null) {
-        const reste = (this.data.rgd_clients || []).filter(x => x.contact_id === contact).length
-          + (this.data.rgd_demandes || []).filter(x => x.contact_id === contact).length;
-        if (reste === 0) {
-          const porte = (id) => PORTEURS_AFFAIRE.some(
-            (n) => (this.data[n] || []).some(x => x.deal_id === id))
-            || (this.data.rgd_chantiers || []).some(
-              c => c.deal_id === id && !estSimpleRdv(c));
-          // ⚠ TROIS BORNES, ET LA PREMIERE EST UN DEFAUT VECU : sans
-          // `activity === 'rgd'`, supprimer la fiche RGD de quelqu'un effacait
-          // son dossier BTP Expertise — constate en demo sur Thomas Petit,
-          // 750 €, etape « Qualifie », parce qu'aucune des sept tables
-          // ci-dessus n'est lue par BTP : la condition etait vraie par
-          // construction. Un montant porte par l'affaire elle-meme est de
-          // l'argent, meme sans devis derriere. Et l'affaire doit PORTER un
-          // rendez-vous pour partir avec lui : sinon c'est une affaire vide
-          // quelconque qu'on emporte, plus large que le geste demande.
-          const porteUnRdv = (id) => (this.data.rgd_chantiers || [])
-            .some(c => c.deal_id === id);
-          const vides = (this.data.deals || [])
-            .filter(d => d.contact_id === contact && d.activity === 'rgd'
-              && !(d.amount || 0) && porteUnRdv(d.id) && !porte(d.id))
-            .map(d => d.id);
-          if (vides.length) {
-            // ⚠ LA DEMO N'A AUCUNE CASCADE : le chantier du rendez-vous
-            // resterait derriere son affaire, et l'onglet « RDV » le lirait
-            // encore. Meme piege que les pieces des sous-traitants.
-            this.data.rgd_chantiers = (this.data.rgd_chantiers || [])
-              .filter(c => !vides.includes(c.deal_id));
-            this.data.deals = (this.data.deals || []).filter(d => !vides.includes(d.id));
-            affaires = vides.length;
-          }
-        }
+
+      if (vides.length) {
+        // ⚠ LA DÉMO N'A AUCUNE CASCADE : le chantier du rendez-vous resterait
+        // derrière son affaire, et l'onglet « RDV » le lirait encore.
+        this.data.rgd_chantiers = (this.data.rgd_chantiers || [])
+          .filter(x => !vides.includes(x.deal_id));
+        this.data.deals = (this.data.deals || []).filter(d => !vides.includes(d.id));
       }
+
       this.save();
-      return { ok: true, d1_id: d1, marquee: d1 != null, affaires_retirees: affaires };
+      return { ok: true, d1_id: d1, marquee: d1 != null,
+        affaires_retirees: vides.length, corbeille: ligneCorbeille.id,
+        contact_archive: archive, orphelins };
+    }
+
+    // ── Remettre une fiche prise dans la corbeille ────────────────────────
+    // ⚠ DOUBLE DE `rgd_restaurer_fiche`. Elle remet la fiche, ses affaires et
+    // leurs chantiers, retire la pierre tombale et désarchive le contact — mais
+    // SEULEMENT si c'est la suppression qui l'avait archivé.
+    if (nom === 'rgd_restaurer_fiche') {
+      if (this.monRole() !== 'direction') {
+        throw new Error("la restauration d'une fiche est réservée à la direction");
+      }
+      const r = (this.data.rgd_corbeille || []).find(x => x.id === args.p_corbeille);
+      if (!r) return { ok: false, error: 'ligne de corbeille introuvable' };
+      if (r.restauree_le) return { ok: false, error: 'cette fiche a déjà été restaurée' };
+
+      const table = 'rgd_' + r.source;
+      this.data[table] = this.data[table] || [];
+      if (this.data[table].some(x => x.id === r.fiche_id)) {
+        return { ok: false, error: 'une fiche porte déjà cet identifiant' };
+      }
+      this.data[table].push({ ...r.fiche });
+
+      // L'affaire d'abord, le chantier ensuite : `deal_id` pointe sur elle.
+      this.data.deals = this.data.deals || [];
+      (r.affaires || []).forEach(d => {
+        if (!this.data.deals.some(x => x.id === d.id)) this.data.deals.push({ ...d });
+      });
+      this.data.rgd_chantiers = this.data.rgd_chantiers || [];
+      (r.chantiers || []).forEach(x => {
+        if (!this.data.rgd_chantiers.some(y => y.id === x.id)) this.data.rgd_chantiers.push({ ...x });
+      });
+
+      if (r.contact_archive && r.contact_id) {
+        const ct = (this.data.contacts || []).find(x => x.id === r.contact_id);
+        if (ct) ct.archived_at = null;
+      }
+
+      const d1 = r.fiche?.d1_id ?? null;
+      if (d1 != null) {
+        this.data.rgd_suppressions = (this.data.rgd_suppressions || [])
+          .filter(x => !(x.source === r.source && x.d1_id === d1));
+      }
+
+      r.restauree_le = new Date().toISOString();
+      r.restauree_par = this.moi()?.id || null;
+      this.save();
+      return { ok: true, fiche_id: r.fiche_id, source: r.source,
+        affaires: (r.affaires || []).length, chantiers: (r.chantiers || []).length,
+        contact_desarchive: !!r.contact_archive };
     }
 
     throw new Error('Fonction inconnue en mode démo : ' + nom);
@@ -465,6 +564,11 @@ const localAdapter = {
   async deleteFile(path, { bucket = 'documents' } = {}) { const all = this.files(); delete all[`${bucket}/${path}`]; localStorage.setItem(LS_FILES, JSON.stringify(all)); },
   // auth
   async currentUser() { const id = localStorage.getItem(LS_USER); return this.data.profiles.find(u => u.id === id) || null; },
+  // Qui regarde, en démo — lu de la même façon que `currentUser`, mais sans
+  // attendre : les doubles des fonctions de base sont synchrones, et deux
+  // d'entre eux ont besoin du rôle pour refuser ce que la base refuse.
+  moi() { const id = localStorage.getItem(LS_USER); return (this.data.profiles || []).find(u => u.id === id) || null; },
+  monRole() { return this.moi()?.role || null; },
   async signIn(userId) { localStorage.setItem(LS_USER, userId); return this.data.profiles.find(u => u.id === userId); },
   async signOut() { localStorage.removeItem(LS_USER); },
   async resetPassword() { throw new Error('Pas de mot de passe en mode démo'); },

@@ -102,7 +102,7 @@ import { poserEspace } from './espace.js';
 import { cadre, guard } from './rgd-espace.js';
 import { majNote } from '../data/rgd-clients.js';
 import { toast } from '../ui.js';
-import { supprimerFiche, boutonSuppression } from './rgd-prospect-saisie.js';
+import { supprimerFiche, boutonSuppression, restaurerFiche } from './rgd-prospect-saisie.js';
 import { nouvelleDemandeRgd } from './rgd-projet.js';
 import { ouvrirFicheRgd } from './rgd-fiche.js';
 
@@ -723,8 +723,23 @@ export const rgdClientsPage = {
 
       const ts = terms(state.q);
       const surDemande = state.vue === 'demande';
-      // La frise, c'est tout sauf l'annuaire : sept étapes, un seul tableau.
-      const surFrise = state.vue !== 'contacts';
+
+      // ⚠ LA CORBEILLE (06/10/2026, demandée par Élodie : « rajoute un truc
+      // corbeille pour qu'on puisse retrouver si on supprime par erreur »). Elle
+      // n'est ni une étape ni l'annuaire : une fiche qui y est N'EST PLUS dans
+      // la base, elle attend qu'on la remette ou qu'on l'oublie. Elle a donc sa
+      // place à côté de l'annuaire, hors de la frise.
+      //
+      // ⚠ ELLE NE S'AFFICHE QU'À LA DIRECTION, miroir de sa policy : la lecture
+      // d'une fiche supprimée est le même droit que sa suppression.
+      const surCorbeille = state.vue === 'corbeille';
+      const corbeille = scope.rgdCorbeille().slice()
+        .sort((a, b) => String(b.supprime_le || '').localeCompare(String(a.supprime_le || '')));
+      const lignesCorbeille = corbeille.filter(x => hit([x.nom], ts));
+
+      // La frise, c'est tout sauf l'annuaire et la corbeille : sept étapes,
+      // un seul tableau.
+      const surFrise = state.vue !== 'contacts' && !surCorbeille;
       // ⚠ À PARTIR DE « DEVIS ACCEPTÉ », LA COLONNE « BUDGET » DEVIENT
       // « MONTANT HT » (25/09/2026, demandé par Mickael : « je voudrais que le
       // montant apparaisse aussi dans ce tableau à partir de devis accepté »).
@@ -955,6 +970,51 @@ export const rgdClientsPage = {
       // atteignable : `supprimerFiche` garde son refus sur les fiches qui
       // portent des devis ou des chantiers, et sa pierre tombale.
       // ---------- les deux tableaux ----------
+      // ⚠ CE TABLEAU NE PAGINE PAS, et ce n'est pas un oubli : une corbeille
+      // qui déborde est un symptôme, pas un volume normal. Le jour où elle
+      // compte cent lignes, c'est la question « qui supprime quoi » qu'il faut
+      // poser, pas une pagination.
+      // ⚠ PAS `qui` : ce nom est DEJA pris dans cette fonction (`cleIdentite`
+      // l'emploie pour l'identite d'un contact), et le redeclarer ici cassait
+      // l'ecran entier au chargement — « Cannot access 'qui' before
+      // initialization », une erreur de zone morte que ni le controle de
+      // syntaxe ni la relecture ne voient.
+      const nomDuProfil = (id) => db.byId('profiles', id)?.full_name || '—';
+      const compteOrphelins = (o) => [
+        [o?.devis, 'devis', 'devis'], [o?.paiements, 'paiement', 'paiements'],
+        [o?.chantiers, 'chantier', 'chantiers'], [o?.autres, 'autre', 'autres'],
+      ].filter(([n]) => n > 0).map(([n, un, pl]) => `${n} ${n > 1 ? pl : un}`).join(', ');
+
+      const tableauCorbeille = () => `<section class="card table-wrap">
+        <table>
+          <thead><tr><th>Qui</th><th>Supprimée le</th><th>Par</th>
+            <th>Parti avec la fiche</th><th>Resté sans fiche</th><th></th></tr></thead>
+          <tbody>${lignesCorbeille.map(x => {
+            const emporte = [
+              x.affaires?.length ? `${x.affaires.length} affaire${s_(x.affaires.length)}` : '',
+              x.chantiers?.length ? `${x.chantiers.length} rendez-vous` : '',
+              x.contact_archive ? 'contact archivé' : '',
+            ].filter(Boolean).join(', ');
+            const laisse = compteOrphelins(x.orphelins);
+            return `<tr class="${x.restauree_le ? 'est-restauree' : ''}">
+              <td><b>${esc(x.nom || '(fiche sans nom)')}</b>
+                <div class="s muted">${x.source === 'demandes' ? 'demande du site' : 'fiche client'}</div></td>
+              <td class="muted small">${esc(fmtDateTime(x.supprime_le))}</td>
+              <td class="muted small">${esc(nomDuProfil(x.par))}</td>
+              <td class="muted small">${esc(emporte || '—')}</td>
+              <td class="small">${laisse
+                ? `<span class="chip amber" title="Ces lignes existent toujours, sans fiche à qui les rattacher">${esc(laisse)}</span>`
+                : '<span class="muted">—</span>'}</td>
+              <td>${x.restauree_le
+                ? `<span class="muted small">remise le ${esc(fmtDate(x.restauree_le))}</span>`
+                : `<button type="button" class="btn ghost sm" data-restaurer-fiche="${esc(x.id)}">Restaurer</button>`}</td>
+            </tr>`;
+          }).join('') || `<tr><td colspan="6"><div class="empty">${
+            state.q ? 'Aucune fiche supprimée ne correspond à la recherche.'
+              : 'La corbeille est vide — aucune fiche n’a été supprimée.'}</div></td></tr>`}</tbody>
+        </table>
+      </section>`;
+
       const tableauFiches = () => `<section class="card table-wrap">
         <table>
           <thead><tr><th>Nom, prénom</th><th>Type</th><th>Statut</th><th>Email</th>
@@ -1113,6 +1173,10 @@ export const rgdClientsPage = {
             <button type="button" data-vue="${ONGLET_ANNUAIRE.key}"
               class="rcl-onglet-annuaire ${state.vue === 'contacts' ? 'on' : ''}"
               title="${esc(ONGLET_ANNUAIRE.titre)}">${ONGLET_ANNUAIRE.label}<span>${ONGLET_ANNUAIRE.n}</span></button>
+            ${scope.canSupprimerFicheRgd ? `<button type="button" data-vue="corbeille"
+              class="rcl-onglet-annuaire ${surCorbeille ? 'on' : ''}"
+              title="Les fiches supprimées, et de quoi les remettre">🗑 Corbeille<span>${
+              corbeille.filter(x => !x.restauree_le).length}</span></button>` : ''}
           </div>
         </div>
 
@@ -1143,7 +1207,7 @@ export const rgdClientsPage = {
         <div class="toolbar">
           ${searchInput('rcl-q', state, surDemande
             ? 'Recherche nom, email, ville, projet…' : 'Rechercher nom, email, téléphone…')}
-          ${surFrise ? `<select id="rcl-prov" aria-label="Provenance" class="${state.provenance ? 'actif' : ''}">
+          ${surCorbeille ? '' : surFrise ? `<select id="rcl-prov" aria-label="Provenance" class="${state.provenance ? 'actif' : ''}">
             <!-- ⚠ TOUS LES COMPTES PORTENT SUR LA MÊME POPULATION, y compris
                  celui de « Toutes ». Il comptait la frise ENTIÈRE pendant que
                  les autres comptaient l'étape : 51 en face de six lignes dont
@@ -1179,12 +1243,13 @@ export const rgdClientsPage = {
             }).join('')}
           </select>` : ''}`}
           <span class="grow"></span>
-          <span class="muted small">${affichees} ligne${s_(affichees)}</span>
+          <span class="muted small">${surCorbeille ? lignesCorbeille.length : affichees} ligne${
+            s_(surCorbeille ? lignesCorbeille.length : affichees)}</span>
           ${surDemande && scope.canRgd
             ? '<button class="btn" id="rcl-nouveau">+ Nouvelle demande</button>' : ''}
         </div>
 
-        ${surFrise ? tableauProspects() : tableauFiches()}`;
+        ${surCorbeille ? tableauCorbeille() : surFrise ? tableauProspects() : tableauFiches()}`;
 
       root.innerHTML = cadre('#/rgd/clients', 'Clients & prospects', corps);
       bindSearch(root, 'rcl-q', state, draw);
@@ -1238,6 +1303,11 @@ export const rgdClientsPage = {
       // Supprimer : le bouton n'existe que sur les fiches nees dans le CRM
       // (`boutonSuppression` ne rend rien autrement), et `supprimerProspect`
       // reverifie — un ecran est un garde-fou, pas une garantie.
+      root.querySelectorAll('[data-restaurer-fiche]').forEach(b => b.onclick = () => {
+        const x = corbeille.find(y => y.id === b.dataset.restaurerFiche);
+        if (x) restaurerFiche(x, draw);
+      });
+
       root.querySelectorAll('[data-suppr]').forEach(b => b.onclick = () => {
         const ligne = [...demandes, ...fiches].find(x => x.id === b.dataset.suppr);
         if (!ligne) return;

@@ -56,6 +56,12 @@ export const SEED = {
     // ⚠ UN CONTACT SANS NOM DE FAMILLE — le cas que l'annuaire doit survivre.
     // La colonne y affiche « nom, prenom » ; quand le nom manque, `famille`
     // retombe sur le prenom et l'inversion ecrirait deux fois le meme mot.
+    // ⚠ CE CONTACT EST ARCHIVÉ, et c'est le seul du jeu : sa fiche est dans
+    // la corbeille. Sans lui, l'onglet « Corbeille » s'ouvrait vide et la
+    // restauration ne s'essayait nulle part — or c'est tout l'intérêt d'une
+    // corbeille. Il n'apparaît dans aucune liste tant que la fiche n'est pas
+    // remise, exactement comme en production.
+    { id: 'c17', first_name: 'Nadia', last_name: 'Lemoine', phone: '06 39 98 00 17', email: 'nadia.lemoine@example.com', city: 'Tours', postal_code: '37100', activities: ['rgd'], type: 'Prospect', owner_id: 'u-mickael', channel: 'Formulaire site', consent: true, created_at: d(-30), archived_at: d(-2) },
     { id: 'c16', first_name: 'Farid', phone: '06 39 98 00 16', email: 'farid@example.com', city: 'Tours', postal_code: '37000', activities: ['rgd'], type: 'Client', owner_id: 'u-mickael', channel: 'Recommandation client', consent: true, created_at: d(-200) },
     { id: 'c15', first_name: 'Damien', last_name: 'Rey', phone: '06 39 98 00 15', email: 'damien.rey@example.com', city: 'Tours', postal_code: '37200', activities: ['rgd'], type: 'Prospect', owner_id: 'u-mickael', channel: 'Site internet direct', consent: true, created_at: d(-2) },
   ],
@@ -524,6 +530,26 @@ export const SEED = {
   // technique (la première colonne de la pipeline), un devis présenté, un
   // chantier en cours, et un terminé — celui-là porte `date_passage_termine`,
   // qui doit DISPARAÎTRE si on le fait reculer.
+  // ⚠ LA CORBEILLE (06/10/2026). Une seule ligne, et elle porte le cas le
+  // moins évident : une suppression FORCÉE, qui a laissé un devis sans fiche.
+  // Une corbeille semée vide montrerait un écran mort ; une ligne ordinaire ne
+  // montrerait pas la pastille ambre de ce qui reste orphelin, qui est
+  // précisément ce qu'on vient y lire.
+  //
+  // ⚠ `fiche` EST LA LIGNE ENTIÈRE, telle qu'elle était : c'est elle que la
+  // restauration remet, avec son identifiant d'origine. Un résumé ne
+  // suffirait pas — ce serait une trace, pas une corbeille.
+  rgd_corbeille: [
+    { id: 'corb1', source: 'clients', fiche_id: 'rc-supprimee', contact_id: 'c17',
+      nom: 'Nadia Lemoine',
+      fiche: { id: 'rc-supprimee', contact_id: 'c17', owner_id: 'u-mickael',
+        statut: 'prospect', statut_suivi: 'devis_en_cours', source: 'site',
+        notes: 'Devis envoyé, sans réponse depuis trois semaines.', maj: d(-2) },
+      affaires: [], chantiers: [],
+      orphelins: { devis: 1, paiements: 0, chantiers: 0, autres: 0 },
+      forcee: true, contact_archive: true,
+      supprime_le: d(-2), par: 'u-mickael', restauree_le: null, restauree_par: null },
+  ],
   rgd_chantiers: [
     { id: 'rch1', deal_id: 'd1', contact_id: 'c1', reference: 'Rénovation appartement — Bernard',
       adresse: '12 rue Nationale', code_postal: '37000', ville: 'Tours',

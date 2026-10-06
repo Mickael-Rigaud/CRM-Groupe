@@ -1111,6 +1111,26 @@ export const ACTIVITY_KEYS = Object.keys(ACTIVITIES);
 // condition dans les quatre écrans qui rangent une tâche — la liste, ses
 // pastilles, le tableau en colonnes et le formulaire — est tout l'intérêt de
 // cette déclaration : quatre copies auraient fini par ne plus s'accorder.
+// ⚠ CE QUI FAIT QU'UN CHANTIER N'EST QU'UN RENDEZ-VOUS, DIT UNE SEULE FOIS
+// (06/10/2026). C'est le **double exact** de la fonction `rgd_est_un_rendez_vous`
+// en base : si la règle change là-bas, elle change ici aussi — l'écran et le
+// serveur ne peuvent pas répondre deux choses à « cette fiche se supprime-t-elle ».
+//
+// ⚠ ZÉRO N'EST PAS UN MONTANT, c'est l'absence de chiffrage. La première
+// version testait `montant_ht` non nul et refusait donc une visite portant
+// **0 €** — le cas de « mur humides » (VT-2026-0236), signalé par Élodie.
+//
+// ⚠ `d1_id` NE BLOQUE PLUS : une visite relevée depuis l'application RGD reste
+// une visite. Ce test confondait d'où vient la ligne avec ce qu'elle porte.
+// `costructor_id`, lui, reste bloquant — `costructor-chantiers` recréerait la
+// ligne dans la demi-heure, et supprimer ce qui revient tout seul n'est pas
+// supprimer.
+export const estUnRendezVousRgd = (c) => !!c
+  && c.statut_d1 === 'visite_technique'
+  && !Number(c.montant_ht || 0)
+  && !Number(c.montant_ttc || 0)
+  && c.costructor_id == null;
+
 export const MODULES_TACHE = {
   locatif: {
     key: 'locatif', label: 'Gestion locative', short: 'Locatif',

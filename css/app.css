@@ -5955,6 +5955,10 @@ textarea.ev-nu { resize: vertical; min-height: 40px; }
    pas. On lit le `display` calcule, jamais la propriete. */
 .rgp-rappel-quand .btn[hidden] { display: none; }
 
+/* Une ligne de corbeille deja remise : elle reste lisible mais ne se propose
+   plus, et l'oeil doit la distinguer sans lire la derniere colonne. */
+tr.est-restauree { opacity: .55; }
+
 .rgdf-rap-pied { display: flex; justify-content: flex-end; margin-top: 2px; }
 .rgdf-rap-pied .btn[disabled] { opacity: .5; cursor: default; }
 /* La liste des rappels deja poses prend de l'air sous le champ. */

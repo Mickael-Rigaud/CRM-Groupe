@@ -42,7 +42,8 @@
 import { db } from '../data/db.js';
 import { openModal, closeModal, confirm, renderForm, readForm, toast, esc } from '../ui.js';
 import { scope } from '../data/scope.js';
-import { supprimerFicheRgd } from '../data/rgd-clients.js';
+import { supprimerFicheRgd, restaurerFicheRgd } from '../data/rgd-clients.js';
+import { estUnRendezVousRgd } from '../data/schema.js';
 
 // Ce que chaque sous-onglet réclame, en plus de l'identité.
 // `table` dit où atterrit la fiche, `fixe` les colonnes imposées par la
@@ -261,10 +262,10 @@ function rattachements(contactId) {
   // ce qui porte de l'ARGENT — un devis, un paiement, un chantier qui a un
   // montant, un identifiant Costructor ou un `d1_id`. Un rendez-vous ne porte
   // rien ; il part avec la fiche, et la confirmation le nomme.
-  const porteDeLArgent = (c) => c.montant_ht != null || c.montant_ttc != null
-    || c.d1_id != null || c.costructor_id != null
-    || c.statut_d1 !== 'visite_technique';
-  const vraisChantiers = chantiers.filter(porteDeLArgent);
+  // ⚠ LA RÈGLE EST DÉCLARÉE DANS `schema.js`, ET C'EST LE DOUBLE EXACT de la
+  // fonction `rgd_est_un_rendez_vous` en base. Une copie ici et l'écran
+  // finirait par proposer une suppression que le serveur refuse, ou l'inverse.
+  const vraisChantiers = chantiers.filter(c => !estUnRendezVousRgd(c));
   const rdv = chantiers.length - vraisChantiers.length;
 
   const detail = [
@@ -293,33 +294,71 @@ export async function supprimerFiche(sousVue, ligne, apresSuppression) {
     || [c?.first_name, c?.last_name].filter(Boolean).join(' ')
     || 'cette fiche';
 
-  // ⚠ LE REFUS PASSE AVANT LA CONFIRMATION. Demander « êtes-vous sûr ? » puis
-  // répondre « en fait non » fait perdre du temps et de la confiance.
-  const liens = rattachements(ligne.contact_id);
-  if (liens.total) {
-    return toast(`${nom} porte ${liens.detail.join(', ')} : la fiche ne peut pas être `
-      + `supprimée sans les orpheliner. Retirez-les d'abord.`, 'warn');
+  // ⚠ LA SUPPRESSION EST UN GESTE DE DIRECTION depuis le 06/10/2026, et le
+  // refus vit AUSSI dans la fonction de base : ce garde-ci évite seulement
+  // d'offrir ce qui échouerait.
+  if (!scope.canSupprimerFicheRgd) {
+    return toast('La suppression d\'une fiche est réservée à la direction.', 'warn');
   }
+
+  // ⚠ CE QUI PEND NE REFUSE PLUS, IL AVERTIT (06/10/2026, demandé par Élodie :
+  // « je voudrais que tu me laisses la possibilité de supprimer si je le
+  // souhaite »). Le refus sec enfermait : aucun écran ne permet de retirer un
+  // devis ou un chantier, donc « retirez-les d'abord » désignait une porte
+  // fermée. On nomme maintenant ce qui restera sans fiche, et on demande une
+  // seconde fois.
+  const liens = rattachements(ligne.contact_id);
 
   // ⚠ LA CONFIRMATION NOMME LE RENDEZ-VOUS, et dit ce qu'il advient de
   // l'agenda. Le supprimer en silence ferait disparaître une visite de l'onglet
   // « RDV » sans que personne sache pourquoi ; et l'événement, lui, RESTE chez
   // Google, qui en est la source — la fonction de base n'y touche pas.
-  const mot = liens.rdv
-    ? `Supprimer ${nom} ? La fiche part définitivement, avec ${liens.rdv > 1
-        ? `ses ${liens.rdv} visites techniques` : 'sa visite technique'} et `
-      + `${liens.rdv > 1 ? 'leurs affaires' : 'son affaire'}. Le rendez-vous reste `
-      + `dans Google Agenda : retirez-l'y aussi s'il n'a plus lieu d'être. `
-      + `Le contact est archivé et reste récupérable.`
-    : `Supprimer ${nom} ? La fiche est retirée définitivement. `
-      + `Le contact, lui, est archivé et reste récupérable.`;
+  // ⚠ UNE SEULE QUESTION DANS LE CAS COURANT. L'écran sait déjà ce qui pend :
+  // le dire ici évite de demander « êtes-vous sûr ? », de se faire refuser par
+  // le serveur, puis de redemander. La seconde question reste pour ce que
+  // l'écran ne voit pas — un devis rattaché à l'affaire seule, par exemple.
+  const recuperables = `La fiche va dans la corbeille et le contact est `
+    + `archivé : les deux se récupèrent.`;
+  const mot = liens.total
+    ? `${nom} porte ${liens.detail.join(', ')}. Supprimer la fiche quand même ? `
+      + `Ces lignes RESTERONT en base, sans fiche : leurs montants continueront `
+      + `de compter dans le chiffre d'affaires sans qu'on puisse dire pour qui. `
+      + recuperables
+    : liens.rdv
+      ? `Supprimer ${nom} ? La fiche part, avec ${liens.rdv > 1
+          ? `ses ${liens.rdv} visites techniques` : 'sa visite technique'} et `
+        + `${liens.rdv > 1 ? 'leurs affaires' : 'son affaire'}. Le rendez-vous reste `
+        + `dans Google Agenda : retirez-l'y aussi s'il n'a plus lieu d'être. `
+        + recuperables
+      : `Supprimer ${nom} ? ${recuperables}`;
   if (!await confirm(mot)) return;
 
   // 1. La fiche et, s'il y a lieu, sa pierre tombale — une seule transaction.
   //    ⚠ `db.remove` ne suffirait pas : sans la pierre, une fiche venue de
   //    l'application reviendrait au relevé suivant, et la corbeille aurait
   //    donné l'illusion d'avoir agi.
-  const r = await supprimerFicheRgd(surDemande ? 'demandes' : 'clients', ligne.id);
+  const source = surDemande ? 'demandes' : 'clients';
+  let r = await supprimerFicheRgd(source, ligne.id, !!liens.total);
+
+  // ⚠ LE SERVEUR A LE DERNIER MOT, ET IL COMPTE MIEUX QUE L'ÉCRAN : celui-ci
+  // lit les devis par `contact_id` et laisserait passer un devis rattaché à
+  // l'affaire seule. Quand il refuse, on nomme ce qui restera sans fiche et on
+  // demande une seconde fois — c'est le seul chemin vers le forçage.
+  if (!r.ok && r.refus?.motif === 'rattachements') {
+    const quoi = [
+      [r.refus.devis, 'devis', 'devis'],
+      [r.refus.paiements, 'paiement', 'paiements'],
+      [r.refus.chantiers, 'chantier', 'chantiers'],
+      [r.refus.autres, 'autre ligne', 'autres lignes'],
+    ].filter(([n]) => n > 0).map(([n, un, pl]) => `${n} ${n > 1 ? pl : un}`);
+    const sur = await confirm(`${nom} porte ${quoi.join(', ')}. Supprimer la fiche `
+      + `quand même ? Ces lignes RESTERONT en base, sans fiche : leurs montants `
+      + `continueront de compter dans le chiffre d'affaires sans qu'on puisse dire `
+      + `pour qui. La fiche va dans la corbeille et se restaure.`);
+    if (!sur) return;
+    r = await supprimerFicheRgd(source, ligne.id, true);
+  }
+
   if (!r.ok) return toast(`Suppression impossible : ${r.motif}`, 'err');
 
   // Le cache tient encore la ligne : la fonction a écrit en base sans passer
@@ -333,23 +372,61 @@ export async function supprimerFiche(sousVue, ligne, apresSuppression) {
   // l'onglet « RDV », sa colonne date-et-heure et le Pipeline continueraient
   // d'afficher une visite dont la fiche n'existe plus. Meme piege que la RPC qui
   // POSE le rendez-vous, qui doit recharger les memes tables.
-  if (r.affaires_retirees) {
+  // ⚠ `r.donnees`, PAS `r` : la couche de données enveloppe la réponse de la
+  // base. Lire `r.affaires_retirees` rendait `undefined`, donc rien ne se
+  // rechargeait et la visite restait à l'écran après la suppression.
+  if (r.donnees?.affaires_retirees) {
     await db.recharger('rgd_chantiers');
     await db.recharger('deals');
   }
 
-  // 2. Le contact suit, mais ARCHIVÉ et non supprimé — voir l'en-tête.
-  if (ligne.contact_id) {
-    try { await db.update('contacts', ligne.contact_id, { archived_at: new Date().toISOString() }); }
-    catch { /* L'archivage est un confort : son échec n'annule pas la suppression. */ }
-  }
-  toast('Fiche supprimée');
+  // ⚠ LE CONTACT EST ARCHIVÉ PAR LA FONCTION, PLUS PAR L'ÉCRAN (06/10/2026).
+  // Il l'était ici, après coup : la réussite n'était pas liée à celle de la
+  // suppression, et surtout rien ne disait s'il était DÉJÀ archivé avant —
+  // donc une restauration ne pouvait pas savoir s'il fallait le désarchiver.
+  // La corbeille garde cette réponse. On recharge pour que l'écran le voie.
+  if (r.donnees?.contact_archive) await db.recharger('contacts');
+  await db.recharger('rgd_corbeille');
+
+  toast('Fiche supprimée — elle est dans la corbeille');
   apresSuppression?.();
+}
+
+/**
+ * Remettre une fiche prise dans la corbeille.
+ *
+ * ⚠ ELLE RECHARGE QUATRE TABLES, et aucune n'est de trop : la fiche, son
+ * affaire, son chantier et le contact désarchivé sont tous écrits par la
+ * fonction de base, donc hors du cache. Sans ça la ligne revient en base et
+ * l'écran continue de montrer qu'elle n'y est pas.
+ */
+export async function restaurerFiche(ligne, apres) {
+  if (!scope.canSupprimerFicheRgd) {
+    return toast('La restauration est réservée à la direction.', 'warn');
+  }
+  const quoi = (ligne.affaires || []).length
+    ? ' Son rendez-vous et son affaire reviennent avec elle.' : '';
+  if (!await confirm(`Remettre ${ligne.nom || 'cette fiche'} ?${quoi}`)) return;
+
+  const r = await restaurerFicheRgd(ligne.id);
+  if (!r.ok) return toast(`Restauration impossible : ${r.motif}`, 'err');
+
+  await db.recharger(ligne.source === 'demandes' ? 'rgd_demandes' : 'rgd_clients');
+  if (r.donnees?.affaires) { await db.recharger('deals'); await db.recharger('rgd_chantiers'); }
+  if (r.donnees?.contact_desarchive) await db.recharger('contacts');
+  await db.recharger('rgd_corbeille');
+
+  toast('Fiche remise');
+  apres?.();
 }
 
 // La corbeille d'une ligne. Elle s'affiche partout, et son infobulle ne dit
 // plus d'où vient la fiche : depuis le 25/09/2026 le geste est le même pour
 // les deux populations, et distinguer deux cas identiques à l'usage ne sert
 // qu'à faire hésiter.
-export const boutonSuppression = (ligne) =>
-  `<button class="icon-btn" data-suppr="${esc(ligne.id)}" title="Supprimer cette fiche">🗑</button>`;
+// ⚠ IL N'EXISTE QUE POUR LA DIRECTION depuis le 06/10/2026. Ce n'est pas le
+// droit — celui-là est dans la fonction de base, qui refuse — c'est la
+// politesse de ne pas proposer un geste qui échouerait.
+export const boutonSuppression = (ligne) => (scope.canSupprimerFicheRgd
+  ? `<button class="icon-btn" data-suppr="${esc(ligne.id)}" title="Supprimer cette fiche">🗑</button>`
+  : '');
