@@ -98,6 +98,7 @@ import { formulaireEvenement } from './evenement-form.js';
 import { decale, finApres } from '../data/evenements.js';
 // Ouvrir, déplacer, supprimer : les trois gestes passent par le même module.
 import { lireEvenement, modifierEvenement, supprimerEvenement } from '../data/evenements.js';
+import { creerAgendaPersonnel } from '../comptes.js';
 
 // JUSQU'OÙ ON A LE DROIT DE NAVIGUER.
 //
@@ -729,7 +730,50 @@ export const rgdAgendaPage = {
         state.releve === 'echec' ? ' style="color:var(--red)"' : ''}>${esc(t)}</span>`;
     };
 
+    // ⚠ SANS AGENDA À SOI, L'ÉCRAN NE MONTRE RIEN — et surtout pas celui de la
+    // structure. Demandé par Élodie le 06/10/2026 après un essai sur le compte
+    // d'un chargé d'affaires. Il ne s'agit pas d'une protection : la policy
+    // rend bien toutes les lignes à qui porte l'activité. Il s'agit de ne pas
+    // présenter comme « son » agenda celui de quelqu'un d'autre.
+    //
+    // ⚠ ET ON DIT POURQUOI, AVEC LE BOUTON SOUS LA MAIN : un écran vide sans
+    // explication se lit comme une panne, et la panne se signale à la
+    // direction au lieu de se résoudre d'un clic.
+    const sansAgenda = () => `
+      <section class="card">
+        <div class="card-head"><h2>Votre agenda</h2></div>
+        <p>Vous n’avez pas encore d’agenda RGD Renova. Tant qu’il n’existe pas, cet écran reste vide :
+          ce qui s’affiche ici, ce sont <b>vos</b> rendez-vous, pas ceux de l’équipe.</p>
+        <p class="muted small">Rien à connecter, aucun mot de passe à donner : le cabinet crée le
+          calendrier et vous le partage. Vous recevrez une invitation Google à accepter, et il
+          apparaîtra dans votre Google Agenda à côté des autres.</p>
+        <div class="form-actions"><button class="btn" id="ag-creer">Créer mon agenda RGD Renova</button></div>
+        <div id="ag-creer-retour"></div>
+      </section>`;
+
     const draw = () => {
+      if (!db.demo && !scope.mesAgendas(KEY).length) {
+        root.innerHTML = cadre('#/rgd/agenda', 'Agenda', sansAgenda());
+        const b = root.querySelector('#ag-creer');
+        if (b) b.onclick = async () => {
+          const zone = root.querySelector('#ag-creer-retour');
+          b.disabled = true; b.textContent = 'Création…';
+          try {
+            const r = await creerAgendaPersonnel(scope.user.id, KEY);
+            // ⚠ LE MESSAGE PASSE PAR UN `toast`, PAS PAR LE BLOC : on redessine
+            // juste après, et le bloc disparaîtrait avec l'écran qu'il explique.
+            toast(r.deja ? 'Vous aviez déjà un agenda'
+              : r.partage ? 'Agenda créé — acceptez l’invitation Google pour le voir'
+                          : 'Agenda créé, mais le partage a échoué', r.partage === false ? 'warn' : undefined);
+            await db.recharger('agendas_personnels').catch(() => {});
+            draw(); rafraichir();
+          } catch (e) {
+            zone.innerHTML = `<p class="muted small" style="color:var(--red)">${esc(e.message)}</p>`;
+            b.disabled = false; b.textContent = 'Créer mon agenda RGD Renova';
+          }
+        };
+        return;
+      }
       const aujourdhui = isoDay();
       // ⚠ `voitAgenda` EN PLUS DU FILTRE D'ACTIVITÉ : `scope.rgd` ne cloisonne
       // pas cette table (elle n'a pas de propriétaire à lire, seulement un

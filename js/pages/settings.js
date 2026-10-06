@@ -30,6 +30,7 @@ export const settingsPage = {
       const users = db.t('profiles');
       root.innerHTML = `
         <div class="grid c2">
+          ${scope.isDirection ? `
           <div class="card"><div class="card-head"><h2>Utilisateurs et droits</h2>${scope.isDirection ? `<button class="btn sm" id="u-new">+ ${db.demo ? 'Utilisateur (démo)' : 'Compte'}</button>` : ''}</div>
             <div class="table-wrap"><table><thead><tr><th>Nom</th><th>Rôle</th><th>Activités</th><th>Actif</th></tr></thead><tbody>
               ${users.map(u => `<tr ${scope.isDirection ? `class="click" data-compte="${u.id}"` : ''}><td><b>${esc(u.full_name)}</b><div class="small muted">${esc(u.email || '')}</div></td><td><span class="pill">${esc(ROLES[u.role]?.label || u.role)}</span></td><td>${(u.activities || []).map(k => `<span class="badge" style="--c:${ACTIVITIES[k]?.color}">${esc(ACTIVITIES[k]?.short || k)}</span>`).join(' ')}</td><td>${u.active === false ? '<span class="pill bad">Non</span>' : '<span class="pill ok">Oui</span>'}</td></tr>`).join('')}
@@ -37,6 +38,7 @@ export const settingsPage = {
             <p class="muted small">${Object.entries(ROLES).map(([k, r]) => `<b>${r.label}</b> : ${r.description}`).join('<br>')}</p>
             ${!db.demo && scope.isDirection ? '<p class="muted small">« + Compte » crée le compte et envoie à la personne un lien pour créer son espace : elle choisit son mot de passe elle-même. Cliquez une ligne pour changer le rôle, les structures ou mettre le compte en sommeil.</p>' : ''}
           </div>
+          ` : ''}
           <div class="card"><div class="card-head"><h2>Import de contacts (CSV)</h2></div>
             <p class="muted small">Colonnes reconnues : prénom, nom, téléphone, email, adresse, code postal, ville, société, type, canal, campagne, activités (rgd|btp|courtage|propulsion), notes. Séparateur ; ou ,. Les doublons (même email ou téléphone) sont ignorés.</p>
             <div class="form"><div class="field half"><label>Fichier CSV</label><input type="file" id="imp-file" accept=".csv,text/csv"></div>
@@ -48,11 +50,13 @@ export const settingsPage = {
           </div>
         </div>
         <div class="grid c2">
+          ${scope.isDirection ? `
           <div class="card"><div class="card-head"><h2>Entrée automatique des leads</h2></div>
             <p class="small">Les formulaires des sites et les Meta Lead Ads créent les leads via un scénario Make (gratuit) qui appelle la fonction <code>intake_lead</code> de Supabase. Le jeton ci-dessous protège l'accès : à copier dans Make, jamais sur un site.</p>
             <div class="form"><div class="field"><label>Jeton d'entrée (intake_token)</label><input id="tok" value="${esc(db.setting('intake_token') || '')}" ${scope.isDirection ? '' : 'disabled'}></div>${scope.isDirection ? '<div class="form-actions"><button class="btn ghost sm" id="tok-gen">Générer</button><button class="btn sm" id="tok-save">Enregistrer</button></div>' : ''}</div>
             <p class="muted small">Mode d'emploi complet dans le fichier <code>README.md</code> (section « Entrée des leads »).${db.demo ? ' En mode démo, ce jeton n\'est pas utilisé.' : ''}</p>
           </div>
+          ` : ''}
           <div class="card"><div class="card-head"><h2>Référentiel</h2></div>
             <p class="small"><b>Canaux</b> : ${CHANNELS.map(esc).join(' · ')}</p>
             <p class="small"><b>Motifs de perte</b> : ${LOST_REASONS.map(esc).join(' · ')}</p>

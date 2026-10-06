@@ -254,11 +254,16 @@ export const scope = {
    * où elle ne voit pas tout, et c'est voulu : la vue d'ensemble des affaires
    * est donnée par les pipelines, pas par l'agenda de chacun.
    *
-   * ⚠ TANT QUE LA PERSONNE N'A AUCUN AGENDA À ELLE, RIEN NE CHANGE. Sans ce
-   * garde, déployer le filtre viderait l'écran de tout le monde le jour où il
-   * arrive, puisqu'aucun agenda personnel n'existe encore. Chaque structure
-   * devient privée pour quelqu'un le jour où on lui crée son agenda, pas
-   * avant.
+   * ⚠ SANS AGENDA À SOI, ON NE VOIT RIEN — ET SURTOUT PAS CELUI DE LA
+   * STRUCTURE. La première version retombait sur l'agenda commun tant qu'on
+   * n'avait pas le sien : un garde pensé pour ne vider l'écran de personne le
+   * jour de la mise en ligne, qui montrait donc à chacun les rendez-vous des
+   * autres. Éprouvé par Élodie le 06/10/2026 sur un compte de chargé
+   * d'affaires : « il ne doit pas voir l'agenda de Mickael, dans l'idéal je
+   * voudrais que rien ne s'affiche en disant qu'il faut qu'il connecte son
+   * agenda ». Un écran vide AVEC SA RAISON vaut mieux qu'un écran plein de ce
+   * qui ne vous regarde pas — à charge pour les écrans d'expliquer et de
+   * proposer le bouton, ce que font `#/rgd/agenda` et « Ma journée ».
    *
    * ⚠ ON NE FILTRE QUE L'AGENDA, jamais le rendez-vous attaché à une fiche :
    * le propriétaire d'un dossier doit voir la visite qui le concerne même
@@ -268,8 +273,6 @@ export const scope = {
   voitAgenda(e) {
     const structure = e?.activity;
     if (!structure || this.STRUCTURES_A_AGENDA_COMMUN.includes(structure)) return true;
-    const miens = this.mesAgendas(structure);
-    if (!miens.length) return true;
-    return miens.includes(e.calendar_id);
+    return this.mesAgendas(structure).includes(e.calendar_id);
   },
 };
