@@ -101,9 +101,8 @@ function carte(a, recentes) {
 // évidence le nombre de tâches à effectuer et ce qu'il reste à faire ». Un
 // « ☑ 0/2 » gris se lisait comme une métadonnée ; la carte dit maintenant
 // combien il en reste, montre la barre, et NOMME les sous-tâches restantes —
-// c'est ce qu'on vient chercher. ⚠ TROIS AU PLUS, puis « + n autres » : une
-// checklist de douze lignes transformerait la carte en liste et pousserait les
-// suivantes hors de l'écran ; le détail entier reste dans la tâche ouverte.
+// c'est ce qu'on vient chercher. (Plafonnée à trois le matin, puis affichée en
+// entier le même jour : voir `blocSousTaches`.)
 //
 // ⚠ ELLES SE COCHENT SUR LA CARTE DEPUIS LE 06/10/2026 (demandé le même jour :
 // « cocher directement depuis la vue d'ensemble une sous-tâche effectuée »).
@@ -120,7 +119,6 @@ function carte(a, recentes) {
 // fonction d'écriture — deux copies d'une coche finissent par ne plus écrire la
 // même chose. `enLigne` ne change que la mise en page ; `teinte` sert la ligne
 // d'une tâche sans structure, qui n'a pas de `--c`.
-const RESTANTES_VISIBLES = 3;
 const DELAI_SOUS_MS = 15000;
 const sousRecentes = new Map(); // `${id}|${rang}` → minuteur
 const cleSous = (id, i) => `${id}|${i}`;
@@ -133,11 +131,13 @@ export function blocSousTaches(a, sousTaches = Array.isArray(a.checklist) ? a.ch
   const restantes = lignes.filter(x => !x.f);
   const complete = restantes.length === 0;
   const pct = Math.round((faites / total) * 100);
-  // Les restantes (trois au plus) et celles qu'on vient de cocher, dans l'ordre
-  // de la checklist : une coche ne doit pas faire sauter la ligne d'à côté.
-  const gardees = new Set(restantes.slice(0, RESTANTES_VISIBLES).map(x => x.i));
-  const vues = lignes.filter(x => gardees.has(x.i) || (x.f && sousRecentes.has(cleSous(a.id, x.i))));
-  const reste = restantes.length - gardees.size;
+  // ⚠ TOUTES LES SOUS-TÂCHES, FAITES COMPRISES, DEPUIS LE 06/10/2026 (« affiche
+  // toutes les sous-tâches dans la vue d'ensemble ») : le plafond de trois et le
+  // « + n autres » obligeaient à ouvrir la tâche pour voir la quatrième. Les
+  // faites restent, barrées et cochées — elles se décochent donc à tout moment,
+  // ce qui rend le délai de quinze secondes sans objet ici (il reste inoffensif).
+  // Ordre de la checklist : une coche ne doit pas faire sauter la ligne d'à côté.
+  const vues = lignes;
   return `<div class="kb-sous ${complete ? 'est-complete' : ''} ${enLigne ? 'en-ligne' : ''}"${
     teinte ? ` style="--c:${teinte}"` : ''}>
     <div class="kb-sous-tete">
@@ -150,8 +150,7 @@ export function blocSousTaches(a, sousTaches = Array.isArray(a.checklist) ? a.ch
     ${vues.length ? `<ul class="kb-sous-liste">${vues.map(x =>
       `<li><label class="${x.f ? 'est-cochee' : ''}" title="${x.f ? 'Décocher' : 'Marquer comme faite'}">
         <input type="checkbox" data-sous="${esc(a.id)}" data-rang="${x.i}" ${x.f ? 'checked' : ''}>
-        <span>${esc(x.t)}</span></label></li>`).join('')}${reste > 0
-      ? `<li class="kb-sous-plus">+ ${reste} autre${reste > 1 ? 's' : ''}</li>` : ''}</ul>` : ''}
+        <span>${esc(x.t)}</span></label></li>`).join('')}</ul>` : ''}
   </div>`;
 }
 
