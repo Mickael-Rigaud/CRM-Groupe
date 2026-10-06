@@ -422,9 +422,44 @@ export const scope = {
    * quand elle a été posée depuis le calendrier d'un autre. Les écrans de
    * fiche lisent donc `agenda_events` sans passer par ici.
    */
+  // Les agendas de la structure que PERSONNE NE PORTE en propre.
+  //
+  // ⚠ C'EST L'AGENDA D'ENTRÉE, et il se définit par soustraction plutôt que
+  // par un réglage de plus : le réglage `<structure>_calendar_id` accumule
+  // désormais TOUS les agendas, y compris ceux créés pour chaque personne,
+  // parce que le relevé doit tous les lire. Ce qui reste une fois retirés
+  // ceux qui appartiennent à quelqu'un, c'est l'agenda commun — pour RGD, la
+  // boîte où arrivent les leads.
+  agendasDeStructure(structure) {
+    const bruts = String(db.setting(`${structure}_calendar_id`) || '')
+      .split(',').map(c => c.trim()).filter(Boolean);
+    const portes = new Set(db.t('agendas_personnels').map(a => a.calendar_id));
+    return bruts.filter(c => !portes.has(c));
+  },
+
+  // A-t-on quelque chose à regarder dans cette structure ? Lu par l'écran
+  // agenda, qui propose de créer le sien quand la réponse est non.
+  aUnAgendaAVoir(structure) {
+    if (this.mesAgendas(structure).length) return true;
+    return this.isDirection && this.agendasDeStructure(structure).length > 0;
+  },
+
   voitAgenda(e) {
     const structure = e?.activity;
     if (!structure || this.STRUCTURES_A_AGENDA_COMMUN.includes(structure)) return true;
-    return this.mesAgendas(structure).includes(e.calendar_id);
+    if (this.mesAgendas(structure).includes(e.calendar_id)) return true;
+    // ⚠ LA DIRECTION PARTAGE L'AGENDA D'ENTRÉE (06/10/2026, Élodie : « remets
+    // la connexion du Google Agenda m.rigaud@rgdrenova.fr pour Mickael et
+    // Élodie »). Ce n'est pas un retour en arrière sur « strictement privé » :
+    // cette règle visait les chargés d'affaires, qui ne doivent pas voir les
+    // rendez-vous les uns des autres. L'agenda où ARRIVENT les leads, lui,
+    // n'appartient à personne — c'est l'outil commun de la direction, celui
+    // depuis lequel elle répartit.
+    //
+    // ⚠ ELLE NE VOIT PAS POUR AUTANT LES AGENDAS DES AUTRES : seuls les
+    // calendriers que PERSONNE ne porte entrent ici. Celui d'Antoine lui
+    // appartient, il reste invisible à tout le monde sauf à lui.
+    if (this.isDirection) return this.agendasDeStructure(structure).includes(e.calendar_id);
+    return false;
   },
 };

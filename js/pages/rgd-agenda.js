@@ -752,7 +752,10 @@ export const rgdAgendaPage = {
       </section>`;
 
     const draw = () => {
-      if (!db.demo && !scope.mesAgendas(KEY).length) {
+      // ⚠ `aUnAgendaAVoir` ET NON `mesAgendas` : la direction n'a pas d'agenda
+      // à elle et regarde celui d'entrée — lui proposer d'en créer un cacherait
+      // l'agenda où arrivent les leads derrière un bouton.
+      if (!db.demo && !scope.aUnAgendaAVoir(KEY)) {
         root.innerHTML = cadre('#/rgd/agenda', 'Agenda', sansAgenda());
         const b = root.querySelector('#ag-creer');
         if (b) b.onclick = async () => {

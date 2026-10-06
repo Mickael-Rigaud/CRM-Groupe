@@ -479,7 +479,7 @@ function carteJournee(cles) {
 // le métier d'un rendez-vous s'y déduit du calendrier, un agenda personnel ne
 // recevrait rien. On y invite la personne au lieu de lui en créer un.
 const structuresSansMonAgenda = (cles) => (cles || []).filter(
-  k => !scope.STRUCTURES_A_AGENDA_COMMUN.includes(k) && !scope.mesAgendas(k).length);
+  k => !scope.STRUCTURES_A_AGENDA_COMMUN.includes(k) && !scope.aUnAgendaAVoir(k));
 
 const monAgendaHtml = (cles) => {
   const manquantes = structuresSansMonAgenda(cles);
