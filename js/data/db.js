@@ -113,6 +113,20 @@ const CLE_PRIMAIRE = {
 };
 
 // ---------- Adaptateur local (démo) ----------
+// ⚠ CE QUI FAIT QU'UN CHANTIER EST UN SIMPLE RENDEZ-VOUS, et non du travail
+// qui porte de l'argent. Double du `not exists` de `rgd_supprimer_fiche` : si la
+// liste change en base, elle change ici aussi.
+const estSimpleRdv = (c) => c.statut_d1 === 'visite_technique'
+  && c.montant_ht == null && c.montant_ttc == null
+  && c.d1_id == null && c.costructor_id == null;
+
+// Les tables dont une ligne suffit a retenir une affaire. Memes noms, meme ordre
+// que dans la fonction SQL.
+const PORTEURS_AFFAIRE = [
+  'rgd_devis', 'rgd_paiements', 'rgd_fournitures', 'rgd_missions',
+  'rgd_st_paiements', 'rgd_st_commissions', 'henrri_documents',
+];
+
 const localAdapter = {
   name: 'local',
   data: null,
@@ -356,6 +370,9 @@ const localAdapter = {
       const i = lignes.findIndex(x => x.id === args.p_id);
       if (i < 0) return { ok: false, error: 'fiche introuvable' };
       const d1 = lignes[i].d1_id ?? null;
+      // On relit le contact AVANT de retirer la fiche : apres, le lien n'existe
+      // plus et le rendez-vous serait introuvable. Meme ordre que le SQL.
+      const contact = lignes[i].contact_id ?? null;
       lignes.splice(i, 1);
       if (d1 != null) {
         this.data.rgd_suppressions = this.data.rgd_suppressions || [];
@@ -367,8 +384,48 @@ const localAdapter = {
           });
         }
       }
+      // ⚠ LE RENDEZ-VOUS PART AVEC LA FICHE, comme en base depuis le
+      // 06/10/2026 : `rgd_visite_planifiee` fabrique une affaire ET un chantier
+      // pour porter une visite technique, et le garde-fou de l'ecran refusait
+      // « 1 chantier » sans regarder lequel. On ne retire qu'une affaire dont
+      // RIEN d'autre ne depend, et seulement si le contact n'a plus de fiche.
+      let affaires = 0;
+      if (contact != null) {
+        const reste = (this.data.rgd_clients || []).filter(x => x.contact_id === contact).length
+          + (this.data.rgd_demandes || []).filter(x => x.contact_id === contact).length;
+        if (reste === 0) {
+          const porte = (id) => PORTEURS_AFFAIRE.some(
+            (n) => (this.data[n] || []).some(x => x.deal_id === id))
+            || (this.data.rgd_chantiers || []).some(
+              c => c.deal_id === id && !estSimpleRdv(c));
+          // ⚠ TROIS BORNES, ET LA PREMIERE EST UN DEFAUT VECU : sans
+          // `activity === 'rgd'`, supprimer la fiche RGD de quelqu'un effacait
+          // son dossier BTP Expertise — constate en demo sur Thomas Petit,
+          // 750 €, etape « Qualifie », parce qu'aucune des sept tables
+          // ci-dessus n'est lue par BTP : la condition etait vraie par
+          // construction. Un montant porte par l'affaire elle-meme est de
+          // l'argent, meme sans devis derriere. Et l'affaire doit PORTER un
+          // rendez-vous pour partir avec lui : sinon c'est une affaire vide
+          // quelconque qu'on emporte, plus large que le geste demande.
+          const porteUnRdv = (id) => (this.data.rgd_chantiers || [])
+            .some(c => c.deal_id === id);
+          const vides = (this.data.deals || [])
+            .filter(d => d.contact_id === contact && d.activity === 'rgd'
+              && !(d.amount || 0) && porteUnRdv(d.id) && !porte(d.id))
+            .map(d => d.id);
+          if (vides.length) {
+            // ⚠ LA DEMO N'A AUCUNE CASCADE : le chantier du rendez-vous
+            // resterait derriere son affaire, et l'onglet « RDV » le lirait
+            // encore. Meme piege que les pieces des sous-traitants.
+            this.data.rgd_chantiers = (this.data.rgd_chantiers || [])
+              .filter(c => !vides.includes(c.deal_id));
+            this.data.deals = (this.data.deals || []).filter(d => !vides.includes(d.id));
+            affaires = vides.length;
+          }
+        }
+      }
       this.save();
-      return { ok: true, d1_id: d1, marquee: d1 != null };
+      return { ok: true, d1_id: d1, marquee: d1 != null, affaires_retirees: affaires };
     }
 
     throw new Error('Fonction inconnue en mode démo : ' + nom);

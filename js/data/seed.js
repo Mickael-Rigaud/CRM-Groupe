@@ -61,6 +61,14 @@ export const SEED = {
   ],
   deals: [
     { id: 'd1', title: 'Rénovation appartement — Bernard', activity: 'rgd', stage: 'visite', status: 'open', contact_id: 'c1', owner_id: 'u-mickael', amount: 28000, channel: 'Meta Ads', campaign: 'RGD-Renov-Sept26', fields: { type_travaux: 'Rénovation complète', adresse_chantier: '12 rue Nationale, Tours', budget_annonce: 30000, date_visite: day(1) }, stage_history: [{ stage: 'lead', at: d(-6) }, { stage: 'qualifie', at: d(-5) }, { stage: 'visite', at: d(-3) }], created_at: d(-6), stage_changed_at: d(-3) },
+    // ⚠ L'AFFAIRE QUI NE PORTE QU'UN RENDEZ-VOUS, semee le 06/10/2026 :
+    // c'est tout ce que `rgd_visite_planifiee` fabrique quand on prend une
+    // visite depuis la fiche projet — une affaire et un chantier, sans un euro.
+    // Sans elle, la demo ne montrait que des visites a `deal_id` nul, donc
+    // invisibles du Pipeline, et la suppression d'une fiche qui ne porte QUE
+    // son rendez-vous ne s'essayait nulle part : c'est pourtant le cas qui
+    // rendait le prospect indeboulonnable en production.
+    { id: 'd-rdv', title: 'Visite technique : Camille Petit / RGD Renova', activity: 'rgd', stage: 'visite', status: 'open', contact_id: 'c4', owner_id: 'u-mickael', amount: null, fields: {}, stage_history: [{ stage: 'visite', at: d(-1) }], created_at: d(-1), stage_changed_at: d(-1) },
     { id: 'd2', title: 'Salle de bain — Fontaine', activity: 'rgd', stage: 'devis_envoye', status: 'open', contact_id: 'c8', owner_id: 'u-mickael', amount: 11500, channel: 'Google Ads', campaign: 'RGD-SdB-2026', fields: { type_travaux: 'Salle de bain', num_devis: 'DEV-2026-118' }, stage_history: [{ stage: 'lead', at: d(-20) }, { stage: 'visite', at: d(-14) }, { stage: 'devis_envoye', at: d(-8) }], created_at: d(-20), stage_changed_at: d(-8) },
     { id: 'd3', title: 'Réaménagement maison — Haddad', activity: 'rgd', stage: 'nego', status: 'won', contact_id: 'c2', owner_id: 'u-mickael', amount: 42000, channel: 'Recommandation client', fields: { type_travaux: 'Réaménagement', num_devis: 'DEV-2026-097' }, stage_history: [{ stage: 'lead', at: d(-120) }, { stage: 'visite', at: d(-110) }, { stage: 'devis_envoye', at: d(-95) }, { stage: 'nego', at: d(-80) }], created_at: d(-120), won_at: d(-70), closed_at: d(-70), stage_changed_at: d(-80) },
     { id: 'd4', title: 'Cuisine — Roux', activity: 'rgd', stage: 'lead', status: 'open', contact_id: 'c9', owner_id: 'u-charge', amount: 0, channel: 'Meta Ads', campaign: 'RGD-Renov-Sept26', fields: { type_travaux: 'Cuisine', budget_annonce: 15000 }, stage_history: [{ stage: 'lead', at: d(-2) }], created_at: d(-2), stage_changed_at: d(-2) },
@@ -539,7 +547,7 @@ export const SEED = {
     { id: 'rch7', deal_id: null, contact_id: 'c3', reference: 'Visite technique — Garnier',
       ville: 'Amboise', statut_d1: 'visite_technique', date_debut_prevue: day(-2),
       source_event_id: 'demo-visite-garnier', created_at: d(-40), updated_at: d(-3) },
-    { id: 'rch8', deal_id: null, contact_id: 'c4', reference: 'Visite technique — Petit',
+    { id: 'rch8', deal_id: 'd-rdv', contact_id: 'c4', reference: 'Visite technique — Petit',
       ville: 'Tours', statut_d1: 'visite_technique', date_debut_prevue: day(21),
       source_event_id: 'demo-visite-petit',
       created_at: d(-1), updated_at: d(-1) },

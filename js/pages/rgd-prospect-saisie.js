@@ -244,14 +244,41 @@ function rattachements(contactId) {
   // invisibles deux fois.
   const paiements = db.t('rgd_paiements').filter(p => idsAffaires.has(p.deal_id));
 
+  // ⚠ UN RENDEZ-VOUS N'EST PAS UN CHANTIER, et les confondre rendait un prospect
+  // DÉFINITIVEMENT indéboulonnable (05/10/2026, signalé par Élodie sur une
+  // capture : « Elodie Carré porte 1 chantier : la fiche ne peut pas être
+  // supprimée sans les orpheliner. Retirez-les d'abord » — et aucun écran ne
+  // permet de les retirer).
+  //
+  // ⚠ CE CHANTIER-LÀ EST LE RENDEZ-VOUS LUI-MÊME : `rgd_visite_planifiee` crée
+  // une affaire ET un chantier pour porter la visite, parce que `deal_id` est
+  // `not null` et que l'onglet « RDV » se lit sur un chantier
+  // `visite_technique`. Prendre un rendez-vous depuis la fiche condamnait donc
+  // le prospect. 4 fiches étaient dans ce cas, et toute visite à venir s'y
+  // ajoutait.
+  //
+  // ⚠ LE GARDE-FOU NE DEVIENT PAS PLUS PERMISSIF, IL DEVIENT JUSTE : il refuse
+  // ce qui porte de l'ARGENT — un devis, un paiement, un chantier qui a un
+  // montant, un identifiant Costructor ou un `d1_id`. Un rendez-vous ne porte
+  // rien ; il part avec la fiche, et la confirmation le nomme.
+  const porteDeLArgent = (c) => c.montant_ht != null || c.montant_ttc != null
+    || c.d1_id != null || c.costructor_id != null
+    || c.statut_d1 !== 'visite_technique';
+  const vraisChantiers = chantiers.filter(porteDeLArgent);
+  const rdv = chantiers.length - vraisChantiers.length;
+
   const detail = [
     [devis.length, 'devis', 'devis'],
-    [chantiers.length, 'chantier', 'chantiers'],
+    [vraisChantiers.length, 'chantier', 'chantiers'],
     [paiements.length, 'paiement', 'paiements'],
   ].filter(([n]) => n > 0)
    .map(([n, un, plusieurs]) => `${n} ${n > 1 ? plusieurs : un}`);
 
-  return { total: devis.length + chantiers.length + paiements.length, detail };
+  return {
+    total: devis.length + vraisChantiers.length + paiements.length,
+    detail,
+    rdv,
+  };
 }
 
 // `sousVue` vaut `site` pour une demande du formulaire, autre chose pour une
@@ -274,8 +301,19 @@ export async function supprimerFiche(sousVue, ligne, apresSuppression) {
       + `supprimée sans les orpheliner. Retirez-les d'abord.`, 'warn');
   }
 
-  if (!await confirm(`Supprimer ${nom} ? La fiche est retirée définitivement. `
-    + `Le contact, lui, est archivé et reste récupérable.`)) return;
+  // ⚠ LA CONFIRMATION NOMME LE RENDEZ-VOUS, et dit ce qu'il advient de
+  // l'agenda. Le supprimer en silence ferait disparaître une visite de l'onglet
+  // « RDV » sans que personne sache pourquoi ; et l'événement, lui, RESTE chez
+  // Google, qui en est la source — la fonction de base n'y touche pas.
+  const mot = liens.rdv
+    ? `Supprimer ${nom} ? La fiche part définitivement, avec ${liens.rdv > 1
+        ? `ses ${liens.rdv} visites techniques` : 'sa visite technique'} et `
+      + `${liens.rdv > 1 ? 'leurs affaires' : 'son affaire'}. Le rendez-vous reste `
+      + `dans Google Agenda : retirez-l'y aussi s'il n'a plus lieu d'être. `
+      + `Le contact est archivé et reste récupérable.`
+    : `Supprimer ${nom} ? La fiche est retirée définitivement. `
+      + `Le contact, lui, est archivé et reste récupérable.`;
+  if (!await confirm(mot)) return;
 
   // 1. La fiche et, s'il y a lieu, sa pierre tombale — une seule transaction.
   //    ⚠ `db.remove` ne suffirait pas : sans la pierre, une fiche venue de
@@ -289,6 +327,16 @@ export async function supprimerFiche(sousVue, ligne, apresSuppression) {
   // plutôt que de la retirer à la main — un `filter` ici et la ligne
   // reviendrait au premier rafraîchissement, la base ayant raison.
   await db.recharger(table);
+
+  // ⚠ ET L'AFFAIRE DU RENDEZ-VOUS AUSSI, quand la fonction en a retire une :
+  // elle a ecrit dans `deals` et `rgd_chantiers` sans passer par le cache, donc
+  // l'onglet « RDV », sa colonne date-et-heure et le Pipeline continueraient
+  // d'afficher une visite dont la fiche n'existe plus. Meme piege que la RPC qui
+  // POSE le rendez-vous, qui doit recharger les memes tables.
+  if (r.affaires_retirees) {
+    await db.recharger('rgd_chantiers');
+    await db.recharger('deals');
+  }
 
   // 2. Le contact suit, mais ARCHIVÉ et non supprimé — voir l'en-tête.
   if (ligne.contact_id) {
