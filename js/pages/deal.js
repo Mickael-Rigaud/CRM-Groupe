@@ -781,7 +781,8 @@ export function openDeal(id, onChange) {
       if (dd.activity === 'btp') {
         if (!await confirm(`Mettre l’affaire « ${dd.title} » à la corbeille ?`
           + ' Elle quitte le pipeline, mais rien n’est détruit : ses tâches, son historique,'
-          + ' son suivi AMO, ses relevés et ses documents partent avec elle et reviennent si on la reprend.')) return;
+          + ' son suivi AMO, ses relevés et ses documents partent avec elle et reviennent si on la reprend.'
+          + ' Le contact est supprimé avec elle s’il ne porte rien d’autre, et revient aussi.')) return;
         const r = await jeterAffaireBtp(id);
         if (!r.ok) return toast(`Suppression impossible : ${r.motif}`, 'err');
         // ⚠ QUATRE TABLES À RECHARGER : une fonction de base écrit sans
@@ -791,6 +792,10 @@ export function openDeal(id, onChange) {
         await db.recharger('activities').catch(() => {});
         await db.recharger('events').catch(() => {});
         await db.recharger('btp_corbeille').catch(() => {});
+        // ⚠ LE CONTACT A PU PARTIR AVEC L'AFFAIRE : sans ce rechargement,
+        // l'annuaire continuerait d'afficher quelqu'un que la base ne
+        // connaît plus.
+        if (r.donnees?.contact_supprime) await db.recharger('contacts').catch(() => {});
         closeModal(true);
         toast('Affaire mise à la corbeille');
         onChange?.();

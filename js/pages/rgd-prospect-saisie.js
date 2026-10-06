@@ -318,8 +318,19 @@ export async function supprimerFiche(sousVue, ligne, apresSuppression) {
   // le dire ici évite de demander « êtes-vous sûr ? », de se faire refuser par
   // le serveur, puis de redemander. La seconde question reste pour ce que
   // l'écran ne voit pas — un devis rattaché à l'affaire seule, par exemple.
-  const recuperables = `La fiche va dans la corbeille et le contact est `
-    + `archivé : les deux se récupèrent.`;
+  // ⚠ LE CONTACT PART AVEC LA FICHE DEPUIS LE 06/10/2026 (Élodie : « quand on
+  // supprime un projet, je veux que ça supprime son contact »). La phrase le
+  // dit, parce que c'est le seul endroit où on peut encore renoncer — et
+  // parce qu'une personne qui disparaît de l'annuaire sans avoir été annoncée
+  // se lit comme une perte, même quand elle se reprend.
+  //
+  // ⚠ « S'IL NE PORTE RIEN D'AUTRE » N'EST PAS UNE PRÉCAUTION DE STYLE : la
+  // fonction de base garde le contact dès qu'une autre fiche, une affaire ou
+  // un devis le désigne encore — `contacts` est partagée par les quatre
+  // structures. Promettre une suppression sèche ferait mentir l'écran une
+  // fois sur trente.
+  const recuperables = `La fiche va dans la corbeille, et le contact est `
+    + `supprimé avec elle s'il ne porte rien d'autre : tout se récupère.`;
   const mot = liens.total
     ? `${nom} porte ${liens.detail.join(', ')}. Supprimer la fiche quand même ? `
       + `Ces lignes RESTERONT en base, sans fiche : leurs montants continueront `
@@ -386,7 +397,17 @@ export async function supprimerFiche(sousVue, ligne, apresSuppression) {
   // suppression, et surtout rien ne disait s'il était DÉJÀ archivé avant —
   // donc une restauration ne pouvait pas savoir s'il fallait le désarchiver.
   // La corbeille garde cette réponse. On recharge pour que l'écran le voie.
-  if (r.donnees?.contact_archive) await db.recharger('contacts');
+  // ⚠ ON RECHARGE LES CONTACTS DÈS QUE L'UN DES DEUX S'EST PRODUIT : supprimé
+  // ou archivé, la ligne du cache est périmée, et l'annuaire continuerait
+  // d'afficher quelqu'un que la base ne connaît plus.
+  if (r.donnees?.contact_archive || r.donnees?.contact_supprime) await db.recharger('contacts');
+  // Les tâches et l'historique qui désignaient le contact ont été DÉTACHÉS en
+  // silence par la base (SET NULL) : sans ce rechargement, un rappel
+  // continuerait d'afficher une personne qui n'existe plus.
+  if (r.donnees?.contact_supprime) {
+    await db.recharger('activities').catch(() => {});
+    await db.recharger('events').catch(() => {});
+  }
   await db.recharger('rgd_corbeille');
 
   toast('Fiche supprimée — elle est dans la corbeille');
@@ -418,7 +439,12 @@ export async function restaurerFiche(ligne, apres) {
 
   await db.recharger(ligne.source === 'demandes' ? 'rgd_demandes' : 'rgd_clients');
   if (r.donnees?.affaires) { await db.recharger('deals'); await db.recharger('rgd_chantiers'); }
-  if (r.donnees?.contact_desarchive) await db.recharger('contacts');
+  if (r.donnees?.contact_desarchive || r.donnees?.contact_remis) await db.recharger('contacts');
+  // ⚠ LA REPRISE RATTACHE AUSSI LES TÂCHES que la suppression avait détachées.
+  if (r.donnees?.contact_remis) {
+    await db.recharger('activities').catch(() => {});
+    await db.recharger('events').catch(() => {});
+  }
   await db.recharger('rgd_corbeille');
 
   toast('Fiche remise');

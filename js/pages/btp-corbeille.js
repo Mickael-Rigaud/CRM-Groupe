@@ -29,6 +29,9 @@ const emporte = (x) => [
   (x.suivi_amo || []).length && `${(x.suivi_amo || []).length} point${(x.suivi_amo || []).length > 1 ? 's' : ''} de suivi AMO`,
   (x.releves || []).length && `${(x.releves || []).length} relevé${(x.releves || []).length > 1 ? 's' : ''}`,
   (x.documents || []).length && `${(x.documents || []).length} document${(x.documents || []).length > 1 ? 's' : ''}`,
+  // ⚠ LE CONTACT EST NOMMÉ À PART : c'est une PERSONNE, pas une pièce du
+  // dossier, et c'est la ligne qu'on relit avant de détruire pour de bon.
+  x.contact_supprime && 'le contact',
 ].filter(Boolean).join(' · ');
 
 export function ouvrirCorbeilleBtp(apres) {
@@ -100,6 +103,8 @@ export function ouvrirCorbeilleBtp(apres) {
       await db.recharger('activities').catch(() => {});
       await db.recharger('events').catch(() => {});
       await db.recharger('btp_corbeille').catch(() => {});
+      // ⚠ ET LE CONTACT, QUAND IL ÉTAIT PARTI AVEC L'AFFAIRE.
+      if (r.donnees?.contact_remis) await db.recharger('contacts').catch(() => {});
       toast('Affaire reprise');
       dessine();
       apres?.();
