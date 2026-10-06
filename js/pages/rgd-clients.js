@@ -104,6 +104,7 @@ import { majNote } from '../data/rgd-clients.js';
 import { toast } from '../ui.js';
 import { supprimerFiche, boutonSuppression, restaurerFiche } from './rgd-prospect-saisie.js';
 import { nouvelleDemandeRgd } from './rgd-projet.js';
+import { attribuerEnLotRgd } from './rgd-attribuer-lot.js';
 import { ouvrirFicheRgd } from './rgd-fiche.js';
 
 const s_ = (n) => (n > 1 ? 's' : '');
@@ -732,6 +733,17 @@ export const rgdClientsPage = {
       //
       // ⚠ ELLE NE S'AFFICHE QU'À LA DIRECTION, miroir de sa policy : la lecture
       // d'une fiche supprimée est le même droit que sa suppression.
+      // ⚠ CONFIER PLUSIEURS DOSSIERS D'UN GESTE (06/10/2026). Le
+      // cloisonnement par personne existe depuis le 25/09, mais **191 fiches
+      // sur 194** appartenaient à Mickael : l'écran fiche par fiche est correct
+      // pour dix dossiers, intenable pour deux cents.
+      //
+      // ⚠ LA SÉLECTION VIT DANS `state`, PAS DANS LE DOM : le tableau est
+      // reconstruit à chaque `draw()` — un changement de statut, une note
+      // écrite — et des cases cochées dans le HTML disparaîtraient sans un mot,
+      // au milieu d'un tri de deux cents lignes.
+      const peutAttribuer = scope.isDirection;
+      if (!(state.selection instanceof Set)) state.selection = new Set();
       const surCorbeille = state.vue === 'corbeille';
       const corbeille = scope.rgdCorbeille().slice()
         .sort((a, b) => String(b.supprime_le || '').localeCompare(String(a.supprime_le || '')));
@@ -1101,10 +1113,33 @@ export const rgdClientsPage = {
         </span>`;
       };
 
+      // Ce que la sélection retient : des lignes de l'onglet ouvert, jamais des
+      // identifiants orphelins. Changer d'onglet la vide (voir le gestionnaire
+      // de `[data-vue]`) — garder une sélection invisible serait un piège.
+      const sel = () => lignesProspects.filter(x => state.selection.has(x.ligne.id));
+
+      const barreLot = () => {
+        if (!peutAttribuer) return '';
+        const n = sel().length;
+        if (!n) return '';
+        return `<div class="rcl-lot">
+          <span><b>${n}</b> fiche${n > 1 ? 's' : ''} sélectionnée${n > 1 ? 's' : ''}</span>
+          ${n < lignesProspects.length ? `<button type="button" class="btn ghost sm" id="rcl-lot-tout">Sélectionner les ${lignesProspects.length} de l’onglet</button>` : ''}
+          <button type="button" class="btn ghost sm" id="rcl-lot-rien">Tout désélectionner</button>
+          <span class="grow"></span>
+          <button type="button" class="btn" id="rcl-lot-confier">Confier à…</button>
+        </div>`;
+      };
+
       const tableauProspects = () => `<section class="card table-wrap">
+        ${barreLot()}
         ${bandeauTotal()}
         <table>
-          <thead><tr><th>Reçu</th><th>Provenance</th><th>Nom</th><th>Contact</th>
+          <thead><tr>${peutAttribuer ? `<th class="rcl-coche"><input type="checkbox" id="rcl-coche-page"
+              title="Sélectionner les lignes de cette page"${
+              tranche(lignesProspects).every(x => state.selection.has(x.ligne.id))
+                && lignesProspects.length ? ' checked' : ''}></th>` : ''}
+            <th>Reçu</th><th>Provenance</th><th>Nom</th><th>Contact</th>
             ${surRdv ? '<th>Rendez-vous</th>' : ''}
             <th>Projet</th><th>${surMontant ? 'Montant HT' : 'Budget'}</th><th>Ville</th><th>Statut</th>
             ${surRelances ? '<th>Dernière relance</th>' : ''}
@@ -1118,6 +1153,8 @@ export const rgdClientsPage = {
                ⚠ PAS D'ACCENT GRAVE ICI : ce commentaire est DANS un litteral
                de gabarit, un seul le referme et l'ecran reste sur Chargement. -->
           <tbody>${tranche(lignesProspects).map((x, i) => { const n = debut + i; return `<tr class="click" data-fiche="${n}">
+            ${peutAttribuer ? `<td class="rcl-coche"><input type="checkbox" data-coche="${esc(x.ligne.id)}"${
+              state.selection.has(x.ligne.id) ? ' checked' : ''}></td>` : ''}
             <td class="small">${x.recu ? esc(fmtDate(x.recu)) : '<span class="muted">—</span>'}</td>
             <td>${pastilleProvenance(x.provenance)}</td>
             <td><b>${esc(x.nom || '—')}</b>
@@ -1140,7 +1177,7 @@ export const rgdClientsPage = {
             ${surRelances ? `<td class="small rcl-rel-td">${celluleRelance(x.ligne, x.statut, x.cible)}</td>` : ''}
             <td class="rcl-note">${champNote(x.ligne, x.cible)}</td>
             <td class="rcl-suppr">${boutonSuppression(x.ligne)}</td>
-          </tr>`; }).join('') || `<tr><td colspan="${10 + (surRdv ? 1 : 0) + (surRelances ? 1 : 0)}"><div class="empty">${esc(vide())}</div></td></tr>`}</tbody>
+          </tr>`; }).join('') || `<tr><td colspan="${10 + (surRdv ? 1 : 0) + (surRelances ? 1 : 0) + (peutAttribuer ? 1 : 0)}"><div class="empty">${esc(vide())}</div></td></tr>`}</tbody>
         </table>
         ${pagination()}
         <p class="small muted">${state.ecriture
@@ -1258,6 +1295,10 @@ export const rgdClientsPage = {
         // Les filtres appartiennent à la liste qu'on quitte : un statut de
         // demande n'existe pas chez les clients, et le garder viderait l'écran
         // sans qu'on comprenne pourquoi.
+        // ⚠ LA SÉLECTION SE VIDE AVEC LES FILTRES, et pour la même raison :
+        // elle appartient à la liste qu'on quitte. La garder confierait, d'un
+        // clic, des dossiers qu'on ne voit plus.
+        state.selection = new Set();
         state.vue = b.dataset.vue; state.q = ''; state.type = ''; state.statut = ''; draw();
       });
       // ⚠ La ligne entière ouvre la fiche, MAIS PAS SES COMMANDES : un clic sur
@@ -1303,6 +1344,34 @@ export const rgdClientsPage = {
       // Supprimer : le bouton n'existe que sur les fiches nees dans le CRM
       // (`boutonSuppression` ne rend rien autrement), et `supprimerProspect`
       // reverifie — un ecran est un garde-fou, pas une garantie.
+      // La sélection : une case par ligne, une case par page, deux raccourcis.
+      // On redessine à chaque coche — c'est la barre du haut qui doit suivre, et
+      // rien n'est en cours de frappe dans ce tableau à ce moment-là.
+      root.querySelectorAll('[data-coche]').forEach(c => c.onchange = () => {
+        if (c.checked) state.selection.add(c.dataset.coche);
+        else state.selection.delete(c.dataset.coche);
+        draw();
+      });
+      const cochePage = root.querySelector('#rcl-coche-page');
+      if (cochePage) cochePage.onchange = () => {
+        tranche(lignesProspects).forEach(x => {
+          if (cochePage.checked) state.selection.add(x.ligne.id);
+          else state.selection.delete(x.ligne.id);
+        });
+        draw();
+      };
+      const lotTout = root.querySelector('#rcl-lot-tout');
+      if (lotTout) lotTout.onclick = () => {
+        lignesProspects.forEach(x => state.selection.add(x.ligne.id));
+        draw();
+      };
+      const lotRien = root.querySelector('#rcl-lot-rien');
+      if (lotRien) lotRien.onclick = () => { state.selection = new Set(); draw(); };
+      const lotConfier = root.querySelector('#rcl-lot-confier');
+      if (lotConfier) lotConfier.onclick = () => attribuerEnLotRgd(
+        sel().map(x => ({ cible: x.cible, ligne: x.ligne, nom: x.nom })),
+        () => { state.selection = new Set(); draw(); });
+
       root.querySelectorAll('[data-restaurer-fiche]').forEach(b => b.onclick = () => {
         const x = corbeille.find(y => y.id === b.dataset.restaurerFiche);
         if (x) restaurerFiche(x, draw);

@@ -5986,6 +5986,16 @@ textarea.ev-nu { resize: vertical; min-height: 40px; }
    plus, et l'oeil doit la distinguer sans lire la derniere colonne. */
 tr.est-restauree { opacity: .55; }
 
+/* La barre de repartition en lot : elle n'existe que quand quelque chose est
+   coche, et elle ouvre le tableau — on ne va pas chercher sous deux cents
+   lignes le bouton qui agit sur ce qu'on vient de selectionner. */
+.rcl-lot { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 10px 14px; border-bottom: 1px solid var(--border);
+  background: var(--accent-soft); font-size: 13px; }
+.rcl-lot .grow { flex: 1; }
+th.rcl-coche, td.rcl-coche { width: 34px; text-align: center; padding-left: 10px; padding-right: 0; }
+td.rcl-coche input, th.rcl-coche input { cursor: pointer; }
+
 /* Le selecteur « regarder comme » de l'espace RGD : dans l'en-tete, a cote de
    la date. Il se signale quand il filtre — un reglage memorise qui ne se voit
    pas est un reglage qu'on oublie. */
