@@ -2075,12 +2075,15 @@ tr.btp-mission .btp-pts { color: var(--m-encre); }
   background: color-mix(in srgb, var(--c) 18%, var(--card)); }
 .kb-sous-barre > span { display: block; height: 100%; border-radius: inherit; background: var(--c); }
 .kb-sous-liste { margin: 6px 0 0; padding: 0; list-style: none; }
-.kb-sous-liste li { position: relative; padding-left: 15px; font-size: 11.5px; line-height: 1.45;
-  color: var(--text); overflow-wrap: anywhere; }
-.kb-sous-liste li::before { content: ''; position: absolute; left: 1px; top: 4px; width: 8px; height: 8px;
-  border: 1.5px solid var(--muted); border-radius: 3px; }
-.kb-sous-liste li.kb-sous-plus { padding-left: 15px; color: var(--muted); font-weight: 650; }
-.kb-sous-liste li.kb-sous-plus::before { content: none; }
+.kb-sous-liste li { font-size: 11.5px; line-height: 1.45; color: var(--text); overflow-wrap: anywhere; }
+/* Chaque sous-tache restante se coche sur la carte : toute la ligne est la cible. */
+.kb-sous-liste label { display: flex; align-items: flex-start; gap: 6px; padding: 2px 3px; margin: 0 -3px;
+  border-radius: 5px; cursor: pointer; }
+.kb-sous-liste label:hover { background: color-mix(in srgb, var(--c) 12%, var(--card)); }
+.kb-sous-liste input[type="checkbox"] { flex: 0 0 auto; width: 13px; height: 13px; margin: 2px 0 0;
+  accent-color: var(--c); cursor: pointer; }
+.kb-sous-liste label.est-cochee span { text-decoration: line-through; color: var(--muted); }
+.kb-sous-liste li.kb-sous-plus { padding-left: 19px; color: var(--muted); font-weight: 650; }
 .kb-sous.est-complete { background: var(--green-soft); }
 .kb-sous.est-complete .kb-sous-reste,
 .kb-sous.est-complete .kb-sous-compte { color: var(--green); }

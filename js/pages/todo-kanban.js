@@ -21,7 +21,7 @@ import { db } from '../data/db.js';
 import { scope } from '../data/scope.js';
 import { stageOf } from '../data/schema.js';
 import { etapeDeFiche, etapeDeDemande, joursDeVisite } from '../data/rgd-etapes.js';
-import { esc, daysSince, relDay, userName, fmtDate } from '../ui.js';
+import { esc, daysSince, relDay, userName, fmtDate, toast } from '../ui.js';
 import { actType, structureDe, contexteTache, structuresDeLUtilisateur } from './activity.js';
 
 const ecart = (a) => (a.due_date ? daysSince(a.due_date) : null);
@@ -80,7 +80,7 @@ function carte(a, recentes) {
       ${ligneCtx ? `<p class="kb-ctx">${esc(ligneCtx)}</p>` : ''}
       ${ctx && ctx.tel ? `<p class="kb-tel"><a href="tel:${esc(String(ctx.tel).replace(/\s+/g, ''))}"
         onclick="event.stopPropagation()">📞 ${esc(ctx.tel)}</a></p>` : ''}
-      ${sousTaches.length ? blocSousTaches(sousTaches, faites) : ''}
+      ${sousTaches.length ? blocSousTaches(a, sousTaches, faites) : ''}
       <div class="kb-pied">
         ${a.priority === 'urgent' ? '<span class="kb-etiq urgent">Urgent</span>' : ''}
         ${a.priority === 'retard' ? '<span class="kb-etiq retard">En retard</span>' : ''}
@@ -104,14 +104,33 @@ function carte(a, recentes) {
 // c'est ce qu'on vient chercher. ⚠ TROIS AU PLUS, puis « + n autres » : une
 // checklist de douze lignes transformerait la carte en liste et pousserait les
 // suivantes hors de l'écran ; le détail entier reste dans la tâche ouverte.
+//
+// ⚠ ELLES SE COCHENT SUR LA CARTE DEPUIS LE 06/10/2026 (demandé le même jour :
+// « cocher directement depuis la vue d'ensemble une sous-tâche effectuée »).
+// Ouvrir la tâche, cocher, enregistrer : trois gestes pour un seul. On désigne
+// la sous-tâche par son RANG dans la checklist, et on relit la tâche dans le
+// cache au moment d'écrire — jamais la copie du rendu, qu'une autre coche a pu
+// rendre périmée.
+// ⚠ UNE SOUS-TÂCHE COCHÉE RESTE VISIBLE, BARRÉE, PENDANT QUINZE SECONDES, et se
+// décoche : sans ce délai elle disparaissait au clic, et un clic de travers
+// n'avait plus d'autre réparation que d'ouvrir la tâche. Même délai que la
+// tâche elle-même (`GRACE_MS` de `today.js`).
 const RESTANTES_VISIBLES = 3;
-function blocSousTaches(sousTaches, faites) {
+const DELAI_SOUS_MS = 15000;
+const sousRecentes = new Map(); // `${id}|${rang}` → minuteur
+const cleSous = (id, i) => `${id}|${i}`;
+
+function blocSousTaches(a, sousTaches, faites) {
   const total = sousTaches.length;
-  const restantes = sousTaches.filter(x => x && !x.f);
+  const lignes = sousTaches.map((x, i) => ({ t: x?.t || '', f: !!x?.f, i }));
+  const restantes = lignes.filter(x => !x.f);
   const complete = restantes.length === 0;
   const pct = Math.round((faites / total) * 100);
-  const vues = restantes.slice(0, RESTANTES_VISIBLES);
-  const reste = restantes.length - vues.length;
+  // Les restantes (trois au plus) et celles qu'on vient de cocher, dans l'ordre
+  // de la checklist : une coche ne doit pas faire sauter la ligne d'à côté.
+  const gardees = new Set(restantes.slice(0, RESTANTES_VISIBLES).map(x => x.i));
+  const vues = lignes.filter(x => gardees.has(x.i) || (x.f && sousRecentes.has(cleSous(a.id, x.i))));
+  const reste = restantes.length - gardees.size;
   return `<div class="kb-sous ${complete ? 'est-complete' : ''}">
     <div class="kb-sous-tete">
       <span class="kb-sous-reste">${complete ? '✓ Tout est fait'
@@ -121,10 +140,34 @@ function blocSousTaches(sousTaches, faites) {
     <div class="kb-sous-barre" role="progressbar" aria-valuemin="0" aria-valuemax="${total}"
       aria-valuenow="${faites}"><span style="width:${pct}%"></span></div>
     ${vues.length ? `<ul class="kb-sous-liste">${vues.map(x =>
-      `<li>${esc(x.t || '')}</li>`).join('')}${reste > 0
+      `<li><label class="${x.f ? 'est-cochee' : ''}" title="${x.f ? 'Décocher' : 'Marquer comme faite'}">
+        <input type="checkbox" data-sous="${esc(a.id)}" data-rang="${x.i}" ${x.f ? 'checked' : ''}>
+        <span>${esc(x.t)}</span></label></li>`).join('')}${reste > 0
       ? `<li class="kb-sous-plus">+ ${reste} autre${reste > 1 ? 's' : ''}</li>` : ''}</ul>` : ''}
   </div>`;
 }
+
+/** Branche les cases des sous-tâches du tableau. Appelée après chaque rendu. */
+export function lierSousTaches(root, redessiner) {
+  root.querySelectorAll('.kb-carte input[data-sous]').forEach(cb => cb.onchange = async () => {
+    const id = cb.dataset.sous;
+    const rang = Number(cb.dataset.rang);
+    const tache = db.byId('activities', id);
+    const liste = Array.isArray(tache?.checklist) ? tache.checklist.map(x => ({ t: x?.t || '', f: x?.f === true })) : [];
+    if (!liste[rang]) { redessiner(); return; }
+    liste[rang].f = cb.checked;
+    const cle = cleSous(id, rang);
+    clearTimeout(sousRecentes.get(cle));
+    sousRecentes.delete(cle);
+    try { await db.update('activities', id, { checklist: liste }); }
+    catch (e) { toast('Sous-tâche non enregistrée : ' + (e?.message || e), 'err'); redessiner(); return; }
+    if (cb.checked) sousRecentes.set(cle, setTimeout(() => { sousRecentes.delete(cle); redessiner(); }, DELAI_SOUS_MS));
+    redessiner();
+  });
+}
+
+/** À appeler en quittant l'écran : les minuteurs redessineraient une page absente. */
+export function oublierSousTaches() { sousRecentes.forEach(clearTimeout); sousRecentes.clear(); }
 
 // ———————————————————————————————————————————————————————————————————————————
 // LES DOSSIERS QUI ATTENDENT UNE ÉCRITURE

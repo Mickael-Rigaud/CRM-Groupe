@@ -17,7 +17,7 @@ import { STRUCTURES_TACHE } from '../data/schema.js';
 import { esc, daysSince, fmtDate, relDay, userName, searchInput, bindSearch, restoreFocus, terms, hit } from '../ui.js';
 import { actType, bindActivityRows, activityForm, nextActivity, structureDe,
          toggleActivity, structuresDeLUtilisateur, marquesTache } from './activity.js';
-import { kanbanHtml, dossiersDe, carteDossier } from './todo-kanban.js';
+import { kanbanHtml, dossiersDe, carteDossier, lierSousTaches, oublierSousTaches } from './todo-kanban.js';
 import { openDeal } from './deal.js';
 
 // Les trois rangs de la liste, dans l'ordre où ils se lisent. Ils reprennent les
@@ -323,6 +323,7 @@ export const todayPage = {
         if (cb.checked) recentes.set(id, setTimeout(() => { recentes.delete(id); draw(); }, GRACE_MS));
         draw();
       });
+      lierSousTaches(root, draw);
     };
 
     draw();
@@ -330,7 +331,7 @@ export const todayPage = {
       refresh: draw,
       // Quitter l'écran emporte les minuteurs avec lui, sinon ils redessineraient
       // une page qui n'est plus là.
-      destroy() { recentes.forEach(clearTimeout); recentes.clear(); },
+      destroy() { recentes.forEach(clearTimeout); recentes.clear(); oublierSousTaches(); },
     };
   },
 };
