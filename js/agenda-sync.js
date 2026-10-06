@@ -2,14 +2,22 @@
 //
 // Le probleme que ca resout : lire Google a l'affichage oblige chaque personne a
 // se connecter, et ne lui montre que les calendriers partages avec elle. En
-// recopiant les rendez-vous dans la base, tout le monde voit la meme journee,
-// sans connexion Google — et le CRM peut les trier, les colorer et les meler a
-// ses propres taches.
+// recopiant les rendez-vous dans la base, la journee s'affiche sans connexion
+// Google — et le CRM peut les trier, les colorer et les meler a ses propres
+// taches.
+//
+// ⚠ LA BASE CONTIENT TOUT, L'ECRAN N'EN MONTRE PAS TOUT (06/10/2026). Le
+// releve rapatrie les agendas de la structure sans distinction ; c'est
+// `scope.voitAgenda` qui ne garde ensuite que ceux de la personne connectee,
+// quand elle en a. Ce n'est donc PAS une protection — la policy rend bien
+// toutes les lignes a qui porte l'activite — mais un cloisonnement
+// d'affichage, demande par Elodie : « chaque personne son agenda ».
 //
 // CE MODULE NE FAIT PLUS QUE LIRE. La recopie se fait cote serveur, hors du
 // navigateur : aucune fenetre de consentement, aucun jeton Google ici, rien a
 // cliquer. Le CRM affiche ce qu'il trouve dans agenda_events, c'est tout.
 import { db } from './data/db.js';
+import { scope } from './data/scope.js';
 import { idsDe } from './agenda.js';
 import { ACTIVITY_KEYS } from './data/schema.js';
 
@@ -27,7 +35,7 @@ export const agendasDe = (cles = ACTIVITY_KEYS) =>
 // Les rendez-vous d'un jour, tels qu'ils sont enregistrés dans le CRM.
 export function evenementsEnregistres(cles, jour = jourCle()) {
   return db.t('agenda_events')
-    .filter(e => e.day === jour && cles.includes(e.activity))
+    .filter(e => e.day === jour && cles.includes(e.activity) && scope.voitAgenda(e))
     .map(e => ({
       id: e.id, titre: e.title || '(sans titre)', lieu: e.location || '',
       debut: new Date(e.starts_at), fin: e.ends_at ? new Date(e.ends_at) : new Date(e.starts_at),
@@ -40,7 +48,8 @@ export function evenementsEnregistres(cles, jour = jourCle()) {
 // plutôt que de laisser croire que la journée est vide.
 export function derniereSync(cles, jour = jourCle()) {
   const dates = db.t('agenda_events')
-    .filter(e => e.day === jour && cles.includes(e.activity) && e.synced_at)
+    .filter(e => e.day === jour && cles.includes(e.activity) && e.synced_at
+      && scope.voitAgenda(e))
     .map(e => new Date(e.synced_at).getTime());
   return dates.length ? new Date(Math.max(...dates)) : null;
 }

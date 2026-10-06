@@ -422,8 +422,10 @@ function carteJournee(cles) {
     return `<section class="card">${entete}
       <div class="tb-ag-vide">
         <p><b>Aucun agenda n'est encore raccordé.</b> Une fois les calendriers des structures renseignés,
-        leurs rendez-vous du jour sont recopiés automatiquement dans le CRM, visibles par tout le monde.
-        Personne n'a de connexion à faire.</p>
+        leurs rendez-vous du jour sont recopiés automatiquement dans le CRM.
+        Personne n'a de connexion à faire. Chacun ne voit que les agendas qui lui
+        appartiennent dès qu'on lui en a créé un&nbsp;; sans agenda à lui, il voit
+        celui de sa structure.</p>
         ${peutRaccorder() ? modeEmploi() + '<p class="muted small">Puis « Raccorder les agendas » ci-dessus.</p>'
           : '<p class="muted small">La direction peut les renseigner depuis cet écran.</p>'}
       </div>

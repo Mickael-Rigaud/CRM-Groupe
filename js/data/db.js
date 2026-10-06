@@ -67,7 +67,14 @@ export const TABLES = ['profiles', 'organisations', 'contacts', 'deals', 'activi
   // messagerie interne (canaux par structure + conversations privées)
   'conversations', 'conversation_members', 'messages', 'message_reads',
   // agenda du groupe : le reflet des rendez-vous Google, recopié par la direction
-  'agenda_events'];
+  'agenda_events',
+  // ⚠ QUEL AGENDA GOOGLE APPARTIENT À QUI. Lecture seule pour tout le monde
+  // (`select` accordé à `authenticated`, aucune policy d'écriture) : seule la
+  // fonction qui crée réellement le calendrier y écrit, en `service_role`.
+  // Sans elle, `scope.voitAgenda` ne saurait rien et l'agenda resterait
+  // commun à la structure. Une table absente ne casse rien : `load` se
+  // contente d'un avertissement et `db.t` rend un tableau vide.
+  'agendas_personnels'];
 const LS_FILES = 'crm_local_files';
 const LS_KEY = 'crm_local_v1';
 const LS_USER = 'crm_local_user';

@@ -731,7 +731,13 @@ export const rgdAgendaPage = {
 
     const draw = () => {
       const aujourdhui = isoDay();
-      const tous = scope.rgd('agenda_events').filter(e => e.activity === KEY);
+      // ⚠ `voitAgenda` EN PLUS DU FILTRE D'ACTIVITÉ : `scope.rgd` ne cloisonne
+      // pas cette table (elle n'a pas de propriétaire à lire, seulement un
+      // calendrier), et la direction y échappe de toute façon. Voir
+      // `scope.voitAgenda` : chacun ne voit que ses calendriers dès qu'il en a
+      // un, et rien ne change tant qu'il n'en a pas.
+      const tous = scope.rgd('agenda_events')
+        .filter(e => e.activity === KEY && scope.voitAgenda(e));
 
       // La fenêtre relevée, CALCULÉE et non déduite des lignes reçues : un jour
       // sans rendez-vous est un jour libre, pas un jour inconnu, et il doit

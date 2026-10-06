@@ -203,4 +203,54 @@ export const scope = {
   // Ceux a qui l'on peut ecrire. `users()` reste entier a cote : confier une
   // tache ou nommer un responsable d'affaire n'est pas cloisonne.
   collegues() { return this.users().filter(u => this.partageStructure(u)); },
+
+  // ---------- Agendas ----------
+  // Les calendriers Google qui appartiennent EN PROPRE à la personne
+  // connectée, pour une structure. Créés un par un depuis l'écran des
+  // comptes, ils sont la seule façon de savoir qu'un rendez-vous est le sien
+  // plutôt que celui de la structure : `agenda_events` ne porte PAS de
+  // propriétaire, il ne porte qu'un `calendar_id`.
+  mesAgendas(structure) {
+    if (!this.user) return [];
+    return db.t('agendas_personnels')
+      .filter(a => a.profile_id === this.user.id && a.structure === structure)
+      .map(a => a.calendar_id).filter(Boolean);
+  },
+
+  // Les structures dont l'agenda reste COMMUN, quoi qu'il arrive.
+  //
+  // ⚠ BTP EXPERTISE EN FAIT PARTIE, ET CE N'EST PAS UN OUBLI : le cabinet
+  // tient deux agendas, expertise et AMO, et le métier d'un rendez-vous se
+  // DÉDUIT DU CALENDRIER dont il vient (`btp_projets_depuis_agenda` ne lit
+  // que ces deux-là). Les ranger par personne reviendrait à perdre le métier,
+  // donc la fiche projet — silencieusement. Tant que le pipeline lit les
+  // calendriers, ces deux agendas restent l'outil de travail commun.
+  STRUCTURES_A_AGENDA_COMMUN: ['btp'],
+
+  /**
+   * Cette personne doit-elle voir ce rendez-vous dans SON agenda ?
+   *
+   * Décision d'Élodie du 06/10/2026 : « strictement privé, personne ne voit
+   * les autres ». La direction n'y échappe pas — c'est le seul endroit du CRM
+   * où elle ne voit pas tout, et c'est voulu : la vue d'ensemble des affaires
+   * est donnée par les pipelines, pas par l'agenda de chacun.
+   *
+   * ⚠ TANT QUE LA PERSONNE N'A AUCUN AGENDA À ELLE, RIEN NE CHANGE. Sans ce
+   * garde, déployer le filtre viderait l'écran de tout le monde le jour où il
+   * arrive, puisqu'aucun agenda personnel n'existe encore. Chaque structure
+   * devient privée pour quelqu'un le jour où on lui crée son agenda, pas
+   * avant.
+   *
+   * ⚠ ON NE FILTRE QUE L'AGENDA, jamais le rendez-vous attaché à une fiche :
+   * le propriétaire d'un dossier doit voir la visite qui le concerne même
+   * quand elle a été posée depuis le calendrier d'un autre. Les écrans de
+   * fiche lisent donc `agenda_events` sans passer par ici.
+   */
+  voitAgenda(e) {
+    const structure = e?.activity;
+    if (!structure || this.STRUCTURES_A_AGENDA_COMMUN.includes(structure)) return true;
+    const miens = this.mesAgendas(structure);
+    if (!miens.length) return true;
+    return miens.includes(e.calendar_id);
+  },
 };
