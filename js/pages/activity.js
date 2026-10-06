@@ -103,6 +103,21 @@ export function contexteTache(a) {
   };
 }
 
+/**
+ * Les deux petites marques d'une tâche, communes à la liste et au tableau :
+ * l'avancement des sous-tâches et le partage. Le partage dit l'AUTRE personne —
+ * « avec X » pour qui l'a partagée, « de X » pour qui la reçoit.
+ */
+export function marquesTache(a) {
+  const l = Array.isArray(a.checklist) ? a.checklist : [];
+  const faites = l.filter(x => x?.f === true).length;
+  const moi = scope.user?.id;
+  const avec = !a.shared_with ? ''
+    : a.shared_with === moi ? `de ${userName(a.assignee_id || a.created_by)}` : `avec ${userName(a.shared_with)}`;
+  return (l.length ? ` <span class="todo-sous ${faites === l.length ? 'est-complete' : ''}" title="Sous-tâches faites">☑ ${faites}/${l.length}</span>` : '')
+    + (avec ? ` <span class="todo-partage" title="Tâche partagée">🤝 ${esc(avec)}</span>` : '');
+}
+
 export function activityForm(link = {}, existing = null, onSaved, onClose = null) {
   // On ne confie une tâche qu'à quelqu'un de ses structures — même règle que la
   // messagerie, imposée côté serveur par le déclencheur `tache_destinataire`
@@ -111,6 +126,12 @@ export function activityForm(link = {}, existing = null, onSaved, onClose = null
   // monde. `scope.users()` sert ailleurs, là où le cloisonnement ne s'applique
   // pas — nommer le responsable d'une affaire, par exemple.
   const users = scope.collegues();
+  // ⚠ UNE PERSONNE DÉJÀ POSÉE RESTE PROPOSÉE, même hors de la liste : sinon le
+  // `<select>` n'aurait pas son option, et l'enregistrement effacerait en
+  // silence un partage que quelqu'un a choisi.
+  for (const id of [existing?.assignee_id, existing?.shared_with]) {
+    if (id && !users.some(u => u.id === id)) users.push({ id, full_name: userName(id) });
+  }
   const spec = [
     { key: 'type', label: 'Type', type: 'select', required: true, half: true, value: 'appel',
       options: [...new Set(ACTIVITY_TYPES.map(t => t.groupe))].map(g => ({
@@ -133,7 +154,17 @@ export function activityForm(link = {}, existing = null, onSaved, onClose = null
       options: structuresDeLUtilisateur().map(a => [a.key, a.label]),
       value: existing?.activity || structureDe({ ...link, ...(existing || {}) }) || '',
       hint: 'À quelle activité du groupe cette tâche appartient.' },
-    { key: 'notes', label: 'Notes', type: 'textarea', rows: 2 },
+    // ⚠ LE PARTAGE N'EST PAS UN SECOND RESPONSABLE (06/10/2026, demandé par
+    // Mickael) : le partagé voit la tâche et peut la modifier — cocher ses
+    // sous-tâches —, mais elle reste comptée chez le responsable, et il ne peut
+    // pas la supprimer (`peut_supprimer_activity` côté base). Même liste que le
+    // responsable, pour la même raison : on ne partage qu'avec quelqu'un de ses
+    // structures.
+    { key: 'shared_with', label: 'Partagée avec', type: 'select', options: users.map(u => [u.id, u.full_name]) },
+    // ⚠ « Notes » N'EST PLUS UN CHAMP : les notes sont devenues des sous-tâches.
+    // Une note qui existe encore est portée par `monterElements`, qui la rend à
+    // l'enregistrement — sans lui, `readForm` lirait un champ absent et
+    // écrirait une note vide.
   ];
   // ⚠ « SUPPRIMER » ET « ANNULER » ÉTAIENT À DIX PIXELS L'UN DE L'AUTRE, DANS
   // LE MÊME HABILLAGE — fond blanc, même bordure, même encre. Mesuré le
@@ -213,6 +244,12 @@ export function activityForm(link = {}, existing = null, onSaved, onClose = null
     ${ctx.ficheRgd || ctx.deal ? '<button type="button" class="taf-ctx-ouvrir" id="taf-ouvrir">Ouvrir la fiche →</button>' : ''}
   </section>` : '';
 
+  // Miroir de `peut_supprimer_activity` : celui qui n'est là QUE par le partage
+  // ne supprime pas — on n'offre pas un bouton que la base refuserait.
+  const moi = scope.user?.id;
+  const peutSupprimer = !existing || !(existing.shared_with === moi
+    && existing.assignee_id !== moi && existing.created_by !== moi);
+
   const corpsForm = `
     ${blocCtx}
     <input class="taf-titre" type="text" name="title" required autocomplete="off"
@@ -220,21 +257,21 @@ export function activityForm(link = {}, existing = null, onSaved, onClose = null
     ${ligne('🏷️', 'Type', `<select name="type" required>${selOptions('type')}</select>`)}
     ${ligne('⚡', 'Degré de traitement', pastillesPrio,
       'Ordinaire suffit dans la plupart des cas : la tâche se range alors à son échéance.')}
-    ${ligne('👤', 'Responsable', `<select name="assignee_id" required><option value="">—</option>${selOptions('assignee_id')}</select>`)}
+    ${ligne('👤', 'Responsable · partagée avec', `<span class="taf-duo taf-duo-egal">
+      <select name="assignee_id" required title="Responsable"><option value="">—</option>${selOptions('assignee_id')}</select>
+      <select name="shared_with" title="Partagée avec"><option value="">Pas de partage</option>${selOptions('shared_with')}</select>
+    </span>`, 'Le partage donne à voir et à modifier la tâche, pas à la supprimer. Elle reste comptée chez le responsable.')}
     ${ligne('📅', 'Échéance', `<span class="taf-duo">
       <input type="date" name="due_date" required value="${esc(val('due_date'))}">
       <input type="time" name="due_time" value="${esc(val('due_time'))}" title="Heure (optionnel)">
     </span>`)}
     ${ligne('🏢', 'Structure', `<select name="activity"><option value="">—</option>${selOptions('activity')}</select>`,
       'À quelle activité du groupe cette tâche appartient. C’est elle qui décide de sa colonne.')}
-    ${ligne('📝', 'Notes', `<textarea name="notes" rows="3" placeholder="Ce qu'il faut savoir avant de s'y mettre…">${esc(val('notes'))}</textarea>`)}
-    ${existing
-      ? '<div id="taf-elements" class="taf-elements"></div>'
-      : `<p class="taf-aide taf-apres">Sous-tâches, pièces jointes et commentaires s’ajoutent une fois la tâche
-         créée : une pièce jointe a besoin d’une tâche à laquelle se rattacher.</p>`}`;
+    <div id="taf-elements" class="taf-elements"></div>
+    ${existing ? '' : '<p class="taf-aide taf-apres">Les commentaires s’ouvrent une fois la tâche créée.</p>'}`;
 
   const m = openModal(existing ? 'Modifier la tâche' : 'Nouvelle tâche', `<form class="form taf" id="act-form">${corpsForm}
-    <div class="form-actions">${existing ? '<button type="button" class="btn danger left" id="act-del" data-arme="0">Supprimer</button>' : ''}<button type="button" class="btn ghost" data-close>Annuler</button><button class="btn" type="submit">Enregistrer</button></div></form>`, { onClose });
+    <div class="form-actions">${existing && peutSupprimer ? '<button type="button" class="btn danger left" id="act-del" data-arme="0">Supprimer</button>' : ''}<button type="button" class="btn ghost" data-close>Annuler</button><button class="btn" type="submit">Enregistrer</button></div></form>`, { onClose });
   const form = m.querySelector('#act-form');
   // Les pastilles écrivent dans le champ caché : une seule valeur lue, celle
   // que `readForm` ira chercher.
@@ -242,11 +279,10 @@ export function activityForm(link = {}, existing = null, onSaved, onClose = null
     form.querySelector('[name="priority"]').value = b.dataset.prio;
     form.querySelectorAll('#taf-prio [data-prio]').forEach(x => x.classList.toggle('on', x === b));
   });
-  // ⚠ LES TROIS BLOCS NE S'OUVRENT QU'EN MODIFICATION : une pièce jointe et un
-  // commentaire ont besoin d'un identifiant auquel se rattacher, et une tâche
-  // qu'on est en train de créer n'en a pas encore.
-  const hoteElements = m.querySelector('#taf-elements');
-  const elements = hoteElements ? monterElements(hoteElements, existing) : null;
+  // ⚠ LES BLOCS S'OUVRENT AUSSI À LA CRÉATION depuis le 06/10/2026 : sous-tâches
+  // et pièces jointes s'y saisissent, les fichiers attendent l'insertion
+  // (`envoyerPieces`). Seuls les commentaires restent fermés.
+  const elements = monterElements(m.querySelector('#taf-elements'), existing || {});
 
   form.querySelector('.taf-titre')?.focus();
   // ⚠ IMPORT PARESSEUX : les écrans de fiche importent `activity.js`, les
@@ -288,17 +324,28 @@ export function activityForm(link = {}, existing = null, onSaved, onClose = null
   form.onsubmit = async (e) => {
     e.preventDefault();
     const v = readForm(form, spec);
+    // Une colonne uuid ne prend pas la chaîne vide ; et partager avec le
+    // responsable lui-même ne veut rien dire.
+    if (!v.shared_with || v.shared_with === v.assignee_id) v.shared_with = null;
+    v.checklist = elements.checklist();
+    v.notes = elements.notes();
     try {
       // ⚠ LA CHECKLIST PART AVEC LE FORMULAIRE, et pas à chaque coche : on
       // coche trois cases d'affilée, écrire à chaque clic ferait trois appels.
       // Les commentaires et les pièces jointes, eux, sont déjà partis — ce sont
       // des ajouts, pas des corrections.
-      if (existing) await db.update('activities', existing.id, elements ? { ...v, checklist: elements.checklist() } : v);
+      if (existing) await db.update('activities', existing.id, v);
       // `link` porte les rattachements (affaire, contact…) ; la saisie prime dessus,
       // sinon une clé absente de `link` écraserait ce que l'on vient de choisir.
       // `created_by` : qui envoie la tache. La colonne a auth.uid() pour defaut
       // cote serveur ; on la pose ici pour que le mode demo se comporte pareil.
-      else await db.insert('activities', { ...link, ...v, done: false, created_by: scope.user?.id || null });
+      else {
+        const cree = await db.insert('activities', { ...link, ...v, done: false, created_by: scope.user?.id || null });
+        // ⚠ APRÈS l'insertion, jamais avant : un fichier a besoin de
+        // l'identifiant. Un dépôt qui échoue est dit, la tâche reste créée.
+        const n = await elements.envoyerPieces(cree?.id);
+        if (n) toast(`${n} document${n > 1 ? 's joints' : ' joint'}`);
+      }
       closeModal(true); toast('Activité enregistrée'); onSaved?.();
     } catch (err) { toast(err.message, 'err'); }
   };
@@ -362,6 +409,7 @@ export function activityRowHtml(a, { showContext = false } = {}) {
       <div><b>${t.icon} ${esc(a.title)}</b>${struct ? ` <span class="act-struct">${esc(ACTIVITIES[struct].short)}</span>` : ''} <span class="muted small">· ${esc(userName(a.assignee_id))}</span></div>
       ${ctx ? `<div class="small muted">${ctx}</div>` : ''}
       ${a.notes ? `<div class="small muted">${esc(a.notes)}</div>` : ''}
+      ${a.shared_with ? `<div class="small muted">🤝 Partagée avec ${esc(userName(a.shared_with))}</div>` : ''}
       <div class="when ${late ? 'late' : ''}">${fmtDate(a.due_date)}${a.due_time ? ' ' + esc(a.due_time) : ''} · ${relDay(a.due_date)}</div>
     </div>
     <button class="icon-btn" data-edit-act="${a.id}" title="Modifier">✎</button>

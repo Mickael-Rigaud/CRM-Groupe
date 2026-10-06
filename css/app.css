@@ -1965,6 +1965,21 @@ tr.btp-mission .btp-pts { color: var(--m-encre); }
   color: var(--muted); background: var(--card); }
 .tel-depot:hover { border-color: var(--accent); color: var(--accent); }
 .tel-depot.est-occupe { opacity: .6; cursor: default; }
+.tel-depot.survol { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.tel-pieces li.est-attente { color: var(--muted); }
+.tel-piece-nom { font-weight: 650; color: var(--text); }
+/* L'ancienne note, en lecture : elle garde ses retours a la ligne. */
+.tel-note { margin: 0 0 8px; font-size: 13px; line-height: 1.5; white-space: pre-wrap; }
+.tel-note-actions { display: flex; gap: 6px; }
+.tel-bloc + .tel-bloc { margin-top: 10px; }
+/* Responsable et partage cote a cote, a parts egales. */
+.taf-duo.taf-duo-egal > * { flex: 1 1 50%; min-width: 0; }
+@media (max-width: 560px) { .taf-duo.taf-duo-egal { flex-direction: column; } }
+/* Marques de la liste : avancement des sous-taches, partage. */
+.todo-sous, .todo-partage { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px;
+  font-size: 11px; font-weight: 650; color: var(--muted); background: var(--card-2); vertical-align: 1px; }
+.todo-sous.est-complete { color: var(--green); background: var(--green-soft); }
+.todo-partage { color: var(--accent-ink); background: var(--accent-soft); }
 
 /* ---- Ce que la tache concerne ----
    Au-dessus du titre : on ouvre une tache de rappel pour savoir QUI rappeler,
@@ -2062,6 +2077,8 @@ tr.btp-mission .btp-pts { color: var(--m-encre); }
    l'autre — la couleur vient du nom, pas du hasard. */
 .kb-qui { flex: 0 0 24px; height: 24px; border-radius: 999px; color: #fff;
   font-size: 10px; font-weight: 800; line-height: 24px; text-align: center; }
+/* Le partage : un second rond, en retrait et cerclé, qui se lit « avec ». */
+.kb-qui.kb-partage { margin-left: -8px; box-shadow: 0 0 0 2px var(--card); }
 .kb-case { flex: 0 0 auto; padding-top: 1px; }
 .kb-note { margin: 4px 2px 0; max-width: 70ch; }
 

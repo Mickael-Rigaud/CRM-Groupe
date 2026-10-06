@@ -91,6 +91,8 @@ function carte(a, recentes) {
         <span class="grow"></span>
         <span class="kb-qui" style="background:${teinteDe(a.assignee_id)}"
           title="${esc(userName(a.assignee_id) || 'Sans responsable')}">${esc(initiales(a.assignee_id))}</span>
+        ${a.shared_with ? `<span class="kb-qui kb-partage" style="background:${teinteDe(a.shared_with)}"
+          title="${esc('Partagée avec ' + userName(a.shared_with))}">${esc(initiales(a.shared_with))}</span>` : ''}
       </div>
     </div>
   </article>`;
@@ -265,7 +267,8 @@ export function kanbanHtml(taches, recentes) {
     }).join('')}
   </div>
   <p class="kb-note muted small">Vos tâches, rangées par structure.
-    Chacun a la sienne : personne ne voit celle des autres, direction comprise.
+    Chacun a la sienne : personne ne voit celle des autres, direction comprise —
+    sauf une tâche qu'on vous a partagée, marquée d'un second rond.
     Pour confier une tâche, l'onglet « Envoyées » la suit sans la perdre de vue.
     Les <b>dossiers en attente</b> ne sont pas des tâches : ce sont les affaires arrêtées
     à une étape d'écriture, relues à chaque ouverture. Elles ne se cochent pas —

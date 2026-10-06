@@ -113,7 +113,11 @@ export const SEED = {
     // pastille dans la liste restaient vides : on ne voyait ni la couleur, ni le
     // compte, ni le « + » qui cree dedans. Elles n'ont ni affaire ni contact —
     // une tache de gestion locative se rattache a un bail, pas a un prospect.
-    { id: 'a0a', activity: 'locatif', type: 'relance', title: 'Relancer le loyer de septembre — M. Said', due_date: day(-1), done: false, assignee_id: 'u-mickael', created_at: d(-4) },
+    // ⚠ PARTAGÉE, ET AVEC SES SOUS-TÂCHES ET UNE REMARQUE RESTÉE EN NOTE (06/10/2026) :
+    // c'est la forme exacte que la conversion de la gestion locative a laissée en
+    // production. Sans elle, ni la marque « avec Stéphanie » ni la note en lecture
+    // ne s'essayaient.
+    { id: 'a0a', activity: 'locatif', type: 'relance', title: 'Relancer le loyer de septembre — M. Said', due_date: day(-1), done: false, assignee_id: 'u-mickael', shared_with: 'u-stephanie', checklist: [{ t: 'Appeler le locataire', f: true }, { t: 'Envoyer la lettre de relance', f: false }, { t: 'Prévenir la CAF', f: false }], notes: 'En attente de paiement', created_at: d(-4) },
     { id: 'a0b', activity: 'locatif', type: 'pieces', title: 'Demander l attestation d assurance habitation', due_date: day(4), done: false, assignee_id: 'u-mickael', created_at: d(-1) },
     { id: 'a1', deal_id: 'd1', contact_id: 'c1', type: 'visite', title: 'Visite chantier rue Nationale', due_date: day(1), due_time: '10:00', done: false, assignee_id: 'u-mickael', created_at: d(-3) },
     { id: 'a2', deal_id: 'd2', contact_id: 'c8', type: 'relance', title: 'Relancer devis salle de bain', due_date: day(-2), done: false, assignee_id: 'u-mickael', created_at: d(-6) },
@@ -123,7 +127,12 @@ export const SEED = {
     { id: 'a6', deal_id: 'd10', contact_id: 'c11', type: 'appel', title: 'Appeler le prospect (lead Meta RAC)', due_date: day(0), due_time: '11:00', done: false, assignee_id: 'u-mickael', created_at: d(-1) },
     { id: 'a7', deal_id: 'd12', contact_id: 'c6', type: 'relance', title: 'Relancer proposition Garage Moreau', due_date: day(0), done: false, assignee_id: 'u-stephanie', created_at: d(-2) },
     { id: 'a8', organisation_id: 'o3', contact_id: 'c5', type: 'partenaire', title: 'Préparer renouvellement Boulangerie Dupuis', due_date: day(3), done: false, assignee_id: 'u-stephanie', created_at: d(-1) },
-    { id: 'a9', organisation_id: 'o5', type: 'partenaire', title: 'Relancer Cabinet Leroy (pas de contact depuis 70 j)', due_date: day(2), done: false, assignee_id: 'u-mickael', created_at: d(-1) },
+    // Une note d'AVANT les sous-tâches, hors gestion locative : la migration ne
+    // l'a pas touchée, l'écran la montre et propose « Convertir ».
+    { id: 'a9', organisation_id: 'o5', type: 'partenaire', title: 'Relancer Cabinet Leroy (pas de contact depuis 70 j)', due_date: day(2), done: false, assignee_id: 'u-mickael', notes: '- Rappeler l associé\n- Proposer un déjeuner\n\nDernier dossier transmis en juillet', created_at: d(-1) },
+    // Confiée au chargé d'affaires et PARTAGÉE avec la direction : elle doit
+    // apparaître dans la to-do de Mickael, marquée « de Chargé d'affaires ».
+    { id: 'a12', deal_id: 'd4', contact_id: 'c9', type: 'pieces', title: 'Réunir les photos avant visite', due_date: day(2), done: false, assignee_id: 'u-charge', created_by: 'u-charge', shared_with: 'u-mickael', checklist: [{ t: 'Photos salle de bain', f: false }, { t: 'Plan du logement', f: false }], created_at: d(-1) },
     { id: 'a10', deal_id: 'd8', contact_id: 'c10', type: 'avis', title: 'Demander un avis Google', due_date: day(-15), done: true, done_at: d(-15), assignee_id: 'u-mickael', created_at: d(-20) },
     { id: 'a11', deal_id: 'd11', contact_id: 'c2', type: 'appel', title: 'Point avec le Crédit Agricole', due_date: day(1), due_time: '14:00', done: false, assignee_id: 'u-mickael', created_at: d(-2) },
   ],

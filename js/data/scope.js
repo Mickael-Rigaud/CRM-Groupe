@@ -56,6 +56,8 @@ export const scope = {
   canSeeActivity(a) {
     if (a.assignee_id === this.user.id) return true;
     if (a.created_by && a.created_by === this.user.id) return true;
+    // Miroir de `can_see_activity` (06/10/2026) : une tâche partagée se voit.
+    if (a.shared_with && a.shared_with === this.user.id) return true;
     if (a.deal_id) { const d = db.byId('deals', a.deal_id); return d ? this.canSeeDeal(d) : false; }
     if (a.contact_id) { const c = db.byId('contacts', a.contact_id); return c ? this.canSeeContact(c) : false; }
     if (a.organisation_id) { const o = db.byId('organisations', a.organisation_id); return o ? this.canSeeOrg(o) : false; }

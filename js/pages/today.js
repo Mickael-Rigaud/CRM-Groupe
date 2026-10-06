@@ -16,7 +16,7 @@ import { scope } from '../data/scope.js';
 import { STRUCTURES_TACHE } from '../data/schema.js';
 import { esc, daysSince, fmtDate, relDay, userName, searchInput, bindSearch, restoreFocus, terms, hit } from '../ui.js';
 import { actType, bindActivityRows, activityForm, nextActivity, structureDe,
-         toggleActivity, structuresDeLUtilisateur } from './activity.js';
+         toggleActivity, structuresDeLUtilisateur, marquesTache } from './activity.js';
 import { kanbanHtml, dossiersDe, carteDossier } from './todo-kanban.js';
 import { openDeal } from './deal.js';
 
@@ -91,7 +91,7 @@ function carte(a, pour = false) {
   return `<div class="todo-tache ${a.done ? 'done' : ''} ${recentes.has(a.id) ? 'recente' : ''} ${a.priority === 'urgent' && !a.done ? 'urgent' : ''}" ${act ? `style="--c:${act.color};--b:${act.accent};--bt:${act.on}"` : ''}>
     <label class="todo-case" title="${a.done ? 'Rouvrir' : 'Marquer comme fait'}">
       <input type="checkbox" ${a.done ? 'checked' : ''} data-toggle="${a.id}"><span></span></label>
-    <b class="todo-t">${t.icon} ${esc(a.title)}</b>
+    <b class="todo-t">${t.icon} ${esc(a.title)}${marquesTache(a)}</b>
     <div class="todo-meta">
       <span class="todo-struct">${act ? `<span class="todo-badge">${logo(act, 'todo-badge-logo')}${esc(act.short)}</span>` : ''}</span>
       <span class="todo-ctx">${ctx}</span>
@@ -109,7 +109,11 @@ function carte(a, pour = false) {
 // l'a prise, ce n'est pas une tache « envoyee ».
 const ONGLETS = [
   { key: 'mienne', label: 'Ma to do list',
-    garde: (a, moi) => a.assignee_id === moi || (!a.assignee_id && a.created_by === moi) },
+    // ⚠ UNE TÂCHE PARTAGÉE AVEC MOI EST AUSSI LA MIENNE (06/10/2026) : c'est le
+    // sens du partage. « Chacun la sienne » n'est pas rompu — le responsable l'a
+    // confiée nommément, ce n'est pas la direction qui lit la to-do d'un autre.
+    garde: (a, moi) => a.assignee_id === moi || a.shared_with === moi
+      || (!a.assignee_id && a.created_by === moi) },
   { key: 'envoyees', label: 'Envoyées',
     garde: (a, moi) => a.created_by === moi && !!a.assignee_id && a.assignee_id !== moi },
 ];
