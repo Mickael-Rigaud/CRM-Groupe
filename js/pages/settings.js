@@ -1,7 +1,19 @@
 // Paramètres : utilisateurs et droits, import CSV, référentiel, entrée des leads (Make), démo.
 import { CONFIG } from '../config.js';
 import { db } from '../data/db.js';
-import { creerCompte, renvoyerLienAcces, supprimerCompte, ouvrirAgendas, creerAgendaPersonnel } from '../comptes.js';
+import { creerCompte, renvoyerLienAcces, supprimerCompte, creerAgendaPersonnel } from '../comptes.js';
+
+// ⚠ « OUVRIR SES AGENDAS » A ÉTÉ RETIRÉ LE 06/10/2026, demandé par Élodie :
+// « le chargé d'affaires ne doit voir que son propre agenda ». Le bouton
+// faisait entrer les agendas DE LA STRUCTURE dans le Google Agenda personnel
+// de quelqu'un — l'inverse exact du cloisonnement posé le matin même. Il
+// s'exécutait AUSSI tout seul à la création d'un compte, sans qu'on le
+// demande. ⚠ NE PAS LE REMETTRE SANS EN REPARLER : la fonction serveur
+// `agenda-partager` et `ouvrirAgendas` existent toujours, elles ne sont plus
+// appelées d'ici. ⚠ ET CE N'EST PAS CE BOUTON QUI DONNAIT ACCÈS À L'AGENDA
+// DE MICKAEL : la fonction refusait déjà toute boîte personnelle, et le
+// disait. Elle ouvrait les deux agendas du cabinet BTP, qui n'appartiennent
+// à personne — et que Google refusait de toute façon (403).
 import { scope } from '../data/scope.js';
 import { ACTIVITIES, ACTIVITY_KEYS, CHANNELS, ROLES, ROLES_ATTRIBUABLES, LOST_REASONS, ACTIVITY_TYPES } from '../data/schema.js';
 import { esc, toast, openModal, closeModal, renderForm, readForm, confirm, csvDownload } from '../ui.js';
@@ -93,29 +105,6 @@ export const settingsPage = {
       root.querySelector('#tok-save')?.addEventListener('click', async () => { const v = root.querySelector('#tok').value.trim(); if (v.length < 12) return toast('Jeton trop court', 'warn'); if (db.setting('intake_token') !== undefined) await db.update('settings', 'intake_token', { value: v }); else await db.insert('settings', { key: 'intake_token', value: v }); toast('Jeton enregistré'); });
       root.querySelector('#exp-all').onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(db.cache, null, 2)], { type: 'application/json' })); a.download = `crm-export-${new Date().toISOString().slice(0, 10)}.json`; a.click(); };
       root.querySelector('#reset-demo')?.addEventListener('click', async () => { if (await confirm('Effacer les données de démo de ce navigateur et recharger l\'exemple ?')) { db.resetDemo(); location.reload(); } });
-      /**
-       * Ce que l'ouverture des agendas a donné, dit en français.
-       *
-       * ⚠ TROIS RÉSULTATS, ET LES TROIS DOIVENT SE LIRE. Un agenda ouvert, une
-       * structure qui n'a aucun agenda réglé, et un agenda PERSONNEL qu'on a
-       * refusé d'ouvrir. Taire les deux derniers ferait croire que tout est
-       * fait, et personne n'irait voir.
-       */
-      const motAgendas = (rep) => {
-        if (!rep) return '';
-        const noms = { rgd: 'RGD Renova', btp: 'BTP Expertise', courtage: 'La Référence Courtage', propulsion: 'Propulsion' };
-        const ok = (rep.partages || []).filter(p => p.ok);
-        const ko = (rep.partages || []).filter(p => !p.ok);
-        const sans = (rep.sans_agenda || []).map(s => noms[s] || s);
-        const perso = (rep.refuses || []).map(p => noms[p.structure] || p.structure);
-        const l = [];
-        if (ok.length) l.push(`<p class="mf-aide ok">${ok.length} agenda${ok.length > 1 ? 's' : ''} ouvert${ok.length > 1 ? 's' : ''} — une invitation Google lui est partie, elle doit l'accepter pour les voir.</p>`);
-        if (sans.length) l.push(`<p class="mf-aide">Aucun agenda n'est réglé pour ${esc(sans.join(', '))} : rien à ouvrir de ce côté.</p>`);
-        if (perso.length) l.push(`<p class="mf-aide attention">${esc(perso.join(', '))} : l'agenda réglé est une boîte <b>personnelle</b>, pas un agenda de cabinet. Il n'a pas été ouvert — l'ouvrir donnerait aussi accès aux rendez-vous privés.</p>`);
-        if (ko.length) l.push(`<p class="mf-aide attention">${ko.length} agenda${ko.length > 1 ? 's' : ''} a refusé : <span class="small muted">${esc(ko[0].motif || '')}</span></p>`);
-        if (rep.rien) l.push(`<p class="mf-aide">${esc(rep.rien)}</p>`);
-        return l.join('');
-      };
 
       // ---- La fiche d'un compte : la même pour en créer un et pour le modifier
       //
@@ -218,11 +207,6 @@ export const settingsPage = {
                  pas l'avoir. Propose aussi sur son propre compte : rien
                  n'empeche la direction d'avoir perdu son mot de passe. -->
             ${edition && !db.demo ? '<button type="button" class="btn ghost sm" id="u-renvoyer">Renvoyer le lien d\'accès</button>' : ''}
-            <!-- Rattraper un profil cree avant que les agendas ne s'ouvrent
-                 tout seuls, ou dont les structures ont change depuis. La
-                 fonction est idempotente : reposer une regle qui existe la
-                 met a jour, donc ce bouton ne peut pas faire de degat. -->
-            ${edition && !db.demo ? '<button type="button" class="btn ghost sm" id="u-agendas-ouvrir">Ouvrir ses agendas</button>' : ''}
             <button type="button" class="btn ghost" data-close>Annuler</button>
             <button type="button" class="btn" id="u-ok">${edition ? 'Enregistrer' : (db.demo ? 'Créer (démo)' : 'Créer le compte')}</button>
           </div>`;
@@ -268,17 +252,6 @@ export const settingsPage = {
               cible.innerHTML = `<p class="mf-aide attention">${esc(e.message)}</p>`;
             }
             b.disabled = false; b.textContent = `Créer son agenda ${ACTIVITIES[k].label}`;
-          });
-          zone.querySelector('#u-agendas-ouvrir')?.addEventListener('click', async (ev) => {
-            const b = ev.currentTarget;
-            b.disabled = true; b.textContent = 'Ouverture…';
-            const cible = zone.querySelector('#u-retour');
-            try {
-              cible.innerHTML = `<div class="card" style="margin-top:14px">${motAgendas(await ouvrirAgendas(profil.id))}</div>`;
-            } catch (e) {
-              cible.innerHTML = `<div class="card" style="margin-top:14px"><p class="mf-aide attention">${esc(e.message)}</p></div>`;
-            }
-            b.disabled = false; b.textContent = 'Ouvrir ses agendas';
           });
           zone.querySelector('#u-renvoyer')?.addEventListener('click', async (ev) => {
             const b = ev.currentTarget;
@@ -427,27 +400,8 @@ export const settingsPage = {
                      <p class="mf-aide">⚠ Ce lien ne fonctionne <b>qu'une seule fois</b> et expire au bout de 24 h. S'il a servi ou s'il est trop vieux, n'essayez pas de le réutiliser : rouvrez cette fiche et cliquez « Renvoyer le lien d'accès ».</p>
                      <button type="button" class="btn ghost sm" id="u-copier">Copier le lien</button>`
                   : ''}
-                <div id="u-agendas"></div>
               </div>`;
 
-            /* ⚠ LES AGENDAS S'OUVRENT APRÈS, ET LEUR ÉCHEC NE REMET RIEN EN
-               CAUSE (05/10/2026, demandé par Élodie). Le compte est créé et le
-               lien est parti : si Google refuse, on le DIT dans l'encadré au
-               lieu de faire croire que la création a échoué. C'est aussi
-               pourquoi l'appel vient ici et non dans `creer-utilisateur` : deux
-               gestes de nature différente ne partagent pas le même sort.
-               ⚠ ET IL EST REJOUABLE : la fiche d'un profil existant porte le
-               même bouton, la fonction étant idempotente. */
-            const cible = zone.querySelector('#u-agendas');
-            if (rep.profil?.id && cible) {
-              cible.innerHTML = '<p class="mf-aide">Ouverture des agendas…</p>';
-              try {
-                cible.innerHTML = motAgendas(await ouvrirAgendas(rep.profil.id));
-              } catch (e) {
-                cible.innerHTML = `<p class="mf-aide attention">Les agendas n'ont pas pu être ouverts : ${esc(e.message)}<br>
-                  <span class="small muted">Le compte, lui, est bien créé. Rouvrez sa fiche pour réessayer.</span></p>`;
-              }
-            }
 
             zone.querySelector('#u-copier')?.addEventListener('click', async () => {
               try { await navigator.clipboard.writeText(rep.lien); toast('Lien copié'); }
