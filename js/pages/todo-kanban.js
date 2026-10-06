@@ -80,8 +80,7 @@ function carte(a, recentes) {
       ${ligneCtx ? `<p class="kb-ctx">${esc(ligneCtx)}</p>` : ''}
       ${ctx && ctx.tel ? `<p class="kb-tel"><a href="tel:${esc(String(ctx.tel).replace(/\s+/g, ''))}"
         onclick="event.stopPropagation()">📞 ${esc(ctx.tel)}</a></p>` : ''}
-      ${sousTaches.length ? `<p class="kb-checklist ${faites === sousTaches.length ? 'est-complete' : ''}">
-        ☑ ${faites}/${sousTaches.length}</p>` : ''}
+      ${sousTaches.length ? blocSousTaches(sousTaches, faites) : ''}
       <div class="kb-pied">
         ${a.priority === 'urgent' ? '<span class="kb-etiq urgent">Urgent</span>' : ''}
         ${a.priority === 'retard' ? '<span class="kb-etiq retard">En retard</span>' : ''}
@@ -96,6 +95,35 @@ function carte(a, recentes) {
       </div>
     </div>
   </article>`;
+}
+
+// L'avancement des sous-tâches, demandé le 06/10/2026 : « mettre plus en
+// évidence le nombre de tâches à effectuer et ce qu'il reste à faire ». Un
+// « ☑ 0/2 » gris se lisait comme une métadonnée ; la carte dit maintenant
+// combien il en reste, montre la barre, et NOMME les sous-tâches restantes —
+// c'est ce qu'on vient chercher. ⚠ TROIS AU PLUS, puis « + n autres » : une
+// checklist de douze lignes transformerait la carte en liste et pousserait les
+// suivantes hors de l'écran ; le détail entier reste dans la tâche ouverte.
+const RESTANTES_VISIBLES = 3;
+function blocSousTaches(sousTaches, faites) {
+  const total = sousTaches.length;
+  const restantes = sousTaches.filter(x => x && !x.f);
+  const complete = restantes.length === 0;
+  const pct = Math.round((faites / total) * 100);
+  const vues = restantes.slice(0, RESTANTES_VISIBLES);
+  const reste = restantes.length - vues.length;
+  return `<div class="kb-sous ${complete ? 'est-complete' : ''}">
+    <div class="kb-sous-tete">
+      <span class="kb-sous-reste">${complete ? '✓ Tout est fait'
+        : `${restantes.length} sous-tâche${restantes.length > 1 ? 's' : ''} à faire`}</span>
+      <span class="kb-sous-compte">${faites}/${total}</span>
+    </div>
+    <div class="kb-sous-barre" role="progressbar" aria-valuemin="0" aria-valuemax="${total}"
+      aria-valuenow="${faites}"><span style="width:${pct}%"></span></div>
+    ${vues.length ? `<ul class="kb-sous-liste">${vues.map(x =>
+      `<li>${esc(x.t || '')}</li>`).join('')}${reste > 0
+      ? `<li class="kb-sous-plus">+ ${reste} autre${reste > 1 ? 's' : ''}</li>` : ''}</ul>` : ''}
+  </div>`;
 }
 
 // ———————————————————————————————————————————————————————————————————————————
