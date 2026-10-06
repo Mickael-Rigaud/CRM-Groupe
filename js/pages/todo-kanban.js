@@ -321,11 +321,11 @@ export function kanbanHtml(taches, recentes) {
       || (x.due_time || '99').localeCompare(y.due_time || '99');
   });
 
-  // ⚠ PEU DE COLONNES GARDENT LA LARGEUR D'UNE COLONNE DE LA DIRECTION : un
-  // chargé d'affaires n'a souvent qu'une ou deux structures, et `auto-fit` les
-  // étirerait sur toute la page — une carte de 1 200 px ne se lit plus comme une
-  // carte. `auto-fill` garde les pistes vides, donc la même largeur qu'ailleurs.
-  return `<div class="kb-plateau${colonnes.length < 4 ? ' est-etroit' : ''}">
+  // ⚠ LES COLONNES REMPLISSENT TOUJOURS LA LARGEUR, quel que soit leur nombre
+  // (06/10/2026 : « peu importe le nombre de structures, adapte-toi à la largeur
+  // de l'écran »). Une colonne seule ne fait pas pour autant des cartes d'un
+  // mètre : sa pile passe en grille de cartes (requête de conteneur, `app.css`).
+  return `<div class="kb-plateau">
     ${colonnes.map(c => {
       const ouvertes = c.l.filter(t => !t.done);
       const tard = ouvertes.filter(t => ecart(t) > 0).length;

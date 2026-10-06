@@ -2015,7 +2015,18 @@ tr.btp-mission .btp-pts { color: var(--m-encre); }
    titre se brise mot par mot — mesure, pas devine. */
 .kb-plateau { display: grid; gap: 14px; align-items: start;
   grid-template-columns: repeat(auto-fit, minmax(236px, 1fr)); padding: 2px 2px 10px; }
-.kb-plateau.est-etroit { grid-template-columns: repeat(auto-fill, minmax(236px, 1fr)); }
+/* Les colonnes prennent toute la largeur, quel que soit leur nombre (demande
+   du 06/10/2026). Une colonne large ne fait pas des cartes de 1 200 px : sa
+   pile passe en grille de cartes des qu'il y a la place (requete de conteneur,
+   donc selon la largeur de LA COLONNE et non de l'ecran). */
+.kb-col { container-type: inline-size; }
+@container (min-width: 520px) {
+  /* `.kb-col .kb-pile` et non `.kb-pile` : la regle de base est plus bas dans la
+     feuille et, a poids egal, son `display: flex` l'emportait — constate. */
+  .kb-col .kb-pile { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    align-items: start; }
+  .kb-col .kb-pile > .kb-sous-titre, .kb-col .kb-pile > .kb-vide { grid-column: 1 / -1; }
+}
 .kb-col { display: flex; flex-direction: column; min-width: 0;
   background: var(--card-2); border-radius: 14px; padding: 10px; }
 .kb-tete { padding: 2px 4px 10px; border-bottom: 2px solid var(--c); margin-bottom: 10px; }
@@ -2123,7 +2134,7 @@ tr.btp-mission .btp-pts { color: var(--m-encre); }
 @media (max-width: 760px) {
   /* Au doigt, une seule colonne : `auto-fit` les empilerait deja, on le dit
      explicitement pour que le minimum ne force pas deux colonnes etroites. */
-  .kb-plateau, .kb-plateau.est-etroit { grid-template-columns: 1fr; }
+  .kb-plateau { grid-template-columns: 1fr; }
 }
 
 /* ---- To do list : ce qui protege le travail ----
