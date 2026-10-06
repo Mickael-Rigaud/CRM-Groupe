@@ -104,6 +104,29 @@ export async function supprimerFicheRgd(source, id, forcer = false) {
  *
  * ⚠ LA RESTAURATION EST RÉSERVÉE À LA DIRECTION, côté base comme ici.
  */
+/**
+ * Détruire pour de bon une fiche jetée : la copie gardée dans la corbeille.
+ *
+ * ⚠ RÉSERVÉE À LA DIRECTION, côté base comme ici (06/10/2026). C'est la seule
+ * moitié du geste qui reste fermée : jeter est ouvert au propriétaire de la
+ * fiche, parce que jeter se répare.
+ *
+ * ⚠ ELLE NE RETIRE PAS LA PIERRE TOMBALE. `rgd_suppressions` empêche le relevé
+ * de faire revenir la fiche depuis l'application RGD ; l'effacer avec la copie
+ * ferait réapparaître la fiche au passage suivant — on aurait détruit la trace
+ * et gardé l'objet.
+ *
+ * ⚠ ET ELLE REFUSE UNE LIGNE DÉJÀ RESTAURÉE : la fiche est revenue, il n'y a
+ * plus de copie à détruire. Pour la supprimer, on la jette à nouveau.
+ */
+export async function purgerFicheRgd(corbeilleId) {
+  try {
+    const r = await db.rpc('rgd_purger_corbeille', { p_corbeille: corbeilleId });
+    if (r?.ok === false) return { ok: false, motif: r.error || 'refusé' };
+    return { ok: true, donnees: r };
+  } catch (e) { return echec(e); }
+}
+
 export async function restaurerFicheRgd(corbeilleId) {
   try {
     const r = await db.rpc('rgd_restaurer_fiche', { p_corbeille: corbeilleId });

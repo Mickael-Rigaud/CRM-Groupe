@@ -42,7 +42,7 @@
 import { db } from '../data/db.js';
 import { openModal, closeModal, confirm, renderForm, readForm, toast, esc } from '../ui.js';
 import { scope } from '../data/scope.js';
-import { supprimerFicheRgd, restaurerFicheRgd } from '../data/rgd-clients.js';
+import { supprimerFicheRgd, restaurerFicheRgd, purgerFicheRgd } from '../data/rgd-clients.js';
 import { estUnRendezVousRgd } from '../data/schema.js';
 
 // Ce que chaque sous-onglet réclame, en plus de l'identité.
@@ -294,11 +294,12 @@ export async function supprimerFiche(sousVue, ligne, apresSuppression) {
     || [c?.first_name, c?.last_name].filter(Boolean).join(' ')
     || 'cette fiche';
 
-  // ⚠ LA SUPPRESSION EST UN GESTE DE DIRECTION depuis le 06/10/2026, et le
-  // refus vit AUSSI dans la fonction de base : ce garde-ci évite seulement
-  // d'offrir ce qui échouerait.
-  if (!scope.canSupprimerFicheRgd) {
-    return toast('La suppression d\'une fiche est réservée à la direction.', 'warn');
+  // ⚠ JETER EST OUVERT AU PROPRIÉTAIRE depuis le 06/10/2026 : la fiche part
+  // dans la corbeille avec son contenu, le geste se répare. Détruire la copie
+  // reste à la direction. Le refus vit AUSSI dans la fonction de base : ce
+  // garde-ci évite seulement d'offrir ce qui échouerait.
+  if (!scope.peutJeterFicheRgd(ligne)) {
+    return toast('Cette fiche ne vous appartient pas.', 'warn');
   }
 
   // ⚠ CE QUI PEND NE REFUSE PLUS, IL AVERTIT (06/10/2026, demandé par Élodie :
@@ -401,8 +402,12 @@ export async function supprimerFiche(sousVue, ligne, apresSuppression) {
  * l'écran continue de montrer qu'elle n'y est pas.
  */
 export async function restaurerFiche(ligne, apres) {
-  if (!scope.canSupprimerFicheRgd) {
-    return toast('La restauration est réservée à la direction.', 'warn');
+  // ⚠ CELUI QUI JETTE PEUT REPRENDRE. Sans ça, un chargé d'affaires qui se
+  // trompe devrait appeler la direction pour défaire son propre geste, et la
+  // corbeille cesserait d'en être une. ⚠ LE PROPRIÉTAIRE SE LIT DANS LA COPIE
+  // GARDÉE (`ligne.fiche`) : la fiche, elle, n'existe plus.
+  if (!scope.peutJeterFicheRgd(ligne.fiche)) {
+    return toast('Cette fiche ne vous appartient pas.', 'warn');
   }
   const quoi = (ligne.affaires || []).length
     ? ' Son rendez-vous et son affaire reviennent avec elle.' : '';
@@ -420,13 +425,43 @@ export async function restaurerFiche(ligne, apres) {
   apres?.();
 }
 
+/**
+ * Détruire pour de bon une fiche jetée.
+ *
+ * ⚠ DEUX CONFIRMATIONS, ET LA SECONDE NOMME CE QUI DISPARAÎT. C'est le seul
+ * geste du CRM après lequel il n'y a plus rien à reprendre : la corbeille était
+ * le filet, et on retire le filet.
+ *
+ * ⚠ ELLE NE RECHARGE QUE LA CORBEILLE : rien d'autre ne bouge en base. La
+ * fiche, son affaire et son chantier avaient déjà été effacés au moment où on
+ * l'a jetée ; seule la copie gardée disparaît ici.
+ */
+export async function purgerFiche(ligne, apres) {
+  if (!scope.canPurgerCorbeilleRgd) {
+    return toast('La suppression d\u00e9finitive est réservée à la direction.', 'warn');
+  }
+  const quoi = (ligne.affaires || []).length
+    ? ' Sa copie, son rendez-vous et son affaire gardés avec elle partent aussi.'
+    : ' Sa copie part avec elle.';
+  if (!await confirm(
+    `Supprimer définitivement ${ligne.nom || 'cette fiche'} ?${quoi}`
+    + ' Elle ne pourra plus être remise : c’est irréversible.')) return;
+
+  const r = await purgerFicheRgd(ligne.id);
+  if (!r.ok) return toast(`Suppression impossible : ${r.motif}`, 'err');
+
+  await db.recharger('rgd_corbeille');
+  toast('Fiche supprimée définitivement');
+  apres?.();
+}
+
 // La corbeille d'une ligne. Elle s'affiche partout, et son infobulle ne dit
 // plus d'où vient la fiche : depuis le 25/09/2026 le geste est le même pour
 // les deux populations, et distinguer deux cas identiques à l'usage ne sert
 // qu'à faire hésiter.
-// ⚠ IL N'EXISTE QUE POUR LA DIRECTION depuis le 06/10/2026. Ce n'est pas le
-// droit — celui-là est dans la fonction de base, qui refuse — c'est la
-// politesse de ne pas proposer un geste qui échouerait.
-export const boutonSuppression = (ligne) => (scope.canSupprimerFicheRgd
+// ⚠ IL N'EXISTE QUE SUR SES PROPRES FICHES, et sur toutes pour la direction
+// (06/10/2026). Ce n'est pas le droit — celui-là est dans la fonction de base,
+// qui refuse — c'est la politesse de ne pas proposer un geste qui échouerait.
+export const boutonSuppression = (ligne) => (scope.peutJeterFicheRgd(ligne)
   ? `<button class="icon-btn" data-suppr="${esc(ligne.id)}" title="Supprimer cette fiche">🗑</button>`
   : '');

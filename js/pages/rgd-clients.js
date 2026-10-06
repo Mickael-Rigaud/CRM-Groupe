@@ -102,7 +102,7 @@ import { poserEspace } from './espace.js';
 import { cadre, guard } from './rgd-espace.js';
 import { majNote } from '../data/rgd-clients.js';
 import { toast } from '../ui.js';
-import { supprimerFiche, boutonSuppression, restaurerFiche } from './rgd-prospect-saisie.js';
+import { supprimerFiche, boutonSuppression, restaurerFiche, purgerFiche } from './rgd-prospect-saisie.js';
 import { nouvelleDemandeRgd } from './rgd-projet.js';
 import { attribuerEnLotRgd } from './rgd-attribuer-lot.js';
 import { ouvrirFicheRgd } from './rgd-fiche.js';
@@ -1017,9 +1017,14 @@ export const rgdClientsPage = {
               <td class="small">${laisse
                 ? `<span class="chip amber" title="Ces lignes existent toujours, sans fiche à qui les rattacher">${esc(laisse)}</span>`
                 : '<span class="muted">—</span>'}</td>
+              <!-- ⚠ « Supprimer définitivement » N'APPARAÎT QUE POUR LA DIRECTION
+                   (06/10/2026). Un chargé d'affaires jette et reprend ; il ne
+                   détruit pas. Le serveur refuse de toute façon. -->
               <td>${x.restauree_le
                 ? `<span class="muted small">remise le ${esc(fmtDate(x.restauree_le))}</span>`
-                : `<button type="button" class="btn ghost sm" data-restaurer-fiche="${esc(x.id)}">Restaurer</button>`}</td>
+                : `<button type="button" class="btn ghost sm" data-restaurer-fiche="${esc(x.id)}">Restaurer</button>${scope.canPurgerCorbeilleRgd
+                    ? `<button type="button" class="btn ghost sm danger" data-purger-fiche="${esc(x.id)}" title="Supprimer définitivement : la copie gardée disparaît, la fiche ne pourra plus être remise">Supprimer définitivement</button>`
+                    : ''}`}</td>
             </tr>`;
           }).join('') || `<tr><td colspan="6"><div class="empty">${
             state.q ? 'Aucune fiche supprimée ne correspond à la recherche.'
@@ -1232,7 +1237,7 @@ export const rgdClientsPage = {
             <button type="button" data-vue="${ONGLET_ANNUAIRE.key}"
               class="rcl-onglet-annuaire ${state.vue === 'contacts' ? 'on' : ''}"
               title="${esc(ONGLET_ANNUAIRE.titre)}">${ONGLET_ANNUAIRE.label}<span>${ONGLET_ANNUAIRE.n}</span></button>
-            ${scope.canSupprimerFicheRgd ? `<button type="button" data-vue="corbeille"
+            ${scope.canRgd ? `<button type="button" data-vue="corbeille"
               class="rcl-onglet-annuaire ${surCorbeille ? 'on' : ''}"
               title="Les fiches supprimées, et de quoi les remettre">🗑 Corbeille<span>${
               corbeille.filter(x => !x.restauree_le).length}</span></button>` : ''}
@@ -1420,6 +1425,11 @@ export const rgdClientsPage = {
       root.querySelectorAll('[data-restaurer-fiche]').forEach(b => b.onclick = () => {
         const x = corbeille.find(y => y.id === b.dataset.restaurerFiche);
         if (x) restaurerFiche(x, draw);
+      });
+
+      root.querySelectorAll('[data-purger-fiche]').forEach(b => b.onclick = () => {
+        const x = corbeille.find(y => y.id === b.dataset.purgerFiche);
+        if (x) purgerFiche(x, draw);
       });
 
       root.querySelectorAll('[data-suppr]').forEach(b => b.onclick = () => {

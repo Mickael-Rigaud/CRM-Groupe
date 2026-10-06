@@ -141,12 +141,31 @@ export const scope = {
   get canBtp() { return this.activityKeys.includes('btp'); },
   get canRgd() { return this.activityKeys.includes('rgd'); },
 
-  // ⚠ SUPPRIMER UNE FICHE RGD EST UN GESTE DE DIRECTION depuis le 06/10/2026
-  // (demandé par Élodie : « la suppression n'est que pour les profils direction
-  // pas les chargés d'affaires »). Miroir EXACT du garde de
-  // `rgd_supprimer_fiche`, qui refuse côté base — un bouton caché n'est pas un
+  // ⚠ JETER N'EST PAS DÉTRUIRE, et la distinction date du 06/10/2026 (Élodie :
+  // « les chargés d'affaires ne pourront pas supprimer définitivement mais ils
+  // peuvent mettre dans la corbeille »). Elle revient sur sa propre règle du
+  // matin — « la suppression n'est que pour les profils direction » — et la
+  // précise : la corbeille n'existait pas quand celle-ci a été écrite. Jeter
+  // est devenu un geste réparable, et un geste réparable n'a pas besoin
+  // d'être verrouillé.
+  //
+  // ⚠ UNE FICHE SANS PROPRIÉTAIRE RESTE À LA DIRECTION : c'est le cas des
+  // demandes venues du site, que la fonction d'entrée crée sans utilisateur.
+  // Les ouvrir à tous reviendrait à dire qu'une fiche que personne ne porte
+  // appartient à n'importe qui.
+  //
+  // Miroir EXACT du garde de `rgd_supprimer_fiche` (migration
+  // `20261006133019`), qui refuse côté base — un bouton caché n'est pas un
   // droit retiré ; l'écran évite seulement d'offrir ce qui échouerait.
-  get canSupprimerFicheRgd() { return this.isDirection && this.canRgd; },
+  peutJeterFicheRgd(fiche) {
+    if (!this.canRgd) return false;
+    if (this.isDirection) return true;
+    return !!fiche?.owner_id && fiche.owner_id === this.user?.id;
+  },
+
+  // Détruire pour de bon la copie gardée : la direction, et elle seule.
+  // Miroir de `rgd_purger_corbeille` (migration `20261006133118`).
+  get canPurgerCorbeilleRgd() { return this.isDirection && this.canRgd; },
 
   // ⚠ `rgd_corbeille` (06/10/2026) GARDE LE CONTENU des fiches supprimées —
   // la ligne entière, l'affaire et le chantier emportés, qui a supprimé et
@@ -156,8 +175,14 @@ export const scope = {
   // ce filtre dit la même chose, pour que le mode démo — qui n'a pas de
   // serveur — montre le même cloisonnement.
   rgdCorbeille() {
-    if (!this.canSupprimerFicheRgd) return [];
+    if (!this.canRgd) return [];
     const lignes = db.t('rgd_corbeille');
+    // ⚠ UN CHARGÉ D'AFFAIRES NE VOIT QUE CE QU'IL A JETÉ. La policy le dit
+    // déjà côté base depuis le 06/10/2026 et ne lui envoie rien d'autre ;
+    // ceci est pour le mode démo, qui n'a pas de serveur pour le dire.
+    if (!this.isDirection) {
+      return lignes.filter(x => x.fiche?.owner_id === this.user?.id);
+    }
     // ⚠ ELLE SUIT LA VUE PAR CHARGÉ D'AFFAIRES, et c'est la cohérence qui
     // l'exige : regarder l'espace comme quelqu'un et y voir les fiches
     // supprimées d'un autre ferait mentir le bandeau. Le propriétaire se lit
