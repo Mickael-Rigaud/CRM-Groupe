@@ -19,6 +19,7 @@ import {
   champsAgendas, enregistrerAgendas, peutRaccorder,
 } from '../agenda.js';
 import { evenementsEnregistres, derniereSync, agendasDe } from '../agenda-sync.js';
+import { creerAgendaPersonnel } from '../comptes.js';
 
 const LS_FILTRE = 'crm_home_filtre';
 const BASE_PROSPECTS = {
@@ -236,6 +237,28 @@ export const homePage = {
       root.querySelector('#tb-obj')?.addEventListener('click', () => formObjectifs(draw));
       root.querySelector('#tb-ag')?.addEventListener('click', () => formAgendas(visibles, draw));
 
+      /* ⚠ LE RETOUR S'ÉCRIT DANS UN BLOC, PAS DANS UN `toast` : il porte
+         l'identifiant du calendrier créé, qu'un message qui s'efface au bout
+         de trois secondes perdrait. Même choix que l'écran des comptes. */
+      root.querySelectorAll('[data-mon-agenda]').forEach(b => b.onclick = async () => {
+        const k = b.dataset.monAgenda;
+        const cible = root.querySelector('#tb-mon-agenda');
+        b.disabled = true; b.textContent = 'Création…';
+        try {
+          const r = await creerAgendaPersonnel(scope.user.id, k);
+          cible.innerHTML = r.deja
+            ? `<p class="muted small">Vous avez déjà un agenda ${esc(ACTIVITIES[k].label)}.</p>`
+            : `<p class="muted small">Agenda « ${esc(r.nom)} » créé.
+               ${r.partage ? 'Une invitation Google vient de vous être envoyée : acceptez-la pour le voir.'
+                           : 'Le partage a échoué : ' + esc(r.motif_partage || '')}</p>`;
+          await db.recharger('agendas_personnels').catch(() => {});
+          draw();
+        } catch (e) {
+          cible.innerHTML = `<p class="muted small" style="color:var(--red)">${esc(e.message)}</p>`;
+          b.disabled = false; b.textContent = `Créer mon agenda ${ACTIVITIES[k].label}`;
+        }
+      });
+
       dessineCourbe(cles, moisSerie, deals);
     };
 
@@ -437,9 +460,37 @@ function carteJournee(cles) {
   // la direction — c'est elle qui a accès aux calendriers.
   return `<section class="card">${entete}
     <div id="tb-jour">${dessinerJournee([...evenementsEnregistres(cles), ...tachesDuJour()], cles)}</div>
+    ${monAgendaHtml(cles)}
     <p class="muted small tb-ag-src">${sourcesHtml(cles)}<span id="tb-maj">${etatSync(cles)}</span></p>
   </section>`;
 }
+// Les structures que la personne porte et pour lesquelles elle n'a pas encore
+// d'agenda à elle. Tant qu'elle n'en a pas, elle voit celui de sa structure —
+// partagé avec les autres — et ses propres rendez-vous s'y mêlent.
+//
+// ⚠ AUCUNE CONNEXION GOOGLE À FAIRE, et c'est le point qui surprend : le
+// cabinet crée le calendrier et le lui partage en écriture. Pas de fenêtre de
+// consentement, pas de mot de passe, rien à autoriser — seulement une
+// invitation Google à accepter. Brancher son agenda PERSONNEL aurait fait
+// entrer ses rendez-vous privés dans le CRM, ce qui est précisément ce qu'on
+// refuse.
+//
+// ⚠ BTP EXPERTISE N'Y FIGURE JAMAIS (`scope.STRUCTURES_A_AGENDA_COMMUN`) :
+// le métier d'un rendez-vous s'y déduit du calendrier, un agenda personnel ne
+// recevrait rien. On y invite la personne au lieu de lui en créer un.
+const structuresSansMonAgenda = (cles) => (cles || []).filter(
+  k => !scope.STRUCTURES_A_AGENDA_COMMUN.includes(k) && !scope.mesAgendas(k).length);
+
+const monAgendaHtml = (cles) => {
+  const manquantes = structuresSansMonAgenda(cles);
+  if (!manquantes.length || db.demo) return '';
+  return `<p class="muted small tb-ag-mien">Vos rendez-vous arrivent dans l’agenda de votre structure,
+      que vous partagez avec les autres. Vous pouvez avoir le vôtre — rien à connecter, vous
+      recevrez une invitation Google à accepter.<br>
+      ${manquantes.map(k => `<button class="btn ghost sm" data-mon-agenda="${k}">Créer mon agenda ${esc(ACTIVITIES[k].label)}</button>`).join(' ')}
+    </p><div id="tb-mon-agenda"></div>`;
+};
+
 const etatSync = (cles) => {
   const d = derniereSync(cles);
   if (!d) return '<span class="ag-abs">pas encore relevé</span>';

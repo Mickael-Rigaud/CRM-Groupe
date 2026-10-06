@@ -140,6 +140,26 @@ export const lireEvenement = (champs) => appeler('lire-evenement', champs);
 export const creerEvenement = (champs) => appeler('creer-evenement', champs);
 
 /**
+ * Passer un rendez-vous à quelqu'un, en même temps que son dossier.
+ *
+ * `champs` : `evenement` (l'identifiant de la LIGNE `agenda_events`, jamais
+ * un identifiant Google) et `beneficiaire` (un profil).
+ *
+ * ⚠ LE GESTE N'EST PAS LE MÊME DES DEUX CÔTÉS, et c'est le serveur qui
+ * tranche, pas l'écran. Pour RGD le rendez-vous est **déplacé** dans
+ * l'agenda de la personne — il quitte celui de la direction, ce qui est tout
+ * l'intérêt. Pour BTP la personne est **invitée** et l'événement reste dans
+ * l'agenda du cabinet : `btp_projets_depuis_agenda` déduit le métier du
+ * calendrier, le déplacer ferait disparaître la fiche projet sans rien dire.
+ * La réponse porte `mode` : `deplace` ou `invite`.
+ *
+ * ⚠ 409 QUAND LA PERSONNE N'A PAS ENCORE D'AGENDA, et c'est un refus utile :
+ * retomber sur l'agenda de la structure ne déplacerait rien tout en ayant
+ * l'air d'avoir marché.
+ */
+export const transfererRendezVous = (champs) => appeler('transferer-rendez-vous', champs);
+
+/**
  * Déplacer ou corriger un rendez-vous existant.
  *
  * `champs` : `evenement` (l'identifiant de la LIGNE `agenda_events`, jamais un

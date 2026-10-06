@@ -26,6 +26,8 @@ import { db } from '../data/db.js';
 import { esc, openModal, closeModal, toast, userName } from '../ui.js';
 import { scope } from '../data/scope.js';
 import { assignerResponsable } from './deal.js';
+import { rendezVousDeLaFiche } from '../data/rgd-rdv.js';
+import { transfererRendezVous } from '../data/evenements.js';
 
 const TABLE = { demande: 'rgd_demandes', client: 'rgd_clients' };
 
@@ -33,6 +35,21 @@ const TABLE = { demande: 'rgd_demandes', client: 'rgd_clients' };
 // la seule clé que les deux tables partagent avec `deals`.
 const affairesDeLaFiche = (ligne) => !ligne?.contact_id ? []
   : db.t('deals').filter(d => d.activity === 'rgd' && d.contact_id === ligne.contact_id);
+
+// Les chantiers nés des affaires de la fiche — c'est par eux que le
+// rendez-vous se retrouve : `rgd_chantiers.source_event_id` porte
+// l'identifiant Google de la visite qui a créé le chantier.
+const chantiersDeLaFiche = (ligne) => {
+  const ids = new Set(affairesDeLaFiche(ligne).map(d => d.id));
+  return db.t('rgd_chantiers').filter(c => ids.has(c.deal_id));
+};
+
+// ⚠ ON LIT `agenda_events` SANS LE FILTRE PAR PERSONNE : `scope.voitAgenda`
+// cloisonne l'ÉCRAN agenda, pas le rendez-vous attaché à un dossier. Le
+// filtrer ici cacherait à la direction le rendez-vous qu'elle est précisément
+// en train de passer à quelqu'un.
+const rdvsDeLaFiche = (x) =>
+  rendezVousDeLaFiche(x.ligne, chantiersDeLaFiche(x.ligne), db.t('agenda_events'), x.nom);
 
 export function proprietaireDeLaFiche(ligne) {
   return ligne?.owner_id ? db.byId('profiles', ligne.owner_id) : null;
@@ -74,6 +91,7 @@ export function attribuerFicheRgd(x, onDone, onClose = null) {
   const actuel = proprietaireDeLaFiche(ligne);
   const candidats = scope.candidatsRgd();
   const affaires = affairesDeLaFiche(ligne);
+  const rdvs = rdvsDeLaFiche(x);
 
   const m = openModal(actuel ? 'Changer de responsable' : 'Attribuer cette fiche', `
     <form class="form" id="rgda-form">
@@ -90,6 +108,18 @@ export function attribuerFicheRgd(x, onDone, onClose = null) {
           ? ` L'affaire${affaires.length > 1 ? 's' : ''} qui en ${affaires.length > 1 ? 'sont nées' : 'est née'} suivra${affaires.length > 1 ? 'ont' : ''}, avec ${affaires.length > 1 ? 'leurs' : 'ses'} devis, chantiers et paiements.`
           : " Elle n'a pas encore d'affaire : il n'y a que la fiche à confier."}
         Le contact suit dans tous les cas.</p>
+      ${rdvs.length ? `
+        <label class="check">
+          <input type="checkbox" name="avec_rdv" checked>
+          <span>Passer aussi ${rdvs.length > 1 ? `les ${rdvs.length} rendez-vous` : 'le rendez-vous'} dans son agenda</span>
+        </label>
+        <!-- Le rendez-vous QUITTE l'agenda de la direction pour le sien : c'est
+             sans danger pour RGD, ou la visite technique se reconnait a son
+             titre et non au calendrier dont elle vient. -->
+        <p class="muted small">${esc(rdvs.map(r => r.title || 'sans titre').slice(0, 3).join(' · '))}${
+          rdvs.length > 3 ? ` · et ${rdvs.length - 3} autre${rdvs.length > 4 ? 's' : ''}` : ''}.
+          Il quittera l’agenda où il est posé. La personne doit déjà avoir son agenda RGD Renova.</p>
+      ` : ''}
       <div class="form-actions">
         <button type="button" class="btn ghost" data-close>Annuler</button>
         <button class="btn" type="submit">${actuel ? 'Changer' : 'Attribuer'}</button>
@@ -100,13 +130,36 @@ export function attribuerFicheRgd(x, onDone, onClose = null) {
     e.preventDefault();
     const id = new FormData(e.target).get('owner_id');
     if (!id || id === ligne.owner_id) { closeModal(true); return onDone?.(); }
+    const avecRdv = !!new FormData(e.target).get('avec_rdv');
     try {
       await confierFicheRgd(x.cible, ligne, id);
-      closeModal(true);
-      toast(`Confiée à ${userName(id)}`);
-      onDone?.();
     } catch (err) {
       toast(err.message || "L'attribution a échoué", 'warn');
+      return;
     }
+    closeModal(true);
+    toast(`Confiée à ${userName(id)}`);
+
+    // ⚠ LE DOSSIER EST DÉJÀ PASSÉ À CE STADE : l'échec du rendez-vous ne doit
+    // donc PAS ressembler à l'échec de l'attribution, sinon on recommence un
+    // geste qui a réussi. Deux messages distincts, et l'écran se redessine
+    // dans tous les cas.
+    if (avecRdv && rdvs.length) {
+      let passes = 0;
+      let souci = '';
+      for (const r of rdvs) {
+        try {
+          await transfererRendezVous({ evenement: r.id, beneficiaire: id });
+          passes += 1;
+        } catch (err) {
+          souci = err.message || 'le rendez-vous n’a pas pu être passé';
+          break;
+        }
+      }
+      if (souci) toast(souci, 'warn');
+      else if (passes) toast(passes > 1 ? `${passes} rendez-vous passés` : 'Rendez-vous passé');
+      await db.recharger('agenda_events').catch(() => {});
+    }
+    onDone?.();
   };
 }
