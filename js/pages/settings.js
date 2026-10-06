@@ -125,6 +125,18 @@ export const settingsPage = {
       // désynchroniserait les deux, et la personne se connecterait toujours avec
       // l'ancienne. Ce sera un geste à part le jour où ce sera nécessaire.
       const ficheCompte = (profil) => {
+        // ⚠ PAS D'AGENDA PERSONNEL POUR UNE STRUCTURE À AGENDA COMMUN, et le
+        // proposer serait un piège : pour BTP Expertise, rien n'est jamais
+        // routé vers un agenda personnel — le métier d'un rendez-vous se
+        // déduit du calendrier dont il vient, et `btp_projets_depuis_agenda` ne
+        // lit que les deux agendas du cabinet. Le bouton créerait donc un
+        // calendrier que personne ne remplirait et que l'écran ignorerait, tout
+        // en l'ajoutant à la liste du relevé. Pour mettre un rendez-vous BTP
+        // dans l'agenda de quelqu'un, on l'INVITE depuis l'écran agenda.
+        // Même source que le filtre d'affichage : `scope.STRUCTURES_A_AGENDA_COMMUN`.
+        const structuresAgenda = (v) =>
+          (v.structures || []).filter(k => !scope.STRUCTURES_A_AGENDA_COMMUN.includes(k));
+
         const edition = !!profil;
         const moi = edition && profil.id === scope.user?.id;
         const v = {
@@ -169,14 +181,14 @@ export const settingsPage = {
                 ? 'Cette personne ne verra que ses propres affaires, et seulement dans ces structures.'
                 : 'Sans structure, la personne ne verrait aucune donnée : choisissez-en au moins une.'}</p>
 
-          ${edition && !db.demo && v.structures.length ? `
+          ${edition && !db.demo && structuresAgenda(v).length ? `
             <div class="mf-bloc-titre">Son agenda</div>
             <!-- Un agenda PROPRE a la personne, cree par le cabinet et partage
                  avec elle en ecriture : il apparait dans son Google, le CRM le
                  lit parce qu'il nous appartient, et sa vie privee reste la
                  sienne. Un agenda par structure qu'elle porte. -->
             <div class="fa-chips" data-agendas>
-              ${v.structures.map(k => `<button type="button" class="btn ghost sm"
+              ${structuresAgenda(v).map(k => `<button type="button" class="btn ghost sm"
                 data-agenda="${k}">Créer son agenda ${esc(ACTIVITIES[k].label)}</button>`).join('')}
             </div>
             <p class="mf-aide">Elle recevra une invitation Google à accepter. S'il existe déjà, rien n'est recréé.</p>
