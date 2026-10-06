@@ -183,6 +183,9 @@ export const todayPage = {
       const parStructure = structuresDeLUtilisateur()
         .map(a => ({ ...a, n: ouvertes.filter(t => structureDe(t) === a.key).length }));
       const sansStructure = ouvertes.filter(rangeeAilleurs).length;
+      // ⚠ UNE SEULE STRUCTURE, PAS DE PASTILLES (06/10/2026 : « considère qu'un
+      // chargé n'a qu'une structure, pas la peine d'avoir “Toutes” et “RGD
+      // Renova” ») : deux boutons qui montrent la même chose ne filtrent rien.
 
       // Les fraîchement cochées restent à leur place au lieu de disparaître aussitôt.
       const retenues = vues.filter(a => !a.done || recentes.has(a.id)).filter(surStructure);
@@ -223,7 +226,7 @@ export const todayPage = {
           ${onglets.map(o => `<button type="button" data-onglet="${o.key}" class="${state.onglet === o.key ? 'on' : ''}">${esc(o.label)}<span>${compte(o)}</span></button>`).join('')}
         </div>
 
-        <div class="pill-tabs todo-structures" ${surTableau ? 'hidden' : ''}>
+        <div class="pill-tabs todo-structures" ${surTableau || parStructure.length <= 1 ? 'hidden' : ''}>
           <button type="button" data-struct="" class="${state.structure ? '' : 'on'}">Toutes<span>${ouvertes.length}</span></button>
           ${parStructure.map(a => `<button type="button" data-struct="${a.key}" class="${state.structure === a.key ? 'on' : ''}">${logo(a)}${esc(a.label)}<span>${a.n}</span></button>`).join('')}
           ${sansStructure ? `<button type="button" data-struct="—" class="${state.structure === '—' ? 'on' : ''}">Sans structure<span>${sansStructure}</span></button>` : ''}
