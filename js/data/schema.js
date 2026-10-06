@@ -155,9 +155,17 @@ export const tauxSuggere = (score) =>
 
 // Les six phases d'une AMO, et le poids que chacune pèse dans la mission. Les poids
 // font 100 % : ils servent aussi de clé de facturation par phase.
+// ⚠ LES ÉTAPES DES DEUX PREMIÈRES PHASES ONT ÉTÉ ÉCHANGÉES LE 06/10/2026, avec le
+// nouvel ordre du pipeline AMO. `etape` ne sert qu'à AFFICHER, sous chaque phase,
+// l'étape du pipeline qui lui correspond (écran `#/btp/amo`) ; le suivi, lui, se
+// repère par `num`. Sans cet échange, la phase 1 aurait renvoyé à « Rédaction
+// mission AMO » et la phase 2 au « RDV terrain », qui la précède désormais — deux
+// lignes qui se contredisent sur le même écran. Le rapprochement est aussi plus
+// juste qu'avant : le cadrage, c'est la visite où l'on recueille le besoin ; la
+// préparation, c'est la rédaction de la mission.
 export const PHASES_AMO = [
-  { num: 1, label: 'Cadrage', contenu: 'Besoins, contraintes, priorités, enveloppe, calendrier général.', poids: 10, etape: 'amo_cadrage' },
-  { num: 2, label: 'Préparation', contenu: 'Définition fonctionnelle, préconisations, budget, prestations attendues.', poids: 15, etape: 'amo_programme' },
+  { num: 1, label: 'Cadrage', contenu: 'Besoins, contraintes, priorités, enveloppe, calendrier général.', poids: 10, etape: 'amo_programme' },
+  { num: 2, label: 'Préparation', contenu: 'Définition fonctionnelle, préconisations, budget, prestations attendues.', poids: 15, etape: 'amo_cadrage' },
   { num: 3, label: 'Consultation', contenu: 'Analyse et comparaison des offres, documents, aide au choix et à la négociation.', poids: 20, etape: 'amo_consultation' },
   { num: 4, label: 'Accompagnement travaux', contenu: 'Points réguliers, avancement, situations, avenants, alertes et conseil.', poids: 35, etape: 'amo_chantier' },
   { num: 5, label: 'Réception', contenu: 'Préparation, assistance, réserves, conseils sur les paiements.', poids: 15, etape: 'amo_reception' },
@@ -920,7 +928,7 @@ export const ACTIVITIES = {
     //
     // ⚠ Chaque jalon nomme UNE ÉTAPE PAR MÉTIER, jamais une seule pour les deux. Les
     // deux déroulés se répondent un à un mais n'ont pas les mêmes clés : « Qualifié »
-    // s'appelle `qualifie` en expertise et `amo_cadrage` en AMO, et le RDV sur le terrain
+    // s'appelle `qualifie` en expertise et le RDV sur le terrain
     // `rdv` d'un côté, `amo_programme` de l'autre. Comparer des rangs dans la liste
     // fusionnée ne marcherait pas — les étapes de l'AMO suivent celles de l'expertise,
     // donc « Qualifié » côté AMO passerait pour postérieur à « Clôturé facturé » côté
@@ -928,9 +936,19 @@ export const ACTIVITIES = {
     //
     // Le dernier jalon n'a pas d'étape : c'est du CHIFFRE D'AFFAIRES, et il lit
     // l'objectif de CA déjà saisi pour la structure — un chiffre, une source.
+    //
+    // ⚠ LES DEUX PREMIERS JALONS POINTENT SUR LA MÊME ÉTAPE CÔTÉ AMO DEPUIS LE
+    // 06/10/2026, et c'est une conséquence du nouvel ordre, pas une étourderie :
+    // l'AMO n'a plus d'étape « Qualifié » — son premier jalon de métier EST le
+    // RDV terrain. Les deux affirmations restent vraies (on ne se déplace pas
+    // sur un lead qu'on n'a pas qualifié), et l'entonnoir reste décroissant.
+    // Le prix est connu et se dit : pour une AMO, le taux de passage
+    // « Qualifiés → RDV terrain » vaut 100 %. L'alternative — ne pas donner
+    // d'étape AMO au premier jalon — aurait fait afficher MOINS de qualifiés que
+    // de RDV, c'est-à-dire la flèche `↑` d'un entonnoir qui remonte.
     objectifs: [
       { cle: 'leads', label: 'Leads', unite: 'nombre' },
-      { cle: 'qualifie', label: 'Qualifiés', unite: 'nombre', etape: { expertise: 'qualifie', amo: 'amo_cadrage' } },
+      { cle: 'qualifie', label: 'Qualifiés', unite: 'nombre', etape: { expertise: 'qualifie', amo: 'amo_programme' } },
       { cle: 'rdv', label: 'RDV terrain', unite: 'nombre', etape: { expertise: 'rdv', amo: 'amo_programme' } },
       { cle: 'ca', label: 'Missions signées', unite: 'euros' },
     ],
@@ -986,15 +1004,37 @@ export const ACTIVITIES = {
       { key: 'mission_realisee', label: 'Rédaction en cours', p: 100, delivery: true, mission: 'expertise' },
       { key: 'rapport_remis', label: 'Rapport émis', p: 100, delivery: true, mission: 'expertise' },
       { key: 'rdv_complementaire', label: 'Clôturé facturé', p: 100, delivery: true, mission: 'expertise' },
-      // AMO : de la définition du besoin à la réception des travaux
-      { key: 'amo_cadrage', label: 'Qualifié', p: 20, mission: 'amo' },
+      // AMO : du rendez-vous sur le terrain à la réception des travaux.
+      //
+      // ⚠ L'ORDRE A ÉTÉ REVU PAR MICKAEL LE 06/10/2026 : « nouveau - rdv tel -
+      // rdv terrain - rédaction mission AMO - mission AMO signée - démarrage
+      // chantier - suivi intermédiaire - réception chantiers ». Le RDV terrain
+      // passe donc AVANT la signature — il la précède dans la réalité, on va voir
+      // le chantier avant de rédiger la mission —, et l'ancienne étape « Qualifié »
+      // disparaît : en AMO on ne qualifie pas au téléphone, on se déplace.
+      //
+      // ⚠ LES CLÉS NE CHANGENT PAS, SEULS LES LIBELLÉS ET LE RANG. `amo_cadrage`
+      // s'affiche désormais « Rédaction mission AMO » : la clé est écrite dans
+      // `deals.stage` et dans `stage_history`, la renommer demanderait une
+      // migration pour un gain nul. Ne pas s'étonner qu'une clé nommée « cadrage »
+      // porte un autre intitulé — c'est le même piège que `rdv1`, qui s'affiche
+      // « RDV tel ».
+      //
+      // ⚠ `amo_programme` PERD `delivery` ET SON `p: 100`, et ce n'est pas un
+      // oubli : placé avant la signature, il n'engage plus rien. Le garder en
+      // réalisation compterait une AMO non signée dans « Missions en cours » et
+      // lui poserait le bloc de facturation, qui lit `delivery`. Les deux premières
+      // étapes du métier répondent maintenant rang pour rang à celles de
+      // l'expertise — `qualifie` (20) et `proposition` (60) —, ce dont
+      // `etapeEquivalente` se sert pour traduire une affaire qui change de métier.
+      { key: 'amo_programme', label: 'RDV terrain', p: 20, mission: 'amo' },
+      { key: 'amo_cadrage', label: 'Rédaction mission AMO', p: 60, mission: 'amo' },
       // La signature de la mission AMO ouvre la réalisation — c'est ce que dit le
       // commentaire ci-dessus depuis le début, le `delivery` manquait seulement. Une
       // mission signée n'est plus une probabilité : d'où p: 100, comme toute étape de
       // réalisation. Le seuil du CA prévisionnel reste déclaré par `engagement`, par
       // clé et non par p — les deux notions ne se confondent pas.
       { key: 'amo_contrat', label: 'Mission AMO signée', p: 100, delivery: true, mission: 'amo' },
-      { key: 'amo_programme', label: 'RDV terrain', p: 100, delivery: true, mission: 'amo' },
       { key: 'amo_consultation', label: 'Démarrage chantier', p: 100, delivery: true, mission: 'amo' },
       { key: 'amo_chantier', label: 'Suivi intermédiaire', p: 100, delivery: true, mission: 'amo' },
       { key: 'amo_reception', label: 'Réception chantiers', p: 100, delivery: true, mission: 'amo' },

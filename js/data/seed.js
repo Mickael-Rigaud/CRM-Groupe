@@ -86,7 +86,12 @@ export const SEED = {
     // colonnes à zéro et la répartition du CA donne 100 % à l'expertise. Rien de
     // ce qui distingue les deux métiers n'était vérifiable hors production.
     // `type_mission` est ce qui range une affaire dans l'un ou l'autre déroulé.
-    { id: 'd8b', title: 'Rénovation lourde — SCI Les Tilleuls', activity: 'btp', stage: 'amo_programme', status: 'open', organisation_id: 'o4', owner_id: 'u-mickael', amount: 14000, channel: 'Réseau professionnel', fields: { type_mission: 'amo', problematique: 'Assistance à maîtrise d’ouvrage', type_bien: 'Immeuble', contexte: 'Rénovation lourde' }, stage_history: [{ stage: 'lead', at: d(-70) }, { stage: 'rdv1', at: d(-62) }, { stage: 'amo_cadrage', at: d(-50) }, { stage: 'amo_contrat', at: d(-38) }, { stage: 'amo_programme', at: d(-20) }], created_at: d(-70), stage_changed_at: d(-20) },
+    // ⚠ ELLE A ÉTÉ AVANCÉE À « Démarrage chantier » LE 06/10/2026, avec le nouvel
+    // ordre du pipeline AMO. Elle était à `amo_programme` — devenu la PREMIÈRE
+    // étape du métier — tout en portant `amo_contrat` dans son historique : la
+    // carte se serait affichée avant la signature sur une mission signée, et le
+    // bloc de facturation serait apparu sur une colonne qui ne le mérite plus.
+    { id: 'd8b', title: 'Rénovation lourde — SCI Les Tilleuls', activity: 'btp', stage: 'amo_consultation', status: 'open', organisation_id: 'o4', owner_id: 'u-mickael', amount: 14000, channel: 'Réseau professionnel', fields: { type_mission: 'amo', problematique: 'Assistance à maîtrise d’ouvrage', type_bien: 'Immeuble', contexte: 'Rénovation lourde' }, stage_history: [{ stage: 'lead', at: d(-70) }, { stage: 'rdv1', at: d(-62) }, { stage: 'amo_programme', at: d(-50) }, { stage: 'amo_cadrage', at: d(-44) }, { stage: 'amo_contrat', at: d(-38) }, { stage: 'amo_consultation', at: d(-20) }], created_at: d(-70), stage_changed_at: d(-20) },
     { id: 'd8', title: 'Malfaçons carrelage — Marchand', activity: 'btp', stage: 'rapport_remis', status: 'won', contact_id: 'c10', owner_id: 'u-mickael', amount: 1200, channel: 'Partenaire / apporteur', referrer_org_id: 'o2', fields: { problematique: 'Malfaçons', type_bien: 'Appartement', contexte: 'Litige', date_visite: day(-30), date_rapport: day(-20) }, stage_history: [{ stage: 'lead', at: d(-60) }, { stage: 'rdv', at: d(-50) }, { stage: 'proposition', at: d(-45) }, { stage: 'mission_planifiee', at: d(-40) }, { stage: 'rapport_remis', at: d(-20) }], created_at: d(-60), won_at: d(-40), closed_at: d(-40), stage_changed_at: d(-20) },
     { id: 'd9', title: 'Crédit immo — Lemaire', activity: 'courtage', stage: 'pieces', status: 'open', contact_id: 'c7', owner_id: 'u-mickael', amount: 2100, channel: 'Site internet direct', fields: { type_financement: 'Crédit immobilier', montant_projet: 240000, montant_financement: 210000, apport: 30000, objectif: 'Résidence principale', pieces_manquantes: 'Avis d\'imposition 2025, 3 derniers bulletins' }, stage_history: [{ stage: 'lead', at: d(-20) }, { stage: 'rdv', at: d(-12) }, { stage: 'pieces', at: d(-10) }], created_at: d(-20), stage_changed_at: d(-10) },
     { id: 'd10', title: 'Regroupement crédits — Blanc', activity: 'courtage', stage: 'lead', status: 'open', contact_id: 'c11', owner_id: 'u-mickael', amount: 1500, channel: 'Meta Ads', campaign: 'RAC-Regroupement-Sept26', fields: { type_financement: 'Regroupement de crédits' }, stage_history: [{ stage: 'lead', at: d(-1) }], created_at: d(-1), stage_changed_at: d(-1) },
@@ -767,7 +772,6 @@ export const SEED = {
       source: 'google_calendar', notes: '', maj: d(-1) },
     { id: 'rc7', owner_id: 'u-mickael', contact_id: 'c8', statut: 'client', statut_suivi: 'devis_envoye',
       source: 'manuel', notes: '', maj: d(-8) },
-
     // ⚠ CELLES-CI PORTENT UN `costructor_id`, ET C'EST CE QUI LES FAIT ENTRER
     // DANS « TOUS LES CONTACTS ». L'annuaire ne montre que les fiches connues
     // de Costructor (`fiches.filter(f => f.costructor_id)`) : sans cette clef,
