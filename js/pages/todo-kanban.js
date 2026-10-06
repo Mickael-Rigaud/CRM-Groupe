@@ -348,12 +348,7 @@ export function kanbanHtml(taches, recentes) {
         </div>
       </section>`;
     }).join('')}
-  </div>
-  <p class="kb-note muted small">Vos tâches, rangées par structure.
-    Chacun a la sienne : personne ne voit celle des autres, direction comprise —
-    sauf une tâche qu'on vous a partagée, marquée d'un second rond.
-    Pour confier une tâche, l'onglet « Envoyées » la suit sans la perdre de vue.
-    Les <b>dossiers en attente</b> ne sont pas des tâches : ce sont les affaires arrêtées
-    à une étape d'écriture, relues à chaque ouverture. Elles ne se cochent pas —
-    un clic ouvre la fiche, et c'est l'étape qui les retire d'ici.</p>`;
+  </div>`;
+  // La note d'explication sous le tableau a été retirée le 06/10/2026, demandé :
+  // ne pas la remettre.
 }
