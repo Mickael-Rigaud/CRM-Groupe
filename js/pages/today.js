@@ -124,9 +124,13 @@ const ONGLETS = [
     garde: (a, moi) => a.created_by === moi && !!a.assignee_id && a.assignee_id !== moi },
 ];
 
-// ⚠ POUR LA DIRECTION, LE TABLEAU REMPLACE « Ma to do list » — demandé ainsi le
-// 01/10/2026, pas ajouté à côté. Les autres gardent la liste : une seule
-// colonne n'est pas un tableau.
+// ⚠ LE TABLEAU REMPLACE « Ma to do list » — demandé ainsi pour la direction le
+// 01/10/2026, pas ajouté à côté. ⚠ ET POUR TOUT LE MONDE DEPUIS LE 06/10/2026
+// (« je veux exactement le même visuel » pour les chargés d'affaires) : la
+// raison d'avant — « une seule colonne n'est pas un tableau » — a été écartée.
+// La seule différence est dans les COLONNES, qui viennent de
+// `structuresDeLUtilisateur` : chacun ne voit que ses structures. Les dossiers
+// en attente suivent `scope`, donc un chargé n'y lit que son portefeuille.
 //
 // ⚠ ET IL NE MONTRE QUE MES TÂCHES, EXACTEMENT COMME LA LISTE QU'IL REMPLACE.
 // La première version portait `garde: () => true` : le tableau affichait alors
@@ -143,9 +147,7 @@ const ongletsDe = (direction) => (direction ? [ONGLET_KANBAN, ONGLETS[1]] : ONGL
 export const todayPage = {
   title: () => 'To do list',
   render(root) {
-    // Le tableau par structures n'a de sens qu'avec plusieurs structures : la
-    // direction les porte toutes, un chargé d'affaires souvent une seule.
-    const enTableau = scope.isDirection;
+    const enTableau = true;
     const onglets = ongletsDe(enTableau);
     const state = { onglet: onglets[0].key, structure: '', q: '', showDone: false, focus: null };
     const moi = scope.user.id;
