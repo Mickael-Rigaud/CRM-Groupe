@@ -36,6 +36,8 @@ import {
 } from '../data/chiffres.js';
 import { imprimerFicheDeal } from './btp-fiche.js';
 import { vivierBtpPage } from './btp-vivier.js';
+import { ouvrirCorbeilleBtp } from './btp-corbeille.js';
+import { corbeilleBtpEnAttente } from '../data/btp-corbeille.js';
 
 const KEY = 'btp';
 const act = () => ACTIVITIES[KEY];
@@ -1367,6 +1369,15 @@ const pageMission = (mission) => ({
           <div class="card-head"><h2>Les missions</h2>
             ${searchInput('m-q', state, 'Rechercher une mission, un client…')}
             <span class="muted small">${liste.length} ligne${liste.length > 1 ? 's' : ''}</span>
+            <!-- ⚠ LA CORBEILLE S'OUVRE D'OÙ LES AFFAIRES VIVENT. Les vues de
+                 #/btp/base décrivent des CONTACTS : y glisser des affaires
+                 jetées aurait donné un tableau dont la moitié des colonnes
+                 n'ont pas de sens. ⚠ ET LE BOUTON NE S'AFFICHE QUE S'IL Y A
+                 QUELQUE CHOSE DEDANS : une corbeille vide proposée en
+                 permanence invite à chercher ce qu'on n'a pas perdu. -->
+            ${corbeilleBtpEnAttente().length
+              ? `<button type="button" class="btn ghost sm" id="m-corbeille" title="Les affaires jetées : rien n'est détruit, elles se reprennent d'ici">🗑 Corbeille <span class="cnt">${corbeilleBtpEnAttente().length}</span></button>`
+              : ''}
           </div>
           <div class="table-wrap"><table>
             <thead><tr><th>Mission</th><th>Client</th><th>Étape</th><th>Niveau</th><th class="num">Points</th><th>Chargé d'affaires</th><th class="num">Montant HT</th><th></th></tr></thead>
@@ -1402,6 +1413,7 @@ const pageMission = (mission) => ({
         </div>`);
 
       bindSearch(root, 'm-q', state, draw); restoreFocus(root, state);
+      root.querySelector('#m-corbeille')?.addEventListener('click', () => ouvrirCorbeilleBtp(draw));
       lierAffaires(root, draw);
       lierGlisser(root, draw);
       root.querySelectorAll('[data-op]').forEach(b => b.onclick = () => {

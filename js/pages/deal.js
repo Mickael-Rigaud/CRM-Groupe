@@ -15,6 +15,7 @@ import { initiales, tuile, info } from './rgd-fiche.js';
 // ranger. Voir l'en-tête du module : la copie porte la plus grande partie de
 // ce qui a été saisi, et rien ne l'affichait.
 import { lignesDecouverte } from '../data/btp-decouverte.js';
+import { jeterAffaireBtp } from '../data/btp-corbeille.js';
 
 // ⚠ TROIS RUBRIQUES, ET LA FACTURATION À PART (25/09/2026 : « sépare bien les
 // informations du prospect et du projet et de la mission », « la facturation à
@@ -635,7 +636,11 @@ export function openDeal(id, onChange) {
           ${d.fields?.decouverte ? '<button class="btn ghost sm" id="d-fiche">🖨 Fiche de mission</button>' : ''}
           ${scope.isDirection ? `<button class="btn ghost sm" id="d-attr">👤 ${d.owner_id ? 'Changer de responsable' : 'Attribuer'}</button>` : ''}
           <button class="btn ghost sm" id="d-edit">✎ Modifier</button>
-          <button class="btn ghost sm danger" id="d-del">🗑 Supprimer</button>
+          <!-- ⚠ BTP JETTE, LES AUTRES DÉTRUISENT ENCORE. Une affaire BTP part
+               dans btp_corbeille avec tout ce qui pend ; ailleurs la
+               suppression reste immédiate, faute d'une corbeille qui sache
+               reprendre les chantiers et les paiements d'une affaire RGD. -->
+          <button class="btn ghost sm danger" id="d-del">🗑 ${d.activity === 'btp' ? 'Mettre à la corbeille' : 'Supprimer'}</button>
         </div>
       </div>
 
@@ -768,7 +773,39 @@ export function openDeal(id, onChange) {
     m.querySelector('#d-edit').onclick = () => dealForm(d.activity, db.byId('deals', id), {}, (nid) => { if (nid) refresh(); else { onChange?.(); } }, render);
         m.querySelector('#d-del').onclick = async () => {
       const dd = db.byId('deals', id);
-      if (!await confirm(`Supprimer définitivement l'affaire « ${dd.title} » ? Ses activités et ses notes seront supprimées avec elle. Le contact, lui, est conservé.`)) return;
+
+      // ⚠ BTP PASSE PAR LA CORBEILLE, ET LA CONFIRMATION LE DIT : rien n'est
+      // détruit. La fonction de base copie l'affaire AVEC ses tâches, son
+      // historique, son suivi AMO, ses relevés et ses documents avant de
+      // l'effacer — sans quoi reprendre rendrait une coquille.
+      if (dd.activity === 'btp') {
+        if (!await confirm(`Mettre l’affaire « ${dd.title} » à la corbeille ?`
+          + ' Elle quitte le pipeline, mais rien n’est détruit : ses tâches, son historique,'
+          + ' son suivi AMO, ses relevés et ses documents partent avec elle et reviennent si on la reprend.')) return;
+        const r = await jeterAffaireBtp(id);
+        if (!r.ok) return toast(`Suppression impossible : ${r.motif}`, 'err');
+        // ⚠ QUATRE TABLES À RECHARGER : une fonction de base écrit sans
+        // passer par le cache, donc le pipeline continuerait d'afficher une
+        // affaire qui n'existe plus.
+        await db.recharger('deals').catch(() => {});
+        await db.recharger('activities').catch(() => {});
+        await db.recharger('events').catch(() => {});
+        await db.recharger('btp_corbeille').catch(() => {});
+        closeModal(true);
+        toast('Affaire mise à la corbeille');
+        onChange?.();
+        return;
+      }
+
+      // ⚠ AILLEURS LA SUPPRESSION RESTE IMMÉDIATE, ET LA PHRASE NOMME ENFIN
+      // CE QU'ELLE EMPORTE : mesuré sur les clés étrangères, supprimer une
+      // affaire RGD détruit EN CASCADE ses chantiers et ses PAIEMENTS, et
+      // détache ses devis. Le message d'avant ne parlait que des « activités
+      // et notes » — il taisait l'argent.
+      if (!await confirm(`Supprimer définitivement l’affaire « ${dd.title} » ?`
+        + ' Ses tâches, ses notes et son historique sont supprimés avec elle — ainsi que,'
+        + ' pour une affaire RGD Renova, ses chantiers et ses paiements. Le contact, lui,'
+        + ' est conservé. C’est irréversible.')) return;
       for (const a of db.t('activities').filter(x => x.deal_id === id)) await db.remove('activities', a.id);
       for (const e of db.t('events').filter(x => x.deal_id === id)) await db.remove('events', e.id);
       await db.remove('deals', id);

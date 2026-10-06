@@ -79,7 +79,12 @@ export const TABLES = ['profiles', 'organisations', 'contacts', 'deals', 'activi
   // Sans elle, `scope.voitAgenda` ne saurait rien et l'agenda resterait
   // commun à la structure. Une table absente ne casse rien : `load` se
   // contente d'un avertissement et `db.t` rend un tableau vide.
-  'agendas_personnels'];
+  'agendas_personnels',
+  // ⚠ LES AFFAIRES BTP JETÉES, avec tout ce que leur suppression aurait
+  // détruit en cascade. Lecture seule (`select` à `authenticated`, aucune
+  // policy d'écriture) : seules les trois fonctions `security definer` y
+  // écrivent. Une table absente ne casse rien, `db.t` rend un tableau vide.
+  'btp_corbeille'];
 const LS_FILES = 'crm_local_files';
 const LS_KEY = 'crm_local_v1';
 const LS_USER = 'crm_local_user';
