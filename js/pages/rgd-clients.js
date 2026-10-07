@@ -1236,7 +1236,7 @@ export const rgdClientsPage = {
 
         <div class="rcl-barres">
           <div class="pill-tabs rcl-etapes" role="tablist" aria-label="Suivi du dossier">
-            ${ETAPES.map(r => `<button type="button" data-vue="${r.key}"
+            ${ETAPES.filter(r => r.key !== 'indesirable').map(r => `<button type="button" data-vue="${r.key}"
               class="${state.vue === r.key ? 'on' : ''}"${r.titre ? ` title="${esc(r.titre)}"` : ''}>${
               r.label}<span>${r.n}</span></button>`).join('')}
           </div>
@@ -1248,6 +1248,15 @@ export const rgdClientsPage = {
               class="rcl-onglet-annuaire ${surCorbeille ? 'on' : ''}"
               title="Les fiches supprimées, et de quoi les remettre">🗑 Corbeille<span>${
               corbeille.filter(x => !x.restauree_le).length}</span></button>` : ''}
+            ${(() => {
+              // « Clients indésirables » à côté de la corbeille (07/10/2026,
+              // demandé) : ce n'est pas une étape du dossier, c'est un endroit
+              // où l'on range — sa place est avec l'annuaire, hors de la frise.
+              const e = ETAPES.find(x => x.key === 'indesirable');
+              return e ? `<button type="button" data-vue="indesirable"
+              class="rcl-onglet-annuaire ${state.vue === 'indesirable' ? 'on' : ''}"
+              title="${esc(e.titre)}">⛔ ${esc(e.label)}<span>${e.n}</span></button>` : '';
+            })()}
           </div>
         </div>
 
@@ -1594,7 +1603,7 @@ export const rgdClientsPage = {
             const changeDOnglet = versEtape !== state.vue;
             if (changeDOnglet) {
               const tr = m.closest('tr');
-              const cible = root.querySelector(`.rcl-etapes [data-vue="${versEtape}"]`);
+              const cible = root.querySelector(`.rcl-barres [data-vue="${versEtape}"]`);
               // Le sens du glissement suit le sens de la frise : vers la droite
               // si l'affaire avance, vers la gauche si elle recule.
               const av = ORDRE_ETAPES.indexOf(state.vue);
