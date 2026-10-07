@@ -6172,3 +6172,8 @@ body:has(.msg-bulle-zone.ouverte) .rappels { display: none; }
   color: var(--accent-ink); font-family: inherit; font-size: 12.5px; font-weight: 650; text-align: left; cursor: pointer; }
 .rap-activer:hover { background: color-mix(in srgb, var(--accent) 16%, var(--card)); }
 @media print { .rappels { display: none !important; } }
+/* La veille du lundi sur l'écran Sous-traitants (07/10/2026) : un bandeau
+   bleu, distinct de l'orange des potentiels — ce ne sont pas encore des
+   artisans qu'on prospecte, seulement des noms à trancher. */
+.st-tete-veille { --st-trait: #2563EB; }
+.st-veille td .s a { white-space: nowrap; }

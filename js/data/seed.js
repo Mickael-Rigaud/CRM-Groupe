@@ -515,6 +515,26 @@ export const SEED = {
       issue: null, montant_estime: 3200 },
   ],
 
+  // La veille du lundi (`veille-sous-traitants`) : trois trouvailles à
+  // valider, noms INVENTÉS — le dépôt est public. Sans elles, le bloc « Trouvés
+  // par la veille » et ses deux gestes ne s'essayaient qu'en production.
+  rgd_st_veille: [
+    { id: 'v1', siret: '00000000000011', siren: '000000000', raison_sociale: 'ÉLEC DU VALOIS (démo)',
+      corps_metier: 'Électricité', naf: '43.21A', adresse: '3 rue des Tilleuls 60300 SENLIS',
+      code_postal: '60300', ville: 'SENLIS', distance_km: 8.4, dirigeant: 'Paul MARTIN (Gérant)',
+      effectif: '3 à 5 salariés', date_creation: '2012-03-01', est_rge: true, score: 58,
+      lot: '2026-W41', etat: 'a_valider' },
+    { id: 'v2', siret: '00000000000022', siren: '000000001', raison_sociale: 'CARRELAGES DE LA NONETTE (démo)',
+      corps_metier: 'Carrelage / revêtements', naf: '43.33Z', adresse: '12 avenue du Bois 60260 LAMORLAYE',
+      code_postal: '60260', ville: 'LAMORLAYE', distance_km: 4.1, dirigeant: 'Sofia DIAS (Présidente de SAS)',
+      effectif: '1 ou 2 salariés', date_creation: '2019-09-15', est_rge: false, score: 23,
+      lot: '2026-W41', etat: 'a_valider' },
+    { id: 'v3', siret: '00000000000033', siren: '000000002', raison_sociale: 'TOITURES DE L’OISE (démo)',
+      corps_metier: 'Couverture', naf: '43.91B', adresse: '5 rue Neuve 60500 CHANTILLY',
+      code_postal: '60500', ville: 'CHANTILLY', distance_km: 1.2, dirigeant: null,
+      effectif: '6 à 9 salariés', date_creation: '2004-01-10', est_rge: true, score: 64,
+      lot: '2026-W41', etat: 'a_valider' },
+  ],
   rgd_sous_traitants: [
     { id: 'st1', owner_id: 'u-mickael', d1_id: 9001, raison_sociale: 'Élec Démo SARL', contact_nom: 'Paul Martin',
       email: 'paul@example.com', telephone: '02 61 91 00 21', siret: '00000000000001',
