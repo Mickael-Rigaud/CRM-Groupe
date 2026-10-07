@@ -75,7 +75,7 @@
 //      on reconnaît une forme plus vite qu'on ne lit un mot.
 import { db } from '../data/db.js';
 import { esc, eur, fmtDate, fmtDateTime, openModal, closeModal, toast, userName,
-         daysSince } from '../ui.js';
+         daysSince, armerCroix } from '../ui.js';
 import { ETAPES_RGD, ETAPES_HORS_CYCLE, ORDRE_ETAPES, STATUT_DE_L_ETAPE, ecrireStatut,
          montantDevisDe, etapeAvecMontant, COL_RELANCE, derniereRelance,
          aujourdhui } from '../data/rgd-etapes.js';
@@ -334,6 +334,7 @@ export function ouvrirFicheRgd(x, onChange, retour = null) {
       ${liste.length ? `<ul>${liste.slice(0, 6).map(a => `<li>
         <span class="rgdf-quand">${esc(fmtDate(a.due_date))}${a.due_time ? ` à ${esc(a.due_time)}` : ''}</span>
         <span class="rgdf-dit">${esc(a.title || 'Rappel')}</span>
+        ${scope.canRgd ? `<button type="button" class="icon-btn" data-rap-suppr="${esc(a.id)}" title="Supprimer la ligne">✕</button>` : ''}
       </li>`).join('')}</ul>
       <p class="rgdf-source">Ils se cochent dans la to-do du CRM.</p>` : ''}
     </section>`;
@@ -419,6 +420,36 @@ export function ouvrirFicheRgd(x, onChange, retour = null) {
       dessine();
       onChange?.();
     };
+
+    /* ⚠ SUPPRIMER UN RAPPEL POSÉ PAR ERREUR (07/10/2026, demandé par Élodie).
+       Jusqu'ici la fiche ne faisait que les MONTRER : il fallait retrouver la
+       ligne dans la to-do pour défaire un clic de trop fait ici même.
+
+       ⚠ DEUX CLICS, ET SURTOUT PAS LE `confirm()` DE `ui.js` : il appelle
+       `closeModal(true)` et REMPLACE la fiche par sa propre fenêtre — dixième
+       occurrence du piège dans ce dépôt. `armerCroix` porte ce garde-fou une
+       seule fois pour tout le CRM.
+
+       ⚠ ON SUPPRIME, ON NE COCHE PAS : cocher voudrait dire « c'est fait » et
+       laisserait la ligne dans « Fait aujourd'hui », alors qu'un rappel posé
+       par erreur n'a jamais eu lieu d'être.
+
+       ⚠ ET C'EST LA BASE QUI TRANCHE LE DROIT : `peut_supprimer_activity`
+       refuse la tâche de quelqu'un d'autre. Ce bouton évite seulement d'offrir
+       un geste qui échouerait à qui ne porte pas RGD. */
+    bloc.querySelectorAll('[data-rap-suppr]').forEach(x => armerCroix(x, async () => {
+      const id = x.dataset.rapSuppr;
+      try {
+        await db.remove('activities', id);
+      } catch (e) {
+        return toast(e.message || 'Rappel non supprimé', 'err');
+      }
+      toast('Rappel supprimé');
+      // Même raison que pour la pose : le compteur du titre vient de changer,
+      // et la fiche ne s'écoute pas elle-même.
+      dessine();
+      onChange?.();
+    }));
   };
 
 

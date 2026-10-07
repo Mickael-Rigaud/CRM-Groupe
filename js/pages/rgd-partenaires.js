@@ -49,7 +49,7 @@
 // se demander lequel est vrai.
 import { scope } from '../data/scope.js';
 import { esc, eur, fmtDate, terms, hit, searchInput, bindSearch, restoreFocus } from '../ui.js';
-import { toast, openModal, closeModal } from '../ui.js';
+import { toast, openModal, closeModal, armerCroix } from '../ui.js';
 import { poserEspace } from './espace.js';
 import { cadre, guard } from './rgd-espace.js';
 import { creerPartenaire, majPartenaire, supprimerPartenaire,
@@ -820,53 +820,6 @@ function ouvrirFichePartenaire(id, apres) {
   };
 
   dessine();
-}
-
-/**
- * La croix de suppression d'une ligne de tableau : deux clics sur la même.
- *
- * ⚠ PAS DE `confirm()` ICI, ET C'EST UN BUG CORRIGÉ LE 25/09/2026 : « quand je
- * supprime une ligne ça me ferme la fiche partenaire ». Le `confirm()` du CRM
- * appelle `closeModal(true)` et REMPLACE la fenêtre courante par la sienne — la
- * fiche partait donc avant même la réponse, et elle ne revenait pas. Le premier
- * clic arme (la croix devient rouge et dit « Confirmer »), le second supprime.
- *
- * ⚠ ELLE SE DÉSARME SEULE AU BOUT DE QUATRE SECONDES, pour qu'une croix rouge
- * oubliée ne piège pas le clic suivant.
- *
- * ⚠ ÉCRIT UNE SEULE FOIS, et c'est le but de cette fonction (05/10/2026) : les
- * deux tableaux de la fiche — ce qu'il apporte, ce que RGD lui apporte — ont la
- * même croix, et deux copies d'un garde-fou n'en restent une que jusqu'au jour
- * où l'on n'en corrige qu'une.
- *
- * ⚠ LES LIBELLÉS SONT DES PARAMÈTRES, et ce n'est pas de la souplesse gratuite :
- * le même garde-fou sert une croix de tableau et un bouton « Supprimer » de
- * formulaire. Avec un libellé en dur, le bouton du formulaire se serait changé
- * en « ✕ » au bout de quatre secondes, sans que rien ne le signale.
- */
-function armerCroix(x, agir, opts = {}) {
-  const repos = opts.repos || '✕';
-  const arme = opts.arme || 'Confirmer';
-  const classe = opts.classe || 'est-arme';
-  const titre = opts.titre || 'Supprimer la ligne';
-  x.onclick = async () => {
-    if (x.dataset.arme !== '1') {
-      x.dataset.arme = '1';
-      x.classList.add(classe);
-      x.textContent = arme;
-      x.title = 'Cliquez à nouveau pour supprimer';
-      clearTimeout(x._t);
-      x._t = setTimeout(() => {
-        x.dataset.arme = '';
-        x.classList.remove(classe);
-        x.textContent = repos;
-        x.title = titre;
-      }, 4000);
-      return;
-    }
-    clearTimeout(x._t);
-    await agir();
-  };
 }
 
 /**

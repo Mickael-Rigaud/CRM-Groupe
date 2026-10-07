@@ -270,3 +270,51 @@ export function bindMultiPick(root, id, items, st, draw, state = null) {
   root.querySelector('[data-pick-reset]')?.addEventListener('click', () => { st.sel = new Set(items.map(i => i.id)); st.q = ''; if (state) { state.q = ''; state.focus = null; } pickSave(st); draw(); });
   root.querySelector('[data-clear-q]')?.addEventListener('click', () => { if (state) { state.q = ''; state.focus = null; } draw(); });
 }
+
+/**
+ * Un bouton qui DEMANDE DEUX CLICS avant d'agir.
+ *
+ * ⚠ PAS DE `confirm()` ICI, ET C'EST UN BUG CORRIGÉ LE 25/09/2026 : « quand je
+ * supprime une ligne ça me ferme la fiche partenaire ». Le `confirm()` du CRM
+ * appelle `closeModal(true)` et REMPLACE la fenêtre courante par la sienne — la
+ * fiche partait donc avant même la réponse, et elle ne revenait pas. Le premier
+ * clic arme (la croix devient rouge et dit « Confirmer »), le second supprime.
+ *
+ * ⚠ ELLE SE DÉSARME SEULE AU BOUT DE QUATRE SECONDES, pour qu'une croix rouge
+ * oubliée ne piège pas le clic suivant.
+ *
+ * ⚠ ELLE VIT DANS `ui.js` DEPUIS LE 07/10/2026, et pas dans l'écran qui l'a vue
+ * naître : la fiche projet en avait besoin à son tour, et `rgd-partenaires.js`
+ * IMPORTE `rgd-fiche.js` — l'appeler de là aurait fermé un cycle. C'est un
+ * garde-fou, et deux copies d'un garde-fou n'en restent une que jusqu'au jour
+ * où l'on n'en corrige qu'une.
+ *
+ * ⚠ LES LIBELLÉS SONT DES PARAMÈTRES, et ce n'est pas de la souplesse gratuite :
+ * le même garde-fou sert une croix de tableau et un bouton « Supprimer » de
+ * formulaire. Avec un libellé en dur, le bouton du formulaire se serait changé
+ * en « ✕ » au bout de quatre secondes, sans que rien ne le signale.
+ */
+export function armerCroix(x, agir, opts = {}) {
+  const repos = opts.repos || '✕';
+  const arme = opts.arme || 'Confirmer';
+  const classe = opts.classe || 'est-arme';
+  const titre = opts.titre || 'Supprimer la ligne';
+  x.onclick = async () => {
+    if (x.dataset.arme !== '1') {
+      x.dataset.arme = '1';
+      x.classList.add(classe);
+      x.textContent = arme;
+      x.title = 'Cliquez à nouveau pour supprimer';
+      clearTimeout(x._t);
+      x._t = setTimeout(() => {
+        x.dataset.arme = '';
+        x.classList.remove(classe);
+        x.textContent = repos;
+        x.title = titre;
+      }, 4000);
+      return;
+    }
+    clearTimeout(x._t);
+    await agir();
+  };
+}
