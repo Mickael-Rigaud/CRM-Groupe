@@ -6177,3 +6177,7 @@ body:has(.msg-bulle-zone.ouverte) .rappels { display: none; }
    artisans qu'on prospecte, seulement des noms à trancher. */
 .st-tete-veille { --st-trait: #2563EB; }
 .st-veille td .s a { white-space: nowrap; }
+/* Prospection : le contact se saisit dans la ligne, deux champs serrés. */
+.rpv-contact input { display: block; width: 190px; padding: 4px 8px; font-size: 12px; margin-bottom: 4px; }
+.rpv-table td input[type="date"] { padding: 4px 6px; font-size: 12px; }
+.rpv-table .vb-retard input { color: var(--red); font-weight: 700; border-color: var(--red); }

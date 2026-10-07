@@ -1,44 +1,59 @@
 // Espace RGD Renova — Prospection (la veille hebdomadaire des sous-traitants)
 //
 // Demandé le 07/10/2026 : « je voudrais le nom de l'écran dans le menu
-// "prospection" pour retrouver cette veille ». La veille avait d'abord été
-// posée en bloc sur l'écran Sous-traitants ; elle a son écran à elle, entrée
-// « Prospection » du groupe « Base de données », et Sous-traitants ne garde
-// qu'une ligne qui y renvoie quand des trouvailles attendent.
+// "prospection" pour retrouver cette veille », puis, le même jour, « reprends
+// cette présentation pour Prospection de RGD Renova » — celle du vivier Experts
+// & AMO de BTP Expertise. Les colonnes sont les siennes, moins celles qui
+// n'ont de sens que pour recruter un expert (cible, expérience, scores,
+// certitude) : Nom · Ville · Dépt · Métier · Entreprise · Contact · Suivi · Relance.
 //
 // Chaque lundi, l'Edge Function `veille-sous-traitants` dépose deux artisans
 // par corps de métier (annuaire public des entreprises, 25 km de Chantilly).
-// « Garder » les fait passer en prospection dans Sous-traitants, « Écarter »
-// les retire pour de bon. Voir `js/data/rgd-st-veille.js`.
+// Le suivi les mène de « À valider » à « Gardé », qui les fait entrer dans
+// Sous-traitants, ou à « Écarté ». Voir `js/data/rgd-st-veille.js`.
+//
+// ⚠ LE CONTACT ET LA RELANCE S'ÉCRIVENT DANS LA LIGNE, AU `change`, SANS
+// REDESSIN : un redessin remplacerait le champ sous le doigt de qui vient d'y
+// taper, et ferait glisser la ligne si le tri porte sur la relance. Seul le
+// suivi redessine — il peut faire sortir la ligne de la vue, c'est voulu.
 //
 // ⚠ DIRECTION SEULE : la table lui est réservée (policies `my_role()`), et
 // l'entrée de menu n'est montrée qu'à elle — voir `cadre` dans rgd-espace.js.
 
 import { scope } from '../data/scope.js';
 import { db } from '../data/db.js';
-import { esc, fmtDate, toast } from '../ui.js';
+import { esc, toast, terms, hit, searchInput, bindSearch, restoreFocus } from '../ui.js';
 import { poserEspace } from './espace.js';
 import { cadre, guard } from './rgd-espace.js';
-import { trouvaillesAValider, garderTrouvaille, ecarterTrouvaille, reprendreTrouvaille } from '../data/rgd-st-veille.js';
+import { SUIVI_VEILLE, ORDRE_SUIVI, changerSuivi, majTrouvaille, nomDirigeant } from '../data/rgd-st-veille.js';
 
 const lienAnnuaire = (t) => `https://annuaire-entreprises.data.gouv.fr/etablissement/${encodeURIComponent(t.siret)}`;
 const lienRecherche = (t) => `https://www.google.com/search?q=${encodeURIComponent(`${t.raison_sociale} ${t.ville || ''}`)}`;
 const km = (t) => (t.distance_km != null ? `${String(t.distance_km).replace('.', ',')} km` : '');
+const qualite = (d) => (String(d || '').match(/\(([^)]*)\)\s*$/) || [])[1] || '';
+const majuscule = (s) => String(s || '').toLowerCase().replace(/(^|[\s'-])\p{L}/gu, (m) => m.toUpperCase());
 
-const celluleEntreprise = (t) => `<td><b>${esc(t.raison_sociale)}</b>
-  ${t.dirigeant ? `<div class="s muted">${esc(t.dirigeant)}</div>` : ''}
-  <div class="s"><a href="${esc(lienAnnuaire(t))}" target="_blank" rel="noopener">Fiche entreprise ↗</a>
-  · <a href="${esc(lienRecherche(t))}" target="_blank" rel="noopener"
-       title="Le téléphone et l’e-mail ne sont pas dans l’annuaire">Chercher ses coordonnées ↗</a></div></td>`;
+// Le jour LOCAL, jamais `toISOString()` (UTC : une relance posée à 23 h serait
+// datée du lendemain).
+const aujourdhui = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+const enRetard = (t) => !!t.prochaine_relance && t.prochaine_relance < aujourdhui();
 
-const celluleProfil = (t) => `<td class="s">${t.est_rge ? '<span class="chip green">RGE</span> ' : ''}${esc(t.effectif || '')}
-  ${t.date_creation ? `<div class="muted">depuis ${esc(t.date_creation.slice(0, 4))}</div>` : ''}</td>`;
+const VUES = [['cours', 'En cours'], ['gardes', 'Gardés'], ['ecartes', 'Écartés']];
+const DANS_LA_VUE = {
+  cours: (t) => !SUIVI_VEILLE[t.etat]?.fin,
+  gardes: (t) => t.etat === 'retenu',
+  ecartes: (t) => t.etat === 'ecarte',
+};
 
 export const rgdProspectionPage = {
   title: () => 'RGD Renova — Prospection',
   render(root) {
     if (guard(root)) return {};
     const coquille = poserEspace(root);
+    const state = { q: '', focus: null, vue: 'cours', metier: '', suivi: '', sort: 'suivi', dir: 1 };
 
     const draw = () => {
       if (!scope.isDirection) {
@@ -46,92 +61,131 @@ export const rgdProspectionPage = {
           '<section class="card"><div class="empty">La veille de prospection est réservée à la direction.</div></section>');
         return;
       }
-      const aValider = trouvaillesAValider();
-      // Ce qui a déjà été tranché, le plus récent d'abord : c'est la mémoire de
-      // la veille, et le seul endroit où reprendre un artisan écarté trop vite.
-      const tranches = db.t('rgd_st_veille').filter(t => t.etat !== 'a_valider')
-        .sort((a, b) => String(b.traite_le || '').localeCompare(String(a.traite_le || '')))
-        .slice(0, 60);
+      const toutes = db.t('rgd_st_veille');
+      const metiers = [...new Set(toutes.map(t => t.corps_metier))].sort((a, b) => a.localeCompare(b, 'fr'));
+      const qt = terms(state.q);
+      const val = (t) => ({
+        nom: nomDirigeant(t.dirigeant) || t.raison_sociale, ville: t.ville || '', metier: t.corps_metier || '',
+        entreprise: t.raison_sociale || '', suivi: ORDRE_SUIVI[t.etat] ?? 99, relance: t.prochaine_relance || '9999',
+      })[state.sort];
+      const lignes = toutes
+        .filter(DANS_LA_VUE[state.vue])
+        .filter(t => (!state.metier || t.corps_metier === state.metier) && (!state.suivi || t.etat === state.suivi))
+        .filter(t => hit([t.raison_sociale, t.dirigeant, t.ville, t.corps_metier, t.telephone, t.email], qt))
+        .sort((a, b) => {
+          const x = val(a), y = val(b);
+          const c = typeof x === 'number' ? x - y : String(x).localeCompare(String(y), 'fr');
+          return (c || (b.score || 0) - (a.score || 0)) * state.dir;
+        });
+      const nb = (k) => toutes.filter(t => t.etat === k).length;
+      const retards = toutes.filter(t => DANS_LA_VUE.cours(t) && enRetard(t)).length;
+
+      const th = (k, label) => `<th data-sort="${k}" style="cursor:pointer;white-space:nowrap">${label}${
+        state.sort === k ? (state.dir > 0 ? ' ▲' : ' ▼') : ''}</th>`;
+      const opt = (liste, cur) => liste.map(([k, l]) => `<option value="${esc(k)}"${cur === k ? ' selected' : ''}>${esc(l)}</option>`).join('');
+      const selectSuivi = (t) => t.etat === 'retenu'
+        ? '<span class="chip green">Gardé</span><div class="small"><a href="#/rgd/soustraitants">Dans Sous-traitants →</a></div>'
+        : `<select class="filter-input" style="padding:4px 8px;min-width:130px;font-size:12px" data-suivi="${esc(t.id)}">
+            ${opt(Object.entries(SUIVI_VEILLE).map(([k, v]) => [k, v.label]), t.etat)}</select>`;
 
       const corps = `
         <section class="st-tete st-tete-veille">
           <div>
-            <h2>Veille sous-traitants <span class="chip accent">◇ ${aValider.length} à valider</span></h2>
+            <h2>Veille sous-traitants <span class="chip accent">◇ ${nb('a_valider')} à valider</span></h2>
             <p class="muted small">Chaque lundi matin, deux artisans par corps de métier, repérés dans l’annuaire
             public des entreprises : en activité, de 1 à 49 salariés, à 25 km de Chantilly au plus, les RGE en
-            premier. « Garder » les fait passer en prospection dans Sous-traitants ; « Écarter » les retire,
-            ils ne seront plus reproposés.</p>
+            premier. Passer le suivi à « Gardé » les fait entrer dans Sous-traitants, en prospection.</p>
           </div>
         </section>
 
-        ${aValider.length ? `<section class="card table-wrap st-veille">
-          <table>
-            <thead><tr><th>Entreprise</th><th>Métier</th><th>Où</th><th>Profil</th><th></th></tr></thead>
-            <tbody>${aValider.map(t => `<tr>
-              ${celluleEntreprise(t)}
-              <td>${esc(t.corps_metier)}</td>
-              <td>${esc(t.ville || '—')}<div class="s muted">${km(t)}</div></td>
-              ${celluleProfil(t)}
-              <td class="num st-actions">
-                <button type="button" class="btn primary sm" data-garder="${esc(t.id)}">Garder</button>
-                <button type="button" class="btn ghost sm" data-ecarter="${esc(t.id)}">Écarter</button>
-              </td>
-            </tr>`).join('')}</tbody>
-          </table>
-        </section>` : `<section class="card"><div class="empty">
-          <b>Rien à valider</b><br>Les prochaines trouvailles arrivent lundi matin.</div></section>`}
+        <div class="card tight">
+          <div class="toolbar">
+            ${searchInput('rpv-q', state, 'Nom, entreprise, ville, métier, téléphone…')}
+            <select id="rpv-metier"><option value="">Tous les métiers</option>${opt(metiers.map(m => [m, m]), state.metier)}</select>
+            <select id="rpv-suivi"><option value="">Tout suivi</option>${opt(Object.entries(SUIVI_VEILLE)
+              .filter(([, v]) => !v.fin).map(([k, v]) => [k, v.label]), state.suivi)}</select>
+            <span class="grow"></span>
+            ${retards ? `<span class="small vb-retard">${retards} relance${retards > 1 ? 's' : ''} due${retards > 1 ? 's' : ''}</span>` : ''}
+            <select id="rpv-vue">${opt(VUES.map(([k, l]) => [k, `${l} (${toutes.filter(DANS_LA_VUE[k]).length})`]), state.vue)}</select>
+          </div>
+        </div>
 
-        ${tranches.length ? `<div class="st-separation"></div>
-        <section class="card table-wrap">
-          <div class="card-head"><h2>Déjà tranchés</h2><span class="grow"></span>
-            <span class="muted small">${tranches.length} dernier${tranches.length > 1 ? 's' : ''}</span></div>
-          <table>
-            <thead><tr><th>Entreprise</th><th>Métier</th><th>Où</th><th>Décision</th><th></th></tr></thead>
-            <tbody>${tranches.map(t => `<tr class="${t.etat === 'ecarte' ? 'muted' : ''}">
-              ${celluleEntreprise(t)}
-              <td>${esc(t.corps_metier)}</td>
-              <td>${esc(t.ville || '—')}<div class="s muted">${km(t)}</div></td>
-              <td>${t.etat === 'retenu' ? '<span class="chip green">Gardé</span>' : '<span class="chip">Écarté</span>'}
-                ${t.traite_le ? `<div class="s muted">le ${esc(fmtDate(t.traite_le))}</div>` : ''}</td>
-              <td class="num st-actions">${t.etat === 'retenu'
-                ? '<a class="btn ghost sm" href="#/rgd/soustraitants">Voir dans Sous-traitants</a>'
-                : `<button type="button" class="btn ghost sm" data-reprendre="${esc(t.id)}"
-                     title="Le remettre parmi les trouvailles à valider">Reprendre</button>`}</td>
-            </tr>`).join('')}</tbody>
-          </table>
-        </section>` : ''}`;
+        <div class="card"><div class="card-head"><h2>${lignes.length} artisan${lignes.length > 1 ? 's' : ''}</h2>
+          <span class="muted small">Le suivi, le contact et la relance se changent dans la liste.</span></div>
+          <div class="table-wrap"><table class="vb-table rpv-table"><thead><tr>
+            ${th('nom', 'Nom')}${th('ville', 'Ville')}<th>Dépt</th>${th('metier', 'Métier')}${th('entreprise', 'Entreprise')}<th>Contact</th>${th('suivi', 'Suivi')}${th('relance', 'Relance')}
+          </tr></thead><tbody>
+            ${lignes.map(t => {
+              const nom = nomDirigeant(t.dirigeant);
+              return `<tr class="${t.etat === 'ecarte' ? 'muted' : ''}">
+              <td><b>${nom ? esc(majuscule(nom)) : '<span class="muted">—</span>'}</b>
+                ${qualite(t.dirigeant) ? `<div class="small muted">${esc(qualite(t.dirigeant))}</div>` : ''}</td>
+              <td>${esc(majuscule(t.ville || ''))}<div class="small muted">${km(t)}</div></td>
+              <td>${esc(String(t.code_postal || '').slice(0, 2))}</td>
+              <td class="small">${esc(t.corps_metier || '')}</td>
+              <td class="small"><b>${esc(t.raison_sociale)}</b>
+                <div class="muted">${t.est_rge ? '<span class="chip green">RGE</span> ' : ''}${esc(t.effectif || '')}${
+                  t.date_creation ? ` · depuis ${esc(t.date_creation.slice(0, 4))}` : ''}</div>
+                <div><a href="${esc(lienAnnuaire(t))}" target="_blank" rel="noopener">Fiche entreprise ↗</a></div></td>
+              <td class="small rpv-contact">
+                <input type="tel" class="filter-input" data-champ="telephone" data-id="${esc(t.id)}"
+                  value="${esc(t.telephone || '')}" placeholder="Téléphone">
+                <input type="email" class="filter-input" data-champ="email" data-id="${esc(t.id)}"
+                  value="${esc(t.email || '')}" placeholder="E-mail">
+                ${!t.telephone && !t.email ? `<a href="${esc(lienRecherche(t))}" target="_blank" rel="noopener"
+                  title="L’annuaire ne donne ni téléphone ni e-mail">Chercher ses coordonnées ↗</a>` : ''}</td>
+              <td>${selectSuivi(t)}</td>
+              <td class="small nowrap${enRetard(t) ? ' vb-retard' : ''}">
+                <input type="date" class="filter-input" data-champ="prochaine_relance" data-id="${esc(t.id)}"
+                  value="${esc(t.prochaine_relance || '')}"></td>
+            </tr>`;
+            }).join('') || '<tr><td colspan="8" class="empty">Aucun artisan ne correspond à ces filtres.</td></tr>'}
+          </tbody></table></div>
+        </div>`;
 
       root.innerHTML = cadre('#/rgd/prospection', 'Prospection', corps);
+      bindSearch(root, 'rpv-q', state, draw);
+      restoreFocus(root, state);
+
+      const sel = (id, cle) => { const s = root.querySelector(id); if (s) s.onchange = () => { state[cle] = s.value; draw(); }; };
+      sel('#rpv-metier', 'metier'); sel('#rpv-suivi', 'suivi'); sel('#rpv-vue', 'vue');
+      root.querySelectorAll('[data-sort]').forEach(h => h.onclick = () => {
+        if (state.sort === h.dataset.sort) state.dir *= -1;
+        else { state.sort = h.dataset.sort; state.dir = 1; }
+        draw();
+      });
 
       const parId = (id) => db.t('rgd_st_veille').find(t => t.id === id);
-      root.querySelectorAll('[data-garder]').forEach(b => b.onclick = async () => {
-        const t = parId(b.dataset.garder);
+      root.querySelectorAll('[data-suivi]').forEach(s => s.onchange = async () => {
+        const t = parId(s.dataset.suivi);
         if (!t) return;
-        b.disabled = true;
-        const r = await garderTrouvaille(t);
-        if (!r.ok) { b.disabled = false; toast(`Non enregistré — ${r.motif}`, 'err'); return; }
-        toast(`${t.raison_sociale} rejoint les sous-traitants en prospection`);
+        s.disabled = true;
+        const r = await changerSuivi(t, s.value);
+        if (!r.ok) { toast(`Non enregistré — ${r.motif}`, 'err'); draw(); return; }
+        if (s.value === 'retenu') toast(`${t.raison_sociale} rejoint les sous-traitants en prospection`);
+        else if (s.value === 'ecarte') toast(`${t.raison_sociale} est écarté — la veille ne le reproposera pas`);
         draw();
       });
-      root.querySelectorAll('[data-ecarter]').forEach(b => b.onclick = async () => {
-        const t = parId(b.dataset.ecarter);
+      root.querySelectorAll('[data-champ]').forEach(i => i.onchange = async () => {
+        const t = parId(i.dataset.id);
         if (!t) return;
-        const r = await ecarterTrouvaille(t);
+        const r = await majTrouvaille(t, { [i.dataset.champ]: i.value });
         if (!r.ok) { toast(`Non enregistré — ${r.motif}`, 'err'); return; }
-        toast(`${t.raison_sociale} est écarté — la veille ne le reproposera pas`);
-        draw();
-      });
-      root.querySelectorAll('[data-reprendre]').forEach(b => b.onclick = async () => {
-        const t = parId(b.dataset.reprendre);
-        if (!t) return;
-        const r = await reprendreTrouvaille(t);
-        if (!r.ok) { toast(`Non enregistré — ${r.motif}`, 'err'); return; }
-        toast(`${t.raison_sociale} est de nouveau à valider`);
-        draw();
+        if (i.dataset.champ === 'prochaine_relance') {
+          i.closest('td').classList.toggle('vb-retard', enRetard({ prochaine_relance: i.value }));
+        }
       });
     };
 
     draw();
-    return { refresh: draw, destroy() { coquille.retirer(); } };
+    // ⚠ `db.update` émet, et l'émission redessine la page : sans ce garde, passer
+    // du téléphone à l'e-mail au clavier ferait disparaître le champ qu'on
+    // vient d'atteindre. On attend que la saisie soit finie.
+    const refresh = () => {
+      const ici = document.activeElement;
+      if (ici && root.contains(ici) && ici.matches('[data-champ]')) return;
+      draw();
+    };
+    return { refresh, destroy() { coquille.retirer(); } };
   },
 };

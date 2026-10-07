@@ -523,7 +523,7 @@ export const SEED = {
       corps_metier: 'Électricité', naf: '43.21A', adresse: '3 rue des Tilleuls 60300 SENLIS',
       code_postal: '60300', ville: 'SENLIS', distance_km: 8.4, dirigeant: 'Paul MARTIN (Gérant)',
       effectif: '3 à 5 salariés', date_creation: '2012-03-01', est_rge: true, score: 58,
-      lot: '2026-W41', etat: 'a_valider' },
+      lot: '2026-W41', etat: 'contacte', telephone: '03 44 00 00 00', prochaine_relance: '2026-10-01' },
     { id: 'v2', siret: '00000000000022', siren: '000000001', raison_sociale: 'CARRELAGES DE LA NONETTE (démo)',
       corps_metier: 'Carrelage / revêtements', naf: '43.33Z', adresse: '12 avenue du Bois 60260 LAMORLAYE',
       code_postal: '60260', ville: 'LAMORLAYE', distance_km: 4.1, dirigeant: 'Sofia DIAS (Présidente de SAS)',
