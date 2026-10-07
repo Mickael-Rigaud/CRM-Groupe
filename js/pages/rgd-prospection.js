@@ -29,6 +29,9 @@ import { SUIVI_VEILLE, ORDRE_SUIVI, changerSuivi, majTrouvaille, nomDirigeant } 
 
 const lienAnnuaire = (t) => `https://annuaire-entreprises.data.gouv.fr/etablissement/${encodeURIComponent(t.siret)}`;
 const lienRecherche = (t) => `https://www.google.com/search?q=${encodeURIComponent(`${t.raison_sociale} ${t.ville || ''}`)}`;
+// Le site tel que la liste RGE l'écrit, parfois sans « http » : sans lui, le
+// lien serait lu comme une adresse relative au CRM.
+const lienSite = (u) => (/^https?:\/\//i.test(u) ? u : `https://${u}`);
 const km = (t) => (t.distance_km != null ? `${String(t.distance_km).replace('.', ',')} km` : '');
 const qualite = (d) => (String(d || '').match(/\(([^)]*)\)\s*$/) || [])[1] || '';
 const majuscule = (s) => String(s || '').toLowerCase().replace(/(^|[\s'-])\p{L}/gu, (m) => m.toUpperCase());
@@ -92,9 +95,10 @@ export const rgdProspectionPage = {
         <section class="st-tete st-tete-veille">
           <div>
             <h2>Veille sous-traitants <span class="chip accent">◇ ${nb('a_valider')} à valider</span></h2>
-            <p class="muted small">Chaque lundi matin, deux artisans par corps de métier, repérés dans l’annuaire
-            public des entreprises : en activité, de 1 à 49 salariés, à 25 km de Chantilly au plus, les RGE en
-            premier. Passer le suivi à « Gardé » les fait entrer dans Sous-traitants, en prospection.</p>
+            <p class="muted small">Chaque lundi matin, vingt artisans à 25 km de Chantilly au plus, pris dans la
+            liste des entreprises RGE de l’ADEME : <b>tous ont un téléphone ou un e-mail</b>. Deux par corps de
+            métier quand il y en a ; plâtrerie, carrelage et terrassement y sont rares. Passer le suivi à
+            « Gardé » les fait entrer dans Sous-traitants, en prospection.</p>
           </div>
         </section>
 
@@ -126,7 +130,8 @@ export const rgdProspectionPage = {
               <td class="small"><b>${esc(t.raison_sociale)}</b>
                 <div class="muted">${t.est_rge ? '<span class="chip green">RGE</span> ' : ''}${esc(t.effectif || '')}${
                   t.date_creation ? ` · depuis ${esc(t.date_creation.slice(0, 4))}` : ''}</div>
-                <div><a href="${esc(lienAnnuaire(t))}" target="_blank" rel="noopener">Fiche entreprise ↗</a></div></td>
+                <div><a href="${esc(lienAnnuaire(t))}" target="_blank" rel="noopener">Fiche entreprise ↗</a>${
+                  t.site_internet ? ` · <a href="${esc(lienSite(t.site_internet))}" target="_blank" rel="noopener">Site ↗</a>` : ''}</div></td>
               <td class="small rpv-contact">
                 <input type="tel" class="filter-input" data-champ="telephone" data-id="${esc(t.id)}"
                   value="${esc(t.telephone || '')}" placeholder="Téléphone">
