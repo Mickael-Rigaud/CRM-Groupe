@@ -27,12 +27,18 @@ export const ONGLETS = [
     { hash: '#/rgd/partenaires', label: 'Partenaires' },
     { hash: '#/rgd/soustraitants', label: 'Sous-traitants' },
   ] },
+  // ⚠ « Travaux » RESTE UN GROUPE BIEN QU'IL N'AIT PLUS QU'UNE LIGNE, et c'est
+  // une décision d'Élodie du 07/10/2026 — **ne pas le dissoudre**. Le Pipeline
+  // est descendu dans « Autres » le même jour ; j'ai proposé de remonter
+  // « Réalisations » au premier niveau, au motif qu'un intitulé coiffant un
+  // seul écran prend une ligne pour ne rien apprendre. Réponse : « non ne
+  // dissous pas le groupe, j'aime quand c'est bien rangé ».
+  //
+  // ⚠ CE N'EST PAS UN OUBLI À RATTRAPER : le rangement se lit, il ne se compte
+  // pas. L'intitulé dit de quoi relève l'écran, et il tiendra la place d'un
+  // second écran de travaux le jour où il y en aura un. Un groupe à une ligne
+  // n'est pas une anomalie ici.
   { label: 'Travaux', sous: [
-    // ⚠ « Chantiers » S'APPELLE « PIPELINE » DEPUIS LE 25/09/2026, demandé par
-    // Mickael. L'adresse `#/rgd/chantiers` ne change PAS : elle est écrite dans
-    // des liens déjà partis et dans les deux CLAUDE.md. Un nom d'écran se
-    // renomme, une adresse se casse.
-    { hash: '#/rgd/chantiers', label: 'Pipeline' },
     { hash: '#/rgd/realisations', label: 'Réalisations' },
   ] },
   { hash: '#/rgd/agenda', label: 'Agenda' },
@@ -68,6 +74,22 @@ export const ONGLETS = [
   // coïncidence il faudrait une clé stable à part ; à retenir avant de renommer
   // un groupe dont le défaut serait « ouvert ».
   { label: 'Autres', bas: true, pliable: true, sous: [
+    // ⚠ « Chantiers » S'APPELLE « PIPELINE » DEPUIS LE 25/09/2026, demandé par
+    // Mickael. L'adresse `#/rgd/chantiers` ne change PAS : elle est écrite dans
+    // des liens déjà partis et dans les deux CLAUDE.md. Un nom d'écran se
+    // renomme, une adresse se casse.
+    //
+    // ⚠ IL EST DESCENDU ICI LE 07/10/2026, demandé par Élodie. Conséquence à
+    // connaître avant de s'étonner : ce groupe est REPLIÉ PAR DÉFAUT, donc le
+    // Pipeline est désormais derrière un clic. C'est le propre de ce bloc —
+    // « cinq entrées qu'on n'ouvre pas tous les jours » — et c'est bien ce qui
+    // a été demandé.
+    //
+    // ⚠ IL EST EN TÊTE ET NON À LA SUITE : les quatre autres se suivent dans
+    // l'ordre de l'argent (un devis devient une facture, puis un encaissement,
+    // et Réglages corrige le CA). Le Pipeline ne fait pas partie de cette
+    // chaîne ; l'y intercaler la casserait, le poser devant la laisse intacte.
+    { hash: '#/rgd/chantiers', label: 'Pipeline' },
     { hash: '#/rgd/devis', label: 'Devis' },
     { hash: '#/rgd/paiements', label: 'Encaissements' },
     { hash: '#/rgd/costructor', label: 'Costructor' },
