@@ -391,6 +391,79 @@ export const scope = {
 
   candidatsRgd() { return this.users().filter(u => u.role === 'direction' || (u.activities || []).includes('rgd')); },
 
+  // ---------- La même vue, pour BTP Expertise (07/10/2026, demandé par
+  // Élodie : « une vue du chargé d'affaires qui appartient à la structure,
+  // même fonctionnement que RGD Renova »).
+  //
+  // ⚠ LE POINT DE PASSAGE N'EST PAS LE MÊME QUE CHEZ RGD, ET C'EST LE MODÈLE
+  // QUI LE DIT. RGD possède ses propres tables (`rgd_clients`,
+  // `rgd_demandes`…), d'où `RGD_PORTEFEUILLE` et un filtre table par table.
+  // BTP n'en a aucune : son portefeuille, ce sont les AFFAIRES de `deals`
+  // dont l'`activity` vaut `btp`. Un seul critère — `owner_id` — et une seule
+  // porte côté écran, `deals()` dans `btp.js`, que lisent le tableau de bord,
+  // les deux pipelines, la charge, le CA et la pile des leads.
+  //
+  // ⚠ CE N'EST PAS UNE PROTECTION, c'est un cloisonnement d'affichage : la
+  // policy rend les mêmes lignes qu'avant à la direction. Ce qui change, c'est
+  // la POPULATION REGARDÉE, jamais les droits ni la signature de ce qu'on
+  // écrit — même arbitrage que côté RGD.
+  CLE_VUE_BTP: 'crm_btp_vue_charge',
+
+  // Trois valeurs, comme pour RGD : `'direction'` (le défaut), la chaîne vide
+  // pour « toute l'équipe », ou l'identifiant d'une personne.
+  // ⚠ « SANS RESPONSABLE » VEUT DIRE « À LA DIRECTION », et ici ce n'est pas une
+  // commodité : `creer_prospect_btp` et `intake_lead` créent l'affaire SANS
+  // `owner_id`, exprès (arbitré le 18/09/2026, la direction distribue à la
+  // main). Un lead neuf n'appartient donc à personne, et il doit rester sous
+  // les yeux de ceux qui le distribuent.
+  get vueBtp() {
+    if (!this.isDirection) return null;
+    try {
+      const v = localStorage.getItem(this.CLE_VUE_BTP);
+      if (v === null) return 'direction';
+      if (v && this.estDeLaDirection(v)) return 'direction';
+      return v || null;
+    } catch { return 'direction'; }
+  },
+
+  poserVueBtp(id) {
+    try {
+      // Même nuance que `poserVueRgd` : la chaîne vide est un CHOIX (« toute
+      // l'équipe »), seul `null` efface le réglage. Les confondre rendrait ce
+      // choix impossible à garder — il reviendrait au défaut au redessin.
+      if (id == null) localStorage.removeItem(this.CLE_VUE_BTP);
+      else localStorage.setItem(this.CLE_VUE_BTP, id);
+    } catch { /* navigation privée : la vue ne se mémorise pas, elle marche */ }
+  },
+
+  // La vue appliquée à une liste d'affaires BTP.
+  // ⚠ ELLE NE RÉUTILISE PAS `canSeeDeal` : celle-ci répond « oui » d'emblée à la
+  // direction, donc elle ne filtrerait rien — or c'est précisément la
+  // direction qui regarde. Même raison que `rgdVoitLignePour`.
+  btpVue(affaires) {
+    const vue = this.vueBtp;
+    if (!vue) return affaires;
+    if (vue === 'direction') {
+      return affaires.filter(d => !d.owner_id || this.estDeLaDirection(d.owner_id));
+    }
+    return affaires.filter(d => d.owner_id === vue);
+  },
+
+  // Ceux de la direction qui PORTENT des affaires BTP : c'est leur nom que
+  // prend l'entrée « direction » du sélecteur. ⚠ L'ENTRÉE GARDE LA VALEUR
+  // `direction`, PAS LEUR IDENTIFIANT : les leads neufs arrivent sans
+  // responsable, et une vue « les affaires de Mickael » au sens strict les
+  // ferait disparaître de l'écran où on les distribue.
+  producteursDirectionBtp() {
+    const porteurs = new Set(db.t('deals')
+      .filter(d => d.activity === 'btp').map(d => d.owner_id).filter(Boolean));
+    return this.users().filter(u => u.role === 'direction' && porteurs.has(u.id));
+  },
+
+  chargesBtp() {
+    return this.users().filter(u => u.role !== 'direction' && (u.activities || []).includes('btp'));
+  },
+
   users() { return db.t('profiles').filter(u => u.active !== false); },
   // Ceux a qui l'on peut ecrire. `users()` reste entier a cote : confier une
   // tache ou nommer un responsable d'affaire n'est pas cloisonne.

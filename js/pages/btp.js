@@ -42,7 +42,16 @@ import { corbeilleBtpEnAttente } from '../data/btp-corbeille.js';
 const KEY = 'btp';
 const act = () => ACTIVITIES[KEY];
 const isBtp = (row) => !!row && (row.activities || []).includes(KEY);
-const deals = () => scope.deals().filter(d => d.activity === KEY);
+// ⚠ DEUX LISTES, ET LA DIFFÉRENCE COMPTE. `dealsTous` est le portefeuille du
+// cabinet tel que les droits le rendent ; `deals` est ce que la VUE choisie
+// laisse voir. Tout l'espace lit la seconde — tableau de bord, pipelines,
+// charge, CA, pile des leads — donc filtrer ici les sert tous sans en
+// retoucher un seul, et aucun écran ne peut « oublier » de suivre. La
+// première ne sert qu'à savoir si une fiche appartient à quelqu'un : sans
+// elle, une fiche dont l'affaire est hors vue se lirait comme une fiche sans
+// affaire, donc comme un contact de l'annuaire commun.
+const dealsTous = () => scope.deals().filter(d => d.activity === KEY);
+const deals = () => scope.btpVue(dealsTous());
 const activities = () => {
   const ids = new Set(deals().map(d => d.id));
   return scope.activities().filter(a => (a.deal_id && ids.has(a.deal_id))
@@ -125,10 +134,71 @@ const ONGLETS = [
 // menu là-bas aurait donné deux listes à tenir, et la seconde aurait cessé de
 // suivre au premier ajout — le genre d'écart qui ne se voit que le jour où un
 // écran n'allume plus rien dans la colonne.
+// ⚠ LE SÉLECTEUR DE VUE ET SON BANDEAU (07/10/2026, demandés « même
+// fonctionnement que RGD Renova »). Ils vivent dans `cadreBtp`, donc sur TOUS
+// les écrans du cabinet — celui-ci est aussi appelé par `btp-pages.js`.
+//
+// ⚠ CE N'EST PAS SE CONNECTER À SA PLACE, et la différence n'est pas théorique :
+// l'usurpation ferait signer les écritures par quelqu'un d'autre et
+// l'historique cesserait de dire qui a fait quoi. Seule la population
+// regardée change ; les droits, les boutons et la signature restent ceux de
+// la direction, et le bandeau le dit.
+const selecteurVueBtp = () => {
+  if (!scope.isDirection) return '';
+  const vue = scope.vueBtp;
+  const nomDirection = scope.producteursDirectionBtp()
+    .map(u => u.full_name || u.email).filter(Boolean).join(' · ') || 'La direction';
+  return `<label class="esp-vue${vue !== 'direction' ? ' est-filtree' : ''}">
+    <span>Vue</span>
+    <select id="btp-vue-charge" aria-label="Regarder l’espace comme">
+      <option value=""${!vue ? ' selected' : ''}>Toute l’équipe</option>
+      <option value="direction"${vue === 'direction' ? ' selected' : ''}>${esc(nomDirection)}</option>
+      ${scope.chargesBtp().map(u => `<option value="${esc(u.id)}"${vue === u.id ? ' selected' : ''}>${
+        esc(u.full_name || u.email || 'sans nom')}</option>`).join('')}
+    </select></label>`;
+};
+
+// ⚠ RIEN À DIRE SUR LA VUE PAR DÉFAUT : un bandeau qui énonce l'état normal à
+// chaque ouverture cesse d'être lu, et il prend la place de ce qu'on vient
+// voir. Même arbitrage que côté RGD le 06/10/2026.
+const bandeauVueBtp = () => {
+  const vue = scope.vueBtp;
+  if (!vue || vue === 'direction') return '';
+  const u = db.byId('profiles', vue);
+  return `<div class="alert esp-vue-bandeau"><b>👁</b><div>
+    <b>Vous regardez l’espace comme ${esc(u?.full_name || 'ce membre de l’équipe')}.</b>
+    Les missions, les leads et les fiches affichés sont les siens, et les
+    chiffres — CA, charge, objectifs — sont calculés sur eux seuls. Les fiches
+    que personne ne porte, partenaires et courtiers compris, restent communes.
+    Vos droits ne changent pas : ce que vous écrivez reste signé de votre nom.
+    </div></div>`;
+};
+
 export const cadreBtp = (actif, titre, corps) => coquilleEspace({
-  actif, titre, corps,
+  actif, titre, corps: bandeauVueBtp() + corps,
+  commandes: selecteurVueBtp(),
   cle: KEY, marque: act().label, baseline: 'Expertise et conseil bâtiment', onglets: ONGLETS,
 });
+
+// ⚠ L'ÉCOUTEUR EST POSÉ UNE SEULE FOIS, SUR LE DOCUMENT, et pas sur le champ :
+// l'en-tête est réécrit à chaque `draw()` d'un écran, donc un gestionnaire
+// attaché au `<select>` disparaîtrait au premier redessin — et le sélecteur
+// cesserait de répondre sans que rien ne le dise.
+// ⚠ ON RE-ROUTE, ON NE RECHARGE PAS : `route()` écoute `hashchange`, et un
+// `location.reload()` reprendrait toutes les données pour un changement qui ne
+// touche qu'un filtre d'affichage.
+let vueBtpEcoutee = false;
+function ecouterLaVueBtp() {
+  if (vueBtpEcoutee) return;
+  vueBtpEcoutee = true;
+  document.addEventListener('change', (e) => {
+    const sel = e.target.closest('#btp-vue-charge');
+    if (!sel) return;
+    scope.poserVueBtp(sel.value);
+    window.dispatchEvent(new Event('hashchange'));
+  });
+}
+ecouterLaVueBtp();
 const cadre = cadreBtp;
 const poser = poserEspace;
 
@@ -2039,7 +2109,34 @@ export const btpBasePage = {
       const ts = terms(state.q);
       // Les archives ne se mélangent à rien : elles ont leur onglet, et elles
       // sortent de tous les autres. C'est la seule raison d'être de l'archivage.
-      const tousContacts = scope.contacts().filter(isBtp);
+      // ⚠ UNE FICHE SUIT SES AFFAIRES, ET UNE FICHE SANS AFFAIRE RESTE À TOUS.
+      // C'est la règle posée côté RGD : ce qui n'appartient à personne ne se
+      // filtre pas. Un partenaire, un courtier, un prospect pas encore
+      // qualifié n'ont pas de dossier à eux — ce sont les carnets d'adresses du
+      // cabinet, et les cacher dans la vue d'un chargé d'affaires reviendrait à
+      // lui retirer l'annuaire au lieu de lui montrer son portefeuille.
+      // ⚠ LES AFFAIRES SE COMPTENT UNE FOIS, pas une fois par ligne : la base
+      // affiche jusqu'à plusieurs centaines de fiches, et un `filter` imbriqué
+      // dans un `filter` les reparcourrait toutes à chaque ligne.
+      const vuesIds = new Set(deals().map(d => d.id));
+      const porteurs = new Map();
+      for (const d of dealsTous()) {
+        if (!d.contact_id) continue;
+        if (!porteurs.has(d.contact_id)) porteurs.set(d.contact_id, false);
+        if (vuesIds.has(d.id)) porteurs.set(d.contact_id, true);
+      }
+      // `undefined` veut dire « aucune affaire », ce qui n'est PAS « aucune
+      // affaire visible » : la première reste à tout le monde, la seconde non.
+      const dansLaVue = (row) => porteurs.get(row.id) !== false;
+      // ⚠ LES ORGANISATIONS NE SE FILTRENT PAS, ET C'EST UNE CORRECTION DE
+      // L'ESSAI : elles ne s'affichent que sous « Partenaires » et
+      // « Courtiers », c'est-à-dire l'annuaire du cabinet. En les faisant
+      // suivre leurs affaires, un partenaire qui porte par ailleurs une
+      // mission disparaîssait de la vue d'un chargé d'affaires — mesuré en
+      // démo, 3 partenaires contre 2. On lui retirait un carnet d'adresses
+      // pour lui montrer un portefeuille.
+      const tousContacts = scope.contacts().filter(isBtp)
+        .filter(dansLaVue);
       const toutesOrgs = scope.orgs().filter(isBtp);
       const contacts = tousContacts.filter(estActive);
       const orgs = toutesOrgs.filter(estActive);
