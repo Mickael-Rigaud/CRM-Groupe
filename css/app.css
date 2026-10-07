@@ -6177,7 +6177,94 @@ body:has(.msg-bulle-zone.ouverte) .rappels { display: none; }
    artisans qu'on prospecte, seulement des noms à trancher. */
 .st-tete-veille { --st-trait: #2563EB; }
 .st-veille td .s a { white-space: nowrap; }
-/* Prospection : le contact se saisit dans la ligne, deux champs serrés. */
-.rpv-contact input { display: block; width: 190px; padding: 4px 8px; font-size: 12px; margin-bottom: 4px; }
-.rpv-table td input[type="date"] { padding: 4px 6px; font-size: 12px; }
-.rpv-table .vb-retard input { color: var(--red); font-weight: 700; border-color: var(--red); }
+
+/* ---------- Prospection RGD (veille des sous-traitants), refaite le 07/10/2026 :
+   « plus moderne et dynamique », une carte par corps de métier. Chaque carte
+   porte sa teinte en `--m` ; tout le reste en dérive par color-mix, donc une
+   seule valeur par métier (METIERS dans rgd-prospection.js). */
+.rpv-hero { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; margin-bottom: 14px;
+  padding: 20px 22px; border-radius: var(--radius); border: 1px solid var(--line);
+  background: linear-gradient(120deg, color-mix(in srgb, #2563EB 10%, var(--card)), var(--card) 60%);
+  box-shadow: var(--shadow); }
+.rpv-hero > div:first-child { flex: 1; min-width: 260px; }
+.rpv-hero h2 { margin: 0 0 4px; font-size: 20px; }
+.rpv-hero p { margin: 0; color: var(--muted); font-size: 13px; max-width: 60ch; }
+.rpv-kpis { display: flex; gap: 8px; flex-wrap: wrap; }
+.rpv-kpi { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 96px;
+  padding: 10px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--card);
+  cursor: pointer; font-family: inherit; color: var(--text); transition: transform .15s, box-shadow .15s, border-color .15s; }
+.rpv-kpi b { font-size: 22px; font-family: var(--font-display); line-height: 1; color: var(--k, var(--text)); }
+.rpv-kpi span { font-size: 11.5px; color: var(--muted); font-weight: 600; }
+.rpv-kpi:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
+.rpv-kpi.actif { border-color: var(--k, var(--accent)); background: color-mix(in srgb, var(--k, var(--accent)) 10%, var(--card)); }
+.rpv-kpi-a_valider { --k: #2563EB; }
+.rpv-kpi-a_contacter { --k: #C08400; }
+.rpv-kpi-contacte { --k: #7C3AED; }
+.rpv-kpi-interesse { --k: var(--green); }
+.rpv-kpi-retard { --k: var(--red); }
+
+.rpv-barre { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
+.rpv-select { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); font-weight: 600; }
+.rpv-onglets { display: inline-flex; padding: 3px; border-radius: 10px; background: var(--card-2); border: 1px solid var(--line); }
+.rpv-onglets button { border: 0; background: transparent; padding: 6px 12px; border-radius: 8px; cursor: pointer;
+  font-family: inherit; font-size: 13px; font-weight: 600; color: var(--muted); transition: background .15s, color .15s; }
+.rpv-onglets button span { font-size: 11px; opacity: .7; margin-left: 3px; }
+.rpv-onglets button.actif { background: var(--card); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+
+.rpv-carte { border-radius: var(--radius); border: 1px solid var(--line); background: var(--card);
+  box-shadow: var(--shadow); margin-bottom: 16px; overflow: hidden; }
+.rpv-carte-tete { display: flex; align-items: center; gap: 10px; padding: 12px 18px;
+  background: color-mix(in srgb, var(--m) 9%, var(--card));
+  border-bottom: 1px solid color-mix(in srgb, var(--m) 22%, var(--line)); border-left: 4px solid var(--m); }
+.rpv-carte-tete h2 { margin: 0; font-size: 16px; flex: 1; color: color-mix(in srgb, var(--m) 70%, var(--text)); }
+.rpv-carte-ico { width: 34px; height: 34px; display: grid; place-items: center; font-size: 18px; border-radius: 10px;
+  background: color-mix(in srgb, var(--m) 16%, var(--card)); }
+.rpv-carte-nb { font-size: 12px; font-weight: 600; color: var(--muted); }
+.rpv-carte-new { font-size: 11.5px; font-weight: 700; color: #fff; background: var(--m); padding: 3px 9px; border-radius: 20px; }
+.rpv-carte .table-wrap { padding: 0 6px 6px; }
+.rpv-table { table-layout: fixed; width: 100%; }
+.rpv-table th { font-size: 10.5px; }
+.rpv-table td { vertical-align: middle; padding-top: 10px; padding-bottom: 10px; }
+.rpv-table tbody tr { transition: background .15s; animation: rpv-entree .35s ease both; animation-delay: calc(var(--i, 0) * 40ms); }
+.rpv-table tbody tr:hover { background: color-mix(in srgb, var(--m) 5%, var(--card)); }
+.rpv-table tbody tr.est-ecarte { opacity: .55; }
+@keyframes rpv-entree { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .rpv-table tbody tr { animation: none; } .rpv-kpi:hover { transform: none; } }
+
+.rpv-qui { display: flex; align-items: center; gap: 10px; }
+.rpv-avatar { flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center;
+  font-size: 12.5px; font-weight: 700; color: #fff; background: var(--m); }
+.rpv-ent { display: block; font-size: 13px; }
+.rpv-puces { display: flex; gap: 4px; flex-wrap: wrap; margin: 4px 0; }
+.rpv-puce { font-size: 10.5px; font-weight: 600; padding: 2px 7px; border-radius: 20px; background: var(--card-2); color: var(--muted); }
+.rpv-rge { background: color-mix(in srgb, var(--green) 15%, var(--card)); color: var(--green); }
+.rpv-liens { display: flex; gap: 10px; font-size: 12px; }
+.rpv-km { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.rpv-dept { display: inline-block; font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 8px; background: var(--card-2); }
+
+/* ⚠ PAS DE `display: flex` SUR LA CELLULE ELLE-MÊME : une `td` en flex sort du
+   modèle de tableau et casse la bordure de la ligne. Le flex est sur les champs. */
+.rpv-contact .rpv-champ + .rpv-champ { margin-top: 4px; }
+.rpv-champ { display: flex; align-items: center; gap: 6px; border: 1px solid transparent; border-radius: 8px;
+  padding: 2px 6px; transition: border-color .15s, background .15s; }
+.rpv-champ:hover, .rpv-champ:focus-within { border-color: var(--line); background: var(--card-2); }
+.rpv-ico { width: 16px; text-align: center; color: var(--muted); font-size: 12px; }
+.rpv-champ input { flex: 1; min-width: 0; border: 0; background: transparent; padding: 3px 0; font-family: inherit;
+  font-size: 12.5px; color: var(--text); outline: none; }
+.rpv-agir { flex: none; text-decoration: none; font-size: 13px; padding: 2px 6px; border-radius: 6px;
+  background: color-mix(in srgb, var(--m) 12%, var(--card)); }
+.rpv-agir:hover { background: color-mix(in srgb, var(--m) 24%, var(--card)); }
+
+.rpv-statut { font-family: inherit; font-size: 12px; font-weight: 700; padding: 5px 10px; border-radius: 20px;
+  border: 1px solid transparent; cursor: pointer; max-width: 100%; }
+.rpv-statut.st-a_valider { background: color-mix(in srgb, #2563EB 12%, var(--card)); color: #2563EB; }
+.rpv-statut.st-a_contacter { background: color-mix(in srgb, #E9A100 15%, var(--card)); color: #A16207; }
+.rpv-statut.st-contacte { background: color-mix(in srgb, #7C3AED 12%, var(--card)); color: #7C3AED; }
+.rpv-statut.st-interesse, .rpv-statut.st-retenu { background: color-mix(in srgb, var(--green) 14%, var(--card)); color: var(--green); }
+.rpv-statut.st-ecarte { background: var(--card-2); color: var(--muted); }
+span.rpv-statut { display: inline-block; margin-bottom: 4px; }
+
+.rpv-date { width: 100%; font-family: inherit; font-size: 12px; padding: 4px 6px; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--card); color: var(--text); }
+.rpv-retard .rpv-date { border-color: var(--red); color: var(--red); font-weight: 700; }
+.rpv-alerte { font-size: 11px; font-weight: 700; color: var(--red); margin-top: 3px; }
