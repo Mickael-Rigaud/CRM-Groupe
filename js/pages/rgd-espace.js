@@ -115,15 +115,18 @@ const vueChoisie = () => (scope.isDirection ? scope.vueRgd : null);
 const selecteurVue = () => {
   if (!scope.isDirection) return '';
   const vue = scope.vueRgd;
-  const gens = scope.candidatsRgd();
-  // ⚠ L'ORDRE DES ENTRÉES EST CELUI DE L'USAGE : la vue de travail d'abord,
-  // puis la vue d'ensemble, puis les personnes. « Toute l'équipe » en tête
-  // ferait de l'exception le premier choix proposé.
+  const gens = scope.chargesRgd();
+  // ⚠ TROIS ENTRÉES, DANS L'ORDRE DEMANDÉ LE 07/10/2026 : Toute l'équipe,
+  // Mickael, Antoine. « Mickael » est la vue DIRECTION (leads sans responsable
+  // compris), nommée d'après ceux de la direction qui portent des dossiers —
+  // voir `producteursDirectionRgd`. Elle reste la vue par défaut.
+  const nomDirection = scope.producteursDirectionRgd()
+    .map(u => u.full_name || u.email).filter(Boolean).join(' · ') || 'La direction';
   return `<label class="esp-vue${vue !== 'direction' ? ' est-filtree' : ''}">
     <span>Vue</span>
     <select id="rgd-vue-charge" aria-label="Regarder l’espace comme">
-      <option value="direction"${vue === 'direction' ? ' selected' : ''}>La direction</option>
       <option value=""${!vue ? ' selected' : ''}>Toute l’équipe</option>
+      <option value="direction"${vue === 'direction' ? ' selected' : ''}>${esc(nomDirection)}</option>
       ${gens.map(u => `<option value="${esc(u.id)}"${vue === u.id ? ' selected' : ''}>${
         esc(u.full_name || u.email || 'sans nom')}</option>`).join('')}
     </select></label>`;
@@ -165,8 +168,8 @@ const bandeauVue = () => {
 };
 
 // ⚠ LE BANDEAU NE S'AFFICHE PAS SUR CLIENTS & PROSPECTS, et ce n'est pas une
-// exception de confort : cet écran porte déjà un filtre « Leads de… » et une
-// colonne « Responsable » sur chaque ligne. Il dit donc à qui est ce qu'on
+// exception de confort : cet écran porte une colonne « Responsable » sur
+// chaque ligne (le filtre « Leads de… » qui la doublait est parti le 07/10). Il dit donc à qui est ce qu'on
 // regarde, mieux et plus précisément qu'une phrase en tête. Ailleurs — la vue
 // d'ensemble, le Pipeline — rien ne le dit, et des chiffres qui ne sont pas
 // ceux de l'entreprise se lisent comme une entreprise au ralenti.

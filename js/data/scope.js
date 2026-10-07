@@ -289,7 +289,11 @@ export const scope = {
     if (!this.isDirection) return null;
     try {
       const v = localStorage.getItem(this.CLE_VUE_RGD);
-      return v === null ? 'direction' : (v || null);
+      if (v === null) return 'direction';
+      // Une personne de la direction choisie avant le 07/10/2026 : elle n'a
+      // plus d'entrée à elle, c'est l'entrée « direction » qui la porte.
+      if (v && this.estDeLaDirection(v)) return 'direction';
+      return v || null;
     } catch { return 'direction'; }
   },
 
@@ -368,6 +372,23 @@ export const scope = {
   // qui portent RGD. Même règle que `candidatsResponsable` pour une affaire —
   // attribuer une demande à quelqu'un qui ne porte pas l'activité la lui
   // ferait disparaître aussitôt.
+  // Les entrées du sélecteur « Vue » de l'espace RGD (07/10/2026, demandé :
+  // « Toute l'équipe, Mickael, Antoine »). ⚠ LA DIRECTION N'Y EST QU'UNE FOIS,
+  // sous le nom de ceux qui PRODUISENT — qui portent au moins un dossier :
+  // Élodie est dans la direction pour administrer le CRM, pas pour vendre, et
+  // une vue à son nom serait vide. ⚠ ET CETTE ENTRÉE GARDE LA VALEUR
+  // `direction`, PAS L'IDENTIFIANT DE MICKAEL : les leads neufs arrivent sans
+  // responsable et ne sont visibles que dans la vue direction — une vue
+  // « fiches de Mickael » au sens strict les ferait disparaître.
+  producteursDirectionRgd() {
+    const porteurs = new Set([...db.t('rgd_clients'), ...db.t('rgd_demandes')]
+      .map(r => r.owner_id).filter(Boolean));
+    return this.users().filter(u => u.role === 'direction' && porteurs.has(u.id));
+  },
+  chargesRgd() {
+    return this.users().filter(u => u.role !== 'direction' && (u.activities || []).includes('rgd'));
+  },
+
   candidatsRgd() { return this.users().filter(u => u.role === 'direction' || (u.activities || []).includes('rgd')); },
 
   users() { return db.t('profiles').filter(u => u.active !== false); },
