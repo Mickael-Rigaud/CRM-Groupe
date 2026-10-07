@@ -1,0 +1,8 @@
+# ⚠ LES BIBLIOTHÈQUES LOGÉES DANS `assets/` NE SE NORMALISENT PAS (07/10/2026).
+# Elles sont reprises de npm à l'octet près, et leur empreinte md5 est ce qui
+# prouve d'où elles viennent : `chart.umd.js` porte 2 retours à la ligne,
+# `supabase.umd.js` en porte 10. Sans ce `-text`, git les convertit en CRLF à
+# la sortie sur Windows — le fichier du disque ne vaut alors plus l'empreinte
+# écrite dans le code, et le contrôle qui doit rassurer devient celui qui
+# inquiète.
+assets/*.umd.js -text

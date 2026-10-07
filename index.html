@@ -23,6 +23,20 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="stylesheet" href="css/app.css">
   <script src="assets/chart.umd.js"></script>
+  <!-- ⚠ SUPABASE EST LOGÉ ICI DEPUIS LE 07/10/2026, ET C'EST UNE PANNE DE
+       PRODUCTION QUI L'A IMPOSÉ. Il était chargé depuis esm.sh au démarrage :
+       le jour où ce CDN a publié une version cassée, le CRM entier a cessé de
+       s'ouvrir, et nous n'avions aucun moyen d'agir. Épingler la version
+       protégeait d'une mauvaise publication, pas d'une panne de leur serveur.
+       Même traitement que Chart.js au-dessus : le fichier est à nous.
+       ⚠ IL EST REPRIS DE npm À L'OCTET PRÈS (@supabase/supabase-js 2.117.0,
+       dist/umd, MIT, md5 40a0691b0f7596f780e708b869004391). Ne pas le
+       retoucher : son empreinte est ce qui prouve d'où il vient. Pour monter
+       de version, on redépose le fichier, on ne l'édite pas.
+       ⚠ PAS DE `defer` : `js/app.js` est un module, donc différé d'office,
+       et ce script s'exécute forcément avant lui. C'est ce qui permet à
+       `db.js` de compter sur `window.supabase` sans rien attendre. -->
+  <script src="assets/supabase.umd.js"></script>
 </head>
 <body>
   <div id="app"><div class="login"><div class="card"><p class="muted">Chargement…</p></div></div></div>

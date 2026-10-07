@@ -591,21 +591,28 @@ const supabaseAdapter = {
   name: 'supabase',
   client: null,
   async connect() {
-    // ⚠ LA VERSION EST ÉPINGLÉE, ET C'EST UNE PANNE DE PRODUCTION DU 07/10/2026.
-    // « @2 » veut dire « la dernière du rang 2 » : esm.sh y a publié 2.117.3, dont
-    // le module d'entrée répond 200 mais importe `auth-js@2.117.3`,
-    // `functions-js@2.117.3`, `realtime-js@2.117.3` et `storage-js@2.117.3` —
-    // quatre versions QUI N'EXISTENT PAS (ces paquets ont leur propre
-    // numérotation). Les quatre répondent 404, l'import échoue, et le navigateur
-    // accuse l'adresse d'entrée : « Failed to fetch dynamically imported
-    // module ». Le CRM entier ne démarrait plus.
+    // ⚠ SUPABASE NE VIENT PLUS D'UN TIERS (07/10/2026). Cette ligne allait le
+    // chercher chez esm.sh à chaque démarrage. Le jour où ce CDN a publié une
+    // version cassée — un module d'entrée en 200 qui importe quatre paquets dans
+    // des versions qui n'existent pas — le CRM entier a cessé de s'ouvrir, et
+    // nous n'avions aucun moyen d'agir : ni le code, ni les données, ni
+    // l'hébergement n'étaient en cause.
     //
-    // ⚠ CE N'EST PAS NOTRE CODE QUI A BOUGÉ : aucun commit n'a touché cette ligne.
-    // C'est la publication d'une version chez un tiers qui nous est tombée
-    // dessus — raison pour laquelle une plage ouverte n'a rien à faire sur
-    // l'outil de travail d'une entreprise. On monte de version à la main.
-    const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2.117.0');
-    this.client = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+    // ⚠ ÉPINGLER LA VERSION NE SUFFISAIT PAS, et c'est ce qui a décidé du dépôt :
+    // cela protège d'une mauvaise publication, pas d'une panne de leur serveur.
+    // Le fichier est désormais dans `assets/`, comme Chart.js, et `index.html`
+    // le charge avant ce module.
+    //
+    // ⚠ ON NE TESTE PAS `window.supabase` POUR LE CHARGER À LA DEMANDE : le
+    // script est posé dans la page SANS `defer`, donc il s'exécute avant
+    // `js/app.js`, qui est un module et donc différé d'office. S'il manque, ce
+    // n'est pas une course à rattraper mais un fichier absent — et le dire
+    // clairement vaut mieux qu'un `undefined is not a function` trois appels
+    // plus loin.
+    if (!window.supabase?.createClient) {
+      throw new Error('assets/supabase.umd.js n’a pas été chargé.');
+    }
+    this.client = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
   },
   // `tables` sert à ne recharger qu'une partie du cache : la messagerie se
   // rafraîchit toutes les quelques secondes, il serait absurde de retélécharger
