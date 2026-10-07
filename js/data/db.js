@@ -591,7 +591,20 @@ const supabaseAdapter = {
   name: 'supabase',
   client: null,
   async connect() {
-    const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+    // ⚠ LA VERSION EST ÉPINGLÉE, ET C'EST UNE PANNE DE PRODUCTION DU 07/10/2026.
+    // « @2 » veut dire « la dernière du rang 2 » : esm.sh y a publié 2.117.3, dont
+    // le module d'entrée répond 200 mais importe `auth-js@2.117.3`,
+    // `functions-js@2.117.3`, `realtime-js@2.117.3` et `storage-js@2.117.3` —
+    // quatre versions QUI N'EXISTENT PAS (ces paquets ont leur propre
+    // numérotation). Les quatre répondent 404, l'import échoue, et le navigateur
+    // accuse l'adresse d'entrée : « Failed to fetch dynamically imported
+    // module ». Le CRM entier ne démarrait plus.
+    //
+    // ⚠ CE N'EST PAS NOTRE CODE QUI A BOUGÉ : aucun commit n'a touché cette ligne.
+    // C'est la publication d'une version chez un tiers qui nous est tombée
+    // dessus — raison pour laquelle une plage ouverte n'a rien à faire sur
+    // l'outil de travail d'une entreprise. On monte de version à la main.
+    const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2.117.0');
     this.client = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
   },
   // `tables` sert à ne recharger qu'une partie du cache : la messagerie se
