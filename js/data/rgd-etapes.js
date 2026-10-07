@@ -502,6 +502,49 @@ export function aujourdhui() {
   return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
 }
 
+/**
+ * « Qui est cette personne », depuis l'annuaire — quatre réponses.
+ *
+ * ⚠ ELLE ÉCRIT DEUX COLONNES, ET C'EST TOUTE SA RAISON D'ÊTRE. Le menu de
+ * l'annuaire mêle deux vocabulaires que le CRM tient séparés : `statut` dit ce
+ * qu'EST la fiche (prospect, client, partenaire), `statut_suivi` où en est
+ * l'affaire — et « indésirable » vit dans le second, parce que c'est lui que
+ * `etapeDeFiche` lit pour ranger la fiche dans son onglet. Demander à l'écran
+ * de choisir sa colonne au cas par cas aurait fait deux chemins d'écriture
+ * pour un seul menu.
+ *
+ * ⚠ ON N'EFFACE `statut_suivi` QUE S'IL VAUT « indésirable ». Le vider à chaque
+ * passage en « Client » emporterait un « devis accepté » ou un « chantier en
+ * cours » posé ailleurs : la fiche changerait d'étape dans le dos de celui qui
+ * voulait seulement dire que cette personne est un client.
+ *
+ * ⚠ ET « indésirable » NE TOUCHE PAS À `statut` : quelqu'un reste le client
+ * qu'il a été. On range la personne, on ne réécrit pas son histoire — et c'est
+ * ce qui permet de la remettre telle qu'elle était.
+ */
+export async function ecrireStatutAnnuaire({ uuid, valeur }) {
+  const { db } = await import('./db.js');
+  const ligne = db.byId('rgd_clients', uuid);
+  const patch = valeur === 'indesirable'
+    ? { statut_suivi: 'indesirable' }
+    : { statut: valeur };
+  if (valeur !== 'indesirable' && ligne?.statut_suivi === 'indesirable') {
+    patch.statut_suivi = null;
+  }
+  return db.update('rgd_clients', uuid, patch)
+    .then(l => ({ ok: true, ligne: l }))
+    .catch(e => ({ ok: false, motif: String(e.message || e).slice(0, 80) }));
+}
+
+// ⚠ « A SIGNÉ UN DEVIS » SE DIT ICI, UNE SEULE FOIS. L'annuaire s'en sert pour
+// garder quelqu'un qui a signé même si son étape l'a porté ailleurs depuis — un
+// devis accepté dormant depuis six mois part aux archives, et la personne
+// disparaîtrait de l'annuaire sans que rien ne le dise.
+// Le rattachement passe par `memeQue` : contact OU organisation, comme partout
+// ailleurs dans ce fichier — un professionnel n'a que la seconde.
+export const aSigneUnDevis = (f, devis) =>
+  devis.some(v => memeQue(v, f) && v.statut === 'signe');
+
 export async function ecrireStatut({ uuid, cible, statut }) {
   const { db } = await import('./db.js');
   const table = cible === 'demande' ? 'rgd_demandes' : 'rgd_clients';
