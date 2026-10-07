@@ -71,7 +71,7 @@ import { convertirSt, creerSousTraitant, majSousTraitant, activerSousTraitant,
 import { toast, openModal, closeModal } from '../ui.js';
 import { ouvrirPiecesSt, ouvrirRelanceSt } from './rgd-st-pieces.js';
 import { PIECES_ST, piecesDe, etatPiece } from '../data/rgd-pieces.js';
-import { trouvaillesAValider, garderTrouvaille, ecarterTrouvaille } from '../data/rgd-st-veille.js';
+import { trouvaillesAValider } from '../data/rgd-st-veille.js';
 
 // Les quatre pièces qu'un sous-traitant doit tenir à jour, prises dans la
 // liste des huit — une seule déclaration, dans `js/data/rgd-pieces.js`, pour
@@ -357,46 +357,14 @@ export const rgdSousTraitantsPage = {
       // ne décore pas, elle dit qui peut engager la responsabilité de RGD
       // Renova. Elle est seulement passée SOUS le bandeau des actifs, qui est
       // la population qu'elle concerne.
-      // ⚠ LA VEILLE DU LUNDI (07/10/2026). Ses trouvailles ne sont PAS des
-      // potentiels : personne ne les a encore regardées. Elles attendent ici,
-      // au-dessus des potentiels, et n'y entrent que sur « Garder ». Le bloc
-      // n'existe que pour la direction (la table lui est réservée) et
-      // disparaît quand il n'y a plus rien à trancher.
+      // ⚠ LA VEILLE DU LUNDI A SON ÉCRAN, « Prospection » (07/10/2026). Ici ne
+      // reste qu'une ligne qui y renvoie quand des trouvailles attendent — deux
+      // endroits pour trancher la même liste finiraient par se contredire.
       const trouvailles = scope.isDirection ? trouvaillesAValider() : [];
-      const blocVeille = () => {
-        if (!trouvailles.length) return '';
-        const lien = (t) => `https://annuaire-entreprises.data.gouv.fr/etablissement/${encodeURIComponent(t.siret)}`;
-        const recherche = (t) => `https://www.google.com/search?q=${encodeURIComponent(`${t.raison_sociale} ${t.ville || ''}`)}`;
-        return `<section class="st-tete st-tete-veille">
-          <div>
-            <h2>Trouvés par la veille <span class="chip accent">◇ À valider</span></h2>
-            <p class="muted small">${trouvailles.length} artisan${trouvailles.length > 1 ? 's' : ''} repéré${trouvailles.length > 1 ? 's' : ''}
-            dans l’annuaire public des entreprises — chaque lundi, deux par corps de métier, à 25 km de Chantilly au plus.
-            « Garder » les fait passer en prospection.</p>
-          </div>
-        </section>
-        <section class="card table-wrap st-veille">
-          <table>
-            <thead><tr><th>Entreprise</th><th>Métier</th><th>Où</th><th>Profil</th><th></th></tr></thead>
-            <tbody>${trouvailles.map(t => `<tr>
-              <td><b>${esc(t.raison_sociale)}</b>
-                ${t.dirigeant ? `<div class="s muted">${esc(t.dirigeant)}</div>` : ''}
-                <div class="s"><a href="${esc(lien(t))}" target="_blank" rel="noopener">Fiche entreprise ↗</a>
-                · <a href="${esc(recherche(t))}" target="_blank" rel="noopener"
-                     title="Le téléphone et l’e-mail ne sont pas dans l’annuaire">Chercher ses coordonnées ↗</a></div></td>
-              <td>${esc(t.corps_metier)}</td>
-              <td>${esc(t.ville || '—')}<div class="s muted">${t.distance_km != null ? `${esc(String(t.distance_km).replace('.', ','))} km` : ''}</div></td>
-              <td class="s">${t.est_rge ? '<span class="chip green">RGE</span> ' : ''}${esc(t.effectif || '')}
-                ${t.date_creation ? `<div class="muted">depuis ${esc(t.date_creation.slice(0, 4))}</div>` : ''}</td>
-              <td class="num st-actions">
-                <button type="button" class="btn primary sm" data-garder="${esc(t.id)}">Garder</button>
-                <button type="button" class="btn ghost sm" data-ecarter="${esc(t.id)}">Écarter</button>
-              </td>
-            </tr>`).join('')}</tbody>
-          </table>
-        </section>
-        <div class="st-separation"></div>`;
-      };
+      const blocVeille = () => (trouvailles.length ? `<div class="alert st-veille-renvoi"><b>◇</b>
+        <div><b>${trouvailles.length} artisan${trouvailles.length > 1 ? 's' : ''} trouvé${trouvailles.length > 1 ? 's' : ''} par la veille
+        attende${trouvailles.length > 1 ? 'nt' : ''} votre décision.</b>
+        <a href="#/rgd/prospection">Ouvrir la prospection →</a></div></div>` : '');
 
       const corps = `
         <section class="st-tete st-tete-actifs">
@@ -457,7 +425,6 @@ export const rgdSousTraitantsPage = {
         <div class="st-separation"></div>
 
         ${blocVeille()}
-
         <section class="st-tete st-tete-potentiels">
           <div>
             <h2>Sous-traitants potentiels <span class="chip amber">○ En prospection</span></h2>
@@ -624,25 +591,6 @@ export const rgdSousTraitantsPage = {
       root.querySelectorAll('[data-convertir]').forEach(b => b.onclick = () => {
         const st = parId(b.dataset.convertir);
         if (st) formulaireConversion(st, draw);
-      });
-
-      const trouvaille = (id) => trouvailles.find(t => t.id === id);
-      root.querySelectorAll('[data-garder]').forEach(b => b.onclick = async () => {
-        const t = trouvaille(b.dataset.garder);
-        if (!t) return;
-        b.disabled = true;
-        const r = await garderTrouvaille(t);
-        if (!r.ok) { b.disabled = false; toast(`Non enregistré — ${r.motif}`, 'err'); return; }
-        toast(`${t.raison_sociale} rejoint les sous-traitants en prospection`);
-        draw();
-      });
-      root.querySelectorAll('[data-ecarter]').forEach(b => b.onclick = async () => {
-        const t = trouvaille(b.dataset.ecarter);
-        if (!t) return;
-        const r = await ecarterTrouvaille(t);
-        if (!r.ok) { toast(`Non enregistré — ${r.motif}`, 'err'); return; }
-        toast(`${t.raison_sociale} est écarté — la veille ne le reproposera pas`);
-        draw();
       });
 
       // LES TROIS BASCULES.

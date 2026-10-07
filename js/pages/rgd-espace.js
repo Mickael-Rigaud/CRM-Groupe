@@ -26,6 +26,9 @@ export const ONGLETS = [
     { hash: '#/rgd/clients', label: 'Clients & prospects' },
     { hash: '#/rgd/partenaires', label: 'Partenaires' },
     { hash: '#/rgd/soustraitants', label: 'Sous-traitants' },
+    // La veille hebdomadaire des sous-traitants (07/10/2026). Direction seule :
+    // `cadre` retire l'entrée pour les autres.
+    { hash: '#/rgd/prospection', label: 'Prospection' },
   ] },
   // ⚠ « Travaux » RESTE UN GROUPE BIEN QU'IL N'AIT PLUS QU'UNE LIGNE, et c'est
   // une décision d'Élodie du 07/10/2026 — **ne pas le dissoudre**. Le Pipeline
@@ -175,11 +178,19 @@ const bandeauVue = () => {
 // ceux de l'entreprise se lisent comme une entreprise au ralenti.
 const SANS_BANDEAU = ['#/rgd/clients'];
 
+// Les écrans réservés à la direction sortent du menu des autres : une entrée
+// qui n'ouvre qu'un « réservé à la direction » est une porte peinte au mur.
+const RESERVES_DIRECTION = ['#/rgd/prospection'];
+const sansDirection = (liste) => liste
+  .filter(o => !RESERVES_DIRECTION.includes(o.hash))
+  .map(o => (o.sous ? { ...o, sous: sansDirection(o.sous) } : o));
+
 export const cadre = (actif, titre, corps) => coquilleEspace({
   actif, titre,
   corps: (SANS_BANDEAU.includes(actif) ? '' : bandeauVue()) + corps,
   commandes: selecteurVue(),
-  cle: KEY, marque: act().label, baseline: 'Rénovation tous corps d’état', onglets: ONGLETS,
+  cle: KEY, marque: act().label, baseline: 'Rénovation tous corps d’état',
+  onglets: scope.isDirection ? ONGLETS : sansDirection(ONGLETS),
 });
 
 // ⚠ L'ÉCOUTEUR EST POSÉ UNE SEULE FOIS, SUR LE DOCUMENT, et pas sur le champ :

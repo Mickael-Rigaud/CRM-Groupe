@@ -55,3 +55,10 @@ export async function ecarterTrouvaille(t) {
     return { ok: true, donnees: await db.update(TABLE, t.id, { etat: 'ecarte', ...trace() }) };
   } catch (e) { return { ok: false, motif: String(e.message || e).slice(0, 160) }; }
 }
+
+/** Revenir sur un « Écarter » donné trop vite : la trouvaille repasse à valider. */
+export async function reprendreTrouvaille(t) {
+  try {
+    return { ok: true, donnees: await db.update(TABLE, t.id, { etat: 'a_valider', traite_par: null, traite_le: null }) };
+  } catch (e) { return { ok: false, motif: String(e.message || e).slice(0, 160) }; }
+}
