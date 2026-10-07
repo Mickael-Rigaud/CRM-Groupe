@@ -982,6 +982,22 @@ export function ficheProjet(existing = null, presets = {}, apres = null, onClose
   };
 
   const dessine = () => {
+    // ⚠ LES SOUS-TITRES PRENNENT LA COULEUR DU METIER (06/10/2026, demande
+    // d'Elodie : « que les sous-titres ressortent »). Violet pour l'expertise,
+    // ambre pour l'AMO — les memes teintes que les pastilles et le kanban, pas
+    // une seconde palette.
+    //
+    // ⚠ `encre` ET NON `couleur`, ET C'EST MESURE : l'orange de l'AMO
+    // (#F09300) donne 2,37:1 sur blanc, illisible sur un intitule de 10,5 px
+    // en capitales ; sa version assombrie (#9A5E00) monte a 5,28:1. Meme piege
+    // que les grands chiffres des indicateurs, qui prennent `--accent-ink` et
+    // jamais `--accent`.
+    //
+    // ⚠ C'EST POSE A CHAQUE REDESSIN, PAS UNE FOIS A L'OUVERTURE : le metier
+    // se change au segment du premier ecran, et `dessine()` est le seul
+    // passage oblige. Pose a l'ouverture, la couleur resterait celle du metier
+    // de depart.
+    corps.style.setProperty('--titre-metier', couleurMission(v.mission).encre);
     corps.innerHTML = enTete() + RENDU[nomEcran()]();
     lier();
   };

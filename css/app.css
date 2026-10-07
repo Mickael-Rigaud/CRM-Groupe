@@ -2448,8 +2448,19 @@ a.fp-fichier-nom { color: var(--m-encre); }
 .fp-tarif-note b { color: var(--text); }
 .fp-tarif.est-vide { border-style: dashed; background: none; }
 
+/* ⚠ `--titre-metier` N'EST LU QUE PAR CETTE REGLE, ET C'EST LE POINT.
+   Poser `--m` sur le formulaire entier aurait suffi — le helper `teinte()`
+   existe deja — mais une cinquantaine d'autres regles lisent `--m` avec un
+   repli sur `--accent` : pastilles, zones de depot, matrice de cotation,
+   schema de reperage, textes d'aide, intitules de champ. Tout le formulaire
+   aurait change de couleur. La demande du 06/10/2026 portait sur les
+   sous-titres — « que les sous-titres ressortent » —, pas sur la teinte
+   generale.
+   ⚠ ET LE REPLI N'EST PAS DECORATIF : `.mf-bloc-titre` sert aussi a la
+   corbeille BTP, au tableau de bord du cabinet et aux reglages, qui ne posent
+   pas la variable et gardent leur gris. */
 .mf-bloc-titre { margin: 4px 0 10px; font-size: 10.5px; font-weight: 700; letter-spacing: .07em;
-  text-transform: uppercase; color: var(--muted-2); }
+  text-transform: uppercase; color: var(--titre-metier, var(--muted-2)); }
 
 /* Le niveau se choisit sur des cartes : on lit ce qu'il contient et ce qu'il pese */
 /* Le sous-titre de la rangee des prestations. Il pose une QUESTION
