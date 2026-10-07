@@ -126,8 +126,25 @@ export function valeursProjet(x) {
     projet_description: f.projet_description || '',
     adresse_chantier: f.adresse_chantier || '',
     code_postal_chantier: f.code_postal_chantier || '',
-    ville_chantier: f.ville_chantier || '',
+    ville_chantier: f.ville_chantier || villeMeta(f),
   };
+}
+
+// ⚠ LA VILLE D'UN LEAD META EST CELLE DU PROJET (07/10/2026, demandé : « pour
+// les fiches qui viennent de Meta Ads, je voudrais que la ville soit
+// automatiquement enregistrée dans le formulaire de la fiche projet »). Le
+// formulaire Facebook ne pose qu'une question de lieu, « Ville », et c'est là
+// que les travaux ont lieu. `leads-meta` la range sur le CONTACT (`city`), et
+// 13 fiches Meta sur 15 avaient donc une ville de chantier vide.
+// ⚠ ON LIT LE CONTACT, PAS `meta_form_data` : c'est la même réponse au départ,
+// mais le contact est ce qu'on corrige ensuite — une ville rectifiée au
+// téléphone doit l'emporter sur la réponse brute du formulaire.
+// ⚠ C'EST UNE VALEUR DE DÉPART, PAS UNE ÉCRITURE : elle s'enregistre avec la
+// fiche, et une ville de chantier déjà saisie n'est jamais remplacée.
+function villeMeta(f) {
+  if (f.source !== 'meta_ads') return '';
+  const c = f.contact_id && db.byId('contacts', f.contact_id);
+  return String(c?.city || '').trim();
 }
 
 /**
