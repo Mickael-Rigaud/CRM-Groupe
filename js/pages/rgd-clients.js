@@ -97,7 +97,7 @@ import { ORDRE_ETAPES, ETAPES_RGD, ETAPES_CLES, ETAPE_DU_STATUT, STATUT_DE_L_ETA
          visiteDeLaFiche } from '../data/rgd-etapes.js';
 import { sansNoteAuto } from '../data/rgd-projet.js';
 import { db } from '../data/db.js';
-import { esc, eur, fmtDate, fmtDateTime, relDay, terms, hit, searchInput, bindSearch, restoreFocus } from '../ui.js';
+import { esc, eur, fmtDate, fmtDateTime, terms, hit, searchInput, bindSearch, restoreFocus } from '../ui.js';
 import { poserEspace } from './espace.js';
 import { cadre, guard } from './rgd-espace.js';
 import { majNote } from '../data/rgd-clients.js';
@@ -682,8 +682,20 @@ export const rgdClientsPage = {
       const contactsUniques = [...meilleures.values()];
       const doublons = contacts.length - contactsUniques.length;
 
-      // L'annuaire entier : c'est le menu de statut, plus bas, qui le reduit.
-      const contactsVus = contactsUniques;
+      // ⚠ L'ANNUAIRE NE MONTRE PLUS CEUX QU'ON A ÉCARTÉS (07/10/2026, demandé
+      // par Élodie : « trier tous les contacts … pour après n'avoir qu'une base de
+      // données avec les contacts que l'on souhaite vraiment »). Sans ce filtre,
+      // marquer quelqu'un indésirable ne changeait RIEN à la liste qu'on est en
+      // train de trier : on ne savait plus où l'on en était, et le tri ne
+      // finissait jamais.
+      //
+      // ⚠ ON PASSE PAR `etapeDe`, PAS PAR `statut_suivi` EN DIRECT : c'est la
+      // même définition que l'onglet de destination (`etapeDeFiche` rend
+      // 'indesirable' avant tout le reste), donc une fiche écartée ici se
+      // retrouve forcément là-bas. Deux lectures du même état auraient fini par
+      // faire disparaître quelqu'un des deux côtés à la fois.
+      const contactsEcartes = contactsUniques.filter(f => etapeDe(f) === 'indesirable');
+      const contactsVus = contactsUniques.filter(f => etapeDe(f) !== 'indesirable');
       // ---------- les prospects, une seule liste venue de DEUX tables
       // `rgd_demandes` porte les demandes du formulaire du site, `rgd_clients`
       // les fiches. Une demande n'a pas forcément de fiche, et l'inverse est
@@ -725,7 +737,7 @@ export const rgdClientsPage = {
       // Son compteur compte l'annuaire ENTIER, pas la liste filtrée : sinon
       // cliquer « Prospects » ferait changer le nombre de l'onglet lui-même.
       const ONGLET_ANNUAIRE = { key: 'contacts', label: 'Tous les contacts',
-        n: contactsUniques.length,
+        n: contactsVus.length,
         titre: badge != null ? `Annuaire Costructor — il en compte ${badge} distinct${s_(Number(badge))}` : 'Annuaire Costructor' };
 
       const ts = terms(state.q);
@@ -1040,8 +1052,14 @@ export const rgdClientsPage = {
 
       const tableauFiches = () => `<section class="card table-wrap">
         <table>
+          <!-- ⚠ « Maj » ET « Commentaire » ONT CÉDÉ LA PLACE (07/10/2026, demandé
+               mot pour mot : « à la place des colonnes MAJ et Commentaire »).
+               Les deux disaient quelque chose du SUIVI d'un dossier, sur un
+               écran qui est un annuaire : on vient y chercher quelqu'un, pas
+               suivre une affaire. Le commentaire reste écrit et lisible sur la
+               fiche et dans les onglets de la frise, rien n'est perdu. -->
           <thead><tr><th>Nom, prénom</th><th>Type</th><th>Statut</th><th>Email</th>
-            <th>Téléphone</th><th>Adresse</th><th>Maj</th><th>Commentaire</th><th class="rcl-suppr"></th></tr></thead>
+            <th>Téléphone</th><th>Adresse</th><th class="rcl-ecarter"></th><th class="rcl-suppr"></th></tr></thead>
           <tbody>${tranche(lignesFiches).map(({ f, p }) => {
             const ap = f.apporteur_id && apporteurs.find(a => a.id === f.apporteur_id);
             return `<tr>
@@ -1055,13 +1073,32 @@ export const rgdClientsPage = {
               <td>${p?.email ? `<a href="mailto:${esc(p.email)}">${esc(p.email)}</a>` : '<span class="muted">—</span>'}</td>
               <td>${esc(p?.tel || '—')}</td>
               <td class="muted">${esc(adresseDe(p))}</td>
-              <td class="muted small">${f.maj ? esc(relDay(f.maj)) : '—'}</td>
-              <td class="rcl-note">${champNote(f, 'client')}</td>
+              <!-- ⚠ UN SEUL CLIC, ET PAS DEUX : on en fait cent soixante à la
+                   suite. Le garde-fou n'est pas la confirmation mais le fait que
+                   le geste SE DÉFAIT — la ligne sous le tableau compte les
+                   écartés et mène à l'onglet, où un bouton les ramène. Rien
+                   n'est supprimé : c'est un rangement, pas une corbeille.
+                   ⚠ « Indésirable » L'EMPORTE SUR TOUT dans le calcul d'étape, devis
+                   et chantiers compris : écarter quelqu'un qui porte une affaire
+                   en cours la sort du pipeline. Le titre du bouton le dit. -->
+              <td class="rcl-ecarter">${state.ecriture ? `<button type="button"
+                  class="btn ghost sm" data-ecarter="${esc(f.id)}"
+                  title="Ranger dans « Clients indésirables » : la personne quitte l’annuaire sans rien perdre, et un bouton l’y ramène. Si elle porte un devis ou un chantier, elle sort aussi du pipeline."
+                  >Écarter</button>` : ''}</td>
               <td class="rcl-suppr">${boutonSuppression(f)}</td>
             </tr>`;
-          }).join('') || `<tr><td colspan="9"><div class="empty">${esc(vide())}</div></td></tr>`}</tbody>
+          }).join('') || `<tr><td colspan="8"><div class="empty">${esc(vide())}</div></td></tr>`}</tbody>
         </table>
         ${pagination()}
+        <!-- ⚠ CE QU'ON A ÉCARTÉ SE COMPTE ET SE RETROUVE. Une liste qui rétrécit
+             sans dire où vont les lignes se lit comme une suppression : le
+             nombre répond à « est-ce que j'ai cliqué par erreur ? », et le lien
+             répond à « comment je le défais ? ». -->
+        ${contactsEcartes.length ? `<p class="small muted">
+          ${contactsEcartes.length} contact${contactsEcartes.length > 1 ? 's' : ''}
+          écarté${contactsEcartes.length > 1 ? 's' : ''} de l’annuaire —
+          <button type="button" class="lien" data-vue="indesirable">voir les clients indésirables</button>.
+          Rien n’est supprimé : ils se remettent d’un clic.</p>` : ''}
       </section>`;
 
       // UN SEUL TABLEAU POUR LES DEUX TABLES. Les colonnes sont celles que les
@@ -1089,6 +1126,12 @@ export const rgdClientsPage = {
       // onglet, donc partout ailleurs il n'y en a pas. Une colonne vide prend
       // la place des autres et fait chercher une donnée qui n'a pas lieu d'être.
       const surRdv = state.vue === 'rdv';
+      // ⚠ LE CHEMIN DU RETOUR, SANS QUOI LE TRI EST À SENS UNIQUE. Le menu de
+      // statut de la ligne sort bien de cet onglet, mais il oblige à CHOISIR une
+      // étape — « Nouveau prospect » sur un client de dix ans. Remettre, c'est
+      // effacer le jugement, pas en poser un autre : on remet `statut_suivi` à
+      // vide et l'étape se recalcule sur les faits, comme avant.
+      const surIndesirable = state.vue === 'indesirable';
       // ⚠ LA COLONNE DES RELANCES NE S'AFFICHE QUE SUR « NOUVELLE DEMANDE » :
       // les trois statuts de relance n'existent que là, et une colonne vide sur
       // six onglets coûterait de la largeur à tous pour n'informer qu'un seul.
@@ -1175,6 +1218,7 @@ export const rgdClientsPage = {
             <th>Projet</th><th>${surMontant ? 'Montant HT' : 'Budget'}</th><th>Ville</th>
             ${peutAttribuer ? '<th>Responsable</th>' : ''}<th>Statut</th>
             ${surRelances ? '<th>Dernière relance</th>' : ''}
+            ${surIndesirable ? '<th class="rcl-ecarter"></th>' : ''}
             <th>Commentaire</th><th class="rcl-suppr"></th></tr></thead>
           <!-- ⚠ L'INDEX EST CELUI DE LA LISTE ENTIERE, PAS DE LA PAGE.
                L'attribut data-fiche sert au clic, qui relit la liste entiere.
@@ -1208,9 +1252,14 @@ export const rgdClientsPage = {
               ? menuStatut(x.statut, x.cible, x.ligne.id) + flechesEtape(x.etape, true)
               : pastilleSuivi(x.statut)}</td>
             ${surRelances ? `<td class="small rcl-rel-td">${celluleRelance(x.ligne, x.statut, x.cible)}</td>` : ''}
+            ${surIndesirable && state.ecriture ? `<td class="rcl-ecarter">
+              <button type="button" class="btn ghost sm" data-reprendre="${esc(x.ligne.id)}"
+                data-cible="${esc(x.cible)}"
+                title="Remettre dans l’annuaire : le statut de suivi est effacé, l’étape se recalcule sur les faits"
+                >Remettre</button></td>` : surIndesirable ? '<td></td>' : ''}
             <td class="rcl-note">${champNote(x.ligne, x.cible)}</td>
             <td class="rcl-suppr">${boutonSuppression(x.ligne)}</td>
-          </tr>`; }).join('') || `<tr><td colspan="${10 + (surRdv ? 1 : 0) + (surRelances ? 1 : 0) + (peutAttribuer ? 2 : 0)}"><div class="empty">${esc(vide())}</div></td></tr>`}</tbody>
+          </tr>`; }).join('') || `<tr><td colspan="${10 + (surRdv ? 1 : 0) + (surRelances ? 1 : 0) + (surIndesirable ? 1 : 0) + (peutAttribuer ? 2 : 0)}"><div class="empty">${esc(vide())}</div></td></tr>`}</tbody>
         </table>
         ${pagination()}
         <p class="small muted">${state.ecriture
@@ -1437,6 +1486,36 @@ export const rgdClientsPage = {
       if (lotConfier) lotConfier.onclick = () => attribuerEnLotRgd(
         sel().map(x => ({ cible: x.cible, ligne: x.ligne, nom: x.nom })),
         () => { state.selection = new Set(); draw(); });
+
+      // ⚠ UNE SEULE PORTE D'ÉCRITURE, ET ELLE N'EST PAS ICI : `ecrireStatut`.
+      // Cet écran s'était déjà fabriqué son propre chemin pour le statut, et les
+      // deux ont vécu séparément trois jours. Écarter et remettre, c'est le même
+      // geste à deux valeurs près — d'où une seule fonction.
+      //
+      // ⚠ LE BOUTON SE DÉSARME ET SE RARME, il ne disparaît pas pendant l'appel :
+      // une ligne qui s'efface avant la réponse laisserait croire que c'est fait
+      // même quand le serveur refuse.
+      const rangerContact = async (b, uuid, cible, statut, dit) => {
+        b.disabled = true;
+        const r = await ecrireStatut({ uuid, cible, statut });
+        b.disabled = false;
+        if (!r.ok) return toast(r.motif || 'Changement non enregistré', 'err');
+        toast(dit);
+        // La ligne change d'onglet : c'est tout le tableau qu'il faut refaire,
+        // compteurs et pied compris.
+        draw();
+      };
+
+      root.querySelectorAll('[data-ecarter]').forEach(b => b.onclick = () =>
+        rangerContact(b, b.dataset.ecarter, 'client', 'indesirable',
+          'Contact écarté — il est dans « Clients indésirables »'));
+
+      // ⚠ `null` ET NON UN STATUT DE REPLI : poser « Nouveau prospect » sur un
+      // client qui a trois chantiers le rangerait dans la première étape de la
+      // frise. Vide, `etapeDeFiche` relit les faits et le remet où il était.
+      root.querySelectorAll('[data-reprendre]').forEach(b => b.onclick = () =>
+        rangerContact(b, b.dataset.reprendre, b.dataset.cible, null,
+          'Contact remis dans l’annuaire'));
 
       root.querySelectorAll('[data-restaurer-fiche]').forEach(b => b.onclick = () => {
         const x = corbeille.find(y => y.id === b.dataset.restaurerFiche);

@@ -3873,6 +3873,11 @@ button.tb-pp:hover { color: var(--text); text-decoration: underline; text-underl
    tableau en `table-layout: auto` n'est qu'une suggestion qu'il ignore. Mesuré :
    la colonne tombait à 176 px et un commentaire de trois phrases s'y étalait
    sur dix lignes, alors que la table laissait de la place à droite. */
+/* ⚠ LA COLONNE « Écarter » NE S'ENROULE PAS (07/10/2026) : son bouton tient sur
+   un mot, et une colonne sans largeur fixe le coupe en deux lignes dès que
+   l'adresse d'à côté est longue — toutes les lignes du tableau grandissent
+   alors d'un cran pour rien. */
+.rcl-ecarter { white-space: nowrap; width: 1%; vertical-align: top; }
 .rcl-note { width: 300px; max-width: 340px; vertical-align: top; }
 .rcl-note textarea {
   width: 100%; border: 1px solid transparent; background: transparent;
