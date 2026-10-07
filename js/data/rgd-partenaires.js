@@ -129,16 +129,48 @@ export const apportsDe = (apporteurId) => db.t('rgd_apports')
  * tableau dit donc deux choses différentes, et c'est voulu.
  */
 export function totauxDe(apporteurId) {
-  let devis = 0, commission = 0, gagnes = 0, apports = 0;
+  let devis = 0, commission = 0, gagnes = 0, apports = 0, devisGagnes = 0;
   for (const a of apportsDe(apporteurId)) {
     apports += 1;
     devis += Number(a.montant_devis) || 0;
     if (a.issue === 'gagne') {
       gagnes += 1;
       commission += Number(a.montant_commission) || 0;
+      devisGagnes += Number(a.montant_devis) || 0;
     }
   }
-  return { devis, commission, gagnes, apports };
+  return { devis, commission, gagnes, apports, devisGagnes };
+}
+
+/**
+ * Le taux de commission, en pourcentage. `null` quand il n'y a rien a diviser.
+ *
+ * ⚠ LE DENOMINATEUR EST LE DEVIS DES AFFAIRES GAGNEES, PAS LE TOTAL AFFICHE
+ * DANS LA COLONNE D'A COTE — et c'est tout l'objet de cette fonction. Le
+ * commentaire de `totauxDe` dit depuis le 25/09/2026 que les deux montants ne
+ * portent pas sur la meme population : le devis compte des qu'il est chiffre,
+ * la commission seulement sur une affaire gagnee. Diviser l'un par l'autre
+ * melange donc deux ensembles, et le taux obtenu BAISSE a chaque affaire
+ * perdue qui porte un montant — sans que rien ne le signale.
+ *
+ * ⚠ MESURE DU 07/10/2026, AVANT D'ECRIRE : en production les deux formules
+ * donnent EXACTEMENT le meme chiffre (14,8 %), parce que les 4 apports non
+ * tranches ne portent aucun montant de devis et que les 4 gagnes les portent
+ * tous. L'ecart n'existe donc pas aujourd'hui ; il naitra le jour ou quelqu'un
+ * chiffrera une affaire perdue. C'est exactement pour ce jour-la que le
+ * denominateur est pose correctement maintenant.
+ *
+ * ⚠ ET IL N'Y A PAS DE TAUX SANS COMMISSION : on rend `null` plutot que
+ * « 0 % », pour la meme raison que la colonne d'a cote affiche un tiret. Zero
+ * commission sur une affaire gagnee et commission pas encore saisie se
+ * ressemblent trop ; un « 0 % » se lirait comme un fait constate.
+ */
+export function tauxCommission(t) {
+  if (!t) return null;
+  const base = Number(t.devisGagnes) || 0;
+  const com = Number(t.commission) || 0;
+  if (base <= 0 || com <= 0) return null;
+  return (com / base) * 100;
 }
 
 export async function creerApport(champs) {

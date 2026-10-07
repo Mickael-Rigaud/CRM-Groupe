@@ -53,7 +53,8 @@ import { toast, openModal, closeModal, armerCroix } from '../ui.js';
 import { poserEspace } from './espace.js';
 import { cadre, guard } from './rgd-espace.js';
 import { creerPartenaire, majPartenaire, supprimerPartenaire,
-         apportsDe, equipeDe, totauxDe, creerApport, majApport, supprimerApport,
+         apportsDe, equipeDe, totauxDe, tauxCommission,
+         creerApport, majApport, supprimerApport,
          // Le sens inverse, depuis le 05/10/2026 : ce que RGD a apporté à ses
          // partenaires. Pas de liste d'états à importer — la table porte la même
          // `issue` que sa jumelle, et c'est `ISSUES`, ci-dessous, qui habille
@@ -72,6 +73,31 @@ import { aujourdhui } from '../data/rgd-etapes.js';
 // rondes colorées devant chaque information existaient déjà : deux fiches qui
 // se ressemblent s'apprennent une fois.
 import { initiales, tuile, info } from './rgd-fiche.js';
+
+// ⚠ LE TAUX S'ÉCRIT ICI ET NULLE PART AILLEURS : le tableau de l'écran et la
+// tuile de la fiche l'affichent tous les deux, et deux formatages recopiés
+// finissent par arrondir différemment — on lirait 14,8 % d'un côté et 15 % de
+// l'autre pour le même partenaire. Le CALCUL, lui, vit dans la couche de
+// données (`tauxCommission`), pour la même raison.
+//
+// Virgule décimale et espace insécable avant le signe : c'est la typographie
+// française, celle que `eur` applique déjà aux montants juste à côté.
+const pourCent = (v) => (v === null || v === undefined)
+  ? null
+  : v.toFixed(1).replace('.', ',') + '\u00a0%';
+
+// ⚠ CE QUE L'INFOBULLE DIT, ET POURQUOI ELLE EXISTE : le dénominateur du taux
+// n'est PAS le montant affiché dans la colonne « Montant devis », qui compte
+// aussi les affaires non gagnées. Les deux coïncident en production au
+// 07/10/2026 — mesuré — mais le jour où une affaire perdue portera un montant,
+// un lecteur attentif divisera les deux colonnes de tête et trouvera autre
+// chose. L'infobulle montre alors l'écart au lieu de le laisser deviner.
+const detailTaux = (t) => {
+  const base = `${eur(t.commission)} de commissions sur ${eur(t.devisGagnes)} de devis gagnés`;
+  return t.devis > t.devisGagnes
+    ? `${base}. La colonne « Montant devis » affiche ${eur(t.devis)} : elle compte aussi les affaires non gagnées, sur lesquelles rien n'est commissionné.`
+    : base;
+};
 
 // Deux rôles, et pas trois. « Commercial » et « autre » ont été retirés le
 // 25/09/2026 : une fiche qui les portait est devenue un apporteur.
@@ -722,6 +748,11 @@ function ouvrirFichePartenaire(id, apres) {
         <div class="rgdf-tuiles">
           ${tuile(t.devis ? eur(t.devis) : '—', 'Montant devis')}
           ${tuile(t.commission ? eur(t.commission) : '—', 'Commissions')}
+          ${/* ⚠ LA TUILE EST À CÔTÉ DES DEUX MONTANTS DONT ELLE SORT, pas en
+                bout de rangée : on lit « 126 607 € · 18 761 € · 14,8 % » d'un
+                trait, et le taux s'explique tout seul. Plus loin, il faudrait
+                revenir en arrière pour savoir de quoi il est le rapport. */''}
+          ${tuile(pourCent(tauxCommission(t)) || '—', '% commission')}
           ${tuile(t.apports, t.apports > 1 ? 'Apports' : 'Apport')}
           ${tuile(t.gagnes, t.gagnes > 1 ? 'Gagnés' : 'Gagné')}
         </div>
@@ -938,6 +969,7 @@ export const rgdPartenairesPage = {
 
       const ligne = (a, sec) => {
         const t = totauxDe(a.id);
+        const taux = tauxCommission(t);
         return `<tr ${state.ecriture ? `data-partenaire="${esc(String(a.id))}"` : ''}>
           <td><b>${esc(a.nom || nomDe(a))}</b></td>
           <td>${esc(a.prenom || '—')}</td>
@@ -947,8 +979,10 @@ export const rgdPartenairesPage = {
           <td class="num">${t.devis ? esc(eur(t.devis)) : '<span class="muted">—</span>'}
             ${t.apports ? `<div class="s muted">${t.apports} apport${t.apports > 1 ? 's' : ''}${
               t.gagnes ? ` · ${t.gagnes} gagné${t.gagnes > 1 ? 's' : ''}` : ''}</div>` : ''}</td>
-          <td class="num">${t.commission ? `<b>${esc(eur(t.commission))}</b>` : '<span class="muted">—</span>'}</td>`
-          : '<td class="muted">—</td><td class="muted">—</td>'}
+          <td class="num">${t.commission ? `<b>${esc(eur(t.commission))}</b>` : '<span class="muted">—</span>'}</td>
+          <td class="num">${taux === null ? '<span class="muted">—</span>'
+            : `<span title="${esc(detailTaux(t))}">${esc(pourCent(taux))}</span>`}</td>`
+          : '<td class="muted">—</td><td class="muted">—</td><td class="muted">—</td>'}
         </tr>`;
       };
 
@@ -971,9 +1005,10 @@ export const rgdPartenairesPage = {
           <div class="table-wrap">
             <table>
               <thead><tr><th>Nom</th><th>Prénom</th><th>Société</th><th>Profession</th>
-                <th class="num">Montant devis</th><th class="num">Montant commissions</th></tr></thead>
+                <th class="num">Montant devis</th><th class="num">Montant commissions</th>
+                <th class="num">% commission</th></tr></thead>
               <tbody>${lignes.map(a => ligne(a, sec)).join('')
-                || `<tr><td colspan="6"><div class="empty">${
+                || `<tr><td colspan="7"><div class="empty">${
                   state.q ? 'Aucun résultat dans cette catégorie.'
                     : 'Personne pour le moment.'}</div></td></tr>`}</tbody>
             </table>
