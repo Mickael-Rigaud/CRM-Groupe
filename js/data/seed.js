@@ -519,6 +519,11 @@ export const SEED = {
   // valider, noms INVENTÉS — le dépôt est public. Sans elles, le bloc « Trouvés
   // par la veille » et ses deux gestes ne s'essayaient qu'en production.
   rgd_st_veille: [
+    { id: 'v4', siret: '00000000000044', siren: '000000003', raison_sociale: 'PARQUETS DU VALOIS (démo)',
+      corps_metier: 'Revêtements de sols', naf: '43.33Z', adresse: '2 rue Basse 60300 SENLIS',
+      code_postal: '60300', ville: 'SENLIS', distance_km: 8.9, dirigeant: null,
+      effectif: '1 ou 2 salariés', date_creation: '2015-05-01', est_rge: false, score: 20,
+      lot: '2026-W41', etat: 'en_recherche' },
     { id: 'v1', siret: '00000000000011', siren: '000000000', raison_sociale: 'ÉLEC DU VALOIS (démo)',
       corps_metier: 'Électricité', naf: '43.21A', adresse: '3 rue des Tilleuls 60300 SENLIS',
       code_postal: '60300', ville: 'SENLIS', distance_km: 8.4, dirigeant: 'Paul MARTIN (Gérant)',

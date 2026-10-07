@@ -40,6 +40,8 @@ const lienRecherche = (t) => `https://www.google.com/search?q=${encodeURICompone
 // Le site tel que la liste RGE l'écrit, parfois sans « http » : sans lui, le
 // lien serait lu comme une adresse relative au CRM.
 const lienSite = (u) => (/^https?:\/\//i.test(u) ? u : `https://${u}`);
+// Le site lu d'un coup d'œil : « cactus-protection.fr », pas une adresse entière.
+const domaine = (u) => String(u || '').replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/.*$/, '');
 const km = (t) => (t.distance_km != null ? `${String(t.distance_km).replace('.', ',')} km` : '');
 const qualite = (d) => (String(d || '').match(/\(([^)]*)\)\s*$/) || [])[1] || '';
 const majuscule = (s) => String(s || '').toLowerCase().replace(/(^|[\s'-])\p{L}/gu, (m) => m.toUpperCase());
@@ -75,7 +77,7 @@ const identite = (m) => METIERS[m] || { icone: '🛠', teinte: '#475569' };
 
 const VUES = [['cours', 'En cours'], ['gardes', 'Gardés'], ['ecartes', 'Écartés']];
 const DANS_LA_VUE = {
-  cours: (t) => !SUIVI_VEILLE[t.etat]?.fin,
+  cours: (t) => !SUIVI_VEILLE[t.etat]?.fin && !SUIVI_VEILLE[t.etat]?.cache,
   gardes: (t) => t.etat === 'retenu',
   ecartes: (t) => t.etat === 'ecarte',
 };
@@ -96,6 +98,7 @@ export const rgdProspectionPage = {
       }
       const toutes = db.t('rgd_st_veille');
       const enCours = toutes.filter(DANS_LA_VUE.cours);
+      const enRecherche = toutes.filter(t => t.etat === 'en_recherche').length;
       const qt = terms(state.q);
       const val = (t) => ({
         suivi: ORDRE_SUIVI[t.etat] ?? 99, distance: Number(t.distance_km ?? 99),
@@ -130,13 +133,23 @@ export const rgdProspectionPage = {
       const selectSuivi = (t) => t.etat === 'retenu'
         ? '<span class="rpv-statut st-retenu">✓ Gardé</span><a class="small" href="#/rgd/soustraitants">Dans Sous-traitants →</a>'
         : `<select class="rpv-statut st-${esc(t.etat)}" data-suivi="${esc(t.id)}">
-            ${opt(Object.entries(SUIVI_VEILLE).map(([k, v]) => [k, v.label]), t.etat)}</select>`;
+            ${opt(Object.entries(SUIVI_VEILLE).filter(([, v]) => !v.cache).map(([k, v]) => [k, v.label]), t.etat)}</select>`;
 
-      const champ = (t, cle, type, icone, lien, place) => `<label class="rpv-champ">
+      // ⚠ DES BOUTONS, PAS DES LIENS `tel:` / `mailto:` (corrigé le 07/10/2026,
+      // « les boutons téléphone et mail ne fonctionnent pas »). Sur un ordinateur,
+      // `tel:` n'ouvre rien quand aucune application de téléphonie n'est
+      // installée, et `mailto:` dépend d'une messagerie par défaut — ici une
+      // boîte Gmail dans le navigateur, que `mailto:` n'atteint pas. Le clic est
+      // traité plus bas : il copie toujours la valeur, appelle sur un téléphone,
+      // et ouvre un message Gmail prêt à écrire.
+      // ⚠ ET PLUS DANS UN `<label>` : un bouton logé dans le libellé d'un champ
+      // renvoie son clic au champ dans certains navigateurs.
+      const champ = (t, cle, type, icone, action, place) => `<div class="rpv-champ">
         <span class="rpv-ico">${icone}</span>
         <input type="${type}" data-champ="${cle}" data-id="${esc(t.id)}" value="${esc(t[cle] || '')}" placeholder="${place}">
-        ${t[cle] ? `<a class="rpv-agir" href="${esc(lien + t[cle])}" title="${type === 'tel' ? 'Appeler' : 'Écrire'}">${type === 'tel' ? '📞' : '✉'}</a>` : ''}
-      </label>`;
+        ${t[cle] ? `<button type="button" class="rpv-agir" data-${action}="${esc(t[cle])}"
+          title="${action === 'appeler' ? 'Appeler (copie le numéro sur ordinateur)' : 'Écrire un e-mail'}">${action === 'appeler' ? '📞' : '✉'}</button>` : ''}
+      </div>`;
 
       const ligne = (t, i) => {
         const nom = nomDirigeant(t.dirigeant);
@@ -152,13 +165,14 @@ export const rgdProspectionPage = {
               ${t.effectif ? `<span class="rpv-puce">${esc(t.effectif)}</span>` : ''}
               ${t.date_creation ? `<span class="rpv-puce">depuis ${esc(t.date_creation.slice(0, 4))}</span>` : ''}
             </div>
-            <div class="rpv-liens"><a href="${esc(lienAnnuaire(t))}" target="_blank" rel="noopener">Fiche ↗</a>${
-              t.site_internet ? `<a href="${esc(lienSite(t.site_internet))}" target="_blank" rel="noopener">Site ↗</a>` : ''}</div></td>
+            ${t.site_internet ? `<a class="rpv-site" href="${esc(lienSite(t.site_internet))}" target="_blank" rel="noopener"
+              title="Ouvrir le site de l’entreprise">🌐 ${esc(domaine(t.site_internet))}</a>` : ''}
+            <div class="rpv-liens"><a href="${esc(lienAnnuaire(t))}" target="_blank" rel="noopener">Fiche entreprise ↗</a></div></td>
           <td><b>${esc(majuscule(t.ville || '—'))}</b><div class="rpv-km">📍 ${esc(km(t))}</div></td>
           <td><span class="rpv-dept">${esc(String(t.code_postal || '').slice(0, 2))}</span></td>
           <td class="rpv-contact">
-            ${champ(t, 'telephone', 'tel', '☎', 'tel:', 'Téléphone')}
-            ${champ(t, 'email', 'email', '@', 'mailto:', 'E-mail')}
+            ${champ(t, 'telephone', 'tel', '☎', 'appeler', 'Téléphone')}
+            ${champ(t, 'email', 'email', '@', 'ecrire', 'E-mail')}
             ${!t.telephone && !t.email ? `<a class="small" href="${esc(lienRecherche(t))}" target="_blank" rel="noopener">Chercher ses coordonnées ↗</a>` : ''}</td>
           <td>${selectSuivi(t)}</td>
           <td class="${enRetard(t) ? 'rpv-retard' : ''}">
@@ -190,8 +204,11 @@ export const rgdProspectionPage = {
         <section class="rpv-hero">
           <div>
             <h2>Veille sous-traitants</h2>
-            <p>Chaque lundi, vingt artisans RGE à 25 km de Chantilly, <b>tous joignables</b> — téléphone ou
-            e-mail. Passer le suivi à « Gardé » les fait entrer dans Sous-traitants.</p>
+            <p>Chaque lundi, des artisans à 25 km de Chantilly, RGE ou non, <b>tous joignables</b> — téléphone ou
+            e-mail, trouvés dans la liste de l’ADEME ou sur le web. Passer le suivi à « Gardé » les fait entrer
+            dans Sous-traitants.</p>
+            ${enRecherche ? `<p class="rpv-recherche">🔎 ${enRecherche} artisan${enRecherche > 1 ? 's' : ''} de plus
+              en cours de recherche de coordonnées — ${enRecherche > 1 ? 'ils apparaîtront' : 'il apparaîtra'} ici dès qu’un contact sera trouvé.</p>` : ''}
           </div>
           <div class="rpv-kpis">
             ${compteur('a_valider', 'À valider', enCours.filter(t => t.etat === 'a_valider').length)}
@@ -228,6 +245,22 @@ export const rgdProspectionPage = {
         if (k === 'retard') { state.retard = !state.retard; state.suivi = ''; }
         else { state.suivi = state.suivi === k ? '' : k; state.retard = false; }
         draw();
+      });
+
+      const copier = async (texte) => {
+        try { await navigator.clipboard.writeText(texte); return true; } catch { return false; }
+      };
+      const surTelephone = () => window.matchMedia('(pointer: coarse)').matches;
+      root.querySelectorAll('[data-appeler]').forEach(b => b.onclick = async () => {
+        const num = b.dataset.appeler;
+        if (surTelephone()) { window.location.href = `tel:${num.replace(/\s/g, '')}`; return; }
+        toast(await copier(num) ? `Numéro copié : ${num}` : `Numéro : ${num}`);
+      });
+      root.querySelectorAll('[data-ecrire]').forEach(b => b.onclick = async () => {
+        const mail = b.dataset.ecrire;
+        await copier(mail);
+        window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(mail)}`, '_blank', 'noopener');
+        toast(`Adresse copiée : ${mail}`);
       });
 
       const parId = (id) => db.t('rgd_st_veille').find(t => t.id === id);

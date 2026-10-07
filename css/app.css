@@ -6251,7 +6251,7 @@ body:has(.msg-bulle-zone.ouverte) .rappels { display: none; }
 .rpv-ico { width: 16px; text-align: center; color: var(--muted); font-size: 12px; }
 .rpv-champ input { flex: 1; min-width: 0; border: 0; background: transparent; padding: 3px 0; font-family: inherit;
   font-size: 12.5px; color: var(--text); outline: none; }
-.rpv-agir { flex: none; text-decoration: none; font-size: 13px; padding: 2px 6px; border-radius: 6px;
+.rpv-agir { flex: none; text-decoration: none; font-size: 13px; padding: 2px 6px; border-radius: 6px; border: 0; cursor: pointer; font-family: inherit;
   background: color-mix(in srgb, var(--m) 12%, var(--card)); }
 .rpv-agir:hover { background: color-mix(in srgb, var(--m) 24%, var(--card)); }
 
@@ -6268,3 +6268,11 @@ span.rpv-statut { display: inline-block; margin-bottom: 4px; }
   border: 1px solid var(--line); background: var(--card); color: var(--text); }
 .rpv-retard .rpv-date { border-color: var(--red); color: var(--red); font-weight: 700; }
 .rpv-alerte { font-size: 11px; font-weight: 700; color: var(--red); margin-top: 3px; }
+.rpv-recherche { margin-top: 8px !important; font-weight: 600; color: #2563EB !important; }
+/* Le site de l'artisan, en pastille cliquable sous son nom (07/10/2026 : « si on
+   peut rajouter les liens des sites internet ce serait génial »). */
+.rpv-site { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; margin: 2px 0 4px;
+  padding: 3px 9px; border-radius: 20px; font-size: 12px; font-weight: 600; text-decoration: none;
+  color: var(--m); background: color-mix(in srgb, var(--m) 10%, var(--card));
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rpv-site:hover { background: color-mix(in srgb, var(--m) 20%, var(--card)); }

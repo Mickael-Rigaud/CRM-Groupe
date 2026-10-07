@@ -19,7 +19,13 @@ import { creerSousTraitant } from './rgd-st.js';
 const TABLE = 'rgd_st_veille';
 
 // Le suivi, dans l'ordre du déroulé. `fin` = sorti de la liste de travail.
+// ⚠ `en_recherche` ET `sans_contact` NE SONT PAS DES ÉTAPES DU SUIVI (07/10/2026) :
+// ce sont les artisans non RGE dont la routine du lundi cherche encore — ou n'a
+// pas trouvé — le téléphone et l'e-mail. `cache` les retire de la liste de
+// travail et du menu : l'écran ne montre que des artisans joignables.
 export const SUIVI_VEILLE = {
+  en_recherche: { label: 'Contact en recherche', cache: true },
+  sans_contact: { label: 'Sans contact trouvé', cache: true, fin: true },
   a_valider: { label: 'À valider' },
   a_contacter: { label: 'À contacter' },
   contacte: { label: 'Contacté' },
@@ -64,7 +70,7 @@ async function garder(t) {
 
 /** Changer le suivi. « Gardé » crée l'artisan dans Sous-traitants. */
 export async function changerSuivi(t, etat) {
-  if (!SUIVI_VEILLE[etat]) return { ok: false, motif: 'suivi inconnu' };
+  if (!SUIVI_VEILLE[etat] || SUIVI_VEILLE[etat].cache) return { ok: false, motif: 'suivi inconnu' };
   if (t.etat === 'retenu') return { ok: false, motif: 'déjà gardé — il se suit désormais dans Sous-traitants' };
   if (etat === 'retenu') return garder(t);
   try {
