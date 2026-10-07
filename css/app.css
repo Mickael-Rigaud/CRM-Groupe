@@ -1856,8 +1856,21 @@ tr.btp-mission .btp-pts { color: var(--m-encre); }
   width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
 /* Les deux sont des `span` : sans `display: block` la date et l'objet se
    suivent sur la meme ligne, et l'objet fait souvent une phrase entiere. */
+/* ⚠ DEUX COLONNES, ET SANS TOUCHER AU HTML (07/10/2026, demandé par Élodie :
+   « la croix je voudrais que tu la mettes sur la même ligne que le rappel »).
+   La date et le texte restaient empilés en blocs, donc la croix tombait SOUS
+   eux, à la ligne. On met la ligne en grille : le texte occupe la colonne de
+   gauche sur ses deux rangées, la croix tient la colonne de droite et se cale
+   au milieu de la hauteur.
+   ⚠ LA PUCE EST EN `::before` ABSOLU et ne devient donc PAS un élément de la
+   grille — sans quoi elle aurait pris la première case et tout décalé d'un
+   cran. C'est ce qui permet de ne pas toucher au balisage. */
+.rgdf-rappels li { display: grid; grid-template-columns: 1fr auto;
+  column-gap: 8px; align-items: start; }
 .rgdf-rappels .rgdf-quand,
-.rgdf-rappels .rgdf-dit { display: block; }
+.rgdf-rappels .rgdf-dit { display: block; grid-column: 1; }
+.rgdf-rappels li > .icon-btn { grid-column: 2; grid-row: 1 / span 2;
+  align-self: center; }
 .rgdf-rappels .rgdf-dit { font-size: 12.5px; line-height: 1.4; }
 
 /* Dans le tableau : le rang en pastille, puis la date et l'anciennete.
