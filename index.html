@@ -10,7 +10,15 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="manifest" href="manifest.json">
-  <link rel="apple-touch-icon" href="assets/icon-192.png">
+  <!-- ⚠ 192 px POUR UN EMPLACEMENT QUI EN DEMANDE 304 À 334 (07/10/2026,
+       signalé par Élodie : l’icône du raccourci de sa tablette est floue).
+       Une icône d’accueil fait 152 pt sur iPad et 167 pt sur iPad Pro, sur un
+       écran à double densité : le fichier était agrandi d’une fois et demie.
+       On sert le 512, qu’iOS réduit lui-même.
+       ⚠ ET IL EST OPAQUE ET CARRÉ, pas rond : iOS remplit de NOIR tout pixel
+       transparent avant d’appliquer son propre masque — les coins arrondis du
+       fichier faisaient donc un liseré noir dans l’arrondi du système. -->
+  <link rel="apple-touch-icon" href="assets/icon-apple-512.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="stylesheet" href="css/app.css">
