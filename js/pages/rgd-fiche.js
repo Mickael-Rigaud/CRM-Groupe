@@ -145,7 +145,18 @@ const pict = (cle) => `<svg viewBox="0 0 20 20" aria-hidden="true"><path d="${IC
 // là-bas aurait fabriqué deux présentations qui se ressemblent le premier jour
 // et divergent au premier ajustement — et c'est précisément la couleur de ces
 // blocs que Mickael est venu chercher.
-export const tuile = (valeur, quoi) => `<div class="rgdf-tuile">
+// ⚠ `cle` EST FACULTATIVE MAIS PAS DÉCORATIVE : elle pose un `data-tuile`,
+// par lequel une fiche qui met ses chiffres à jour EN PLACE retrouve la bonne
+// tuile. La fiche partenaire les repérait par leur RANG
+// (`querySelectorAll('.rgdf-tuile b')[1]`) — et le 07/10/2026 l'insertion
+// d'une tuile « % commission » au milieu a décalé les trois suivantes : après
+// la moindre cellule modifiée, le taux affichait le nombre d'apports et
+// « Gagnés » gardait une valeur périmée. Rien ne le signalait, et la syntaxe
+// était parfaite. Un rang n'est pas un nom.
+// Les appels sans `cle` ne changent pas : la fiche client ne met aucune tuile
+// à jour en place.
+export const tuile = (valeur, quoi, cle) => `<div class="rgdf-tuile"${
+  cle ? ` data-tuile="${esc(cle)}"` : ''}>
   <b>${esc(String(valeur))}</b><span>${esc(quoi)}</span></div>`;
 
 // ⚠ UNE LIGNE VIDE NE S'AFFICHE PAS. Un tiret en face de six intitulés donne

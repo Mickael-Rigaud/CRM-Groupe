@@ -307,6 +307,32 @@ function nouveauPartenaire(apres, typeDefaut = 'apporteur') {
 // ne se change plus ici ; la colonne ne porte donc que la PERSONNE de l'équipe
 // qui a présenté l'affaire, en texte libre, avec les noms déjà employés chez ce
 // partenaire en suggestion.
+// ⚠ LE TAUX D'UNE LIGNE SE LIT SUR SES PROPRES MONTANTS, sans passer par
+// `tauxCommission` : celle-ci divise par le devis des affaires GAGNÉES, ce qui
+// n'a de sens que sur un total. Une ligne n'a qu'un devis et qu'une
+// commission ; il n'y a pas de population à trier.
+//
+// ⚠ IL S'AFFICHE SUR TOUTES LES LIGNES, Y COMPRIS PERDUES — mais ATTÉNUÉ.
+// C'est le taux convenu, et le voir sur une affaire perdue a un sens (on sait à
+// quoi on a renoncé). Le montrer comme les autres laisserait croire qu'il entre
+// dans les totaux, alors que la commission d'une affaire perdue n'y entre pas :
+// l'infobulle le dit en toutes lettres.
+const tauxLigne = (x) => {
+  const d = Number(x.montant_devis) || 0;
+  const c = Number(x.montant_commission) || 0;
+  if (d <= 0 || c <= 0) return null;
+  return (c / d) * 100;
+};
+
+const celluleTauxLigne = (x) => {
+  const v = tauxLigne(x);
+  if (v === null) return '<span class="muted">—</span>';
+  const txt = esc(pourCent(v));
+  return x.issue === 'gagne'
+    ? `<span title="Commission sur le devis de cette affaire">${txt}</span>`
+    : `<span class="muted" title="Taux convenu. Cette commission n’entre pas dans les totaux : l’affaire n’est pas gagnée.">${txt}</span>`;
+};
+
 const ligneApport = (x) => `<tr data-ligne="${esc(String(x.id))}">
   <td><input data-champ="apporte_par" list="pa-equipe"
     value="${esc(x.apporte_par || '')}" placeholder="Qui a apporté ?"></td>
@@ -321,11 +347,12 @@ const ligneApport = (x) => `<tr data-ligne="${esc(String(x.id))}">
       value="${x.montant_devis != null ? esc(String(x.montant_devis)) : ''}" placeholder="€"></td>
   <td><input type="number" step="10" data-champ="montant_commission"
       value="${x.montant_commission != null ? esc(String(x.montant_commission)) : ''}" placeholder="€"></td>
+  <td class="num pat-taux" data-taux>${celluleTauxLigne(x)}</td>
   <td><button type="button" class="pat-x" data-suppr title="Supprimer la ligne">✕</button></td>
 </tr>`;
 
 const corpsApports = (siens) => siens.map(x => ligneApport(x)).join('')
-  || '<tr class="pat-vide"><td colspan="7"><div class="empty">Aucun apport. Ajoutez une ligne pour commencer.</div></td></tr>';
+  || '<tr class="pat-vide"><td colspan="8"><div class="empty">Aucun apport. Ajoutez une ligne pour commencer.</div></td></tr>';
 
 
 // --------------------------------------- ce que RGD a apporté à ses partenaires
@@ -746,15 +773,15 @@ function ouvrirFichePartenaire(id, apres) {
           ? '<button type="button" class="btn ghost sm rgdf-modifier" id="pa-modifier">Modifier les informations</button>'
           : ''}
         <div class="rgdf-tuiles">
-          ${tuile(t.devis ? eur(t.devis) : '—', 'Montant devis')}
-          ${tuile(t.commission ? eur(t.commission) : '—', 'Commissions')}
+          ${tuile(t.devis ? eur(t.devis) : '—', 'Montant devis', 'devis')}
+          ${tuile(t.commission ? eur(t.commission) : '—', 'Commissions', 'commission')}
           ${/* ⚠ LA TUILE EST À CÔTÉ DES DEUX MONTANTS DONT ELLE SORT, pas en
                 bout de rangée : on lit « 126 607 € · 18 761 € · 14,8 % » d'un
                 trait, et le taux s'explique tout seul. Plus loin, il faudrait
                 revenir en arrière pour savoir de quoi il est le rapport. */''}
-          ${tuile(pourCent(tauxCommission(t)) || '—', '% commission')}
-          ${tuile(t.apports, t.apports > 1 ? 'Apports' : 'Apport')}
-          ${tuile(t.gagnes, t.gagnes > 1 ? 'Gagnés' : 'Gagné')}
+          ${tuile(pourCent(tauxCommission(t)) || '—', '% commission', 'taux')}
+          ${tuile(t.apports, t.apports > 1 ? 'Apports' : 'Apport', 'apports')}
+          ${tuile(t.gagnes, t.gagnes > 1 ? 'Gagnés' : 'Gagné', 'gagnes')}
         </div>
       </div>
 
@@ -788,8 +815,17 @@ function ouvrirFichePartenaire(id, apres) {
             <datalist id="pa-equipe">${equipeDe(a.id)
               .map(n => `<option value="${esc(n)}"></option>`).join('')}</datalist>
             <table class="pat">
+              <!-- « % » et non « Taux de commission » : l'intitulé entier ne
+                   se coupe pas et imposerait une centaine de pixels à une
+                   colonne qui en affiche cinq, ce qui pousserait la croix de
+                   suppression derrière un défilement — le défaut déjà corrigé
+                   sur « Commission attendue » du tableau d'en dessous. Ce
+                   qu'il veut dire est dans l'infobulle et sous le tableau.
+                   AUCUN ACCENT GRAVE ICI : il refermerait le gabarit. -->
               <thead><tr><th>Apporté par</th><th>Date</th><th>Client</th><th>Issue</th>
-                <th class="num">Montant devis</th><th class="num">Commission</th><th></th></tr></thead>
+                <th class="num">Montant devis</th><th class="num">Commission</th>
+                <th class="num" title="Taux de commission : commission divisée par le devis de la ligne">%</th>
+                <th></th></tr></thead>
               <tbody id="pa-corps">${corpsApports(siens)}</tbody>
             </table>
           </div>
@@ -877,13 +913,34 @@ function brancherTableau(m, a, apres) {
   };
 
   // Les tuiles, recalculées sans toucher au reste de la fenêtre.
+  //
+  // ⚠ ON LES DÉSIGNE PAR LEUR NOM, PLUS PAR LEUR RANG — défaut vécu le
+  // 07/10/2026. Cette fonction lisait `querySelectorAll('.rgdf-tuile b')[n]` ;
+  // l'insertion d'une tuile « % commission » entre les montants et les
+  // compteurs a décalé les trois suivantes, et après la moindre cellule
+  // modifiée le taux affichait le nombre d'apports pendant que « Gagnés »
+  // gardait une valeur périmée. Aucune erreur, aucune alerte : le code
+  // continuait d'écrire, simplement dans la mauvaise case.
   const majChiffres = () => {
     const t = totauxDe(a.id);
-    const tuiles = m.querySelectorAll('.rgdf-tuile b');
-    if (tuiles[0]) tuiles[0].textContent = t.devis ? eur(t.devis) : '—';
-    if (tuiles[1]) tuiles[1].textContent = t.commission ? eur(t.commission) : '—';
-    if (tuiles[2]) tuiles[2].textContent = String(t.apports);
-    if (tuiles[3]) tuiles[3].textContent = String(t.gagnes);
+    // ⚠ L'INTITULÉ SE MET À JOUR AUSSI, et c'est un défaut d'avant corrigé en
+    // passant : seule la valeur était réécrite, donc une deuxième affaire
+    // gagnée donnait « 2 Gagné ». Le pluriel est calculé au rendu, il doit
+    // l'être ici aussi — sinon la tuile se contredit dès qu'on touche une
+    // cellule.
+    const poser = (cle, valeur, intitule) => {
+      const el = m.querySelector(`.rgdf-tuile[data-tuile="${cle}"]`);
+      if (!el) return;
+      const b = el.querySelector('b');
+      if (b) b.textContent = String(valeur);
+      const s = intitule && el.querySelector('span');
+      if (s) s.textContent = intitule;
+    };
+    poser('devis', t.devis ? eur(t.devis) : '—');
+    poser('commission', t.commission ? eur(t.commission) : '—');
+    poser('taux', pourCent(tauxCommission(t)) || '—');
+    poser('apports', t.apports, t.apports > 1 ? 'Apports' : 'Apport');
+    poser('gagnes', t.gagnes, t.gagnes > 1 ? 'Gagnés' : 'Gagné');
     const n = m.querySelector('#pa-n');
     if (n) n.textContent = String(t.apports);
   };
@@ -915,6 +972,19 @@ function brancherTableau(m, a, apres) {
           // sans redessiner le tableau : on est peut-être déjà dans la cellule
           // suivante.
           if (cle === 'apporte_par') majSuggestions();
+
+          // ⚠ LE TAUX DE LA LIGNE SE REFAIT ICI, ET SEULEMENT LUI. Il dépend
+          // des deux montants ET de l'issue, donc trois des six champs le
+          // changent ; le recalculer sur n'importe quel `change` coûte moins
+          // que de se demander lesquels. On remplace le contenu de LA cellule,
+          // jamais la ligne : refaire la ligne détruirait le champ que la
+          // personne vient d'atteindre, et emporterait son curseur avec.
+          const cel = tr.querySelector('[data-taux]');
+          if (cel) {
+            const ligne = apportsDe(a.id).find(p => String(p.id) === String(ligneId));
+            if (ligne) cel.innerHTML = celluleTauxLigne(ligne);
+          }
+
           majChiffres();
           apres?.();
         };
