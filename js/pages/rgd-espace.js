@@ -38,8 +38,8 @@ export const ONGLETS = [
   // l'analyse. Le groupe ne portait plus rien. Les réalisations sont ce que
   // RGD MONTRE — sur le site et sur les réseaux —, c'est ce qui les met ici.
   // Placé SOUS « Formations », demandé le même jour.
-  // Calendrier et Analyse sont réservés à la direction (`RESERVES_DIRECTION`) ;
-  // un chargé d'affaires garde donc le groupe, avec les seules Réalisations.
+  // Le groupe ENTIER est réservé à la direction (`RESERVES_DIRECTION`), et il
+  // sort du menu d'un chargé d'affaires.
   { label: 'Communication', sous: [
     { hash: '#/rgd/realisations', label: 'Réalisations' },
     { hash: '#/rgd/communication', label: 'Calendrier réseaux sociaux' },
@@ -179,7 +179,10 @@ const SANS_BANDEAU = ['#/rgd/clients'];
 
 // Les écrans réservés à la direction sortent du menu des autres : une entrée
 // qui n'ouvre qu'un « réservé à la direction » est une porte peinte au mur.
-const RESERVES_DIRECTION = ['#/rgd/prospection', '#/rgd/communication', '#/rgd/analyse'];
+// ⚠ LE GROUPE « COMMUNICATION » ENTIER est réservé depuis le 08/10/2026,
+// Réalisations comprises (Élodie : « tu ne dois donner les accès qu'à la
+// direction et pas aux chargés d'affaires »). Le groupe vidé sort du menu.
+const RESERVES_DIRECTION = ['#/rgd/prospection', '#/rgd/realisations', '#/rgd/communication', '#/rgd/analyse'];
 const sansDirection = (liste) => liste
   .filter(o => !RESERVES_DIRECTION.includes(o.hash))
   .map(o => (o.sous ? { ...o, sous: sansDirection(o.sous) } : o))

@@ -6423,3 +6423,25 @@ span.rpv-statut { display: inline-block; margin-bottom: 4px; }
   background: var(--rs); color: #fff; font-size: 12px; font-weight: 700; }
 .ana-etat { flex: none; font-size: 11.5px; font-weight: 650; padding: 3px 10px; border-radius: 999px;
   background: var(--amber-soft); color: var(--amber); }
+
+/* L'aperçu d'un contenu : la diapo au format du fichier (4:5 pour les
+   carrousels Instagram), et la légende à côté, retours à la ligne compris. */
+.com-apercu { display: grid; grid-template-columns: minmax(0, 340px) minmax(0, 1fr); gap: 16px; padding: 12px;
+  border: 1px solid var(--line); border-radius: 12px; background: var(--card-2); }
+.com-ap-diapo { position: relative; border-radius: 10px; overflow: hidden; background: #000; }
+.com-ap-diapo img, .com-ap-diapo video { display: block; width: 100%; height: auto; }
+.com-ap-fl { position: absolute; top: 50%; transform: translateY(-50%); width: 32px; height: 32px; border: 0;
+  border-radius: 50%; background: rgb(255 255 255 / .9); color: #111; font-size: 20px; line-height: 1; cursor: pointer;
+  box-shadow: 0 1px 4px rgb(0 0 0 / .25); }
+.com-ap-fl.g { left: 8px; } .com-ap-fl.d { right: 8px; }
+.com-ap-fl:disabled { opacity: 0; pointer-events: none; }
+.com-ap-num { position: absolute; top: 8px; right: 8px; padding: 2px 8px; border-radius: 999px;
+  background: rgb(0 0 0 / .6); color: #fff; font-size: 11.5px; }
+.com-ap-cote { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.com-ap-points { display: flex; gap: 5px; flex-wrap: wrap; }
+.com-ap-points button { width: 8px; height: 8px; padding: 0; border: 0; border-radius: 50%; background: var(--line-strong); cursor: pointer; }
+.com-ap-points button.actif { background: var(--accent-ink); }
+.com-ap-legende { white-space: pre-wrap; font-size: 13px; line-height: 1.5; color: var(--text);
+  max-height: 420px; overflow: auto; }
+.com-visuel { cursor: pointer; }
+@media screen and (max-width: 720px) { .com-apercu { grid-template-columns: 1fr; } }

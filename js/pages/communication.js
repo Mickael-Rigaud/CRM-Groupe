@@ -265,6 +265,8 @@ function formulaire(cle, existant, defauts = {}) {
         class="com-chip com-chip-st${v.statut === k ? ' actif' : ''}" data-statut="${k}" style="--st:${s.couleur}">${esc(s.label)}</button>`).join('')}</div>
     </div>
 
+    <div class="com-apercu" hidden></div>
+
     <label class="com-bloc"><span class="com-lib">Texte de la publication</span>
       <textarea name="texte" rows="7" placeholder="Le texte tel qu’il sera publié, hashtags compris">${esc(v.texte || '')}</textarea>
       <span class="com-compteur"></span></label>
@@ -309,7 +311,38 @@ function formulaire(cle, existant, defauts = {}) {
     el.textContent = isFinite(lim) ? `${n} / ${lim.toLocaleString('fr-FR')} caractères` : `${n} caractères`;
     el.classList.toggle('est-trop', isFinite(lim) && n > lim);
   };
-  f.elements.texte.oninput = compteur;
+  // L'APERÇU MONTRE LE POST COMME IL SERA VU : la diapo en grand, au format du
+  // fichier, ses flèches et ses points, et la légende à côté avec ses retours
+  // à la ligne (demandé le 08/10/2026 : « voir chaque slide avec les
+  // légendes »). Les liens Canva/Drive n'y entrent pas : ce ne sont pas des
+  // images. Il suit la frappe sans redessiner le champ.
+  let diapo = 0;
+  const apercu = () => {
+    const z = f.querySelector('.com-apercu');
+    const medias = v.visuels.filter(x => x.type !== 'lien');
+    z.hidden = !medias.length;
+    if (!medias.length) { z.innerHTML = ''; return; }
+    diapo = Math.min(diapo, medias.length - 1);
+    const x = medias[diapo];
+    z.innerHTML = `<div class="com-ap-diapo">
+        ${x.type === 'video' ? `<video src="${esc(x.url)}" controls muted></video>` : `<img src="${esc(x.url)}" alt="">`}
+        ${medias.length > 1 ? `<button type="button" class="com-ap-fl g" data-diapo="-1" ${diapo ? '' : 'disabled'} aria-label="Diapo précédente">‹</button>
+          <button type="button" class="com-ap-fl d" data-diapo="1" ${diapo < medias.length - 1 ? '' : 'disabled'} aria-label="Diapo suivante">›</button>
+          <span class="com-ap-num">${diapo + 1} / ${medias.length}</span>` : ''}
+      </div>
+      <div class="com-ap-cote">
+        ${medias.length > 1 ? `<div class="com-ap-points">${medias.map((_, i) => `<button type="button" data-aller="${i}" class="${i === diapo ? 'actif' : ''}" aria-label="Diapo ${i + 1}"></button>`).join('')}</div>` : ''}
+        <div class="com-ap-legende"></div>
+      </div>`;
+    z.querySelector('.com-ap-legende').textContent = f.elements.texte.value || 'Pas encore de légende.';
+    z.querySelectorAll('[data-diapo]').forEach(b => b.onclick = () => { diapo += Number(b.dataset.diapo); apercu(); });
+    z.querySelectorAll('[data-aller]').forEach(b => b.onclick = () => { diapo = Number(b.dataset.aller); apercu(); });
+  };
+  f.elements.texte.oninput = () => {
+    compteur();
+    const l = f.querySelector('.com-ap-legende');
+    if (l) l.textContent = f.elements.texte.value || 'Pas encore de légende.';
+  };
 
   const visuels = () => {
     const z = f.querySelector('.com-visuels');
@@ -319,7 +352,14 @@ function formulaire(cle, existant, defauts = {}) {
           : `<img src="${esc(x.url)}" alt="">`}
       <button type="button" data-retirer="${i}" title="Retirer du contenu">✕</button>
     </figure>`).join('');
-    z.querySelectorAll('[data-retirer]').forEach(b => b.onclick = () => { v.visuels.splice(Number(b.dataset.retirer), 1); visuels(); });
+    z.querySelectorAll('[data-retirer]').forEach(b => b.onclick = (e) => { e.stopPropagation(); v.visuels.splice(Number(b.dataset.retirer), 1); visuels(); });
+    // Un clic sur une vignette l'affiche dans l'aperçu.
+    const medias = v.visuels.filter(x => x.type !== 'lien');
+    z.querySelectorAll('.com-visuel').forEach((fig, i) => {
+      const k = medias.indexOf(v.visuels[i]);
+      if (k >= 0) fig.onclick = () => { diapo = k; apercu(); };
+    });
+    apercu();
   };
   visuels(); compteur();
 

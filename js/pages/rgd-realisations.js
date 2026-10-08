@@ -168,6 +168,13 @@ export const rgdRealisationsPage = {
   title: () => 'RGD Renova — Réalisations',
   render(root) {
     if (guard(root)) return {};
+    // ⚠ DIRECTION SEULE depuis le 08/10/2026, comme tout le groupe
+    // « Communication » : l'entrée sort du menu, et l'adresse tapée à la main
+    // ne doit pas ouvrir l'atelier qui publie sur rgdrenova.fr.
+    if (!scope.isDirection) {
+      root.innerHTML = '<div class="card"><div class="empty">Les réalisations sont réservées à la direction.</div></div>';
+      return {};
+    }
     const coquille = poserEspace(root);
     // `vue` vaut 'projet' ou 'carrousel' ; `slug` dit quel projet est ouvert à
     // droite ; `editeur` porte l'atelier quand on modifie — c'est LUI qui tient
