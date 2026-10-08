@@ -84,7 +84,7 @@ const DANS_LA_VUE = {
 const TRIS = [['suivi', 'Suivi'], ['distance', 'Distance'], ['relance', 'Relance'], ['nom', 'Nom']];
 
 export const rgdProspectionPage = {
-  title: () => 'RGD Renova — Prospection',
+  title: () => 'RGD Renova — Vivier sous-traitants',
   render(root) {
     if (guard(root)) return {};
     const coquille = poserEspace(root);
@@ -92,7 +92,7 @@ export const rgdProspectionPage = {
 
     const draw = () => {
       if (!scope.isDirection) {
-        root.innerHTML = cadre('#/rgd/prospection', 'Prospection',
+        root.innerHTML = cadre('#/rgd/prospection', 'Vivier sous-traitants',
           '<section class="card"><div class="empty">La veille de prospection est réservée à la direction.</div></section>');
         return;
       }
@@ -231,7 +231,7 @@ export const rgdProspectionPage = {
           <b>${state.q || state.suivi || state.retard ? 'Aucun artisan ne correspond à ces filtres' : 'Rien ici pour l’instant'}</b><br>
           ${state.vue === 'cours' ? 'Les prochaines trouvailles arrivent lundi matin.' : ''}</div></section>`}`;
 
-      root.innerHTML = cadre('#/rgd/prospection', 'Prospection', corps);
+      root.innerHTML = cadre('#/rgd/prospection', 'Vivier sous-traitants', corps);
       bindSearch(root, 'rpv-q', state, draw);
       restoreFocus(root, state);
 

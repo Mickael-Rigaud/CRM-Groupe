@@ -364,7 +364,7 @@ export const rgdSousTraitantsPage = {
       const blocVeille = () => (trouvailles.length ? `<div class="alert st-veille-renvoi"><b>◇</b>
         <div><b>${trouvailles.length} artisan${trouvailles.length > 1 ? 's' : ''} trouvé${trouvailles.length > 1 ? 's' : ''} par la veille
         attende${trouvailles.length > 1 ? 'nt' : ''} votre décision.</b>
-        <a href="#/rgd/prospection">Ouvrir la prospection →</a></div></div>` : '');
+        <a href="#/rgd/prospection">Ouvrir le vivier sous-traitants →</a></div></div>` : '');
 
       const corps = `
         <section class="st-tete st-tete-actifs">

@@ -28,7 +28,7 @@ export const ONGLETS = [
     { hash: '#/rgd/soustraitants', label: 'Sous-traitants' },
     // La veille hebdomadaire des sous-traitants (07/10/2026). Direction seule :
     // `cadre` retire l'entrée pour les autres.
-    { hash: '#/rgd/prospection', label: 'Prospection' },
+    { hash: '#/rgd/prospection', label: 'Vivier sous-traitants' },
   ] },
   // ⚠ « Travaux » RESTE UN GROUPE BIEN QU'IL N'AIT PLUS QU'UNE LIGNE, et c'est
   // une décision d'Élodie du 07/10/2026 — **ne pas le dissoudre**. Le Pipeline
