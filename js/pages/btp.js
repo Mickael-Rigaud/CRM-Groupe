@@ -123,6 +123,14 @@ const ONGLETS = [
     { hash: '#/btp/atlas', label: 'Formation' },
     { hash: '#/btp/mails', label: 'Mails & modèles' },
   ] },
+  // Le groupe « Communication » (08/10/2026), le même que chez RGD Renova moins
+  // les Réalisations, que le cabinet n'a pas. Placé sous « Documentation »,
+  // qui porte « Formation » — même rang que chez RGD. Direction seule : le groupe
+  // entier sort du menu des autres.
+  { label: 'Communication', sous: [
+    { hash: '#/btp/communication', label: 'Calendrier réseaux sociaux' },
+    { hash: '#/btp/analyse', label: 'Analyse' },
+  ] },
   // `bas: true` le pousse au pied du menu, séparé par un trait : on n'ouvre pas
   // la facturation pour travailler un dossier, on l'ouvre pour clore un mois.
   { label: 'Autres', bas: true, sous: [
@@ -174,10 +182,18 @@ const bandeauVueBtp = () => {
     </div></div>`;
 };
 
+// Une entrée qui n'ouvrirait qu'un « réservé à la direction » est une porte
+// peinte au mur : elle sort du menu des autres.
+const RESERVES_DIRECTION_BTP = ['#/btp/communication', '#/btp/analyse'];
+const sansDirectionBtp = (liste) => liste
+  .filter(o => !RESERVES_DIRECTION_BTP.includes(o.hash))
+  .map(o => (o.sous ? { ...o, sous: sansDirectionBtp(o.sous) } : o))
+  .filter(o => !o.sous || o.sous.length);
 export const cadreBtp = (actif, titre, corps) => coquilleEspace({
   actif, titre, corps: bandeauVueBtp() + corps,
   commandes: selecteurVueBtp(),
-  cle: KEY, marque: act().label, baseline: 'Expertise et conseil bâtiment', onglets: ONGLETS,
+  cle: KEY, marque: act().label, baseline: 'Expertise et conseil bâtiment',
+  onglets: scope.isDirection ? ONGLETS : sansDirectionBtp(ONGLETS),
 });
 
 // ⚠ L'ÉCOUTEUR EST POSÉ UNE SEULE FOIS, SUR LE DOCUMENT, et pas sur le champ :

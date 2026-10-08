@@ -30,22 +30,21 @@ export const ONGLETS = [
     // `cadre` retire l'entrée pour les autres.
     { hash: '#/rgd/prospection', label: 'Vivier sous-traitants' },
   ] },
-  // ⚠ « Travaux » RESTE UN GROUPE BIEN QU'IL N'AIT PLUS QU'UNE LIGNE, et c'est
-  // une décision d'Élodie du 07/10/2026 — **ne pas le dissoudre**. Le Pipeline
-  // est descendu dans « Autres » le même jour ; j'ai proposé de remonter
-  // « Réalisations » au premier niveau, au motif qu'un intitulé coiffant un
-  // seul écran prend une ligne pour ne rien apprendre. Réponse : « non ne
-  // dissous pas le groupe, j'aime quand c'est bien rangé ».
-  //
-  // ⚠ CE N'EST PAS UN OUBLI À RATTRAPER : le rangement se lit, il ne se compte
-  // pas. L'intitulé dit de quoi relève l'écran, et il tiendra la place d'un
-  // second écran de travaux le jour où il y en aura un. Un groupe à une ligne
-  // n'est pas une anomalie ici.
-  { label: 'Travaux', sous: [
-    { hash: '#/rgd/realisations', label: 'Réalisations' },
-  ] },
   { hash: '#/rgd/agenda', label: 'Agenda' },
   { hash: '#/rgd/formations', label: 'Formations' },
+  // ⚠ « TRAVAUX » A DISPARU LE 08/10/2026, ET CE N'EST PAS UN RETOUR SUR LA
+  // DÉCISION DU 07/10 : Élodie a demandé de ranger « Réalisations » dans un
+  // groupe « Communication », avec le calendrier des réseaux sociaux et
+  // l'analyse. Le groupe ne portait plus rien. Les réalisations sont ce que
+  // RGD MONTRE — sur le site et sur les réseaux —, c'est ce qui les met ici.
+  // Placé SOUS « Formations », demandé le même jour.
+  // Calendrier et Analyse sont réservés à la direction (`RESERVES_DIRECTION`) ;
+  // un chargé d'affaires garde donc le groupe, avec les seules Réalisations.
+  { label: 'Communication', sous: [
+    { hash: '#/rgd/realisations', label: 'Réalisations' },
+    { hash: '#/rgd/communication', label: 'Calendrier réseaux sociaux' },
+    { hash: '#/rgd/analyse', label: 'Analyse' },
+  ] },
   // LES CINQ ÉCRANS DE L'ARGENT ET DE SA PLOMBERIE, EN UN SEUL GROUPE
   // (25/09/2026, demandé par Mickael : « regroupe devis, encaissement,
   // costructor, réglages, application rgd »).
@@ -180,10 +179,12 @@ const SANS_BANDEAU = ['#/rgd/clients'];
 
 // Les écrans réservés à la direction sortent du menu des autres : une entrée
 // qui n'ouvre qu'un « réservé à la direction » est une porte peinte au mur.
-const RESERVES_DIRECTION = ['#/rgd/prospection'];
+const RESERVES_DIRECTION = ['#/rgd/prospection', '#/rgd/communication', '#/rgd/analyse'];
 const sansDirection = (liste) => liste
   .filter(o => !RESERVES_DIRECTION.includes(o.hash))
-  .map(o => (o.sous ? { ...o, sous: sansDirection(o.sous) } : o));
+  .map(o => (o.sous ? { ...o, sous: sansDirection(o.sous) } : o))
+  // Un groupe vidé par le filtre partirait en intitulé seul, au-dessus de rien.
+  .filter(o => !o.sous || o.sous.length);
 
 export const cadre = (actif, titre, corps) => coquilleEspace({
   actif, titre,

@@ -53,6 +53,8 @@ export const TABLES = ['profiles', 'organisations', 'contacts', 'deals', 'activi
   // Les trouvailles de la veille du lundi (`veille-sous-traitants`). La
   // direction seule les lit : pour les autres, la table revient vide.
   'rgd_st_veille',
+  // Le calendrier des contenus des réseaux sociaux (RGD et BTP), direction seule.
+  'communication_contenus',
   // ⚠ `rgd_apports` non plus n'est pas un reflet : les apports d'affaires d'un
   // partenaire se saisissent dans le CRM, et depuis le 25/09/2026 `rgd_apporteurs`
   // a rejoint ce cas — le relevé ignore désormais sa charge.
@@ -549,7 +551,7 @@ const localAdapter = {
   // En démo il n'y a pas de bucket : la photo devient son propre contenu. Une
   // adresse `data:` s'affiche dans une vignette exactement comme une autre, ce
   // qui permet d'éprouver l'atelier sans rien déposer nulle part.
-  async deposerPhotoPublique(chemin, fichier) {
+  async deposerPhotoPublique(chemin, fichier, seau = 'realisations') {
     if (fichier.size > 3 * 1048576) throw new Error('En mode démo, 3 Mo max par photo (sans limite en production)');
     return new Promise((res, rej) => {
       const r = new FileReader();
@@ -704,11 +706,13 @@ const supabaseAdapter = {
   // soit des documents lisibles par tous, soit des photos que le site ne peut
   // pas afficher. D'où deux méthodes plutôt qu'un paramètre : un nom de bucket
   // qui se passe en argument finit par se tromper d'appelant.
-  async deposerPhotoPublique(chemin, fichier) {
-    const { error } = await this.client.storage.from('realisations')
+  // ⚠ LE SEAU EST UN PARAMÈTRE DEPUIS LE 08/10/2026 : le calendrier de
+  // communication dépose ses visuels dans `communication`, public lui aussi.
+  async deposerPhotoPublique(chemin, fichier, seau = 'realisations') {
+    const { error } = await this.client.storage.from(seau)
       .upload(chemin, fichier, { upsert: false, contentType: fichier.type || undefined });
     if (error) throw new Error(error.message);
-    const { data } = this.client.storage.from('realisations').getPublicUrl(chemin);
+    const { data } = this.client.storage.from(seau).getPublicUrl(chemin);
     return data.publicUrl;
   },
 };
@@ -774,7 +778,7 @@ export const db = {
   // les pièces jointes des fiches vivent dans « documents », les attestations
   // des sous-traitants dans « sous-traitants », qui n'a pas les mêmes droits.
   uploadFile(path, file, options) { return this.adapter.uploadFile(path, file, options); },
-  deposerPhotoPublique(chemin, fichier) { return this.adapter.deposerPhotoPublique(chemin, fichier); },
+  deposerPhotoPublique(chemin, fichier, seau) { return this.adapter.deposerPhotoPublique(chemin, fichier, seau); },
   fileUrl(path, options) { return this.adapter.fileUrl(path, options); },
   deleteFile(path, options) { return this.adapter.deleteFile(path, options); },
   // auth

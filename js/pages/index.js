@@ -10,6 +10,7 @@ import { rgdClientsPage } from './rgd-clients.js';
 import { rgdDevisPage, rgdPaiementsPage } from './rgd-facturation.js';
 import { rgdSousTraitantsPage } from './rgd-soustraitants.js';
 import { rgdProspectionPage } from './rgd-prospection.js';
+import { rgdCommunicationPage, btpCommunicationPage, rgdAnalysePage, btpAnalysePage } from './communication.js';
 import { rgdAgendaPage } from './rgd-agenda.js';
 import { rgdPartenairesPage } from './rgd-partenaires.js';
 import { rgdRealisationsPage } from './rgd-realisations.js';
@@ -51,6 +52,8 @@ export const pages = {
   rgd_paiements: rgdPaiementsPage,
   rgd_soustraitants: rgdSousTraitantsPage,
   rgd_prospection: rgdProspectionPage,
+  rgd_communication: rgdCommunicationPage,
+  rgd_analyse: rgdAnalysePage,
   rgd_partenaires: rgdPartenairesPage,
   rgd_realisations: rgdRealisationsPage,
   rgd_costructor: rgdCostructorPage,
@@ -66,6 +69,8 @@ export const pages = {
   btp_amo: btpAmoPage,
   btp_charges: btpChargesPage,
   btp_vivier: btpVivierPage,
+  btp_communication: btpCommunicationPage,
+  btp_analyse: btpAnalysePage,
   btp_base: btpBasePage,
   btp_dtu: btpDtuPage,
   btp_mails: btpMailsPage,

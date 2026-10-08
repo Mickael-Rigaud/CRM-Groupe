@@ -518,6 +518,30 @@ export const SEED = {
   // La veille du lundi (`veille-sous-traitants`) : trois trouvailles à
   // valider, noms INVENTÉS — le dépôt est public. Sans elles, le bloc « Trouvés
   // par la veille » et ses deux gestes ne s'essayaient qu'en production.
+  // Le calendrier de communication (08/10/2026) : des contenus aux cinq
+  // statuts, sur plusieurs réseaux, une idée sans date et un contenu BTP —
+  // sans eux l'écran s'ouvrait vide et ni la légende ni la réserve d'idées
+  // ne s'essayaient. Textes INVENTÉS.
+  communication_contenus: [
+    { id: 'com1', activity: 'rgd', date_prevue: '2026-10-02', heure: '18:00', reseaux: ['facebook', 'instagram'],
+      format: 'carrousel', titre: 'Avant / après salle de bain', statut: 'publie',
+      texte: 'Une salle de bain refaite du sol au plafond en trois semaines. Glissez pour voir l’avant ! #renovation #salledebain',
+      visuels: [{ url: 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 10 10%22%3E%3Crect width=%2210%22 height=%2210%22 fill=%22%23FD7A2D%22/%3E%3C/svg%3E', type: 'image', nom: 'demo.svg' }],
+      lien_publication: 'https://www.facebook.com/', updated_at: '2026-10-02T16:00:00Z' },
+    { id: 'com2', activity: 'rgd', date_prevue: '2026-10-09', heure: '12:30', reseaux: ['instagram', 'tiktok'],
+      format: 'reel', titre: 'Reel chantier cuisine', statut: 'programme',
+      texte: 'De la dépose à la pose du plan de travail, en 30 secondes.', visuels: [], updated_at: '2026-10-06T09:00:00Z' },
+    { id: 'com3', activity: 'rgd', date_prevue: '2026-10-14', heure: '09:00', reseaux: ['linkedin'],
+      format: 'post', titre: 'Recrutement chargé d’affaires', statut: 'a_valider',
+      texte: 'RGD Renova recrute un chargé d’affaires sur le secteur de Chantilly.', visuels: [], updated_at: '2026-10-07T09:00:00Z' },
+    { id: 'com4', activity: 'rgd', date_prevue: '2026-10-21', reseaux: ['facebook', 'instagram'],
+      format: 'post', titre: 'Conseil : isoler avant l’hiver', statut: 'brouillon', texte: '', visuels: [], updated_at: '2026-10-07T10:00:00Z' },
+    { id: 'com5', activity: 'rgd', date_prevue: null, reseaux: ['tiktok'], format: 'video',
+      titre: 'Une journée avec l’équipe', statut: 'idee', texte: '', visuels: [], updated_at: '2026-10-05T10:00:00Z' },
+    { id: 'com6', activity: 'btp', date_prevue: '2026-10-15', heure: '10:00', reseaux: ['facebook', 'instagram'],
+      format: 'post', titre: 'Les 3 fissures à surveiller', statut: 'programme',
+      texte: 'Toutes les fissures ne se valent pas. Voici celles qui doivent vous alerter.', visuels: [], updated_at: '2026-10-07T10:00:00Z' },
+  ],
   rgd_st_veille: [
     { id: 'v4', siret: '00000000000044', siren: '000000003', raison_sociale: 'PARQUETS DU VALOIS (démo)',
       corps_metier: 'Revêtements de sols', naf: '43.33Z', adresse: '2 rue Basse 60300 SENLIS',
