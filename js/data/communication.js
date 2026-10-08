@@ -36,8 +36,19 @@ export const STATUTS = {
   brouillon: { label: 'Brouillon', couleur: '#A16207' },
   a_valider: { label: 'À valider', couleur: '#D97706' },
   programme: { label: 'Programmé', couleur: '#2563EB' },
+  // ⚠ `auto` : posés par l'outil de publication, jamais proposés à la main
+  // (08/10/2026). « Envoi en cours » qui dure veut dire un passage interrompu :
+  // vérifier sur Instagram avant de remettre en « Programmé ».
+  en_cours: { label: 'Envoi en cours', couleur: '#7C3AED', auto: true },
   publie: { label: 'Publié', couleur: '#16A34A' },
+  erreur: { label: 'Erreur d’envoi', couleur: '#DC2626', auto: true },
 };
+
+// ⚠ CE QUI PART TOUT SEUL : un contenu « Programmé » de ces structures, sur ces
+// réseaux, est publié par l'outil `publication-instagram` (GitHub Actions,
+// toutes les 15 minutes) via l'Edge Function `communication-publication`.
+// Ailleurs, le calendrier ne fait que planifier.
+export const PUBLICATION_AUTO = { btp: ['instagram'] };
 // Même règle : miroir de la contrainte `check` de `format`.
 export const FORMATS = {
   post: 'Post',

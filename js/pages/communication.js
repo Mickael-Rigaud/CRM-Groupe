@@ -28,7 +28,7 @@ import { poserEspace } from './espace.js';
 import { cadre as cadreRgd } from './rgd-espace.js';
 import { cadreBtp } from './btp.js';
 import {
-  RESEAUX, RESEAUX_DE, STATUTS, FORMATS, LIMITE_TEXTE,
+  RESEAUX, RESEAUX_DE, STATUTS, FORMATS, LIMITE_TEXTE, PUBLICATION_AUTO,
   contenusDe, creerContenu, majContenu, supprimerContenu, deposerVisuel,
 } from '../data/communication.js';
 
@@ -261,10 +261,11 @@ function formulaire(cle, existant, defauts = {}) {
     </div>
     <div class="com-ligne">
       <span class="com-lib">Statut</span>
-      <div class="com-choix">${Object.entries(STATUTS).map(([k, s]) => `<button type="button"
+      <div class="com-choix">${Object.entries(STATUTS).filter(([k, s]) => !s.auto || v.statut === k).map(([k, s]) => `<button type="button"
         class="com-chip com-chip-st${v.statut === k ? ' actif' : ''}" data-statut="${k}" style="--st:${s.couleur}">${esc(s.label)}</button>`).join('')}</div>
     </div>
 
+    <div class="com-suivi"></div>
     <div class="com-apercu" hidden></div>
 
     <label class="com-bloc"><span class="com-lib">Texte de la publication</span>
@@ -360,13 +361,46 @@ function formulaire(cle, existant, defauts = {}) {
       if (k >= 0) fig.onclick = () => { diapo = k; apercu(); };
     });
     apercu();
+    suivi();
   };
   visuels(); compteur();
+
+  // CE QUE L'OUTIL DE PUBLICATION FERA — OU A FAIT — DE CE CONTENU. Il ne
+  // publie que les structures et réseaux de `PUBLICATION_AUTO`, et seulement
+  // ce qui est « Programmé » ; le dire évite de croire qu'un post LinkedIn
+  // partira tout seul.
+  // Déclaration de fonction, pas `const` : `visuels()` l'appelle avant cette
+  // ligne, et une constante y serait encore en zone morte.
+  function suivi() {
+    const auto = (PUBLICATION_AUTO[cle] || []).filter(r => v.reseaux.includes(r));
+    const noms = auto.map(r => RESEAUX[r].label).join(' et ');
+    const z = f.querySelector('.com-suivi');
+    let html = '';
+    if (v.statut === 'erreur') {
+      html = `<div class="com-note est-erreur"><b>L’envoi a échoué.</b> ${esc(existant?.erreur || '')}
+        <br>Corrigez, puis remettez le statut sur « Programmé » : il repartira au passage suivant (15 min).</div>`;
+    } else if (v.statut === 'en_cours') {
+      html = `<div class="com-note est-attention"><b>Envoi en cours</b> depuis ${esc(existant?.envoi_le ? new Date(existant.envoi_le).toLocaleString('fr-FR') : '—')}.
+        S’il reste bloqué, vérifiez sur Instagram s’il est parti avant de le remettre en « Programmé » — sinon il sortira deux fois.</div>`;
+    } else if (v.statut === 'publie' && existant?.media_id) {
+      html = `<div class="com-note est-ok"><b>Publié automatiquement</b>${existant.publie_le ? ` le ${esc(new Date(existant.publie_le).toLocaleString('fr-FR'))}` : ''}.
+        ${existant.lien_publication ? `<a href="${esc(existant.lien_publication)}" target="_blank" rel="noopener">Voir le post ↗</a>` : ''}
+        Le modifier ici ne change plus rien en ligne.</div>`;
+    } else if (auto.length && v.statut === 'programme') {
+      const jpeg = v.visuels.some(x => x.type === 'image' && !/\.jpe?g(\?|$)/i.test(x.url));
+      html = `<div class="com-note est-auto"><b>Publication automatique sur ${esc(noms)}</b> à la date et à l’heure prévues (dans les 15 minutes).
+        Sans heure, à 9 h.${jpeg ? ' <b class="com-rouge">⚠ Instagram n’accepte que des images JPEG : remplacez les autres.</b>' : ''}</div>`;
+    } else if (auto.length) {
+      html = `<div class="com-note">Passez en « Programmé » pour qu’il soit publié automatiquement sur ${esc(noms)}.</div>`;
+    }
+    z.innerHTML = html;
+  }
+  suivi();
 
   m.querySelectorAll('[data-rs]').forEach(b => b.onclick = () => {
     const r = b.dataset.rs;
     v.reseaux = v.reseaux.includes(r) ? v.reseaux.filter(x => x !== r) : [...v.reseaux, r];
-    b.classList.toggle('actif'); compteur();
+    b.classList.toggle('actif'); compteur(); suivi();
   });
   m.querySelectorAll('[data-format]').forEach(b => b.onclick = () => {
     v.format = b.dataset.format;
@@ -375,6 +409,7 @@ function formulaire(cle, existant, defauts = {}) {
   m.querySelectorAll('[data-statut]').forEach(b => b.onclick = () => {
     v.statut = b.dataset.statut;
     m.querySelectorAll('[data-statut]').forEach(x => x.classList.toggle('actif', x === b));
+    suivi();
   });
 
   // Les fichiers partent tout de suite dans le seau public : ce sont des images
@@ -423,7 +458,7 @@ function formulaire(cle, existant, defauts = {}) {
     // contenu sur un autre jour, pas pour le publier deux fois.
     f.querySelector('.com-dupliquer').onclick = async () => {
       lire();
-      const { id, created_at, created_by, updated_at, lien_publication, ...reste } = v;
+      const { id, created_at, created_by, updated_at, lien_publication, envoi_le, publie_le, media_id, erreur, ...reste } = v;
       const r = await creerContenu({ ...reste, titre: `${v.titre || titreDe(v)} (copie)`, date_prevue: null, heure: null, statut: 'brouillon' });
       if (!r.ok) { toast(`Non dupliqué — ${r.motif}`, 'err'); return; }
       formulaire(cle, r.donnees);
