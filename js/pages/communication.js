@@ -26,6 +26,7 @@ import { scope } from '../data/scope.js';
 import { db } from '../data/db.js';
 import { logoReseau } from '../data/logos-reseaux.js';
 import { vueSite } from './analyse-site.js';
+import { raccordementTiktok, demarrerRaccordementTiktok, retirerRaccordementTiktok, messageRetourTiktok } from '../data/tiktok.js';
 import { cadreCourtage } from './courtage.js';
 import { esc, toast, openModal, closeModal, armerCroix } from '../ui.js';
 import { poserEspace } from './espace.js';
@@ -491,7 +492,20 @@ export const btpCommunicationPage = pageCommunication('btp');
 // se lit sur la fenêtre d'avant, relevée en même temps. Les jours ne servent
 // plus qu'à l'histogramme.
 const SITES = { rgd: 'rgdrenova.fr', btp: 'btpexpertise.fr' };
-const RACCORDES = ['facebook', 'instagram'];
+// ⚠ « RACCORDÉ » NE VEUT PAS DIRE « RELEVÉ » : TikTok y est depuis le
+// 12/10/2026, mais sa carte reste « À raccorder » tant que personne n'a
+// autorisé le CRM depuis le compte — c'est `tiktok_raccordement` qui le dit,
+// pas cette liste. LinkedIn n'y est pas : son autorisation de développeur
+// n'est pas accordée.
+const RACCORDES = ['facebook', 'instagram', 'tiktok'];
+// Les autorisations TikTok sans lesquelles la carte reste muette sur un
+// point. ⚠ EN BAC À SABLE, `user.info.stats` ET `video.list` NE RÉPONDENT
+// QUE POUR LES COMPTES DÉCLARÉS DANS L'APPLICATION : un compte autorisé
+// sans eux est un cas normal, pas une panne, et l'écran doit le nommer.
+const AUTORISATIONS_TIKTOK = [
+  ['user.info.stats', 'le nombre d’abonnés'],
+  ['video.list', 'les vidéos et leurs chiffres'],
+];
 // ⚠ LES FENÊTRES DE L'APPLICATION INSTAGRAM, PAS D'AUTRES (12/10/2026) : les
 // chiffres affichés sont les totaux que Meta calcule lui-même sur 7, 14 et 30
 // jours (table `communication_stats_periode`). Au-delà de 30 jours l'API
@@ -551,6 +565,11 @@ export function pageAnalyse(cle) {
       // sociaux et le site internet dans deux écrans différents mais dans la
       // même page analyse ») : la période se partage, la mise en page non.
       const state = { periode: 30, tri: 'portee', reseau: '', vue: 'reseaux' };
+      // ⚠ LU UNE SEULE FOIS, HORS DE `draw()`, ET LA QUESTION EST RETIRÉE DE
+      // L'ADRESSE EN MÊME TEMPS : `draw()` est rappelé à chaque clic de période,
+      // donc une lecture là-dedans effacerait le message avant qu'il s'affiche
+      // — ou le réafficherait à chaque redessin.
+      const retourTiktok = messageRetourTiktok();
       try {
         const memo = Number(localStorage.getItem('crm_ana_periode'));
         if (PERIODES.some(([n]) => n === memo)) state.periode = memo;
@@ -585,13 +604,71 @@ export function pageAnalyse(cle) {
         const tuile = (libelle, valeur, avant, aide) => `<div class="ana-tuile" title="${esc(aide)}">
           <span>${esc(libelle)}</span><b>${nombre(net(valeur))}</b>${ecart(net(valeur), net(avant), true)}</div>`;
 
+        // ⚠ TIKTOK A SA PROPRE CARTE, ET CE N'EST PAS UNE AFFAIRE DE MISE EN
+        // PAGE. Son API ne donne NI portée (personnes uniques), NI série par
+        // jour, NI visites du profil : la carte de Meta aurait affiché trois
+        // tirets et un histogramme vide. Pire, elle aurait fait lire ses vues
+        // comme celles d'Instagram, alors que ce n'est pas la même grandeur —
+        // ici ce sont les vues des vidéos PUBLIÉES sur la période, et une
+        // ancienne vidéo qui repart n'y entre pas. La carte l'écrit.
+        const carteTiktok = (def) => {
+          const compte = raccordementTiktok(cle);
+          const tete = `${logoReseau('tiktok', 30)}<h3>${esc(def.label)}</h3>`;
+          if (!compte) {
+            return `<section class="ana-carte est-vide" style="--rs:${def.couleur}">
+              <header>${tete}<span class="ana-etat">À raccorder</span></header>
+              <p class="small muted">Le raccordement se fait depuis le compte TikTok de ${esc(NOMS[cle])} : vous serez envoyée sur TikTok pour autoriser le CRM à lire ses chiffres, puis ramenée ici. Aucune publication n’est possible par ce raccordement, seulement la lecture.</p>
+              <p><button type="button" class="btn" id="ana-tt-brancher">Raccorder TikTok</button></p>
+            </section>`;
+          }
+          const t = totaux.find(x => x.reseau === 'tiktok');
+          const prec = t ? (t.precedent || {}) : {};
+          const abonnes = compte.abonnes ?? [...jours].reverse().find(l => l.reseau === 'tiktok' && l.abonnes != null)?.abonnes ?? null;
+          const videos = posts.filter(p => p.reseau === 'tiktok');
+          // ⚠ PAS D'ÉCART QUAND LA FENÊTRE D'AVANT N'AVAIT AUCUNE VIDÉO : on
+          // compare ici ce qu'ont fait les vidéos PUBLIÉES dans chaque fenêtre,
+          // donc une fenêtre sans publication vaut zéro — et `ecart` l'annonce
+          // alors comme « nouveau », c'est-à-dire une percée, pour une semaine
+          // où l'on n'a simplement rien posté. Quatre pastilles vertes de suite
+          // sur un compte en sommeil : constaté en démo, pas à la relecture.
+          const comparable = Number(prec.publiees) > 0;
+          const tuileTT = (libelle, valeur, avant, aide) => tuile(libelle, valeur, comparable ? avant : null, aide);
+          const manque = AUTORISATIONS_TIKTOK.filter(([a]) => !(compte.autorisations || '').includes(a));
+          // Le raccordement vit un an à partir du dernier relevé. On ne le dit
+          // qu'à deux mois de la fin : plus tôt, c'est une alarme qui ne
+          // s'éteint jamais, et une alarme permanente cesse d'être lue.
+          const finRac = compte.refresh_expire_le ? Date.parse(compte.refresh_expire_le) : null;
+          const bientot = finRac && finRac - Date.now() < 60 * 86400000;
+          return `<section class="ana-carte" style="--rs:${def.couleur}">
+            <header>${tete}
+              <span class="ana-abonnes"><b>${nombre(abonnes)}</b> abonnés
+                ${t?.nouveaux_abonnes ? `<em>+${nombre(t.nouveaux_abonnes)} sur la période</em>` : ''}</span>
+            </header>
+            <div class="ana-tuiles">
+              ${tuileTT('Vues', t?.vues, prec.vues, 'Vues des vidéos publiées sur la période, depuis leur publication')}
+              ${tuileTT('J’aime', t?.likes, prec.likes, 'J’aime reçus par les vidéos publiées sur la période')}
+              ${tuileTT('Commentaires', t?.commentaires, prec.commentaires, 'Commentaires reçus par les vidéos publiées sur la période')}
+              ${tuileTT('Partages', t?.partages, prec.partages, 'Partages des vidéos publiées sur la période')}
+            </div>
+            <p class="small muted ana-note">Ces quatre chiffres sont ceux des <b>vidéos publiées sur la période</b> — TikTok ne sait dire ni combien de personnes vous ont vue entre deux dates, ni donner un chiffre par jour. Une vidéo plus ancienne qui repart n’y entre donc pas. Les abonnés, eux, sont relevés chaque matin.</p>
+            <div class="ana-tt-pied">
+              <span class="small muted">Compte raccordé${compte.display_name ? ` : <b>${esc(compte.display_name)}</b>` : ''}${videos.length ? ` · ${nombre(videos.length)} vidéo${videos.length > 1 ? 's' : ''} relevée${videos.length > 1 ? 's' : ''}` : ''}</span>
+              <button type="button" class="btn ghost small" id="ana-tt-detacher" title="Détacher le compte TikTok">Détacher</button>
+            </div>
+            ${manque.length ? `<p class="small ana-note est-manque">TikTok n’a pas accordé ${esc(manque.map(([, l]) => l).join(' ni '))} : l’examen de l’application n’est pas terminé, ou le compte n’est pas déclaré comme compte d’essai. Le reste est relevé normalement.</p>` : ''}
+            ${compte.dernier_motif ? `<p class="small ana-note est-manque">Dernier relevé incomplet : ${esc(compte.dernier_motif)}</p>` : ''}
+            ${bientot ? `<p class="small ana-note est-manque">Le raccordement expire le ${esc(new Date(finRac).toLocaleDateString('fr-FR'))} : il faudra réautoriser le CRM depuis le compte TikTok.</p>` : ''}
+          </section>`;
+        };
+
         const carteReseau = (r) => {
           const def = RESEAUX[r];
           const siennes = jours.filter(l => l.reseau === r).sort((a, b) => a.jour.localeCompare(b.jour));
+          if (r === 'tiktok') return carteTiktok(def);
           if (!RACCORDES.includes(r) || !siennes.length) {
             return `<section class="ana-carte est-vide" style="--rs:${def.couleur}">
               <header>${logoReseau(r, 30)}<h3>${esc(def.label)}</h3><span class="ana-etat">À raccorder</span></header>
-              <p class="small muted">${r === 'tiktok' || r === 'linkedin'
+              <p class="small muted">${r === 'linkedin'
                 ? `${esc(def.label)} demande une autorisation de développeur, accordée après examen : le raccordement viendra ensuite.`
                 : 'Aucun relevé pour l’instant.'}</p></section>`;
           }
@@ -660,6 +737,7 @@ export function pageAnalyse(cle) {
             <div class="com-rs-filtre">${PERIODES.map(([n, l]) => `<button type="button" data-periode="${n}" class="${state.periode === n ? 'actif' : ''}">${esc(l)}</button>`).join('')}</div>
           </section>
           ${state.vue === 'site' ? vueSite(cle, state.periode) : `
+            ${retourTiktok ? `<p class="ana-retour est-${retourTiktok.ton}">${esc(retourTiktok.texte)}</p>` : ''}
             <p class="small muted ana-releve">${dernierReleve ? `Relevé chaque matin — dernier relevé le ${esc(new Date(dernierReleve).toLocaleString('fr-FR', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }))}.` : 'Premier relevé demain matin.'}</p>
             <div class="ana-cartes">${RESEAUX_DE[cle].map(carteReseau).join('')}</div>
             ${blocPosts}`}`;
@@ -678,6 +756,36 @@ export function pageAnalyse(cle) {
         if (tri) tri.onchange = (e) => { state.tri = e.target.value; draw(); };
         const res = root.querySelector('#ana-reseau');
         if (res) res.onchange = (e) => { state.reseau = e.target.value; draw(); };
+
+        // ⚠ LE BOUTON NE BRANCHE RIEN, IL FAIT QUITTER LE CRM : c'est TikTok qui
+        // demande l'autorisation, sur son site, puis ramène le navigateur sur
+        // l'Edge Function `tiktok-retour`. L'adresse vient du serveur et non
+        // d'ici : elle porte un jeton d'état qu'il vient de poser en base, et
+        // c'est la seule chose qui empêche un inconnu de raccorder SON compte à
+        // la place du nôtre.
+        const brancher = root.querySelector('#ana-tt-brancher');
+        if (brancher) brancher.onclick = async () => {
+          brancher.disabled = true;
+          brancher.textContent = 'Ouverture de TikTok…';
+          try {
+            location.assign(await demarrerRaccordementTiktok(cle));
+          } catch (e) {
+            brancher.disabled = false;
+            brancher.textContent = 'Raccorder TikTok';
+            toast(e.message || 'Raccordement impossible', 'error');
+          }
+        };
+        // Détacher efface le jeton : deux clics sur le même bouton, jamais le
+        // `confirm()` de `ui.js` qui remplacerait la fenêtre courante.
+        const detacher = root.querySelector('#ana-tt-detacher');
+        if (detacher) armerCroix(detacher, async () => {
+          try {
+            await retirerRaccordementTiktok(cle);
+            await db.recharger('tiktok_raccordement');
+            toast('TikTok détaché');
+            draw();
+          } catch (e) { toast(e.message || 'Impossible de détacher', 'error'); }
+        }, { repos: 'Détacher', arme: 'Confirmer le détachement', titre: 'Détacher le compte TikTok' });
       };
       draw();
       return { refresh: draw, destroy() { coquille.retirer(); } };

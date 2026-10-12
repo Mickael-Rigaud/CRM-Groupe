@@ -45,6 +45,15 @@ function statsDemo() {
       }
     }
   }
+  // ⚠ TIKTOK N'A QU'UNE COLONNE REMPLIE, ET C'EST LA RÉALITÉ DE SON API : elle
+  // ne donne ni portée, ni vues par jour, ni visites de profil — seulement le
+  // nombre d'abonnés à l'instant où on le lit. Les semer comme Facebook
+  // montrerait en démo des chiffres que la production n'aura jamais.
+  for (let i = 1; i <= 60; i++) {
+    const d = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
+    lignes.push({ activity: 'rgd', reseau: 'tiktok', jour: d,
+      abonnes: 1240 - Math.round(i * 2.4), releve_le: new Date().toISOString() });
+  }
   return lignes;
 }
 const postsDemo = () => [
@@ -57,7 +66,23 @@ const postsDemo = () => [
   reseau, activity, post_id: `demo-post-${i}`, type, apercu, portee, vues, likes, commentaires, enregistrements,
   publie_le: new Date(Date.now() - ilya * 86400000).toISOString(), lien: 'https://www.instagram.com/',
   interactions: likes + commentaires + (enregistrements || 0), releve_le: new Date().toISOString(),
-}));
+})).concat(TIKTOK_DEMO.map(([ilya, apercu, vues, likes, commentaires, partages], i) => ({
+  // ⚠ `portee` ET `enregistrements` RESTENT NULS : TikTok ne les donne pas, et
+  // l'écran doit afficher « — » plutôt qu'un zéro qui se lirait « personne ne
+  // l'a vue ». Sans ces trois vidéos, le classement « Meilleurs posts » ne
+  // s'essayait jamais avec une ligne dont la portée manque.
+  reseau: 'tiktok', activity: 'rgd', post_id: `demo-tt-${i}`, type: 'Vidéo', apercu,
+  portee: null, vues, likes, commentaires, partages, enregistrements: null,
+  publie_le: new Date(Date.now() - ilya * 86400000).toISOString(), lien: 'https://www.tiktok.com/',
+  interactions: likes + commentaires + partages, releve_le: new Date().toISOString(),
+})));
+
+// Trois vidéos de démonstration, textes INVENTÉS — le dépôt est public.
+const TIKTOK_DEMO = [
+  [3, 'La salle de bain refaite en 30 secondes', 14200, 612, 28, 41],
+  [11, 'Pourquoi on casse toujours le carrelage avant', 5100, 198, 14, 9],
+  [26, 'Une journée avec l’équipe sur un chantier', 2300, 87, 6, 3],
+];
 
 export const SEED = {
   organisations: [
@@ -606,8 +631,37 @@ export const SEED = {
       out.push({ activity: act, reseau, periode: n, du: cur[cur.length - 1].jour, au: cur[0].jour,
         abonnes: siens[0].abonnes, ...bloc(cur), precedent: bloc(avant), releve_le: new Date().toISOString() });
     }
+    // ⚠ TIKTOK SE CALCULE SUR LES VIDÉOS PUBLIÉES DANS LA FENÊTRE, pas sur une
+    // somme de journées : c'est tout ce que son API permet, et la carte de
+    // l'écran le dit. `portee` reste nulle — il n'en donne aucune.
+    const videos = postsDemo().filter(p => p.reseau === 'tiktok');
+    const jtt = j.filter(x => x.activity === 'rgd' && x.reseau === 'tiktok');
+    for (const n of [7, 14, 30]) {
+      const fin = Date.now() - 86400000;
+      const dans = (a, b) => videos.filter(v => Date.parse(v.publie_le) >= a && Date.parse(v.publie_le) < b);
+      const bloc = (l) => ({ vues: somme(l, 'vues'), likes: somme(l, 'likes'),
+        commentaires: somme(l, 'commentaires'), partages: somme(l, 'partages'),
+        interactions: somme(l, 'interactions'), publiees: l.length });
+      const debut = fin - n * 86400000;
+      out.push({ activity: 'rgd', reseau: 'tiktok', periode: n,
+        du: new Date(debut).toISOString().slice(0, 10), au: jtt[0].jour,
+        abonnes: jtt[0].abonnes, nouveaux_abonnes: jtt[0].abonnes - (jtt[n - 1]?.abonnes ?? jtt[0].abonnes),
+        portee: null, visites_profil: null, ...bloc(dans(debut, fin)),
+        precedent: bloc(dans(debut - n * 86400000, debut)), releve_le: new Date().toISOString() });
+    }
     return out;
   })(),
+
+  // Le compte TikTok raccordé, en démo. ⚠ C'est la VUE `tiktok_raccordement`
+  // qu'on sème, jamais la table : aucun jeton ne descend dans le navigateur, et
+  // la démo ne doit pas laisser croire le contraire. Sans cette ligne, la carte
+  // TikTok s'affichait toujours « À raccorder » et son état raccordé — abonnés,
+  // vidéos, autorisations manquantes — ne s'essayait qu'en production.
+  tiktok_raccordement: [
+    { activity: 'rgd', open_id: 'demo-open-id', display_name: 'RGD Renova (démo)', avatar_url: null,
+      abonnes: 1240, autorisations: 'user.info.basic,user.info.profile,user.info.stats,video.list',
+      raccorde_le: d(-9), refresh_expire_le: d(356), maj_le: d(0), dernier_motif: null },
+  ],
   communication_contenus: [
     { id: 'com1', activity: 'rgd', date_prevue: '2026-10-02', heure: '18:00', reseaux: ['facebook', 'instagram'],
       format: 'carrousel', titre: 'Avant / après salle de bain', statut: 'publie',

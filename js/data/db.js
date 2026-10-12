@@ -57,6 +57,11 @@ export const TABLES = ['profiles', 'organisations', 'contacts', 'deals', 'activi
   'communication_contenus',
   // Les statistiques relevées chaque matin (direction seule, lecture seule).
   'communication_stats_jour', 'communication_stats_posts', 'communication_stats_periode',
+  // ⚠ `tiktok_raccordement` EST UNE VUE, PAS LA TABLE : celle-ci porte les
+  // jetons et n'a aucune policy — rien n'en sort côté navigateur. La vue ne dit
+  // que quel compte est raccordé, depuis quand et jusqu'à quand, et elle ne
+  // rend rien à qui n'est pas direction.
+  'tiktok_raccordement',
   // Le compteur d'audience des sites, sans cookie (direction seule).
   'site_stats_jour',
   // Google Analytics et Search Console, en totaux de période (direction seule).

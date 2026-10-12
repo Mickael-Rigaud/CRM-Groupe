@@ -6505,6 +6505,27 @@ span.rpv-statut { display: inline-block; margin-bottom: 4px; }
 .ana-histo rect { fill: var(--rs); opacity: .85; }
 .ana-histo rect:hover { opacity: 1; }
 .ana-note { margin: 0; }
+/* Ce qui manque ou ce qui a cloche : lisible, jamais rouge vif — une
+   autorisation TikTok non accordee en bac a sable est l'etat NORMAL, pas
+   une panne, et un bandeau d'alarme a chaque ouverture cesse d'etre lu. */
+.ana-note.est-manque { color: var(--amber); }
+/* Le pied de la carte TikTok : le compte raccorde a gauche, le
+   detachement a droite. `margin-top: auto` le colle en bas, pour que deux
+   cartes voisines de hauteurs differentes alignent quand meme leur pied. */
+.ana-tt-pied { display: flex; align-items: center; gap: 10px; margin-top: auto;
+  padding-top: 8px; border-top: 1px solid var(--line); }
+.ana-tt-pied span { min-width: 0; }
+.ana-tt-pied button { margin-left: auto; flex: none; }
+/* Le mot rapporte de TikTok au retour de l'autorisation. Il n'apparait
+   qu'une fois : l'ecran retire la question de l'adresse en la lisant. */
+.ana-retour { margin: 0 4px 12px; padding: 10px 14px; border-radius: 10px; font-size: 13.5px;
+  border: 1px solid var(--line); background: var(--card); }
+.ana-retour.est-ok { border-color: color-mix(in srgb, var(--green) 45%, var(--line));
+  background: color-mix(in srgb, var(--green) 9%, var(--card)); color: var(--text); }
+.ana-retour.est-refus { border-color: color-mix(in srgb, var(--amber) 45%, var(--line));
+  background: color-mix(in srgb, var(--amber) 9%, var(--card)); color: var(--text); }
+.ana-retour.est-erreur { border-color: color-mix(in srgb, var(--red) 45%, var(--line));
+  background: color-mix(in srgb, var(--red) 8%, var(--card)); color: var(--text); }
 .ana-posts { margin-bottom: 14px; }
 .ana-posts-tete { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .ana-posts-tete h3 { margin: 0 auto 0 0; }
