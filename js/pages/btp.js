@@ -139,7 +139,14 @@ const ONGLETS = [
   ] },
   // `bas: true` le pousse au pied du menu, séparé par un trait : on n'ouvre pas
   // la facturation pour travailler un dossier, on l'ouvre pour clore un mois.
-  { label: 'Autres', bas: true, sous: [
+  // ⚠ REPLIABLE DEPUIS LE 12/10/2026 (demandé par Élodie le jour où
+  // « Communication » l'est devenu). Il est donc comme son homonyme de RGD :
+  // en bas, séparé par un trait, et replié.
+  // ⚠ IL NE PORTE QU'UNE ENTRÉE, et le repli la cache quand même — c'est
+  // assumé. La raison n'est pas de gagner de la place sur une ligne, c'est que
+  // deux groupes voisins dont un seul porte une flèche se lisent comme un
+  // défaut : la régularité du menu vaut plus ici que le clic économisé.
+  { label: 'Autres', bas: true, pliable: true, sous: [
     { hash: '#/btp/facturation', label: 'Facturation' },
   ] },
 ];
