@@ -67,7 +67,13 @@ function editeur(etat) {
 
   const corps = () => {
     const bougees = etat.liste.filter(modifiee);
-    const boiteuses = etat.liste.filter(p => (p.avant || p.apres) && !complete(p));
+    // ⚠ UNE PRESTATION CRÉÉE SANS AUCUNE PHOTO COMPTE AUSSI, et c'est un
+    // défaut vécu (12/10/2026). Le test exigeait au moins UNE image : Élodie a
+    // ajouté « Ravalement de façade », publié, puis cherché sur le site pourquoi
+    // rien n'apparaissait. Une création vierge n'était nommée nulle part —
+    // exactement le cas où l'on ne peut PAS deviner ce qui manque, puisqu'il
+    // n'y a rien à l'écran qui ressemble à un début de réponse.
+    const boiteuses = etat.liste.filter(p => !complete(p) && (p.avant || p.apres || p.creee));
     return `<div class="rpr-atelier">
       <div class="rpr-tete">
         <div>
@@ -104,8 +110,17 @@ function editeur(etat) {
             : bougees.length ? `Publier ${bougees.length} changement${bougees.length > 1 ? 's' : ''}`
             : 'Publier sur le site'}</button>
       </div>
-      ${boiteuses.length ? `<p class="rpr-manque">⚠ ${boiteuses.map(p => esc(p.titre || 'Nouvelle prestation')).join(', ')} :
-        il manque une des deux photos — cette prestation ne partira pas.</p>` : ''}
+      ${/* ⚠ ON NOMME CE QUI MANQUE, PAS SEULEMENT QU'IL MANQUE. « Il manque une
+            des deux photos » était faux quand il n'y en a aucune, et ne disait pas
+            laquelle quand il n'en manque qu'une — on relisait la carte pour le
+            savoir. */''}
+      ${boiteuses.length ? `<p class="rpr-manque">⚠ ${boiteuses.map(p => {
+        const quoi = !p.avant && !p.apres ? 'aucune photo déposée'
+          : !p.avant ? 'il manque la photo <b>Avant</b>'
+          : 'il manque la photo <b>Après</b>';
+        return `<b>${esc(p.titre || 'Nouvelle prestation')}</b> — ${quoi}`;
+      }).join(' · ')}. ${boiteuses.length > 1 ? 'Ces prestations ne partiront pas' : 'Cette prestation ne partira pas'}
+        sur le site tant que les deux photos n'y sont pas.</p>` : ''}
       <p class="muted small">Le retour arrière ne remonte que d’un cran : deux publications
         de suite, et la version d’avant n’existe plus nulle part.</p>
     </div>`;
@@ -316,7 +331,15 @@ function editeur(etat) {
           : `Non publié — ${r.motif}`, 'err');
         return;
       }
-      toast('Publié sur rgdrenova.fr');
+      // ⚠ « PUBLIÉ » TOUT COURT ÉTAIT TROMPEUR quand une prestation reste de
+      // côté : le 12/10/2026 une création sans photo a été publiée, le message a
+      // dit « Publié sur rgdrenova.fr », le panneau s'est fermé, et il a fallu
+      // aller lire la base pour comprendre pourquoi le site ne montrait rien.
+      // Le message nomme désormais ce qui n'est pas parti.
+      const restees = etat.liste.filter(p => !p.avant || !p.apres);
+      toast(restees.length
+        ? `Publié — ${restees.map(p => p.titre || 'une prestation ajoutée').join(', ')} n'est pas en ligne : il y manque une photo.`
+        : 'Publié sur rgdrenova.fr');
       fermer();
     });
 
