@@ -6166,6 +6166,9 @@ tr.click:hover td.rcl-suppr { background: var(--card-2); }
 .rappels[hidden] { display: none; }
 .rappels.a-du-retard { border-left-color: var(--red); }
 body:has(.msg-bulle-zone.ouverte) .rappels { display: none; }
+/* Une fenêtre ouverte passe devant : le panneau (z 59) recouvrait la moitié droite
+   des formulaires (fenêtres en z 50) — « Programmé » du calendrier y disparaissait. */
+body:has(.modal-backdrop) .rappels { display: none; }
 .rappels.est-reduit { width: auto; border: 0; background: none; box-shadow: none; overflow: visible; }
 .rap-pastille { display: inline-flex; align-items: center; gap: 6px; padding: 8px 13px; border-radius: 999px;
   border: 1px solid var(--line); background: var(--card); color: var(--text); font-family: inherit;
