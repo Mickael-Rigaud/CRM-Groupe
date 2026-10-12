@@ -127,7 +127,13 @@ const ONGLETS = [
   // les Réalisations, que le cabinet n'a pas. Placé sous « Documentation »,
   // qui porte « Formation » — même rang que chez RGD. Direction seule : le groupe
   // entier sort du menu des autres.
-  { label: 'Communication', sous: [
+  // ⚠ REPLIABLE DEPUIS LE 12/10/2026, comme chez RGD et pour la même demande.
+  // ⚠ IL EST LE SEUL GROUPE PLIABLE DE CET ESPACE, ET ÇA NE CONTREDIT PAS LA
+  // DÉCISION DU 29/09 : celle-ci portait sur « Documentation », qu'on consulte
+  // EN TRAVAILLANT — Mickael voulait quatre groupes qui se lisent pareil. La
+  // communication, elle, est à la direction et ne s'ouvre pas tous les jours ;
+  // c'est le même usage que le groupe « Autres » de RGD, qui est replié.
+  { label: 'Communication', pliable: true, sous: [
     { hash: '#/btp/communication', label: 'Calendrier réseaux sociaux' },
     { hash: '#/btp/analyse', label: 'Analyse' },
   ] },

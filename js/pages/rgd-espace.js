@@ -40,7 +40,15 @@ export const ONGLETS = [
   // Placé SOUS « Formations », demandé le même jour.
   // Le groupe ENTIER est réservé à la direction (`RESERVES_DIRECTION`), et il
   // sort du menu d'un chargé d'affaires.
-  { label: 'Communication', sous: [
+  // ⚠ REPLIABLE DEPUIS LE 12/10/2026 (demandé par Élodie : « que l'onglet
+  // communication soit comme "autres" de rgd renova avec une sous-flèche »).
+  // C'est `pliable: true` et RIEN D'AUTRE : surtout pas `bas: true`, qui le
+  // pousserait au pied du menu — sa place sous « Formations » a été choisie le
+  // 08/10, seule la flèche était demandée.
+  // ⚠ CONSÉQUENCE À CONNAÎTRE : un groupe pliable est REPLIÉ PAR DÉFAUT, donc
+  // ces trois écrans passent derrière un clic. C'est le propre de ce réglage,
+  // et le groupe de la page ouverte se déplie toujours de lui-même.
+  { label: 'Communication', pliable: true, sous: [
     { hash: '#/rgd/realisations', label: 'Réalisations' },
     { hash: '#/rgd/communication', label: 'Calendrier réseaux sociaux' },
     { hash: '#/rgd/analyse', label: 'Analyse' },
