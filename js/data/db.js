@@ -56,7 +56,7 @@ export const TABLES = ['profiles', 'organisations', 'contacts', 'deals', 'activi
   // Le calendrier des contenus des réseaux sociaux (RGD et BTP), direction seule.
   'communication_contenus',
   // Les statistiques relevées chaque matin (direction seule, lecture seule).
-  'communication_stats_jour', 'communication_stats_posts',
+  'communication_stats_jour', 'communication_stats_posts', 'communication_stats_periode',
   // ⚠ `rgd_apports` non plus n'est pas un reflet : les apports d'affaires d'un
   // partenaire se saisissent dans le CRM, et depuis le 25/09/2026 `rgd_apporteurs`
   // a rejoint ce cas — le relevé ignore désormais sa charge.

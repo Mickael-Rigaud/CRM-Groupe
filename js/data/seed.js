@@ -556,6 +556,22 @@ export const SEED = {
   // ne s'essayaient. Textes INVENTÉS.
   communication_stats_jour: statsDemo(),
   communication_stats_posts: postsDemo(),
+  // Les totaux de période « à la Meta » : en démo, la somme des jours (sans
+  // dédoublonnage) suffit à remplir l'écran.
+  communication_stats_periode: (() => {
+    const j = statsDemo();
+    const out = [];
+    const somme = (l, k) => l.reduce((a, x) => a + (x[k] || 0), 0);
+    for (const act of ['rgd', 'btp']) for (const reseau of ['facebook', 'instagram']) for (const n of [7, 14, 30]) {
+      const siens = j.filter(x => x.activity === act && x.reseau === reseau);
+      const cur = siens.slice(0, n), avant = siens.slice(n, 2 * n);
+      const bloc = (l) => ({ portee: Math.round(somme(l, 'portee') * 0.6), vues: somme(l, 'vues'), interactions: somme(l, 'interactions'),
+        visites_profil: somme(l, 'visites_profil'), nouveaux_abonnes: somme(l, 'nouveaux_abonnes') });
+      out.push({ activity: act, reseau, periode: n, du: cur[cur.length - 1].jour, au: cur[0].jour,
+        abonnes: siens[0].abonnes, ...bloc(cur), precedent: bloc(avant), releve_le: new Date().toISOString() });
+    }
+    return out;
+  })(),
   communication_contenus: [
     { id: 'com1', activity: 'rgd', date_prevue: '2026-10-02', heure: '18:00', reseaux: ['facebook', 'instagram'],
       format: 'carrousel', titre: 'Avant / après salle de bain', statut: 'publie',

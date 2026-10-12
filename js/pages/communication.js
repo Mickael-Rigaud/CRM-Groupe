@@ -482,11 +482,18 @@ export const btpCommunicationPage = pageCommunication('btp');
 // comme « personne ne nous voit ». Elle reste marquée « À raccorder ».
 // ⚠ UN NULL N'EST PAS UN ZÉRO : Meta retire des métriques ; une valeur
 // inconnue est exclue des sommes et s'affiche « — ».
-// ⚠ LA COMPARAISON N'APPARAÎT QUE SI LA PÉRIODE PRÉCÉDENTE EST ENTIÈREMENT
-// RELEVÉE : comparer 28 jours à 3 jours relevés donnerait « +900 % » à tort.
+// ⚠ LES CHIFFRES SONT CEUX DE META, PAS UNE SOMME DE JOURS (12/10/2026, « je
+// veux exactement la même chose » qu'Instagram) : la portée compte des
+// personnes uniques sur la fenêtre, que seul Meta sait dédoublonner. L'écart
+// se lit sur la fenêtre d'avant, relevée en même temps. Les jours ne servent
+// plus qu'à l'histogramme.
 const SITES = { rgd: 'rgdrenova.fr', btp: 'btpexpertise.fr' };
 const RACCORDES = ['facebook', 'instagram'];
-const PERIODES = [[7, '7 jours'], [28, '28 jours'], [90, '90 jours']];
+// ⚠ LES FENÊTRES DE L'APPLICATION INSTAGRAM, PAS D'AUTRES (12/10/2026) : les
+// chiffres affichés sont les totaux que Meta calcule lui-même sur 7, 14 et 30
+// jours (table `communication_stats_periode`). Au-delà de 30 jours l'API
+// refuse, d'où l'absence de 90 jours.
+const PERIODES = [[7, '7 jours'], [14, '14 jours'], [30, '30 jours']];
 const nombre = (n) => (n == null ? '—' : Number(n).toLocaleString('fr-FR'));
 const isoJour = (d) => d.toISOString().slice(0, 10);
 
@@ -537,8 +544,11 @@ export function pageAnalyse(cle) {
         return {};
       }
       const coquille = poserEspace(root);
-      const state = { periode: 28, tri: 'portee', reseau: '' };
-      try { state.periode = Number(localStorage.getItem('crm_ana_periode')) || 28; } catch { /* sans stockage */ }
+      const state = { periode: 30, tri: 'portee', reseau: '' };
+      try {
+        const memo = Number(localStorage.getItem('crm_ana_periode'));
+        if (PERIODES.some(([n]) => n === memo)) state.periode = memo;
+      } catch { /* sans stockage */ }
 
       const draw = () => {
         if (!scope.isDirection) {
@@ -548,6 +558,7 @@ export function pageAnalyse(cle) {
         }
         const jours = db.t('communication_stats_jour').filter(l => l.activity === cle);
         const posts = db.t('communication_stats_posts').filter(p => p.activity === cle);
+        const totaux = db.t('communication_stats_periode').filter(t => t.activity === cle && Number(t.periode) === state.periode);
         const contenus = contenusDe(cle);
         const dernierReleve = [...jours, ...posts].map(x => x.releve_le).sort().pop();
 
@@ -555,11 +566,12 @@ export function pageAnalyse(cle) {
         const hier = new Date(Date.now() - 86400000);
         const fin = isoJour(hier);
         const debut = isoJour(new Date(hier.getTime() - (state.periode - 1) * 86400000));
-        const finAvant = isoJour(new Date(Date.parse(debut + 'T12:00:00Z') - 86400000));
-        const debutAvant = isoJour(new Date(Date.parse(finAvant + 'T12:00:00Z') - (state.periode - 1) * 86400000));
 
-        const tuile = (libelle, valeur, avant, complet, aide) => `<div class="ana-tuile" title="${esc(aide)}">
-          <span>${esc(libelle)}</span><b>${nombre(valeur)}</b>${ecart(valeur, avant, complet)}</div>`;
+        // ⚠ META REND DES SOLDES : des enregistrements retirés donnent -19. Un
+        // total ne s'affiche pas en négatif.
+        const net = (v) => (v == null ? null : Math.max(0, Number(v)));
+        const tuile = (libelle, valeur, avant, aide) => `<div class="ana-tuile" title="${esc(aide)}">
+          <span>${esc(libelle)}</span><b>${nombre(net(valeur))}</b>${ecart(net(valeur), net(avant), true)}</div>`;
 
         const carteReseau = (r) => {
           const def = RESEAUX[r];
@@ -571,10 +583,14 @@ export function pageAnalyse(cle) {
                 ? `${esc(def.label)} demande une autorisation de développeur, accordée après examen : le raccordement viendra ensuite.`
                 : 'Aucun relevé pour l’instant.'}</p></section>`;
           }
-          const act = bilanPeriode(siennes, debut, fin);
-          const prec = bilanPeriode(siennes, debutAvant, finAvant);
-          const complet = prec.jours >= state.periode;
-          const abonnes = [...siennes].reverse().find(l => l.abonnes != null)?.abonnes ?? null;
+          // Les chiffres affichés : le total de Meta sur la fenêtre. À défaut
+          // (premier jour, réseau pas encore relevé ainsi), la somme des jours,
+          // et l'écran le dit.
+          const t = totaux.find(x => x.reseau === r);
+          const act = t || bilanPeriode(siennes, debut, fin);
+          const prec = t ? (t.precedent || {}) : {};
+          const abonnes = t?.abonnes ?? [...siennes].reverse().find(l => l.abonnes != null)?.abonnes ?? null;
+          const du = t ? t.du : debut, au = t ? t.au : fin;
           return `<section class="ana-carte" style="--rs:${def.couleur}">
             <header>
               <span class="ana-pastille">${esc(def.court)}</span><h3>${esc(def.label)}</h3>
@@ -582,14 +598,14 @@ export function pageAnalyse(cle) {
                 ${act.nouveaux_abonnes ? `<em>+${nombre(act.nouveaux_abonnes)} sur la période</em>` : ''}</span>
             </header>
             <div class="ana-tuiles">
-              ${tuile('Portée', act.portee, prec.portee, complet, 'Somme des comptes uniques touchés chaque jour')}
-              ${tuile('Vues', act.vues, prec.vues, complet, 'Nombre d’affichages des contenus')}
-              ${tuile('Interactions', act.interactions, prec.interactions, complet, 'J’aime, commentaires, partages, enregistrements')}
-              ${tuile('Visites', act.visites_profil, prec.visites_profil, complet, 'Visites de la page ou du profil')}
+              ${tuile(r === 'instagram' ? 'Comptes touchés' : 'Spectateurs', act.portee, prec.portee, 'Personnes uniques qui ont vu vos contenus sur la période, calculé par Meta')}
+              ${tuile('Vues', act.vues, prec.vues, 'Nombre de fois où vos contenus ont été vus')}
+              ${tuile('Interactions', act.interactions, prec.interactions, 'J’aime, commentaires, partages, enregistrements')}
+              ${tuile('Visites du profil', act.visites_profil, prec.visites_profil, 'Visites de la page ou du profil')}
             </div>
-            <div class="ana-histo-tete"><span>Vues par jour</span><span class="small muted">${esc(debut.split('-').reverse().join('/'))} → ${esc(fin.split('-').reverse().join('/'))}</span></div>
+            <div class="ana-histo-tete"><span>Vues par jour</span><span class="small muted">${esc(du.split('-').reverse().join('/'))} → ${esc(au.split('-').reverse().join('/'))}</span></div>
             ${histogramme(siennes, debut, state.periode, 'vues', def.couleur)}
-            ${!complet && act.jours ? `<p class="small muted ana-note">Pas de comparaison : la période précédente n’est pas encore entièrement relevée (l’historique commence le ${esc(siennes[0].jour.split('-').reverse().join('/'))}).</p>` : ''}
+            ${t ? '' : '<p class="small muted ana-note">Totaux de Meta pas encore relevés pour cette période : somme des jours, provisoire.</p>'}
           </section>`;
         };
 
