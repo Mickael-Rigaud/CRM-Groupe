@@ -638,6 +638,61 @@ export function pageAnalyse(cle) {
             : '<div class="empty">Aucun post relevé sur cette période.</div>'}
         </section>`;
 
+        // ---- Le site : le compteur sans cookie (`site_stats_jour`) ----
+        // Une visite = une arrivée depuis l'extérieur ; les pages vues suivent.
+        // Ces compteurs s'additionnent sans fausser : ce ne sont pas des
+        // personnes uniques, contrairement à la portée des réseaux.
+        const blocSite = () => {
+          const site = SITES[cle];
+          const lignes = db.t('site_stats_jour').filter(l => l.site === site);
+          if (!lignes.length) {
+            return `<section class="ana-bloc"><h3>Site internet</h3>
+              <div class="ana-source" style="--rs:#475569">
+                <span class="ana-pastille">WEB</span>
+                <div><b>${esc(site)}</b><div class="small muted">visites, provenance, pages vues</div></div>
+                <span class="ana-etat">${cle === 'btp' ? 'Première visite attendue' : 'À raccorder'}</span>
+              </div></section>`;
+          }
+          // La période du site va jusqu'à aujourd'hui inclus : le compteur est
+          // en direct, contrairement aux relevés de Meta.
+          const jourIl = (n) => isoJour(new Date(Date.now() - n * 86400000));
+          const auj = jourIl(0);
+          const debutS = jourIl(state.periode - 1);
+          const avantFin = jourIl(state.periode);
+          const avantDebut = jourIl(2 * state.periode - 1);
+          const cur = lignes.filter(l => l.jour >= debutS && l.jour <= auj);
+          const prec = lignes.filter(l => l.jour >= avantDebut && l.jour <= avantFin);
+          const tot = (l, k) => l.reduce((a, x) => a + (x[k] || 0), 0);
+          const premier = lignes.map(l => l.jour).sort()[0];
+          // Pas d'écart tant que la période d'avant n'est pas entièrement mesurée.
+          const complet = premier <= avantDebut;
+          const groupe = (champ, k = 'vues') => {
+            const m = new Map();
+            for (const l of cur) m.set(l[champ], (m.get(l[champ]) || 0) + (l[k] || 0));
+            return [...m.entries()].filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]);
+          };
+          const barres = (liste, total) => liste.map(([nom, n]) => `<div class="ana-barre-l">
+            <span class="ana-barre-nom" title="${esc(nom)}">${esc(nom)}</span>
+            <span class="ana-barre-piste"><i style="width:${total ? Math.max(2, (n / total) * 100) : 0}%"></i></span>
+            <b>${nombre(n)}</b></div>`).join('') || '<div class="small muted">—</div>';
+          const visites = tot(cur, 'visites'), vues = tot(cur, 'vues');
+          const tuileS = (lib, v, avant) => `<div class="ana-tuile"><span>${esc(lib)}</span><b>${nombre(v)}</b>${ecart(v, avant, complet)}</div>`;
+          return `<section class="ana-bloc ana-site">
+            <header class="ana-posts-tete"><h3>Site internet — ${esc(site)}</h3>
+              <span class="small muted">Mesure sans cookie depuis le ${esc(premier.split('-').reverse().join('/'))}</span></header>
+            <div class="ana-tuiles ana-tuiles-site" style="--rs:#475569">
+              ${tuileS('Visites', visites, tot(prec, 'visites'))}
+              ${tuileS('Pages vues', vues, tot(prec, 'vues'))}
+              <div class="ana-tuile"><span>Pages par visite</span><b>${visites ? (vues / visites).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) : '—'}</b></div>
+            </div>
+            <div class="ana-site-grille">
+              <div><h4>Provenance des visites</h4>${barres(groupe('source', 'visites'), visites)}</div>
+              <div><h4>Pages les plus vues</h4>${barres(groupe('page').slice(0, 8), vues)}</div>
+              <div><h4>Appareils</h4>${barres(groupe('appareil', 'visites').map(([a, n]) => [a.charAt(0).toUpperCase() + a.slice(1), n]), visites)}</div>
+            </div>
+          </section>`;
+        };
+
         const corps = `
           <section class="ana-barre">
             <div>
@@ -648,13 +703,7 @@ export function pageAnalyse(cle) {
           </section>
           <div class="ana-cartes">${RESEAUX_DE[cle].map(carteReseau).join('')}</div>
           ${blocPosts}
-          <section class="ana-bloc"><h3>Site internet</h3>
-            <div class="ana-source" style="--rs:#475569">
-              <span class="ana-pastille">WEB</span>
-              <div><b>${esc(SITES[cle])}</b><div class="small muted">visites, provenance, pages vues, recherches Google</div></div>
-              <span class="ana-etat">À raccorder</span>
-            </div>
-          </section>`;
+          ${blocSite()}`;
         root.innerHTML = cadre(hash, 'Analyse', corps);
         root.querySelectorAll('[data-periode]').forEach(b => b.onclick = () => {
           state.periode = Number(b.dataset.periode);

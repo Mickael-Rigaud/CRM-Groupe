@@ -6510,3 +6510,14 @@ span.rpv-statut { display: inline-block; margin-bottom: 4px; }
 .com-chip[data-rs] { display: inline-flex; align-items: center; gap: 6px; }
 .com-chip[data-rs].actif { background: color-mix(in srgb, var(--rs) 14%, var(--card)); color: var(--text);
   border-color: var(--rs); font-weight: 600; }
+
+/* Le site dans l'écran Analyse (12/10/2026) : trois chiffres, puis
+   provenance, pages et appareils en barres horizontales. */
+.ana-site { margin-bottom: 14px; }
+.ana-tuiles-site { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.ana-site-grille { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; margin-top: 4px; }
+.ana-site-grille h4 { margin: 0 0 8px; font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.ana-barre-l { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) auto; gap: 8px; align-items: center; font-size: 12.5px; padding: 3px 0; }
+.ana-barre-nom { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ana-barre-piste { height: 8px; border-radius: 4px; background: var(--card-2); overflow: hidden; }
+.ana-barre-piste i { display: block; height: 100%; border-radius: 4px; background: var(--accent); }

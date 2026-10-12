@@ -556,6 +556,21 @@ export const SEED = {
   // ne s'essayaient. Textes INVENTÉS.
   communication_stats_jour: statsDemo(),
   communication_stats_posts: postsDemo(),
+  // Le compteur du site en démo : 40 jours, trois pages, quatre provenances.
+  // Chiffres INVENTÉS, tirés d'une formule fixe.
+  site_stats_jour: (() => {
+    const out = [];
+    const pages = ['/', '/expertises/', '/reglement/'];
+    const sources = ['Google', 'Accès direct', 'Instagram', 'Facebook'];
+    for (let i = 0; i < 40; i++) {
+      const jour = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
+      pages.forEach((page, a) => sources.forEach((source, b) => {
+        const v = (i + a * 3 + b * 5) % 4;
+        if (v) out.push({ site: 'btpexpertise.fr', jour, page, source, appareil: (a + b) % 3 ? 'mobile' : 'ordinateur', vues: v + a, visites: a === 0 ? v : 0 });
+      }));
+    }
+    return out;
+  })(),
   // Les totaux de période « à la Meta » : en démo, la somme des jours (sans
   // dédoublonnage) suffit à remplir l'écran.
   communication_stats_periode: (() => {
