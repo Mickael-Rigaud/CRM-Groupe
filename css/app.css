@@ -2345,6 +2345,11 @@ tr.btp-mission .btp-pts { color: var(--m-encre); }
 .rpr-carte-tete .pat-x { margin-left: auto; }
 .rpr-contenu { display: grid; gap: 10px; margin-bottom: 12px; }
 .rpr-contenu textarea { resize: vertical; min-height: 64px; }
+
+/* Une prestation créée sans photos PART quand même, en texte seul : ce n'est
+   donc pas un avertissement mais une information, et elle ne doit pas porter
+   l'ambre de ce qui bloque. */
+.rpr-manque.rpr-info { color: var(--muted); }
 .rpr-pied .btn.arme { background: var(--red, #b3261e); border-color: var(--red, #b3261e);
   color: #fff; }
 

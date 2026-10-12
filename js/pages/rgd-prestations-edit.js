@@ -67,13 +67,13 @@ function editeur(etat) {
 
   const corps = () => {
     const bougees = etat.liste.filter(modifiee);
-    // ⚠ UNE PRESTATION CRÉÉE SANS AUCUNE PHOTO COMPTE AUSSI, et c'est un
-    // défaut vécu (12/10/2026). Le test exigeait au moins UNE image : Élodie a
-    // ajouté « Ravalement de façade », publié, puis cherché sur le site pourquoi
-    // rien n'apparaissait. Une création vierge n'était nommée nulle part —
-    // exactement le cas où l'on ne peut PAS deviner ce qui manque, puisqu'il
-    // n'y a rien à l'écran qui ressemble à un début de réponse.
-    const boiteuses = etat.liste.filter(p => !complete(p) && (p.avant || p.apres || p.creee));
+    // ⚠ DEUX POPULATIONS, DEUX PHRASES. Le défaut d'origine (12/10/2026) était
+    // qu'une création vierge n'était nommée nulle part : Élodie a ajouté
+    // « Ravalement de façade », publié, puis cherché sur le site pourquoi rien
+    // n'apparaissait. Depuis, elle PART — en texte seul — et c'est une
+    // information, plus un avertissement.
+    const incompletesSite = etat.liste.filter(p => !p.creee && (p.avant || p.apres) && !complete(p));
+    const creeesSansPaire = etat.liste.filter(p => p.creee && !complete(p));
     return `<div class="rpr-atelier">
       <div class="rpr-tete">
         <div>
@@ -110,17 +110,21 @@ function editeur(etat) {
             : bougees.length ? `Publier ${bougees.length} changement${bougees.length > 1 ? 's' : ''}`
             : 'Publier sur le site'}</button>
       </div>
-      ${/* ⚠ ON NOMME CE QUI MANQUE, PAS SEULEMENT QU'IL MANQUE. « Il manque une
-            des deux photos » était faux quand il n'y en a aucune, et ne disait pas
-            laquelle quand il n'en manque qu'une — on relisait la carte pour le
-            savoir. */''}
-      ${boiteuses.length ? `<p class="rpr-manque">⚠ ${boiteuses.map(p => {
-        const quoi = !p.avant && !p.apres ? 'aucune photo déposée'
-          : !p.avant ? 'il manque la photo <b>Avant</b>'
-          : 'il manque la photo <b>Après</b>';
-        return `<b>${esc(p.titre || 'Nouvelle prestation')}</b> — ${quoi}`;
-      }).join(' · ')}. ${boiteuses.length > 1 ? 'Ces prestations ne partiront pas' : 'Cette prestation ne partira pas'}
+      ${/* ⚠ LES DEUX CAS NE DISENT PAS LA MÊME CHOSE, ET LES CONFONDRE SERAIT
+            MENTIR DANS UN SENS OU DANS L'AUTRE (12/10/2026). Une des SIX à qui
+            il manque une photo ne part pas : la page garde les siennes, et une
+            moitié donnerait un curseur qui révèle du vide. Une prestation
+            CRÉÉE, elle, part quand même — en texte seul, sans cadre — et
+            reprendra son curseur quand les deux photos arriveront. */''}
+      ${incompletesSite.length ? `<p class="rpr-manque">⚠ ${incompletesSite.map(p =>
+        `<b>${esc(p.titre)}</b> — ${!p.avant ? 'il manque la photo <b>Avant</b>' : 'il manque la photo <b>Après</b>'}`
+      ).join(' · ')}. ${incompletesSite.length > 1 ? 'Ces prestations ne partiront pas' : 'Cette prestation ne partira pas'}
         sur le site tant que les deux photos n'y sont pas.</p>` : ''}
+      ${creeesSansPaire.length ? `<p class="rpr-manque rpr-info">ℹ ${creeesSansPaire.map(p =>
+        `<b>${esc(p.titre || 'Nouvelle prestation')}</b>`).join(' · ')} :
+        ${creeesSansPaire.length > 1 ? 'elles partiront' : 'elle partira'} sur le site
+        <b>en texte seul</b>, sans le curseur avant/après. Déposez les deux photos
+        quand vous les aurez, et ${creeesSansPaire.length > 1 ? 'elles le retrouveront' : 'elle le retrouvera'}.</p>` : ''}
       <p class="muted small">Le retour arrière ne remonte que d’un cran : deux publications
         de suite, et la version d’avant n’existe plus nulle part.</p>
     </div>`;
@@ -334,11 +338,14 @@ function editeur(etat) {
       // ⚠ « PUBLIÉ » TOUT COURT ÉTAIT TROMPEUR quand une prestation reste de
       // côté : le 12/10/2026 une création sans photo a été publiée, le message a
       // dit « Publié sur rgdrenova.fr », le panneau s'est fermé, et il a fallu
-      // aller lire la base pour comprendre pourquoi le site ne montrait rien.
-      // Le message nomme désormais ce qui n'est pas parti.
-      const restees = etat.liste.filter(p => !p.avant || !p.apres);
-      toast(restees.length
-        ? `Publié — ${restees.map(p => p.titre || 'une prestation ajoutée').join(', ')} n'est pas en ligne : il y manque une photo.`
+      // aller lire la base pour comprendre. Le message nomme désormais ce qui
+      // part autrement, et ce qui ne part pas du tout.
+      const retenues = etat.liste.filter(p => !p.creee && !complete(p) && (p.avant || p.apres));
+      const enTexte = etat.liste.filter(p => p.creee && !complete(p));
+      toast(retenues.length
+        ? `Publié — ${retenues.map(p => p.titre).join(', ')} n'est pas en ligne : il y manque une photo.`
+        : enTexte.length
+        ? `Publié — ${enTexte.map(p => p.titre).join(', ')} apparaît en texte seul, sans photos.`
         : 'Publié sur rgdrenova.fr');
       fermer();
     });
