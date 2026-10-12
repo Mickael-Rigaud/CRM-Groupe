@@ -183,5 +183,37 @@ export function enregistrerPrestations(liste) {
   return publierDocSite('prestations', { prestations });
 }
 
+// ⚠ LES PRESTATIONS CRÉÉES SONT AUSSI DES TYPES DE TRAVAUX (12/10/2026,
+// demandé par Élodie). Le formulaire de devis du site les propose depuis le
+// même jour — `assets/rgd-formulaire.js` ajoute une case par prestation créée.
+// Sans ce qui suit, une demande arrivée avec « Ravalement de façade »
+// s'afficherait dans le CRM cochée mais EN TRAIT DISCONTINU, le signe réservé
+// à un vocabulaire qui a bougé. Ici il n'a pas bougé : c'est une valeur qu'on
+// propose exprès.
+//
+// ⚠ LES SEPT CORPS DE MÉTIER NE BOUGENT PAS, on ne fait qu'ajouter — même
+// règle que côté site. Ce ne sont pas les mêmes listes : « type de travaux »
+// ce sont des corps de métier, une prestation est une page vitrine. Une
+// prestation AJOUTÉE, elle, est bien un travail qu'on propose.
+let titresCrees = null;
+
+/** Ce qu'on a déjà, sans attendre : vide avant le premier chargement. */
+export const titresPrestationsCreees = () => titresCrees || [];
+
+/**
+ * Charge une fois les titres des prestations créées.
+ *
+ * ⚠ ON NE MET EN CACHE QU'EN CAS DE SUCCÈS : retenir un tableau vide après une
+ * lecture ratée fermerait la liste pour toute la session, et l'écran dirait
+ * « il n'y en a pas » là où il faut lire « on n'a pas pu savoir ».
+ */
+export async function chargerTitresPrestations() {
+  if (titresCrees) return titresCrees;
+  const lu = await lirePrestations();
+  if (!lu.ok) return [];
+  titresCrees = lu.donnees.filter(p => p.creee && p.titre).map(p => p.titre);
+  return titresCrees;
+}
+
 /** Revenir à la version précédente. UNE seule, comme partout ici. */
 export const restaurerPrestations = () => restaurerDocSite('prestations');

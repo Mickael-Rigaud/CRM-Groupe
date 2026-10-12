@@ -59,6 +59,7 @@ import { esc, openModal, closeModal, toast, fmtDate } from '../ui.js';
 // le bloc des relances (demandé par Élodie). Elles restent la porte unique des
 // trois colonnes, appelées par le tableau et par `ecrireStatut` : c'est le
 // FORMULAIRE qui ne les écrit plus, pas la règle qui disparaît.
+import { titresPrestationsCreees, chargerTitresPrestations } from '../data/rgd-prestations.js';
 import { DEMANDEUR, BIEN, RESIDENCE, TRAVAUX, BUDGETS, CONNU, listeTravaux,
          CONNU_RECOMMANDATION, CONNU_APPORTEUR } from '../data/rgd-formulaire.js';
 import { valeursProjet, valeursSuivi, personneDe, enregistrerProjet, ditCreneau,
@@ -269,7 +270,7 @@ export function ficheProjetRgd({ dans, cible = null, apporteurs = null,
       ${puce('type_projet', 'Type de bien', BIEN)}
       ${puce('type_intervention', 'Usage du bien', RESIDENCE)}
       ${champ('superficie', 'Superficie', { type: 'number', inputmode: 'numeric', placeholder: 'm²' })}
-      ${puces('types_travaux', 'Types de travaux', TRAVAUX)}
+      ${puces('types_travaux', 'Types de travaux', [...TRAVAUX, ...titresPrestationsCreees()])}
       <!-- ⚠ « DÉTAILS DU PROJET », pas « Ce que la personne demande » : c'est le
            nom que Mickael lui donne, et c'est la MÊME colonne en base. En créer
            une seconde aurait donné deux textes libres que personne ne saurait
@@ -853,6 +854,25 @@ export function ficheProjetRgd({ dans, cible = null, apporteurs = null,
   }
 
   dessine();
+
+  // ⚠ LES PRESTATIONS CRÉÉES ARRIVENT APRÈS LE PREMIER DESSIN, et c'est sans
+  // conséquence : la liste vient d'un document du site, pas du cache, donc on
+  // ne peut pas l'avoir avant d'ouvrir. Elle est retenue pour la session — le
+  // second formulaire ouvert les a d'emblée.
+  //
+  // ⚠ ON NE REDESSINE PAS SOUS LES DOIGTS DE QUELQU'UN QUI ÉCRIT. Un clic sur
+  // une puce redessine déjà tout le formulaire, c'est donc un geste admis ici ;
+  // mais le faire pendant une saisie déplacerait le curseur. Si quelqu'un est
+  // dans un champ, on laisse : le prochain clic de puce ou changement d'étape
+  // fera apparaître les valeurs, et il en reste beaucoup à faire avant
+  // d'arriver aux travaux.
+  chargerTitresPrestations().then((titres) => {
+    if (!titres.length) return;
+    const actif = document.activeElement;
+    if (actif && /^(INPUT|TEXTAREA|SELECT)$/.test(actif.tagName)) return;
+    dessine();
+  }).catch(() => {});
+
   return { nomDit };
 }
 

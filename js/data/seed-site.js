@@ -136,6 +136,16 @@ export const SEED_SITE = {
       { id: 'isolation', avant: AV1, apres: AP1 },
       { id: 'electricite', avant: AV2, apres: AP2 },
       { id: 'plomberie', avant: AV1, apres: AP3 },
+      // ⚠ UNE PRESTATION CRÉÉE DEPUIS LE CRM, ET SANS PHOTOS : c'est le cas
+      // qui n'était essayable que sur la production avant le 12/10/2026. Elle
+      // éprouve trois choses d'un coup — la carte à champs de l'atelier, le
+      // fait qu'une création SANS PAIRE est quand même conservée et publiée
+      // (en texte seul sur le site), et sa présence dans les « Types de
+      // travaux » de la fiche projet, où elle ne doit PAS s'afficher en trait
+      // discontinu.
+      { id: 'ravalement-de-facade', titre: 'Ravalement de façade',
+        texte: 'Nettoyage, reprise des fissures, enduit et peinture de façade.',
+        bouton: 'Rénover ma façade', avant: '', apres: '' },
     ],
   },
 };
