@@ -27,6 +27,38 @@ export const SEED_USERS = [
   { id: 'u-charge', full_name: "Chargé d'affaires (démo)", email: 'charge@example.com', role: 'charge_affaires', activities: ['rgd', 'btp'], active: true },
 ];
 
+// Les statistiques des réseaux en démo (12/10/2026) : 60 jours fabriqués à
+// partir d'aujourd'hui, pour que l'écran Analyse montre des courbes ET une
+// comparaison avec la période précédente. Chiffres INVENTÉS, tirés d'une
+// formule fixe (pas de hasard : l'écran ne doit pas changer à chaque ouverture).
+function statsDemo() {
+  const lignes = [];
+  const base = { rgd: { facebook: [600, 850, 9, 8], instagram: [180, 450, 4, 812] }, btp: { facebook: [3, 5, 0, 2], instagram: [8, 20, 1, 180] } };
+  for (const [act, res] of Object.entries(base)) {
+    for (const [reseau, [po, vu, int, ab]] of Object.entries(res)) {
+      for (let i = 1; i <= 60; i++) {
+        const d = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
+        const vague = 1 + 0.35 * Math.sin(i / 3) + (i % 7 === 2 ? 0.4 : 0);
+        lignes.push({ activity: act, reseau, jour: d, abonnes: i === 1 ? ab : null,
+          nouveaux_abonnes: i % 5 === 0 ? 1 : 0, portee: Math.round(po * vague), vues: Math.round(vu * vague),
+          interactions: Math.round(int * vague), visites_profil: i % 3, releve_le: new Date().toISOString() });
+      }
+    }
+  }
+  return lignes;
+}
+const postsDemo = () => [
+  ['instagram', 'rgd', 6, 'reel', 'Avant / après : salle de bain à Chantilly', 1840, 3120, 64, 5, 22],
+  ['instagram', 'rgd', 20, 'carrousel', 'Cuisine ouverte, du gros œuvre à la pose', 920, 1610, 41, 3, 15],
+  ['facebook', 'rgd', 12, 'added_video', 'Chantier terminé à Senlis', 2100, 3400, 18, 2, null],
+  ['instagram', 'btp', 4, 'carrousel', 'Trois devis. Trois prix. Lequel choisir ?', 64, 140, 9, 1, 3],
+  ['facebook', 'btp', 9, 'added_photos', 'Les signaux qui rassurent à tort', 6, 9, 0, 0, null],
+].map(([reseau, activity, ilya, type, apercu, portee, vues, likes, commentaires, enregistrements], i) => ({
+  reseau, activity, post_id: `demo-post-${i}`, type, apercu, portee, vues, likes, commentaires, enregistrements,
+  publie_le: new Date(Date.now() - ilya * 86400000).toISOString(), lien: 'https://www.instagram.com/',
+  interactions: likes + commentaires + (enregistrements || 0), releve_le: new Date().toISOString(),
+}));
+
 export const SEED = {
   organisations: [
     { id: 'o1', name: 'Agence Immo Centre', type: 'Partenaire', partner_job: 'Agence immobilière', zone: 'Tours', activities: ['btp', 'courtage'], phone: '02 61 91 00 01', email: 'contact@example.com', city: 'Tours', owner_id: 'u-mickael', last_contact_at: d(-12), created_at: d(-200) },
@@ -522,6 +554,8 @@ export const SEED = {
   // statuts, sur plusieurs réseaux, une idée sans date et un contenu BTP —
   // sans eux l'écran s'ouvrait vide et ni la légende ni la réserve d'idées
   // ne s'essayaient. Textes INVENTÉS.
+  communication_stats_jour: statsDemo(),
+  communication_stats_posts: postsDemo(),
   communication_contenus: [
     { id: 'com1', activity: 'rgd', date_prevue: '2026-10-02', heure: '18:00', reseaux: ['facebook', 'instagram'],
       format: 'carrousel', titre: 'Avant / après salle de bain', statut: 'publie',

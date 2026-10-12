@@ -6455,3 +6455,46 @@ span.rpv-statut { display: inline-block; margin-bottom: 4px; }
 .com-note.est-erreur { background: var(--red-soft); border-color: color-mix(in srgb, var(--red) 40%, var(--line)); }
 .com-note.est-attention { background: var(--amber-soft); border-color: color-mix(in srgb, var(--amber) 40%, var(--line)); }
 .com-rouge { color: var(--red); }
+
+/* L'écran Analyse raccordé (12/10/2026) : une carte par réseau, quatre
+   chiffres, l'histogramme des vues, puis les meilleurs posts. */
+.ana-barre { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between;
+  padding: 14px 18px; margin-bottom: 14px; border: 1px solid var(--line); border-radius: var(--radius);
+  background: linear-gradient(120deg, var(--accent-soft), var(--card) 55%); box-shadow: var(--shadow); }
+.ana-barre h2 { margin: 0 0 2px; font-size: 19px; }
+.ana-barre p { margin: 0; }
+.ana-cartes { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 14px; margin-bottom: 14px; }
+.ana-carte { padding: 14px 16px; border: 1px solid var(--line); border-top: 3px solid var(--rs); border-radius: var(--radius);
+  background: var(--card); box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.ana-carte header { display: flex; align-items: center; gap: 10px; }
+.ana-carte h3 { margin: 0; font-size: 15px; color: var(--text); text-transform: none; letter-spacing: 0; }
+.ana-carte.est-vide { border-top-color: var(--line-strong); }
+.ana-carte.est-vide p { margin: 0; }
+.ana-carte .ana-etat { margin-left: auto; }
+.ana-abonnes { margin-left: auto; text-align: right; font-size: 12.5px; color: var(--muted); line-height: 1.3; }
+.ana-abonnes b { font-size: 18px; color: var(--text); }
+.ana-abonnes em { display: block; font-style: normal; color: var(--green); font-weight: 600; }
+.ana-tuiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.ana-tuile { padding: 8px 10px; border-radius: 10px; background: color-mix(in srgb, var(--rs) 7%, var(--card));
+  display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ana-tuile span { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ana-tuile b { font-size: 18px; color: var(--text); }
+.ana-ecart { font-size: 11.5px; font-weight: 650; color: var(--muted); }
+.ana-ecart.hausse { color: var(--green); }
+.ana-ecart.baisse { color: var(--red); }
+.ana-histo-tete { display: flex; justify-content: space-between; align-items: baseline; font-size: 12px; font-weight: 650; color: var(--muted); }
+.ana-histo { width: 100%; height: 90px; display: block; }
+.ana-histo rect { fill: var(--rs); opacity: .85; }
+.ana-histo rect:hover { opacity: 1; }
+.ana-note { margin: 0; }
+.ana-posts { margin-bottom: 14px; }
+.ana-posts-tete { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.ana-posts-tete h3 { margin: 0 auto 0 0; }
+.ana-table { width: 100%; font-size: 13px; }
+.ana-table td { vertical-align: top; }
+.ana-apercu { max-width: 420px; color: var(--text); }
+.ana-table .nowrap { white-space: nowrap; }
+@media screen and (max-width: 720px) {
+  .ana-tuiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ana-cartes { grid-template-columns: 1fr; }
+}

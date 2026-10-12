@@ -23,6 +23,7 @@
 // ⚠ DIRECTION SEULE, miroir de la policy `communication_contenus_direction`.
 
 import { scope } from '../data/scope.js';
+import { db } from '../data/db.js';
 import { esc, toast, openModal, closeModal, armerCroix } from '../ui.js';
 import { poserEspace } from './espace.js';
 import { cadre as cadreRgd } from './rgd-espace.js';
@@ -471,16 +472,59 @@ export const rgdCommunicationPage = pageCommunication('rgd');
 export const btpCommunicationPage = pageCommunication('btp');
 
 // ---------- Analyse : réseaux sociaux et site internet ----------
-// (08/10/2026, demandé par Élodie dans le groupe « Communication »).
+// (08/10/2026, raccordée à Facebook et Instagram le 12/10/2026).
 //
-// ⚠ AUCUN CHIFFRE N'EST AFFICHÉ TANT QU'AUCUNE SOURCE N'EST RACCORDÉE, et
-// c'est délibéré : des zéros se liraient comme « personne ne nous voit ».
-// L'écran dit ce qu'il mesurera et ce qu'il attend pour le faire. Chaque
-// source se branche côté serveur (comptes Meta, TikTok, LinkedIn, Google
-// Analytics / Search Console) ; aucun jeton ne passe par le navigateur.
+// Les chiffres viennent de `communication_stats_jour` (une ligne par jour et
+// par réseau) et `communication_stats_posts` (une ligne par post), relevées
+// chaque matin à 6 h 30 UTC par l'Edge Function `communication-stats`.
+//
+// ⚠ UNE SOURCE NON RACCORDÉE N'AFFICHE AUCUN CHIFFRE : des zéros se liraient
+// comme « personne ne nous voit ». Elle reste marquée « À raccorder ».
+// ⚠ UN NULL N'EST PAS UN ZÉRO : Meta retire des métriques ; une valeur
+// inconnue est exclue des sommes et s'affiche « — ».
+// ⚠ LA COMPARAISON N'APPARAÎT QUE SI LA PÉRIODE PRÉCÉDENTE EST ENTIÈREMENT
+// RELEVÉE : comparer 28 jours à 3 jours relevés donnerait « +900 % » à tort.
 const SITES = { rgd: 'rgdrenova.fr', btp: 'btpexpertise.fr' };
-const MESURES_RESEAU = 'abonnés, portée, interactions, meilleurs contenus';
-const MESURES_SITE = 'visites, provenance, pages vues, recherches Google, demandes de devis';
+const RACCORDES = ['facebook', 'instagram'];
+const PERIODES = [[7, '7 jours'], [28, '28 jours'], [90, '90 jours']];
+const nombre = (n) => (n == null ? '—' : Number(n).toLocaleString('fr-FR'));
+const isoJour = (d) => d.toISOString().slice(0, 10);
+
+function bilanPeriode(lignes, debut, fin) {
+  const dans = lignes.filter(l => l.jour >= debut && l.jour <= fin);
+  const somme = (k) => {
+    const v = dans.map(l => l[k]).filter(x => x != null);
+    return v.length ? v.reduce((a, b) => a + b, 0) : null;
+  };
+  return { jours: dans.length, portee: somme('portee'), vues: somme('vues'), interactions: somme('interactions'),
+    visites_profil: somme('visites_profil'), nouveaux_abonnes: somme('nouveaux_abonnes') };
+}
+
+function ecart(actuel, avant, complet) {
+  if (!complet || actuel == null || avant == null) return '';
+  if (avant === 0) return actuel > 0 ? '<span class="ana-ecart hausse">nouveau</span>' : '';
+  const p = Math.round(((actuel - avant) / avant) * 100);
+  if (p === 0) return '<span class="ana-ecart">=</span>';
+  return `<span class="ana-ecart ${p > 0 ? 'hausse' : 'baisse'}">${p > 0 ? '+' : ''}${p} %</span>`;
+}
+
+// Un histogramme en SVG, sans bibliothèque : une série de jours, les vides
+// laissés vides (un jour non relevé n'est pas un jour à zéro).
+function histogramme(lignes, debut, nbJours, cle, couleur) {
+  const jours = [];
+  const d0 = new Date(debut + 'T12:00:00Z');
+  for (let i = 0; i < nbJours; i++) jours.push(isoJour(new Date(d0.getTime() + i * 86400000)));
+  const parJour = Object.fromEntries(lignes.map(l => [l.jour, l[cle]]));
+  const max = Math.max(1, ...jours.map(j => parJour[j] || 0));
+  const l = 100 / jours.length;
+  const barres = jours.map((j, i) => {
+    const v = parJour[j];
+    if (v == null) return '';
+    const h = Math.max(v > 0 ? 2 : 0, (v / max) * 100);
+    return `<rect x="${(i * l + l * 0.15).toFixed(2)}" y="${(100 - h).toFixed(2)}" width="${(l * 0.7).toFixed(2)}" height="${h.toFixed(2)}" rx="0.6"><title>${j.split('-').reverse().join('/')} : ${nombre(v)}</title></rect>`;
+  }).join('');
+  return `<svg class="ana-histo" viewBox="0 0 100 100" preserveAspectRatio="none" style="--rs:${couleur}" role="img" aria-label="Évolution quotidienne">${barres}</svg>`;
+}
 
 export function pageAnalyse(cle) {
   const hash = `#/${cle}/analyse`;
@@ -493,33 +537,115 @@ export function pageAnalyse(cle) {
         return {};
       }
       const coquille = poserEspace(root);
+      const state = { periode: 28, tri: 'portee', reseau: '' };
+      try { state.periode = Number(localStorage.getItem('crm_ana_periode')) || 28; } catch { /* sans stockage */ }
+
       const draw = () => {
         if (!scope.isDirection) {
           root.innerHTML = cadre(hash, 'Analyse',
             '<section class="card"><div class="empty">L’analyse est réservée à la direction.</div></section>');
           return;
         }
-        const source = (nom, court, couleur, mesures) => `<div class="ana-source" style="--rs:${couleur}">
-          <span class="ana-pastille">${esc(court)}</span>
-          <div><b>${esc(nom)}</b><div class="small muted">${esc(mesures)}</div></div>
-          <span class="ana-etat">À raccorder</span>
-        </div>`;
+        const jours = db.t('communication_stats_jour').filter(l => l.activity === cle);
+        const posts = db.t('communication_stats_posts').filter(p => p.activity === cle);
+        const contenus = contenusDe(cle);
+        const dernierReleve = [...jours, ...posts].map(x => x.releve_le).sort().pop();
+
+        // La période se termine hier : aujourd'hui n'est jamais complet.
+        const hier = new Date(Date.now() - 86400000);
+        const fin = isoJour(hier);
+        const debut = isoJour(new Date(hier.getTime() - (state.periode - 1) * 86400000));
+        const finAvant = isoJour(new Date(Date.parse(debut + 'T12:00:00Z') - 86400000));
+        const debutAvant = isoJour(new Date(Date.parse(finAvant + 'T12:00:00Z') - (state.periode - 1) * 86400000));
+
+        const tuile = (libelle, valeur, avant, complet, aide) => `<div class="ana-tuile" title="${esc(aide)}">
+          <span>${esc(libelle)}</span><b>${nombre(valeur)}</b>${ecart(valeur, avant, complet)}</div>`;
+
+        const carteReseau = (r) => {
+          const def = RESEAUX[r];
+          const siennes = jours.filter(l => l.reseau === r).sort((a, b) => a.jour.localeCompare(b.jour));
+          if (!RACCORDES.includes(r) || !siennes.length) {
+            return `<section class="ana-carte est-vide" style="--rs:${def.couleur}">
+              <header><span class="ana-pastille">${esc(def.court)}</span><h3>${esc(def.label)}</h3><span class="ana-etat">À raccorder</span></header>
+              <p class="small muted">${r === 'tiktok' || r === 'linkedin'
+                ? `${esc(def.label)} demande une autorisation de développeur, accordée après examen : le raccordement viendra ensuite.`
+                : 'Aucun relevé pour l’instant.'}</p></section>`;
+          }
+          const act = bilanPeriode(siennes, debut, fin);
+          const prec = bilanPeriode(siennes, debutAvant, finAvant);
+          const complet = prec.jours >= state.periode;
+          const abonnes = [...siennes].reverse().find(l => l.abonnes != null)?.abonnes ?? null;
+          return `<section class="ana-carte" style="--rs:${def.couleur}">
+            <header>
+              <span class="ana-pastille">${esc(def.court)}</span><h3>${esc(def.label)}</h3>
+              <span class="ana-abonnes"><b>${nombre(abonnes)}</b> abonnés
+                ${act.nouveaux_abonnes ? `<em>+${nombre(act.nouveaux_abonnes)} sur la période</em>` : ''}</span>
+            </header>
+            <div class="ana-tuiles">
+              ${tuile('Portée', act.portee, prec.portee, complet, 'Somme des comptes uniques touchés chaque jour')}
+              ${tuile('Vues', act.vues, prec.vues, complet, 'Nombre d’affichages des contenus')}
+              ${tuile('Interactions', act.interactions, prec.interactions, complet, 'J’aime, commentaires, partages, enregistrements')}
+              ${tuile('Visites', act.visites_profil, prec.visites_profil, complet, 'Visites de la page ou du profil')}
+            </div>
+            <div class="ana-histo-tete"><span>Vues par jour</span><span class="small muted">${esc(debut.split('-').reverse().join('/'))} → ${esc(fin.split('-').reverse().join('/'))}</span></div>
+            ${histogramme(siennes, debut, state.periode, 'vues', def.couleur)}
+            ${!complet && act.jours ? `<p class="small muted ana-note">Pas de comparaison : la période précédente n’est pas encore entièrement relevée (l’historique commence le ${esc(siennes[0].jour.split('-').reverse().join('/'))}).</p>` : ''}
+          </section>`;
+        };
+
+        // Les meilleurs posts des 12 derniers mois. Un post publié depuis le
+        // calendrier y retrouve son titre (`media_id`).
+        const titreDuPost = Object.fromEntries(contenus.filter(c => c.media_id).map(c => [c.media_id, c.titre]));
+        const an = isoJour(new Date(Date.now() - 365 * 86400000));
+        const liste = posts
+          .filter(p => (p.publie_le || '').slice(0, 10) >= an && (!state.reseau || p.reseau === state.reseau))
+          .sort((a, b) => (b[state.tri] ?? -1) - (a[state.tri] ?? -1))
+          .slice(0, 10);
+        const TRIS = [['portee', 'Portée'], ['vues', 'Vues'], ['interactions', 'Interactions'], ['enregistrements', 'Enregistrements']];
+        const opt = (k, l, cur) => `<option value="${esc(k)}"${cur === k ? ' selected' : ''}>${esc(l)}</option>`;
+        const blocPosts = `<section class="ana-bloc ana-posts">
+          <header class="ana-posts-tete"><h3>Meilleurs posts — 12 derniers mois</h3>
+            <select id="ana-reseau" class="filter-input">${opt('', 'Tous les réseaux', state.reseau)}${RACCORDES.map(r => opt(r, RESEAUX[r].label, state.reseau)).join('')}</select>
+            <select id="ana-tri" class="filter-input">${TRIS.map(([k, l]) => opt(k, `Trier par ${l.toLowerCase()}`, state.tri)).join('')}</select>
+          </header>
+          ${liste.length ? `<div class="table-wrap"><table class="ana-table">
+            <thead><tr><th></th><th>Publié</th><th>Post</th><th>Portée</th><th>Vues</th><th>J’aime</th><th>Comm.</th><th>Enreg.</th><th></th></tr></thead>
+            <tbody>${liste.map(p => `<tr>
+              <td><span class="com-rs" style="--rs:${RESEAUX[p.reseau].couleur}">${esc(RESEAUX[p.reseau].court)}</span></td>
+              <td class="nowrap">${esc((p.publie_le || '').slice(0, 10).split('-').reverse().join('/'))}</td>
+              <td class="ana-apercu">${titreDuPost[p.post_id] ? `<b>${esc(titreDuPost[p.post_id])}</b><br>` : ''}${esc(p.apercu || (p.type || 'Sans texte'))}</td>
+              <td><b>${nombre(p.portee)}</b></td><td>${nombre(p.vues)}</td><td>${nombre(p.likes)}</td>
+              <td>${nombre(p.commentaires)}</td><td>${nombre(p.enregistrements)}</td>
+              <td>${p.lien ? `<a href="${esc(p.lien)}" target="_blank" rel="noopener" title="Voir le post">↗</a>` : ''}</td>
+            </tr>`).join('')}</tbody></table></div>`
+            : '<div class="empty">Aucun post relevé sur cette période.</div>'}
+        </section>`;
+
         const corps = `
-          <section class="ana-intro">
-            <h2>Ce que cet écran va suivre</h2>
-            <p>Les performances des réseaux sociaux et du site de ${esc(NOMS[cle])}, mois par mois, à côté des
-            contenus du calendrier — pour voir ce qui a marché. Aucune source n’est encore raccordée : rien n’est
-            affiché plutôt que des zéros trompeurs.</p>
+          <section class="ana-barre">
+            <div>
+              <h2>Réseaux sociaux de ${esc(NOMS[cle])}</h2>
+              <p class="small muted">${dernierReleve ? `Relevé chaque matin — dernier relevé le ${esc(new Date(dernierReleve).toLocaleString('fr-FR', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }))}.` : 'Premier relevé demain matin.'}</p>
+            </div>
+            <div class="com-rs-filtre">${PERIODES.map(([n, l]) => `<button type="button" data-periode="${n}" class="${state.periode === n ? 'actif' : ''}">${esc(l)}</button>`).join('')}</div>
           </section>
-          <div class="ana-grille">
-            <section class="ana-bloc"><h3>Réseaux sociaux</h3>
-              ${RESEAUX_DE[cle].map(r => source(RESEAUX[r].label, RESEAUX[r].court, RESEAUX[r].couleur, MESURES_RESEAU)).join('')}
-            </section>
-            <section class="ana-bloc"><h3>Site internet</h3>
-              ${source(SITES[cle], 'WEB', '#475569', MESURES_SITE)}
-            </section>
-          </div>`;
+          <div class="ana-cartes">${RESEAUX_DE[cle].map(carteReseau).join('')}</div>
+          ${blocPosts}
+          <section class="ana-bloc"><h3>Site internet</h3>
+            <div class="ana-source" style="--rs:#475569">
+              <span class="ana-pastille">WEB</span>
+              <div><b>${esc(SITES[cle])}</b><div class="small muted">visites, provenance, pages vues, recherches Google</div></div>
+              <span class="ana-etat">À raccorder</span>
+            </div>
+          </section>`;
         root.innerHTML = cadre(hash, 'Analyse', corps);
+        root.querySelectorAll('[data-periode]').forEach(b => b.onclick = () => {
+          state.periode = Number(b.dataset.periode);
+          try { localStorage.setItem('crm_ana_periode', String(state.periode)); } catch { /* sans stockage */ }
+          draw();
+        });
+        root.querySelector('#ana-tri').onchange = (e) => { state.tri = e.target.value; draw(); };
+        root.querySelector('#ana-reseau').onchange = (e) => { state.reseau = e.target.value; draw(); };
       };
       draw();
       return { refresh: draw, destroy() { coquille.retirer(); } };
