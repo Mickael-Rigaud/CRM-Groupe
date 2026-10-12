@@ -180,7 +180,10 @@ const bloc = (titre, dedans) => `
 function corpsFormulaire(v, creation) {
   return `<form id="paf" class="paf">
     ${bloc('Le partenaire', `
-      ${champ('nom', 'Nom', v.nom, { required: true })}
+      ${'' /* ⚠ LE NOM N'EST PLUS EXIGÉ PAR LE NAVIGATEUR (12/10/2026, Élodie) : une
+         société seule suffit — un fournisseur se connaît souvent sans interlocuteur.
+         « Un nom ou une société, au moins » reste vérifié à l'enregistrement. */}
+      ${champ('nom', 'Nom', v.nom)}
       ${champ('prenom', 'Prénom', v.prenom)}
       ${champ('societe', 'Société', v.societe || v.raison_sociale)}
       ${champ('profession', 'Métier', v.profession, { placeholder: 'Courtier, architecte…' })}
@@ -601,7 +604,7 @@ function formulaireSortant(ligne, apres) {
 
   const options = tous.map(p => `<option value="${esc(String(p.id))}"${
     String(p.id) === choisi ? ' selected' : ''}>${esc(nomDe(p))}${
-    p.societe || p.raison_sociale ? ` — ${esc(p.societe || p.raison_sociale)}` : ''}${
+    (p.societe || p.raison_sociale) && (p.nom || p.prenom) ? ` — ${esc(p.societe || p.raison_sociale)}` : ''}${
     estActif(p) ? '' : ' (inactif)'}</option>`).join('');
 
   const html = `
