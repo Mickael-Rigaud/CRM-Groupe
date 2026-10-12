@@ -189,10 +189,19 @@ const sansDirection = (liste) => liste
   // Un groupe vidé par le filtre partirait en intitulé seul, au-dessus de rien.
   .filter(o => !o.sous || o.sous.length);
 
+// ⚠ LE GROUPE « COMMUNICATION » N'A PAS DE VUE PAR PERSONNE (12/10/2026,
+// Élodie : « toute la partie communication ne doit être accessible que pour la
+// direction alors enlève la possibilité de voir de différentes vues »). Ces
+// écrans sont réservés à la direction et ne portent rien qui appartienne à un
+// chargé d'affaires — le site, les réseaux, l'analyse : le sélecteur n'y
+// filtrerait rien et laisserait croire le contraire, et le bandeau d'une vue
+// restée mémorisée annoncerait un filtre qui n'existe pas.
+const SANS_VUE = ['#/rgd/realisations', '#/rgd/communication', '#/rgd/analyse'];
+
 export const cadre = (actif, titre, corps) => coquilleEspace({
   actif, titre,
-  corps: (SANS_BANDEAU.includes(actif) ? '' : bandeauVue()) + corps,
-  commandes: selecteurVue(),
+  corps: (SANS_BANDEAU.includes(actif) || SANS_VUE.includes(actif) ? '' : bandeauVue()) + corps,
+  commandes: SANS_VUE.includes(actif) ? undefined : selecteurVue(),
   cle: KEY, marque: act().label, baseline: 'Rénovation tous corps d’état',
   onglets: scope.isDirection ? ONGLETS : sansDirection(ONGLETS),
 });

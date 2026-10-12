@@ -189,9 +189,13 @@ const sansDirectionBtp = (liste) => liste
   .filter(o => !RESERVES_DIRECTION_BTP.includes(o.hash))
   .map(o => (o.sous ? { ...o, sous: sansDirectionBtp(o.sous) } : o))
   .filter(o => !o.sous || o.sous.length);
+// Même règle que chez RGD (12/10/2026) : le groupe « Communication » est à la
+// direction et ne porte rien d'un chargé d'affaires, donc pas de vue par personne.
+const SANS_VUE_BTP = ['#/btp/communication', '#/btp/analyse'];
+
 export const cadreBtp = (actif, titre, corps) => coquilleEspace({
-  actif, titre, corps: bandeauVueBtp() + corps,
-  commandes: selecteurVueBtp(),
+  actif, titre, corps: (SANS_VUE_BTP.includes(actif) ? '' : bandeauVueBtp()) + corps,
+  commandes: SANS_VUE_BTP.includes(actif) ? undefined : selecteurVueBtp(),
   cle: KEY, marque: act().label, baseline: 'Expertise et conseil bâtiment',
   onglets: scope.isDirection ? ONGLETS : sansDirectionBtp(ONGLETS),
 });
