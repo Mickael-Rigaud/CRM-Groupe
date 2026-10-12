@@ -25,7 +25,7 @@
 import { esc, toast } from '../ui.js';
 import { scope } from '../data/scope.js';
 import {
-  PRESTATIONS, PAGE_PRESTATIONS, RATIO_PRESTA,
+  PRESTATIONS, PAGE_PRESTATIONS, RATIO_PRESTA, idDepuisTitre,
   lirePrestations, enregistrerPrestations, restaurerPrestations,
 } from '../data/rgd-prestations.js';
 import { deposerPhotosRealisations } from '../data/rgd-site.js';
@@ -41,16 +41,28 @@ export async function chargerPrestations() {
   return {
     ok: true,
     editeur: editeur({
-      liste: lu.donnees.map(p => ({ ...p })),
+      // ⚠ `cle` N'EST PAS `id`, ET C'EST VOLONTAIRE. L'identifiant d'une
+      // prestation créée se déduit de son nom AU MOMENT DE PUBLIER : tant
+      // qu'on tape le titre, il n'existe pas encore. Une clé interne, stable
+      // pour la durée de l'écran, sert donc à désigner la ligne dans le DOM et
+      // dans la carte des empreintes. Employer `id` ferait perdre le suivi
+      // d'une ligne dès la première lettre du nom.
+      liste: lu.donnees.map((p, i) => ({ ...p, cle: p.id || 'n' + i })),
       // L'état d'origine, pour dire ce qui a bougé sans le deviner.
-      origine: new Map(lu.donnees.map(p => [p.id, `${p.avant}|${p.apres}`])),
-      ligne: '', occupe: false,
+      origine: new Map(lu.donnees.map((p, i) => [p.id || 'n' + i, empreinte(p)])),
+      ligne: '', occupe: false, compteur: 0,
     }),
   };
 }
 
+// ⚠ L'EMPREINTE PORTE AUSSI LE CONTENU DEPUIS LE 12/10/2026. Elle ne tenait
+// que les deux images, ce qui suffisait quand le panneau ne changeait qu'elles ;
+// une prestation créée dont on corrige le texte n'aurait pas été vue comme
+// modifiée, et le bouton « Publier » serait resté éteint sur un travail réel.
+const empreinte = (p) => [p.avant, p.apres, p.titre, p.texte, p.bouton].join('|');
+
 function editeur(etat) {
-  const modifiee = (p) => etat.origine.get(p.id) !== `${p.avant}|${p.apres}`;
+  const modifiee = (p) => etat.origine.get(p.cle) !== empreinte(p);
   const complete = (p) => Boolean(p.avant && p.apres);
 
   const corps = () => {
@@ -60,11 +72,15 @@ function editeur(etat) {
       <div class="rpr-tete">
         <div>
           <h2>Visuels des prestations</h2>
-          <p class="muted small">Les six curseurs avant/après de
+          <p class="muted small">Les curseurs avant/après de
             <a href="${PAGE_PRESTATIONS}" target="_blank" rel="noopener">la page « Nos prestations »</a>.
-            Déposez une photo pour la remplacer ; le reste de la page — titres, textes,
-            boutons — ne se modifie pas d’ici.</p>
+            Déposez une photo pour la remplacer. Pour les six que la page porte déjà,
+            le titre et le texte vivent dans la page et ne se modifient pas d’ici ;
+            une prestation que vous ajoutez porte les siens.</p>
         </div>
+        <span class="grow"></span>
+        ${scope.canRgd ? `<button type="button" class="btn primary" id="rpr-ajouter"
+          ${etat.occupe ? 'disabled' : ''}>+ Ajouter une prestation</button>` : ''}
       </div>
 
       <p class="rpr-avis">Une prestation se publie <b>par paire</b> : tant que l’avant et
@@ -88,7 +104,7 @@ function editeur(etat) {
             : bougees.length ? `Publier ${bougees.length} changement${bougees.length > 1 ? 's' : ''}`
             : 'Publier sur le site'}</button>
       </div>
-      ${boiteuses.length ? `<p class="rpr-manque">⚠ ${boiteuses.map(p => esc(p.titre)).join(', ')} :
+      ${boiteuses.length ? `<p class="rpr-manque">⚠ ${boiteuses.map(p => esc(p.titre || 'Nouvelle prestation')).join(', ')} :
         il manque une des deux photos — cette prestation ne partira pas.</p>` : ''}
       <p class="muted small">Le retour arrière ne remonte que d’un cran : deux publications
         de suite, et la version d’avant n’existe plus nulle part.</p>
@@ -101,7 +117,7 @@ function editeur(etat) {
   const vignette = (p, quoi) => {
     const url = p[quoi];
     const nom = quoi === 'avant' ? 'Avant' : 'Après';
-    return `<div class="rpr-case" data-zone="${esc(p.id)}" data-quoi="${quoi}">
+    return `<div class="rpr-case" data-zone="${esc(p.cle)}" data-quoi="${quoi}">
       <span class="rpr-case-nom">${nom}</span>
       <div class="rpr-cadre" style="aspect-ratio:${RATIO_PRESTA}">
         ${url
@@ -109,22 +125,47 @@ function editeur(etat) {
           : '<span class="rpr-vide">Aucune photo</span>'}
       </div>
       ${scope.canRgd ? `<div class="rpr-case-actions">
-        <button type="button" class="btn small" data-choisir="${esc(p.id)}|${quoi}">Remplacer…</button>
+        <button type="button" class="btn small" data-choisir="${esc(p.cle)}|${quoi}">Remplacer…</button>
       </div>` : ''}
     </div>`;
   };
 
+  // ⚠ LES CHAMPS DE CONTENU N'EXISTENT QUE SUR UNE PRESTATION CRÉÉE. Les
+  // offrir sur les six donnerait un enregistrement qui répond « ok » sans rien
+  // changer — la page garde les siens, écrits dans son HTML, et on afficherait
+  // deux titres pour une même prestation.
+  const contenu = (p) => !p.creee ? '' : `
+    <div class="rpr-contenu">
+      <label class="mail-champ plein"><span>Nom de la prestation</span>
+        <input data-champ="titre" data-cle="${esc(p.cle)}" value="${esc(p.titre || '')}"
+          placeholder="Carrelage · Faïence" maxlength="60"></label>
+      <label class="mail-champ plein"><span>Texte de présentation</span>
+        <textarea data-champ="texte" data-cle="${esc(p.cle)}" rows="3"
+          placeholder="Ce que RGD Renova fait pour cette prestation, en trois ou quatre phrases."
+        >${esc(p.texte || '')}</textarea></label>
+      <label class="mail-champ plein"><span>Libellé du bouton</span>
+        <input data-champ="bouton" data-cle="${esc(p.cle)}" value="${esc(p.bouton || '')}"
+          placeholder="Refaire mes sols et murs" maxlength="48"></label>
+      <p class="muted small">Le bouton mène à la page « Demandez un devis », comme les autres.</p>
+    </div>`;
+
   const carte = (p) => `
-    <section class="rpr-carte${modifiee(p) ? ' est-modifiee' : ''}">
+    <section class="rpr-carte${modifiee(p) ? ' est-modifiee' : ''}${p.creee ? ' est-creee' : ''}">
       <header class="rpr-carte-tete">
         <span class="rpr-num">${esc(p.num)}</span>
-        <b>${esc(p.titre)}</b>
+        <b>${esc(p.titre || (p.creee ? 'Nouvelle prestation' : ''))}</b>
+        ${p.creee ? '<span class="chip accent">Ajoutée depuis le CRM</span>' : ''}
         ${modifiee(p)
           ? `<span class="chip amber">${complete(p) ? 'À publier' : 'Incomplète'}</span>`
           : ''}
-        <a class="rpr-ancre muted small" href="${PAGE_PRESTATIONS}#${encodeURIComponent(p.id)}"
-           target="_blank" rel="noopener">Voir sur le site</a>
+        ${p.creee ? '' : `<a class="rpr-ancre muted small" href="${PAGE_PRESTATIONS}#${encodeURIComponent(p.id)}"
+           target="_blank" rel="noopener">Voir sur le site</a>`}
+        ${p.creee && scope.canRgd
+          ? `<button type="button" class="pat-x" data-retirer="${esc(p.cle)}"
+               title="Retirer cette prestation">✕</button>`
+          : ''}
       </header>
+      ${contenu(p)}
       <div class="rpr-paire">
         ${vignette(p, 'avant')}
         ${vignette(p, 'apres')}
@@ -150,9 +191,9 @@ function editeur(etat) {
       hote.appendChild(champ);
     }
 
-    const deposer = async (id, quoi, fichier) => {
+    const deposer = async (cle, quoi, fichier) => {
       if (!fichier) return;
-      const p = etat.liste.find(x => x.id === id);
+      const p = etat.liste.find(x => x.cle === cle);
       if (!p) return;
       ligne(`Dépôt de ${fichier.name}…`);
       const r = await deposerPhotosRealisations([fichier]);
@@ -164,10 +205,10 @@ function editeur(etat) {
     };
 
     champ.onchange = () => {
-      const [id, quoi] = String(champ.dataset.cible || '').split('|');
+      const [cle, quoi] = String(champ.dataset.cible || '').split('|');
       const f = champ.files && champ.files[0];
       champ.value = '';
-      if (id && quoi) deposer(id, quoi, f);
+      if (cle && quoi) deposer(cle, quoi, f);
     };
 
     hote.querySelectorAll('[data-choisir]').forEach(b => b.onclick = () => {
@@ -192,7 +233,75 @@ function editeur(etat) {
       };
     });
 
+    // ⚠ LA SAISIE N'EST PAS REDESSINÉE À LA FRAPPE. `input` part à chaque
+    // lettre ; redessiner là remplacerait le champ sous le doigt et emporterait
+    // le curseur avec lui — défaut déjà payé sur le montant de la fiche projet
+    // BTP. On écrit dans l'état, et seul le bouton « Publier » est réveillé.
+    hote.querySelectorAll('[data-champ]').forEach(el => {
+      el.oninput = () => {
+        const p = etat.liste.find(x => x.cle === el.dataset.cle);
+        if (!p) return;
+        p[el.dataset.champ] = el.value;
+
+        // ⚠ LE TITRE DE L'EN-TÊTE SUIT LA FRAPPE, EN PLACE. Il est rendu au
+        // dessin et l'écran ne se redessine pas à chaque lettre — un redessin
+        // remplacerait le champ sous le doigt et emporterait le curseur. Sans
+        // cette ligne, la carte s'intitulerait « Nouvelle prestation » alors
+        // que son nom est écrit juste en dessous.
+        if (el.dataset.champ === 'titre') {
+          const tete = el.closest('.rpr-carte')?.querySelector('.rpr-carte-tete b');
+          if (tete) tete.textContent = p.titre || 'Nouvelle prestation';
+        }
+
+        const b = $('#rpr-publier');
+        if (b) b.disabled = etat.occupe || !etat.liste.some(modifiee);
+      };
+    });
+
+    // ⚠ ELLE NAÎT SANS IDENTIFIANT : celui-ci se déduit du nom au moment de
+    // publier (`idDepuisTitre`), parce qu'il n'y a pas de nom tant qu'on n'a
+    // pas tapé. La clé interne, elle, existe tout de suite — c'est elle qui
+    // désigne la ligne dans le DOM.
+    $('#rpr-ajouter')?.addEventListener('click', () => {
+      etat.compteur += 1;
+      etat.liste.push({
+        cle: 'neuve-' + etat.compteur,
+        id: '', creee: true,
+        num: ('0' + (etat.liste.length + 1)).slice(-2),
+        titre: '', texte: '', bouton: '', avant: '', apres: '',
+      });
+      redessiner();
+      hote.querySelector('.rpr-carte.est-creee:last-of-type [data-champ="titre"]')?.focus();
+    });
+
+    // ⚠ RETIRER N'EFFACE RIEN EN LIGNE TANT QU'ON N'A PAS PUBLIÉ, et l'écran
+    // ne le prétend pas : la ligne quitte l'état, et c'est la publication qui
+    // fait disparaître la section du site — le script ne crée que ce que le
+    // document nomme. Deux clics sur le même bouton, jamais le `confirm()` de
+    // `ui.js` : il remplacerait le panneau et sa saisie.
+    hote.querySelectorAll('[data-retirer]').forEach(b => {
+      b.onclick = () => {
+        if (b.dataset.arme !== '1') {
+          b.dataset.arme = '1';
+          b.textContent = 'Retirer ?';
+          b.classList.add('arme');
+          setTimeout(() => {
+            if (!b.isConnected || b.dataset.arme !== '1') return;
+            b.dataset.arme = '0'; b.textContent = '✕'; b.classList.remove('arme');
+          }, 4000);
+          return;
+        }
+        etat.liste = etat.liste.filter(x => x.cle !== b.dataset.retirer);
+        redessiner();
+      };
+    });
+
     $('#rpr-publier')?.addEventListener('click', async () => {
+      const sansNom = etat.liste.filter(p => p.creee && !p.titre.trim());
+      if (sansNom.length) {
+        toast('Donnez un nom à la prestation ajoutée : sans lui, rien ne peut être créé sur le site.', 'err');
+        return;
+      }
       const partantes = etat.liste.filter(p => p.avant && p.apres);
       if (!partantes.length) { toast('Aucune prestation complète à publier.', 'err'); return; }
       etat.occupe = true; redessiner();
@@ -244,6 +353,6 @@ function editeur(etat) {
     // Rien de ce qui est dans cet écran n'est perdu sans qu'on l'ait voulu :
     // une photo déposée vit déjà dans le stockage, mais la PAIRE choisie, elle,
     // n'existe que dans cet état tant qu'on n'a pas publié.
-    get sale() { return etat.liste.some(p => etat.origine.get(p.id) !== `${p.avant}|${p.apres}`); },
+    get sale() { return etat.liste.some(modifiee) || etat.liste.some(p => p.creee && !etat.origine.has(p.cle)); },
   };
 }

@@ -2332,6 +2332,19 @@ tr.btp-mission .btp-pts { color: var(--m-encre); }
 
 .rpr-pied { display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
 .rpr-manque { margin: 0; font-size: 12.5px; color: var(--amber-ink, #6b4410); }
+
+/* Une prestation AJOUTÉE depuis le CRM (12/10/2026). Elle se distingue des six
+   que la page porte dans son propre HTML : celles-ci n'ont ni titre ni texte à
+   régler ici, et leur en donner en afficherait deux sur le site.
+   ⚠ LA CROIX PREND `margin-left: auto` À LA PLACE DE `.rpr-ancre` : une carte
+   créée n'a pas de lien « Voir sur le site » — sa section n'existe pas encore —
+   donc sans cette règle la croix se collerait au titre. Les deux ne cohabitent
+   jamais sur la même carte. */
+.rpr-carte.est-creee { border-style: dashed; }
+.rpr-carte.est-creee.est-modifiee { border-style: solid; }
+.rpr-carte-tete .pat-x { margin-left: auto; }
+.rpr-contenu { display: grid; gap: 10px; margin-bottom: 12px; }
+.rpr-contenu textarea { resize: vertical; min-height: 64px; }
 .rpr-pied .btn.arme { background: var(--red, #b3261e); border-color: var(--red, #b3261e);
   color: #fff; }
 
@@ -6527,3 +6540,94 @@ span.rpv-statut { display: inline-block; margin-bottom: 4px; }
 .ana-site-partie + .ana-site-partie { border-top: 1px solid var(--line); margin-top: 6px; padding-top: 14px; }
 .ana-site-titre { margin: 0; font-size: 14px; color: var(--text); text-transform: none; letter-spacing: 0; }
 .ana-site-titre .small { font-weight: 400; margin-left: 6px; }
+
+/* ---- Analyse : les deux onglets et l'écran « Site internet » (12/10/2026) ----
+   Plus vif que le reste de l'écran, demandé : capture de l'accueil dans un
+   cadre de navigateur, grands chiffres, courbe en aire, anneau des provenances. */
+.ana-onglets { display: flex; gap: 6px; padding: 4px; border-radius: 14px; background: var(--card); border: 1px solid var(--line); }
+.ana-onglets button { display: inline-flex; align-items: center; gap: 8px; border: 0; background: none; cursor: pointer;
+  padding: 9px 16px; border-radius: 10px; font-family: inherit; font-size: 14px; font-weight: 600; color: var(--muted); }
+.ana-onglets button.actif { background: var(--accent-ink); color: #fff; box-shadow: 0 2px 8px rgb(0 0 0 / .15); }
+.ana-onglets button:not(.actif):hover { background: var(--accent-soft); color: var(--text); }
+.ana-releve { margin: -4px 4px 12px; }
+
+.as-hero { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 28px; align-items: center;
+  padding: 22px; margin-bottom: 14px; border-radius: 18px; color: #fff; overflow: hidden; position: relative;
+  background: radial-gradient(circle at 85% 15%, color-mix(in srgb, var(--accent) 55%, transparent), transparent 55%),
+    linear-gradient(135deg, var(--accent-ink), color-mix(in srgb, var(--accent-ink) 70%, #000)); box-shadow: var(--shadow-lift, var(--shadow)); }
+.as-capture { display: block; border-radius: 12px; overflow: hidden; background: #fff; box-shadow: 0 18px 40px rgb(0 0 0 / .35);
+  transform: perspective(1200px) rotateY(4deg) rotateX(1deg); transition: transform .3s; }
+.as-capture:hover { transform: perspective(1200px) rotateY(0) rotateX(0) scale(1.01); }
+.as-capture img { display: block; width: 100%; height: auto; }
+.as-navigateur { display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: #EEF0F3; }
+.as-navigateur i { width: 10px; height: 10px; border-radius: 50%; background: #FF5F57; }
+.as-navigateur i:nth-child(2) { background: #FEBC2E; } .as-navigateur i:nth-child(3) { background: #28C840; }
+.as-navigateur span { margin-left: 10px; flex: 1; padding: 3px 10px; border-radius: 6px; background: #fff; color: #475569; font-size: 12px; }
+.as-hero-texte h2 { margin: 6px 0 4px; font-size: 30px; color: #fff; letter-spacing: -.01em; }
+.as-hero-texte p { margin: 0 0 18px; color: rgb(255 255 255 / .8); font-size: 13px; }
+.as-pastille-ligne { display: inline-flex; align-items: center; gap: 7px; padding: 4px 11px; border-radius: 999px;
+  background: rgb(255 255 255 / .15); font-size: 12px; font-weight: 600; }
+.as-pastille-ligne i { width: 8px; height: 8px; border-radius: 50%; background: #4ADE80; box-shadow: 0 0 0 4px rgb(74 222 128 / .25); }
+.as-hero-chiffres { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.as-hero-chiffres .as-chiffre { background: rgb(255 255 255 / .12); border: 1px solid rgb(255 255 255 / .18); color: #fff; }
+.as-hero-chiffres .as-chiffre b { font-size: 40px; color: #fff; }
+.as-hero-chiffres .as-chiffre-l { color: rgb(255 255 255 / .8); }
+.as-hero-chiffres .as-ecart { background: rgb(255 255 255 / .9); }
+
+.as-chiffre { display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; border-radius: 14px; min-width: 0; }
+.as-chiffre b { font-size: 28px; line-height: 1.1; color: var(--text); font-family: var(--font-display, inherit); }
+.as-chiffre-l { font-size: 12px; font-weight: 600; color: var(--muted); }
+.as-ecart { align-self: flex-start; font-size: 11.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--card-2); color: var(--muted); }
+.as-ecart.bon { color: #15803D; background: #DCFCE7; }
+.as-ecart.mauvais { color: #B91C1C; background: #FEE2E2; }
+
+.as-tuiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-bottom: 14px; }
+.as-tuiles .as-chiffre { background: var(--card); border: 1px solid var(--line); box-shadow: var(--shadow); border-left: 4px solid var(--c); }
+.as-chiffre.t1 { --c: #F97316; } .as-chiffre.t2 { --c: #14B8A6; } .as-chiffre.t3 { --c: #4285F4; } .as-chiffre.t4 { --c: #A855F7; }
+
+.as-grille { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-bottom: 14px; }
+.as-carte { padding: 16px 18px; border: 1px solid var(--line); border-radius: 16px; background: var(--card); box-shadow: var(--shadow); min-width: 0; }
+.as-carte.as-large { grid-column: 1 / -1; }
+.as-carte header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 12px; margin-bottom: 12px; }
+.as-carte h3 { margin: 0; font-size: 15px; color: var(--text); text-transform: none; letter-spacing: 0; }
+.as-vide { padding: 18px 0; text-align: center; color: var(--muted); font-size: 13px; }
+
+.as-courbe { width: 100%; height: 160px; display: block; }
+.as-courbe-pied { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--muted); margin-top: 6px; }
+
+.as-anneau { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.as-anneau-svg { width: 150px; height: 150px; flex: none; }
+.as-anneau-n { font-size: 22px; font-weight: 700; fill: var(--text); }
+.as-anneau-l { font-size: 10px; fill: var(--muted); }
+.as-legende { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 160px; font-size: 13px; }
+.as-legende li { display: flex; align-items: center; gap: 8px; }
+.as-legende i { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.as-legende b { margin-left: auto; }
+
+.as-appareils { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 10px; }
+.as-appareil { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 14px 8px; border-radius: 14px;
+  background: var(--accent-soft); color: var(--accent-ink); }
+.as-appareil-ico svg { width: 34px; height: 34px; display: block; }
+.as-appareil b { font-size: 24px; color: var(--text); }
+.as-appareil span:last-child { font-size: 12px; color: var(--muted); }
+
+.as-classement { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.as-classement li { display: grid; grid-template-columns: 26px minmax(0, 1.4fr) minmax(0, 1fr) 56px; gap: 10px; align-items: center; font-size: 13px; }
+.as-rang { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700;
+  background: var(--card-2); color: var(--muted); }
+.as-classement li:first-child .as-rang { background: var(--accent); color: #fff; }
+.as-classement-nom { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.as-classement-piste { height: 10px; border-radius: 5px; background: var(--card-2); overflow: hidden; }
+.as-classement-piste i { display: block; height: 100%; border-radius: 5px; background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 60%, #fff)); }
+.as-classement b { text-align: right; }
+
+.as-table { width: 100%; font-size: 13px; }
+.as-position { display: inline-block; min-width: 38px; text-align: center; padding: 2px 8px; border-radius: 999px; background: var(--card-2); font-weight: 600; }
+.as-position.top { background: #DCFCE7; color: #15803D; }
+.as-position.p1 { background: #DBEAFE; color: #1D4ED8; }
+
+@media screen and (max-width: 900px) {
+  .as-hero { grid-template-columns: 1fr; }
+  .as-capture { transform: none; }
+  .as-grille { grid-template-columns: 1fr; }
+}
