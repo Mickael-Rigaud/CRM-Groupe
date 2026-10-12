@@ -52,10 +52,21 @@ export const RESIDENCE = ['Une résidence principale', 'Une résidence secondair
 // « Menuiseries » d'un côté et « Menuiserie PVC » de l'autre feraient deux
 // populations qu'aucun décompte ne réunit. Les cinq premiers, eux, n'existent
 // que dans le CRM — le site ne les propose pas.
+//
+// ⚠ ET C'ÉTAIT FAUX SUR UN DES SEPT, corrigé le 12/10/2026 : la case du site
+// s'appelle « Menuiserie », pas « Menuiserie PVC ». Mesuré dans le HTML de
+// /demandez-un-devis/. La liste prétendait recopier le site et ne le faisait
+// pas — la première demande cochant cette case serait arrivée hors liste, et
+// « mot pour mot » n'était vrai que de six valeurs sur sept.
+//
+// ⚠ UNE FICHE PORTE ENCORE « Menuiserie PVC » (saisie dans le CRM, mesurée
+// avant de changer) : elle s'affichera cochée, en trait discontinu. C'est le
+// mécanisme prévu pour le vocabulaire qui bouge, et c'est préférable à une
+// liste qui ment sur sa source.
 export const CHANTIERS = ['Rénovation complète', 'Rénovation salle de bain',
   'Rénovation cuisine', 'Aménagement intérieur', 'Extension / surélévation'];
 export const CORPS_METIER = ['Électricité', 'Maçonnerie', 'Isolation', 'Peinture',
-  'Plomberie', 'Terrassement', 'Menuiserie PVC'];
+  'Plomberie', 'Terrassement', 'Menuiserie'];
 export const TRAVAUX = [...CHANTIERS, ...CORPS_METIER];
 export const BUDGETS = ['Moins de 20 000€', '20 000€ - 35 000€', '35 000€ - 50 000€',
   '50 000€ - 80 000€', '80 000€ - 120 000€', 'Plus de 120 000€'];
