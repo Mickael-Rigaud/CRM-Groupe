@@ -638,6 +638,69 @@ export function pageAnalyse(cle) {
             : '<div class="empty">Aucun post relevé sur cette période.</div>'}
         </section>`;
 
+        // ---- Le site par Google : Analytics (fréquentation) + Search Console
+        // (recherche Google), relevés chaque matin dans `site_google_periode`
+        // (12/10/2026). Ce sont des totaux de fenêtre calculés par Google. ----
+        const blocGoogle = () => {
+          const site = SITES[cle];
+          const ga = db.t('site_google_periode').find(x => x.site === site && x.outil === 'analytics' && Number(x.periode) === state.periode);
+          const sc = db.t('site_google_periode').find(x => x.site === site && x.outil === 'search_console' && Number(x.periode) === state.periode);
+          if (!ga && !sc) return null;
+          const dates = (x) => `${x.du.split('-').reverse().join('/')} → ${x.au.split('-').reverse().join('/')}`;
+          const pct = (v) => (v == null ? '—' : `${(v * 100).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} %`);
+          const pos = (v) => (v == null ? '—' : v.toLocaleString('fr-FR', { maximumFractionDigits: 1 }));
+          // Pour la position, plus bas est mieux : l'écart s'inverse.
+          const ecartPos = (a, b) => {
+            if (a == null || !b) return '';
+            const d = Math.round((a - b) * 10) / 10;
+            if (!d) return '<span class="ana-ecart">=</span>';
+            return `<span class="ana-ecart ${d < 0 ? 'hausse' : 'baisse'}">${d < 0 ? 'gagne' : 'perd'} ${Math.abs(d).toLocaleString('fr-FR')} place${Math.abs(d) >= 2 ? 's' : ''}</span>`;
+          };
+          const tuileG = (lib, v, avant, aide, rendu = nombre) => `<div class="ana-tuile" title="${esc(aide)}"><span>${esc(lib)}</span><b>${rendu(v)}</b>${ecart(v, avant, true)}</div>`;
+          const barres = (liste) => {
+            const total = liste.reduce((a, [, n]) => a + n, 0);
+            return liste.map(([nom, n]) => `<div class="ana-barre-l">
+              <span class="ana-barre-nom" title="${esc(nom)}">${esc(nom)}</span>
+              <span class="ana-barre-piste"><i style="width:${total ? Math.max(2, (n / total) * 100) : 0}%"></i></span>
+              <b>${nombre(n)}</b></div>`).join('') || '<div class="small muted">—</div>';
+          };
+          const g = ga?.donnees || {}, gp = ga?.precedent || {};
+          const s = sc?.donnees || {}, sp = sc?.precedent || {};
+          return `<section class="ana-bloc ana-site">
+            <header class="ana-posts-tete"><h3>Site internet — ${esc(site)}</h3></header>
+            ${ga ? `<div class="ana-site-partie">
+              <h4 class="ana-site-titre">Fréquentation <span class="small muted">Google Analytics · ${esc(dates(ga))}</span></h4>
+              <div class="ana-tuiles" style="--rs:#E37400">
+                ${tuileG('Visites', g.visites, gp.visites, 'Sessions sur le site')}
+                ${tuileG('Visiteurs', g.visiteurs, gp.visiteurs, 'Personnes uniques, calculé par Google')}
+                ${tuileG('Pages vues', g.pages_vues, gp.pages_vues, 'Pages affichées')}
+                ${tuileG('Nouveaux visiteurs', g.nouveaux_visiteurs, gp.nouveaux_visiteurs, 'Première visite sur le site')}
+              </div>
+              <div class="ana-site-grille">
+                <div><h4>Provenance des visites</h4>${barres(g.provenance || [])}</div>
+                <div><h4>Pages les plus vues</h4>${barres(g.pages || [])}</div>
+                <div><h4>Appareils</h4>${barres(g.appareils || [])}</div>
+              </div>
+              <p class="small muted ana-note">Analytics ne compte que les visiteurs qui acceptent les cookies du site : ces chiffres sont en dessous de la fréquentation réelle.</p>
+            </div>` : ''}
+            ${sc ? `<div class="ana-site-partie">
+              <h4 class="ana-site-titre">Recherche Google <span class="small muted">Search Console · ${esc(dates(sc))}</span></h4>
+              <div class="ana-tuiles" style="--rs:#4285F4">
+                ${tuileG('Clics', s.clics, sp.clics, 'Clics depuis les résultats Google')}
+                ${tuileG('Apparitions', s.impressions, sp.impressions, 'Affichages du site dans les résultats Google')}
+                ${tuileG('Taux de clic', s.ctr, sp.ctr, 'Clics ÷ apparitions', pct)}
+                <div class="ana-tuile" title="Rang moyen dans les résultats Google (1 = en tête)"><span>Position moyenne</span><b>${pos(s.position)}</b>${ecartPos(s.position, sp.position)}</div>
+              </div>
+              <div class="table-wrap"><table class="ana-table">
+                <thead><tr><th>Recherche tapée dans Google</th><th>Clics</th><th>Apparitions</th><th>Position</th></tr></thead>
+                <tbody>${(s.recherches || []).map(r => `<tr><td>${esc(r.cle)}</td><td><b>${nombre(r.clics)}</b></td><td>${nombre(r.impressions)}</td><td>${pos(r.position)}</td></tr>`).join('')
+                  || '<tr><td colspan="4" class="muted">Aucune recherche sur la période.</td></tr>'}</tbody>
+              </table></div>
+              <p class="small muted ana-note">Search Console a trois jours de retard : la période s'arrête trois jours avant aujourd'hui.</p>
+            </div>` : ''}
+          </section>`;
+        };
+
         // ---- Le site : le compteur sans cookie (`site_stats_jour`) ----
         // Une visite = une arrivée depuis l'extérieur ; les pages vues suivent.
         // Ces compteurs s'additionnent sans fausser : ce ne sont pas des
@@ -703,7 +766,7 @@ export function pageAnalyse(cle) {
           </section>
           <div class="ana-cartes">${RESEAUX_DE[cle].map(carteReseau).join('')}</div>
           ${blocPosts}
-          ${blocSite()}`;
+          ${blocGoogle() || blocSite()}`;
         root.innerHTML = cadre(hash, 'Analyse', corps);
         root.querySelectorAll('[data-periode]').forEach(b => b.onclick = () => {
           state.periode = Number(b.dataset.periode);

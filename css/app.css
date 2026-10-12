@@ -6521,3 +6521,9 @@ span.rpv-statut { display: inline-block; margin-bottom: 4px; }
 .ana-barre-nom { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ana-barre-piste { height: 8px; border-radius: 4px; background: var(--card-2); overflow: hidden; }
 .ana-barre-piste i { display: block; height: 100%; border-radius: 4px; background: var(--accent); }
+
+/* Le site par Google : deux parties, fréquentation puis recherche. */
+.ana-site-partie { display: flex; flex-direction: column; gap: 10px; padding-top: 8px; }
+.ana-site-partie + .ana-site-partie { border-top: 1px solid var(--line); margin-top: 6px; padding-top: 14px; }
+.ana-site-titre { margin: 0; font-size: 14px; color: var(--text); text-transform: none; letter-spacing: 0; }
+.ana-site-titre .small { font-weight: 400; margin-left: 6px; }

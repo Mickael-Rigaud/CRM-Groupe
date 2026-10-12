@@ -556,6 +556,24 @@ export const SEED = {
   // ne s'essayaient. Textes INVENTÉS.
   communication_stats_jour: statsDemo(),
   communication_stats_posts: postsDemo(),
+  // Analytics et Search Console de rgdrenova.fr en démo (chiffres INVENTÉS).
+  site_google_periode: [7, 14, 30].flatMap(n => {
+    const j = (d) => new Date(Date.now() - d * 86400000).toISOString().slice(0, 10);
+    const k = n / 7;
+    return [
+      { site: 'rgdrenova.fr', outil: 'analytics', periode: n, du: j(n), au: j(1), releve_le: new Date().toISOString(),
+        donnees: { visites: Math.round(30 * k), visiteurs: Math.round(27 * k), pages_vues: Math.round(80 * k), nouveaux_visiteurs: Math.round(22 * k),
+          provenance: [['Recherche Google et moteurs', Math.round(14 * k)], ['Accès direct', Math.round(9 * k)], ['Réseaux sociaux', Math.round(7 * k)]],
+          pages: [['/', Math.round(40 * k)], ['/nos-realisations/', Math.round(22 * k)], ['/demandez-un-devis/', Math.round(18 * k)]],
+          appareils: [['Mobile', Math.round(19 * k)], ['Ordinateur', Math.round(11 * k)]] },
+        precedent: { visites: Math.round(26 * k), visiteurs: Math.round(24 * k), pages_vues: Math.round(70 * k), nouveaux_visiteurs: Math.round(20 * k) } },
+      { site: 'rgdrenova.fr', outil: 'search_console', periode: n, du: j(n + 2), au: j(3), releve_le: new Date().toISOString(),
+        donnees: { clics: Math.round(5 * k), impressions: Math.round(110 * k), ctr: 0.045, position: 9.4,
+          recherches: [{ cle: 'rénovation salle de bain chantilly', clics: Math.round(2 * k), impressions: Math.round(30 * k), position: 6.2 },
+            { cle: 'entreprise rénovation oise', clics: Math.round(k), impressions: Math.round(25 * k), position: 11.5 }] },
+        precedent: { clics: Math.round(4 * k), impressions: Math.round(95 * k), ctr: 0.042, position: 10.8 } },
+    ];
+  }),
   // Le compteur du site en démo : 40 jours, trois pages, quatre provenances.
   // Chiffres INVENTÉS, tirés d'une formule fixe.
   site_stats_jour: (() => {

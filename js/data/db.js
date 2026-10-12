@@ -59,6 +59,8 @@ export const TABLES = ['profiles', 'organisations', 'contacts', 'deals', 'activi
   'communication_stats_jour', 'communication_stats_posts', 'communication_stats_periode',
   // Le compteur d'audience des sites, sans cookie (direction seule).
   'site_stats_jour',
+  // Google Analytics et Search Console, en totaux de période (direction seule).
+  'site_google_periode',
   // ⚠ `rgd_apports` non plus n'est pas un reflet : les apports d'affaires d'un
   // partenaire se saisissent dans le CRM, et depuis le 25/09/2026 `rgd_apporteurs`
   // a rejoint ce cas — le relevé ignore désormais sa charge.
