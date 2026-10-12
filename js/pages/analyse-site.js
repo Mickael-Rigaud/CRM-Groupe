@@ -19,6 +19,7 @@ import { esc } from '../ui.js';
 const INFOS = {
   rgd: { site: 'rgdrenova.fr', capture: 'assets/captures/rgdrenova.jpg' },
   btp: { site: 'btpexpertise.fr', capture: 'assets/captures/btpexpertise.jpg' },
+  courtage: { site: 'lareferencecourtage.fr', capture: 'assets/captures/lareferencecourtage.jpg' },
 };
 // Une couleur par provenance : la même d'un écran à l'autre.
 const COULEURS = {
@@ -62,7 +63,8 @@ function frequentation(cle, periode) {
     const jours = [];
     for (let i = periode - 1; i >= 0; i--) {
       const j = jourIl(i);
-      jours.push([j, tot(cur.filter(l => l.jour === j), 'visites')]);
+      // Avant le premier jour mesuré, on ne sait pas : pas de zéro qui se lirait « personne ».
+      if (j >= premier) jours.push([j, tot(cur.filter(l => l.jour === j), 'visites')]);
     }
     return {
       source: 'compteur', libelle: `Compteur sans cookie, depuis le ${fr(premier)}`, du: debut, au: fin,

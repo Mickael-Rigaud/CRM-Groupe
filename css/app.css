@@ -6631,3 +6631,7 @@ span.rpv-statut { display: inline-block; margin-bottom: 4px; }
   .as-capture { transform: none; }
   .as-grille { grid-template-columns: 1fr; }
 }
+
+/* Une structure sans reseau (La Reference Courtage) n a pas d onglets : `display: flex`
+   battrait `[hidden]`, de specificite nulle. */
+.ana-onglets[hidden] { display: none; }

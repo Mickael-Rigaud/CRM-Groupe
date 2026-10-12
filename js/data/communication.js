@@ -27,6 +27,9 @@ export const RESEAUX = {
 export const RESEAUX_DE = {
   rgd: ['facebook', 'instagram', 'tiktok', 'linkedin'],
   btp: ['facebook', 'instagram'],
+  // La Référence Courtage (12/10/2026) : aucun réseau raccordé pour l'instant,
+  // seul le site est mesuré — l'écran Analyse n'y montre donc pas d'onglet.
+  courtage: [],
 };
 
 // ⚠ MIROIR DE LA CONTRAINTE `check` de la colonne `statut` : une clé ajoutée

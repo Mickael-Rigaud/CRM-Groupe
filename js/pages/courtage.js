@@ -30,12 +30,25 @@ const ONGLETS = [
   { hash: '#/courtage', label: "Vue d'ensemble" },
   { hash: '#/courtage/base', label: 'Base de données' },
   { hash: '#/courtage/vivier', label: 'Vivier courtiers' },
+  // « Communication » (12/10/2026, Élodie) : pour l'instant la seule analyse du
+  // site lareferencecourtage.fr, les réseaux viendront plus tard. Réservé à la
+  // direction, comme chez RGD Renova et BTP Expertise.
+  { label: 'Communication', pliable: true, sous: [
+    { hash: '#/courtage/analyse', label: 'Analyse' },
+  ] },
 ];
+const RESERVES_DIRECTION_COURTAGE = ['#/courtage/analyse'];
+const sansDirection = (liste) => liste
+  .filter(o => !RESERVES_DIRECTION_COURTAGE.includes(o.hash))
+  .map(o => (o.sous ? { ...o, sous: sansDirection(o.sous) } : o))
+  .filter(o => !o.sous || o.sous.length);
 
-const cadre = (actif, titre, corps) => coquilleEspace({
+export const cadreCourtage = (actif, titre, corps) => coquilleEspace({
   actif, titre, corps,
-  cle: KEY, marque: act().label, baseline: 'Courtage en crédit immobilier', onglets: ONGLETS,
+  cle: KEY, marque: act().label, baseline: 'Courtage en crédit immobilier',
+  onglets: scope.isDirection ? ONGLETS : sansDirection(ONGLETS),
 });
+const cadre = cadreCourtage;
 
 const guard = (root) => {
   if (scope.activityKeys.includes(KEY)) return false;

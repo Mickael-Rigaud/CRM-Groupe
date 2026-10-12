@@ -10,7 +10,7 @@ import { rgdClientsPage } from './rgd-clients.js';
 import { rgdDevisPage, rgdPaiementsPage } from './rgd-facturation.js';
 import { rgdSousTraitantsPage } from './rgd-soustraitants.js';
 import { rgdProspectionPage } from './rgd-prospection.js';
-import { rgdCommunicationPage, btpCommunicationPage, rgdAnalysePage, btpAnalysePage } from './communication.js';
+import { rgdCommunicationPage, btpCommunicationPage, rgdAnalysePage, btpAnalysePage, courtageAnalysePage } from './communication.js';
 import { rgdAgendaPage } from './rgd-agenda.js';
 import { rgdPartenairesPage } from './rgd-partenaires.js';
 import { rgdRealisationsPage } from './rgd-realisations.js';
@@ -90,6 +90,7 @@ export const pages = {
   courtage_home: courtageHomePage,
   courtage_base: courtageBasePage,
   courtage_vivier: courtageVivierPage,
+  courtage_analyse: courtageAnalysePage,
   dashboard: dashboardPage,
   messagerie: messageriePage,
   today: todayPage,

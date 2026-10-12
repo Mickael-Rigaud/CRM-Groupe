@@ -586,6 +586,8 @@ export const SEED = {
       pages.forEach((page, a) => sources.forEach((source, b) => {
         const v = (i + a * 3 + b * 5) % 4;
         if (v) out.push({ site: 'btpexpertise.fr', jour, page, source, appareil: (a + b) % 3 ? 'mobile' : 'ordinateur', vues: v + a, visites: a === 0 ? v : 0 });
+        // lareferencecourtage.fr : douze jours seulement, pour voir le compteur qui démarre.
+        if (v && i < 12) out.push({ site: 'lareferencecourtage.fr', jour, page: ['/', '/simulateur/', '/pret-immobilier/'][a], source, appareil: (a + b) % 2 ? 'mobile' : 'ordinateur', vues: v + a + 1, visites: a === 0 ? v : 0 });
       }));
     }
     return out;

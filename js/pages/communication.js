@@ -26,6 +26,7 @@ import { scope } from '../data/scope.js';
 import { db } from '../data/db.js';
 import { logoReseau } from '../data/logos-reseaux.js';
 import { vueSite } from './analyse-site.js';
+import { cadreCourtage } from './courtage.js';
 import { esc, toast, openModal, closeModal, armerCroix } from '../ui.js';
 import { poserEspace } from './espace.js';
 import { cadre as cadreRgd } from './rgd-espace.js';
@@ -35,8 +36,8 @@ import {
   contenusDe, creerContenu, majContenu, supprimerContenu, deposerVisuel,
 } from '../data/communication.js';
 
-const CADRES = { rgd: cadreRgd, btp: cadreBtp };
-const NOMS = { rgd: 'RGD Renova', btp: 'BTP Expertise' };
+const CADRES = { rgd: cadreRgd, btp: cadreBtp, courtage: cadreCourtage };
+const NOMS = { rgd: 'RGD Renova', btp: 'BTP Expertise', courtage: 'La Référence Courtage' };
 const JOURS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 
 // Le jour LOCAL, jamais `toISOString()` : un contenu posé à 23 h serait daté
@@ -556,6 +557,11 @@ export function pageAnalyse(cle) {
         if (localStorage.getItem('crm_ana_vue') === 'site') state.vue = 'site';
       } catch { /* sans stockage */ }
 
+      // ⚠ UNE STRUCTURE SANS RÉSEAU N'A PAS D'ONGLETS (La Référence Courtage,
+      // 12/10/2026) : un onglet « Réseaux sociaux » vide se lirait comme une panne.
+      const sansReseau = !(RESEAUX_DE[cle] || []).length;
+      if (sansReseau) state.vue = 'site';
+
       const draw = () => {
         if (!scope.isDirection) {
           root.innerHTML = cadre(hash, 'Analyse',
@@ -647,7 +653,7 @@ export function pageAnalyse(cle) {
           role="tab" aria-selected="${state.vue === k}">${icone}<span>${esc(libelle)}</span></button>`;
         const corps = `
           <section class="ana-barre">
-            <div class="ana-onglets" role="tablist">
+            <div class="ana-onglets" role="tablist"${sansReseau ? ' hidden' : ''}>
               ${onglet('reseaux', 'Réseaux sociaux', '<svg viewBox="0 0 24 24" width="18" height="18"><circle cx="6" cy="12" r="2.6" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="18" cy="6" r="2.6" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="18" cy="18" r="2.6" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8.3 10.8l7.4-3.6M8.3 13.2l7.4 3.6" stroke="currentColor" stroke-width="1.8"/></svg>')}
               ${onglet('site', 'Site internet', '<svg viewBox="0 0 24 24" width="18" height="18"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3 12h18M12 3c2.6 2.6 2.6 15.4 0 18M12 3c-2.6 2.6-2.6 15.4 0 18" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>')}
             </div>
@@ -681,3 +687,4 @@ export function pageAnalyse(cle) {
 
 export const rgdAnalysePage = pageAnalyse('rgd');
 export const btpAnalysePage = pageAnalyse('btp');
+export const courtageAnalysePage = pageAnalyse('courtage');
