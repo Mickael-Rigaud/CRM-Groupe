@@ -51,7 +51,10 @@ export const STATUTS = {
 // réseaux, est publié par l'outil `publication-instagram` (GitHub Actions,
 // toutes les 15 minutes) via l'Edge Function `communication-publication`.
 // Ailleurs, le calendrier ne fait que planifier.
-export const PUBLICATION_AUTO = { btp: ['instagram'] };
+// RGD Renova branché le 12/10/2026 (Élodie : « j'ai plein de stories à
+// programmer ») : Instagram et sa page Facebook — une story, elle, ne part
+// jamais sur Facebook, l'outil la saute.
+export const PUBLICATION_AUTO = { btp: ['instagram'], rgd: ['instagram', 'facebook'] };
 // Même règle : miroir de la contrainte `check` de `format`.
 export const FORMATS = {
   post: 'Post',
