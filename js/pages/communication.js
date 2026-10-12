@@ -25,6 +25,7 @@
 import { scope } from '../data/scope.js';
 import { db } from '../data/db.js';
 import { logoReseau } from '../data/logos-reseaux.js';
+import { vueSite } from './analyse-site.js';
 import { esc, toast, openModal, closeModal, armerCroix } from '../ui.js';
 import { poserEspace } from './espace.js';
 import { cadre as cadreRgd } from './rgd-espace.js';
@@ -545,10 +546,14 @@ export function pageAnalyse(cle) {
         return {};
       }
       const coquille = poserEspace(root);
-      const state = { periode: 30, tri: 'portee', reseau: '' };
+      // ⚠ DEUX ONGLETS, UN SEUL ÉCRAN (12/10/2026, Élodie : « sépare les réseaux
+      // sociaux et le site internet dans deux écrans différents mais dans la
+      // même page analyse ») : la période se partage, la mise en page non.
+      const state = { periode: 30, tri: 'portee', reseau: '', vue: 'reseaux' };
       try {
         const memo = Number(localStorage.getItem('crm_ana_periode'));
         if (PERIODES.some(([n]) => n === memo)) state.periode = memo;
+        if (localStorage.getItem('crm_ana_vue') === 'site') state.vue = 'site';
       } catch { /* sans stockage */ }
 
       const draw = () => {
@@ -638,143 +643,35 @@ export function pageAnalyse(cle) {
             : '<div class="empty">Aucun post relevé sur cette période.</div>'}
         </section>`;
 
-        // ---- Le site par Google : Analytics (fréquentation) + Search Console
-        // (recherche Google), relevés chaque matin dans `site_google_periode`
-        // (12/10/2026). Ce sont des totaux de fenêtre calculés par Google. ----
-        const blocGoogle = () => {
-          const site = SITES[cle];
-          const ga = db.t('site_google_periode').find(x => x.site === site && x.outil === 'analytics' && Number(x.periode) === state.periode);
-          const sc = db.t('site_google_periode').find(x => x.site === site && x.outil === 'search_console' && Number(x.periode) === state.periode);
-          if (!ga && !sc) return null;
-          const dates = (x) => `${x.du.split('-').reverse().join('/')} → ${x.au.split('-').reverse().join('/')}`;
-          const pct = (v) => (v == null ? '—' : `${(v * 100).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} %`);
-          const pos = (v) => (v == null ? '—' : v.toLocaleString('fr-FR', { maximumFractionDigits: 1 }));
-          // Pour la position, plus bas est mieux : l'écart s'inverse.
-          const ecartPos = (a, b) => {
-            if (a == null || !b) return '';
-            const d = Math.round((a - b) * 10) / 10;
-            if (!d) return '<span class="ana-ecart">=</span>';
-            return `<span class="ana-ecart ${d < 0 ? 'hausse' : 'baisse'}">${d < 0 ? 'gagne' : 'perd'} ${Math.abs(d).toLocaleString('fr-FR')} place${Math.abs(d) >= 2 ? 's' : ''}</span>`;
-          };
-          const tuileG = (lib, v, avant, aide, rendu = nombre) => `<div class="ana-tuile" title="${esc(aide)}"><span>${esc(lib)}</span><b>${rendu(v)}</b>${ecart(v, avant, true)}</div>`;
-          const barres = (liste) => {
-            const total = liste.reduce((a, [, n]) => a + n, 0);
-            return liste.map(([nom, n]) => `<div class="ana-barre-l">
-              <span class="ana-barre-nom" title="${esc(nom)}">${esc(nom)}</span>
-              <span class="ana-barre-piste"><i style="width:${total ? Math.max(2, (n / total) * 100) : 0}%"></i></span>
-              <b>${nombre(n)}</b></div>`).join('') || '<div class="small muted">—</div>';
-          };
-          const g = ga?.donnees || {}, gp = ga?.precedent || {};
-          const s = sc?.donnees || {}, sp = sc?.precedent || {};
-          return `<section class="ana-bloc ana-site">
-            <header class="ana-posts-tete"><h3>Site internet — ${esc(site)}</h3></header>
-            ${ga ? `<div class="ana-site-partie">
-              <h4 class="ana-site-titre">Fréquentation <span class="small muted">Google Analytics · ${esc(dates(ga))}</span></h4>
-              <div class="ana-tuiles" style="--rs:#E37400">
-                ${tuileG('Visites', g.visites, gp.visites, 'Sessions sur le site')}
-                ${tuileG('Visiteurs', g.visiteurs, gp.visiteurs, 'Personnes uniques, calculé par Google')}
-                ${tuileG('Pages vues', g.pages_vues, gp.pages_vues, 'Pages affichées')}
-                ${tuileG('Nouveaux visiteurs', g.nouveaux_visiteurs, gp.nouveaux_visiteurs, 'Première visite sur le site')}
-              </div>
-              <div class="ana-site-grille">
-                <div><h4>Provenance des visites</h4>${barres(g.provenance || [])}</div>
-                <div><h4>Pages les plus vues</h4>${barres(g.pages || [])}</div>
-                <div><h4>Appareils</h4>${barres(g.appareils || [])}</div>
-              </div>
-              <p class="small muted ana-note">Analytics ne compte que les visiteurs qui acceptent les cookies du site : ces chiffres sont en dessous de la fréquentation réelle.</p>
-            </div>` : ''}
-            ${sc ? `<div class="ana-site-partie">
-              <h4 class="ana-site-titre">Recherche Google <span class="small muted">Search Console · ${esc(dates(sc))}</span></h4>
-              <div class="ana-tuiles" style="--rs:#4285F4">
-                ${tuileG('Clics', s.clics, sp.clics, 'Clics depuis les résultats Google')}
-                ${tuileG('Apparitions', s.impressions, sp.impressions, 'Affichages du site dans les résultats Google')}
-                ${tuileG('Taux de clic', s.ctr, sp.ctr, 'Clics ÷ apparitions', pct)}
-                <div class="ana-tuile" title="Rang moyen dans les résultats Google (1 = en tête)"><span>Position moyenne</span><b>${pos(s.position)}</b>${ecartPos(s.position, sp.position)}</div>
-              </div>
-              <div class="table-wrap"><table class="ana-table">
-                <thead><tr><th>Recherche tapée dans Google</th><th>Clics</th><th>Apparitions</th><th>Position</th></tr></thead>
-                <tbody>${(s.recherches || []).map(r => `<tr><td>${esc(r.cle)}</td><td><b>${nombre(r.clics)}</b></td><td>${nombre(r.impressions)}</td><td>${pos(r.position)}</td></tr>`).join('')
-                  || '<tr><td colspan="4" class="muted">Aucune recherche sur la période.</td></tr>'}</tbody>
-              </table></div>
-              <p class="small muted ana-note">Search Console a trois jours de retard : la période s'arrête trois jours avant aujourd'hui.</p>
-            </div>` : ''}
-          </section>`;
-        };
-
-        // ---- Le site : le compteur sans cookie (`site_stats_jour`) ----
-        // Une visite = une arrivée depuis l'extérieur ; les pages vues suivent.
-        // Ces compteurs s'additionnent sans fausser : ce ne sont pas des
-        // personnes uniques, contrairement à la portée des réseaux.
-        const blocSite = () => {
-          const site = SITES[cle];
-          const lignes = db.t('site_stats_jour').filter(l => l.site === site);
-          if (!lignes.length) {
-            return `<section class="ana-bloc"><h3>Site internet</h3>
-              <div class="ana-source" style="--rs:#475569">
-                <span class="ana-pastille">WEB</span>
-                <div><b>${esc(site)}</b><div class="small muted">visites, provenance, pages vues</div></div>
-                <span class="ana-etat">${cle === 'btp' ? 'Première visite attendue' : 'À raccorder'}</span>
-              </div></section>`;
-          }
-          // La période du site va jusqu'à aujourd'hui inclus : le compteur est
-          // en direct, contrairement aux relevés de Meta.
-          const jourIl = (n) => isoJour(new Date(Date.now() - n * 86400000));
-          const auj = jourIl(0);
-          const debutS = jourIl(state.periode - 1);
-          const avantFin = jourIl(state.periode);
-          const avantDebut = jourIl(2 * state.periode - 1);
-          const cur = lignes.filter(l => l.jour >= debutS && l.jour <= auj);
-          const prec = lignes.filter(l => l.jour >= avantDebut && l.jour <= avantFin);
-          const tot = (l, k) => l.reduce((a, x) => a + (x[k] || 0), 0);
-          const premier = lignes.map(l => l.jour).sort()[0];
-          // Pas d'écart tant que la période d'avant n'est pas entièrement mesurée.
-          const complet = premier <= avantDebut;
-          const groupe = (champ, k = 'vues') => {
-            const m = new Map();
-            for (const l of cur) m.set(l[champ], (m.get(l[champ]) || 0) + (l[k] || 0));
-            return [...m.entries()].filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]);
-          };
-          const barres = (liste, total) => liste.map(([nom, n]) => `<div class="ana-barre-l">
-            <span class="ana-barre-nom" title="${esc(nom)}">${esc(nom)}</span>
-            <span class="ana-barre-piste"><i style="width:${total ? Math.max(2, (n / total) * 100) : 0}%"></i></span>
-            <b>${nombre(n)}</b></div>`).join('') || '<div class="small muted">—</div>';
-          const visites = tot(cur, 'visites'), vues = tot(cur, 'vues');
-          const tuileS = (lib, v, avant) => `<div class="ana-tuile"><span>${esc(lib)}</span><b>${nombre(v)}</b>${ecart(v, avant, complet)}</div>`;
-          return `<section class="ana-bloc ana-site">
-            <header class="ana-posts-tete"><h3>Site internet — ${esc(site)}</h3>
-              <span class="small muted">Mesure sans cookie depuis le ${esc(premier.split('-').reverse().join('/'))}</span></header>
-            <div class="ana-tuiles ana-tuiles-site" style="--rs:#475569">
-              ${tuileS('Visites', visites, tot(prec, 'visites'))}
-              ${tuileS('Pages vues', vues, tot(prec, 'vues'))}
-              <div class="ana-tuile"><span>Pages par visite</span><b>${visites ? (vues / visites).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) : '—'}</b></div>
-            </div>
-            <div class="ana-site-grille">
-              <div><h4>Provenance des visites</h4>${barres(groupe('source', 'visites'), visites)}</div>
-              <div><h4>Pages les plus vues</h4>${barres(groupe('page').slice(0, 8), vues)}</div>
-              <div><h4>Appareils</h4>${barres(groupe('appareil', 'visites').map(([a, n]) => [a.charAt(0).toUpperCase() + a.slice(1), n]), visites)}</div>
-            </div>
-          </section>`;
-        };
-
+        const onglet = (k, libelle, icone) => `<button type="button" data-vue="${k}" class="${state.vue === k ? 'actif' : ''}"
+          role="tab" aria-selected="${state.vue === k}">${icone}<span>${esc(libelle)}</span></button>`;
         const corps = `
           <section class="ana-barre">
-            <div>
-              <h2>Réseaux sociaux de ${esc(NOMS[cle])}</h2>
-              <p class="small muted">${dernierReleve ? `Relevé chaque matin — dernier relevé le ${esc(new Date(dernierReleve).toLocaleString('fr-FR', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }))}.` : 'Premier relevé demain matin.'}</p>
+            <div class="ana-onglets" role="tablist">
+              ${onglet('reseaux', 'Réseaux sociaux', '<svg viewBox="0 0 24 24" width="18" height="18"><circle cx="6" cy="12" r="2.6" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="18" cy="6" r="2.6" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="18" cy="18" r="2.6" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8.3 10.8l7.4-3.6M8.3 13.2l7.4 3.6" stroke="currentColor" stroke-width="1.8"/></svg>')}
+              ${onglet('site', 'Site internet', '<svg viewBox="0 0 24 24" width="18" height="18"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3 12h18M12 3c2.6 2.6 2.6 15.4 0 18M12 3c-2.6 2.6-2.6 15.4 0 18" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>')}
             </div>
             <div class="com-rs-filtre">${PERIODES.map(([n, l]) => `<button type="button" data-periode="${n}" class="${state.periode === n ? 'actif' : ''}">${esc(l)}</button>`).join('')}</div>
           </section>
-          <div class="ana-cartes">${RESEAUX_DE[cle].map(carteReseau).join('')}</div>
-          ${blocPosts}
-          ${blocGoogle() || blocSite()}`;
+          ${state.vue === 'site' ? vueSite(cle, state.periode) : `
+            <p class="small muted ana-releve">${dernierReleve ? `Relevé chaque matin — dernier relevé le ${esc(new Date(dernierReleve).toLocaleString('fr-FR', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }))}.` : 'Premier relevé demain matin.'}</p>
+            <div class="ana-cartes">${RESEAUX_DE[cle].map(carteReseau).join('')}</div>
+            ${blocPosts}`}`;
         root.innerHTML = cadre(hash, 'Analyse', corps);
         root.querySelectorAll('[data-periode]').forEach(b => b.onclick = () => {
           state.periode = Number(b.dataset.periode);
           try { localStorage.setItem('crm_ana_periode', String(state.periode)); } catch { /* sans stockage */ }
           draw();
         });
-        root.querySelector('#ana-tri').onchange = (e) => { state.tri = e.target.value; draw(); };
-        root.querySelector('#ana-reseau').onchange = (e) => { state.reseau = e.target.value; draw(); };
+        root.querySelectorAll('[data-vue]').forEach(b => b.onclick = () => {
+          state.vue = b.dataset.vue;
+          try { localStorage.setItem('crm_ana_vue', state.vue); } catch { /* sans stockage */ }
+          draw();
+        });
+        const tri = root.querySelector('#ana-tri');
+        if (tri) tri.onchange = (e) => { state.tri = e.target.value; draw(); };
+        const res = root.querySelector('#ana-reseau');
+        if (res) res.onchange = (e) => { state.reseau = e.target.value; draw(); };
       };
       draw();
       return { refresh: draw, destroy() { coquille.retirer(); } };
