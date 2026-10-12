@@ -24,6 +24,7 @@
 
 import { scope } from '../data/scope.js';
 import { db } from '../data/db.js';
+import { logoReseau } from '../data/logos-reseaux.js';
 import { esc, toast, openModal, closeModal, armerCroix } from '../ui.js';
 import { poserEspace } from './espace.js';
 import { cadre as cadreRgd } from './rgd-espace.js';
@@ -45,7 +46,7 @@ const nomMois = (a, m) => new Date(a, m, 1).toLocaleDateString('fr-FR', { month:
 const jourLong = (s) => new Date(s + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
 
 const pastilles = (reseaux) => (reseaux || []).filter(r => RESEAUX[r])
-  .map(r => `<span class="com-rs" style="--rs:${RESEAUX[r].couleur}" title="${esc(RESEAUX[r].label)}">${esc(RESEAUX[r].court)}</span>`).join('');
+  .map(r => logoReseau(r, 15)).join('');
 const vignette = (c) => {
   const v = (c.visuels || [])[0];
   if (!v) return '';
@@ -145,7 +146,7 @@ export function pageCommunication(cle) {
               <div class="com-rs-filtre">
                 <button type="button" data-reseau="" class="${!state.reseau ? 'actif' : ''}">Tous</button>
                 ${reseaux.map(r => `<button type="button" data-reseau="${r}" class="${state.reseau === r ? 'actif' : ''}"
-                  style="--rs:${RESEAUX[r].couleur}">${esc(RESEAUX[r].label)}</button>`).join('')}
+                  style="--rs:${RESEAUX[r].couleur}">${logoReseau(r, 16)}${esc(RESEAUX[r].label)}</button>`).join('')}
               </div>
               <select id="com-statut" class="filter-input">${opt('', 'Tous les statuts', state.statut)}
                 ${Object.entries(STATUTS).map(([k, v]) => opt(k, v.label, state.statut)).join('')}</select>
@@ -247,7 +248,7 @@ function formulaire(cle, existant, defauts = {}) {
     <div class="com-ligne">
       <span class="com-lib">Réseaux</span>
       <div class="com-choix">${proposes.map(r => `<button type="button" class="com-chip${v.reseaux.includes(r) ? ' actif' : ''}"
-        data-rs="${r}" style="--rs:${RESEAUX[r]?.couleur || '#475569'}">${esc(RESEAUX[r]?.label || r)}</button>`).join('')}</div>
+        data-rs="${r}" style="--rs:${RESEAUX[r]?.couleur || '#475569'}">${logoReseau(r, 16)}${esc(RESEAUX[r]?.label || r)}</button>`).join('')}</div>
     </div>
     <div class="com-ligne">
       <span class="com-lib">Format</span>
@@ -578,7 +579,7 @@ export function pageAnalyse(cle) {
           const siennes = jours.filter(l => l.reseau === r).sort((a, b) => a.jour.localeCompare(b.jour));
           if (!RACCORDES.includes(r) || !siennes.length) {
             return `<section class="ana-carte est-vide" style="--rs:${def.couleur}">
-              <header><span class="ana-pastille">${esc(def.court)}</span><h3>${esc(def.label)}</h3><span class="ana-etat">À raccorder</span></header>
+              <header>${logoReseau(r, 30)}<h3>${esc(def.label)}</h3><span class="ana-etat">À raccorder</span></header>
               <p class="small muted">${r === 'tiktok' || r === 'linkedin'
                 ? `${esc(def.label)} demande une autorisation de développeur, accordée après examen : le raccordement viendra ensuite.`
                 : 'Aucun relevé pour l’instant.'}</p></section>`;
@@ -593,7 +594,7 @@ export function pageAnalyse(cle) {
           const du = t ? t.du : debut, au = t ? t.au : fin;
           return `<section class="ana-carte" style="--rs:${def.couleur}">
             <header>
-              <span class="ana-pastille">${esc(def.court)}</span><h3>${esc(def.label)}</h3>
+              ${logoReseau(r, 30)}<h3>${esc(def.label)}</h3>
               <span class="ana-abonnes"><b>${nombre(abonnes)}</b> abonnés
                 ${act.nouveaux_abonnes ? `<em>+${nombre(act.nouveaux_abonnes)} sur la période</em>` : ''}</span>
             </header>
@@ -627,7 +628,7 @@ export function pageAnalyse(cle) {
           ${liste.length ? `<div class="table-wrap"><table class="ana-table">
             <thead><tr><th></th><th>Publié</th><th>Post</th><th>Portée</th><th>Vues</th><th>J’aime</th><th>Comm.</th><th>Enreg.</th><th></th></tr></thead>
             <tbody>${liste.map(p => `<tr>
-              <td><span class="com-rs" style="--rs:${RESEAUX[p.reseau].couleur}">${esc(RESEAUX[p.reseau].court)}</span></td>
+              <td>${logoReseau(p.reseau, 18)}</td>
               <td class="nowrap">${esc((p.publie_le || '').slice(0, 10).split('-').reverse().join('/'))}</td>
               <td class="ana-apercu">${titreDuPost[p.post_id] ? `<b>${esc(titreDuPost[p.post_id])}</b><br>` : ''}${esc(p.apercu || (p.type || 'Sans texte'))}</td>
               <td><b>${nombre(p.portee)}</b></td><td>${nombre(p.vues)}</td><td>${nombre(p.likes)}</td>

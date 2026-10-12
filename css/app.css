@@ -6498,3 +6498,15 @@ span.rpv-statut { display: inline-block; margin-bottom: 4px; }
   .ana-tuiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .ana-cartes { grid-template-columns: 1fr; }
 }
+
+/* Les logos des réseaux (12/10/2026). Un logo de marque ne se pose pas sur sa
+   propre couleur — le « f » bleu disparaîtrait sur un bouton bleu : un réseau
+   choisi se teinte donc légèrement et se borde de sa couleur. */
+.logo-reseau { display: inline-block; flex: none; vertical-align: middle; }
+.com-puce-haut .logo-reseau { margin-right: 1px; }
+.com-rs-filtre button[data-reseau] { display: inline-flex; align-items: center; gap: 6px; }
+.com-rs-filtre button[data-reseau].actif { background: color-mix(in srgb, var(--rs) 14%, var(--card)); color: var(--text);
+  box-shadow: inset 0 0 0 1.5px var(--rs); font-weight: 600; }
+.com-chip[data-rs] { display: inline-flex; align-items: center; gap: 6px; }
+.com-chip[data-rs].actif { background: color-mix(in srgb, var(--rs) 14%, var(--card)); color: var(--text);
+  border-color: var(--rs); font-weight: 600; }
