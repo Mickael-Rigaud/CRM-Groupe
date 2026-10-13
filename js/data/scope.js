@@ -215,6 +215,8 @@ export const scope = {
     // partenaire, donc du même propriétaire. ⚠ MAIS SON PARTENAIRE PEUT N'ÊTRE
     // QU'UN NOM, sans fiche d'annuaire : d'où un cas à lui, et non `apporteur`.
     rgd_apports_sortants: 'apporteur_ou_libre',
+    // Un dossier SAV prend le propriétaire de sa fiche (13/10/2026).
+    rgd_sav: 'moi',
   },
 
   rgdVoitLigne(table, r) {

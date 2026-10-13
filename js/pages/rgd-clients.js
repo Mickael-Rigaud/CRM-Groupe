@@ -107,6 +107,7 @@ import { supprimerFiche, boutonSuppression, restaurerFiche, purgerFiche } from '
 import { nouvelleDemandeRgd } from './rgd-projet.js';
 import { attribuerEnLotRgd } from './rgd-attribuer-lot.js';
 import { ouvrirFicheRgd } from './rgd-fiche.js';
+import { tableauSav, celluleSav, fenetreSav } from './rgd-sav.js';
 
 const s_ = (n) => (n > 1 ? 's' : '');
 
@@ -159,6 +160,8 @@ const STATUTS_SUIVI = [
   { key: 'devis_accepte',     label: 'Devis accepté',       ton: 'accent' },
   { key: 'chantier_en_cours', label: 'Chantier en cours',   ton: 'green' },
   { key: 'chantier_termine',  label: 'Chantier terminé',    ton: 'green' },
+  // Range la fiche dans l'onglet « SAV » (13/10/2026).
+  { key: 'sav',               label: 'SAV',                 ton: 'amber' },
   { key: 'perdu',             label: 'Perdu',               ton: 'red' },
   // Range la fiche dans l'onglet « Clients indésirables » (rgd-etapes.js).
   { key: 'indesirable',       label: 'Client indésirable',  ton: 'red' },
@@ -680,6 +683,8 @@ export const rgdClientsPage = {
       q: '', type: '',
       // La période de l'onglet « Chantier terminé » (13/10/2026, Élodie).
       periodeFin: '', finDu: '', finAu: '',
+      // L'onglet « SAV » : les dossiers en cours, ou ceux déjà résolus.
+      savFiltre: 'encours',
       // ⚠ `?vue=clients` DOIT CONTINUER D'OUVRIR LES CLIENTS. Des mails de
       // notification deja partis le portent. Il visait le sous-onglet retire ;
       // il vise maintenant le menu, ou il se voit et se defait.
@@ -757,7 +762,7 @@ export const rgdClientsPage = {
       // suffit, sinon le doublon resté « en cours » le ferait réapparaître
       // dans la liste qu'on travaille.
       const RANG = ['archives', 'devis_encours', 'devis_accepte',
-                    'chantier_termine', 'chantier_encours', 'indesirable'];
+                    'chantier_termine', 'chantier_encours', 'sav', 'indesirable'];
       const rangDe = (f) => RANG.indexOf(etapeDe(f));
       const meilleures = new Map();
       for (const f of contacts) {
@@ -1372,6 +1377,31 @@ export const rgdClientsPage = {
         })[state.vue] || 'Personne à cette étape.';
       }
 
+      // ---------- l'onglet « SAV » (13/10/2026) : une ligne par DOSSIER
+      // Les fiches de l'étape passent par les mêmes filtres que la frise
+      // (recherche, provenance) ; les dossiers résolus, eux, vivent sur des
+      // fiches revenues en « Chantier terminé ».
+      const lignesSav = state.vue === 'sav' ? tableauSav(lignesProspects, state.savFiltre, prospects) : [];
+      const nResolus = state.vue === 'sav' ? scope.rgd('rgd_sav').filter(s => s.statut === 'resolu').length : 0;
+      const tableauSavHtml = () => `<section class="card table-wrap">
+        <div class="sav-filtre">
+          <button type="button" data-savfiltre="encours" class="${state.savFiltre === 'encours' ? 'on' : ''}">En cours</button>
+          <button type="button" data-savfiltre="resolus" class="${state.savFiltre === 'resolus' ? 'on' : ''}">Résolus <span>${nResolus}</span></button>
+          <span class="grow"></span>
+          <span class="small muted">Passez une fiche en « SAV » depuis « Chantier terminé », ou ouvrez un dossier depuis sa fiche.</span>
+        </div>
+        <table>
+          <thead><tr><th>Client</th><th>Dossier</th><th>Chantier</th><th>Garantie</th>
+            <th>Intervention</th><th>Statut</th><th>Dernier suivi</th><th class="num">Coût</th><th></th></tr></thead>
+          <tbody>${lignesSav.map((l, i) => { const c = celluleSav(l); return `<tr class="click" data-sav="${i}">
+            <td>${c.client}</td><td>${c.dossier}</td><td class="small">${c.chantier}</td><td>${c.garantie}</td>
+            <td class="small">${c.intervention}</td><td>${c.statut}</td><td class="sav-dernier">${c.suivi}</td>
+            <td class="num small">${c.cout}</td>
+            <td>${l.x ? `<button type="button" class="btn ghost sm" data-savfiche="${i}" title="Ouvrir la fiche projet">Fiche</button>` : ''}</td>
+          </tr>`; }).join('') || `<tr><td colspan="9"><div class="empty">${state.savFiltre === 'resolus'
+            ? 'Aucun dossier SAV résolu.' : 'Aucun dossier SAV en cours.'}</div></td></tr>`}</tbody>
+        </table></section>`;
+
       const corps = `
 
         <div class="rcl-barres">
@@ -1476,7 +1506,7 @@ export const rgdClientsPage = {
             ? '<button class="btn" id="rcl-nouveau">+ Nouvelle demande</button>' : ''}
         </div>
 
-        ${surCorbeille ? tableauCorbeille() : surFrise ? tableauProspects() : tableauFiches()}`;
+        ${surCorbeille ? tableauCorbeille() : state.vue === 'sav' ? tableauSavHtml() : surFrise ? tableauProspects() : tableauFiches()}`;
 
       root.innerHTML = cadre('#/rgd/clients', 'Clients & prospects', corps);
       bindSearch(root, 'rcl-q', state, draw);
@@ -1495,6 +1525,20 @@ export const rgdClientsPage = {
       // ⚠ La ligne entière ouvre la fiche, MAIS PAS SES COMMANDES : un clic sur
       // le menu de statut, une flèche, un lien ou la corbeille doit faire ce
       // qu'il annonce, pas ouvrir une modale par-dessus.
+      // L'onglet SAV : une ligne ouvre son dossier, ou en ouvre un s'il n'y en a pas.
+      root.querySelectorAll('[data-savfiltre]').forEach(b => b.onclick = () => {
+        state.savFiltre = b.dataset.savfiltre; draw();
+      });
+      root.querySelectorAll('tr[data-sav]').forEach(tr => tr.onclick = (e) => {
+        if (e.target.closest('select, button, a, input, textarea')) return;
+        const l = lignesSav[Number(tr.dataset.sav)];
+        if (l?.x) fenetreSav({ ...l.x.ligne, __nom: l.x.nom }, l.s, draw);
+      });
+      root.querySelectorAll('[data-savfiche]').forEach(b => b.onclick = () => {
+        const l = lignesSav[Number(b.dataset.savfiche)];
+        if (l?.x) ouvrirFicheRgd(l.x, draw);
+      });
+
       root.querySelectorAll('tr[data-fiche]').forEach(tr => tr.onclick = (e) => {
         if (e.target.closest('select, button, a, input, textarea')) return;
         const x = lignesProspects[Number(tr.dataset.fiche)];

@@ -6738,3 +6738,40 @@ span.rpv-statut { display: inline-block; margin-bottom: 4px; }
    un ecran qu on croit casse. */
 .avi-sans-mail { margin: 0 0 4px; padding: 9px 12px; border-radius: 10px; font-size: 13px;
   line-height: 1.5; background: #FEF3C7; color: #92400E; border: 1px solid #FDE68A; }
+
+/* ---- SAV de RGD Renova (13/10/2026) : statut, onglet, dossier, bloc de fiche ---- */
+.chip.st-sav, .statut-menu.st-sav { background: #FEF3C7; border-color: #D97706; color: #92400E; }
+.sav-filtre { display: flex; align-items: center; gap: 8px; padding: 12px 14px; flex-wrap: wrap; }
+.sav-filtre button { border: 1px solid var(--line); background: var(--card); border-radius: 999px; padding: 5px 12px;
+  font-family: inherit; font-size: 13px; cursor: pointer; color: var(--text); }
+.sav-filtre button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.sav-filtre button span { margin-left: 4px; opacity: .8; }
+.sav-dernier { max-width: 260px; }
+.sav-urgent { color: var(--red); }
+.sav { display: flex; flex-direction: column; gap: 14px; }
+.sav-tete { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.sav-tete b { font-size: 16px; margin-right: 8px; }
+.sav-garantie { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sav-bloc { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px;
+  border-left: 3px solid var(--accent); }
+.sav-bloc h4 { margin: 0; font-size: 13px; text-transform: none; letter-spacing: 0; color: var(--text); }
+.sav-grille { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+@media screen and (max-width: 760px) { .sav-grille { grid-template-columns: 1fr; } }
+.sav-champ { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); min-width: 0; }
+.sav-champ[hidden] { display: none; }
+.sav-champ input, .sav-champ select, .sav-champ textarea { font-family: inherit; font-size: 14px; color: var(--text);
+  padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); width: 100%; box-sizing: border-box; }
+.sav-large { grid-column: 1 / -1; }
+.sav-depot { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; padding: 8px 12px;
+  border: 1px dashed var(--line); border-radius: 10px; font-size: 13px; color: var(--text); align-self: flex-start; }
+.sav-depot input { display: none; }
+.sav-pieces { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 13px; }
+.sav-pieces:empty { display: none; }
+.sav-fil { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
+.sav-fil li { border-left: 2px solid var(--line); padding-left: 10px; }
+.sav-pied { display: flex; align-items: center; gap: 8px; }
+.rgdf-sav-ligne { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; border: 1px solid var(--line);
+  background: var(--card); border-radius: 10px; padding: 8px 10px; margin-bottom: 6px; cursor: pointer; font-family: inherit;
+  font-size: 13px; color: var(--text); }
+.rgdf-sav-ligne:hover { border-color: var(--accent); }
+.rgdf-sav-objet { min-width: 0; }

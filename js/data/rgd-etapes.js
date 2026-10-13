@@ -66,6 +66,11 @@ export const ETAPES_RGD = [
     titre: 'Chantier commencé, pas encore terminé' },
   { key: 'chantier_termine', label: 'Chantier terminé',
     titre: 'Plus aucun chantier en cours chez cette personne' },
+  // ⚠ « SAV » (13/10/2026, Élodie) : HORS DU CYCLE comme les archives — on n'y
+  // avance pas, on y range un client dont un dossier après-vente est ouvert.
+  // Il en sort tout seul, vers « Chantier terminé », quand le dernier dossier
+  // est résolu (`majSav` dans `rgd-sav.js`).
+  { key: 'sav', label: 'SAV', titre: 'Un dossier après-vente est ouvert chez ce client' },
   { key: 'archives', label: 'Archivés', titre: 'Perdus et mis de côté' },
   // ⚠ « CLIENTS INDÉSIRABLES » (06/10/2026, demandé : « une case clients
   // indésirables et une ligne dans la liste déroulante du statut »). Comme les
@@ -78,7 +83,7 @@ export const ETAPES_RGD = [
 ];
 // Les étapes HORS du cycle : on n'y avance pas, on y range. Écrites une fois
 // pour que la frise de la fiche, les flèches et le pipeline les écartent pareil.
-export const ETAPES_HORS_CYCLE = ['archives', 'indesirable'];
+export const ETAPES_HORS_CYCLE = ['archives', 'indesirable', 'sav'];
 export const ETAPES_CLES = ETAPES_RGD.map(e => e.key);
 
 // Le statut de suivi du tableau de bord RGD range une à une sur ces étapes :
@@ -97,6 +102,7 @@ export const ETAPE_DU_STATUT = {
   devis_accepte: 'devis_accepte',
   chantier_en_cours: 'chantier_encours',
   chantier_termine: 'chantier_termine',
+  sav: 'sav',
   perdu: 'archives',
   indesirable: 'indesirable',
 };
@@ -111,6 +117,7 @@ export const STATUT_DE_L_ETAPE = {
   devis_accepte: 'devis_accepte',
   chantier_encours: 'chantier_en_cours',
   chantier_termine: 'chantier_termine',
+  sav: 'sav',
   archives: 'perdu',
   indesirable: 'indesirable',
 };

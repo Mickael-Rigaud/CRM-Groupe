@@ -100,6 +100,8 @@ import { attribuerFicheRgd, proprietaireDeLaFiche } from './rgd-attribuer.js';
 import { majNote, COLONNE_NOTE } from '../data/rgd-clients.js';
 import { lienAvis, messageAvis, envoyerDemandeAvis, avisDejaDemande, KIND_AVIS,
   enveloppeApercu, htmlDepuisTexte } from '../data/rgd-avis.js';
+import { dossiersDe, statutSav, garantie, finDuChantier } from '../data/rgd-sav.js';
+import { fenetreSav } from './rgd-sav.js';
 
 const ETAT_CHANTIER = {
   demarrage: { label: 'Préparé', ton: 'amber' },
@@ -807,6 +809,24 @@ export function ouvrirFicheRgd(x, onChange, retour = null) {
         </div>
 
         <div class="rgdf-colonne">
+          ${x.genre === 'fiche' && (dossiersDe(f).length || ['chantier_termine', 'sav'].includes(etapeCourante)) ? (() => {
+            // ⚠ LE BLOC « SAV » (13/10/2026) : les dossiers après-vente de la
+            // personne, et de quoi en ouvrir un. Il n'apparaît qu'une fois le
+            // chantier terminé — ou si des dossiers existent déjà —, un SAV
+            // n'ayant pas de sens avant.
+            const ds = dossiersDe(f);
+            return `<section class="rgdf-bloc rgdf-sav">
+              <h3>SAV${ds.length ? ` <span class="rgdf-compte">${ds.length}</span>` : ''}</h3>
+              ${ds.map(s => { const c = s.chantier_id ? db.byId('rgd_chantiers', s.chantier_id) : null;
+                const g = garantie(finDuChantier(c), s.ouvert_le);
+                return `<button type="button" class="rgdf-sav-ligne" data-sav-id="${esc(s.id)}">
+                  <span class="chip ${statutSav(s.statut).ton}">${esc(statutSav(s.statut).label)}</span>
+                  <span class="rgdf-sav-objet">${esc(s.objet)}<span class="s muted"> · ouvert le ${esc(fmtDate(s.ouvert_le))}${
+                    s.urgence === 'urgente' ? ' · urgent' : ''} · ${esc(g.label)}</span></span>
+                </button>`; }).join('')}
+              ${scope.canRgd ? '<button type="button" class="btn sm" id="rgdf-sav-ouvrir">+ Ouvrir un dossier SAV</button>' : ''}
+            </section>`;
+          })() : ''}
           ${(() => {
             // ⚠ LE COMMENTAIRE S'ÉCRIT DEPUIS LA FICHE DEPUIS LE 02/10/2026
             // (demandé : « je voudrais pouvoir modifier l'encadré des
@@ -876,6 +896,22 @@ export function ouvrirFicheRgd(x, onChange, retour = null) {
     m.classList.add('rgdf');
 
     lierRappel(m);
+
+    // Le SAV : un dossier s'ouvre dans sa propre fenêtre, et la fiche se
+    // reconstruit en revenant — avec son étape relue, que le dossier a pu
+    // changer (ouvert → « SAV », dernier résolu → « Chantier terminé »).
+    const retourSav = () => {
+      const frais = db.byId('rgd_clients', f.id);
+      if (frais?.statut_suivi === 'sav') etapeCourante = 'sav';
+      else if (etapeCourante === 'sav') etapeCourante = 'chantier_termine';
+      dessine();
+    };
+    const pourSav = () => ({ ...(db.byId('rgd_clients', f.id) || f), __nom: x.nom });
+    m.querySelector('#rgdf-sav-ouvrir')?.addEventListener('click', () => fenetreSav(pourSav(), null, retourSav));
+    m.querySelectorAll('[data-sav-id]').forEach(b => b.onclick = () => {
+      const s = db.byId('rgd_sav', b.dataset.savId);
+      if (s) fenetreSav(pourSav(), s, retourSav);
+    });
 
     // ⚠ LE FORMULAIRE S'OUVRE DANS SA PROPRE FENÊTRE, ET LA FICHE SE
     // RECONSTRUIT DERRIÈRE : voir l'en-tête du fichier. `onClose` ramène à la

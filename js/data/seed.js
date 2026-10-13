@@ -757,6 +757,24 @@ export const SEED = {
   // ⚠ `fiche` EST LA LIGNE ENTIÈRE, telle qu'elle était : c'est elle que la
   // restauration remet, avec son identifiant d'origine. Un résumé ne
   // suffirait pas — ce serait une trace, pas une corbeille.
+  // Les dossiers SAV (13/10/2026) : un EN COURS, urgent, sur une fiche rangée
+  // en « SAV », et un RÉSOLU sur une fiche revenue en « Chantier terminé » —
+  // sans eux ni l'onglet ni son filtre « Résolus » ne s'essayaient.
+  rgd_sav: [
+    { id: 'sav1', fiche_id: 'rc10', contact_id: 'c16', owner_id: null, ouvert_le: day(-6),
+      objet: 'Fuite sous l’évier de la cuisine refaite', urgence: 'urgente', statut: 'intervention',
+      intervenant: 'rgd', intervention_le: day(2), intervention_heure: '09:00',
+      prise_en_charge: 'rgd', cout: null, resolu_le: null,
+      suivi: [{ le: d(-6), par: 'u-mickael', texte: 'Dossier ouvert' },
+              { le: d(-5), par: 'u-mickael', texte: 'Le client a envoyé des photos, joint plomberie à reprendre' }],
+      created_at: d(-6), updated_at: d(-5) },
+    { id: 'sav2', fiche_id: 'rc8', contact_id: 'c2', chantier_id: 'rch9', owner_id: 'u-mickael', ouvert_le: day(-15),
+      objet: 'Joint de douche qui noircit', urgence: 'normale', statut: 'resolu',
+      intervenant: 'rgd', intervention_le: day(-10), prise_en_charge: 'rgd', cout: 45, resolu_le: day(-10),
+      suivi: [{ le: d(-15), par: 'u-mickael', texte: 'Dossier ouvert' },
+              { le: d(-10), par: 'u-mickael', texte: 'Statut : Intervention planifiée → Résolu' }],
+      created_at: d(-15), updated_at: d(-10) },
+  ],
   rgd_corbeille: [
     { id: 'corb1', source: 'clients', fiche_id: 'rc-supprimee', contact_id: 'c17',
       nom: 'Nadia Lemoine',
@@ -1015,7 +1033,7 @@ export const SEED = {
     { id: 'rc9', organisation_id: 'o4', costructor_id: 'cli_demo_02', statut: 'client',
       statut_suivi: 'chantier_en_cours', source: 'costructor', notes: '', maj: d(-12) },
     { id: 'rc10', contact_id: 'c16', costructor_id: 'cli_demo_03', statut: 'client',
-      statut_suivi: 'chantier_termine', source: 'costructor', notes: '', maj: d(-150) },
+      statut_suivi: 'sav', source: 'costructor', notes: '', maj: d(-150) },
     // ⚠ LES TROIS NATURES DE L'ANNUAIRE, et pas une seule repetee. Le menu de
     // statut ne s'affiche que s'il y a un choix a faire : avec trois fiches
     // toutes « client », il disparaissait et la regle n'etait pas verifiable.

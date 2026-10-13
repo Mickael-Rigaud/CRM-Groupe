@@ -72,7 +72,7 @@ const exercice = (d = new Date()) => {
 const COULEURS = {
   demande: '#9CA3AF', rdv: '#2A6FBF', devis_encours: '#B45C00',
   devis_accepte: '#FD7A2C', chantier_encours: '#22C55E',
-  chantier_termine: '#059669', archives: '#B91C1C', indesirable: '#7F1D1D',
+  chantier_termine: '#059669', sav: '#D97706', archives: '#B91C1C', indesirable: '#7F1D1D',
 };
 
 /**
