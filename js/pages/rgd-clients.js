@@ -122,7 +122,7 @@ const PAR_PAGE = 15;
 const PERIODES_FIN = [
   ['', 'Toutes les dates'], ['mois', 'Ce mois-ci'], ['mois_prec', 'Le mois dernier'],
   ['3mois', 'Les 3 derniers mois'], ['annee', 'Cette année'], ['annee_prec', "L'année dernière"],
-  ['dates', 'Choisir les dates…'],
+  ['dates', 'Dates choisies'],
 ];
 const jourLocal = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 // Rend { du, au } inclusifs, ou null quand aucune période ne filtre. Une borne
@@ -1454,8 +1454,9 @@ export const rgdClientsPage = {
           ${surTermine ? `<select id="rcl-periode" aria-label="Période de fin des travaux" class="${state.periodeFin ? 'actif' : ''}">
             ${PERIODES_FIN.map(([k, l]) => `<option value="${k}" ${state.periodeFin === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}
           </select>
-          ${state.periodeFin === 'dates' ? `<label class="rcl-dates">du <input type="date" id="rcl-fin-du" value="${esc(state.finDu)}"></label>
-          <label class="rcl-dates">au <input type="date" id="rcl-fin-au" value="${esc(state.finAu)}"></label>` : ''}` : ''}` : `<select id="rcl-type" aria-label="Type" class="${state.type ? 'actif' : ''}">
+          ${'' /* ⚠ LES DEUX DATES SONT TOUJOURS LÀ (13/10/2026, Élodie : « affiche les dates en permanence ») : un raccourci du menu les REMPLIT, et toucher une date passe le menu sur « Dates choisies » — les champs disent toujours ce qui filtre. */}
+          <label class="rcl-dates">du <input type="date" id="rcl-fin-du" value="${esc(state.finDu)}"></label>
+          <label class="rcl-dates">au <input type="date" id="rcl-fin-au" value="${esc(state.finAu)}"></label>` : ''}` : `<select id="rcl-type" aria-label="Type" class="${state.type ? 'actif' : ''}">
             <option value="">Tous types</option>
             <option value="particulier" ${state.type === 'particulier' ? 'selected' : ''}>Particulier</option>
             <option value="professionnel" ${state.type === 'professionnel' ? 'selected' : ''}>Professionnel</option>
@@ -1523,12 +1524,22 @@ export const rgdClientsPage = {
       const selProv = root.querySelector('#rcl-prov');
       if (selProv) selProv.onchange = () => { state.provenance = selProv.value; draw(); };
       const selPer = root.querySelector('#rcl-periode');
-      if (selPer) selPer.onchange = () => { state.periodeFin = selPer.value; draw(); };
+      // Un raccourci remplit les deux dates ; « Toutes les dates » les vide ;
+      // « Dates choisies » garde celles qui sont posées.
+      if (selPer) selPer.onchange = () => {
+        state.periodeFin = selPer.value;
+        if (selPer.value !== 'dates') {
+          const b = bornesPeriode({ periodeFin: selPer.value });
+          state.finDu = b ? b.du : ''; state.finAu = b ? b.au : '';
+        }
+        draw();
+      };
       // `change` et pas `input` : à la frappe, une année à moitié tapée filtrerait déjà.
+      // Toucher une date, c'est choisir ses propres dates.
       const finDu = root.querySelector('#rcl-fin-du');
-      if (finDu) finDu.onchange = () => { state.finDu = finDu.value; draw(); };
+      if (finDu) finDu.onchange = () => { state.finDu = finDu.value; state.periodeFin = 'dates'; draw(); };
       const finAu = root.querySelector('#rcl-fin-au');
-      if (finAu) finAu.onchange = () => { state.finAu = finAu.value; draw(); };
+      if (finAu) finAu.onchange = () => { state.finAu = finAu.value; state.periodeFin = 'dates'; draw(); };
 
       // Creer une fiche : elle nait dans le CRM, sans `d1_id`, donc le releve
       // Cloudflare ne la verra jamais. `draw` suffit a la faire apparaitre —
