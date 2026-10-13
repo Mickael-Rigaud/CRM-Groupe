@@ -513,6 +513,8 @@ const AUTORISATIONS_TIKTOK = [
 // refuse, d'où l'absence de 90 jours.
 const PERIODES = [[7, '7 jours'], [14, '14 jours'], [30, '30 jours']];
 const nombre = (n) => (n == null ? '—' : Number(n).toLocaleString('fr-FR'));
+// Une date d'horodatage rendue lisible : « 29 juin 2026 ».
+const fmtJour = (iso) => new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
 const isoJour = (d) => d.toISOString().slice(0, 10);
 
 function bilanPeriode(lignes, debut, fin) {
@@ -635,6 +637,19 @@ export function pageAnalyse(cle) {
           const prec = t ? (t.precedent || {}) : {};
           const abonnes = compte.abonnes ?? [...jours].reverse().find(l => l.reseau === 'tiktok' && l.abonnes != null)?.abonnes ?? null;
           const videos = posts.filter(p => p.reseau === 'tiktok');
+          // ⚠ QUATRE ZÉROS NE SONT PAS UNE MESURE, C'EST UNE ABSENCE DE
+          // PUBLICATION — constaté au premier relevé réel (13/10/2026) : le
+          // compte n'avait rien posté depuis le 29 juin, et la carte annonçait
+          // « Vues 0 · J'aime 0 · Commentaires 0 · Partages 0 ». Or ces quatre
+          // chiffres portent sur les vidéos PUBLIÉES dans la fenêtre : zéro
+          // vidéo publiée, donc rien à compter — ce qui n'a rien à voir avec
+          // « personne ne nous regarde », puisque les anciennes vidéos
+          // continuent d'être vues. On le dit en toutes lettres.
+          const dansLaPeriode = videos.filter(v => {
+            const j = (v.publie_le || '').slice(0, 10);
+            return j >= debut && j <= fin;
+          });
+          const derniereVideo = videos.map(v => v.publie_le).filter(Boolean).sort().pop();
           // ⚠ PAS D'ÉCART QUAND LA FENÊTRE D'AVANT N'AVAIT AUCUNE VIDÉO : on
           // compare ici ce qu'ont fait les vidéos PUBLIÉES dans chaque fenêtre,
           // donc une fenêtre sans publication vaut zéro — et `ecart` l'annonce
@@ -654,13 +669,16 @@ export function pageAnalyse(cle) {
               <span class="ana-abonnes"><b>${nombre(abonnes)}</b> abonnés
                 ${t?.nouveaux_abonnes ? `<em>+${nombre(t.nouveaux_abonnes)} sur la période</em>` : ''}</span>
             </header>
+            ${dansLaPeriode.length ? `
             <div class="ana-tuiles">
               ${tuileTT('Vues', t?.vues, prec.vues, 'Vues des vidéos publiées sur la période, depuis leur publication')}
               ${tuileTT('J’aime', t?.likes, prec.likes, 'J’aime reçus par les vidéos publiées sur la période')}
               ${tuileTT('Commentaires', t?.commentaires, prec.commentaires, 'Commentaires reçus par les vidéos publiées sur la période')}
               ${tuileTT('Partages', t?.partages, prec.partages, 'Partages des vidéos publiées sur la période')}
             </div>
-            <p class="small muted ana-note">Ces quatre chiffres sont ceux des <b>vidéos publiées sur la période</b> — TikTok ne sait dire ni combien de personnes vous ont vue entre deux dates, ni donner un chiffre par jour. Une vidéo plus ancienne qui repart n’y entre donc pas. Les abonnés, eux, sont relevés chaque matin.</p>
+            <p class="small muted ana-note">Ces quatre chiffres sont ceux des <b>vidéos publiées sur la période</b> — TikTok ne sait dire ni combien de personnes vous ont vue entre deux dates, ni donner un chiffre par jour. Une vidéo plus ancienne qui repart n’y entre donc pas. Les abonnés, eux, sont relevés chaque matin.</p>`
+            : `<p class="ana-rien">Aucune vidéo publiée sur cette période${derniereVideo ? ` — la dernière date du ${esc(fmtJour(derniereVideo))}` : ''}.</p>
+            <p class="small muted ana-note">Les chiffres par période portent sur les vidéos <b>publiées dans la fenêtre</b> : il n’y a donc rien à compter, ce qui ne veut pas dire que personne ne vous regarde. Les vidéos plus anciennes et leurs vues se lisent dans « Meilleurs posts » ci-dessous.</p>`}
             <div class="ana-tt-pied">
               <span class="small muted">Compte raccordé${compte.display_name ? ` : <b>${esc(compte.display_name)}</b>` : ''}${videos.length ? ` · ${nombre(videos.length)} vidéo${videos.length > 1 ? 's' : ''} relevée${videos.length > 1 ? 's' : ''}` : ''}</span>
               <button type="button" class="btn ghost small" id="ana-tt-detacher" title="Détacher le compte TikTok">Détacher</button>

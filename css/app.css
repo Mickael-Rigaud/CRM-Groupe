@@ -6512,6 +6512,11 @@ span.rpv-statut { display: inline-block; margin-bottom: 4px; }
    autorisation TikTok non accordee en bac a sable est l'etat NORMAL, pas
    une panne, et un bandeau d'alarme a chaque ouverture cesse d'etre lu. */
 .ana-note.est-manque { color: var(--amber); }
+/* « Aucune video publiee sur cette periode » : une phrase, a la place des
+   quatre tuiles. Elle prend leur hauteur pour que la carte ne saute pas
+   d'une periode a l'autre. */
+.ana-rien { margin: 0; padding: 14px 16px; border-radius: 10px; font-size: 14px; font-weight: 600;
+  color: var(--text); background: color-mix(in srgb, var(--rs) 7%, var(--card)); }
 /* Le pied de la carte TikTok : le compte raccorde a gauche, le
    detachement a droite. `margin-top: auto` le colle en bas, pour que deux
    cartes voisines de hauteurs differentes alignent quand meme leur pied. */
