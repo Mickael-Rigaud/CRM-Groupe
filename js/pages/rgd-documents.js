@@ -40,7 +40,7 @@
 // chaque feuille d'un document qu'on imprime à l'unité, sur site.
 import { esc } from '../ui.js';
 import { imprimerPage } from './btp-fiche.js';
-import { valeursProjet, personneDe, nomComplet, adresseChantier } from '../data/rgd-projet.js';
+import { valeursProjet, personneDe, nomComplet, adresseChantier, adresseProspect } from '../data/rgd-projet.js';
 import { montantDevisDe, etapeAvecMontant } from '../data/rgd-etapes.js';
 
 const LOGO = new URL('../../assets/logos/rgd-complet.png', import.meta.url).href;
@@ -100,6 +100,20 @@ export function donneesDocument(x, devis = []) {
     email: perso.email || f.email || '',
     adresseChantier: [ch.adresse, [ch.code_postal, ch.ville].filter(Boolean).join(' ')]
       .filter(Boolean).join(', '),
+    // ⚠ L'ADRESSE DU CLIENT N'EST PAS CELLE DU CHANTIER, et elle ne se lit pas
+    // non plus en recopiant les colonnes du contact : `adresseProspect` porte
+    // la regle — la sienne quand « adresse differente » est cochee, sinon celle
+    // du chantier. La recrire ici ferait une SECONDE traduction, et l'ecart ne
+    // se verrait que sur les dossiers ou les deux adresses different, c'est-a-
+    // dire ceux ou il compte. ⚠ ELLE VAUT SOUVENT CELLE DU CHANTIER, et les
+    // deux figurent quand meme : sur un PV, on identifie le maitre d'ouvrage
+    // par son domicile et le chantier par son adresse — deux mentions qui ne
+    // disent pas la meme chose, meme quand elles portent le meme texte.
+    adresseClient: (() => {
+      const a = adresseProspect(v);
+      return [a.adresse, [a.code_postal, a.ville].filter(Boolean).join(' ')]
+        .filter(Boolean).join(', ');
+    })(),
     villeChantier: ch.ville || '',
     budget: chiffre ? eur(chiffre) : (v.budget_annonce || ''),
     budgetTitre: chiffre ? 'MONTANT HT' : 'BUDGET',
@@ -297,6 +311,9 @@ ${entete('PROCÈS-VERBAL', 'DE RÉCEPTION DES TRAVAUX')}
 ${bandeau('1 · Identification du chantier')}
 <div class="champs">
   ${champ('Client / maître d’ouvrage', d.nom)}
+</div>
+<div class="champs" style="margin-top:7px">
+  ${champ('Adresse du client', d.adresseClient)}
 </div>
 <div class="champs" style="margin-top:7px">
   ${champ('Adresse du chantier', d.adresseChantier)}
