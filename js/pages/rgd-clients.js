@@ -95,7 +95,7 @@ import { ORDRE_ETAPES, ETAPES_RGD, ETAPES_CLES, ETAPE_DU_STATUT, STATUT_DE_L_ETA
          montantDevisDe, etapeAvecMontant, ecrireStatut, derniereRelance,
          rangRelanceDuStatut, majDateRelance, aujourdhui, ecrireStatutAnnuaire,
          aSigneUnDevis, ORDRE_ETAPES as ORDRE,
-         visiteDeLaFiche } from '../data/rgd-etapes.js';
+         visiteDeLaFiche, finDeChantierDe } from '../data/rgd-etapes.js';
 import { sansNoteAuto } from '../data/rgd-projet.js';
 import { db } from '../data/db.js';
 import { esc, eur, fmtDate, fmtDateTime, terms, hit, searchInput, bindSearch, restoreFocus } from '../ui.js';
@@ -115,6 +115,32 @@ const s_ = (n) => (n > 1 ? 's' : '');
 // liste qu'on parcourt du regard vaut mieux qu'une page de moins a tourner.
 // C'est le seul chiffre a changer.
 const PAR_PAGE = 15;
+
+// La période de l'onglet « Chantier terminé » (13/10/2026, Élodie : « choisir
+// une période pour les chantiers terminés »). Des mois et des années ENTIERS,
+// en heure locale — jamais `toISOString()`, qui rendrait la veille avant 2 h.
+const PERIODES_FIN = [
+  ['', 'Toutes les dates'], ['mois', 'Ce mois-ci'], ['mois_prec', 'Le mois dernier'],
+  ['3mois', 'Les 3 derniers mois'], ['annee', 'Cette année'], ['annee_prec', "L'année dernière"],
+  ['dates', 'Choisir les dates…'],
+];
+const jourLocal = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+// Rend { du, au } inclusifs, ou null quand aucune période ne filtre. Une borne
+// laissée vide en mode « dates » reste ouverte de son côté.
+function bornesPeriode(state) {
+  const n = new Date(), a = n.getFullYear(), m = n.getMonth();
+  switch (state.periodeFin) {
+    case 'mois': return { du: jourLocal(new Date(a, m, 1)), au: jourLocal(new Date(a, m + 1, 0)) };
+    case 'mois_prec': return { du: jourLocal(new Date(a, m - 1, 1)), au: jourLocal(new Date(a, m, 0)) };
+    case '3mois': return { du: jourLocal(new Date(a, m - 2, 1)), au: jourLocal(new Date(a, m + 1, 0)) };
+    case 'annee': return { du: `${a}-01-01`, au: `${a}-12-31` };
+    case 'annee_prec': return { du: `${a - 1}-01-01`, au: `${a - 1}-12-31` };
+    case 'dates':
+      if (!state.finDu && !state.finAu) return null;
+      return { du: state.finDu || '0000-01-01', au: state.finAu || '9999-12-31' };
+    default: return null;
+  }
+}
 
 // LES STATUTS DE SUIVI, dans l'ordre du tableau de bord (`STATUTS_DEMANDE`).
 // Ils décrivent l'avancement d'un prospect, du premier contact au chantier.
@@ -652,6 +678,8 @@ export const rgdClientsPage = {
       // de provenance au lieu d'un sous-onglet.
       provenance: PROVENANCES.some(x => x.key === ongletDemande) ? ongletDemande : '',
       q: '', type: '',
+      // La période de l'onglet « Chantier terminé » (13/10/2026, Élodie).
+      periodeFin: '', finDu: '', finAu: '',
       // ⚠ `?vue=clients` DOIT CONTINUER D'OUVRIR LES CLIENTS. Des mails de
       // notification deja partis le portent. Il visait le sous-onglet retire ;
       // il vise maintenant le menu, ou il se voit et se defait.
@@ -903,11 +931,30 @@ export const rgdClientsPage = {
       const baseStatut = dansOnglet.filter(x => !state.provenance || x.provenance === state.provenance);
 
       // Le plus récent en haut : c'est celui qu'on n'a pas encore rappelé.
+      // ⚠ LA PÉRIODE DE « CHANTIER TERMINÉ » PORTE SUR LA FIN DES TRAVAUX
+      // (`finDeChantierDe`), une fois par ligne. Une fiche rangée ici par son
+      // statut sans chantier terminé n'a pas de date : elle sort dès qu'une
+      // période est choisie, et l'écran COMPTE ce qu'il a écarté.
+      const surTermine = state.vue === 'chantier_termine';
+      const finDe = new Map(surTermine
+        ? dansOnglet.map(x => [x, x.cible === 'demande' ? '' : finDeChantierDe(x.ligne, chantiers)]) : []);
+      const bornesFin = surTermine ? bornesPeriode(state) : null;
+      const dansPeriode = (x) => !bornesFin
+        || (finDe.get(x) && finDe.get(x) >= bornesFin.du && finDe.get(x) <= bornesFin.au);
+      const sansFin = bornesFin ? dansOnglet.filter(x => !finDe.get(x)).length : 0;
+
       const lignesProspects = (surFrise ? dansOnglet : [])
         .filter(x => (!state.provenance || x.provenance === state.provenance)
           && (!statutFrise || x.statut === statutFrise)
+          && dansPeriode(x)
           && hit([x.nom, x.email, x.tel, x.ville, x.adresse, x.projet], ts))
         .sort((a, b) => String(b.recu || '').localeCompare(String(a.recu || '')));
+      // Le plus récemment terminé en haut ; sans date en dernier.
+      if (surTermine) lignesProspects.sort((a, b) => {
+        const fa = finDe.get(a), fb = finDe.get(b);
+        if (!fa !== !fb) return fa ? -1 : 1;
+        return String(fb).localeCompare(String(fa));
+      });
 
       // ⚠ L'ONGLET « RDV » SE TRIE PAR DATE DE RENDEZ-VOUS, pas par date de
       // réception (02/10/2026, demandé par Élodie). On y vient pour préparer
@@ -1008,7 +1055,7 @@ export const rgdClientsPage = {
       // production, sous la forme d'une liste vide sur une page qui n'existe
       // plus. On compare donc ce qui DEFINIT la liste, une fois, ici.
       const signature = JSON.stringify([state.vue, state.provenance,
-                         state.statut, state.type, state.q]);
+                         state.statut, state.type, state.q, state.periodeFin, state.finDu, state.finAu]);
       if (signature !== state.signature) { state.signature = signature; state.page = 1; }
 
       const pages = Math.max(1, Math.ceil(affichees / PAR_PAGE));
@@ -1257,6 +1304,7 @@ export const rgdClientsPage = {
                 && lignesProspects.length ? ' checked' : ''}></th>` : ''}
             <th>Reçu</th><th>Provenance</th><th>Nom</th><th>Contact</th>
             ${surRdv ? '<th>Rendez-vous</th>' : ''}
+            ${surTermine ? '<th>Fin des travaux</th>' : ''}
             <th>Projet</th><th>${surMontant ? 'Montant HT' : 'Budget'}</th><th>Ville</th>
             ${peutAttribuer ? '<th>Responsable</th>' : ''}<th>Statut</th>
             ${surRelances ? '<th>Dernière relance</th>' : ''}
@@ -1282,6 +1330,7 @@ export const rgdClientsPage = {
                 ${!x.email && !x.tel ? '<span class="muted">—</span>' : ''}</td>
             ${surRdv ? `<td class="rcl-rdv-cell">${x.cible === 'demande'
               ? '<span class="muted">—</span>' : celluleRdv(x.ligne)}</td>` : ''}
+            ${surTermine ? `<td class="small">${finDe.get(x) ? esc(fmtDate(finDe.get(x))) : '<span class="muted">—</span>'}</td>` : ''}
             <td class="muted">${esc(x.projet || '—')}</td>
             <td class="${surMontant ? 'num' : 'muted'}">${surMontant
               ? (montantDevisDe(x.ligne, devis, state.vue) > 0
@@ -1301,7 +1350,7 @@ export const rgdClientsPage = {
                 >Remettre</button></td>` : surIndesirable ? '<td></td>' : ''}
             <td class="rcl-note">${champNote(x.ligne, x.cible)}</td>
             <td class="rcl-suppr">${boutonSuppression(x.ligne)}</td>
-          </tr>`; }).join('') || `<tr><td colspan="${10 + (surRdv ? 1 : 0) + (surRelances ? 1 : 0) + (surIndesirable ? 1 : 0) + (peutAttribuer ? 2 : 0)}"><div class="empty">${esc(vide())}</div></td></tr>`}</tbody>
+          </tr>`; }).join('') || `<tr><td colspan="${10 + (surRdv ? 1 : 0) + (surTermine ? 1 : 0) + (surRelances ? 1 : 0) + (surIndesirable ? 1 : 0) + (peutAttribuer ? 2 : 0)}"><div class="empty">${esc(vide())}</div></td></tr>`}</tbody>
         </table>
         ${pagination()}
         <p class="small muted">${state.ecriture
@@ -1401,7 +1450,12 @@ export const rgdClientsPage = {
               const n = baseStatut.filter(x => x.statut === st.key).length;
               return `<option value="${esc(st.key)}" ${statutFrise === st.key ? 'selected' : ''}>${esc(st.label)} (${n})</option>`;
             }).join('')}
-          </select>` : ''}` : `<select id="rcl-type" aria-label="Type" class="${state.type ? 'actif' : ''}">
+          </select>` : ''}
+          ${surTermine ? `<select id="rcl-periode" aria-label="Période de fin des travaux" class="${state.periodeFin ? 'actif' : ''}">
+            ${PERIODES_FIN.map(([k, l]) => `<option value="${k}" ${state.periodeFin === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}
+          </select>
+          ${state.periodeFin === 'dates' ? `<label class="rcl-dates">du <input type="date" id="rcl-fin-du" value="${esc(state.finDu)}"></label>
+          <label class="rcl-dates">au <input type="date" id="rcl-fin-au" value="${esc(state.finAu)}"></label>` : ''}` : ''}` : `<select id="rcl-type" aria-label="Type" class="${state.type ? 'actif' : ''}">
             <option value="">Tous types</option>
             <option value="particulier" ${state.type === 'particulier' ? 'selected' : ''}>Particulier</option>
             <option value="professionnel" ${state.type === 'professionnel' ? 'selected' : ''}>Professionnel</option>
@@ -1415,7 +1469,8 @@ export const rgdClientsPage = {
           </select>` : ''}`}
           <span class="grow"></span>
           <span class="muted small">${surCorbeille ? lignesCorbeille.length : affichees} ligne${
-            s_(surCorbeille ? lignesCorbeille.length : affichees)}</span>
+            s_(surCorbeille ? lignesCorbeille.length : affichees)}${sansFin
+            ? ` · ${sansFin} sans date de fin écartée${s_(sansFin)}` : ''}</span>
           ${surDemande && scope.canRgd
             ? '<button class="btn" id="rcl-nouveau">+ Nouvelle demande</button>' : ''}
         </div>
@@ -1433,7 +1488,8 @@ export const rgdClientsPage = {
         // elle appartient à la liste qu'on quitte. La garder confierait, d'un
         // clic, des dossiers qu'on ne voit plus.
         state.selection = new Set();
-        state.vue = b.dataset.vue; state.q = ''; state.type = ''; state.statut = ''; draw();
+        state.vue = b.dataset.vue; state.q = ''; state.type = ''; state.statut = '';
+        state.periodeFin = ''; state.finDu = ''; state.finAu = ''; draw();
       });
       // ⚠ La ligne entière ouvre la fiche, MAIS PAS SES COMMANDES : un clic sur
       // le menu de statut, une flèche, un lien ou la corbeille doit faire ce
@@ -1466,6 +1522,13 @@ export const rgdClientsPage = {
 
       const selProv = root.querySelector('#rcl-prov');
       if (selProv) selProv.onchange = () => { state.provenance = selProv.value; draw(); };
+      const selPer = root.querySelector('#rcl-periode');
+      if (selPer) selPer.onchange = () => { state.periodeFin = selPer.value; draw(); };
+      // `change` et pas `input` : à la frappe, une année à moitié tapée filtrerait déjà.
+      const finDu = root.querySelector('#rcl-fin-du');
+      if (finDu) finDu.onchange = () => { state.finDu = finDu.value; draw(); };
+      const finAu = root.querySelector('#rcl-fin-au');
+      if (finAu) finAu.onchange = () => { state.finAu = finAu.value; draw(); };
 
       // Creer une fiche : elle nait dans le CRM, sans `d1_id`, donc le releve
       // Cloudflare ne la verra jamais. `draw` suffit a la faire apparaitre —

@@ -276,6 +276,23 @@ export function montantDevisDe(f, devis, etape) {
 }
 
 
+// La fin des travaux d'une personne : la plus récente de ses chantiers terminés
+// (13/10/2026, filtre de période de l'onglet « Chantier terminé »).
+//
+// ⚠ PAS `date_passage_termine` EN PREMIER : c'est le jour où le chantier a été
+// MARQUÉ terminé, pas celui où il l'a été — mesuré le 13/10/2026, 13 chantiers
+// sur 24 portent le même 19/06/2026, un marquage en lot. La fin des travaux du
+// devis (`work_end_at`) est renseignée sur 19 sur 24 ; à défaut la fin prévue,
+// et en dernier recours le jour du marquage, plutôt que rien.
+export function finDeChantierDe(f, chantiers) {
+  return (chantiers || [])
+    .filter(c => memeQue(c, f) && estUnChantier(c) && c.etat === 'termine')
+    .map(c => String(c.work_end_at || c.date_fin_prevue || c.date_passage_termine || '').slice(0, 10))
+    .filter(Boolean)
+    .sort()
+    .pop() || '';
+}
+
 // L'étape lue sur les FAITS seuls. Elle ne dépend d'aucune saisie, donc elle
 // ne ment pas — mais elle ne sait rien avant le premier devis.
 export function etapeParLesFaits(f, chantiers, devis, joursVisite) {

@@ -812,6 +812,11 @@ export const SEED = {
     { id: 'rch4', deal_id: 'd4', contact_id: 'c9', reference: 'Cuisine — Roux',
       ville: 'Tours', statut_d1: 'termine', etat: 'termine',
       date_passage_termine: d(-10), created_at: d(-2), updated_at: d(-10) },
+    // Un chantier terminé AVEC sa fin de travaux : sans lui le filtre de période
+    // de l'onglet « Chantier terminé » ne trouvait jamais rien à garder.
+    { id: 'rch9', deal_id: 'd3', contact_id: 'c2', reference: 'Salle d’eau — Haddad',
+      ville: 'Joué-lès-Tours', statut_d1: 'termine', etat: 'termine', montant_ht: 9800,
+      work_end_at: day(-25), date_passage_termine: d(-20), created_at: d(-200), updated_at: d(-20) },
   ],
   // ⚠ L'AGENDA RELEVÉ, ABSENT DU JEU D'EXEMPLE JUSQU'AU 30/09/2026. Sans lui la
   // colonne « Rendez-vous » de `#/rgd/clients` n'affiche jamais d'heure, et le

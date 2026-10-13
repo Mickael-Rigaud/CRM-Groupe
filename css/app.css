@@ -6699,3 +6699,7 @@ span.rpv-statut { display: inline-block; margin-bottom: 4px; }
    de largeur. Sans cette regle il tient toute la place par accident, parce
    qu il est seul — un champ ajoute a cote le casserait. */
 .reg-grille .reg-large { grid-column: 1 / -1; }
+
+/* Les deux bornes de la période « Chantier terminé » (13/10/2026). */
+.rcl-dates { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+.rcl-dates input { font: inherit; font-size: 13px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--text); }
