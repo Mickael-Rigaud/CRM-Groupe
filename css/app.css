@@ -6733,3 +6733,8 @@ span.rpv-statut { display: inline-block; margin-bottom: 4px; }
 .rgdf-docs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 2px; }
 .rgdf-docs > span { font-size: 10.5px; font-weight: 700; letter-spacing: .06em;
   text-transform: uppercase; color: var(--muted); margin-right: 2px; }
+/* Sans adresse e-mail, l envoi est impossible : on le DIT plutot que de changer
+   le bouton en silence — un ecran qui change de geste sans donner sa raison est
+   un ecran qu on croit casse. */
+.avi-sans-mail { margin: 0 0 4px; padding: 9px 12px; border-radius: 10px; font-size: 13px;
+  line-height: 1.5; background: #FEF3C7; color: #92400E; border: 1px solid #FDE68A; }

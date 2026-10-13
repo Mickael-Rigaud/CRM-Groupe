@@ -938,7 +938,19 @@ export function ouvrirFicheRgd(x, onChange, retour = null) {
           ${deja ? `<p class="avi-deja">Un avis a déjà été demandé à cette personne le ${esc(fmtDate(deja.created_at))}. Une seconde demande peut agacer plus qu’elle ne rapporte.</p>` : ''}
           <div class="avi-colonnes">
             <div class="avi-gauche">
-              <p class="avi-qui">À <b>${esc(x.nom || 'cette personne')}</b>${x.email ? ` · ${esc(x.email)}` : ' · <span class="muted">aucune adresse e-mail</span>'}</p>
+              <p class="avi-qui">À <b>${esc(x.nom || 'cette personne')}</b>${x.email ? ` · ${esc(x.email)}` : ''}</p>
+              <!-- ATTENTION : sans adresse, le CRM ne peut rien envoyer, et il
+                   faut le DIRE. Le bouton changeait d'intitule en silence, ce
+                   qui s'est lu comme un defaut (13/10/2026, Elodie : « j'ai
+                   toujours le bouton copier le message et pas envoyer le
+                   message ») — alors que c'etait le comportement voulu.
+                   Un ecran qui change de geste sans en donner la raison est un
+                   ecran qu'on croit casse.
+                   Mesure le meme jour : 81 % des fiches RGD portent une
+                   adresse, et 33 sur 37 de celles qui ont un chantier. Le cas
+                   est donc minoritaire, mais il se rencontre. -->
+              ${x.email ? '' : `<p class="avi-sans-mail">Cette fiche n’a <b>pas d’adresse e-mail</b> : le message ne peut pas partir d’ici.
+                Copiez-le pour un SMS ou WhatsApp — ou ajoutez l’adresse sur la fiche, et le bouton d’envoi reviendra.</p>`}
               <p class="avi-qui avi-de" id="avi-de">De <span class="muted">lecture de l’expéditeur…</span></p>
               <label class="mail-champ plein">
                 <span>Objet</span>
