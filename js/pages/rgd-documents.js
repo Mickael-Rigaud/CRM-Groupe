@@ -49,6 +49,10 @@ const ORANGE = '#FC5D00';
 const ENCRE = '#1A1714';
 const GRIS = '#6E6760';
 const FILET = '#D8D3CE';
+// Le gris foncé des bandeaux du procès-verbal. ⚠ IL NE SERT QU'À LUI :
+// c'est ce qui distingue les deux documents d'un coup d'œil, et la fiche
+// projet reste en blanc.
+const SOMBRE = '#2B2724';
 
 const eur = (n) => (n == null || n === '' ? '' : Number(n).toLocaleString('fr-FR') + ' € HT');
 const jour = (d) => (d ? new Date(d).toLocaleDateString('fr-FR') : '');
@@ -102,7 +106,6 @@ export function donneesDocument(x, devis = []) {
     typeBien: v.type_projet || '',
     superficie: v.superficie || '',
     travaux: Array.isArray(v.types_travaux) ? v.types_travaux.join(', ') : (v.types_travaux || ''),
-    description: v.projet_description || '',
     devisRef: devisRetenu ? (devisRetenu.numero || '') : '',
     devisDate: devisRetenu ? jour(devisRetenu.date_creation) : '',
   };
@@ -129,10 +132,9 @@ const style = `
   .champ > b { display: block; min-height: 15px; padding: 2px 0 3px; font-size: 11pt;
     border-bottom: .75pt solid ${FILET}; }
   .champ.etroit { flex: 0 0 42mm; }
+  .champ.moyen { flex: 0 0 58mm; }
 
   .ligne { height: 8.4mm; border-bottom: .75pt solid ${FILET}; }
-  .texte { margin: 0 0 2px; padding: 5px 9px; background: #F8F6F4; border-left: 2.5pt solid ${FILET};
-    white-space: pre-wrap; font-size: 10pt; }
   .cases { display: flex; flex-wrap: wrap; gap: 3px 14px; margin: 2px 0 0; font-size: 9.5pt; color: ${GRIS}; }
 
   .choix { display: flex; align-items: center; gap: 9px; margin: 7px 0; font-size: 10.5pt; }
@@ -148,12 +150,29 @@ const style = `
     display: flex; justify-content: space-between; gap: 14px; font-size: 8pt; color: ${GRIS}; }
   footer b { color: ${ORANGE}; }
 
-  @media print { h2 { break-after: avoid; } .sign, .choix, header, .champs { break-inside: avoid; } }
+  /* ⚠ UNE PAGE, PAS DEUX : on fait signer une feuille, pas une liasse dont la
+     seconde porte trois lignes vides. Le corps est une colonne de la hauteur
+     EXACTE d'un A4 (padding compris, box-sizing border-box) et la zone de
+     lignes absorbe la place restante. ⚠ LE NOMBRE DE LIGNES NE SE DEVINE PLUS :
+     il etait fige a 12, et le simple ajout de « Appartement · Salle de bain »
+     poussait le pied 53 px sous le bord — defaut mesure, invisible a la
+     relecture. On en dessine plus qu'il n'en faut et overflow:hidden coupe
+     le surplus : une ligne VIDE coupee ne perd rien, un paragraphe si — c'est
+     pourquoi seules les lignes vierges vivent dans ce conteneur.
+     ⚠ min-height:0 N'EST PAS DECORATIF : un enfant flex refuse par defaut
+     de devenir plus petit que son contenu, donc sans lui le conteneur pousse
+     le pied dehors au lieu de rogner. */
+  body.page-une { height: 297mm; display: flex; flex-direction: column; }
+  .remplir { flex: 1 1 0; min-height: 0; overflow: hidden; }
+
+  .bandeau { display: block; margin: 12px 0 7px; }
+  .bandeau + .champs, .bandeau + p { margin-top: 0; }
+  @media print { h2, .bandeau { break-after: avoid; } .sign, .choix, header, .champs { break-inside: avoid; } }
 `;
 
 const page = (titre, corps) => `<!doctype html>
 <html lang="fr"><head><meta charset="utf-8"><title>${esc(titre)}</title>
-<style>${style}</style></head><body>${corps}</body></html>`;
+<style>${style}</style></head><body class="page-une">${corps}</body></html>`;
 
 const entete = (titre, sous) => `
 <header>
@@ -168,6 +187,29 @@ const champ = (libelle, valeur, classe = '') =>
   `<div class="champ ${classe}"><span>${esc(libelle)}</span><b>${esc(valeur || '')}</b></div>`;
 
 const lignes = (n) => Array.from({ length: n }, () => '<div class="ligne"></div>').join('');
+
+/**
+ * Le bandeau de section du PROCÈS-VERBAL : fond gris foncé, texte blanc.
+ *
+ * ⚠ IL EST DESSINÉ EN SVG, ET CE N'EST PAS UN CAPRICE — demandé le 13/10/2026
+ * pour distinguer les deux documents d'un coup d'œil, et le piège est connu :
+ * les navigateurs n'impriment PAS les fonds CSS tant que « Graphiques
+ * d'arrière-plan » n'est pas coché. Un `background` sombre avec du texte blanc
+ * dessus donnerait, une fois sur deux, un titre BLANC SUR DU PAPIER BLANC —
+ * c'est-à-dire une section sans titre, sur le document qu'on fait signer.
+ * Un rectangle et un texte SVG sont du CONTENU : ils s'impriment toujours.
+ *
+ * ⚠ PAS DE `viewBox` : sans lui, les unités du SVG sont des pixels et le texte
+ * garde sa taille réelle. Avec un `viewBox` et une largeur en pourcentage, le
+ * dessin s'étirerait à la largeur de la page et le titre avec lui.
+ */
+const bandeau = (titre) => `
+<svg class="bandeau" width="100%" height="26" role="img" aria-label="${esc(titre)}">
+  <rect x="0" y="0" width="100%" height="26" fill="${SOMBRE}"></rect>
+  <rect x="0" y="0" width="4" height="26" fill="${ORANGE}"></rect>
+  <text x="13" y="17.5" fill="#FFFFFF" font-family="Arial, Helvetica, sans-serif"
+    font-size="12" font-weight="bold" letter-spacing="0.8">${esc(titre.toUpperCase())}</text>
+</svg>`;
 
 /**
  * Le quadrillage des croquis, en SVG.
@@ -189,7 +231,15 @@ function quadrillage(largeurMm, hauteurMm, pasMm = 5) {
 
 // ------------------------------------------------------------ fiche projet
 export function ficheProjetHtml(d) {
-  const complement = [d.typeBien, d.superficie ? `${d.superficie} m²` : '', d.travaux]
+  // ⚠ AUCUN TEXTE LIBRE DE LA FICHE SUR CETTE FEUILLE (demande d'Elodie le
+// 13/10/2026 : « je ne veux pas les commentaires, ca c'est en interne dans le
+// CRM »). « Details du projet » et le champ Commentaire sont des notes d'appel
+// — ce qu'on retient de la personne, ce qu'on se dit entre nous — et cette
+// feuille se remplit devant le client puis part au dossier. Ne restent que des
+// FAITS : type de bien, surface, types de travaux.
+// ⚠ ET LE PAVE N'EST PAS REMPLACE PAR DU VIDE : les lignes vierges reprennent
+// la place, c'est a la visite qu'on ecrit ce qui compte.
+const complement = [d.typeBien, d.superficie ? `${d.superficie} m²` : '', d.travaux]
     .filter(Boolean).join(' · ');
   return page('Fiche projet — RGD Renova', `
 ${entete('FICHE PROJET', jour(new Date()))}
@@ -208,8 +258,7 @@ ${entete('FICHE PROJET', jour(new Date()))}
 
 <h2>Projet · attentes client · observations techniques</h2>
 ${complement ? `<p class="cases">${esc(complement)}</p>` : ''}
-${d.description ? `<p class="texte">${esc(d.description)}</p>` : ''}
-${lignes(d.description ? 8 : 12)}
+<div class="remplir">${lignes(18)}</div>
 
 <h2>Croquis · cotes · relevés</h2>
 ${quadrillage(182, 92)}
@@ -222,7 +271,7 @@ export function receptionHtml(d) {
   return page('Procès-verbal de réception — RGD Renova', `
 ${entete('PROCÈS-VERBAL', 'DE RÉCEPTION DES TRAVAUX')}
 
-<h2>1 · Identification du chantier</h2>
+${bandeau('1 · Identification du chantier')}
 <div class="champs">
   ${champ('Client / maître d’ouvrage', d.nom)}
 </div>
@@ -230,24 +279,24 @@ ${entete('PROCÈS-VERBAL', 'DE RÉCEPTION DES TRAVAUX')}
   ${champ('Adresse du chantier', d.adresseChantier)}
 </div>
 <div class="champs" style="margin-top:7px">
-  ${champ('Référence du devis / marché', d.devisRef, 'etroit')}
+  ${champ('Référence du devis / marché', d.devisRef, 'moyen')}
   ${champ('Date du devis', d.devisDate, 'etroit')}
   ${champ('Date de la réception', '', 'etroit')}
 </div>
 
-<h2>2 · Décision de réception</h2>
+${bandeau('2 · Décision de réception')}
 <p style="margin:4px 0 0;font-size:10pt">Après visite contradictoire des travaux, le maître d’ouvrage déclare :</p>
 <div class="choix"><i></i><span>Prononcer la réception des travaux <b>sans réserve</b>.</span></div>
 <div class="choix"><i></i><span>Prononcer la réception des travaux <b>avec les réserves</b> décrites ci-dessous.</span></div>
 <div class="choix"><i></i><span><b>Refuser</b> la réception (motifs à préciser ci-dessous).</span></div>
 
-<h2>3 · Réserves · motifs · observations</h2>
-${lignes(7)}
+${bandeau('3 · Réserves · motifs · observations')}
+<div class="remplir">${lignes(12)}</div>
 <div class="champs" style="margin-top:9px">
   ${champ('Délai de levée des réserves convenu (le cas échéant)', '')}
 </div>
 
-<h2>4 · Signatures</h2>
+${bandeau('4 · Signatures')}
 <div class="champs">
   ${champ('Fait à', d.villeChantier, 'etroit')}
   ${champ('Le', '', 'etroit')}
