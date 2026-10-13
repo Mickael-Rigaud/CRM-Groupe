@@ -20,6 +20,7 @@ import { cadre, guard } from './rgd-espace.js';
 import { dossiersDe } from '../data/rgd-sav.js';
 import { fenetreSav, celluleSav } from './rgd-sav.js';
 import { ouvrirFicheDuClient } from './rgd-clients.js';
+import { etapeDeFiche, joursDeVisite } from '../data/rgd-etapes.js';
 
 // Le nom et le téléphone d'une fiche : une personne OU une entreprise.
 export function quiEst(f) {
@@ -66,10 +67,39 @@ export const rgdSavPage = {
       }
       const nEnCours = dossiers.filter(s => s.statut !== 'resolu').length;
       const nResolus = dossiers.length - nEnCours;
+      // ⚠ LES CHIFFRES DU SAV (13/10/2026, Élodie : « le nombre de projets SAV
+      // sur le nombre de projets total »). Le total, ce sont les projets LIVRÉS
+      // — étape « Chantier terminé » ou « SAV » —, pas toutes les fiches : un
+      // prospect n'a pas de chantier, il ne peut pas avoir de SAV, et le
+      // compter ferait baisser le taux pour rien. Un projet compte en SAV dès
+      // qu'il a eu UN dossier, ouvert ou résolu, ou que sa fiche est en « SAV ».
+      const chantiers = scope.rgd('rgd_chantiers');
+      const devis = scope.rgd('rgd_devis');
+      const jours = joursDeVisite(scope.rgd('agenda_events'));
+      const avecSav = new Set(dossiers.map(s => s.fiche_id).filter(Boolean));
+      const livres = fiches.filter(f => avecSav.has(f.id) || f.statut_suivi === 'sav'
+        || ['chantier_termine', 'sav'].includes(etapeDeFiche(f, chantiers, devis, jours)));
+      const nSav = livres.filter(f => avecSav.has(f.id) || f.statut_suivi === 'sav').length;
+      const taux = livres.length ? Math.round(nSav / livres.length * 100) : 0;
+      const nUrgents = dossiers.filter(s => s.statut !== 'resolu' && s.urgence === 'urgente').length;
+      const delais = dossiers.filter(s => s.statut === 'resolu' && s.ouvert_le && s.resolu_le)
+        .map(s => (new Date(s.resolu_le) - new Date(s.ouvert_le)) / 864e5).filter(d => d >= 0);
+      const delai = delais.length ? Math.round(delais.reduce((a, b) => a + b, 0) / delais.length) : null;
       const nomIntervenant = (k) => k === 'rgd' ? 'RGD Renova'
         : (db.byId('rgd_sous_traitants', k)?.raison_sociale || 'Sous-traitant');
 
       const corps = `
+        <div class="grid c3 sav-chiffres">
+          <div class="card kpi" style="--kpi-c:#D97706"><div class="lbl">Projets en SAV</div>
+            <div class="val">${taux} %</div>
+            <div class="sub">${nSav} projet${nSav > 1 ? 's' : ''} sur ${livres.length} chantier${livres.length > 1 ? 's' : ''} terminé${livres.length > 1 ? 's' : ''}</div></div>
+          <div class="card kpi"><div class="lbl">Dossiers en cours</div>
+            <div class="val">${nEnCours}</div>
+            <div class="sub">${nUrgents ? `dont ${nUrgents} urgent${nUrgents > 1 ? 's' : ''}` : 'aucun urgent'}</div></div>
+          <div class="card kpi"><div class="lbl">Dossiers résolus</div>
+            <div class="val">${nResolus}</div>
+            <div class="sub">${delai === null ? 'pas encore de délai moyen' : `résolus en ${delai} jour${delai > 1 ? 's' : ''} en moyenne`}</div></div>
+        </div>
         <div class="toolbar">
           ${searchInput('sav-q', state, 'Rechercher un client, un objet…')}
           <div class="sav-filtre">
