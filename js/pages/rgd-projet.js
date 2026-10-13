@@ -69,9 +69,26 @@ import {
   aujourdhuiParis, maintenantParis, DUREES,
 } from '../data/rgd-creneaux.js';
 import { decale } from '../data/evenements.js';
+import { ORDRE_ETAPES } from '../data/rgd-etapes.js';
 
 const ECRANS = ['projet', 'rendezvous', 'prospect'];
 const TITRES = { projet: 'Le projet', rendezvous: 'Le rendez-vous', prospect: 'Le prospect' };
+
+// ⚠ « LE PROSPECT » DEVIENT « LE CLIENT » QUAND LE CHANTIER DEMARRE (demande du
+// 13/10/2026). Quelqu'un dont les travaux sont en cours n'est plus un prospect,
+// et l'ecran qui porte ses coordonnees ne doit pas dire le contraire a celui
+// qui le rappelle.
+// ⚠ LE SEUIL EST « chantier en cours », ET IL SE LIT DANS `ORDRE_ETAPES` :
+// ecrire le nom de l'etape a la main ici en ferait une seconde definition, qui
+// cesserait de suivre le jour ou une etape s'intercale. Tout ce qui vient APRES
+// compte aussi — un chantier termine n'est pas un retour a l'etat de prospect.
+// ⚠ ET SANS ETAPE CONNUE, ON DIT « prospect » : `indexOf` rend -1 sur une
+// creation, ou l'on ne sait encore rien de personne.
+const DEBUT_CLIENT = ORDRE_ETAPES.indexOf('chantier_encours');
+const estUnClient = (etape) => {
+  const i = ORDRE_ETAPES.indexOf(etape);
+  return i >= 0 && i >= DEBUT_CLIENT;
+};
 
 // La semaine affichée par le choix de créneau. Six jours : RGD travaille le
 // samedi, pas le dimanche — une colonne vide tous les sept jours ne dit rien
@@ -116,6 +133,13 @@ export function ficheProjetRgd({ dans, cible = null, apporteurs = null,
   // champs d'origine (type de demandeur, connu via, recommandation) n'existent
   // que sur `rgd_demandes` : voir `valeursSuivi`.
   const aLeContexte = suivi.aLeContexte;
+  // ⚠ UNE SEULE LECTURE DE L'ETAPE : deux endroits qui decident du mot
+  // finiraient par afficher « Le client » en tete d'un ecran qui parle du
+  // prospect. `x.etape` est pose par la fiche, qui le calcule deja pour sa
+  // frise ; une creation n'en a pas, et c'est bien un prospect.
+  const motPersonne = estUnClient(x?.etape) ? 'du client' : 'du prospect';
+  const titreEcran = (nom) =>
+    (nom === 'prospect' && estUnClient(x?.etape) ? 'Le client' : TITRES[nom]);
 
   // On montre la société quand elle existe, sinon la personne : c'est sous ce
   // nom-là qu'un partenaire se désigne au téléphone.
@@ -311,7 +335,7 @@ export function ficheProjetRgd({ dans, cible = null, apporteurs = null,
       <label class="rgp-memeadresse plein">
         <input type="checkbox" id="rgp-adresse_differente"
           ${v.adresse_differente ? 'checked' : ''}>
-        <span>L’adresse du prospect est <b>différente</b> de celle du chantier</span>
+        <span>L’adresse ${esc(motPersonne)} est <b>différente</b> de celle du chantier</span>
       </label>
       ${(() => {
         const ch = adresseChantier(v);
@@ -573,7 +597,7 @@ export function ficheProjetRgd({ dans, cible = null, apporteurs = null,
         <div class="mf-pas rgp-pas">
           ${ECRANS.map((nom, i) => `
             <div class="mf-pas-item ${etatPas.pas === i + 1 ? 'on' : 'fait'}" data-pas="${i + 1}">
-              <span class="mf-pas-num">${i + 1}</span>${esc(TITRES[nom])}
+              <span class="mf-pas-num">${i + 1}</span>${esc(titreEcran(nom))}
             </div>`).join('<i class="mf-pas-lien"></i>')}
         </div>
         ${RENDU[nomEcran()]()}

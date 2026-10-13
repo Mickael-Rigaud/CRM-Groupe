@@ -40,7 +40,7 @@
 // chaque feuille d'un document qu'on imprime à l'unité, sur site.
 import { esc } from '../ui.js';
 import { imprimerPage } from './btp-fiche.js';
-import { valeursProjet, personneDe, nomComplet, adresseChantier, adresseProspect } from '../data/rgd-projet.js';
+import { valeursProjet, personneDe, nomComplet, adresseChantier } from '../data/rgd-projet.js';
 import { montantDevisDe, etapeAvecMontant } from '../data/rgd-etapes.js';
 
 const LOGO = new URL('../../assets/logos/rgd-complet.png', import.meta.url).href;
@@ -70,7 +70,41 @@ export function donneesDocument(x, devis = []) {
   const f = x.ligne;
   const v = valeursProjet(x);
   const p = personneDe(f);
-  const ch = adresseChantier(v);
+  // ⚠ UNE ADRESSE DE CHANTIER VIDE RETOMBE SUR CELLE DU PROSPECT (demande du
+  // 13/10/2026 : « si tu ne trouves pas d'adresse de chantier prends celle du
+  // prospect »). Une feuille de visite sans aucune adresse ne sert a rien, et
+  // sur un dossier pris au telephone on a souvent note l'adresse de la personne
+  // avant celle des travaux. ⚠ ON NE PANACHE PAS LES TROIS CHAMPS : on prend
+  // une adresse ENTIERE ou l'autre — melanger la rue de l'une avec la ville de
+  // l'autre fabriquerait une adresse qui n'existe nulle part, et c'est le
+  // defaut deja paye sur `poserRendezVous` le 01/10. ⚠ ET `adresseProspect`
+  // RESTE LA SEULE TRADUCTION : avec un chantier vide elle rend precisement
+  // l'adresse propre de la personne.
+  const chantier = adresseChantier(v);
+  const vide = (a) => !a.adresse && !a.code_postal && !a.ville;
+  // ⚠ L'ADRESSE DE LA PERSONNE NE PASSE PAS PAR `valeursProjet`, ET LE CROIRE
+  // RENDAIT DU VIDE (mesure : adresse '' sur un dossier dont le prospect habite
+  // Senlis). Cette traduction ne porte que les champs du PROJET ; l'adresse de
+  // la personne vit sur le contact, l'organisation ou la demande.
+  // ⚠ ET LES DEUX CONVENTIONS DE NOMS COHABITENT : `contacts` et
+  // `organisations` portent address/postal_code/city, `rgd_demandes` porte
+  // adresse/code_postal/ville — n'en lire qu'une laisserait la moitie des
+  // dossiers sans repli, sans que rien ne le dise.
+  const dePersonne = (q) => ({
+    adresse: String(q?.address || q?.adresse || '').trim(),
+    code_postal: String(q?.postal_code || q?.code_postal || '').trim(),
+    ville: String(q?.city || q?.ville || '').trim(),
+  });
+  // ⚠ ON PREND UNE ADRESSE ENTIERE OU L'AUTRE, JAMAIS UN PANACHAGE : melanger
+  // la rue de l'une avec la ville de l'autre fabriquerait une adresse qui
+  // n'existe nulle part — defaut deja paye sur `poserRendezVous` le 01/10.
+  // (`perso` n'est declare que plus bas : on relit la personne ici.)
+  const qui = p ? p.ligne : f;
+  const ouSontLesTravaux = !vide(chantier) ? chantier
+    : (!vide(dePersonne(qui)) ? dePersonne(qui) : dePersonne(f));
+  const enUneLigne = (a) => [a.adresse, [a.code_postal, a.ville].filter(Boolean).join(' ')]
+    .filter(Boolean).join(', ');
+  const ch = ouSontLesTravaux;
   // Le nom affiché par l'écran d'abord : c'est celui que l'utilisateur voit.
   // ⚠ ET LE REPLI NE PASSE PAS PAR `nomComplet` SUR UN CONTACT — DÉFAUT VU À
   // L'IMPRESSION, PAS À LA RELECTURE : cette fonction lit `prenom`/`nom`,
@@ -98,22 +132,7 @@ export function donneesDocument(x, devis = []) {
     nom,
     telephone: perso.phone || perso.telephone || f.telephone || '',
     email: perso.email || f.email || '',
-    adresseChantier: [ch.adresse, [ch.code_postal, ch.ville].filter(Boolean).join(' ')]
-      .filter(Boolean).join(', '),
-    // ⚠ L'ADRESSE DU CLIENT N'EST PAS CELLE DU CHANTIER, et elle ne se lit pas
-    // non plus en recopiant les colonnes du contact : `adresseProspect` porte
-    // la regle — la sienne quand « adresse differente » est cochee, sinon celle
-    // du chantier. La recrire ici ferait une SECONDE traduction, et l'ecart ne
-    // se verrait que sur les dossiers ou les deux adresses different, c'est-a-
-    // dire ceux ou il compte. ⚠ ELLE VAUT SOUVENT CELLE DU CHANTIER, et les
-    // deux figurent quand meme : sur un PV, on identifie le maitre d'ouvrage
-    // par son domicile et le chantier par son adresse — deux mentions qui ne
-    // disent pas la meme chose, meme quand elles portent le meme texte.
-    adresseClient: (() => {
-      const a = adresseProspect(v);
-      return [a.adresse, [a.code_postal, a.ville].filter(Boolean).join(' ')]
-        .filter(Boolean).join(', ');
-    })(),
+    adresseChantier: enUneLigne(ouSontLesTravaux),
     villeChantier: ch.ville || '',
     budget: chiffre ? eur(chiffre) : (v.budget_annonce || ''),
     budgetTitre: chiffre ? 'MONTANT HT' : 'BUDGET',
@@ -211,17 +230,6 @@ const pied = (gauche) => `
 // em ne suffit pas (essaye : 22 px contre 28), parce que la hauteur d'une ligne
 // depend de la police du poste. Avec la meme ligne des deux cotes, les traits
 // s'alignent par CONSTRUCTION, quelle que soit la police.
-// ⚠ DEUX ADRESSES SONT « LA MEME » A LA CASSE ET AUX ESPACES PRES : l'une est
-// saisie sur la fiche, l'autre sur le chantier, et « 12 Rue des Lilas » contre
-// « 12 rue des Lilas » ferait reapparaitre la ligne qu'on vient de retirer.
-// On ne va pas plus loin (ni accents, ni abreviations) : au-dela, deux adresses
-// qu'un humain juge differentes seraient fondues en une seule, sur la feuille
-// qu'on fait signer.
-const memeAdresse = (a, b) => {
-  const net = (t) => String(t || '').toLowerCase().replace(/[\s,.-]+/g, ' ').trim();
-  return net(a) !== '' && net(a) === net(b);
-};
-
 const champ = (libelle, valeur, classe = '') =>
   `<div class="champ ${classe}"><span>${esc(libelle)}</span><b>${valeur ? esc(valeur) : '&nbsp;'}</b></div>`;
 
@@ -323,15 +331,6 @@ ${bandeau('1 · Identification du chantier')}
 <div class="champs">
   ${champ('Client / maître d’ouvrage', d.nom)}
 </div>
-<!-- ⚠ LA LIGNE DISPARAIT QUAND LE CLIENT HABITE LE CHANTIER (demande du
-     13/10/2026) : c'est le cas courant, et la meme adresse ecrite deux fois de
-     suite se lit comme une erreur de saisie. ⚠ VIDE, ELLE RESTE : on ne sait
-     alors pas ou habite le client, et c'est un champ a remplir a la main — ne
-     pas confondre « identique » et « inconnue ». -->
-${memeAdresse(d.adresseClient, d.adresseChantier) ? '' : `
-<div class="champs" style="margin-top:7px">
-  ${champ('Adresse du client', d.adresseClient)}
-</div>`}
 <div class="champs" style="margin-top:7px">
   ${champ('Adresse du chantier', d.adresseChantier)}
 </div>
