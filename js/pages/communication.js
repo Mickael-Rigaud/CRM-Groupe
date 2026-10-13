@@ -650,6 +650,22 @@ export function pageAnalyse(cle) {
             return j >= debut && j <= fin;
           });
           const derniereVideo = videos.map(v => v.publie_le).filter(Boolean).sort().pop();
+          const premiereVideo = videos.map(v => v.publie_le).filter(Boolean).sort()[0];
+          // ⚠ SANS PUBLICATION RECENTE, LA CARTE N'AVAIT PLUS RIEN A DIRE —
+          // signale le 13/10/2026 : « je n'ai que ces infos pour tiktok ». Elle
+          // ne montrait que les abonnes et une phrase d'excuse, alors que les
+          // 200 videos relevees portent 199 947 vues. Le cumul ne depend
+          // d'aucune fenetre : c'est ce que le compte a fait depuis sa premiere
+          // video, et c'est la seule chose qui vaille quand rien n'est publie.
+          // ⚠ IL SE CALCULE SUR CE QU'ON A RELEVE, PAS SUR LE COMPTE ENTIER :
+          // TikTok ne rend que les dernieres videos (200 sur 206 ici), et la
+          // carte le dit au lieu de laisser croire a un total exhaustif.
+          const somme = (cle) => {
+            const v = videos.map(x => x[cle]).filter(x => x != null);
+            return v.length ? v.reduce((a, b) => a + b, 0) : null;
+          };
+          const cumul = { vues: somme('vues'), likes: somme('likes'),
+            commentaires: somme('commentaires'), partages: somme('partages') };
           // ⚠ PAS D'ÉCART QUAND LA FENÊTRE D'AVANT N'AVAIT AUCUNE VIDÉO : on
           // compare ici ce qu'ont fait les vidéos PUBLIÉES dans chaque fenêtre,
           // donc une fenêtre sans publication vaut zéro — et `ecart` l'annonce
@@ -676,9 +692,16 @@ export function pageAnalyse(cle) {
               ${tuileTT('Commentaires', t?.commentaires, prec.commentaires, 'Commentaires reçus par les vidéos publiées sur la période')}
               ${tuileTT('Partages', t?.partages, prec.partages, 'Partages des vidéos publiées sur la période')}
             </div>
-            <p class="small muted ana-note">Ces quatre chiffres sont ceux des <b>vidéos publiées sur la période</b> — TikTok ne sait dire ni combien de personnes vous ont vue entre deux dates, ni donner un chiffre par jour. Une vidéo plus ancienne qui repart n’y entre donc pas. Les abonnés, eux, sont relevés chaque matin.</p>`
+            <p class="small muted ana-note">Ces quatre chiffres sont ceux des <b>vidéos publiées sur la période</b> — TikTok ne sait dire ni combien de personnes vous ont vue entre deux dates, ni donner un chiffre par jour. Une vidéo plus ancienne qui repart n’y entre donc pas. Les abonnés, eux, sont relevés chaque matin.</p>
+            <p class="small muted ana-note">Sur l’ensemble du compte : ${nombre(videos.length)} vidéos relevées, ${nombre(cumul.vues)} vues, ${nombre(cumul.likes)} j’aime.</p>`
             : `<p class="ana-rien">Aucune vidéo publiée sur cette période${derniereVideo ? ` — la dernière date du ${esc(fmtJour(derniereVideo))}` : ''}.</p>
-            <p class="small muted ana-note">Les chiffres par période portent sur les vidéos <b>publiées dans la fenêtre</b> : il n’y a donc rien à compter, ce qui ne veut pas dire que personne ne vous regarde. Les vidéos plus anciennes et leurs vues se lisent dans « Meilleurs posts » ci-dessous.</p>`}
+            <div class="ana-tuiles">
+              ${tuile('Vidéos', videos.length, null, 'Vidéos relevées sur le compte')}
+              ${tuile('Vues', cumul.vues, null, 'Vues cumulées de ces vidéos depuis leur publication')}
+              ${tuile('J’aime', cumul.likes, null, 'J’aime cumulés de ces vidéos')}
+              ${tuile('Partages', cumul.partages, null, 'Partages cumulés de ces vidéos')}
+            </div>
+            <p class="small muted ana-note">Ces chiffres sont ceux du <b>compte depuis sa première vidéo</b>${premiereVideo ? ` (${esc(fmtJour(premiereVideo))})` : ''}, pas ceux de la période : ils ne dépendent d’aucune fenêtre et continuent de monter sans qu’on publie. TikTok ne rend que les dernières vidéos, le cumul porte donc sur celles qui sont relevées.</p>`}
             <div class="ana-tt-pied">
               <span class="small muted">Compte raccordé${compte.display_name ? ` : <b>${esc(compte.display_name)}</b>` : ''}${videos.length ? ` · ${nombre(videos.length)} vidéo${videos.length > 1 ? 's' : ''} relevée${videos.length > 1 ? 's' : ''}` : ''}</span>
               <button type="button" class="btn ghost small" id="ana-tt-detacher" title="Détacher le compte TikTok">Détacher</button>
