@@ -690,6 +690,20 @@ export function ouvrirFicheRgd(x, onChange, retour = null) {
         ${peutAttribuer
           ? `<button type="button" class="btn ghost sm rgdf-attribuer" id="rgdf-attribuer">${responsable ? 'Changer de responsable' : 'Attribuer à quelqu\'un'}</button>`
           : ''}
+        <!-- Les deux documents qu'on imprime et qu'on fait signer (13/10/2026,
+             demande par Elodie). DEUX BOUTONS ET PAS UNE FENETRE DE CHOIX :
+             openModal ferme la fenetre courante pour ouvrir la suivante, donc
+             une modale posee ici ferait disparaitre la fiche — le piege est
+             paye onze fois dans ce depot.
+             Ils sont la MEME COLONNE que « Modifier » : ce sont des gestes de
+             dossier, pas une action commerciale comme « Demander un avis ».
+             (Pas d'accent grave dans un commentaire HTML : il FERME le
+             gabarit, sans un mot.) -->
+        <div class="rgdf-docs">
+          <span>À imprimer</span>
+          <button type="button" class="btn ghost sm" id="rgdf-doc-projet">Fiche projet</button>
+          <button type="button" class="btn ghost sm" id="rgdf-doc-reception">PV de réception</button>
+        </div>
         <div class="rgdf-tuiles">
           ${surMontant
             ? tuile(montantEtape > 0 ? eur(montantEtape) : '—', 'Montant HT')
@@ -870,6 +884,21 @@ export function ouvrirFicheRgd(x, onChange, retour = null) {
     // REMPLACEMENT, et l'appelant rouvre sa propre fenêtre. Fermer d'abord
     // ferait clignoter l'écran, et déclencherait le `onClose` de la fiche.
     m.querySelector('#rgdf-retour')?.addEventListener('click', () => retour.action?.());
+
+    // ⚠ LE MODULE N'EST CHARGÉ QU'AU CLIC : une fiche qu'on ouvre pour lire un
+    // numéro de téléphone n'a pas à télécharger la mise en page d'un A4.
+    const imprimer = async (quoi) => {
+      try {
+        const mod = await import('./rgd-documents.js');
+        (quoi === 'projet' ? mod.imprimerFicheProjet : mod.imprimerReception)(x, devis);
+      } catch (e) {
+        toast(e.message || 'Impression impossible', 'error');
+      }
+    };
+    const bProjet = m.querySelector('#rgdf-doc-projet');
+    if (bProjet) bProjet.onclick = () => imprimer('projet');
+    const bReception = m.querySelector('#rgdf-doc-reception');
+    if (bReception) bReception.onclick = () => imprimer('reception');
 
     const bModifier = m.querySelector('#rgdf-modifier');
     if (bModifier) bModifier.onclick = () => {

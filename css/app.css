@@ -6703,3 +6703,10 @@ span.rpv-statut { display: inline-block; margin-bottom: 4px; }
 /* Les deux bornes de la période « Chantier terminé » (13/10/2026). */
 .rcl-dates { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
 .rcl-dates input { font: inherit; font-size: 13px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--text); }
+
+/* Les deux documents a imprimer, dans la colonne des gestes de la fiche
+   projet RGD (13/10/2026). L'intitule les rassemble : deux boutons seuls
+   sous « Attribuer » se liraient comme deux gestes sans rapport. */
+.rgdf-docs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 2px; }
+.rgdf-docs > span { font-size: 10.5px; font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--muted); margin-right: 2px; }
