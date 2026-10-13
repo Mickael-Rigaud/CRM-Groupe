@@ -129,8 +129,14 @@ const style = `
   .champs { display: flex; gap: 14px; }
   .champ { flex: 1; min-width: 0; }
   .champ > span { display: block; font-size: 7.5pt; text-transform: uppercase; letter-spacing: .07em; color: ${GRIS}; }
-  .champ > b { display: block; min-height: 15px; padding: 2px 0 3px; font-size: 11pt;
-    border-bottom: .75pt solid ${FILET}; }
+  /* La hauteur d'un champ est celle d'une ligne de texte, line-height fixee des
+     deux cotes. ⚠ CE N'EST PAS CE REGLAGE QUI ALIGNE LES TRAITS : essaye seul,
+     il laissait encore 22 px contre 28, la hauteur d'une ligne dependant de la
+     police du poste. C'est l'espace insecable de champ() qui tranche, voir son
+     commentaire. Ces deux lignes restent le filet. Une valeur qui s'enroule sur
+     deux lignes grandit toujours : c'est voulu. */
+  .champ > b { display: block; min-height: 1.5em; line-height: 1.5; padding: 2px 0 3px;
+    font-size: 11pt; border-bottom: .75pt solid ${FILET}; }
   .champ.etroit { flex: 0 0 42mm; }
   .champ.moyen { flex: 0 0 58mm; }
 
@@ -183,8 +189,16 @@ const entete = (titre, sous) => `
 const pied = (gauche) => `
 <footer><span>${esc(gauche)}</span><b>rgdrenova.fr</b></footer>`;
 
+// ⚠ UN CHAMP VIDE PORTE UNE ESPACE INSECABLE, ET CE N'EST PAS UNE ASTUCE DE
+// MISE EN PAGE : sans elle il n'a aucune ligne de texte, donc il retombe sur sa
+// hauteur minimale et son trait remonte au-dessus de celui de ses voisins —
+// mesure sur le PV, « Date de la reception » etait 12 px plus haut que les deux
+// dates du devis, sur la rangee qu'on lit en premier. Calculer cette hauteur en
+// em ne suffit pas (essaye : 22 px contre 28), parce que la hauteur d'une ligne
+// depend de la police du poste. Avec la meme ligne des deux cotes, les traits
+// s'alignent par CONSTRUCTION, quelle que soit la police.
 const champ = (libelle, valeur, classe = '') =>
-  `<div class="champ ${classe}"><span>${esc(libelle)}</span><b>${esc(valeur || '')}</b></div>`;
+  `<div class="champ ${classe}"><span>${esc(libelle)}</span><b>${valeur ? esc(valeur) : '&nbsp;'}</b></div>`;
 
 const lignes = (n) => Array.from({ length: n }, () => '<div class="ligne"></div>').join('');
 
