@@ -6715,9 +6715,12 @@ span.rpv-statut { display: inline-block; margin-bottom: 4px; }
 /* ⚠ L apercu est une IFRAME SANDBOX, jamais du innerHTML : il porte un texte
    saisi a la main. Le fond gris est celui de l enveloppe, pour que le cadre ne
    se lise pas comme une page blanche. */
-.avi-cadre { display: block; }
-.avi-apercu { width: 100%; height: 420px; border: 1px solid var(--line); border-radius: 12px;
-  background: #f5f5f4; display: block; }
+/* Le cadre porte la taille FINALE (apres mise a l echelle) et coupe ce qui
+   depasse ; l iframe, elle, est rendue a la vraie largeur du mail puis reduite.
+   Sans `overflow: hidden`, le coin reduit laisserait voir le reste. */
+.avi-cadre { display: block; overflow: hidden; border: 1px solid var(--line);
+  border-radius: 12px; background: #f5f5f4; }
+.avi-apercu { border: 0; display: block; background: #f5f5f4; }
 .avi-de { color: var(--muted); }
 @media screen and (max-width: 900px) {
   .avi-colonnes { grid-template-columns: 1fr; }

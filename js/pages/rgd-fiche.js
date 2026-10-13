@@ -998,7 +998,44 @@ export function ouvrirFicheRgd(x, onChange, retour = null) {
           : `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.6;color:#1f2937;padding:16px">
                <p style="margin:0 0 14px;padding:8px 12px;background:#FEF3C7;color:#92400E;border-radius:8px;font-size:13px">
                  Aperçu du texte seul : l’en-tête au logo et le pied de page s’ajoutent à l’envoi.</p>${corps}</div>`;
-        hote.innerHTML = `<iframe class="avi-apercu" sandbox="" srcdoc="${esc(html)}" title="Aperçu du message"></iframe>`;
+        // ⚠ LE MAIL EST RENDU EN ENTIER PUIS RÉDUIT, IL NE DÉFILE PAS
+        // (13/10/2026, Élodie : « je voudrais que ça ne déroule pas »). Un
+        // aperçu qu'il faut faire défiler ne sert à rien : on l'ouvre pour voir
+        // le message d'un coup d'œil, pas pour le parcourir.
+        //
+        // ⚠ LA LARGEUR DE RÉFÉRENCE EST 640 px, PAS LA LARGEUR DU CADRE : le
+        // mail est une table de 600 px, et le rendre dans un cadre plus étroit
+        // le ferait se replier — on verrait une mise en page que le client
+        // n'aura pas. On le rend donc à sa vraie largeur, et on le MET À
+        // L'ÉCHELLE.
+        //
+        // ⚠ ET LA HAUTEUR EST ESTIMÉE, parce qu'on ne peut pas la mesurer : le
+        // cadre est en `sandbox` vide, donc son document est inaccessible
+        // depuis la page — c'est le prix de l'isolation, et on le paie
+        // volontiers. L'estimation est calée sur une mesure réelle : 589 px
+        // pour le message par défaut, en-tête et pied compris.
+        const lignes = String(w.querySelector('#avi-texte').value)
+          .split(/\n{2,}/).filter(b => b.trim())
+          .reduce((n, b) => n + Math.max(1, Math.ceil(b.trim().length / 68)), 0);
+        // ⚠ ON COMPTE LES BLOCS AUTANT QUE LES LIGNES : chaque paragraphe porte
+        // une marge, et ne compter que les lignes sous-estimait assez pour
+        // couper la signature — constaté à l'écran.
+        // ⚠ LA BASE DÉPEND DE L'ENVELOPPE : avec elle il faut le bandeau au
+        // logo et le pied de page (≈ 210 px) ; sans elle, seulement le bandeau
+        // d'avertissement. Garder la même base laisserait un grand vide sous
+        // l'aperçu dégradé.
+        // ⚠ ET ON PÈCHE PAR EXCÈS : un aperçu qui coupe la fin du message est
+        // pire qu'un aperçu avec un peu de vide — on ne verrait pas ce qu'on
+        // s'apprête à envoyer.
+        const blocs = String(w.querySelector('#avi-texte').value).split(/\n{2,}/).filter(b => b.trim()).length;
+        const base = enveloppe ? 250 : 100;
+        const hautIframe = Math.max(enveloppe ? 620 : 300, base + blocs * 18 + lignes * 25 + 95);
+        const dispo = hote.getBoundingClientRect().width || 480;
+        const k = Math.min(1, dispo / 640);
+        hote.style.height = `${Math.round(hautIframe * k)}px`;
+        hote.innerHTML = `<iframe class="avi-apercu" sandbox="" srcdoc="${esc(html)}"
+          title="Aperçu du message"
+          style="width:640px;height:${hautIframe}px;transform:scale(${k.toFixed(3)});transform-origin:top left"></iframe>`;
       };
       enveloppeApercu().then((e) => {
         enveloppe = e;
