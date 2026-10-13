@@ -25,7 +25,9 @@ export const RESEAUX = {
   linkedin: { label: 'LinkedIn', court: 'IN', couleur: '#0A66C2' },
 };
 export const RESEAUX_DE = {
-  rgd: ['facebook', 'instagram', 'tiktok', 'linkedin'],
+  // LinkedIn retiré le 13/10/2026 (Élodie : « ça ne sert à rien si on ne peut
+  // pas le connecter ») — son API exige une autorisation après examen, écartée.
+  rgd: ['facebook', 'instagram', 'tiktok'],
   btp: ['facebook', 'instagram'],
   // La Référence Courtage (12/10/2026) : aucun réseau raccordé pour l'instant,
   // seul le site est mesuré — l'écran Analyse n'y montre donc pas d'onglet.

@@ -696,7 +696,7 @@ export const SEED = {
     { id: 'com2', activity: 'rgd', date_prevue: '2026-10-09', heure: '12:30', reseaux: ['instagram', 'tiktok'],
       format: 'reel', titre: 'Reel chantier cuisine', statut: 'programme',
       texte: 'De la dépose à la pose du plan de travail, en 30 secondes.', visuels: [], updated_at: '2026-10-06T09:00:00Z' },
-    { id: 'com3', activity: 'rgd', date_prevue: '2026-10-14', heure: '09:00', reseaux: ['linkedin'],
+    { id: 'com3', activity: 'rgd', date_prevue: '2026-10-14', heure: '09:00', reseaux: ['facebook'],
       format: 'post', titre: 'Recrutement chargé d’affaires', statut: 'a_valider',
       texte: 'RGD Renova recrute un chargé d’affaires sur le secteur de Chantilly.', visuels: [], updated_at: '2026-10-07T09:00:00Z' },
     { id: 'com4', activity: 'rgd', date_prevue: '2026-10-21', reseaux: ['facebook', 'instagram'],
