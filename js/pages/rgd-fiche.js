@@ -98,6 +98,7 @@ import { attribuerFicheRgd, proprietaireDeLaFiche } from './rgd-attribuer.js';
 // La porte unique du commentaire, partagée avec le tableau : deux écritures de
 // la même colonne finiraient par ne plus appliquer les mêmes règles.
 import { majNote, COLONNE_NOTE } from '../data/rgd-clients.js';
+import { lienAvis, messageAvis, envoyerDemandeAvis, avisDejaDemande, KIND_AVIS } from '../data/rgd-avis.js';
 
 const ETAT_CHANTIER = {
   demarrage: { label: 'Préparé', ton: 'amber' },
@@ -672,6 +673,17 @@ export function ouvrirFicheRgd(x, onChange, retour = null) {
         ${peutAttribuer
           ? `<button type="button" class="btn ghost sm rgdf-attribuer" id="rgdf-attribuer">${responsable ? 'Changer de responsable' : 'Attribuer à quelqu\'un'}</button>`
           : ''}
+        <!-- Demander un avis : UNIQUEMENT quand le chantier est terminé
+             (13/10/2026, demandé par Élodie). On ne demande pas son avis à
+             quelqu'un dont le chantier n'est pas fini : ce serait gênant pour
+             lui, et mauvais pour nous. C'est la seule étape où le geste a un
+             sens, donc la seule où le bouton existe.
+             Il disparaît aussi tant qu'aucun lien n'est réglé, plutôt que
+             d'ouvrir une fenêtre qui ne sait rien envoyer. -->
+        ${etapeCourante === 'chantier_termine' && lienAvis()
+          ? `<button type="button" class="btn ghost sm rgdf-avis" id="rgdf-avis">${
+              avisDejaDemande(historique()) ? 'Avis — déjà demandé' : '★ Demander un avis'}</button>`
+          : ''}
         <div class="rgdf-tuiles">
           ${surMontant
             ? tuile(montantEtape > 0 ? eur(montantEtape) : '—', 'Montant HT')
@@ -874,6 +886,91 @@ export function ouvrirFicheRgd(x, onChange, retour = null) {
           onChange?.();
         },
       });
+    };
+
+    // ⚠ UNE MODALE PAR-DESSUS LA FICHE LA FERME : `openModal` ferme pour
+    // remplacement. On fait donc comme la fiche projet — on ouvre, et `onClose`
+    // ramène la fiche. Et SURTOUT pas le `confirm()` de `ui.js`, qui
+    // remplacerait cette fenêtre-ci avec le message en cours de retouche.
+    const bAvis = m.querySelector('#rgdf-avis');
+    if (bAvis) bAvis.onclick = () => {
+      const lien = lienAvis();
+      const deja = avisDejaDemande(historique());
+      const msg = messageAvis({ nom: x.nom, ligne: f }, lien);
+      const w = openModal('Demander un avis Google', `
+        <div class="avi">
+          ${deja ? `<p class="avi-deja">Un avis a déjà été demandé à cette personne le ${esc(fmtDate(deja.created_at))}. Une seconde demande peut agacer plus qu’elle ne rapporte.</p>` : ''}
+          <p class="avi-qui">À <b>${esc(x.nom || 'cette personne')}</b>${x.email ? ` · ${esc(x.email)}` : ' · <span class="muted">aucune adresse e-mail</span>'}</p>
+          <label class="mail-champ plein">
+            <span>Le message</span>
+            <textarea id="avi-texte" rows="11">${esc(msg.texte)}</textarea>
+          </label>
+          <p class="small muted">Le lien ouvre directement le formulaire d’avis de la fiche RGD Renova. L’e-mail part dans l’identité de l’entreprise ; la copie sert pour un SMS ou WhatsApp.</p>
+          <div class="form-actions">
+            <span class="grow"></span>
+            <button type="button" class="btn ghost" data-close>Annuler</button>
+            <button type="button" class="btn ghost" id="avi-copier">Copier le message</button>
+            ${x.email ? '<button type="button" class="btn" id="avi-envoyer">Envoyer par e-mail</button>' : ''}
+          </div>
+        </div>`, { onClose: () => dessine() });
+
+      const lire = () => w.querySelector('#avi-texte').value;
+      // ⚠ LA TRACE S'ÉCRIT POUR LES DEUX CHEMINS : copier le message sert à
+      // l'envoyer par SMS, donc la demande a bien eu lieu. Ne dater que
+      // l'e-mail ferait redemander à tous ceux qu'on relance au téléphone.
+      const marquer = (par) => inscrire(KIND_AVIS, `Avis Google demandé (${par})`);
+
+      // ⚠ `navigator.clipboard` ÉCHOUE PLUS SOUVENT QU'ON NE CROIT — « Document
+      // is not focused » quand la fenêtre n'a pas la main, et refus pur et
+      // simple dans certains navigateurs. On tente donc la méthode moderne,
+      // puis l'ancienne, et à défaut on SÉLECTIONNE le texte pour qu'un Ctrl+C
+      // suffise. Sans ce repli, le bouton ne fait rien et ne dit pas quoi faire.
+      const copier = async (texte, champ) => {
+        try { await navigator.clipboard.writeText(texte); return true; } catch { /* on tente l'ancienne */ }
+        try {
+          champ.focus(); champ.select();
+          if (document.execCommand('copy')) return true;
+        } catch { /* ni l'une ni l'autre */ }
+        champ.focus(); champ.select();
+        return false;
+      };
+
+      w.querySelector('#avi-copier').onclick = async () => {
+        const champ = w.querySelector('#avi-texte');
+        if (!await copier(lire(), champ)) {
+          // ⚠ ON NE MARQUE PAS : rien n'a été copié, donc rien ne partira. Poser
+          // la trace ici ferait croire plus tard que le client a été sollicité.
+          toast('Le texte est sélectionné : faites Ctrl+C pour le copier', 'error');
+          return;
+        }
+        await marquer('copié');
+        toast('Message copié');
+        closeModal();
+        dessine();
+      };
+
+      const bEnvoyer = w.querySelector('#avi-envoyer');
+      if (bEnvoyer) bEnvoyer.onclick = async () => {
+        bEnvoyer.disabled = true;
+        bEnvoyer.textContent = 'Envoi…';
+        // ⚠ ON ENVOIE CE QUI EST À L'ÉCRAN : le texte a pu être retouché, et
+        // partir avec la version d'origine ferait mentir l'aperçu.
+        const retouche = lire();
+        const r = await envoyerDemandeAvis(
+          { nom: x.nom, ligne: f },
+          { email: x.email, nom: x.nom, texte: retouche },
+        );
+        if (!r.ok) {
+          bEnvoyer.disabled = false;
+          bEnvoyer.textContent = 'Envoyer par e-mail';
+          toast(`Envoi impossible : ${r.motif}`, 'error');
+          return;
+        }
+        await marquer('e-mail');
+        toast('Demande envoyée');
+        closeModal();
+        dessine();
+      };
     };
 
     const bAttribuer = m.querySelector('#rgdf-attribuer');

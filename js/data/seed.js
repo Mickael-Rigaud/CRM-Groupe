@@ -201,6 +201,13 @@ export const SEED = {
   ],
   settings: [
     { key: 'intake_token', value: 'demo-token-a-changer' },
+    // Le lien de demande d'avis Google (13/10/2026). ADRESSE INVENTEE : le depot
+    // est public, et celle-ci ne mene nulle part. Sans elle, le bouton
+    // « Demander un avis » de la fiche client n'apparait jamais en demo —
+    // il ne s'affiche que si un lien est regle — et ni la fenetre, ni la trace
+    // dans l'historique, ni le garde « deja demande » ne s'essayaient ailleurs
+    // qu'en production.
+    { key: 'rgd_avis_google_lien', value: 'https://g.page/r/DEMO-aucune-fiche/review' },
     // ⚠ SANS OBJECTIFS, LE BLOC « OBJECTIFS » DES ECRANS BTP N'EST QU'UN MESSAGE
     // VIDE — ni barres, ni pourcentages, ni taux de passage. Il n'etait donc
     // essayable que sur la production, et une retouche s'y verifiait a l'aveugle.

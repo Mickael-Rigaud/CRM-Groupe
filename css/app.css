@@ -6669,3 +6669,19 @@ span.rpv-statut { display: inline-block; margin-bottom: 4px; }
 /* Une structure sans reseau (La Reference Courtage) n a pas d onglets : `display: flex`
    battrait `[hidden]`, de specificite nulle. */
 .ana-onglets[hidden] { display: none; }
+
+/* Demander un avis Google a un client dont le chantier est termine (13/10/2026).
+   La fenetre est volontairement nue : un message, deux boutons. */
+.avi-deja { margin: 0 0 12px; padding: 10px 14px; border-radius: 10px; font-size: 13px;
+  background: #FEF3C7; color: #92400E; border: 1px solid #FDE68A; }
+.avi-qui { margin: 0 0 12px; font-size: 13.5px; color: var(--text); }
+.avi textarea { font: inherit; font-size: 13.5px; line-height: 1.6; resize: vertical; }
+/* Le bouton de la fiche : un ton a part, pour qu il ne se confonde pas avec
+   « Modifier » et « Attribuer », qui sont des gestes internes. Celui-ci ecrit
+   a un client. */
+.rgdf-avis.est-fait { opacity: .6; }
+/* Le champ du lien d avis occupe la rangee entiere : la grille des reglages a
+   trois colonnes pour les montants, et une adresse ne se lit pas dans un tiers
+   de largeur. Sans cette regle il tient toute la place par accident, parce
+   qu il est seul — un champ ajoute a cote le casserait. */
+.reg-grille .reg-large { grid-column: 1 / -1; }

@@ -47,6 +47,7 @@ import { esc, eur, toast } from '../ui.js';
 import { poserEspace } from './espace.js';
 import { cadre, guard } from './rgd-espace.js';
 import { db } from '../data/db.js';
+import { lienAvis, lienAvisValide, enregistrerLienAvis } from '../data/rgd-avis.js';
 
 const nombreDe = (v) => {
   const n = Number(String(v ?? '').replace(/\s/g, '').replace(',', '.'));
@@ -67,6 +68,7 @@ export const rgdReglagesPage = {
       const ht = lire('manual_ca_ht_exercice');
       const ttc = lire('manual_ca_ttc_exercice');
       const clients = lire('manual_clients_actifs');
+      const avis = lienAvis();
 
       const champ = (id, label, valeur) => `
         <label class="reg-champ">
@@ -110,6 +112,39 @@ export const rgdReglagesPage = {
           </div>` : ''}
         </section>
 
+        <!-- ATTENTION : le lien d'avis vit dans la table des reglages
+             generiques, pas dans une table neuve (13/10/2026) : une cle, une
+             valeur, et des policies qui existent deja (lecture pour tous,
+             ecriture direction). Aucune migration. Il commande le bouton
+             « Demander un avis » de la fiche client : tant qu'il est vide, le
+             bouton n'existe pas, plutot que d'ouvrir une fenetre qui ne sait
+             rien envoyer.
+             (Pas d'accent grave ici : dans un commentaire HTML pose au milieu
+             d'un gabarit, il FERME le gabarit, sans un mot.) -->
+        <section class="card">
+          <div class="card-head"><h2>Avis Google</h2>
+            <span class="muted small">le lien envoyé aux clients</span></div>
+          <div class="reg-grille">
+            <label class="field reg-large" for="reg-avis">
+              <span>Lien de demande d’avis</span>
+              <input id="reg-avis" type="url" value="${esc(avis)}"
+                placeholder="https://g.page/r/…/review" ${state.ecriture ? '' : 'disabled'}>
+            </label>
+          </div>
+          <p class="small muted">Dans votre fiche d’établissement Google, bouton
+            <b>« Demander des avis »</b> : Google y donne un lien court à copier ici.
+            <b>Ne le fabriquez pas à la main</b> — un lien approximatif enverrait vos
+            clients vers la fiche de quelqu’un d’autre, et personne ne s’en apercevrait.</p>
+          <p class="small muted">Une fois réglé, un bouton <b>« ★ Demander un avis »</b>
+            apparaît sur la fiche d’un client <b>dont le chantier est terminé</b> —
+            et seulement à ce moment-là.</p>
+          ${state.ecriture ? `<div class="toolbar">
+            <button type="button" class="btn primary" id="reg-avis-ok">Enregistrer le lien</button>
+            <button type="button" class="btn ghost" id="reg-avis-essai"${avis ? '' : ' disabled'}>Ouvrir pour vérifier</button>
+            <span class="muted small" id="reg-avis-etat"></span>
+          </div>` : ''}
+        </section>
+
         <section class="card">
           <div class="card-head"><h2>Ce qui n’est pas réglable ici</h2></div>
           <div class="table-wrap"><table>
@@ -132,6 +167,43 @@ export const rgdReglagesPage = {
         </section>`;
 
       root.innerHTML = cadre('#/rgd/reglages', 'Réglages', corps);
+
+      // ⚠ LE LIEN A SON PROPRE BOUTON, et ce n'est pas du rangement : celui du
+      // dessus écrit dans `rgd_reglages`, celui-ci dans `settings`. Deux tables,
+      // deux droits, deux échecs possibles — les confondre ferait dire « tout est
+      // enregistré » alors qu'une moitié seulement est passée.
+      const bAvis = root.querySelector('#reg-avis-ok');
+      if (bAvis) bAvis.onclick = async () => {
+        const champAvis = root.querySelector('#reg-avis');
+        const etatAvis = root.querySelector('#reg-avis-etat');
+        const v = champAvis.value.trim();
+        // ⚠ VIDER LE CHAMP RETIRE LE LIEN, et c'est le seul moyen de faire
+        // disparaître le bouton de la fiche. On ne refuse donc pas le vide.
+        if (v) {
+          const ok = lienAvisValide(v);
+          if (!ok.ok) { toast(ok.motif, 'err'); return; }
+        }
+        bAvis.disabled = true;
+        etatAvis.textContent = 'Enregistrement…';
+        try {
+          await enregistrerLienAvis(v);
+          etatAvis.textContent = v ? 'Lien enregistré' : 'Lien retiré';
+          toast(v ? 'Lien d’avis enregistré' : 'Lien d’avis retiré');
+          draw();
+        } catch (e) {
+          bAvis.disabled = false;
+          etatAvis.textContent = '';
+          toast(e.message || 'Enregistrement impossible', 'err');
+        }
+      };
+      // ⚠ « OUVRIR POUR VÉRIFIER » EST LE SEUL CONTRÔLE QUI VAILLE : un lien peut
+      // être bien formé et pointer sur la fiche d'un autre. Aucune vérification
+      // automatique ne peut dire « c'est bien RGD Renova » — seul l'œil le peut.
+      const bEssai = root.querySelector('#reg-avis-essai');
+      if (bEssai) bEssai.onclick = () => {
+        const v = root.querySelector('#reg-avis').value.trim();
+        if (v) window.open(v, '_blank', 'noopener');
+      };
 
       const bouton = root.querySelector('#reg-ok');
       if (bouton) bouton.onclick = async () => {
