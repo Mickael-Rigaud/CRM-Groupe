@@ -6775,3 +6775,4 @@ span.rpv-statut { display: inline-block; margin-bottom: 4px; }
   font-size: 13px; color: var(--text); }
 .rgdf-sav-ligne:hover { border-color: var(--accent); }
 .rgdf-sav-objet { min-width: 0; }
+.rcl-vers-sav { margin: 10px 14px 0; }

@@ -24,6 +24,13 @@ export const ONGLETS = [
   { hash: '#/rgd', label: 'Vue d’ensemble' },
   { label: 'Base de données', sous: [
     { hash: '#/rgd/clients', label: 'Clients & prospects' },
+    // ⚠ LE SAV A SA PAGE (13/10/2026, Élodie : « je le voyais plus à part »),
+    // sous Clients & prospects, avec le nombre de dossiers en cours. Le libellé
+    // est un ACCESSEUR : le menu est relu à chaque rendu, le compte suit.
+    { hash: '#/rgd/sav', get label() {
+      const n = scope.rgd('rgd_sav').filter(s => s.statut !== 'resolu').length;
+      return n ? `SAV (${n})` : 'SAV';
+    } },
     { hash: '#/rgd/partenaires', label: 'Partenaires' },
     { hash: '#/rgd/soustraitants', label: 'Sous-traitants' },
     // La veille hebdomadaire des sous-traitants (07/10/2026). Direction seule :

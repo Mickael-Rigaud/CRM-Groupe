@@ -186,40 +186,6 @@ export function fenetreSav(fiche, sav, retour) {
   } });
 }
 
-/**
- * Le tableau de l'onglet « SAV » : une ligne par DOSSIER (une personne peut en
- * avoir deux), plus les fiches rangées en SAV sans dossier encore ouvert.
- * @param {object[]} fichesSav  les lignes de l'onglet (forme `ficheDe`)
- * @param {'encours'|'resolus'} filtre
- */
-export function tableauSav(fichesSav, filtre, toutesFiches) {
-  const lignes = [];
-  const vus = new Set();
-  // Les fiches de l'onglet : leurs dossiers ouverts, ou une ligne « à ouvrir ».
-  for (const x of fichesSav) {
-    const ds = dossiersDe(x.ligne);
-    ds.forEach(s => vus.add(s.id));
-    const ouverts = ds.filter(s => s.statut !== 'resolu');
-    if (filtre === 'encours') {
-      if (ouverts.length) ouverts.forEach(s => lignes.push({ x, s }));
-      else lignes.push({ x, s: null });
-    }
-  }
-  // Les dossiers résolus vivent sur des fiches revenues en « Chantier terminé ».
-  if (filtre === 'resolus') {
-    for (const s of scope.rgd('rgd_sav').filter(s => s.statut === 'resolu')) {
-      const x = toutesFiches.find(y => y.ligne.id === s.fiche_id) || null;
-      lignes.push({ x, s });
-    }
-    lignes.sort((a, b) => String(b.s.resolu_le || '').localeCompare(String(a.s.resolu_le || '')));
-  } else {
-    // Les urgents d'abord, puis le plus ancien : c'est celui qui attend le plus.
-    lignes.sort((a, b) => (b.s?.urgence === 'urgente') - (a.s?.urgence === 'urgente')
-      || String(a.s?.ouvert_le || '').localeCompare(String(b.s?.ouvert_le || '')));
-  }
-  return lignes;
-}
-
 export function celluleSav({ x, s }) {
   const chantier = s?.chantier_id ? db.byId('rgd_chantiers', s.chantier_id) : null;
   const g = s ? garantie(finDuChantier(chantier), s.ouvert_le) : null;
