@@ -404,9 +404,17 @@ export function etapeDeFiche(f, chantiers, devis, joursVisite) {
   // Lu, pas brut : « rejetee » se lit « nouveau_prospect », donc il passe par
   // `etapeParLesFaits` comme lui au lieu de tomber dans le repli « demande ».
   const brut = statutSuiviLu(f.statut_suivi);
+  const faits = etapeParLesFaits(f, chantiers, devis, joursVisite);
+  // ⚠ LES FAITS FONT AVANCER UNE ÉTAPE SAISIE À LA MAIN, JAMAIS RECULER
+  // (13/10/2026, Élodie : « quand un brouillon se crée sur Costructor, je
+  // voudrais que la fiche projet passe automatiquement à l'étape devis en
+  // cours »). Avant, une valeur posée à la main l'emportait toujours : une
+  // fiche passée en « RDV planifié » y restait alors que son devis était déjà
+  // écrit. Un fait en retard sur la saisie ne la défait pas — on peut savoir
+  // avant Costructor qu'un devis est en route.
   const e = !JAMAIS_RENSEIGNE.includes(brut)
-    ? (ETAPE_DU_STATUT[brut] || 'demande')
-    : (etapeParLesFaits(f, chantiers, devis, joursVisite) || 'demande');
+    ? plusAvancee(ETAPE_DU_STATUT[brut] || 'demande', faits)
+    : (faits || 'demande');
   // ⚠ LA SEULE RÈGLE OÙ UN FAIT DÉFAIT UNE SAISIE, et il faut le dire.
   // Partout ailleurs une valeur posée à la main l'emporte. Ici c'est cette
   // valeur même qui a expiré : quelqu'un a écrit « devis accepté » il y a plus
@@ -417,12 +425,29 @@ export function etapeDeFiche(f, chantiers, devis, joursVisite) {
   return e;
 }
 
-// L'étape d'une demande du formulaire du site. Elle n'a ni devis ni chantier
-// rattaché : son statut seul décide.
-export function etapeDeDemande(d) {
+// La plus avancée de deux étapes du cycle. Hors du cycle (archives,
+// indésirable), la saisie l'emporte : on n'en sort pas par un fait.
+export function plusAvancee(saisie, faits) {
+  const a = ORDRE_ETAPES.indexOf(saisie), b = ORDRE_ETAPES.indexOf(faits);
+  return a >= 0 && b > a ? faits : saisie;
+}
+
+// L'étape d'une demande du formulaire du site : son statut, que ses DEVIS
+// peuvent faire avancer (13/10/2026). Costructor rattache un devis au CONTACT
+// de la demande quand l'e-mail correspond, et sans cette lecture le brouillon
+// d'un client encore « demande » ne le déplaçait pas.
+//
+// ⚠ LES DEVIS SONT LUS ICI PAR DÉFAUT, pas exigés de l'appelant : la to do
+// list et la fiche ouvrent une demande sans avoir la table sous la main, et un
+// écran qui oublierait de la passer rangerait la même demande ailleurs.
+export function etapeDeDemande(d, devis = scope.rgd('rgd_devis')) {
   if (d.statut === 'indesirable') return 'indesirable';
   if (d.statut === 'perdu') return 'archives';
-  return ETAPE_DU_STATUT[d.statut] || 'demande';
+  const siens = (devis || []).filter(v => memeQue(v, d));
+  const faits = siens.some(v => v.statut === 'signe') ? 'devis_accepte'
+    : siens.some(devisEnvoye) ? 'devis_envoye'
+    : siens.some(devisOuvert) ? 'devis_encours' : null;
+  return plusAvancee(ETAPE_DU_STATUT[d.statut] || 'demande', faits);
 }
 
 // ⚠ UNE FICHE N'ENTRE DANS LA FRISE QUE SI ELLE VIENT D'UNE PROSPECTION, OU

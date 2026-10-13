@@ -128,8 +128,11 @@ export const rgdCostructorPage = {
           Ce sont des clients créés directement dans Costructor, sans rendez-vous et
           sans adresse e-mail que le CRM connaisse : la recopie ne peut les rattacher
           à personne. Le devis est bien là, il n&rsquo;apparaît simplement sur aucune
-          fiche. Pour en rattacher un, il suffit que la fiche existe dans le CRM avec
-          la même adresse e-mail — elle adoptera le client au passage suivant.</div>
+          fiche, et sa fiche n&rsquo;avance donc pas d&rsquo;étape. Pour le rattacher, il suffit que
+          le client porte dans Costructor la même adresse e-mail qu&rsquo;une fiche ou une
+          demande du CRM : il s&rsquo;y rattache au passage suivant (30 minutes au plus).
+          <div class="small" style="margin-top:6px">${devisSansFiche.slice(0, 10)
+            .map(d => esc([d.numero, d.objet].filter(Boolean).join(' — '))).join(' · ')}</div></div>
         </div>` : ''}
 
         <div class="esp-kpis">
