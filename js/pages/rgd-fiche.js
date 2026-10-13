@@ -98,7 +98,8 @@ import { attribuerFicheRgd, proprietaireDeLaFiche } from './rgd-attribuer.js';
 // La porte unique du commentaire, partagée avec le tableau : deux écritures de
 // la même colonne finiraient par ne plus appliquer les mêmes règles.
 import { majNote, COLONNE_NOTE } from '../data/rgd-clients.js';
-import { lienAvis, messageAvis, envoyerDemandeAvis, avisDejaDemande, KIND_AVIS } from '../data/rgd-avis.js';
+import { lienAvis, messageAvis, envoyerDemandeAvis, avisDejaDemande, KIND_AVIS,
+  enveloppeApercu, htmlDepuisTexte } from '../data/rgd-avis.js';
 
 const ETAT_CHANTIER = {
   demarrage: { label: 'Préparé', ton: 'amber' },
@@ -935,19 +936,86 @@ export function ouvrirFicheRgd(x, onChange, retour = null) {
       const w = openModal('Demander un avis Google', `
         <div class="avi">
           ${deja ? `<p class="avi-deja">Un avis a déjà été demandé à cette personne le ${esc(fmtDate(deja.created_at))}. Une seconde demande peut agacer plus qu’elle ne rapporte.</p>` : ''}
-          <p class="avi-qui">À <b>${esc(x.nom || 'cette personne')}</b>${x.email ? ` · ${esc(x.email)}` : ' · <span class="muted">aucune adresse e-mail</span>'}</p>
-          <label class="mail-champ plein">
-            <span>Le message</span>
-            <textarea id="avi-texte" rows="11">${esc(msg.texte)}</textarea>
-          </label>
-          <p class="small muted">Le lien ouvre directement le formulaire d’avis de la fiche RGD Renova. L’e-mail part dans l’identité de l’entreprise ; la copie sert pour un SMS ou WhatsApp.</p>
+          <div class="avi-colonnes">
+            <div class="avi-gauche">
+              <p class="avi-qui">À <b>${esc(x.nom || 'cette personne')}</b>${x.email ? ` · ${esc(x.email)}` : ' · <span class="muted">aucune adresse e-mail</span>'}</p>
+              <p class="avi-qui avi-de" id="avi-de">De <span class="muted">lecture de l’expéditeur…</span></p>
+              <label class="mail-champ plein">
+                <span>Objet</span>
+                <input type="text" id="avi-objet" value="${esc(msg.objet)}">
+              </label>
+              <label class="mail-champ plein">
+                <span>Le message</span>
+                <textarea id="avi-texte" rows="13">${esc(msg.texte)}</textarea>
+              </label>
+              <p class="small muted">La copie sert pour un SMS ou WhatsApp : elle part en texte simple, sans la mise en page.</p>
+            </div>
+            <div class="avi-droite">
+              <span class="avi-titre-apercu">Ce que votre client recevra</span>
+              <!-- L apercu est rendu dans une iframe SANDBOX, jamais en innerHTML :
+                   il porte un texte modifiable a la main, donc du contenu qu on ne
+                   choisit pas. Meme regle que l apercu de relance des sous-traitants.
+                   Le cadre est pose par peindre(), qui le REMPLACE a chaque fois.
+                   (Pas d'accent grave ici : dans un commentaire HTML pose au
+                   milieu d'un gabarit, il FERME le gabarit, sans un mot.) -->
+              <div id="avi-cadre" class="avi-cadre"></div>
+            </div>
+          </div>
           <div class="form-actions">
             <span class="grow"></span>
             <button type="button" class="btn ghost" data-close>Annuler</button>
             <button type="button" class="btn ghost" id="avi-copier">Copier le message</button>
             ${x.email ? '<button type="button" class="btn" id="avi-envoyer">Envoyer par e-mail</button>' : ''}
           </div>
-        </div>`, { onClose: () => dessine() });
+        </div>`, { wide: true, onClose: () => dessine() });
+
+      // ⚠ L'APERÇU NE REDESSINE PAS LE CHAMP, IL NE TOUCHE QUE L'IFRAME : un
+      // redessin détruirait la zone de texte et le curseur partirait avec elle
+      // — défaut déjà vécu sur le montant des travaux de la fiche projet BTP.
+      // ⚠ ET IL SUIT LA FRAPPE SANS RIEN DEMANDER AU RÉSEAU : l'enveloppe est
+      // obtenue UNE fois, coupée en deux, et le corps se réinsère entre les
+      // deux moitiés. Un appel par frappe serait intenable.
+      let enveloppe = null;
+      // ⚠ L'IFRAME EST RECRÉÉE, PAS MODIFIÉE, ET C'EST UN DÉFAUT MESURÉ : poser
+      // `srcdoc` en PROPRIÉTÉ sur une iframe déjà dans la fenêtre n'affiche
+      // RIEN ici — vérifié en forçant un fond rouge vif, le cadre restait gris,
+      // en vrai navigateur comme en capture. La même propriété fonctionne
+      // pourtant sur une iframe posée hors modale, donc ce n'est ni le
+      // `sandbox`, ni le navigateur. On s'aligne donc sur l'aperçu de relance
+      // des sous-traitants, qui tourne depuis des semaines : `srcdoc` est un
+      // ATTRIBUT du gabarit, et le cadre est remplacé en entier.
+      // ⚠ C'est aussi pourquoi la frappe est amortie : recréer une iframe à
+      // chaque touche serait visible.
+      const peindre = () => {
+        const hote = w.querySelector('#avi-cadre');
+        if (!hote) return;
+        const corps = htmlDepuisTexte(w.querySelector('#avi-texte').value, lien);
+        const html = enveloppe
+          ? enveloppe.avant + corps + enveloppe.apres
+          // Sans enveloppe (mode démo, ou serveur injoignable) on montre le
+          // corps seul EN LE DISANT : un aperçu nu qu'on prendrait pour le
+          // rendu final ferait croire que le mail part sans en-tête.
+          : `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.6;color:#1f2937;padding:16px">
+               <p style="margin:0 0 14px;padding:8px 12px;background:#FEF3C7;color:#92400E;border-radius:8px;font-size:13px">
+                 Aperçu du texte seul : l’en-tête au logo et le pied de page s’ajoutent à l’envoi.</p>${corps}</div>`;
+        hote.innerHTML = `<iframe class="avi-apercu" sandbox="" srcdoc="${esc(html)}" title="Aperçu du message"></iframe>`;
+      };
+      enveloppeApercu().then((e) => {
+        enveloppe = e;
+        const de = w.querySelector('#avi-de');
+        if (de) {
+          de.innerHTML = e?.de
+            ? `De <b>${esc(e.de.email)}</b>${e.de.name ? ` · <span class="muted">${esc(e.de.name)}</span>` : ''}`
+            : 'De <span class="muted">RGD Renova</span>';
+        }
+        peindre();
+      });
+      peindre();
+      let minuteur = null;
+      w.querySelector('#avi-texte').oninput = () => {
+        clearTimeout(minuteur);
+        minuteur = setTimeout(peindre, 250);
+      };
 
       const lire = () => w.querySelector('#avi-texte').value;
       // ⚠ LA TRACE S'ÉCRIT POUR LES DEUX CHEMINS : copier le message sert à
@@ -993,7 +1061,7 @@ export function ouvrirFicheRgd(x, onChange, retour = null) {
         const retouche = lire();
         const r = await envoyerDemandeAvis(
           { nom: x.nom, ligne: f },
-          { email: x.email, nom: x.nom, texte: retouche },
+          { email: x.email, nom: x.nom, texte: retouche, objet: w.querySelector('#avi-objet').value },
         );
         if (!r.ok) {
           bEnvoyer.disabled = false;

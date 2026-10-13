@@ -149,7 +149,7 @@ export function messageAvis(fiche, lien = lienAvis()) {
  * ⚠ LA LIGNE QUI EST LE LIEN DEVIENT LE BOUTON, et on ne la laisse pas aussi en
  * texte : l'afficher deux fois ferait croire à deux adresses différentes.
  */
-function htmlDepuisTexte(texte, lien) {
+export function htmlDepuisTexte(texte, lien) {
   const e = (t) => String(t ?? '').replace(/[&<>"]/g,
     (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const bouton = `<p style="margin:22px 0;text-align:center">
@@ -166,6 +166,51 @@ function htmlDepuisTexte(texte, lien) {
     .join('\n');
 }
 
+/* ------------------------------------------------------------- l'aperçu */
+
+/**
+ * L'enveloppe de marque, demandée au serveur UNE fois et gardée en deux moitiés.
+ *
+ * ⚠ ON NE RECOPIE PAS L'ENVELOPPE DANS LE CRM : le bandeau au logo, le pied
+ * orange et les couleurs vivent dans `envoyer-email`. En tenir une seconde
+ * version ici, c'est se garantir qu'elles divergeront — et un aperçu qui ne
+ * montre plus ce qui part vraiment est pire que pas d'aperçu.
+ *
+ * ⚠ UN SEUL APPEL RÉSEAU, PAS UN PAR FRAPPE : on demande l'enveloppe avec un
+ * corps-sentinelle, on la coupe en deux, et le texte se réinsère entre les deux
+ * moitiés localement. L'aperçu suit donc la frappe sans rien demander à
+ * personne.
+ */
+const SENTINELLE = '@@CORPS@@';
+let enveloppeEnCache = null;
+
+export async function enveloppeApercu() {
+  if (enveloppeEnCache) return enveloppeEnCache;
+  if (db.demo) return null;
+  const jeton = await db.accessToken();
+  if (!jeton) return null;
+  try {
+    const r = await fetch(`${CONFIG.SUPABASE_URL}/functions/v1/envoyer-email`, {
+      method: 'POST',
+      headers: {
+        apikey: CONFIG.SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${jeton}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        apercu: true, to: { email: 'apercu@local' },
+        subject: 'Aperçu', html: SENTINELLE,
+      }),
+    });
+    const rep = await r.json().catch(() => ({}));
+    const html = String(rep?.html || '');
+    const i = html.indexOf(SENTINELLE);
+    if (i < 0) return null;
+    enveloppeEnCache = { avant: html.slice(0, i), apres: html.slice(i + SENTINELLE.length), de: rep.de || null };
+    return enveloppeEnCache;
+  } catch { return null; }
+}
+
 /* -------------------------------------------------------------- l'envoi */
 
 /**
@@ -175,7 +220,7 @@ function htmlDepuisTexte(texte, lien) {
  * `envoyer-email`, et la réponse du client arrive chez l'entreprise et non chez
  * l'expéditeur technique.
  */
-export async function envoyerDemandeAvis(fiche, { email, nom, texte }) {
+export async function envoyerDemandeAvis(fiche, { email, nom, texte, objet }) {
   const lien = lienAvis();
   if (!lien) return { ok: false, motif: 'aucun lien d’avis n’est réglé' };
   if (!txt(email)) return { ok: false, motif: 'cette fiche n’a pas d’adresse e-mail' };
@@ -197,7 +242,8 @@ export async function envoyerDemandeAvis(fiche, { email, nom, texte }) {
       },
       body: JSON.stringify({
         to: { email: txt(email), name: txt(nom) || txt(email) },
-        subject: m.objet,
+        // L'objet aussi est modifiable : on envoie celui de l'ecran.
+        subject: String(objet || '').trim() || m.objet,
         html: m.html,
         replyTo: { email: 'contact@rgdrenova.fr', name: 'RGD Renova' },
       }),
