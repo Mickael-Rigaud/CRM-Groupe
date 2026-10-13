@@ -121,18 +121,20 @@ export function messageAvis(fiche, lien = lienAvis()) {
 
   const e = (t) => String(t ?? '').replace(/[&<>"]/g,
     (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  // ⚠ UN LIEN TEXTE, PAS UN BOUTON COLORÉ, ET C'EST UNE MESURE (13/10/2026) :
-  // le premier essai, envoyé à une boîte Gmail, est arrivé dans l'onglet
-  // « Promotions » — où un mail n'est presque jamais lu. L'authentification du
-  // domaine n'y est pour rien (SPF, DKIM brevo1/brevo2 et DMARC sont tous
-  // publiés et corrects, vérifié le jour même) : c'est la FORME qui signe un
-  // envoi marketing, et le bouton d'appel à l'action en est le signal le plus
-  // fort. Élodie a choisi de garder l'en-tête et le pied, et de n'abandonner
-  // que le bouton.
-  // ⚠ ET CE N'EST PAS UNE GARANTIE : Gmail décide, et son classement dépend
-  // aussi du destinataire. Un client qui a déjà reçu son devis et sa
-  // confirmation de rendez-vous de cette adresse n'est pas dans le même cas
-  // qu'une boîte vierge — l'essai était donc le pire des cas.
+  // ⚠ LE BOUTON EST UN CHOIX D'ÉLODIE, FAIT EN CONNAISSANCE DE CAUSE
+  // (13/10/2026) — ne pas le retirer de nouveau sans lui en reparler.
+  // Le premier essai, envoyé à une boîte Gmail, est arrivé dans l'onglet
+  // « Promotions », où un mail n'est presque jamais lu. L'authentification du
+  // domaine n'y est pour rien : SPF inclut spf.brevo.com, DKIM est publié sur
+  // brevo1 et brevo2, DMARC existe — tout a été vérifié le jour même. C'est la
+  // FORME qui signe un envoi marketing, et ce bouton en est le signal le plus
+  // fort. Il a été remplacé par un lien texte pendant une heure, puis remis :
+  // « non je veux un bouton ».
+  // ⚠ ET RIEN N'EST GARANTI DANS UN SENS NI DANS L'AUTRE : Gmail décide, et son
+  // classement dépend autant du destinataire que du message. Un client qui a
+  // déjà reçu son devis et sa confirmation de rendez-vous de cette adresse
+  // n'est pas dans le même cas qu'une boîte vierge — l'essai était le pire des
+  // cas, pas la norme.
   // ⚠ PAS D'EN-TÊTE DE MARQUE ICI : `envoyer-email` enveloppe déjà le contenu.
   // En poser un second donnerait deux logos — le piège déjà rencontré sur la
   // relance des sous-traitants et sur la confirmation de rendez-vous.
@@ -142,8 +144,9 @@ export function messageAvis(fiche, lien = lienAvis()) {
     <p>Si vous avez été content de notre travail, <strong>un avis sur Google</strong>
        nous aiderait beaucoup — cela prend une minute, et c’est ce qui permet à
        d’autres personnes de nous trouver.</p>
-    <p style="margin:18px 0">
-      <a href="${e(lien)}" style="color:#C2410C;font-weight:600">Laisser un avis sur Google</a>
+    <p style="margin:22px 0;text-align:center">
+      <a href="${e(lien)}" style="display:inline-block;padding:13px 26px;border-radius:8px;
+         background:#FD7A2D;color:#fff;text-decoration:none;font-weight:600">Laisser un avis</a>
     </p>
     <p>Merci beaucoup,<br><strong>RGD Renova</strong></p>`;
 
@@ -163,8 +166,9 @@ export function messageAvis(fiche, lien = lienAvis()) {
 export function htmlDepuisTexte(texte, lien) {
   const e = (t) => String(t ?? '').replace(/[&<>"]/g,
     (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  const bouton = `<p style="margin:18px 0">
-      <a href="${e(lien)}" style="color:#C2410C;font-weight:600">Laisser un avis sur Google</a>
+  const bouton = `<p style="margin:22px 0;text-align:center">
+      <a href="${e(lien)}" style="display:inline-block;padding:13px 26px;border-radius:8px;
+         background:#FD7A2D;color:#fff;text-decoration:none;font-weight:600">Laisser un avis</a>
     </p>`;
   return String(texte).split(/\n{2,}/)
     .map((bloc) => {
