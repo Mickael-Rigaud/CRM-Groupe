@@ -681,8 +681,15 @@ export function ouvrirFicheRgd(x, onChange, retour = null) {
              Il disparaît aussi tant qu'aucun lien n'est réglé, plutôt que
              d'ouvrir une fenêtre qui ne sait rien envoyer. -->
         ${etapeCourante === 'chantier_termine' && lienAvis()
-          ? `<button type="button" class="btn ghost sm rgdf-avis" id="rgdf-avis">${
-              avisDejaDemande(historique()) ? 'Avis — déjà demandé' : '★ Demander un avis'}</button>`
+          ? (avisDejaDemande(historique())
+            // ⚠ DEUX ALLURES POUR DEUX ÉTATS, et c'est tout le réglage demandé
+            // le 13/10/2026 par Élodie (« je voudrais qu'il soit plus mis en
+            // évidence ») : PLEIN tant qu'il reste quelque chose à faire,
+            // EFFACÉ une fois l'avis demandé. Un bouton qui garde la même
+            // allure dans les deux cas oblige à lire son libellé pour savoir
+            // s'il reste un geste — alors qu'on parcourt une liste de fiches.
+            ? '<button type="button" class="btn ghost sm rgdf-avis est-fait" id="rgdf-avis">✓ Avis déjà demandé</button>'
+            : '<button type="button" class="btn sm rgdf-avis" id="rgdf-avis">★ Demander un avis</button>')
           : ''}
         <div class="rgdf-tuiles">
           ${surMontant
