@@ -1044,9 +1044,10 @@ export const rgdPartenairesPage = {
         const t = totauxDe(a.id);
         const taux = tauxCommission(t);
         return `<tr ${state.ecriture ? `data-partenaire="${esc(String(a.id))}"` : ''}>
-          <td><b>${esc(a.nom || nomDe(a))}</b></td>
+          ${'' /* La société en tête (13/10/2026, Élodie) : c'est elle qu'on cherche dans la liste. */}
+          <td><b>${esc(a.societe || a.raison_sociale || '—')}</b></td>
+          <td>${esc(a.nom || '—')}</td>
           <td>${esc(a.prenom || '—')}</td>
-          <td class="pa-bleu">${esc(a.societe || a.raison_sociale || '—')}</td>
           <td class="pa-bleu">${esc(a.profession || '—')}</td>
           ${sec.montants ? `
           <td class="num">${t.devis ? esc(eur(t.devis)) : '<span class="muted">—</span>'}
@@ -1077,7 +1078,7 @@ export const rgdPartenairesPage = {
           </div>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Nom</th><th>Prénom</th><th>Société</th><th>Profession</th>
+              <thead><tr><th>Société</th><th>Nom</th><th>Prénom</th><th>Profession</th>
                 <th class="num">Montant devis</th><th class="num">Montant commissions</th>
                 <th class="num">% commission</th></tr></thead>
               <tbody>${lignes.map(a => ligne(a, sec)).join('')
