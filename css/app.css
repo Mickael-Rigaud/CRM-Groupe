@@ -1080,6 +1080,8 @@ button.esp-side-titre { background: none; border: 0; font-family: inherit; color
      les dates se couperaient, `white-space: nowrap` les empechant de plier. */
   .rgdf-hero-haut { flex-wrap: wrap; }
   .rgdf-rdv { margin-left: 0; max-width: none; width: 100%; text-align: left; }
+  /* La rangee passe a la ligne : pousser le cadre a droite n'a plus de sens. */
+  .rgdf-docs { margin-left: 0; }
 }
 /* Le bouton d'entree se tient dans l'en-tete, au-dessus des chiffres : c'est
    la premiere chose qu'on cherche quand on vient corriger quelque chose. */
@@ -6687,6 +6689,11 @@ span.rpv-statut { display: inline-block; margin-bottom: 4px; }
 .rgdf-avis { margin-left: auto; align-self: flex-start; flex: 0 0 auto; white-space: nowrap;
   background: var(--accent); border-color: var(--accent); color: var(--on-accent, #fff); font-weight: 600; }
 .rgdf-avis:hover { background: var(--accent-ink); border-color: var(--accent-ink); }
+/* ⚠ UN SEUL AUTO DANS LA RANGEE, CELUI DU CADRE « A IMPRIMER » : les marges
+   auto se partagent l'espace libre, donc en laisser trois eparpillait les
+   blocs sur toute la largeur au lieu de les grouper a droite. Le selecteur
+   `~` ne vaut que si le cadre est AVANT, ce qui est l'ordre du gabarit. */
+.rgdf-docs ~ .rgdf-rdv, .rgdf-docs ~ .rgdf-avis { margin-left: 0; }
 /* ⚠ UNE FOIS DEMANDE, IL S EFFACE : il ne reste rien a faire, et un bouton
    orange qui ne sert plus attire le clic pour rien. */
 .rgdf-avis.est-fait { background: transparent; color: var(--muted); border-color: var(--line-strong); font-weight: 500; }
@@ -6730,9 +6737,47 @@ span.rpv-statut { display: inline-block; margin-bottom: 4px; }
 /* Les deux documents a imprimer, dans la colonne des gestes de la fiche
    projet RGD (13/10/2026). L'intitule les rassemble : deux boutons seuls
    sous « Attribuer » se liraient comme deux gestes sans rapport. */
-.rgdf-docs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 2px; }
-.rgdf-docs > span { font-size: 10.5px; font-weight: 700; letter-spacing: .06em;
-  text-transform: uppercase; color: var(--muted); margin-right: 2px; }
+/* Les deux documents a imprimer. ⚠ CE BLOC NE DOIT PAS RESSEMBLER AUX GESTES
+   DU DESSUS (signale le 13/10/2026 : « ca se fond trop avec les boutons du
+   dessus ») : « Modifier » et « Changer de responsable » sont des .btn.ghost.sm
+   et les deux documents l'etaient aussi — meme fond blanc, meme bordure grise,
+   meme taille, a six pixels de distance. On cherche l'un des deux en lisant
+   quatre libelles.
+   ⚠ C'EST UN ENCADRE, PAS UNE COULEUR DE BOUTON : teinter les boutons les
+   aurait rendus plus voyants que « Demander un avis », qui est la seule action
+   commerciale de la colonne et doit rester la plus forte. Un cadre dit « ces
+   deux-la vont ensemble et ne sont pas des gestes de dossier » sans monter le
+   ton.
+   ⚠ ET LE FILET ORANGE A GAUCHE EST CELUI DES DOCUMENTS EUX-MEMES : les titres
+   de section de la fiche projet imprimee le portent. L'ecran et la feuille
+   disent la meme chose de la meme facon.
+   La teinte vient de --accent, donc de la structure ouverte : ecrire l'orange
+   de RGD en dur le ferait jurer le jour ou cette fiche servirait ailleurs. */
+/* ⚠ IL SE DIMENSIONNE A SON CONTENU : sans cela il s'etirait sur toute la
+   largeur de l'en-tete et pesait plus lourd que « Demander un avis », la seule
+   action commerciale de la fiche. ⚠ ET C'EST `width: fit-content`, PAS
+   `align-self` : mesure, son parent `.rgdf-hero` est en display:block — un
+   align-self n'y a aucun effet, et le bloc faisait 986 px pour un parent de
+   1030. Le controle qui le montre lit le display CALCULE du parent. */
+.rgdf-docs { width: fit-content; display: flex; flex-direction: column; gap: 7px;
+  /* ⚠ `margin-left: auto` LE POUSSE CONTRE SES VOISINS DE DROITE — mais il ne
+     suffit pas : `.rgdf-rdv` et `.rgdf-avis` en portent un aussi, et PLUSIEURS
+     marges auto se PARTAGENT l'espace libre a parts egales au lieu que la
+     premiere le prenne. Mesure : le cadre et le bouton d'avis se retrouvaient
+     aux deux bouts de la rangee. On neutralise donc celui des suivants, juste
+     en dessous. */
+  margin: 0 0 0 auto; padding: 8px 10px 9px; border-radius: 10px;
+  background: color-mix(in srgb, var(--accent) 6%, #fff);
+  border: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
+  border-left: 3px solid var(--accent); }
+.rgdf-docs > span { display: flex; align-items: center; gap: 6px;
+  font-size: 10.5px; font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--accent-ink); }
+.rgdf-docs > span svg { flex: none; }
+.rgdf-docs-b { display: flex; flex-wrap: wrap; gap: 6px; }
+/* ⚠ FOND BLANC FRANC SUR LES BOUTONS : pose sur le fond teinte du cadre, un
+   .btn.ghost (transparent) se lirait comme une etiquette, pas comme un bouton. */
+.rgdf-docs .btn { background: #fff; }
 /* Sans adresse e-mail, l envoi est impossible : on le DIT plutot que de changer
    le bouton en silence — un ecran qui change de geste sans donner sa raison est
    un ecran qu on croit casse. */

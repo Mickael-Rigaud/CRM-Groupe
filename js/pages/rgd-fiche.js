@@ -223,6 +223,14 @@ function blocRendezVous(rdvs) {
  * Demandé le 01/10/2026 : « rajoute un bouton retour à la tâche pour quitter
  * la fiche ».
  */
+// ⚠ UN SVG, PAS UN CARACTERE D'IMPRIMANTE : les emojis se rendent en couleur
+// et a une taille differente d'un systeme a l'autre, et celui-ci doit tenir la
+// ligne d'un intitule de 10,5 px. `currentColor` le fait suivre la teinte du
+// titre sans qu'on ait a la repeter.
+const ICONE_IMPRIMANTE = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+  stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+  aria-hidden="true"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>`;
+
 export function ouvrirFicheRgd(x, onChange, retour = null) {
   let etapeCourante = x.etape;
   const f = x.ligne;
@@ -664,6 +672,23 @@ export function ouvrirFicheRgd(x, onChange, retour = null) {
                 : '<span class="rgdf-tag est-perdu">À attribuer</span>'}
             </div>
           </div>
+          <!-- Les deux documents qu'on imprime et qu'on fait signer (13/10/2026,
+               demande par Elodie). ⚠ DANS LA RANGEE DU HAUT, A GAUCHE DU BLOC
+               DES RENDEZ-VOUS ET DU BOUTON D'AVIS (demande le jour meme) : en
+               bas de la colonne des gestes, ils se lisaient comme un geste de
+               dossier de plus. ⚠ DEUX BOUTONS ET PAS UNE FENETRE DE CHOIX :
+               openModal ferme la fenetre courante pour ouvrir la suivante,
+               donc une modale posee ici ferait disparaitre la fiche — le piege
+               est paye onze fois dans ce depot.
+               (Pas d'accent grave dans un commentaire HTML : il FERME le
+               gabarit, sans un mot.) -->
+          <div class="rgdf-docs">
+            <span>${ICONE_IMPRIMANTE}À imprimer</span>
+            <div class="rgdf-docs-b">
+              <button type="button" class="btn ghost sm" id="rgdf-doc-projet">Fiche projet</button>
+              <button type="button" class="btn ghost sm" id="rgdf-doc-reception">PV de réception</button>
+            </div>
+          </div>
           ${blocRendezVous(rdvs)}
           <!-- Demander un avis : EN HAUT A DROITE (13/10/2026, demande par
                Elodie : « je voyais plutot le bouton en haut a droite en orange
@@ -693,20 +718,6 @@ export function ouvrirFicheRgd(x, onChange, retour = null) {
         ${peutAttribuer
           ? `<button type="button" class="btn ghost sm rgdf-attribuer" id="rgdf-attribuer">${responsable ? 'Changer de responsable' : 'Attribuer à quelqu\'un'}</button>`
           : ''}
-        <!-- Les deux documents qu'on imprime et qu'on fait signer (13/10/2026,
-             demande par Elodie). DEUX BOUTONS ET PAS UNE FENETRE DE CHOIX :
-             openModal ferme la fenetre courante pour ouvrir la suivante, donc
-             une modale posee ici ferait disparaitre la fiche — le piege est
-             paye onze fois dans ce depot.
-             Ils sont la MEME COLONNE que « Modifier » : ce sont des gestes de
-             dossier, pas une action commerciale comme « Demander un avis ».
-             (Pas d'accent grave dans un commentaire HTML : il FERME le
-             gabarit, sans un mot.) -->
-        <div class="rgdf-docs">
-          <span>À imprimer</span>
-          <button type="button" class="btn ghost sm" id="rgdf-doc-projet">Fiche projet</button>
-          <button type="button" class="btn ghost sm" id="rgdf-doc-reception">PV de réception</button>
-        </div>
         <div class="rgdf-tuiles">
           ${surMontant
             ? tuile(montantEtape > 0 ? eur(montantEtape) : '—', 'Montant HT')
