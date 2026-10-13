@@ -252,8 +252,17 @@ ${entete('FICHE PROJET', jour(new Date()))}
   ${champ('Téléphone', d.telephone, 'etroit')}
   ${champ('E-mail', d.email)}
 </div>
+<!-- ⚠ MEME INTITULE QUE SUR LE PV, au mot pres : les deux feuilles partent au
+     meme dossier, et deux noms pour la meme reference feraient chercher un
+     second document. Vide tant qu'aucun devis n'existe — c'est une fiche de
+     VISITE, le numero s'ecrit alors a la main, comme la date de reception du
+     PV. ⚠ Et la largeur est celle dite moyenne (58 mm) : dans un champ etroit,
+     l'intitule s'enroule et sa valeur tombe une ligne sous celle du voisin,
+     defaut deja paye sur le PV. (Aucun accent grave ici : il FERME le
+     gabarit.) -->
 <div class="champs" style="margin-top:7px">
   ${champ('Adresse du chantier', d.adresseChantier)}
+  ${champ('Référence du devis / marché', d.devisRef, 'moyen')}
 </div>
 
 <h2>Projet · attentes client · observations techniques</h2>
