@@ -6676,23 +6676,24 @@ span.rpv-statut { display: inline-block; margin-bottom: 4px; }
   background: #FEF3C7; color: #92400E; border: 1px solid #FDE68A; }
 .avi-qui { margin: 0 0 12px; font-size: 13.5px; color: var(--text); }
 .avi textarea { font: inherit; font-size: 13.5px; line-height: 1.6; resize: vertical; }
-/* Le bouton de la fiche. Il est MIS EN AVANT (13/10/2026, demande d Elodie) :
-   « Modifier » et « Attribuer » sont des gestes internes qu on fait en passant,
-   celui-ci est une action commerciale qu on veut encourager — un avis de plus,
-   c est des clients de plus. Il est donc plein, aux couleurs de la structure,
-   et detache des deux autres par un filet.
-   ⚠ IL NE PART PAS TOUT SEUL POUR AUTANT : il ouvre une fenetre ou l on relit
-   le message avant d envoyer. Le mettre en avant n est donc pas un risque,
-   contrairement a « Perdue », qu on garde discret pour cette raison-la. */
-.rgdf-avis { width: 100%; margin-top: 10px; padding-top: 9px; padding-bottom: 9px;
-  background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+/* Le bouton « Demander un avis », EN HAUT A DROITE de l en-tete de fiche
+   (13/10/2026, demande d Elodie : « je voyais plutot le bouton en haut a droite
+   en orange mais la il prend toute la largeur pour rien »).
+   ⚠ IL NE S ETIRE PAS : c est un bouton, pas une banniere. `margin-left: auto`
+   le colle a droite de la rangee ; `align-self` le remonte au niveau du nom
+   plutot que de le centrer sur la hauteur de l avatar.
+   ⚠ ET IL COHABITE AVEC LE BLOC DES RENDEZ-VOUS, qui porte deja
+   `margin-left: auto` : quand les deux sont la, ils se partagent la droite. */
+.rgdf-avis { margin-left: auto; align-self: flex-start; flex: 0 0 auto; white-space: nowrap;
+  background: var(--accent); border-color: var(--accent); color: var(--on-accent, #fff); font-weight: 600; }
 .rgdf-avis:hover { background: var(--accent-ink); border-color: var(--accent-ink); }
 /* ⚠ UNE FOIS DEMANDE, IL S EFFACE : il ne reste rien a faire, et un bouton
-   plein qui ne sert plus attire le clic pour rien. Le filet reste, pour que la
-   ligne ne saute pas d une fiche a l autre. */
-.rgdf-avis.est-fait { width: 100%; margin-top: 10px; background: transparent; color: var(--muted);
-  border-color: var(--line); font-weight: 500; cursor: default; }
-.rgdf-avis.est-fait:hover { background: var(--card-2); border-color: var(--line); }
+   orange qui ne sert plus attire le clic pour rien. */
+.rgdf-avis.est-fait { background: transparent; color: var(--muted); border-color: var(--line-strong); font-weight: 500; }
+.rgdf-avis.est-fait:hover { background: var(--card-2); border-color: var(--line-strong); }
+/* Quand le bloc des rendez-vous est la, le bouton passe sous lui plutot que de
+   le comprimer : la rangee s enroule. */
+.rgdf-hero-haut { flex-wrap: wrap; }
 /* Le champ du lien d avis occupe la rangee entiere : la grille des reglages a
    trois colonnes pour les montants, et une adresse ne se lit pas dans un tiers
    de largeur. Sans cette regle il tient toute la place par accident, parce

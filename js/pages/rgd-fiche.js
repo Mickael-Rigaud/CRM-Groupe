@@ -662,6 +662,23 @@ export function ouvrirFicheRgd(x, onChange, retour = null) {
             </div>
           </div>
           ${blocRendezVous(rdvs)}
+          <!-- Demander un avis : EN HAUT A DROITE (13/10/2026, demande par
+               Elodie : « je voyais plutot le bouton en haut a droite en orange
+               mais la il prend toute la largeur pour rien »). Il etait sous
+               « Attribuer », sur toute la largeur — trop de place pour un
+               bouton, et noye parmi des gestes internes.
+               UNIQUEMENT quand le chantier est termine : on ne demande pas son
+               avis a quelqu'un dont le chantier n'est pas fini, ce serait
+               genant pour lui et mauvais pour nous. Il disparait aussi tant
+               qu'aucun lien n'est regle, plutot que d'ouvrir une fenetre qui
+               ne sait rien envoyer.
+               (Pas d'accent grave ici : dans un commentaire HTML pose au
+               milieu d'un gabarit, il FERME le gabarit, sans un mot.) -->
+          ${etapeCourante === 'chantier_termine' && lienAvis()
+            ? (avisDejaDemande(historique())
+              ? '<button type="button" class="btn ghost sm rgdf-avis est-fait" id="rgdf-avis" title="Un avis a deja ete demande">✓ Avis demandé</button>'
+              : '<button type="button" class="btn sm rgdf-avis" id="rgdf-avis">★ Demander un avis</button>')
+            : ''}
         </div>
         ${retour ? `<button type="button" class="btn ghost sm rgdf-retour" id="rgdf-retour">← ${esc(retour.label || 'Retour')}</button>` : ''}
         ${refusDeProjet(x)
@@ -672,24 +689,6 @@ export function ouvrirFicheRgd(x, onChange, retour = null) {
              c'est le CRM qui décide qui la porte, pas le relevé. -->
         ${peutAttribuer
           ? `<button type="button" class="btn ghost sm rgdf-attribuer" id="rgdf-attribuer">${responsable ? 'Changer de responsable' : 'Attribuer à quelqu\'un'}</button>`
-          : ''}
-        <!-- Demander un avis : UNIQUEMENT quand le chantier est terminé
-             (13/10/2026, demandé par Élodie). On ne demande pas son avis à
-             quelqu'un dont le chantier n'est pas fini : ce serait gênant pour
-             lui, et mauvais pour nous. C'est la seule étape où le geste a un
-             sens, donc la seule où le bouton existe.
-             Il disparaît aussi tant qu'aucun lien n'est réglé, plutôt que
-             d'ouvrir une fenêtre qui ne sait rien envoyer. -->
-        ${etapeCourante === 'chantier_termine' && lienAvis()
-          ? (avisDejaDemande(historique())
-            // ⚠ DEUX ALLURES POUR DEUX ÉTATS, et c'est tout le réglage demandé
-            // le 13/10/2026 par Élodie (« je voudrais qu'il soit plus mis en
-            // évidence ») : PLEIN tant qu'il reste quelque chose à faire,
-            // EFFACÉ une fois l'avis demandé. Un bouton qui garde la même
-            // allure dans les deux cas oblige à lire son libellé pour savoir
-            // s'il reste un geste — alors qu'on parcourt une liste de fiches.
-            ? '<button type="button" class="btn ghost sm rgdf-avis est-fait" id="rgdf-avis">✓ Avis déjà demandé</button>'
-            : '<button type="button" class="btn sm rgdf-avis" id="rgdf-avis">★ Demander un avis</button>')
           : ''}
         <div class="rgdf-tuiles">
           ${surMontant
