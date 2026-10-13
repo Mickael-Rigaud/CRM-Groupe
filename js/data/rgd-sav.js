@@ -125,6 +125,30 @@ export async function majSav(sav, champs, commentaire = '') {
   } catch (e) { return { ok: false, motif: String(e.message || e).slice(0, 120) }; }
 }
 
+/**
+ * Sortir une fiche du SAV vers N'IMPORTE QUEL statut de Clients & prospects
+ * (13/10/2026, Élodie : « retirer un projet du SAV pour le remettre dans
+ * n'importe quel statut »).
+ *
+ * ⚠ SES DOSSIERS ENCORE OUVERTS SONT CLOS, avec une ligne au suivi qui dit
+ * pourquoi. Sinon la règle de `majSav` — un dossier ouvert range la fiche en
+ * « SAV » — la ramènerait ici à la prochaine modification d'un dossier. Ils ne
+ * sont PAS supprimés : l'historique reste, et le projet compte toujours comme
+ * ayant eu un SAV. Un dossier ouvert par erreur se supprime depuis sa fenêtre.
+ */
+export async function retirerDuSav(fiche, statut, libelle = statut) {
+  try {
+    for (const s of dossiersDe(fiche).filter(s => s.statut !== 'resolu')) {
+      await db.update('rgd_sav', s.id, {
+        statut: 'resolu', resolu_le: jourLocal(),
+        suivi: [...(s.suivi || []), entree(`Fiche sortie du SAV, remise en « ${libelle} » — dossier clos`)],
+      });
+    }
+    const r = await ecrireStatut({ uuid: fiche.id, cible: 'client', statut });
+    return r.ok ? { ok: true } : r;
+  } catch (e) { return { ok: false, motif: String(e.message || e).slice(0, 120) }; }
+}
+
 /** Supprimer un dossier ouvert par erreur. Ses pièces partent avec lui. */
 export async function supprimerSav(sav) {
   try {

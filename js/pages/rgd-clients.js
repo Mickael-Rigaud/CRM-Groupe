@@ -147,7 +147,7 @@ function bornesPeriode(state) {
 // Les tons suivent ceux de l'original : gris au départ, ambre quand on a
 // parlé, bleu quand un rendez-vous est posé, orange sur le devis, vert quand
 // le chantier tourne, rouge quand c'est perdu.
-const STATUTS_SUIVI = [
+export const STATUTS_SUIVI = [
   { key: 'nouveau_prospect',  label: 'Nouveau prospect',    ton: 'muted' },
   { key: 'relance_1',         label: 'Relance 1',           ton: 'muted' },
   { key: 'relance_2',         label: 'Relance 2',           ton: 'muted' },

@@ -14,12 +14,12 @@
 // vit dans `js/data/rgd-sav.js`.
 import { db } from '../data/db.js';
 import { scope } from '../data/scope.js';
-import { esc, terms, hit, searchInput, bindSearch, restoreFocus, openModal, closeModal } from '../ui.js';
+import { esc, terms, hit, searchInput, bindSearch, restoreFocus, openModal, closeModal, toast } from '../ui.js';
 import { poserEspace } from './espace.js';
 import { cadre, guard } from './rgd-espace.js';
-import { dossiersDe } from '../data/rgd-sav.js';
+import { dossiersDe, retirerDuSav } from '../data/rgd-sav.js';
 import { fenetreSav, celluleSav } from './rgd-sav.js';
-import { ouvrirFicheDuClient } from './rgd-clients.js';
+import { ouvrirFicheDuClient, STATUTS_SUIVI } from './rgd-clients.js';
 import { etapeDeFiche, joursDeVisite } from '../data/rgd-etapes.js';
 
 // Le nom et le téléphone d'une fiche : une personne OU une entreprise.
@@ -122,7 +122,11 @@ export const rgdSavPage = {
               <td>${c.client}</td><td>${c.dossier}</td><td class="small">${c.chantier}</td><td>${c.garantie}</td>
               <td class="small">${c.intervention}</td><td>${c.statut}</td><td class="sav-dernier">${c.suivi}</td>
               <td class="num small">${c.cout}</td>
-              <td>${l.x ? `<button type="button" class="btn ghost sm" data-fiche="${i}" title="Ouvrir la fiche projet">Fiche</button>` : ''}</td>
+              <td class="sav-actions" style="white-space:nowrap">${l.x ? `<button type="button" class="btn ghost sm" data-fiche="${i}" title="Ouvrir la fiche projet">Fiche</button>` : ''}
+                ${l.x && scope.canRgd && l.x.ligne.statut_suivi === 'sav' ? `<select class="sav-retirer" style="margin-left:4px;max-width:150px" data-retirer="${i}" aria-label="Retirer du SAV" title="Retirer le projet du SAV et le remettre dans un statut de Clients &amp; prospects">
+                  <option value="">Retirer du SAV…</option>
+                  ${STATUTS_SUIVI.filter(st => st.key !== 'sav').map(st => `<option value="${esc(st.key)}">${esc(st.label)}</option>`).join('')}
+                </select>` : ''}</td>
             </tr>`; }).join('') || `<tr><td colspan="9"><div class="empty">${state.filtre === 'resolus'
               ? 'Aucun dossier SAV résolu.' : 'Aucun dossier SAV en cours.'}</div></td></tr>`}</tbody>
           </table>
@@ -145,6 +149,23 @@ export const rgdSavPage = {
       root.querySelectorAll('[data-fiche]').forEach(b => b.onclick = () => {
         const l = lignes[Number(b.dataset.fiche)];
         if (l?.x) ouvrirFicheDuClient(l.x.ligne, draw);
+      });
+      // Retirer du SAV : la fiche part dans le statut choisi, ses dossiers
+      // ouverts sont clos (`retirerDuSav`).
+      root.querySelectorAll('[data-retirer]').forEach(sel => sel.onchange = async () => {
+        const l = lignes[Number(sel.dataset.retirer)];
+        const st = STATUTS_SUIVI.find(x => x.key === sel.value);
+        if (!l?.x || !st) return;
+        const n = dossiersDe(l.x.ligne).filter(s => s.statut !== 'resolu').length;
+        if (!window.confirm(`Retirer ${l.x.nom} du SAV et le remettre en « ${st.label} » ?`
+          + (n ? `\n\n${n > 1 ? `Ses ${n} dossiers ouverts seront clos` : 'Son dossier ouvert sera clos'} (l’historique est gardé).` : ''))) {
+          sel.value = ''; return;
+        }
+        sel.disabled = true;
+        const r = await retirerDuSav(l.x.ligne, st.key, st.label);
+        if (!r.ok) { sel.disabled = false; sel.value = ''; return toast(`Non retiré — ${r.motif}`, 'err'); }
+        toast(`${l.x.nom} est sorti du SAV — fiche en « ${st.label} »`);
+        draw();
       });
       root.querySelector('#sav-nouveau')?.addEventListener('click', () => choisirClient(fiches, draw));
     };
