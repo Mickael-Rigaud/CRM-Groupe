@@ -961,11 +961,19 @@ export function ouvrirFicheRgd(x, onChange, retour = null) {
               <div id="avi-cadre" class="avi-cadre"></div>
             </div>
           </div>
+          <!-- UN SEUL BOUTON D'ENVOI (13/10/2026, demande d'Elodie : « a la place
+               du bouton copier le message je voudrais envoyer le message et que
+               ca s'envoi automatiquement »). « Copier » et « Envoyer par e-mail »
+               faisaient deux chemins pour un seul geste, et obligeaient a coller
+               le message ailleurs alors que le CRM sait l'envoyer.
+               La copie ne RESTE que sans adresse e-mail : c'est alors le seul
+               recours, pour un SMS ou WhatsApp. -->
           <div class="form-actions">
             <span class="grow"></span>
             <button type="button" class="btn ghost" data-close>Annuler</button>
-            <button type="button" class="btn ghost" id="avi-copier">Copier le message</button>
-            ${x.email ? '<button type="button" class="btn" id="avi-envoyer">Envoyer par e-mail</button>' : ''}
+            ${x.email
+              ? '<button type="button" class="btn" id="avi-envoyer">Envoyer le message</button>'
+              : '<button type="button" class="btn" id="avi-copier">Copier le message</button>'}
           </div>
         </div>`, { wide: true, onClose: () => dessine() });
 
@@ -1075,7 +1083,8 @@ export function ouvrirFicheRgd(x, onChange, retour = null) {
         return false;
       };
 
-      w.querySelector('#avi-copier').onclick = async () => {
+      const bCopier = w.querySelector('#avi-copier');
+      if (bCopier) bCopier.onclick = async () => {
         const champ = w.querySelector('#avi-texte');
         if (!await copier(lire(), champ)) {
           // ⚠ ON NE MARQUE PAS : rien n'a été copié, donc rien ne partira. Poser
@@ -1102,7 +1111,9 @@ export function ouvrirFicheRgd(x, onChange, retour = null) {
         );
         if (!r.ok) {
           bEnvoyer.disabled = false;
-          bEnvoyer.textContent = 'Envoyer par e-mail';
+          // Le libellé du repos, pas un autre : un bouton qui change de nom
+          // après un échec fait douter de ce qu'il va faire au second essai.
+          bEnvoyer.textContent = 'Envoyer le message';
           toast(`Envoi impossible : ${r.motif}`, 'error');
           return;
         }
