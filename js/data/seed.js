@@ -600,31 +600,6 @@ export const SEED = {
         precedent: { clics: Math.round(4 * k), impressions: Math.round(95 * k), ctr: 0.042, position: 10.8 } },
     ];
   }),
-  // Les performances de la fiche Google, saisies à la main (13/10/2026).
-  // Chiffres INVENTÉS — le dépôt est public.
-  //
-  // ⚠ LE DERNIER MOIS COMPLET N'EST PAS SEMÉ, EXPRÈS : c'est l'état réel le
-  // jour de la livraison, et c'est le seul moyen d'éprouver le bandeau qui
-  // rappelle qu'un mois manque et que Google ne garde que six mois.
-  // ⚠ ET LES CAS LIMITES SONT SEMÉS, PAS SEULEMENT LES MOIS PROPRES : un mois
-  // sans `messages` (messagerie non activée sur la fiche) et un mois dont une
-  // seule source de vues est connue — sans eux, ni la barre hachurée ni le
-  // taux qui refuse de se calculer ne s'essayaient ailleurs qu'en production.
-  fiche_google_mois: (() => {
-    const d = new Date(); d.setDate(1);
-    // Le mois complet le plus récent est le précédent : on part de celui d'avant.
-    const mois = (i) => { const x = new Date(d.getFullYear(), d.getMonth() - i, 1); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}`; };
-    return [
-      { id: 'fg1', activity: 'rgd', mois: mois(6), vues_recherche: 412, vues_maps: 268, appels: 14, itineraires: 9, clics_site: 31, messages: null, note: null },
-      { id: 'fg2', activity: 'rgd', mois: mois(5), vues_recherche: 468, vues_maps: 301, appels: 19, itineraires: 12, clics_site: 38, messages: null, note: null },
-      // Une seule source de vues : la barre se hachure et le taux dit « — ».
-      { id: 'fg3', activity: 'rgd', mois: mois(4), vues_recherche: 503, vues_maps: null, appels: 21, itineraires: 11, clics_site: 44, messages: null,
-        note: 'Relevé incomplet : les vues Maps n’étaient pas affichées ce jour-là.' },
-      { id: 'fg4', activity: 'rgd', mois: mois(3), vues_recherche: 547, vues_maps: 356, appels: 24, itineraires: 15, clics_site: 52, messages: null, note: null },
-      { id: 'fg5', activity: 'rgd', mois: mois(2), vues_recherche: 601, vues_maps: 389, appels: 28, itineraires: 18, clics_site: 61, messages: null,
-        note: 'Beaucoup de « rénovation salle de bain » et de « ravalement façade » dans les recherches.' },
-    ];
-  })(),
   // Le compteur du site en démo : 40 jours, trois pages, quatre provenances.
   // Chiffres INVENTÉS, tirés d'une formule fixe.
   site_stats_jour: (() => {

@@ -66,10 +66,6 @@ export const TABLES = ['profiles', 'organisations', 'contacts', 'deals', 'activi
   'site_stats_jour',
   // Google Analytics et Search Console, en totaux de période (direction seule).
   'site_google_periode',
-  // ⚠ LES PERFORMANCES DE LA FICHE GOOGLE SONT SAISIES À LA MAIN, une ligne par
-  // mois : ce n'est pas un relevé. Le raccordement a été écarté par Élodie le
-  // 13/10/2026 — voir l'en-tête de `js/data/fiche-google.js`. Direction seule.
-  'fiche_google_mois',
   // ⚠ `rgd_apports` non plus n'est pas un reflet : les apports d'affaires d'un
   // partenaire se saisissent dans le CRM, et depuis le 25/09/2026 `rgd_apporteurs`
   // a rejoint ce cas — le relevé ignore désormais sa charge.

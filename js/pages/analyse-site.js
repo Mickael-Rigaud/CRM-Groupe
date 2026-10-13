@@ -21,11 +21,6 @@ const INFOS = {
   btp: { site: 'btpexpertise.fr', capture: 'assets/captures/btpexpertise.jpg' },
   courtage: { site: 'lareferencecourtage.fr', capture: 'assets/captures/lareferencecourtage.jpg' },
 };
-// ⚠ EXPORTÉ POUR L'ONGLET « FICHE GOOGLE », PAS RECOPIÉ (13/10/2026) : il y
-// cherche le compteur du MÊME site pour mettre les clics venus de la fiche en
-// face des visites du mois. Une seconde table de correspondance aurait fini par
-// désigner un autre domaine le jour d'un changement de nom.
-export { INFOS as INFOS_SITE };
 // Une couleur par provenance : la même d'un écran à l'autre.
 const COULEURS = {
   Google: '#4285F4', 'Recherche Google et moteurs': '#4285F4', 'Autres moteurs': '#7BAAF7',

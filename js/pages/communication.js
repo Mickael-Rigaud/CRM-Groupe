@@ -26,7 +26,6 @@ import { scope } from '../data/scope.js';
 import { db } from '../data/db.js';
 import { logoReseau } from '../data/logos-reseaux.js';
 import { vueSite } from './analyse-site.js';
-import { vueFiche, lierFiche } from './analyse-fiche.js';
 import { raccordementTiktok, demarrerRaccordementTiktok, retirerRaccordementTiktok, messageRetourTiktok } from '../data/tiktok.js';
 import { cadreCourtage } from './courtage.js';
 import { esc, toast, openModal, closeModal, armerCroix } from '../ui.js';
@@ -564,16 +563,10 @@ export function pageAnalyse(cle) {
         return {};
       }
       const coquille = poserEspace(root);
-      // ⚠ TROIS ONGLETS, UN SEUL ÉCRAN (12/10/2026, Élodie : « sépare les réseaux
+      // ⚠ DEUX ONGLETS, UN SEUL ÉCRAN (12/10/2026, Élodie : « sépare les réseaux
       // sociaux et le site internet dans deux écrans différents mais dans la
-      // même page analyse » ; la fiche Google s'y est ajoutée le 13/10) : la
-      // période se partage entre les deux premiers, la mise en page non.
-      //
-      // ⚠ `mois` N'APPARTIENT QU'À L'ONGLET « FICHE GOOGLE », et il vit ICI et
-      // non dans la vue : celle-ci est reconstruite à chaque enregistrement, et
-      // un mois gardé là-bas repartirait au plus récent sous les yeux de qui
-      // venait d'en ouvrir un autre.
-      const state = { periode: 30, tri: 'portee', reseau: '', vue: 'reseaux', mois: null };
+      // même page analyse ») : la période se partage, la mise en page non.
+      const state = { periode: 30, tri: 'portee', reseau: '', vue: 'reseaux' };
       // ⚠ LU UNE SEULE FOIS, HORS DE `draw()`, ET LA QUESTION EST RETIRÉE DE
       // L'ADRESSE EN MÊME TEMPS : `draw()` est rappelé à chaque clic de période,
       // donc une lecture là-dedans effacerait le message avant qu'il s'affiche
@@ -582,16 +575,17 @@ export function pageAnalyse(cle) {
       try {
         const memo = Number(localStorage.getItem('crm_ana_periode'));
         if (PERIODES.some(([n]) => n === memo)) state.periode = memo;
-        const vue = localStorage.getItem('crm_ana_vue');
-        if (vue === 'site' || vue === 'fiche') state.vue = vue;
+        // ⚠ UNE SEULE VALEUR MÉMORISÉE EST ENCORE VALABLE : l'onglet « Fiche
+        // Google », livré puis retiré le 13/10/2026, a pu laisser `fiche` dans
+        // le navigateur de qui l'a ouvert. Sans ce filtre, `state.vue` vaudrait
+        // une vue qui n'existe plus et l'écran s'afficherait vide.
+        if (localStorage.getItem('crm_ana_vue') === 'site') state.vue = 'site';
       } catch { /* sans stockage */ }
 
-      // ⚠ UNE STRUCTURE SANS RÉSEAU N'A PAS CET ONGLET (La Référence Courtage,
-      // 12/10/2026) : un onglet « Réseaux sociaux » vide se lirait comme une
-      // panne. Elle garde les deux autres — la barre ne disparaît donc plus,
-      // elle n'avait disparu que parce qu'il ne restait qu'un onglet.
+      // ⚠ UNE STRUCTURE SANS RÉSEAU N'A PAS D'ONGLETS (La Référence Courtage,
+      // 12/10/2026) : un onglet « Réseaux sociaux » vide se lirait comme une panne.
       const sansReseau = !(RESEAUX_DE[cle] || []).length;
-      if (sansReseau && state.vue === 'reseaux') state.vue = 'site';
+      if (sansReseau) state.vue = 'site';
 
       const draw = () => {
         if (!scope.isDirection) {
@@ -779,24 +773,15 @@ export function pageAnalyse(cle) {
 
         const onglet = (k, libelle, icone) => `<button type="button" data-vue="${k}" class="${state.vue === k ? 'actif' : ''}"
           role="tab" aria-selected="${state.vue === k}">${icone}<span>${esc(libelle)}</span></button>`;
-        const onglets = [
-          ...(sansReseau ? [] : [onglet('reseaux', 'Réseaux sociaux', '<svg viewBox="0 0 24 24" width="18" height="18"><circle cx="6" cy="12" r="2.6" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="18" cy="6" r="2.6" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="18" cy="18" r="2.6" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8.3 10.8l7.4-3.6M8.3 13.2l7.4 3.6" stroke="currentColor" stroke-width="1.8"/></svg>')]),
-          onglet('site', 'Site internet', '<svg viewBox="0 0 24 24" width="18" height="18"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3 12h18M12 3c2.6 2.6 2.6 15.4 0 18M12 3c-2.6 2.6-2.6 15.4 0 18" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>'),
-          onglet('fiche', 'Fiche Google', '<svg viewBox="0 0 24 24" width="18" height="18"><path d="M12 22s7-6.3 7-12a7 7 0 10-14 0c0 5.7 7 12 7 12z" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="10" r="2.6" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>'),
-        ];
-        // ⚠ LA PÉRIODE N'EST PAS RENDUE SUR « FICHE GOOGLE » : les deux autres
-        // onglets se lisent sur 7, 14 ou 30 jours glissants, celui-ci sur des
-        // mois calendaires. Un bouton « 7 jours » qui ne filtrerait rien est une
-        // question posée pour rien. Elle n'est pas CACHÉE mais absente : sur un
-        // élément qui porte un `display`, `[hidden]` ne ferait rien — le piège
-        // s'est déjà payé six fois dans ce dépôt.
         const corps = `
           <section class="ana-barre">
-            <div class="ana-onglets" role="tablist"${onglets.length < 2 ? ' hidden' : ''}>${onglets.join('')}</div>
-            ${state.vue === 'fiche' ? '' : `<div class="com-rs-filtre">${PERIODES.map(([n, l]) => `<button type="button" data-periode="${n}" class="${state.periode === n ? 'actif' : ''}">${esc(l)}</button>`).join('')}</div>`}
+            <div class="ana-onglets" role="tablist"${sansReseau ? ' hidden' : ''}>
+              ${onglet('reseaux', 'Réseaux sociaux', '<svg viewBox="0 0 24 24" width="18" height="18"><circle cx="6" cy="12" r="2.6" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="18" cy="6" r="2.6" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="18" cy="18" r="2.6" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8.3 10.8l7.4-3.6M8.3 13.2l7.4 3.6" stroke="currentColor" stroke-width="1.8"/></svg>')}
+              ${onglet('site', 'Site internet', '<svg viewBox="0 0 24 24" width="18" height="18"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3 12h18M12 3c2.6 2.6 2.6 15.4 0 18M12 3c-2.6 2.6-2.6 15.4 0 18" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>')}
+            </div>
+            <div class="com-rs-filtre">${PERIODES.map(([n, l]) => `<button type="button" data-periode="${n}" class="${state.periode === n ? 'actif' : ''}">${esc(l)}</button>`).join('')}</div>
           </section>
-          ${state.vue === 'fiche' ? vueFiche(cle, state.mois)
-            : state.vue === 'site' ? vueSite(cle, state.periode) : `
+          ${state.vue === 'site' ? vueSite(cle, state.periode) : `
             ${retourTiktok ? `<p class="ana-retour est-${retourTiktok.ton}">${esc(retourTiktok.texte)}</p>` : ''}
             <p class="small muted ana-releve">${dernierReleve ? `Relevé chaque matin — dernier relevé le ${esc(new Date(dernierReleve).toLocaleString('fr-FR', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }))}.` : 'Premier relevé demain matin.'}</p>
             <div class="ana-cartes">${RESEAUX_DE[cle].map(carteReseau).join('')}</div>
@@ -812,11 +797,6 @@ export function pageAnalyse(cle) {
           try { localStorage.setItem('crm_ana_vue', state.vue); } catch { /* sans stockage */ }
           draw();
         });
-        // ⚠ LE MOIS REMONTE ICI, et `null` veut dire « le plus récent saisi » :
-        // après une suppression, le mois qu'on regardait n'existe plus.
-        if (state.vue === 'fiche') {
-          lierFiche(root, cle, state.mois, (m) => { state.mois = m; draw(); });
-        }
         const tri = root.querySelector('#ana-tri');
         if (tri) tri.onchange = (e) => { state.tri = e.target.value; draw(); };
         const res = root.querySelector('#ana-reseau');
