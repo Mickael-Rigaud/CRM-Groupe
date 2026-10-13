@@ -6664,3 +6664,82 @@ span.rpv-statut { display: inline-block; margin-bottom: 4px; }
 /* Une structure sans reseau (La Reference Courtage) n a pas d onglets : `display: flex`
    battrait `[hidden]`, de specificite nulle. */
 .ana-onglets[hidden] { display: none; }
+
+/* ===================================================================
+   Onglet « Fiche Google » de l ecran Analyse (13/10/2026).
+   Il reutilise tout l habillage de l onglet site (`.as-hero`, `.as-carte`,
+   `.as-tuiles`, `.as-chiffre`, `.as-classement`) : deux onglets de la meme
+   page qui se ressembleraient a peine s apprendraient deux fois. Seul ce qui
+   lui est propre est ici.
+   =================================================================== */
+
+/* Pas de capture d ecran a montrer : un ecusson, le texte, les commandes. */
+.fg-hero { grid-template-columns: auto minmax(0, 1fr) auto; gap: 20px; }
+.fg-ecusson { width: 68px; height: 68px; flex: none; border-radius: 20px; display: grid; place-items: center;
+  background: rgb(255 255 255 / .14); border: 1px solid rgb(255 255 255 / .2); color: #fff; }
+.fg-commandes { display: flex; flex-direction: column; gap: 8px; align-items: stretch; min-width: 170px; }
+.fg-commandes select { padding: 8px 10px; border-radius: 10px; border: 1px solid rgb(255 255 255 / .25);
+  background: rgb(255 255 255 / .12); color: #fff; font: inherit; font-size: 13px; }
+.fg-commandes select option { color: var(--text); background: var(--card); }
+.fg-commandes .btn.ghost { background: rgb(255 255 255 / .12); border-color: rgb(255 255 255 / .25); color: #fff; }
+
+/* Un mois qui manque se dit, il ne se devine pas : Google ne garde que six mois. */
+.fg-retard { margin: 0 0 12px; padding: 10px 14px; border-radius: 12px; font-size: 13px; font-weight: 600;
+  background: #FEF3C7; color: #92400E; border: 1px solid #FDE68A; }
+
+/* Les vues mois par mois. Des barres et non une courbe : ce sont des mois
+   calendaires, pas une serie continue, et un mois non saisi n est pas un zero
+   — il n a simplement pas de barre. La part Maps est empilee dans la barre. */
+.fg-barres { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 10px;
+  align-items: end; height: 190px; padding-top: 6px; }
+.fg-barre { display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 5px; height: 100%; min-width: 0; }
+.fg-barre-pile { display: block; width: 100%; max-width: 46px; min-height: 3px; border-radius: 8px 8px 3px 3px;
+  background: linear-gradient(180deg, var(--accent), color-mix(in srgb, var(--accent) 72%, #fff)); position: relative; overflow: hidden; }
+.fg-part-maps { position: absolute; inset: auto 0 0 0; display: block; background: #34A853; }
+/* Une barre dont une source manque est plus courte que la realite : on le voit. */
+.fg-barre.est-partielle .fg-barre-pile { background: repeating-linear-gradient(135deg,
+  color-mix(in srgb, var(--accent) 55%, #fff) 0 6px, color-mix(in srgb, var(--accent) 22%, #fff) 6px 12px); }
+.fg-barre b { font-size: 12px; color: var(--text); }
+.fg-barre-mois { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.fg-legende { display: flex; gap: 16px; justify-content: center; margin-top: 10px; font-size: 12px; color: var(--muted); }
+.fg-legende i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.fg-pastille-rech { background: var(--accent); }
+.fg-pastille-maps { background: #34A853; }
+
+/* La fiche et le site sur le meme mois, cote a cote. */
+.fg-face { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+.fg-face > div { display: flex; flex-direction: column; gap: 3px; padding: 14px 16px; border-radius: 14px; background: var(--card-2); }
+.fg-face > div > span:first-child { font-size: 12px; font-weight: 600; color: var(--muted); }
+.fg-face b { font-size: 28px; line-height: 1.1; color: var(--text); font-family: var(--font-display, inherit); }
+
+/* Deux phrases, pas un tiret : `as-vide` les aurait centrees. */
+.fg-manque { margin: 0 0 10px; font-size: 13.5px; line-height: 1.6; color: var(--text); }
+
+.fg-note { margin: 0; font-size: 13px; line-height: 1.6; white-space: pre-wrap; color: var(--text); }
+
+/* Le tableau des mois : chaque ligne ouvre sa saisie. */
+.fg-table tbody tr { cursor: pointer; }
+.fg-table tbody tr:hover { background: var(--card-2); }
+.fg-table tbody tr.est-courant { background: var(--accent-soft); }
+.fg-table tbody tr:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* Le premier accueil, quand rien n a encore ete saisi. */
+.fg-accueil p { margin: 0 0 12px; font-size: 13.5px; line-height: 1.65; }
+.fg-accueil p:last-child { margin-bottom: 0; }
+
+/* Le formulaire d un mois : deux groupes de champs, et rien d autre. */
+.fg-form .fg-groupe { margin: 14px 0; }
+.fg-form .fg-groupe h4 { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+/* DEUX COLONNES, PAS `auto-fit` : avec quatre champs d interaction, auto-fit en
+   posait trois puis laissait « Messages » seul sur une rangee — mesure a l
+   ecran. Deux colonnes font deux rangees pleines, et le groupe « Vues » juste
+   au-dessus se lit de la meme facon. */
+.fg-form .mf-grille { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+@media screen and (max-width: 560px) { .fg-form .mf-grille { grid-template-columns: 1fr; } }
+
+@media screen and (max-width: 900px) {
+  .fg-hero { grid-template-columns: 1fr; }
+  .fg-commandes { min-width: 0; }
+  .fg-barres { height: 150px; gap: 5px; }
+  .fg-barre-mois { font-size: 10px; transform: rotate(-45deg); transform-origin: top center; }
+}
