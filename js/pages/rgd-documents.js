@@ -211,6 +211,17 @@ const pied = (gauche) => `
 // em ne suffit pas (essaye : 22 px contre 28), parce que la hauteur d'une ligne
 // depend de la police du poste. Avec la meme ligne des deux cotes, les traits
 // s'alignent par CONSTRUCTION, quelle que soit la police.
+// ⚠ DEUX ADRESSES SONT « LA MEME » A LA CASSE ET AUX ESPACES PRES : l'une est
+// saisie sur la fiche, l'autre sur le chantier, et « 12 Rue des Lilas » contre
+// « 12 rue des Lilas » ferait reapparaitre la ligne qu'on vient de retirer.
+// On ne va pas plus loin (ni accents, ni abreviations) : au-dela, deux adresses
+// qu'un humain juge differentes seraient fondues en une seule, sur la feuille
+// qu'on fait signer.
+const memeAdresse = (a, b) => {
+  const net = (t) => String(t || '').toLowerCase().replace(/[\s,.-]+/g, ' ').trim();
+  return net(a) !== '' && net(a) === net(b);
+};
+
 const champ = (libelle, valeur, classe = '') =>
   `<div class="champ ${classe}"><span>${esc(libelle)}</span><b>${valeur ? esc(valeur) : '&nbsp;'}</b></div>`;
 
@@ -312,9 +323,15 @@ ${bandeau('1 · Identification du chantier')}
 <div class="champs">
   ${champ('Client / maître d’ouvrage', d.nom)}
 </div>
+<!-- ⚠ LA LIGNE DISPARAIT QUAND LE CLIENT HABITE LE CHANTIER (demande du
+     13/10/2026) : c'est le cas courant, et la meme adresse ecrite deux fois de
+     suite se lit comme une erreur de saisie. ⚠ VIDE, ELLE RESTE : on ne sait
+     alors pas ou habite le client, et c'est un champ a remplir a la main — ne
+     pas confondre « identique » et « inconnue ». -->
+${memeAdresse(d.adresseClient, d.adresseChantier) ? '' : `
 <div class="champs" style="margin-top:7px">
   ${champ('Adresse du client', d.adresseClient)}
-</div>
+</div>`}
 <div class="champs" style="margin-top:7px">
   ${champ('Adresse du chantier', d.adresseChantier)}
 </div>
