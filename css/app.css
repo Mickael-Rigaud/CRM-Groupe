@@ -6775,6 +6775,38 @@ span.rpv-statut { display: inline-block; margin-bottom: 4px; }
   text-transform: uppercase; color: var(--accent-ink); }
 .rgdf-docs > span svg { flex: none; }
 .rgdf-docs-b { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* ----- Les documents deposes sur le dossier (14/10/2026) -----------------
+   ⚠ LA ZONE ENTIERE EST LA CIBLE DU DEPOT, pas son intitule : la classe de
+   survol porte sur `.rgdf-zone`, et un ecouteur pose sur le seul bandeau
+   laisserait le glisser sans effet alors que le clic marcherait — defaut
+   deja paye sur la fiche projet du cabinet BTP.
+   ⚠ C'EST UN `label` QUI ENVELOPPE L'`input file` : le clic marche donc sans
+   une ligne de JavaScript, et le clavier aussi. */
+.rgdf-zone { display: flex; flex-direction: column; gap: 2px; align-items: center;
+  padding: 14px 12px; border: 1.5px dashed var(--line-strong); border-radius: 10px;
+  background: var(--card-2); cursor: pointer; text-align: center; }
+.rgdf-zone:hover, .rgdf-zone.survol { border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 7%, #fff); }
+.rgdf-zone-t { font-size: 12.5px; font-weight: 600; color: var(--text); }
+.rgdf-zone-s { font-size: 11px; color: var(--muted); }
+
+.rgdf-docs-cat { margin-top: 7px; font-size: 11.5px; color: var(--muted); }
+.rgdf-docs-cat select { margin-left: 6px; }
+
+.rgdf-docs-liste { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
+.rgdf-doc { display: flex; align-items: center; gap: 9px; padding: 6px 8px;
+  border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+.rgdf-doc-ico { flex: none; font-size: 15px; }
+/* ⚠ UN BOUTON NEUTRALISE : le nom ouvre le document, donc c'est un bouton et
+   non un lien — une adresse signee se demande au CLIC, elle expire. Il faut
+   alors retirer ce qu'un bouton apporte de lui-meme, et `border: 0` doit venir
+   AVANT tout le reste, sinon il l'efface. */
+.rgdf-doc-nom { border: 0; background: none; padding: 0; font: inherit;
+  font-weight: 600; color: var(--text); text-align: left; cursor: pointer; }
+.rgdf-doc-nom:hover { color: var(--accent-ink); text-decoration: underline; }
+.rgdf-doc-meta { font-size: 11px; color: var(--muted); }
+.rgdf-doc-suppr { flex: none; }
 /* ⚠ FOND BLANC FRANC SUR LES BOUTONS : pose sur le fond teinte du cadre, un
    .btn.ghost (transparent) se lirait comme une etiquette, pas comme un bouton. */
 .rgdf-docs .btn { background: #fff; }

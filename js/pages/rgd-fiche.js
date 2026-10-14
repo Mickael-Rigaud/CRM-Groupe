@@ -102,6 +102,7 @@ import { lienAvis, messageAvis, envoyerDemandeAvis, avisDejaDemande, KIND_AVIS,
   enveloppeApercu, htmlDepuisTexte } from '../data/rgd-avis.js';
 import { dossiersDe, statutSav, garantie, finDuChantier } from '../data/rgd-sav.js';
 import { fenetreSav } from './rgd-sav.js';
+import { blocDocumentsFiche, lierDocumentsFiche, typeDeFiche } from './rgd-docs-fiche.js';
 
 const ETAT_CHANTIER = {
   demarrage: { label: 'Préparé', ton: 'amber' },
@@ -882,6 +883,14 @@ export function ouvrirFicheRgd(x, onChange, retour = null) {
             </section>`;
           })()}
 
+          <!-- Les documents déposés sur le dossier (14/10/2026, demandé par
+               Élodie). AU-DESSUS DE L'HISTORIQUE : ce sont des pièces du
+               dossier, pas des notes d'appel — et l'historique grandit sans
+               fin, donc un bloc posé dessous finirait hors de l'écran.
+               (Pas d'accent grave dans un commentaire HTML : il FERME le
+               gabarit, sans un mot.) -->
+          ${blocDocumentsFiche(typeDeFiche(x), f.id)}
+
           <section class="rgdf-bloc rgdf-suivi">
             <h3>Historique <span class="rgdf-compte">${evs.length}</span></h3>
             ${aUneAncre ? `
@@ -947,6 +956,10 @@ export function ouvrirFicheRgd(x, onChange, retour = null) {
     if (bProjet) bProjet.onclick = () => imprimer('projet');
     const bReception = m.querySelector('#rgdf-doc-reception');
     if (bReception) bReception.onclick = () => imprimer('reception');
+
+    // ⚠ `dessine` EST PASSE EN REDESSIN : un depot ou un retrait change la
+    // liste ET le compteur du titre, et seule la fiche entiere les porte.
+    lierDocumentsFiche(m, typeDeFiche(x), f.id, dessine);
 
     const bModifier = m.querySelector('#rgdf-modifier');
     if (bModifier) bModifier.onclick = () => {
