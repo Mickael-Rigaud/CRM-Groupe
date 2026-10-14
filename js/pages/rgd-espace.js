@@ -57,6 +57,9 @@ export const ONGLETS = [
   // et le groupe de la page ouverte se déplie toujours de lui-même.
   { label: 'Communication', pliable: true, sous: [
     { hash: '#/rgd/realisations', label: 'Réalisations' },
+    // Les mêmes photos, rangées par catégorie du site, pour les montrer en rendez-vous
+    // (14/10/2026). Réservée à la direction comme tout le groupe.
+    { hash: '#/rgd/inspirations', label: 'Inspirations' },
     { hash: '#/rgd/communication', label: 'Calendrier réseaux sociaux' },
     { hash: '#/rgd/analyse', label: 'Analyse' },
   ] },
@@ -197,7 +200,7 @@ const SANS_BANDEAU = ['#/rgd/clients'];
 // ⚠ LE GROUPE « COMMUNICATION » ENTIER est réservé depuis le 08/10/2026,
 // Réalisations comprises (Élodie : « tu ne dois donner les accès qu'à la
 // direction et pas aux chargés d'affaires »). Le groupe vidé sort du menu.
-const RESERVES_DIRECTION = ['#/rgd/prospection', '#/rgd/realisations', '#/rgd/communication', '#/rgd/analyse'];
+const RESERVES_DIRECTION = ['#/rgd/prospection', '#/rgd/realisations', '#/rgd/inspirations', '#/rgd/communication', '#/rgd/analyse'];
 const sansDirection = (liste) => liste
   .filter(o => !RESERVES_DIRECTION.includes(o.hash))
   .map(o => (o.sous ? { ...o, sous: sansDirection(o.sous) } : o))
@@ -211,7 +214,7 @@ const sansDirection = (liste) => liste
 // chargé d'affaires — le site, les réseaux, l'analyse : le sélecteur n'y
 // filtrerait rien et laisserait croire le contraire, et le bandeau d'une vue
 // restée mémorisée annoncerait un filtre qui n'existe pas.
-const SANS_VUE = ['#/rgd/realisations', '#/rgd/communication', '#/rgd/analyse'];
+const SANS_VUE = ['#/rgd/realisations', '#/rgd/inspirations', '#/rgd/communication', '#/rgd/analyse'];
 
 export const cadre = (actif, titre, corps) => coquilleEspace({
   actif, titre,

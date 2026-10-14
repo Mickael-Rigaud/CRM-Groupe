@@ -11,6 +11,7 @@ import { rgdDevisPage, rgdPaiementsPage } from './rgd-facturation.js';
 import { rgdSousTraitantsPage } from './rgd-soustraitants.js';
 import { rgdProspectionPage } from './rgd-prospection.js';
 import { rgdSavPage } from './rgd-sav-page.js';
+import { rgdInspirationsPage } from './rgd-inspirations.js';
 import { rgdCommunicationPage, btpCommunicationPage, rgdAnalysePage, btpAnalysePage, courtageAnalysePage } from './communication.js';
 import { rgdAgendaPage } from './rgd-agenda.js';
 import { rgdPartenairesPage } from './rgd-partenaires.js';
@@ -54,6 +55,7 @@ export const pages = {
   rgd_soustraitants: rgdSousTraitantsPage,
   rgd_prospection: rgdProspectionPage,
   rgd_sav: rgdSavPage,
+  rgd_inspirations: rgdInspirationsPage,
   rgd_communication: rgdCommunicationPage,
   rgd_analyse: rgdAnalysePage,
   rgd_partenaires: rgdPartenairesPage,
