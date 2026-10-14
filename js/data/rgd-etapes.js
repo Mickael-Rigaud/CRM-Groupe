@@ -283,6 +283,44 @@ export function montantDevisDe(f, devis, etape) {
 }
 
 
+/**
+ * Les devis envoyés de cette personne, chacun avec ses relances automatiques.
+ *
+ * Rend, du plus récent au plus ancien :
+ *   [{ numero, envoyeLe, relances: [{ rang, le }] }]
+ *
+ * ⚠ LA DATE D'ENVOI VIENT DE `date_envoi`, PAS DE `updated_at` NI DU STATUT :
+ * c'est la date à laquelle Costructor a réellement expédié le devis, et c'est
+ * elle qui arme le calendrier des relances côté serveur. En afficher une autre
+ * ferait un écran qui contredit la tâche.
+ *
+ * ⚠ ON NE GARDE QUE LES ENVOIS RÉUSSIS (`statut = envoye`) : la table conserve
+ * aussi les échecs, avec leur motif. Les montrer ici ferait lire « relancé le
+ * 17/10 » sur un message qui n'est jamais parti — l'inverse de ce que cette
+ * colonne doit dire. Les échecs se regardent dans la table, pas dans une liste
+ * de dates.
+ *
+ * ⚠ ET LES RELANCES SE RATTACHENT AU DEVIS, PAS À LA PERSONNE : quelqu'un peut
+ * avoir deux devis en attente, relancés chacun de leur côté.
+ */
+export function envoisDevisDe(f, devis, envois) {
+  return (devis || [])
+    .filter(v => memeQue(v, f) && devisEnvoye(v) && v.date_envoi)
+    .map(v => ({
+      numero: v.numero || '',
+      envoyeLe: String(v.date_envoi).slice(0, 10),
+      relances: (envois || [])
+        .filter(e => e.devis_id === v.id
+                  && e.nature === 'relance_devis'
+                  && e.statut === 'envoye'
+                  && e.envoye_le)
+        .map(e => ({ rang: Number(e.rang) || 0, le: String(e.envoye_le).slice(0, 10) }))
+        .sort((a, b) => a.rang - b.rang),
+    }))
+    .sort((a, b) => b.envoyeLe.localeCompare(a.envoyeLe));
+}
+
+
 // La fin des travaux d'une personne : la plus récente de ses chantiers terminés
 // (13/10/2026, filtre de période de l'onglet « Chantier terminé »).
 //

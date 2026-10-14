@@ -50,6 +50,12 @@ export const TABLES = ['profiles', 'organisations', 'contacts', 'deals', 'activi
   // ⚠ `rgd_st_pieces` n'est PAS un reflet : c'est du Supabase pur, écrit par le
   // CRM et par personne d'autre. Le relevé ne l'envoie pas et ne l'écrasera pas.
   'rgd_st_pieces',
+  // La trace des relances de devis parties toutes seules (14/10/2026). Du
+  // Supabase pur lui aussi : c'est la tâche `rgd-envois-auto` qui l'écrit, et
+  // elle seule. ⚠ C'EST LA SEULE TRACE QUI FASSE FOI : Costructor enregistre
+  // bien nos envois, mais les étiquette « Devis envoyé » comme le premier, et
+  // son API ne permet pas de les en distinguer — mesuré.
+  'rgd_envois_auto',
   // Les trouvailles de la veille du lundi (`veille-sous-traitants`). La
   // direction seule les lit : pour les autres, la table revient vide.
   'rgd_st_veille',

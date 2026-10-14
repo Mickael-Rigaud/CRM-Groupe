@@ -71,6 +71,31 @@ export async function enregistrerLienAvis(url) {
  * Le découpage au jugé se trompe une fois sur deux — c'est la raison pour
  * laquelle `rgd_visites_depuis_agenda` a cessé de le faire.
  */
+/**
+ * Le bouton « Laisser un avis », DÉFINI UNE SEULE FOIS.
+ *
+ * ⚠ IL EN EXISTAIT DEUX COPIES — une dans le message proposé, une dans le
+ * rendu du texte retouché — et c'est exactement ce contre quoi ce fichier met
+ * en garde quelques lignes plus bas. Elles avaient déjà le même défaut, elles
+ * auraient fini par ne plus se ressembler.
+ *
+ * ⚠ UN CONTOUR, PAS UN APLAT, ET C'EST MESURÉ LE 14/10/2026 : sur les relances
+ * de devis, un bouton à fond plein a fait basculer le message dans les SPAMS de
+ * Gmail ; le même message avec un simple contour est revenu en boîte de
+ * réception — même expéditeur, même signature, même destinataire. Ce message-ci
+ * était déjà arrivé en « Promotions » avec une authentification parfaite. Ne
+ * pas remettre de fond plein.
+ */
+const boutonAvis = (lien) => {
+  const url = String(lien ?? '').replace(/[&<>"]/g,
+    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  return `<p style="margin:22px 0;text-align:center">
+      <a href="${url}" style="display:inline-block;padding:11px 24px;border-radius:8px;
+         background:#ffffff;color:#D9601A;border:2px solid #D9601A;
+         text-decoration:none;font-weight:700">Laisser un avis</a>
+    </p>`;
+};
+
 const prenomDe = (f) => {
   // Le prénom est une donnée EXACTE quand elle existe : `contacts.first_name`.
   // Mesuré : `rgd_clients` n'a aucune colonne de nom, c'est le contact lié qui
@@ -144,10 +169,7 @@ export function messageAvis(fiche, lien = lienAvis()) {
     <p>Si vous avez été content de notre travail, <strong>un avis sur Google</strong>
        nous aiderait beaucoup — cela prend une minute, et c’est ce qui permet à
        d’autres personnes de nous trouver.</p>
-    <p style="margin:22px 0;text-align:center">
-      <a href="${e(lien)}" style="display:inline-block;padding:13px 26px;border-radius:8px;
-         background:#FD7A2D;color:#fff;text-decoration:none;font-weight:600">Laisser un avis</a>
-    </p>
+    ${boutonAvis(lien)}
     <p>Merci beaucoup,<br><strong>RGD Renova</strong></p>`;
 
   return { objet: 'Votre avis compte pour nous', texte, html };
@@ -166,10 +188,7 @@ export function messageAvis(fiche, lien = lienAvis()) {
 export function htmlDepuisTexte(texte, lien) {
   const e = (t) => String(t ?? '').replace(/[&<>"]/g,
     (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  const bouton = `<p style="margin:22px 0;text-align:center">
-      <a href="${e(lien)}" style="display:inline-block;padding:13px 26px;border-radius:8px;
-         background:#FD7A2D;color:#fff;text-decoration:none;font-weight:600">Laisser un avis</a>
-    </p>`;
+  const bouton = boutonAvis(lien);
   return String(texte).split(/\n{2,}/)
     .map((bloc) => {
       const net = bloc.trim();
@@ -214,6 +233,10 @@ export async function enveloppeApercu() {
       body: JSON.stringify({
         apercu: true, to: { email: 'apercu@local' },
         subject: 'Aperçu', html: SENTINELLE,
+        // ⚠ LE MEME DRAPEAU QUE L'ENVOI, SINON L'APERCU MENT : il montrerait
+        // l'enveloppe de marque pendant qu'une enveloppe sobre partirait. Si
+        // l'envoi change d'enveloppe un jour, cette ligne change avec lui.
+        sobre: true,
       }),
     });
     const rep = await r.json().catch(() => ({}));
@@ -259,6 +282,12 @@ export async function envoyerDemandeAvis(fiche, { email, nom, texte, objet }) {
         // L'objet aussi est modifiable : on envoie celui de l'ecran.
         subject: String(objet || '').trim() || m.objet,
         html: m.html,
+        // ⚠ ENVELOPPE SOBRE, ET C'EST MESURE : ce message etait arrive dans
+        // l'onglet « Promotions » alors que SPF, DKIM et DMARC etaient tous
+        // corrects — verifies le jour meme. Ce n'est pas l'authentification qui
+        // classe, c'est la FORME. L'enveloppe sobre retire le bandeau au logo et
+        // les aplats de couleur, et descend le logo en pied de signature.
+        sobre: true,
         replyTo: { email: 'contact@rgdrenova.fr', name: 'RGD Renova' },
       }),
     });

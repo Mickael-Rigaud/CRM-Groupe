@@ -95,7 +95,7 @@ import { ORDRE_ETAPES, ETAPES_RGD, ETAPES_CLES, ETAPE_DU_STATUT, STATUT_DE_L_ETA
          montantDevisDe, etapeAvecMontant, ecrireStatut, derniereRelance,
          rangRelanceDuStatut, majDateRelance, aujourdhui, ecrireStatutAnnuaire,
          aSigneUnDevis, ORDRE_ETAPES as ORDRE,
-         visiteDeLaFiche, finDeChantierDe } from '../data/rgd-etapes.js';
+         visiteDeLaFiche, finDeChantierDe, envoisDevisDe } from '../data/rgd-etapes.js';
 import { sansNoteAuto } from '../data/rgd-projet.js';
 import { db } from '../data/db.js';
 import { esc, eur, fmtDate, fmtDateTime, terms, hit, searchInput, bindSearch, restoreFocus } from '../ui.js';
@@ -462,6 +462,39 @@ const celluleRelance = (ligne, statut, cible) => {
     <span class="muted rcl-rel-age">${jour ? esc(anciennete(jour)) : ''}</span>
     <span class="muted rcl-rel-avant">${autres}</span>
   </div>`;
+};
+
+/**
+ * L'envoi du devis et ses relances automatiques, sur l'onglet « Devis envoyé »
+ * (14/10/2026, demandé : « je voudrais que tu notes la date d'envoi des devis et
+ * toutes les dates de relances »).
+ *
+ * ⚠ CETTE COLONNE N'EXISTE QUE SUR CET ONGLET, comme « Rendez-vous » n'existe
+ * que sur le sien : ailleurs elle serait vide sur presque chaque ligne, et une
+ * colonne vide fait douter de la donnée au lieu de la montrer.
+ *
+ * ⚠ ELLE SE LIT, ELLE NE SE SAISIT PAS — à la différence de la cellule de
+ * relance téléphonique juste au-dessus. Ces dates-là sont le compte rendu d'une
+ * tâche automatique : les rendre modifiables ferait croire qu'on peut corriger
+ * ce qui est parti.
+ *
+ * ⚠ ET UNE PERSONNE PEUT AVOIR PLUSIEURS DEVIS EN ATTENTE : on les liste tous,
+ * du plus récent au plus ancien, chacun avec ses propres relances. N'en montrer
+ * qu'un cacherait précisément le dossier qu'on a oublié.
+ */
+const celluleEnvoiDevis = (f) => {
+  const envois = envoisDevisDe(f, scope.rgd('rgd_devis'), scope.rgd('rgd_envois_auto'));
+  if (!envois.length) return '<span class="muted">—</span>';
+  return envois.map((v) => {
+    const relances = v.relances.length
+      ? v.relances.map(r => `<b>R${r.rang}&nbsp;${esc(jourCourt(r.le))}</b>`).join(' · ')
+      : '<span class="muted">aucune relance</span>';
+    return `<div class="rcl-env-devis">
+      <div>${v.numero ? `<b>${esc(v.numero)}</b> ` : ''}envoyé le ${esc(jourCourt(v.envoyeLe))}
+        <span class="muted">(${esc(anciennete(v.envoyeLe))})</span></div>
+      <div class="small rcl-env-relances">${relances}</div>
+    </div>`;
+  }).join('');
 };
 
 // Ce qui change dans la cellule après une écriture, et rien d'autre : la
@@ -1235,6 +1268,9 @@ export const rgdClientsPage = {
       // les trois statuts de relance n'existent que là, et une colonne vide sur
       // six onglets coûterait de la largeur à tous pour n'informer qu'un seul.
       const surRelances = state.vue === 'demande';
+      // L'onglet où l'on vient voir ce qui attend une réponse : c'est là, et
+      // nulle part ailleurs, que l'envoi du devis et ses relances ont un sens.
+      const surEnvoiDevis = state.vue === 'devis_envoye';
 
       // ⚠ LA DATE VIENT DU CHANTIER, L'HEURE DE L'AGENDA, et les deux sources
       // ne sont pas interchangeables : c'est `date_debut_prevue` qui décide du
@@ -1315,6 +1351,7 @@ export const rgdClientsPage = {
             <th>Projet</th><th>${surMontant ? 'Montant HT' : 'Budget'}</th><th>Ville</th>
             ${peutAttribuer ? '<th>Responsable</th>' : ''}<th>Statut</th>
             ${surRelances ? '<th>Dernière relance</th>' : ''}
+            ${surEnvoiDevis ? '<th>Envoi et relances</th>' : ''}
             ${surIndesirable ? '<th class="rcl-ecarter"></th>' : ''}
             <th>Commentaire</th><th class="rcl-suppr"></th></tr></thead>
           <!-- ⚠ L'INDEX EST CELUI DE LA LISTE ENTIERE, PAS DE LA PAGE.
@@ -1350,6 +1387,7 @@ export const rgdClientsPage = {
               ? menuStatut(x.statut, x.cible, x.ligne.id) + flechesEtape(x.etape, true)
               : pastilleSuivi(x.statut)}</td>
             ${surRelances ? `<td class="small rcl-rel-td">${celluleRelance(x.ligne, x.statut, x.cible)}</td>` : ''}
+            ${surEnvoiDevis ? `<td class="small rcl-env-td">${celluleEnvoiDevis(x.ligne)}</td>` : ''}
             ${surIndesirable && state.ecriture ? `<td class="rcl-ecarter">
               <button type="button" class="btn ghost sm" data-reprendre="${esc(x.ligne.id)}"
                 data-cible="${esc(x.cible)}"
@@ -1357,7 +1395,7 @@ export const rgdClientsPage = {
                 >Remettre</button></td>` : surIndesirable ? '<td></td>' : ''}
             <td class="rcl-note">${champNote(x.ligne, x.cible)}</td>
             <td class="rcl-suppr">${boutonSuppression(x.ligne)}</td>
-          </tr>`; }).join('') || `<tr><td colspan="${10 + (surRdv ? 1 : 0) + (surTermine ? 1 : 0) + (surRelances ? 1 : 0) + (surIndesirable ? 1 : 0) + (peutAttribuer ? 2 : 0)}"><div class="empty">${esc(vide())}</div></td></tr>`}</tbody>
+          </tr>`; }).join('') || `<tr><td colspan="${10 + (surRdv ? 1 : 0) + (surTermine ? 1 : 0) + (surRelances ? 1 : 0) + (surEnvoiDevis ? 1 : 0) + (surIndesirable ? 1 : 0) + (peutAttribuer ? 2 : 0)}"><div class="empty">${esc(vide())}</div></td></tr>`}</tbody>
         </table>
         ${pagination()}
         <p class="small muted">${state.ecriture

@@ -1905,6 +1905,19 @@ tr.btp-mission .btp-pts { color: var(--m-encre); }
 .rcl-rel-age, .rcl-rel-avant { display: block; font-size: 11px; line-height: 1.3; }
 .rcl-rel-age:empty, .rcl-rel-avant:empty { display: none; }
 
+/* L'envoi du devis et ses relances, sur l'onglet « Devis envoye » (14/10/2026).
+   ⚠ UNE PERSONNE PEUT AVOIR PLUSIEURS DEVIS EN ATTENTE : chaque bloc est un
+   devis, separe du suivant par un filet plutot que par une marge, sinon deux
+   dates d'envoi se lisent comme un envoi et une relance.
+   ⚠ `white-space: nowrap` SUR LES RELANCES : « R1 17/10 » coupe entre le rang
+   et la date devient illisible, et la colonne est etroite. Les points
+   separateurs portent la coupure. */
+.rcl-env-td { min-width: 190px; }
+.rcl-env-devis + .rcl-env-devis { margin-top: 6px; padding-top: 6px;
+  border-top: 1px solid var(--line); }
+.rcl-env-relances { line-height: 1.4; }
+.rcl-env-relances b { white-space: nowrap; }
+
 /* ⚠ `[hidden]` A UNE SPECIFICITE NULLE : `.pill-tabs { display: flex }` le
    bat, et la rangee des structures restait affichee au-dessus du tableau — ou
    elle ne sert a rien, puisque les colonnes SONT les structures. C'est la

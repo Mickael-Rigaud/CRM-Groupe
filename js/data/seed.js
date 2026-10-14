@@ -923,6 +923,18 @@ export const SEED = {
       montant_ht: 15200, montant_ttc: 18240, statut: 'refuse',
       date_creation: day(-15), date_envoi: day(-12) },
   ],
+
+  // Les relances parties toutes seules sur le devis en attente (`rdv2`, envoyé
+  // il y a huit jours). ⚠ DEUX RANGS, PAS TROIS : à J+8 le troisième n'est pas
+  // dû, et l'inventer montrerait un calendrier que la tâche ne produit jamais.
+  // Une démo qui ment sur le rythme est pire qu'une démo vide.
+  rgd_envois_auto: [
+    { id: 'rea1', nature: 'relance_devis', rang: 1, devis_id: 'rdv2',
+      canal: 'email', statut: 'envoye', envoye_le: d(-5) },
+    { id: 'rea2', nature: 'relance_devis', rang: 2, devis_id: 'rdv2',
+      canal: 'email', statut: 'envoye', envoye_le: d(0) },
+  ],
+
   // Une seule pièce déposée, chez le premier : assez pour voir la pastille
   // verte, le téléchargement et la relance qui ne réclame que ce qui manque.
   rgd_st_pieces: [

@@ -120,7 +120,20 @@ répétées plusieurs fois avant d'être écrites ici : les reproposer fait perd
 2. ⚠ **LES FICHIERS NE SE MIGRENT PAS.** Les PDF des sous-traitants sont des
    essais : pas de reprise du stockage Cloudflare vers Storage, ni pour eux ni
    comme préalable à autre chose.
-3. ⚠ **LES RELANCES DEVIS SONT SUPPRIMÉES** — « on ne fait plus ». Le cron de 8 h
+3. ⚠ **DÉCISION ROUVERTE LE 13/10/2026 : LES RELANCES DEVIS EXISTENT À NOUVEAU,
+   ET TOURNENT DEPUIS LE 14/10.** Élodie les a redemandées en connaissance de
+   cause — la décision ci-dessous lui a été lue, elle a répondu « Tu tranches, je
+   les remets ». Ce qui suit reste écrit parce que c'est le registre des
+   décisions, pas une consigne en vigueur : **ne pas re-supprimer les relances
+   en lisant ce paragraphe.**
+   ⚠ **ET CE N'EST PAS LE MÉCANISME QUI AVAIT ÉTÉ COUPÉ.** Le nouveau vit dans
+   Supabase (`rgd-envois-auto`, cron `rgd_envois_auto` à 8 h UTC), lit
+   `date_envoi`, trace ses envois dans `rgd_envois_auto`, et l'envoi lui-même
+   est déclenché **chez Costructor**, pas par notre serveur. Le worker, lui,
+   reste coupé et le reste. Les détails et les défauts mesurés sont dans le
+   dépôt privé.
+   — Décision d'origine, du 25/09/2026 : **les relances devis sont supprimées**,
+   « on ne fait plus ». Le cron de 8 h
    du worker n'est pas porté. ⚠ **ET « IL S'ÉTEINDRA AVEC LE WORKER » ÉTAIT UNE
    ERREUR** : le worker ne s'est pas éteint, et ce cron a tourné tous les matins
    pendant que la décision était écrite ici. Constaté le 25/09 en allant
