@@ -105,14 +105,37 @@ export async function imprimerFicheDeal(fiche) {
 }
 
 // On attend le chargement avant d'imprimer : sans cela le logo manque à la feuille.
-export function imprimerPage(html) {
+/**
+ * ⚠ LE SECOND ARGUMENT EST LE NOM DU FICHIER PROPOSE (14/10/2026) : « Enregistrer
+ * au format PDF » nomme le fichier d'apres le titre du document imprime.
+ * ⚠ ON POSE LE TITRE DES DEUX COTES, ET C'EST ASSUME : le document de l'iframe
+ * porte deja le sien, mais selon le navigateur c'est celui de la PAGE qui
+ * imprime qui est retenu. Lequel exactement n'a pas pu etre mesure d'ici — la
+ * boite d'impression n'est pas observable —, donc on couvre les deux plutot que
+ * de parier. Sans titre passe, rien ne bouge : les appelants d'avant gardent
+ * exactement leur comportement.
+ * ⚠ IL EST REMIS EN PLACE APRES COUP : `print()` rend la main quand l'apercu se
+ * ferme, mais ce n'est garanti nulle part — d'ou la remise dans le `finally` ET
+ * un filet differe. Un onglet qui garderait le nom d'un client en titre serait
+ * un defaut visible par-dessus le marche.
+ */
+export function imprimerPage(html, titre = null) {
+  const titreAvant = document.title;
+  if (titre) document.title = titre;
+  const rendreLeTitre = () => { if (titre) document.title = titreAvant; };
   const cadre = document.createElement('iframe');
   cadre.setAttribute('aria-hidden', 'true');
   cadre.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden';
   document.body.appendChild(cadre);
   cadre.onload = () => {
     const f = cadre.contentWindow;
-    const lancer = () => { try { f.focus(); f.print(); } finally { setTimeout(() => cadre.remove(), 1000); } };
+    const lancer = () => {
+      try { f.focus(); f.print(); }
+      finally {
+        rendreLeTitre();
+        setTimeout(() => { rendreLeTitre(); cadre.remove(); }, 1000);
+      }
+    };
     if (f.document.readyState === 'complete') lancer();
     else f.addEventListener('load', lancer, { once: true });
   };

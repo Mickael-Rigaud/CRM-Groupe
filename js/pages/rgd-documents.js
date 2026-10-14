@@ -117,6 +117,24 @@ export function donneesDocument(x, devis = []) {
     : q.pro ? String(q.ligne.name || '').trim()
       : [q.ligne.first_name, q.ligne.last_name].filter(Boolean).join(' ').trim());
   const nom = x.nom || nomDe(p) || nomComplet(f) || '';
+
+  // ⚠ LE NOM DU FICHIER MET LE NOM DE FAMILLE EN PREMIER (demande du
+  // 14/10/2026) : un dossier de chantier se classe par nom, et c'est ainsi que
+  // les PDF se rangent tout seuls dans un dossier.
+  // ⚠ ON NE DECOUPE JAMAIS UN NOM COMPLET POUR L'INVERSER : « Monteiro Magali »
+  // deviendrait prenom « Monteiro », nom « Magali » — le titre d'un rendez-vous
+  // dit « Nom Prenom » aussi souvent que l'inverse, et se tromper INVERSE
+  // l'identite de quelqu'un. C'est la regle qui a fait cesser le decoupage dans
+  // `rgd_visites_depuis_agenda`. On n'inverse donc QUE lorsque les deux colonnes
+  // existent separement ; sinon on garde le nom tel qu'il est affiche.
+  const sep = (q) => (!q || q.pro ? null : {
+    nom: String(q.ligne.last_name || '').trim(),
+    prenom: String(q.ligne.first_name || '').trim(),
+  });
+  const deux = sep(p);
+  const nomDeFichier = (deux && deux.nom && deux.prenom)
+    ? `${deux.nom} ${deux.prenom}`
+    : nom;
   const perso = p ? p.ligne : f;
 
   // ⚠ LE MONTANT D'UN DEVIS SIGNÉ L'EMPORTE SUR LE BUDGET ANNONCÉ, et c'est la
@@ -132,6 +150,7 @@ export function donneesDocument(x, devis = []) {
     nom,
     telephone: perso.phone || perso.telephone || f.telephone || '',
     email: perso.email || f.email || '',
+    nomFichier: nomDeFichier,
     adresseChantier: enUneLigne(ouSontLesTravaux),
     villeChantier: ch.ville || '',
     budget: chiffre ? eur(chiffre) : (v.budget_annonce || ''),
@@ -208,6 +227,16 @@ const style = `
   .bandeau + .champs, .bandeau + p { margin-top: 0; }
   @media print { h2, .bandeau { break-after: avoid; } .sign, .choix, header, .champs { break-inside: avoid; } }
 `;
+
+// ⚠ CE TITRE EST LE NOM DU FICHIER, pas une decoration : « Enregistrer au
+// format PDF » propose le titre du document imprime. Sans nom de client, on
+// garde le libelle seul plutot que de laisser un tiret pendre.
+// ⚠ LES CARACTERES INTERDITS PAR LES SYSTEMES DE FICHIERS SONT RETIRES : une
+// raison sociale comme « Dupont / Martin SCI » donnerait un chemin, pas un nom.
+const titreDocument = (quoi, d) => {
+  const propre = String(d.nomFichier || '').replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return propre ? `${quoi} - ${propre}` : quoi;
+};
 
 const page = (titre, corps) => `<!doctype html>
 <html lang="fr"><head><meta charset="utf-8"><title>${esc(titre)}</title>
@@ -288,7 +317,7 @@ export function ficheProjetHtml(d) {
 // la place, c'est a la visite qu'on ecrit ce qui compte.
 const complement = [d.typeBien, d.superficie ? `${d.superficie} m²` : '', d.travaux]
     .filter(Boolean).join(' · ');
-  return page('Fiche projet — RGD Renova', `
+  return page(titreDocument('Fiche projet', d), `
 ${entete('FICHE PROJET', jour(new Date()))}
 
 <div class="champs" style="margin-top:10px">
@@ -324,7 +353,7 @@ ${pied('Document de visite — à conserver au dossier du chantier.')}`);
 
 // ------------------------------------------------------ PV de réception
 export function receptionHtml(d) {
-  return page('Procès-verbal de réception — RGD Renova', `
+  return page(titreDocument('PV de réception', d), `
 ${entete('PROCÈS-VERBAL', 'DE RÉCEPTION DES TRAVAUX')}
 
 ${bandeau('1 · Identification du chantier')}
@@ -366,5 +395,14 @@ ${pied('Document à établir contradictoirement et à conserver par chaque parti
 }
 
 // ------------------------------------------------------------------ portes
-export const imprimerFicheProjet = (x, devis) => imprimerPage(ficheProjetHtml(donneesDocument(x, devis)));
-export const imprimerReception = (x, devis) => imprimerPage(receptionHtml(donneesDocument(x, devis)));
+// ⚠ `donneesDocument` N'EST LUE QU'UNE FOIS : elle interroge la base et calcule
+// l'etape, et deux lectures pourraient rendre deux noms si une ecriture tombe
+// entre les deux.
+export const imprimerFicheProjet = (x, devis) => {
+  const d = donneesDocument(x, devis);
+  imprimerPage(ficheProjetHtml(d), titreDocument('Fiche projet', d));
+};
+export const imprimerReception = (x, devis) => {
+  const d = donneesDocument(x, devis);
+  imprimerPage(receptionHtml(d), titreDocument('PV de réception', d));
+};
