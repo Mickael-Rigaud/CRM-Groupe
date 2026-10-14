@@ -29,6 +29,13 @@ import { db } from './db.js';
 
 export const SEAU_INSPIRATIONS = 'inspirations';
 
+// ⚠ LES CATÉGORIES PROPRES AU CRM (14/10/2026, Élodie : « rajoute une
+// catégorie pièces de vie ») : elles n'existent pas sur le site, n'y partent
+// pas, et s'affichent APRÈS celles du site, dans cet ordre. Leur vignette est
+// là même vide — sinon on ne pourrait pas la trouver pour y ajouter la
+// première inspiration. Une catégorie de plus = une ligne ici.
+export const CATEGORIES_CRM = ['Pièces de vie'];
+
 // Le nom d'un fichier tel que l'appareil l'a donné : le CRM préfixe ses dépôts
 // par « <horodatage>-<hasard>- », dont les chiffres ressembleraient à une date.
 const nomBrut = (u) => decodeURIComponent(String(u).split('/').pop() || '').replace(/^\d{10,}-[a-z0-9]{4,8}-/i, '');
@@ -99,6 +106,8 @@ export function categoriesDesInspirations() {
     cat(r.categorie, null).projets.push(p);
   }
 
+  CATEGORIES_CRM.forEach((nom, i) => { const c = cat(nom, null); if (c.rang === Infinity) c.rang = 100000 + i; });
+
   for (const c of cats.values()) {
     c.projets.sort((a, b) =>
       (b.date.mois ? 1 : 0) - (a.date.mois ? 1 : 0)
@@ -108,12 +117,13 @@ export function categoriesDesInspirations() {
   return [...cats.values()].sort((a, b) => a.rang - b.rang || a.nom.localeCompare(b.nom, 'fr'));
 }
 
-/** Les noms de catégorie du site, dans son ordre — ceux que propose le formulaire. */
+/** Les noms de catégorie du site, dans son ordre, puis celles du CRM — ceux que propose le formulaire. */
 export function categoriesDuSite() {
   const vues = new Map();
   for (const r of db.t('rgd_realisations').slice().sort((a, b) => (a.rang ?? 0) - (b.rang ?? 0))) {
     if (r.categorie_nom && !vues.has(cleCat(r.categorie_nom))) vues.set(cleCat(r.categorie_nom), r.categorie_nom);
   }
+  for (const nom of CATEGORIES_CRM) if (!vues.has(cleCat(nom))) vues.set(cleCat(nom), nom);
   return [...vues.values()];
 }
 

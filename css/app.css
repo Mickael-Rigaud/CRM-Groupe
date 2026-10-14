@@ -6929,3 +6929,5 @@ span.rpv-statut { display: inline-block; margin-bottom: 4px; }
 .insf-pied { display: flex; align-items: center; gap: 8px; }
 .insf-suppr.est-arme { background: var(--red, #c62828); color: #fff; border-color: var(--red, #c62828); }
 @media screen and (max-width: 640px) { .insf-grille { grid-template-columns: 1fr; } }
+.ins-tuile-vide { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font-size: 56px; font-weight: 300; color: var(--muted); background: var(--accent-soft); }

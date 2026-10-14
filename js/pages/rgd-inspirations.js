@@ -66,9 +66,9 @@ export const rgdInspirationsPage = {
           // La couverture est une photo « après » du chantier le plus récent.
           const couv = toutes.find(x => x.moment === 'apres') || toutes[0];
           return `<button type="button" class="ins-tuile" data-cat="${esc(c.cle)}">
-            ${couv ? imgDe(couv) : ''}
+            ${couv ? imgDe(couv) : '<span class="ins-tuile-vide">+</span>'}
             <span class="ins-tuile-txt"><b>${esc(c.nom)}</b>
-              <span>${pluriel(c.projets.length, 'chantier')} · ${pluriel(toutes.filter(x => x.moment === 'apres').length, 'photo')}</span></span>
+              <span>${c.projets.length ? `${pluriel(c.projets.length, 'chantier')} · ${pluriel(toutes.filter(x => x.moment === 'apres').length, 'photo')}` : 'Rien encore — touchez pour ajouter'}</span></span>
           </button>`;
         }).join('');
         root.innerHTML = cadre('#/rgd/inspirations', 'Inspirations', `
@@ -123,7 +123,7 @@ export const rgdInspirationsPage = {
                 ${imgDe(ph)}
                 ${ph.moment === 'avant' ? '<span class="ins-badge">Avant</span>' : ''}
               </button>`).join('')}</div>` : '<p class="small muted">Aucune photo pour l’instant — « Modifier » pour en ajouter.</p>'}
-          </section>`).join('') || '<div class="empty">Aucune photo à montrer ici.</div>'}`);
+          </section>`).join('') || `<div class="empty">${cat.projets.length ? 'Aucune photo à montrer ici.' : 'Aucune inspiration pour l’instant — « + Ajouter une inspiration » pour la première.'}</div>`}`);
 
       remplirPhotos(root);
       root.querySelector('#ins-retour').onclick = () => { state.cat = null; draw(); };
