@@ -80,6 +80,9 @@ export const TABLES = ['profiles', 'organisations', 'contacts', 'deals', 'activi
   'rgd_apports_sortants',
   // Les dossiers SAV (13/10/2026), saisis dans le CRM.
   'rgd_sav',
+  // Les inspirations ajoutées dans le CRM (14/10/2026), à côté des réalisations
+  // du site : elles n'y partent jamais. Direction seule.
+  'rgd_inspirations',
   'rgd_apporteurs', 'rgd_fournitures', 'rgd_realisations', 'rgd_carrousel',
   // ⚠ `rgd_corbeille` est la seule table du CRM qui porte des lignes MORTES :
   // le contenu des fiches supprimées, pour pouvoir les remettre. Sa policy ne

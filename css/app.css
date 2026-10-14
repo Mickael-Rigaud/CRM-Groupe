@@ -6902,3 +6902,30 @@ span.rpv-statut { display: inline-block; margin-bottom: 4px; }
   .ins-plein-nav.prec { left: 6px; }
   .ins-plein-nav.suiv { right: 6px; }
 }
+/* Inspirations ajoutées dans le CRM : en-tête de chantier et formulaire. */
+.ins-barre .ins-intro { margin: 0; }
+.ins-chantier-tete { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
+.ins-chantier-tete h3 { margin: 0; }
+.insf { display: flex; flex-direction: column; gap: 14px; }
+.insf > p { margin: 0; }
+.insf-grille { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.insf-grille > .plein { grid-column: 1 / -1; }
+.insf-grille > [hidden] { display: none; }
+.mail-champ > span { font-size: 12px; font-weight: 600; color: var(--muted); }
+.insf-depot { border: 2px dashed var(--border, #ccd); border-radius: 12px; padding: 16px; display: flex; align-items: center;
+  gap: 8px; flex-wrap: wrap; justify-content: center; text-align: center; }
+.insf-depot.survol { border-color: var(--accent); background: var(--accent-soft); }
+.insf-depot .small { flex-basis: 100%; }
+.insf-photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+.insf-photos:empty { display: none; }
+.insf-photo { border-radius: 10px; overflow: hidden; background: var(--surface-2, #eee); }
+.insf-photo img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; display: block; }
+.insf-photo-pied { display: flex; justify-content: space-between; align-items: center; padding: 6px; gap: 6px; }
+.insf-moment { border: 1px solid var(--green, #2e7d32); color: var(--green, #2e7d32); background: transparent; border-radius: 999px;
+  padding: 2px 10px; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+.insf-moment.est-avant { border-color: var(--muted); color: var(--muted); }
+.insf-retirer { border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 14px; padding: 2px 6px; }
+.insf-retirer:hover { color: var(--red, #c62828); }
+.insf-pied { display: flex; align-items: center; gap: 8px; }
+.insf-suppr.est-arme { background: var(--red, #c62828); color: #fff; border-color: var(--red, #c62828); }
+@media screen and (max-width: 640px) { .insf-grille { grid-template-columns: 1fr; } }
