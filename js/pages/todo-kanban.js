@@ -246,11 +246,11 @@ function dossiersRgd() {
   // que dire faux. La date de la demande, elle, existe.
   for (const f of scope.rgd('rgd_clients')) {
     if (etapeDeFiche(f, chantiers, devis, jours) !== 'devis_encours') continue;
-    cartes.push({ id: f.id, genre: 'client', nom: nomDeFiche(f), libelle: 'Devis en cours', couleur });
+    cartes.push({ id: f.id, genre: 'client', etape: 'devis_encours', nom: nomDeFiche(f), libelle: 'Devis en cours', couleur });
   }
   for (const d of scope.rgd('rgd_demandes')) {
     if (etapeDeDemande(d) !== 'devis_encours') continue;
-    cartes.push({ id: d.id, genre: 'demande', nom: nomDeFiche(d), libelle: 'Devis en cours', couleur });
+    cartes.push({ id: d.id, genre: 'demande', etape: 'devis_encours', nom: nomDeFiche(d), libelle: 'Devis en cours', couleur });
   }
   return cartes;
 }
@@ -259,11 +259,29 @@ function dossiersRgd() {
 // mission gagnée dont l'étape est restée en rédaction remonterait pour toujours.
 const dossiersBtp = () => scope.deals()
   .filter(d => d.activity === 'btp' && d.status === 'open' && SUIVIS_BTP[d.stage])
-  .map(d => ({ id: d.id, genre: 'deal', nom: d.title || 'Affaire sans titre',
+  .map(d => ({ id: d.id, genre: 'deal', etape: d.stage, nom: d.title || 'Affaire sans titre',
                libelle: stageOf(d.activity, d.stage)?.label || d.stage, couleur: SUIVIS_BTP[d.stage],
                depuis: d.stage_changed_at || d.created_at }));
 
-export const dossiersDe = (cle) => (cle === 'rgd' ? dossiersRgd() : cle === 'btp' ? dossiersBtp() : []);
+// ⚠ UNE CARTE SE RETIRE À LA MAIN DEPUIS LE 14/10/2026 (Élodie : « pouvoir
+// retirer nous-même la to do »), et seulement pour soi : `todo_dossiers_masques`
+// garde (personne, dossier, étape). On ne touche pas au dossier — la carte
+// disparaît déjà seule quand l'étape change, et c'est toujours le cas normal.
+// L'étape est dans la clé : un dossier masqué en « Devis en cours » qui passe
+// ensuite à une autre étape suivie réapparaît, c'est une autre attente.
+const estMasque = (x) => db.t('todo_dossiers_masques').some(m =>
+  m.user_id === scope.user?.id && m.genre === x.genre && m.dossier_id === x.id && m.etape === x.etape);
+
+export const dossiersDe = (cle) => (cle === 'rgd' ? dossiersRgd() : cle === 'btp' ? dossiersBtp() : [])
+  .filter(x => !estMasque(x));
+
+/** Retirer une carte de SA to do. Rien n'est écrit sur le dossier. */
+export async function masquerDossier(genre, id, etape) {
+  try {
+    await db.insert('todo_dossiers_masques', { user_id: scope.user?.id, genre, dossier_id: id, etape });
+    return { ok: true };
+  } catch (e) { return { ok: false, motif: String(e.message || e).slice(0, 120) }; }
+}
 
 // ⚠ L'ANCIENNETÉ EST LA MOITIÉ DE L'INFORMATION QUAND ON L'A : une mission en
 // rédaction depuis trois jours ne se lit pas comme une mission en rédaction depuis
@@ -274,8 +292,9 @@ export function carteDossier(x) {
   const j = x.depuis ? daysSince(x.depuis) : null;
   const vieux = j !== null && j > 14;
   return `<article class="kb-dossier${vieux ? ' est-vieux' : ''}" style="--d:${x.couleur}"
-    data-dossier="${esc(x.genre)}" data-dossier-id="${esc(x.id)}" tabindex="0"
+    data-dossier="${esc(x.genre)}" data-dossier-id="${esc(x.id)}" data-dossier-etape="${esc(x.etape)}" tabindex="0"
     title="${esc(x.libelle)}${x.depuis ? ` — depuis le ${fmtDate(x.depuis)}` : ''}">
+    <button type="button" class="kb-d-retirer" data-masquer title="Retirer de ma to do" aria-label="Retirer de ma to do">✕</button>
     <p class="kb-d-nom">${esc(x.nom)}</p>
     <p class="kb-d-etat">${esc(x.libelle)}${
       j !== null ? ` <span class="kb-d-age">· depuis ${j <= 0 ? "aujourd’hui" : `${j} j`}</span>` : ''}</p>

@@ -14,10 +14,10 @@
 import { db } from '../data/db.js';
 import { scope } from '../data/scope.js';
 import { STRUCTURES_TACHE } from '../data/schema.js';
-import { esc, daysSince, fmtDate, relDay, userName, searchInput, bindSearch, restoreFocus, terms, hit } from '../ui.js';
+import { esc, daysSince, fmtDate, relDay, userName, searchInput, bindSearch, restoreFocus, terms, hit, armerCroix, toast } from '../ui.js';
 import { actType, bindActivityRows, activityForm, nextActivity, structureDe,
          toggleActivity, structuresDeLUtilisateur, marquesTache } from './activity.js';
-import { kanbanHtml, dossiersDe, carteDossier, lierSousTaches, oublierSousTaches, blocSousTaches } from './todo-kanban.js';
+import { kanbanHtml, dossiersDe, carteDossier, masquerDossier, lierSousTaches, oublierSousTaches, blocSousTaches } from './todo-kanban.js';
 import { openDeal } from './deal.js';
 
 // Les trois rangs de la liste, dans l'ordre où ils se lisent. Ils reprennent les
@@ -306,6 +306,17 @@ export const todayPage = {
       // `activity.js`, les charger en tête ferait un cycle — même raison que dans
       // `activity.js` lui-même.
       root.querySelectorAll('.kb-dossier[data-dossier]').forEach(el => {
+        // La croix retire la carte de SA to do, en deux clics (jamais le
+        // `confirm()` de `ui.js`, qui remplacerait l'écran). Le dossier n'est
+        // pas touché : il garde son étape, sa fiche et sa place dans le pipeline.
+        const croix = el.querySelector('[data-masquer]');
+        if (croix) armerCroix(croix, async () => {
+          const { dossier: genre, dossierId, dossierEtape } = el.dataset;
+          const r = await masquerDossier(genre, dossierId, dossierEtape);
+          if (!r.ok) return toast(`Non retiré — ${r.motif}`, 'err');
+          toast('Retiré de votre to do — le dossier, lui, ne change pas');
+          draw();
+        }, { repos: '✕', arme: 'Retirer ?', titre: 'Retirer de ma to do' });
         const ouvrir = async () => {
           const { dossier: genre, dossierId } = el.dataset;
           if (genre === 'deal') { openDeal(dossierId, draw); return; }
@@ -315,8 +326,8 @@ export const todayPage = {
           const { ouvrirProspectRgd } = await import('./rgd-clients.js');
           ouvrirProspectRgd(ligne, genre, draw);
         };
-        el.onclick = ouvrir;
-        el.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ouvrir(); } };
+        el.onclick = (e) => { if (e.target.closest('[data-masquer]')) return; ouvrir(); };
+        el.onkeydown = (e) => { if (e.target.closest('[data-masquer]')) return; if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ouvrir(); } };
       });
       // Le « + » d'une colonne crée dans SA structure : c'est tout l'intérêt
       // d'avoir une colonne par structure.

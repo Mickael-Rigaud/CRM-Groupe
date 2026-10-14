@@ -6931,3 +6931,13 @@ span.rpv-statut { display: inline-block; margin-bottom: 4px; }
 @media screen and (max-width: 640px) { .insf-grille { grid-template-columns: 1fr; } }
 .ins-tuile-vide { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
   font-size: 56px; font-weight: 300; color: var(--muted); background: var(--accent-soft); }
+/* La croix d'une carte « dossier en attente » (14/10/2026) : discrète, révélée
+   au survol, toujours visible au doigt. Armée, elle s'élargit en « Retirer ? ». */
+.kb-dossier { position: relative; }
+.kb-d-retirer { position: absolute; top: 6px; right: 6px; border: 0; background: transparent; color: var(--muted);
+  font: inherit; font-size: 12px; line-height: 1; padding: 4px 6px; border-radius: 999px; cursor: pointer; opacity: 0; }
+.kb-dossier:hover .kb-d-retirer, .kb-dossier:focus-within .kb-d-retirer, .kb-d-retirer.est-arme { opacity: 1; }
+.kb-d-retirer:hover { background: var(--line); color: var(--text); }
+.kb-d-retirer.est-arme { background: var(--red, #c62828); color: #fff; font-weight: 700; }
+.kb-dossier .kb-d-nom { padding-right: 22px; }
+@media (hover: none) { .kb-d-retirer { opacity: 1; } }

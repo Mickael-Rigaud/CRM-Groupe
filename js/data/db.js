@@ -83,6 +83,9 @@ export const TABLES = ['profiles', 'organisations', 'contacts', 'deals', 'activi
   // Les inspirations ajoutées dans le CRM (14/10/2026), à côté des réalisations
   // du site : elles n'y partent jamais. Direction seule.
   'rgd_inspirations',
+  // Les cartes « dossier en attente » qu'une personne a retirées de SA to do
+  // (14/10/2026). Chacun ne lit que les siennes.
+  'todo_dossiers_masques',
   'rgd_apporteurs', 'rgd_fournitures', 'rgd_realisations', 'rgd_carrousel',
   // ⚠ `rgd_corbeille` est la seule table du CRM qui porte des lignes MORTES :
   // le contenu des fiches supprimées, pour pouvoir les remettre. Sa policy ne
