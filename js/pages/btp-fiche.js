@@ -114,15 +114,29 @@ export async function imprimerFicheDeal(fiche) {
  * boite d'impression n'est pas observable —, donc on couvre les deux plutot que
  * de parier. Sans titre passe, rien ne bouge : les appelants d'avant gardent
  * exactement leur comportement.
- * ⚠ IL EST REMIS EN PLACE APRES COUP : `print()` rend la main quand l'apercu se
- * ferme, mais ce n'est garanti nulle part — d'ou la remise dans le `finally` ET
- * un filet differe. Un onglet qui garderait le nom d'un client en titre serait
- * un defaut visible par-dessus le marche.
+ * ⚠ ET IL SE REMET SUR `afterprint`, JAMAIS JUSTE APRES `print()` — DEFAUT
+ * CONSTATE : la premiere version restaurait dans le `finally`, et la boite
+ * d'impression proposait encore « CRM Groupe — … ». Le navigateur lit le titre
+ * APRES l'appel, donc une restauration immediate lui redonne celui du CRM avant
+ * qu'il ait regarde. ⚠ ET LE PREMIER CONTROLE N'A PAS VU CE DEFAUT parce qu'il
+ * lisait `document.title` AVANT que `print()` soit appele : il prouvait que le
+ * titre etait pose, pas qu'il l'etait encore au bon moment. Celui qui le
+ * trouve espionne `print` et lit le titre DEPUIS l'appel.
+ * ⚠ UN FILET LONG RESTE : si aucun `afterprint` n'arrive — rien ne le garantit
+ * — le titre revient au bout d'une minute. Un onglet qui garderait le nom d'un
+ * client en titre serait un defaut visible par-dessus le marche.
  */
 export function imprimerPage(html, titre = null) {
   const titreAvant = document.title;
   if (titre) document.title = titre;
-  const rendreLeTitre = () => { if (titre) document.title = titreAvant; };
+  // Une seule remise : trois chemins y mènent, et la seconde reposerait un
+  // titre que l'écran aurait pu changer entre-temps.
+  let rendu = false;
+  const rendreLeTitre = () => {
+    if (!titre || rendu) return;
+    rendu = true;
+    document.title = titreAvant;
+  };
   const cadre = document.createElement('iframe');
   cadre.setAttribute('aria-hidden', 'true');
   cadre.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden';
@@ -130,10 +144,12 @@ export function imprimerPage(html, titre = null) {
   cadre.onload = () => {
     const f = cadre.contentWindow;
     const lancer = () => {
+      f.addEventListener('afterprint', rendreLeTitre, { once: true });
+      window.addEventListener('afterprint', rendreLeTitre, { once: true });
       try { f.focus(); f.print(); }
       finally {
-        rendreLeTitre();
-        setTimeout(() => { rendreLeTitre(); cadre.remove(); }, 1000);
+        setTimeout(() => cadre.remove(), 1000);
+        setTimeout(rendreLeTitre, 60000);
       }
     };
     if (f.document.readyState === 'complete') lancer();
