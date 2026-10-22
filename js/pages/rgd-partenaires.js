@@ -171,6 +171,13 @@ const nomDe = (a) => [a.prenom, a.nom].filter(Boolean).join(' ').trim()
 const adresseDe = (a) => [a.adresse, [a.code_postal, a.ville].filter(Boolean).join(' ')]
   .filter(Boolean).join(', ');
 
+// Actif / Inactif, écrit UNE fois : la colonne du tableau et l'en-tête de la
+// fiche montrent le même mot, il n'y a aucune raison qu'ils divergent le jour
+// où l'un des deux change de couleur — c'est exactement ce qui venait
+// d'arriver.
+const pastilleSuivi = (a) => `<span class="rgdf-tag ${
+  estActif(a) ? 'est-actif' : 'est-perdu'}">${estActif(a) ? 'Actif' : 'Inactif'}</span>`;
+
 // ------------------------------------------------------- le formulaire fiche
 
 const champ = (cle, libelle, valeur, opts = {}) => `
@@ -993,7 +1000,7 @@ function ouvrirFichePartenaire(id, apres) {
             <h2>${esc(nomDe(a))}</h2>
             <div class="rgdf-meta">
               <span class="rgdf-tag">${esc(r.label)}</span>
-              <span class="rgdf-tag ${estActif(a) ? 'est-etape' : 'est-perdu'}">${estActif(a) ? 'Actif' : 'Inactif'}</span>
+              ${pastilleSuivi(a)}
               ${a.partenariat_signe ? '<span class="rgdf-tag">Convention signée</span>' : ''}
             </div>
           </div>
@@ -1284,9 +1291,10 @@ export const rgdPartenairesPage = {
             <td>${esc(a.nom || '—')}</td>
             <td>${esc(a.prenom || '—')}</td>
             <td class="pa-bleu">${esc(a.profession || '—')}</td>
-            ${'' /* La colonne demandée le 22/10 : elle remplace le bloc « inactifs ». */}
-            <td><span class="rgdf-tag ${estActif(a) ? 'est-etape' : 'est-perdu'}">${
-              estActif(a) ? 'Actif' : 'Inactif'}</span></td>
+            ${'' /* La colonne demandée le 22/10 : elle remplace le bloc « inactifs ».
+               Verte, demandé le même jour — et la même pastille que celle de la
+               fiche, pour que le mot ne change pas de couleur en l'ouvrant. */}
+            <td>${pastilleSuivi(a)}</td>
             <td class="num">${t.devis ? esc(eur(t.devis)) : '<span class="muted">—</span>'}
               ${t.apports ? `<div class="s muted">${t.apports} apport${t.apports > 1 ? 's' : ''}${
                 t.gagnes ? ` · ${t.gagnes} gagné${t.gagnes > 1 ? 's' : ''}` : ''}</div>` : ''}</td>

@@ -583,6 +583,11 @@ button.esp-side-titre { background: none; border: 0; font-family: inherit; color
   background: #fff; border: 1px solid var(--line-strong); color: var(--muted); }
 .rgdf-tag.est-etape { background: var(--accent); border-color: var(--accent); color: var(--on-accent, #fff); }
 .rgdf-tag.est-perdu { background: var(--red); border-color: var(--red); color: #fff; }
+/* « Actif » en VERT (22/10/2026, demande d'Elodie). Une pastille a soi plutot
+   que `est-etape`, qui est la couleur de marque et sert aux ETAPES d'un
+   chantier sur d'autres ecrans : la repeindre en vert aurait verdi une demi-
+   douzaine d'endroits qui ne parlent pas du tout de la meme chose. */
+.rgdf-tag.est-actif { background: var(--green); border-color: var(--green); color: #fff; }
 
 /* Les chiffres cles. `minmax(0, 1fr)` et non `1fr` : sans le zero, une tuile
    dont le contenu est long refuse de se reduire et deborde la rangee. */
