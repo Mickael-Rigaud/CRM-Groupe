@@ -27,9 +27,17 @@ const TABLE = 'rgd_apporteurs';
 // pas toucher. `d1_id`, `source` et `apports_declares` n'y sont volontairement
 // pas : les deux premiers viennent de l'autre côté, le troisième est un compte
 // saisi à la main que le tableau des apports remplace.
+// ⚠ UNE COLONNE ABSENTE DE CETTE LISTE EST IGNOREE EN SILENCE : le formulaire
+// envoie tout ce qui porte un `name`, et `filtrer` jette le reste sans un mot.
+// Les cinq champs de la fiche fournisseur (22/10/2026) devaient donc y entrer,
+// sinon le site internet et la ligne directe de l'interlocuteur seraient saisis
+// puis perdus — « enregistre » a l'ecran, rien en base.
 const CHAMPS = ['nom', 'prenom', 'societe', 'raison_sociale', 'profession',
   'email', 'telephone', 'adresse', 'code_postal', 'ville',
-  'type_partenaire', 'actif', 'partenariat_signe', 'date_signature', 'notes'];
+  'type_partenaire', 'actif', 'partenariat_signe', 'date_signature', 'notes',
+  // La fiche fournisseur : la societe, puis la personne qu'on appelle.
+  'site_internet', 'compte_pro_ouvert',
+  'email_interlocuteur', 'telephone_interlocuteur', 'role_interlocuteur'];
 
 // ⚠ `apporte_par` N'EST PAS UN SECOND APPORTEUR : c'est un nom dans l'équipe du
 // partenaire, en texte libre. L'apport reste rattaché au PARTENAIRE, donc ses

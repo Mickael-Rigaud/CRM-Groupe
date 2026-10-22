@@ -524,9 +524,26 @@ export const SEED = {
       code_postal: '60200', ville: 'Compiegne',
       // Inactif : c'est lui qui fait apparaitre la troisieme section.
       type_partenaire: 'apporteur', actif: false, partenariat_signe: false, source: 'demo' },
-    { id: 'ap4', owner_id: 'u-mickael', d1_id: 8004, nom: 'Materiaux du Valois', societe: 'Materiaux du Valois',
+    // ⚠ CE FOURNISSEUR PORTE LES CINQ CHAMPS NES LE 22/10/2026 : le site, le
+    // compte pro et les trois coordonnees de l'interlocuteur. Sans eux, la
+    // demonstration montrerait un formulaire fournisseur a moitie vide, et
+    // personne ne verrait que les coordonnees de la SOCIETE et celles de la
+    // PERSONNE sont deux choses differentes. `nom`/`prenom` sont ceux de
+    // l'interlocuteur, `societe` celui de l'entreprise.
+    { id: 'ap4', owner_id: 'u-mickael', d1_id: 8004, nom: 'Thibault', prenom: 'Marc',
+      societe: 'Materiaux du Valois',
       profession: 'Negoce de materiaux', telephone: '03 44 00 11 25',
+      email: 'contact@example.com', site_internet: 'materiaux-du-valois.example',
       adresse: '2 zone de la Gare', code_postal: '60800', ville: 'Crepy-en-Valois',
+      compte_pro_ouvert: true, role_interlocuteur: 'Responsable d\'agence',
+      email_interlocuteur: 'm.thibault@example.com', telephone_interlocuteur: '06 12 00 11 25',
+      type_partenaire: 'fournisseur', actif: true, partenariat_signe: false, source: 'demo' },
+    // Celui-la n'a pas d'interlocuteur et son compte pro reste inconnu : c'est
+    // l'etat de la plupart des fiches, et il doit se voir tel quel — « Non
+    // renseigne » n'est pas « Non ».
+    { id: 'ap5', owner_id: 'u-mickael', d1_id: 8005, societe: 'Carrelages Oise',
+      profession: 'Carrelage et faience', telephone: '03 44 00 11 26',
+      code_postal: '60100', ville: 'Creil',
       type_partenaire: 'fournisseur', actif: true, partenariat_signe: false, source: 'demo' },
   ],
 

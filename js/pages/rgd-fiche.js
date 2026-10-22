@@ -142,6 +142,8 @@ const ICONES = {
   maison: 'M2.5 9 10 3l7.5 6M4.5 8v9h11V8M8.5 17v-5h3v5',
   regle: 'M2.5 12.5 12.5 2.5l5 5-10 10-5-5Zm3 3 1.5-1.5m1 4 1.5-1.5m1 4 1.5-1.5',
   texte: 'M4 4h12M4 8h12M4 12h8M4 16h5',
+  // Le site d'un fournisseur (22/10/2026) : un globe, pas une etoile.
+  globe: 'M10 2.5a7.5 7.5 0 1 0 0 15 7.5 7.5 0 0 0 0-15Zm0 0c-2 2-3 4.6-3 7.5s1 5.5 3 7.5c2-2 3-4.6 3-7.5s-1-5.5-3-7.5ZM2.8 7.5h14.4M2.8 12.5h14.4',
 };
 const pict = (cle) => `<svg viewBox="0 0 20 20" aria-hidden="true"><path d="${ICONES[cle]}"/></svg>`;
 

@@ -18,22 +18,42 @@
 // le jour où quelqu'un redéploie une ancienne version. Voir
 // `js/data/rgd-partenaires.js`, qui porte toute la mécanique d'écriture.
 //
-// TROIS SECTIONS, REFAITES LE 25/09/2026 SUR DEMANDE DE MICKAEL
-// Apporteurs d'affaires ACTIFS · Fournisseurs · Apporteurs d'affaires
-// INACTIFS. « Autres partenaires » a disparu, et sa seule fiche a rejoint les
-// apporteurs. Le rôle « Commercial » est parti avec : personne ne savait le
-// distinguer d'un apporteur, et une valeur qu'on ne sait pas définir finit par
-// ramasser tout ce qui ne rentre nulle part.
+// DEUX SECTIONS DEPUIS LE 22/10/2026 : APPORTEURS D'AFFAIRES · FOURNISSEURS
+// Elles ont été trois du 25/09 au 22/10 — les apporteurs ACTIFS, les
+// fournisseurs, les apporteurs INACTIFS —, et c'est Élodie qui a demandé la
+// fusion des deux blocs d'apporteurs : « mets les apporteurs d'affaires actifs
+// et inactifs ensemble, et je veux juste que dans le tableau recap rajouter une
+// colonne pour savoir si l'apporteur d'affaires est actif ou inactif ». Une
+// colonne « Suivi » dit la même chose qu'un second bloc, sans couper en deux
+// une liste de treize fiches qu'on parcourt d'un seul regard. Les actifs
+// restent en tête, pour qu'un inactif ne se rappelle pas à soi au milieu.
+// « Autres partenaires » avait déjà disparu le 25/09, sa seule fiche ayant
+// rejoint les apporteurs ; le rôle « Commercial » est parti avec, personne ne
+// sachant le distinguer d'un apporteur.
 //
-// ⚠ L'ACTIF/INACTIF DÉCOUPE LES APPORTEURS, PAS LES FOURNISSEURS. Un
-// fournisseur inactif reste un fournisseur — on ne lui apporte rien, on lui
-// achète ; le découper en deux blocs ferait trois sections pour cinq fiches.
-// Sa ligne est grisée quand il est inactif, comme avant.
+// ⚠ ET LES DEUX TABLEAUX NE PORTENT PLUS LES MÊMES COLONNES. Un apporteur :
+// société, nom, prénom, profession, suivi, puis l'argent. Un fournisseur :
+// société, nom, prénom, secteur d'activité, ville — ni devis ni commission,
+// puisqu'on ne lui apporte rien, on lui achète. Ces trois colonnes-là
+// affichaient trois tirets sur toute la hauteur de son bloc, c'est-à-dire de la
+// largeur prise pour ne rien dire. L'en-tête et les cellules sont décrits
+// ensemble dans `COLONNES`, et le `colspan` du tableau vide est COMPTÉ sur
+// l'en-tête : les déplacer séparément est le genre de décalage qui ne se voit
+// qu'une fois publié.
 //
 // LES COLONNES DISENT L'ARGENT, PLUS LES COORDONNÉES (25/09/2026)
 // Email et téléphone sont partis, remplacés par **Montant devis** et **Montant
-// commissions**. C'est ce qu'on vient chercher dans une liste de partenaires :
-// ce qu'ils rapportent. Les coordonnées sont dans la fiche, qu'un clic ouvre.
+// commissions** chez l'apporteur. C'est ce qu'on vient chercher dans une liste
+// de partenaires : ce qu'ils rapportent. Les coordonnées sont dans la fiche,
+// qu'un clic ouvre.
+//
+// ⚠ ET DEUX FORMULAIRES, DEUX FICHES (22/10/2026). Un fournisseur se remplit
+// en deux temps — la SOCIÉTÉ (société, domaine d'activité, mail, téléphone,
+// site internet, adresse, suivi, compte pro ouvert) puis l'INTERLOCUTEUR (nom,
+// prénom, mail pro, tel pro, rôle). Les cinq derniers champs sont nés ce
+// jour-là en base. Ne pas confondre les deux niveaux de coordonnées : `email`
+// et `telephone` sont ceux de l'entreprise, les `*_interlocuteur` ceux de la
+// personne qu'on appelle.
 //
 // ⚠ LES DEUX MONTANTS NE PORTENT PAS SUR LA MÊME POPULATION, et `totauxDe` le
 // dit : le devis compte dès qu'il est chiffré, quelle que soit l'issue ; la
@@ -113,16 +133,29 @@ const ROLES = {
 const estApporteur = (a) => (a.type_partenaire || 'apporteur') !== 'fournisseur';
 const estActif = (a) => a.actif !== false;
 
+// ⚠ LES APPORTEURS ACTIFS ET INACTIFS SONT DANS LA MEME SECTION DEPUIS LE
+// 22/10/2026 (Elodie : « mets les apporteurs d'affaires actifs et inactifs
+// ensemble, et je veux juste que dans le tableau recap rajouter une colonne
+// pour savoir si l'apporteur d'affaires est actif ou inactif »). Ils ont vecu
+// dans deux blocs depuis le 23/09, pour que l'actif/inactif se lise d'un coup
+// d'oeil — une COLONNE le dit aussi bien, sans couper en deux une liste de
+// treize fiches qu'on parcourt d'un seul regard.
+// ⚠ LES ACTIFS RESTENT EN TETE : c'est une liste de travail, et un inactif
+// intercale entre deux actifs se rappelle a soi pour rien. Ce tri est pose
+// dans `section`, au moment ou les lignes sont choisies.
+// ⚠ ET LES COLONNES DEPENDENT DESORMAIS DE LA SECTION, d'ou `colonnes` : un
+// fournisseur n'a ni devis ni commission — ces trois colonnes affichaient trois
+// tirets sur toute la hauteur du bloc, c'est-a-dire de la largeur prise pour ne
+// rien dire (22/10/2026).
 const SECTIONS = [
-  { cle: 'apporteur', titre: 'Apporteurs d’affaires actifs',
-    bouton: '+ Nouvel apporteur', couleur: 'var(--accent)', montants: true,
-    prend: (a) => estApporteur(a) && estActif(a) },
+  { cle: 'apporteur', titre: 'Apporteurs d’affaires',
+    bouton: '+ Nouvel apporteur', couleur: 'var(--accent)',
+    colonnes: 'apporteur',
+    prend: (a) => estApporteur(a) },
   { cle: 'fournisseur', titre: 'Fournisseurs',
-    bouton: '+ Nouveau fournisseur', couleur: 'var(--blue)', montants: false,
+    bouton: '+ Nouveau fournisseur', couleur: 'var(--blue)',
+    colonnes: 'fournisseur',
     prend: (a) => !estApporteur(a) },
-  { cle: 'inactif', titre: 'Apporteurs d’affaires inactifs',
-    bouton: '', couleur: 'var(--muted)', montants: true, cree: 'apporteur',
-    prend: (a) => estApporteur(a) && !estActif(a) },
 ];
 
 const ISSUES = {
@@ -163,6 +196,21 @@ const bloc = (titre, dedans) => `
     <div class="paf-grille">${dedans}</div>
   </section>`;
 
+// Ce que porte le formulaire À CET INSTANT, champ par champ. Sert deux fois :
+// à l'enregistrement, et au redessin quand on change le type de fiche — c'est
+// par là que la saisie en cours survit à la bascule.
+const valeursSaisies = (form) => Object.fromEntries(
+  [...form.querySelectorAll('[name]')].map(i => [i.name, i.value.trim()]));
+
+// ⚠ TROIS ÉTATS, PAS DEUX, POUR UN « OUI OU NON » (22/10/2026) : oui, non, et
+// « on ne sait pas » — qui est le cas des treize fiches existantes. Un `select`
+// à deux options aurait répondu « non » à leur place dès le premier
+// enregistrement, et plus rien n'aurait distingué une réponse d'une absence de
+// réponse. Même règle que la pastille d'une pièce absente chez les
+// sous-traitants.
+const OUI_NON = [['', 'Non renseigné'], ['1', 'Oui'], ['0', 'Non']];
+const ouiNonValeur = (x) => (x === true ? '1' : x === false ? '0' : '');
+
 /**
  * Le formulaire d'un partenaire, créer comme modifier.
  *
@@ -176,8 +224,21 @@ const bloc = (titre, dedans) => `
  * 25/09/2026). La colonne `adresse` existait en base et n'était affichée ni
  * saisie nulle part — le relevé la reposait, ce qui est justement ce qu'on
  * vient de couper.
+ *
+ * ⚠ ET DEUX FORMULAIRES DEPUIS LE 22/10/2026, selon le type de la fiche : on
+ * ne remplit pas un fournisseur comme un apporteur. Élodie : « section 1 : le
+ * fournisseur : société, domaine d'activité, mail, téléphone, site internet,
+ * adresse, suivi, compte pro ouvert. Section 2 : Interlocuteur : nom, prénom,
+ * mail pro, tel pro, rôle. Supprime donc uniquement pour les fournisseurs
+ * "comment le rejoindre" et "ce qui nous lie" ». La bascule se lit sur
+ * `type_partenaire`, et le champ qui la porte RESTE DANS LE FORMULAIRE — sans
+ * lui, une fiche créée du mauvais côté serait enfermée dans la mauvaise
+ * présentation. Il change l'affichage à la volée (voir `brancherFormulaire`).
  */
 function corpsFormulaire(v, creation) {
+  if (String(v.type_partenaire || 'apporteur') !== 'apporteur') {
+    return corpsFournisseur(v, creation);
+  }
   return `<form id="paf" class="paf">
     ${bloc('Le partenaire', `
       ${'' /* ⚠ LE NOM N'EST PLUS EXIGÉ PAR LE NAVIGATEUR (12/10/2026, Élodie) : une
@@ -206,12 +267,80 @@ function corpsFormulaire(v, creation) {
       <label class="paf-champ est-large"><span>Notes</span>
         <textarea name="notes" rows="3">${esc(v.notes || '')}</textarea></label>`)}
 
+    ${pied(creation)}
+  </form>`;
+}
+
+// Le pied est le même des deux côtés : les deux formulaires s'enregistrent et
+// se suppriment par le même code, et `brancherFormulaire` cherche ces trois
+// identifiants. Le recopier aurait suffi à ce qu'un bouton manque d'un côté.
+const pied = (creation) => `
     <div class="paf-pied">
       ${creation ? '' : '<button type="button" class="btn ghost danger" id="paf-suppr">Supprimer</button>'}
       <span class="grow"></span>
       <button type="button" class="btn ghost" id="paf-annuler">Annuler</button>
       <button type="submit" class="btn primary" id="paf-ok">${creation ? 'Créer le partenaire' : 'Enregistrer'}</button>
-    </div>
+    </div>`;
+
+/**
+ * Le formulaire d'un FOURNISSEUR : la société, puis la personne qu'on appelle.
+ *
+ * ⚠ DEUX NIVEAUX DE COORDONNÉES, ET C'EST TOUT LE POINT DU DÉCOUPAGE :
+ * `email`/`telephone` sont ceux de l'ENTREPRISE — le standard, l'adresse de
+ * contact du site —, les `*_interlocuteur` ceux de la PERSONNE. Les confondre,
+ * c'est rappeler l'accueil quand on cherche son commercial.
+ *
+ * ⚠ « CE QUI NOUS LIE » NE S'AFFICHE QUE S'IL PORTE DÉJÀ QUELQUE CHOSE.
+ * Élodie a demandé la disparition de ce bloc chez les fournisseurs, et c'est
+ * ce que fait la ligne ci-dessous — mais quatre fiches sur huit portaient des
+ * notes et une une convention signée au moment du changement. Les couper sans
+ * condition aurait laissé ces textes en base, invisibles et impossibles à
+ * corriger : écrits une fois, perdus pour tout le monde. Une fiche vierge, ou
+ * une fiche qu'on aura vidée, n'affiche donc rien ; les autres gardent leur
+ * accès à ce qui y est écrit.
+ */
+function corpsFournisseur(v, creation) {
+  const lie = v.partenariat_signe || v.date_signature || v.notes;
+  return `<form id="paf" class="paf">
+    ${bloc('Le fournisseur', `
+      ${champ('societe', 'Société', v.societe || v.raison_sociale, { large: true })}
+      ${'' /* Même colonne `profession` que chez l'apporteur : chez un fournisseur,
+         ce n'est pas un métier exercé mais ce qu'il vend. */}
+      ${champ('profession', 'Domaine d’activité', v.profession,
+        { placeholder: 'Menuiserie, isolation, carrelage…' })}
+      ${champ('email', 'E-mail', v.email, { type: 'email', placeholder: 'Contact de la société' })}
+      ${champ('telephone', 'Téléphone', v.telephone, { type: 'tel', placeholder: 'Standard' })}
+      ${'' /* Pas `large` : la grille a deux colonnes, et un champ pleine
+         largeur ici laissait le telephone seul sur sa ligne, avec un vide a
+         sa droite. Le standard et le site vont de pair. */}
+      ${champ('site_internet', 'Site internet', v.site_internet, { placeholder: 'exemple.fr' })}
+      ${champ('adresse', 'Adresse', v.adresse, { large: true, placeholder: 'Numéro et rue' })}
+      ${champ('code_postal', 'Code postal', v.code_postal)}
+      ${champ('ville', 'Ville', v.ville)}
+      ${liste('actif', 'Suivi', [['1', 'Actif'], ['0', 'Inactif']], v.actif === false ? '0' : '1')}
+      ${liste('compte_pro_ouvert', 'Compte pro ouvert', OUI_NON, ouiNonValeur(v.compte_pro_ouvert))}
+      ${'' /* ⚠ DISCRET MAIS PRÉSENT (choix d'Élodie du 22/10) : c'est la seule
+         porte entre les deux formulaires. Une fiche créée par erreur du côté
+         fournisseur n'aurait aucun moyen de rejoindre les apporteurs. */}
+      ${liste('type_partenaire', 'Type de fiche',
+        Object.entries(ROLES).map(([k, r]) => [k, r.label]), v.type_partenaire || 'fournisseur')}`)}
+
+    ${bloc('Interlocuteur', `
+      ${champ('nom', 'Nom', v.nom)}
+      ${champ('prenom', 'Prénom', v.prenom)}
+      ${champ('role_interlocuteur', 'Rôle', v.role_interlocuteur,
+        { placeholder: 'Commercial, responsable d’agence…' })}
+      ${champ('email_interlocuteur', 'Mail pro', v.email_interlocuteur, { type: 'email' })}
+      ${champ('telephone_interlocuteur', 'Tel pro', v.telephone_interlocuteur, { type: 'tel' })}`)}
+
+    ${lie ? bloc('Ce qui nous lie', `
+      ${liste('partenariat_signe', 'Convention de partenariat',
+        [['0', 'Non signée'], ['1', 'Signée']], v.partenariat_signe ? '1' : '0')}
+      ${champ('date_signature', 'Date de signature', v.date_signature, { type: 'date' })}
+      <label class="paf-champ est-large"><span>Notes</span>
+        <textarea name="notes" rows="3">${esc(v.notes || '')}</textarea></label>`) : ''}
+
+    ${pied(creation)}
   </form>`;
 }
 
@@ -229,10 +358,25 @@ function brancherFormulaire(hote, a, apres, annuler) {
       const form = m.querySelector('#paf');
       m.querySelector('#paf-annuler').onclick = () => (annuler || closeModal)();
 
+      // ⚠ CHANGER LE TYPE DE FICHE REDESSINE LE FORMULAIRE SUR PLACE : les deux
+      // présentations ne portent pas les mêmes champs depuis le 22/10/2026, et
+      // basculer « fournisseur » vers « apporteur » sans redessiner aurait
+      // laissé la liste du haut en désaccord avec les blocs du dessous — on
+      // enregistre un apporteur dans un formulaire qui dit « Le fournisseur ».
+      // La saisie en cours est reprise, y compris ce qui n'a pas de case en
+      // face dans l'autre présentation : elle repart en base si le champ
+      // reparaît, et rien n'est effacé en attendant.
+      const typeSel = form.querySelector('[name="type_partenaire"]');
+      if (typeSel) typeSel.onchange = () => {
+        const v = { ...(a || {}), ...valeursSaisies(form) };
+        form.parentElement.innerHTML = corpsFormulaire(v, creation);
+        brancherFormulaire(m, a, apres, annuler);
+        m.querySelector('[name="type_partenaire"]')?.focus();
+      };
+
       form.onsubmit = async (ev) => {
         ev.preventDefault();
-        const lu = Object.fromEntries(
-          [...form.querySelectorAll('[name]')].map(i => [i.name, i.value.trim()]));
+        const lu = valeursSaisies(form);
         if (!lu.nom && !lu.societe) return toast('Un nom ou une société, au moins', 'warn');
 
         // ⚠ UN CHAMP VIDE PART À `null`, jamais à `''` : c'est ainsi qu'on
@@ -240,8 +384,22 @@ function brancherFormulaire(hote, a, apres, annuler) {
         // distingue plus d'une valeur qu'on n'a jamais remplie.
         const champs = Object.fromEntries(
           Object.entries(lu).map(([k, x]) => [k, x === '' ? null : x]));
-        champs.actif = lu.actif === '1';
-        champs.partenariat_signe = lu.partenariat_signe === '1';
+        // ⚠ UN BOOLÉEN NE SE POSE QUE SI SON CHAMP ÉTAIT À L'ÉCRAN, et c'est la
+        // correction qui compte ici : le formulaire fournisseur n'affiche plus
+        // la convention (22/10/2026), donc `lu.partenariat_signe` y est
+        // `undefined`. Les deux lignes d'avant écrivaient `=== '1'`, c'est-à-dire
+        // `false`, sur chaque enregistrement — le premier passage sur le seul
+        // fournisseur sous convention l'aurait déclarée non signée, avec sa date
+        // restée en place pour dire le contraire. Même mécanique que le relevé
+        // qui réécrivait les contacts : ce qui n'a pas été saisi ne doit pas être
+        // reposé.
+        if ('actif' in lu) champs.actif = lu.actif === '1';
+        if ('partenariat_signe' in lu) champs.partenariat_signe = lu.partenariat_signe === '1';
+        // Trois états : « Non renseigné » vaut `null`, et reste distinct de « Non ».
+        if ('compte_pro_ouvert' in lu) {
+          champs.compte_pro_ouvert = lu.compte_pro_ouvert === ''
+            ? null : lu.compte_pro_ouvert === '1';
+        }
 
         const ok = m.querySelector('#paf-ok');
         ok.disabled = true; ok.textContent = 'Enregistrement…';
@@ -279,6 +437,74 @@ function brancherFormulaire(hote, a, apres, annuler) {
         toast('Partenaire supprimé');
         apres?.(null);
       };
+}
+
+/**
+ * La fiche d'un FOURNISSEUR en lecture : la société à gauche, la personne à
+ * droite (22/10/2026).
+ *
+ * ⚠ ELLE EXISTE PARCE QUE LE FORMULAIRE A CHANGÉ, pas pour faire joli. Cinq
+ * champs sont nés ce jour-là — le site, le compte pro, et les trois
+ * coordonnées de l'interlocuteur. Les laisser dans le seul formulaire aurait
+ * donné des informations qu'on ne peut lire qu'en cliquant « Modifier », donc
+ * qu'on risque de modifier pour les lire. La fiche MONTRE d'abord : c'est la
+ * règle de cet écran depuis le 25/09.
+ *
+ * ⚠ ET LES DEUX NIVEAUX RESTENT SÉPARÉS À L'ÉCRAN AUSSI : le téléphone de la
+ * société d'un côté, la ligne directe de l'autre. Les empiler dans un même
+ * bloc « Comment le joindre » aurait rendu le découpage invisible, donc inutile.
+ *
+ * ⚠ `info` NE REND RIEN SUR UNE VALEUR VIDE : une fiche à peine commencée
+ * n'affiche pas huit tirets. C'est pour cela que chaque bloc dit lui-même
+ * quand il est vide, au lieu de compter sur la place prise par ses lignes.
+ */
+function ficheFournisseur(a) {
+  // Le site est saisi tel quel (« exemple.fr ») ; sans schéma, un navigateur
+  // lirait le lien comme un chemin relatif du CRM et resterait sur place.
+  const site = String(a.site_internet || '').trim();
+  const lien = site && !/^https?:\/\//i.test(site) ? `https://${site}` : site;
+  const compte = a.compte_pro_ouvert === true ? 'Oui'
+    : a.compte_pro_ouvert === false ? 'Non' : '';
+  const perso = a.nom || a.prenom || a.role_interlocuteur
+    || a.email_interlocuteur || a.telephone_interlocuteur;
+  return `
+        <div class="rgdf-colonne">
+          <section class="rgdf-bloc">
+            <h3>Le fournisseur</h3>
+            ${info('source', 'Société', esc(a.societe || a.raison_sociale || ''), 'est-violet')}
+            ${info('personne', 'Domaine d’activité', esc(a.profession || ''), 'est-orange')}
+            ${info('tel', 'Téléphone', a.telephone ? `<a href="tel:${esc(a.telephone)}">${esc(a.telephone)}</a>` : '', 'est-vert')}
+            ${info('mail', 'E-mail', a.email ? `<a href="mailto:${esc(a.email)}">${esc(a.email)}</a>` : '', 'est-bleu')}
+            ${info('globe', 'Site internet', lien
+              ? `<a href="${esc(lien)}" target="_blank" rel="noopener noreferrer">${esc(site)}</a>` : '', 'est-bleu')}
+            ${info('lieu', 'Adresse', esc(adresseDe(a)), 'est-gris')}
+            ${info('euro', 'Compte pro ouvert', esc(compte),
+              a.compte_pro_ouvert === true ? 'est-vert' : 'est-gris')}
+          </section>
+        </div>
+        <div class="rgdf-colonne">
+          <section class="rgdf-bloc">
+            <h3>Interlocuteur</h3>
+            ${info('personne', 'Nom', esc(nomDe(a)), 'est-orange')}
+            ${info('regle', 'Rôle', esc(a.role_interlocuteur || ''), 'est-violet')}
+            ${info('mail', 'Mail pro', a.email_interlocuteur
+              ? `<a href="mailto:${esc(a.email_interlocuteur)}">${esc(a.email_interlocuteur)}</a>` : '', 'est-bleu')}
+            ${info('tel', 'Tel pro', a.telephone_interlocuteur
+              ? `<a href="tel:${esc(a.telephone_interlocuteur)}">${esc(a.telephone_interlocuteur)}</a>` : '', 'est-vert')}
+            ${perso ? '' : '<p class="rgdf-rien">Aucun interlocuteur renseigné.</p>'}
+          </section>
+          ${'' /* Même raison que dans le formulaire : le bloc a disparu de la
+             fiche fournisseur, mais ce qui y était déjà écrit reste lisible. */}
+          ${a.partenariat_signe || a.date_signature || a.notes ? `
+          <section class="rgdf-bloc">
+            <h3>Ce qui nous lie</h3>
+            ${info('regle', 'Convention',
+              a.partenariat_signe
+                ? 'Signée' + (a.date_signature ? ` le ${esc(fmtDate(a.date_signature))}` : '')
+                : 'Non signée', a.partenariat_signe ? 'est-vert' : 'est-gris')}
+            ${info('texte', 'Notes', esc(a.notes || ''), 'est-gris')}
+          </section>` : ''}
+        </div>`;
 }
 
 /** Créer un partenaire : le formulaire seul, dans sa propre fenêtre. */
@@ -789,7 +1015,8 @@ function ouvrirFichePartenaire(id, apres) {
       </div>
 
       <div class="rgdf-corps">
-        ${enModification ? `<div class="rgdf-colonne rgdf-large">${corpsFormulaire(a, false)}</div>` : `
+        ${enModification ? `<div class="rgdf-colonne rgdf-large">${corpsFormulaire(a, false)}</div>`
+          : (estApporteur(a) ? `
         <div class="rgdf-colonne">
           <section class="rgdf-bloc">
             <h3>Comment le joindre</h3>
@@ -810,7 +1037,7 @@ function ouvrirFichePartenaire(id, apres) {
                 : 'Non signée', a.partenariat_signe ? 'est-vert' : 'est-gris')}
             ${info('texte', 'Notes', esc(a.notes || ''), 'est-gris')}
           </section>
-        </div>`}
+        </div>` : ficheFournisseur(a))}
 
         <section class="rgdf-bloc rgdf-large">
           <h3>Ses apports <span class="rgdf-compte" id="pa-n">${siens.length}</span></h3>
@@ -1040,32 +1267,63 @@ export const rgdPartenairesPage = {
       const vus = tous.filter(a =>
         hit([nomDe(a), a.societe, a.raison_sociale, a.profession, a.ville, adresseDe(a)], ts));
 
-      const ligne = (a, sec) => {
-        const t = totauxDe(a.id);
-        const taux = tauxCommission(t);
-        return `<tr ${state.ecriture ? `data-partenaire="${esc(String(a.id))}"` : ''}>
-          ${'' /* La société en tête (13/10/2026, Élodie) : c'est elle qu'on cherche dans la liste. */}
-          <td><b>${esc(a.societe || a.raison_sociale || '—')}</b></td>
-          <td>${esc(a.nom || '—')}</td>
-          <td>${esc(a.prenom || '—')}</td>
-          <td class="pa-bleu">${esc(a.profession || '—')}</td>
-          ${sec.montants ? `
-          <td class="num">${t.devis ? esc(eur(t.devis)) : '<span class="muted">—</span>'}
-            ${t.apports ? `<div class="s muted">${t.apports} apport${t.apports > 1 ? 's' : ''}${
-              t.gagnes ? ` · ${t.gagnes} gagné${t.gagnes > 1 ? 's' : ''}` : ''}</div>` : ''}</td>
-          <td class="num">${t.commission ? `<b>${esc(eur(t.commission))}</b>` : '<span class="muted">—</span>'}</td>
-          <td class="num">${taux === null ? '<span class="muted">—</span>'
-            : `<span title="${esc(detailTaux(t))}">${esc(pourCent(taux))}</span>`}</td>`
-          : '<td class="muted">—</td><td class="muted">—</td><td class="muted">—</td>'}
-        </tr>`;
+      // Les deux tableaux ne portent plus les mêmes colonnes depuis le
+      // 22/10/2026 : l'en-tête et les cellules sont donc décrits ensemble, ici,
+      // pour qu'on ne puisse pas déplacer l'un en oubliant l'autre. Le
+      // précédent décalage de ce genre a coûté une matinée.
+      const COLONNES = {
+        // Un apporteur : ce qu'il a apporté, et s'il est encore de la partie.
+        apporteur: {
+          entete: `<th>Société</th><th>Nom</th><th>Prénom</th><th>Profession</th>
+            <th>Suivi</th><th class="num">Montant devis</th>
+            <th class="num">Montant commissions</th><th class="num">% commission</th>`,
+          cellules: (a) => {
+            const t = totauxDe(a.id);
+            const taux = tauxCommission(t);
+            return `
+            <td>${esc(a.nom || '—')}</td>
+            <td>${esc(a.prenom || '—')}</td>
+            <td class="pa-bleu">${esc(a.profession || '—')}</td>
+            ${'' /* La colonne demandée le 22/10 : elle remplace le bloc « inactifs ». */}
+            <td><span class="rgdf-tag ${estActif(a) ? 'est-etape' : 'est-perdu'}">${
+              estActif(a) ? 'Actif' : 'Inactif'}</span></td>
+            <td class="num">${t.devis ? esc(eur(t.devis)) : '<span class="muted">—</span>'}
+              ${t.apports ? `<div class="s muted">${t.apports} apport${t.apports > 1 ? 's' : ''}${
+                t.gagnes ? ` · ${t.gagnes} gagné${t.gagnes > 1 ? 's' : ''}` : ''}</div>` : ''}</td>
+            <td class="num">${t.commission ? `<b>${esc(eur(t.commission))}</b>` : '<span class="muted">—</span>'}</td>
+            <td class="num">${taux === null ? '<span class="muted">—</span>'
+              : `<span title="${esc(detailTaux(t))}">${esc(pourCent(taux))}</span>`}</td>`;
+          },
+        },
+        // Un fournisseur : ce qu'il vend et où il est. Ni devis ni commission —
+        // on ne lui apporte pas d'affaires, on achète chez lui.
+        fournisseur: {
+          entete: `<th>Société</th><th>Nom</th><th>Prénom</th>
+            <th>Secteur d’activité</th><th>Ville</th>`,
+          cellules: (a) => `
+            <td>${esc(a.nom || '—')}</td>
+            <td>${esc(a.prenom || '—')}</td>
+            ${'' /* Même colonne `profession` que chez l'apporteur, autre intitulé : chez un fournisseur c'est son secteur, pas un métier exercé. */}
+            <td class="pa-bleu">${esc(a.profession || '—')}</td>
+            <td>${esc(a.ville || '—')}</td>`,
+        },
       };
 
+      const ligne = (a, sec) => `<tr ${
+        state.ecriture ? `data-partenaire="${esc(String(a.id))}"` : ''}>
+          ${'' /* La société en tête (13/10/2026, Élodie) : c'est elle qu'on cherche dans la liste. */}
+          <td><b>${esc(a.societe || a.raison_sociale || '—')}</b></td>
+          ${COLONNES[sec.colonnes].cellules(a)}
+        </tr>`;
+
       const section = (sec) => {
-        const lignes = vus.filter(sec.prend);
-        // ⚠ LA SECTION DES INACTIFS NE S'AFFICHE QUE SI ELLE PORTE QUELQU'UN.
-        // Un bloc vide intitulé « Apporteurs inactifs » occupe une place et
-        // n'apprend rien ; il réapparaît au premier partenaire désactivé.
-        if (sec.cle === 'inactif' && !lignes.length && !state.q) return '';
+        // ⚠ LES ACTIFS D'ABORD, DANS LEUR ORDRE D'ORIGINE : depuis que les deux
+        // populations partagent un tableau (22/10/2026), rien ne les séparerait
+        // plus à l'œil. `sort` est stable, donc l'ordre interne de chaque groupe
+        // est celui qu'avait la liste — on ne retrie pas sur le nom ici.
+        const lignes = vus.filter(sec.prend)
+          .sort((x, y) => (estActif(y) ? 1 : 0) - (estActif(x) ? 1 : 0));
+        const nbColonnes = COLONNES[sec.colonnes].entete.split('<th').length - 1;
         return `
         <section class="card pa-sect" style="--pa-trait:${sec.couleur}">
           <div class="pa-head">
@@ -1078,11 +1336,10 @@ export const rgdPartenairesPage = {
           </div>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Société</th><th>Nom</th><th>Prénom</th><th>Profession</th>
-                <th class="num">Montant devis</th><th class="num">Montant commissions</th>
-                <th class="num">% commission</th></tr></thead>
+              <thead><tr>${COLONNES[sec.colonnes].entete}</tr></thead>
+              ${'' /* Le colspan est compté sur l'en-tête, jamais écrit à la main : une colonne ajoutée sans lui laisse la ligne « Personne pour le moment » plus courte que le tableau. */}
               <tbody>${lignes.map(a => ligne(a, sec)).join('')
-                || `<tr><td colspan="7"><div class="empty">${
+                || `<tr><td colspan="${nbColonnes}"><div class="empty">${
                   state.q ? 'Aucun résultat dans cette catégorie.'
                     : 'Personne pour le moment.'}</div></td></tr>`}</tbody>
             </table>
@@ -1216,7 +1473,10 @@ export const rgdPartenairesPage = {
 
       root.querySelectorAll('[data-nouveau]').forEach(b => b.onclick = () => {
         const sec = SECTIONS.find(s => s.cle === b.dataset.nouveau);
-        nouveauPartenaire(draw, sec?.cree || sec?.cle || 'apporteur');
+        // `sec.cree` a disparu avec la section des inactifs (22/10/2026) : elle
+        // seule creait sous un autre role que le sien. Les deux sections qui
+        // restent portent le role qu'elles creent.
+        nouveauPartenaire(draw, sec?.cle || 'apporteur');
       });
       // Le clic ouvre la FICHE, pas le formulaire : on vient d'abord lire.
       root.querySelectorAll('[data-partenaire]').forEach(tr => tr.onclick = () =>
