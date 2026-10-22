@@ -26,6 +26,7 @@ import { scope } from '../data/scope.js';
 import { db } from '../data/db.js';
 import { logoReseau } from '../data/logos-reseaux.js';
 import { vueSite } from './analyse-site.js';
+import { blocMetaAds, lierMetaAds } from './analyse-meta-ads.js';
 import { raccordementTiktok, demarrerRaccordementTiktok, retirerRaccordementTiktok, messageRetourTiktok } from '../data/tiktok.js';
 import { cadreCourtage } from './courtage.js';
 import { esc, toast, openModal, closeModal, armerCroix } from '../ui.js';
@@ -785,8 +786,10 @@ export function pageAnalyse(cle) {
             ${retourTiktok ? `<p class="ana-retour est-${retourTiktok.ton}">${esc(retourTiktok.texte)}</p>` : ''}
             <p class="small muted ana-releve">${dernierReleve ? `Relevé chaque matin — dernier relevé le ${esc(new Date(dernierReleve).toLocaleString('fr-FR', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }))}.` : 'Premier relevé demain matin.'}</p>
             <div class="ana-cartes">${RESEAUX_DE[cle].map(carteReseau).join('')}</div>
+            ${blocMetaAds(cle, state.periode)}
             ${blocPosts}`}`;
         root.innerHTML = cadre(hash, 'Analyse', corps);
+        lierMetaAds(root);
         root.querySelectorAll('[data-periode]').forEach(b => b.onclick = () => {
           state.periode = Number(b.dataset.periode);
           try { localStorage.setItem('crm_ana_periode', String(state.periode)); } catch { /* sans stockage */ }

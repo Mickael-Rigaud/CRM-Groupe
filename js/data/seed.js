@@ -31,6 +31,22 @@ export const SEED_USERS = [
 // partir d'aujourd'hui, pour que l'écran Analyse montre des courbes ET une
 // comparaison avec la période précédente. Chiffres INVENTÉS, tirés d'une
 // formule fixe (pas de hasard : l'écran ne doit pas changer à chaque ouverture).
+// Les jours Meta Ads de démonstration : une formule fixe, pour que la démo
+// rende les mêmes chiffres d'une ouverture à l'autre.
+function metaAdsDemo() {
+  const out = [];
+  const jourDe = (n) => new Intl.DateTimeFormat('fr-CA', { timeZone: 'Europe/Paris' }).format(new Date(Date.now() - n * 86400000));
+  for (let n = 0; n < 90; n++) {
+    const jour = jourDe(n);
+    if (n <= 40) out.push({ campagne_id: 'demo-camp-1', activity: 'rgd', jour, depense: 11 + (n % 5) * 1.7,
+      impressions: 900 + (n % 7) * 60, portee: 620 + (n % 6) * 40, clics: 9 + (n % 4) * 3,
+      leads: n === 6 || n === 2 || n % 9 === 4 ? 1 : 0 });
+    if (n >= 20 && n <= 75) out.push({ campagne_id: 'demo-camp-2', activity: 'rgd', jour, depense: 8 + (n % 3) * 2,
+      impressions: 700 + (n % 5) * 50, portee: 500 + (n % 4) * 30, clics: 6 + (n % 3) * 2, leads: n % 8 === 3 ? 1 : 0 });
+  }
+  return out;
+}
+
 function statsDemo() {
   const lignes = [];
   const base = { rgd: { facebook: [600, 850, 9, 8], instagram: [180, 450, 4, 812] }, btp: { facebook: [3, 5, 0, 2], instagram: [8, 20, 1, 180] } };
@@ -626,6 +642,71 @@ export const SEED = {
   })(),
   // Les totaux de période « à la Meta » : en démo, la somme des jours (sans
   // dédoublonnage) suffit à remplir l'écran.
+  // Les campagnes Meta Ads de démonstration (22/10/2026) : noms et chiffres
+  // INVENTÉS, le dépôt est public. Deux campagnes — une qui tourne, une en
+  // pause — et des leads Meta les jours où arrivent les deux fiches `meta_ads`
+  // du jeu (rc1 il y a 6 jours, rc2 il y a 2 jours), sans quoi le rattachement
+  // d'un lead du CRM à sa campagne ne s'essaierait jamais.
+  meta_ads_campagnes: [
+    { campagne_id: 'demo-camp-1', activity: 'rgd', nom: 'Démo — Rénovation salle de bain', statut: 'ACTIVE',
+      statut_effectif: 'ACTIVE', objectif: 'OUTCOME_LEADS', debut: new Date(Date.now() - 40 * 86400000).toISOString(), fin: null,
+      diffusion_du: day(-40), diffusion_au: day(0),
+    repartition: {
+        plateformes: [{ cle: 'facebook', impressions: 9800, depense: 290, leads: 5 }, { cle: 'instagram', impressions: 6100, depense: 230, leads: 2 }, { cle: 'audience_network', impressions: 900, depense: 56, leads: 0 }],
+        ages: [{ cle: '45-54', impressions: 5200, depense: 170, leads: 3 }, { cle: '35-44', impressions: 4600, depense: 150, leads: 2 }, { cle: '55-64', impressions: 3900, depense: 130, leads: 2 }, { cle: '25-34', impressions: 2100, depense: 80, leads: 0 }, { cle: '65+', impressions: 1000, depense: 46, leads: 0 }],
+        sexes: [{ cle: 'female', impressions: 9900, depense: 330, leads: 5 }, { cle: 'male', impressions: 6700, depense: 236, leads: 2 }, { cle: 'unknown', impressions: 200, depense: 10, leads: 0 }],
+        appareils: [{ cle: 'mobile_app', impressions: 15100, depense: 520, leads: 7 }, { cle: 'desktop', impressions: 1700, depense: 56, leads: 0 }],
+        regions: [{ cle: 'Hauts-de-France', impressions: 10200, depense: 350, leads: 5 }, { cle: 'Ile-de-France', impressions: 6600, depense: 226, leads: 2 }],
+      },
+      releve_le: new Date().toISOString() },
+    { campagne_id: 'demo-camp-2', activity: 'rgd', nom: 'Démo — Isolation des combles', statut: 'PAUSED',
+      statut_effectif: 'PAUSED', objectif: 'OUTCOME_LEADS', debut: new Date(Date.now() - 75 * 86400000).toISOString(),
+      fin: new Date(Date.now() - 20 * 86400000).toISOString(), diffusion_du: day(-75), diffusion_au: day(-20),
+      repartition: {
+        plateformes: [{ cle: 'facebook', impressions: 12400, depense: 380, leads: 6 }, { cle: 'instagram', impressions: 3100, depense: 180, leads: 1 }],
+        ages: [{ cle: '55-64', impressions: 6200, depense: 210, leads: 4 }, { cle: '65+', impressions: 4800, depense: 170, leads: 2 }, { cle: '45-54', impressions: 4500, depense: 180, leads: 1 }],
+        sexes: [{ cle: 'male', impressions: 8600, depense: 300, leads: 4 }, { cle: 'female', impressions: 6900, depense: 260, leads: 3 }],
+        appareils: [{ cle: 'mobile_app', impressions: 13000, depense: 470, leads: 7 }, { cle: 'desktop', impressions: 2500, depense: 90, leads: 0 }],
+        regions: [{ cle: 'Hauts-de-France', impressions: 15500, depense: 560, leads: 7 }],
+      },
+      releve_le: new Date().toISOString() },
+    { campagne_id: 'demo-camp-3', activity: 'rgd', nom: 'Démo — Cuisine sur mesure', statut: 'ARCHIVED',
+      statut_effectif: 'ARCHIVED', objectif: 'OUTCOME_LEADS', debut: new Date(Date.now() - 160 * 86400000).toISOString(),
+      fin: new Date(Date.now() - 130 * 86400000).toISOString(), diffusion_du: day(-160), diffusion_au: day(-131),
+      repartition: {
+        plateformes: [{ cle: 'instagram', impressions: 8200, depense: 240, leads: 2 }, { cle: 'facebook', impressions: 5100, depense: 150, leads: 1 }],
+        ages: [{ cle: '35-44', impressions: 6100, depense: 180, leads: 2 }, { cle: '25-34', impressions: 4300, depense: 120, leads: 1 }, { cle: '45-54', impressions: 2900, depense: 90, leads: 0 }],
+        sexes: [{ cle: 'female', impressions: 8800, depense: 260, leads: 3 }, { cle: 'male', impressions: 4500, depense: 130, leads: 0 }],
+        appareils: [{ cle: 'mobile_app', impressions: 12600, depense: 370, leads: 3 }, { cle: 'desktop', impressions: 700, depense: 20, leads: 0 }],
+        regions: [{ cle: 'Ile-de-France', impressions: 9100, depense: 270, leads: 2 }, { cle: 'Hauts-de-France', impressions: 4200, depense: 120, leads: 1 }],
+      },
+      releve_le: new Date().toISOString() },
+  ],
+  meta_ads_jour: metaAdsDemo(),
+  meta_ads_periode: (() => {
+    const j = metaAdsDemo();
+    const out = [];
+    const jourDe = (n) => new Intl.DateTimeFormat('fr-CA', { timeZone: 'Europe/Paris' }).format(new Date(Date.now() - n * 86400000));
+    const bloc = (l) => ({ depense: Math.round(l.reduce((a, x) => a + x.depense, 0) * 100) / 100,
+      impressions: l.reduce((a, x) => a + x.impressions, 0), portee: Math.round(l.reduce((a, x) => a + x.portee, 0) * 0.7),
+      clics: l.reduce((a, x) => a + x.clics, 0), leads: l.reduce((a, x) => a + x.leads, 0) });
+    for (const n of [7, 14, 30, 0]) {
+      const du = n ? jourDe(n) : jourDe(89), au = jourDe(1);
+      const dans = (l, a, b) => l.filter(x => x.jour >= a && x.jour <= b);
+      const avDu = n ? jourDe(2 * n) : null, avAu = n ? jourDe(n + 1) : null;
+      for (const id of ['*', 'demo-camp-1', 'demo-camp-2']) {
+        const siens = id === '*' ? j : j.filter(x => x.campagne_id === id);
+        out.push({ activity: 'rgd', campagne_id: id, periode: n, du, au, ...bloc(dans(siens, du, au)),
+          precedent: n ? bloc(dans(siens, avDu, avAu)) : null, releve_le: new Date().toISOString() });
+      }
+    }
+    out.push({ activity: 'rgd', campagne_id: 'demo-camp-3', periode: 0, du: day(-160), au: day(-131), depense: 390,
+      impressions: 13300, portee: 7900, clics: 214, leads: 3, precedent: null, releve_le: new Date().toISOString() });
+    const tout = out.find(x => x.campagne_id === '*' && x.periode === 0);
+    Object.assign(tout, { du: day(-160), depense: tout.depense + 390, impressions: tout.impressions + 13300,
+      portee: tout.portee + 7900, clics: tout.clics + 214, leads: tout.leads + 3 });
+    return out;
+  })(),
   communication_stats_periode: (() => {
     const j = statsDemo();
     const out = [];

@@ -63,6 +63,8 @@ export const TABLES = ['profiles', 'organisations', 'contacts', 'deals', 'activi
   'communication_contenus',
   // Les statistiques relevées chaque matin (direction seule, lecture seule).
   'communication_stats_jour', 'communication_stats_posts', 'communication_stats_periode',
+  // Les campagnes Meta Ads (22/10/2026), relevées par l'Edge Function `meta-ads`.
+  'meta_ads_campagnes', 'meta_ads_jour', 'meta_ads_periode',
   // ⚠ `tiktok_raccordement` EST UNE VUE, PAS LA TABLE : celle-ci porte les
   // jetons et n'a aucune policy — rien n'en sort côté navigateur. La vue ne dit
   // que quel compte est raccordé, depuis quand et jusqu'à quand, et elle ne
