@@ -175,8 +175,20 @@ const adresseDe = (a) => [a.adresse, [a.code_postal, a.ville].filter(Boolean).jo
 // fiche montrent le même mot, il n'y a aucune raison qu'ils divergent le jour
 // où l'un des deux change de couleur — c'est exactement ce qui venait
 // d'arriver.
-const pastilleSuivi = (a) => `<span class="rgdf-tag ${
-  estActif(a) ? 'est-actif' : 'est-perdu'}">${estActif(a) ? 'Actif' : 'Inactif'}</span>`;
+//
+// ⚠ LE VERT EST POUR LES APPORTEURS, PAS POUR LES FOURNISSEURS (22/10/2026,
+// Élodie : « non on ne met pas les fournisseurs en vert »). Le vert a été
+// demandé pour la colonne « Suivi » des apporteurs ; je l'avais étendu aux
+// fournisseurs au motif que le mot était le même — il l'est, mais il ne dit pas
+// la même chose : un apporteur actif est quelqu'un avec qui on travaille
+// encore, un fournisseur actif est un compte ouvert chez un marchand. Leur
+// pastille reste à la couleur de marque. Un tableau de fournisseurs n'a de
+// toute façon pas de colonne « Suivi » : seul l'en-tête de sa fiche est
+// concerné.
+const pastilleSuivi = (a) => {
+  const classe = !estActif(a) ? 'est-perdu' : (estApporteur(a) ? 'est-actif' : 'est-etape');
+  return `<span class="rgdf-tag ${classe}">${estActif(a) ? 'Actif' : 'Inactif'}</span>`;
+};
 
 // ------------------------------------------------------- le formulaire fiche
 
