@@ -472,6 +472,7 @@ async function start(user) {
   unsubscribe?.();
   unsubscribe = db.onChange(() => { renderNav(); current?.refresh?.(); });
   route();
+  db.ecouterLesChangements();
   if (retourDeLien()) setTimeout(() => passwordForm(true), 300);
 }
 

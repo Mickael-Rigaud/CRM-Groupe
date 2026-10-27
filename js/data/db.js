@@ -725,6 +725,26 @@ const supabaseAdapter = {
     const { data } = await this.client.auth.getSession();
     return data?.session?.access_token || null;
   },
+  // Temps réel : la base envoie « la table X a changé » sur le canal privé
+  // `crm` (migration `20261027150000_crm_temps_reel` du dépôt Backend). Le
+  // signal ne porte aucune donnée : on recharge la table, à travers la RLS.
+  // `surReprise` : la connexion revient après une coupure (téléphone en veille,
+  // tunnel) — des signaux ont pu se perdre entre-temps.
+  async ecouter(surChangement, surReprise) {
+    await this.client.realtime.setAuth(); // canal privé : il lui faut le jeton de la session
+    let dejaAbonne = false;
+    this.canal = this.client.channel('crm', { config: { private: true } })
+      .on('broadcast', { event: 'changement' }, ({ payload }) => { if (payload?.table) surChangement(payload.table); })
+      .subscribe((etat) => {
+        if (etat !== 'SUBSCRIBED') return;
+        if (dejaAbonne) surReprise();
+        dejaAbonne = true;
+      });
+  },
+  async arreterEcoute() {
+    if (this.canal) await this.client.removeChannel(this.canal);
+    this.canal = null;
+  },
   async resetPassword(email) {
     const { error } = await this.client.auth.resetPasswordForEmail(email, { redirectTo: location.href.split('#')[0] });
     if (error) throw new Error(error.message);
@@ -858,8 +878,8 @@ export const db = {
   // Recharge quelques tables seulement, sans toucher au reste du cache.
   // N'émet que si quelque chose a bougé : autrement un rafraîchissement
   // périodique redessinerait la page sous les doigts de l'utilisateur.
-  async refresh(tables) {
-    const out = await this.adapter.load(tables);
+  async refresh(tables, options) {
+    const out = await this.adapter.load(tables, options);
     let change = false;
     for (const t of tables) {
       const rows = out[t] || [];
@@ -908,7 +928,29 @@ export const db = {
   // auth
   currentUser() { return this.adapter.currentUser(); },
   signIn(a, b) { return this.adapter.signIn(a, b); },
-  async signOut() { await effacerCopie(); return this.adapter.signOut(); },
+  // Les signaux arrivent souvent en rafale (une synchronisation touche plusieurs
+  // tables) : on les regroupe, et l'on recharge une fois. `exigeant` partout :
+  // une coupure ne doit pas remplacer des tables justes par des tables vides.
+  ecouterLesChangements() {
+    if (this.demo || this.ecoute) return;
+    const enAttente = new Set();
+    let minuteur = null;
+    const recharger = async () => {
+      minuteur = null;
+      const tables = [...enAttente].filter(t => TABLES.includes(t));
+      enAttente.clear();
+      if (tables.length) await this.refresh(tables, { exigeant: true }).catch(() => {});
+    };
+    this.ecoute = this.adapter.ecouter(
+      (table) => { enAttente.add(table); minuteur ||= setTimeout(recharger, 800); },
+      () => this.refresh(TABLES, { exigeant: true }).catch(() => {}),
+    ).catch(() => { this.ecoute = null; /* sans temps réel, le CRM marche comme avant */ });
+  },
+  async signOut() {
+    if (this.ecoute) { this.ecoute = null; await this.adapter.arreterEcoute?.(); }
+    await effacerCopie();
+    return this.adapter.signOut();
+  },
   resetPassword(email) { return this.adapter.resetPassword(email); },
   updatePassword(pw) { return this.adapter.updatePassword(pw); },
   isRecovery() { return this.adapter.isRecovery(); },
