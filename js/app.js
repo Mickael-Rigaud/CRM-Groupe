@@ -226,6 +226,7 @@ function renderTiroir(gs, here, hash, u, ini) {
         <div class="tir-qui"><b>${esc(u.full_name)}</b><span>${esc(ROLES[u.role]?.label || u.role)}</span></div>
         <button type="button" class="tir-x" id="tir-x" aria-label="Fermer le menu">${icon('x', 18)}</button>
       </div>
+      ${ecransDeLEspace()}
       <nav class="tir-nav" aria-label="Univers">${gs.filter(g => !g.bottom).map(ligne).join('')}</nav>
       <div class="tir-pied">
         ${gs.filter(g => g.bottom).map(g => `<a href="${g.hash}" class="tir-univ ${here?.key === g.key ? 'on' : ''}">${icon(g.icon, 19)}<span>${esc(g.label)}</span></a>`).join('')}
@@ -246,6 +247,28 @@ function renderTiroir(gs, here, hash, u, ini) {
     document.body.classList.remove('tiroir-ouvert');
     document.getElementById('msg-bulle')?.remove(); demonterRappels(); renderLogin();
   });
+}
+
+// Les écrans de l'espace ouvert (RGD Renova, BTP Expertise, La Référence
+// Courtage), en tête du tiroir. ⚠ SUR TÉLÉPHONE, LE MENU DE L'ESPACE N'EST
+// PLUS AFFICHÉ DANS LA PAGE (27/10/2026, Élodie : « trop de bandeaux en
+// haut ») : il faisait une bande noire qui défilait de côté, et on n'y voyait
+// que deux entrées et demie. Il vit désormais ici, en entier et dans l'ordre.
+// Lu dans la page plutôt que recopié : c'est `coquilleEspace` qui sait quelles
+// entrées ce profil peut voir, et il n'y aurait pas deux listes à tenir.
+function ecransDeLEspace() {
+  const nav = document.querySelector('#content .esp-side-nav');
+  if (!nav) return '';
+  const marque = document.querySelector('#content .esp-side-brand b')?.textContent || '';
+  const lien = (a) => `<a href="${esc(a.getAttribute('href'))}" class="tir-ecran ${a.classList.contains('on') ? 'on' : ''}"><span>${esc(a.textContent.trim())}</span></a>`;
+  const blocs = [...nav.children].map(el => {
+    if (el.matches('a')) return lien(el);
+    const titre = el.querySelector('.esp-side-titre')?.textContent.trim();
+    const liens = [...el.querySelectorAll('a')].map(lien).join('');
+    return `${titre ? `<span class="tir-esp-titre">${esc(titre)}</span>` : ''}${liens}`;
+  }).join('');
+  return `<nav class="tir-espace" aria-label="Écrans ${esc(marque)}">
+    <span class="tir-esp-marque">${esc(marque)}</span>${blocs}</nav>`;
 }
 
 // ---------- Barre du bas (téléphone) ----------

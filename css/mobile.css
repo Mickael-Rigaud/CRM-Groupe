@@ -69,6 +69,113 @@
   .appli-rgd .subnav:not(:has(.embed-actions)) { display: none; }
 }
 
+/* =====================================================================
+   Téléphone : moins de bandeaux, des fiches au lieu des tableaux (27/10/2026)
+   =====================================================================
+   Élodie : « pas du tout ergonomique » — précisé : « tableaux illisibles » et
+   « trop de bandeaux en haut », sur Clients, Pipeline, Agenda et To do. */
+@media (max-width: 820px) {
+  /* ---- Le haut de l'écran ----
+     Avant : barre de couleur, bande noire d'onglets qui défilait, grand titre,
+     puis le sélecteur « Vue » sur sa propre ligne — 300 px avant le contenu.
+     Le menu de l'espace passe dans « Menu » (js/app.js, `ecransDeLEspace`), et
+     le titre partage sa ligne avec le sélecteur. */
+  .esp-side { display: none; }
+  .esp-head { flex-wrap: nowrap; gap: 10px; padding-top: 10px; padding-bottom: 10px; }
+  .esp-head h1 { font-size: 19px; min-width: 0; flex: 0 1 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .esp-vue { margin-right: 0; min-width: 0; flex: 0 1 auto; }
+  .esp-vue > span { display: none; }
+  .esp-vue select { max-width: 46vw; font-size: 14px; padding: 6px 8px; }
+  .esp-body { padding-top: 14px; gap: 14px; }
+
+  /* Les écrans de l'espace, en tête du tiroir. */
+  .tir-espace { display: flex; flex-direction: column; gap: 2px; padding: 10px 10px 12px; max-height: 55vh; overflow-y: auto;
+                border-bottom: 1px solid rgba(255, 255, 255, .12); }
+  .tir-esp-marque { padding: 4px 13px 6px; font-size: 15px; font-weight: 700; color: #fff; }
+  .tir-esp-titre { padding: 10px 13px 3px; font-size: 10.5px; font-weight: 800; letter-spacing: .08em;
+                   text-transform: uppercase; color: rgba(255, 255, 255, .5); }
+  .tir-espace .tir-ecran { padding-left: 13px; }
+
+  /* ---- Les filtres ----
+     La recherche prend la largeur, les menus vont par deux : quatre lignes de
+     contrôles au lieu de sept avant d'arriver à la liste. */
+  .toolbar { gap: 8px; }
+  .toolbar > input[type=search] { flex: 1 1 100%; min-width: 0; }
+  .toolbar > select { flex: 1 1 calc(50% - 4px); min-width: 0; }
+  /* `span` et pas `.grow` seul : le champ de recherche porte AUSSI `.grow`,
+     et un `<input>` est toujours `:empty` — il disparaissait. */
+  .toolbar > span.grow:empty { display: none; }
+  .rcl-outils > .btn { flex: 1 1 100%; justify-content: center; }
+
+  /* ---- Les tableaux deviennent des fiches ----
+     `table.tbl-fiches` (opt-in, voir `etiqueterColonnes` dans js/ui.js) : une
+     fiche par ligne, le nom en titre, chaque valeur sous l'intitulé de sa
+     colonne. Plus de défilement de côté. */
+  .table-wrap:has(> table.tbl-fiches) { overflow: visible; background: none; border: 0; box-shadow: none; padding: 0; }
+  table.tbl-fiches, table.tbl-fiches > tbody { display: block; width: 100%; }
+  table.tbl-fiches > thead { display: none; }
+  table.tbl-fiches > tbody > tr {
+    display: flex; flex-direction: column; position: relative;
+    background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    padding: 12px 14px; margin: 0 0 10px; box-shadow: 0 2px 8px -6px rgba(17, 21, 28, .25);
+  }
+  table.tbl-fiches > tbody > tr.tbl-seule { padding: 0; border: 0; background: none; box-shadow: none; }
+  table.tbl-fiches td { display: flex; align-items: baseline; gap: 12px; padding: 4px 0; border: 0; min-width: 0;
+                        text-align: left; overflow-wrap: anywhere; }
+  /* Intitulé à gauche, et TOUT le contenu empilé à droite : en ligne, un mail
+     et un téléphone se serraient côte à côte sur deux demi-colonnes. */
+  /* ⚠ `align-items: start`, PAS `baseline` : avec un intitulé qui court sur
+     plusieurs rangées, l'alignement sur la ligne de base creusait de grands
+     blancs entre les lignes de la fiche (vu sur la capture du 27/10). */
+  /* ⚠ `row-gap: 0` : le `gap: 12px` hérité de la règle du dessus s'applique
+     aussi entre les six rangées que réserve l'intitulé — 60 px de vide par
+     ligne de fiche, mesuré le 27/10. */
+  table.tbl-fiches td[data-label] { display: grid; grid-template-columns: 32% minmax(0, 1fr); column-gap: 12px; row-gap: 0; align-items: start; }
+  table.tbl-fiches td[data-label] > * { grid-column: 2; }
+  table.tbl-fiches td[data-label] > span { justify-self: start; }   /* une pastille garde sa taille */
+  table.tbl-fiches td[data-label]::before { content: attr(data-label); grid-column: 1; grid-row: 1 / span 6;
+                                            padding-top: 2px; color: var(--muted); font-size: 12px; font-weight: 600; }
+  .lien-tel { font-weight: 600; text-decoration: none; }
+  table.tbl-fiches td > * { min-width: 0; }
+  table.tbl-fiches td.tbl-rien { display: none; }
+  /* Le nom en titre, en premier, sans intitulé. */
+  table.tbl-fiches td.tbl-titre { order: -1; display: block; font-size: 16px; padding: 0 76px 6px 0; }
+  table.tbl-fiches td.tbl-titre::before { display: none; }
+  /* La case à cocher et la corbeille en haut à droite de la fiche. */
+  table.tbl-fiches td.rcl-coche, table.tbl-fiches td.rcl-suppr { position: absolute; top: 8px; padding: 0; }
+  table.tbl-fiches td.rcl-coche { right: 10px; }
+  table.tbl-fiches td.rcl-suppr { right: 46px; }
+  table.tbl-fiches td.rcl-coche::before, table.tbl-fiches td.rcl-suppr::before { display: none; }
+  table.tbl-fiches td.rcl-coche input { width: 22px; height: 22px; }
+  /* Le commentaire sur toute la largeur, sous son intitulé. */
+  table.tbl-fiches td.rcl-note { flex-direction: column; align-items: stretch; gap: 4px; }
+  table.tbl-fiches td.rcl-note::before { flex: none; }
+  table.tbl-fiches td.rcl-note textarea { width: 100%; font-size: 16px; }
+  table.tbl-fiches td.num { justify-content: flex-start; }
+
+  /* ---- L'agenda : un jour à la fois (js/pages/rgd-agenda.js) ----
+     La journée d'abord, puis le mini-calendrier et les prochains rendez-vous.
+     Le paragraphe sur la fenêtre de relevé, utile au bureau, prenait un
+     demi-écran au-dessus de la journée. */
+  .ag-hub { display: flex; flex-direction: column; }
+  .ag-principal { order: -1; }
+  .ag-fenetre { display: none; }
+  .ag-barre { gap: 8px; }
+  .ag-barre .ag-titre { flex: 1 1 auto; min-width: 0; font-size: 15px; }
+  .ag-bande { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin: 0 0 10px; }
+  .ag-bande-j { position: relative; display: flex; flex-direction: column; align-items: center; gap: 1px;
+                padding: 6px 0 8px; border: 1px solid var(--line); border-radius: 12px;
+                background: var(--card); color: var(--text); font: inherit; cursor: pointer; }
+  .ag-bande-j span { font-size: 11px; color: var(--muted); text-transform: capitalize; }
+  .ag-bande-j b { font-size: 16px; }
+  .ag-bande-j i { position: absolute; bottom: 3px; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
+  .ag-bande-j.auj b { color: var(--accent); }
+  .ag-bande-j.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+  .ag-bande-j.on span { color: inherit; opacity: .85; }
+  .ag-bande-j.on b { color: inherit; }
+  .ag-bande-j.on i { background: var(--on-accent); }
+}
+
 /* Installée sur l'écran d'accueil d'un iPhone, l'application passe SOUS la
    barre d'état (`black-translucent`) : la barre du haut s'écarte d'autant. */
 .topnav { padding-top: env(safe-area-inset-top, 0px); background: var(--accent); }

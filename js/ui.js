@@ -193,6 +193,31 @@ export const terms = (q) => norm(q).split(/\s+/).filter(Boolean);
 export const hit = (haystack, ts) => { if (!ts.length) return true; const H = Array.isArray(haystack) ? norm(haystack.filter(Boolean).join(' ')) : norm(haystack); return ts.every(t => H.includes(t)); };
 
 // Barre de recherche standard. state.q porte la saisie, state.focus le champ à re-focaliser après redraw.
+// Tableaux lisibles sur téléphone (27/10/2026, Élodie : « tableaux illisibles »).
+// Un `<table class="tbl-fiches">` devient, sous 820 px, une pile de fiches :
+// une par ligne, chaque valeur sous l'intitulé de sa colonne (css/mobile.css).
+// Cette fonction pose ces intitulés (`data-label`), relus dans l'en-tête — un
+// écran n'a donc rien d'autre à faire que d'ajouter la classe et d'appeler
+// ceci après son rendu. Elle marque aussi les cases vides (« — ») pour que la
+// fiche ne montre que ce qui est renseigné : sur un téléphone, dix lignes
+// « — » noient les trois qui comptent.
+export function etiqueterColonnes(root) {
+  root.querySelectorAll('table.tbl-fiches').forEach(t => {
+    const titres = [...t.querySelectorAll('thead th')].map(th => th.textContent.trim());
+    t.querySelectorAll('tbody tr').forEach(tr => {
+      const cases = [...tr.children];
+      if (cases.length === 1 && cases[0].colSpan > 1) { tr.classList.add('tbl-seule'); return; }
+      let col = 0;
+      for (const td of cases) {
+        if (titres[col]) td.dataset.label = titres[col];
+        col += td.colSpan || 1;
+        const vide = !td.querySelector('input, select, textarea, button, a, img') && /^[\s—-]*$/.test(td.textContent);
+        td.classList.toggle('tbl-rien', vide);
+      }
+    });
+  });
+}
+
 export function searchInput(id, state, placeholder) {
   return `<input type="search" class="grow" id="${id}" placeholder="${esc(placeholder)}" value="${esc(state.q || '')}" autocomplete="off">`;
 }

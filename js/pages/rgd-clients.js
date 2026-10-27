@@ -98,7 +98,7 @@ import { ORDRE_ETAPES, ETAPES_RGD, ETAPES_CLES, ETAPE_DU_STATUT, STATUT_DE_L_ETA
          visiteDeLaFiche, finDeChantierDe, envoisDevisDe } from '../data/rgd-etapes.js';
 import { sansNoteAuto } from '../data/rgd-projet.js';
 import { db } from '../data/db.js';
-import { esc, eur, fmtDate, fmtDateTime, terms, hit, searchInput, bindSearch, restoreFocus } from '../ui.js';
+import { esc, eur, fmtDate, fmtDateTime, terms, hit, searchInput, bindSearch, restoreFocus, etiqueterColonnes } from '../ui.js';
 import { poserEspace } from './espace.js';
 import { cadre, guard } from './rgd-espace.js';
 import { majNote } from '../data/rgd-clients.js';
@@ -1171,7 +1171,7 @@ export const rgdClientsPage = {
       ].filter(([n]) => n > 0).map(([n, un, pl]) => `${n} ${n > 1 ? pl : un}`).join(', ');
 
       const tableauCorbeille = () => `<section class="card table-wrap">
-        <table>
+        <table class="tbl-fiches">
           <thead><tr><th>Qui</th><th>Supprimée le</th><th>Par</th>
             <th>Parti avec la fiche</th><th>Resté sans fiche</th><th></th></tr></thead>
           <tbody>${lignesCorbeille.map(x => {
@@ -1182,7 +1182,7 @@ export const rgdClientsPage = {
             ].filter(Boolean).join(', ');
             const laisse = compteOrphelins(x.orphelins);
             return `<tr class="${x.restauree_le ? 'est-restauree' : ''}">
-              <td><b>${esc(x.nom || '(fiche sans nom)')}</b>
+              <td class="tbl-titre"><b>${esc(x.nom || '(fiche sans nom)')}</b>
                 <div class="s muted">${x.source === 'demandes' ? 'demande du site' : 'fiche client'}</div></td>
               <td class="muted small">${esc(fmtDateTime(x.supprime_le))}</td>
               <td class="muted small">${esc(nomDuProfil(x.par))}</td>
@@ -1206,7 +1206,7 @@ export const rgdClientsPage = {
       </section>`;
 
       const tableauFiches = () => `<section class="card table-wrap">
-        <table>
+        <table class="tbl-fiches">
           <!-- ⚠ « Maj » ET « Commentaire » ONT CÉDÉ LA PLACE (07/10/2026, demandé
                mot pour mot : « à la place des colonnes MAJ et Commentaire »).
                Les deux disaient quelque chose du SUIVI d'un dossier, sur un
@@ -1222,7 +1222,7 @@ export const rgdClientsPage = {
           <tbody>${tranche(lignesFiches).map(({ f, p }) => {
             const ap = f.apporteur_id && apporteurs.find(a => a.id === f.apporteur_id);
             return `<tr class="click" data-contact="${esc(f.id)}">
-              <td><b>${esc(nomIndexe(p) || '(fiche sans contact)')}</b>
+              <td class="tbl-titre"><b>${esc(nomIndexe(p) || '(fiche sans contact)')}</b>
                   ${f.source === 'meta_ads' ? '<span class="chip accent" title="Lead Facebook ou Instagram">Meta</span>' : ''}
                   ${ap ? `<div class="s muted">apporté par ${esc(ap.societe || [ap.prenom, ap.nom].filter(Boolean).join(' '))}</div>` : ''}</td>
               <td class="muted">${esc(p?.type || '—')}</td>
@@ -1353,7 +1353,7 @@ export const rgdClientsPage = {
           <a href="#/rgd/sav">voir la page SAV</a>.</p>` : ''}
         ${barreLot()}
         ${bandeauTotal()}
-        <table>
+        <table class="tbl-fiches">
           <thead><tr>${peutAttribuer ? `<th class="rcl-coche"><input type="checkbox" id="rcl-coche-page"
               title="Sélectionner les lignes de cette page"${
               tranche(lignesProspects).every(x => state.selection.has(x.ligne.id))
@@ -1380,10 +1380,10 @@ export const rgdClientsPage = {
               state.selection.has(x.ligne.id) ? ' checked' : ''}></td>` : ''}
             <td class="small">${x.recu ? esc(fmtDate(x.recu)) : '<span class="muted">—</span>'}</td>
             <td>${pastilleProvenance(x.provenance)}</td>
-            <td><b>${esc(x.nom || '—')}</b>
+            <td class="tbl-titre"><b>${esc(x.nom || '—')}</b>
                 ${x.type ? `<div class="s muted">${esc(x.type)}</div>` : ''}</td>
             <td>${x.email ? `<a href="mailto:${esc(x.email)}">${esc(x.email)}</a>` : ''}
-                ${x.tel ? `<div class="s">${esc(x.tel)}</div>` : ''}
+                ${x.tel ? `<div class="s"><a href="tel:${esc(String(x.tel).replace(/[^\d+]/g, ''))}" class="lien-tel">${esc(x.tel)}</a></div>` : ''}
                 ${!x.email && !x.tel ? '<span class="muted">—</span>' : ''}</td>
             ${surRdv ? `<td class="rcl-rdv-cell">${x.cible === 'demande'
               ? '<span class="muted">—</span>' : celluleRdv(x.ligne)}</td>` : ''}
@@ -1482,7 +1482,7 @@ export const rgdClientsPage = {
           avec ${doublons > 1 ? 'leurs homologues' : 'son homologue'} : même nom, même email ou même
           téléphone. Rien n’est supprimé — les fiches existent toujours dans l’application RGD.</p>` : ''}
 
-        <div class="toolbar">
+        <div class="toolbar rcl-outils">
           ${searchInput('rcl-q', state, surDemande
             ? 'Recherche nom, email, ville, projet…' : 'Rechercher nom, email, téléphone…')}
           ${surCorbeille ? '' : surFrise ? `<select id="rcl-prov" aria-label="Provenance" class="${state.provenance ? 'actif' : ''}">
@@ -1537,6 +1537,7 @@ export const rgdClientsPage = {
         ${surCorbeille ? tableauCorbeille() : surFrise ? tableauProspects() : tableauFiches()}`;
 
       root.innerHTML = cadre('#/rgd/clients', 'Clients & prospects', corps);
+      etiqueterColonnes(root);   // fiches sur téléphone (css/mobile.css)
       bindSearch(root, 'rcl-q', state, draw);
       restoreFocus(root, state);
       root.querySelectorAll('[data-vue]').forEach(b => b.onclick = () => {

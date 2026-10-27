@@ -803,10 +803,26 @@ export const rgdAgendaPage = {
       const vu = tous.map(e => e.synced_at).filter(Boolean)
         .reduce((m, s) => Math.max(m, new Date(s).getTime()), 0);
 
-      const affiches = Array.from({ length: 7 }, (_, i) => decale(lundiDe(state.jour), i));
-      const precedent = decale(state.jour, -7);
-      const suivant = decale(state.jour, 7);
+      // ⚠ SUR TÉLÉPHONE, UN JOUR À LA FOIS (27/10/2026, Élodie : l'agenda
+      // « pas du tout ergonomique » sur téléphone). Sept colonnes dans 390 px
+      // en font 50 chacune : un rendez-vous n'y montrait que trois lettres. On
+      // garde la semaine sous forme de bande de sept jours à toucher, et la
+      // grille ne montre que le jour choisi, sur toute la largeur. Les flèches
+      // avancent alors d'un jour. Même seuil que la barre du bas (820 px).
+      const telephone = matchMedia('(max-width: 820px)').matches;
+      const semaine = Array.from({ length: 7 }, (_, i) => decale(lundiDe(state.jour), i));
+      const affiches = telephone ? [state.jour] : semaine;
+      const pas = telephone ? 1 : 7;
+      const precedent = decale(state.jour, -pas);
+      const suivant = decale(state.jour, pas);
       const vide = !affiches.some(j => (parJour.get(j) || []).length);
+      const bandeJours = telephone ? `<div class="ag-bande" role="tablist" aria-label="Jours de la semaine">${semaine.map(j => {
+        const n = (parJour.get(j) || []).length;
+        return `<button type="button" role="tab" class="ag-bande-j${j === state.jour ? ' on' : ''}${j === aujourdhui ? ' auj' : ''}"
+          data-jour="${j}" aria-selected="${j === state.jour}">
+          <span>${esc(JOURS[(new Date(j + 'T12:00:00').getDay() + 6) % 7].slice(0, 3))}</span>
+          <b>${Number(j.slice(8))}</b>${n ? '<i></i>' : ''}</button>`;
+      }).join('')}</div>` : '';
 
       // Les prochains rendez-vous, toutes dates confondues : c'est ce qu'on
       // vient chercher quand on ouvre un agenda sans savoir quel jour regarder.
@@ -817,7 +833,7 @@ export const rgdAgendaPage = {
           || (a.all_day === b.all_day ? new Date(a.starts_at) - new Date(b.starts_at) : a.all_day ? -1 : 1))
         .slice(0, 6);
 
-      const titre = majuscule(`semaine du ${jourLongAn(lundiDe(state.jour))}`);
+      const titre = telephone ? majuscule(jourLongAn(state.jour)) : majuscule(`semaine du ${jourLongAn(lundiDe(state.jour))}`);
 
       const corps = `
         <div class="ag-hub">
@@ -858,7 +874,9 @@ export const rgdAgendaPage = {
                    case du mini-calendrier dans la semaine en cours, et
                    proposait de revenir la ou on etait deja. (Aucun accent
                    grave ici : il refermerait le gabarit.) -->
-              ${lundiDe(state.jour) !== lundiDe(aujourdhui)
+              ${telephone
+                ? (state.jour !== aujourdhui ? `<button type="button" class="btn ghost sm" data-aller="${aujourdhui}">Aujourd’hui</button>` : '')
+                : lundiDe(state.jour) !== lundiDe(aujourdhui)
                 ? `<button type="button" class="btn ghost sm" data-aller="${aujourdhui}">Cette semaine</button>` : ''}
               <span class="grow"></span>
               ${etatHtml()}
@@ -867,8 +885,9 @@ export const rgdAgendaPage = {
               ${state.ecriture ? '<button type="button" class="btn primary" id="ag-nouveau">+ Événement</button>' : ''}
             </div>
 
+            ${bandeJours}
             <section class="card ag-cadre">
-              ${vide ? '<p class="ag-libre">Aucun rendez-vous cette semaine.</p>' : ''}
+              ${vide ? `<p class="ag-libre">Aucun rendez-vous ${telephone ? 'ce jour-là' : 'cette semaine'}.</p>` : ''}
               ${grille(affiches, parJour, calendriers, state.ecriture)}
             </section>
           </section>
