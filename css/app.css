@@ -7003,8 +7003,22 @@ span.rpv-statut { display: inline-block; margin-bottom: 4px; }
 .pa-secteur.est-cote_azur { background: #e0f2fe; color: #075985; }
 .pa-secteur.est-oise { background: #fef3c7; color: #92400e; }
 .pa-secteur.est-aclasser { background: var(--card-2); color: var(--muted); border: 1px dashed var(--line); }
-.pa-filtre button { display: inline-flex; align-items: center; gap: 6px; }
-.pa-filtre button i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
-.pa-filtre button.est-cote_azur i { background: #0284c7; }
-.pa-filtre button.est-oise i { background: #d97706; }
-.pa-filtre button.est-aclasser i { background: transparent; border: 1px dashed var(--muted); }
+/* Les sous-tableaux par secteur (27/10/2026, seconde version) : un cadre de la
+   couleur du secteur, son nom sur un bandeau teinté. Bleu = Côte d'Azur,
+   ambre = Oise, gris en pointillés = à classer. */
+.pa-sous { --pa-s: #94a3b8; --pa-s-fond: var(--card-2); --pa-s-texte: var(--muted);
+  border: 1px solid var(--pa-s); border-left-width: 5px; border-radius: 10px; overflow: hidden; }
+.pa-sous + .pa-sous { margin-top: 14px; }
+.pa-sous.est-cote_azur { --pa-s: #0284c7; --pa-s-fond: #e0f2fe; --pa-s-texte: #075985; }
+.pa-sous.est-oise { --pa-s: #d97706; --pa-s-fond: #fef3c7; --pa-s-texte: #92400e; }
+.pa-sous.est-aclasser { border-style: dashed; }
+.pa-sous-titre { display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+  background: var(--pa-s-fond); color: var(--pa-s-texte); }
+.pa-sous-titre .grow { flex: 1; }
+.pa-sous-nom { font-weight: 800; font-size: 13px; letter-spacing: .4px; text-transform: uppercase; }
+.pa-sous-n { background: var(--pa-s); color: #fff; font-size: 11.5px; font-weight: 700;
+  border-radius: 999px; padding: 0 8px; line-height: 1.7; }
+.pa-sous-ajout { border: 1px solid var(--pa-s); background: transparent; color: var(--pa-s-texte);
+  font-weight: 700; font-size: 12px; border-radius: 7px; padding: 3px 10px; cursor: pointer; }
+.pa-sous-ajout:hover { background: #fff; }
+.pa-sous .table-wrap { margin: 0; border: 0; border-radius: 0; }

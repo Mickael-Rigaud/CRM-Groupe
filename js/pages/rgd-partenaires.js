@@ -60,15 +60,17 @@
 // commission ne compte QUE sur les affaires gagnées. Les additionner ou en
 // tirer un taux donnerait un chiffre faux.
 //
-// ⚠ UN SECTEUR PAR LIGNE DEPUIS LE 27/10/2026 : CÔTE D'AZUR OU OISE. Élodie :
-// « je voudrais pouvoir distinguer visuellement et rapidement les apporteurs
-// d'affaires, les fournisseurs et les affaires apportées par RGD Renova du
-// Sud/Côte d'Azur et de l'Oise ». Elle pensait à deux tableaux par section ;
-// avec 5 apporteurs, 11 fournisseurs et une affaire apportée, cela faisait six
-// tableaux dont plusieurs d'une ligne. Retenu à la place : une PASTILLE de
-// couleur devant chaque société, les lignes regroupées par secteur, et un
-// FILTRE en haut qui agit sur les trois tableaux à la fois. Une fiche sans
-// secteur porte « À classer » en gris : ne rien savoir ne vaut pas un secteur.
+// ⚠ DEUX TABLEAUX PAR SECTION DEPUIS LE 27/10/2026 : CÔTE D'AZUR ET OISE.
+// Élodie : « je voudrais pouvoir distinguer visuellement et rapidement les
+// apporteurs d'affaires, les fournisseurs et les affaires apportées par RGD
+// Renova du Sud/Côte d'Azur et de l'Oise ». Une première version (pastille
+// devant chaque ligne + filtre en haut) a été publiée puis REFUSÉE le jour même
+// — « je ne trouve pas que ce soit clair, je voudrais plus qu'ils soient
+// répartis en deux tableaux dans un tableau avec deux couleurs différentes ».
+// Ne pas y revenir. Chaque section porte donc un sous-tableau bleu (Côte
+// d'Azur) et un sous-tableau ambre (Oise), toujours affichés, même vides ; un
+// troisième, gris, « À classer », n'apparaît que s'il reste des fiches sans
+// secteur — ne rien savoir ne vaut pas un secteur.
 //
 // LE TABLEAU DES APPORTS, EN BAS
 // Une ligne par affaire présentée : apporteur, date, client, issue, montant du
@@ -168,20 +170,59 @@ const SECTIONS = [
     prend: (a) => !estApporteur(a) },
 ];
 
-// L'ordre de la liste est l'ordre d'affichage : Côte d'Azur, puis Oise, puis
-// les fiches à classer — en dernier, pour qu'elles ne s'intercalent pas.
+// L'ordre de la liste est l'ordre d'affichage des sous-tableaux.
 const SECTEURS = {
   cote_azur: { label: 'Côte d’Azur', court: 'Côte d’Azur' },
   oise: { label: 'Oise', court: 'Oise' },
 };
-const ORDRE_SECTEUR = (s) => (s === 'cote_azur' ? 0 : s === 'oise' ? 1 : 2);
 const OPTIONS_SECTEUR = [['', 'À classer'], ['cote_azur', 'Côte d’Azur'], ['oise', 'Oise']];
+// Ne sert plus qu'en tête de la fiche : dans les listes, c'est le sous-tableau
+// qui dit le secteur.
 const pastilleSecteur = (s) => SECTEURS[s]
   ? `<span class="pa-secteur est-${s}">${esc(SECTEURS[s].court)}</span>`
   : '<span class="pa-secteur est-aclasser">À classer</span>';
-// Le filtre : `''` = tout, sinon le secteur, ou `aclasser`.
-const dansSecteur = (filtre, s) => !filtre
-  || (filtre === 'aclasser' ? !SECTEURS[s] : s === filtre);
+
+/**
+ * Les lignes d'une section, réparties en sous-tableaux par secteur.
+ *
+ * ⚠ CÔTE D'AZUR ET OISE S'AFFICHENT TOUJOURS, MÊME VIDES : c'est la structure
+ * demandée, et un sous-tableau qui disparaît faute de ligne ferait croire que
+ * le secteur n'existe pas. « À classer » seul se retire quand il est vide.
+ * ⚠ L'EN-TÊTE DE COLONNES EST RÉPÉTÉ DANS CHAQUE SOUS-TABLEAU : deux tables
+ * séparées n'alignent pas leurs colonnes, et une table sans en-tête oblige à
+ * remonter pour savoir ce qu'on lit.
+ *
+ * @param {object[]} lignes   les lignes, déjà triées
+ * @param {string} entete      les `<th>` du tableau
+ * @param {function} rendre    une ligne → son `<tr>`
+ * @param {string} vide        le message d'un sous-tableau vide
+ * @param {string} [ajout]     clé de section : pose un « + » qui crée dans ce secteur
+ */
+function sousTableaux(lignes, entete, rendre, vide, ajout) {
+  const nbColonnes = entete.split('<th').length - 1;
+  const groupes = Object.entries(SECTEURS).map(([k, s]) =>
+    ({ cle: k, label: s.label, lignes: lignes.filter(x => x.secteur === k) }));
+  const sans = lignes.filter(x => !SECTEURS[x.secteur]);
+  if (sans.length) groupes.push({ cle: 'aclasser', label: 'À classer', lignes: sans });
+  return groupes.map(g => `
+    <div class="pa-sous est-${g.cle}">
+      <div class="pa-sous-titre">
+        <span class="pa-sous-nom">${esc(g.label)}</span>
+        <span class="pa-sous-n">${g.lignes.length}</span>
+        <span class="grow"></span>
+        ${ajout && g.cle !== 'aclasser'
+          ? `<button type="button" class="pa-sous-ajout" data-nouveau="${esc(ajout)}" data-sect="${g.cle}">+ Ajouter</button>`
+          : ''}
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>${entete}</tr></thead>
+          <tbody>${g.lignes.map(rendre).join('')
+            || `<tr><td colspan="${nbColonnes}"><div class="empty">${esc(vide)}</div></td></tr>`}</tbody>
+        </table>
+      </div>
+    </div>`).join('');
+}
 
 const ISSUES = {
   gagne: { label: 'Gagné', ton: 'green' },
@@ -555,8 +596,8 @@ function ficheFournisseur(a) {
 
 /** Créer un partenaire : le formulaire seul, dans sa propre fenêtre. */
 function nouveauPartenaire(apres, typeDefaut = 'apporteur', secteur = null) {
-  // Créé depuis la vue « Oise », il est de l'Oise : c'est le cas courant, et
-  // la liste du formulaire le change d'un clic.
+  // Créé par le « + Ajouter » du sous-tableau Oise, il est de l'Oise : la
+  // liste du formulaire le change d'un clic.
   const v = { type_partenaire: typeDefaut, actif: true, secteur };
   openModal('Nouveau partenaire', corpsFormulaire(v, true), { wide: true, onOpen: (m) => {
     brancherFormulaire(m, null, () => { closeModal(); apres?.(); });
@@ -1318,19 +1359,13 @@ export const rgdPartenairesPage = {
     const coquille = poserEspace(root);
     // Une seule porte : la policy `rgd_apporteurs_acces`, dont `scope.canRgd`
     // est le miroir exact. Plus aucun compte de l'application RGD n'est exigé.
-    // Le filtre de secteur se retient d'une visite à l'autre : on travaille
-    // une semaine dans le Sud, on ne veut pas le reposer à chaque ouverture.
-    let secteurMemo = '';
-    try { secteurMemo = localStorage.getItem('rgd_partenaires_secteur') || ''; } catch { /* navigation privée */ }
-    const state = { q: '', focus: null, ecriture: scope.canRgd,
-      secteur: ['', 'cote_azur', 'oise', 'aclasser'].includes(secteurMemo) ? secteurMemo : '' };
+    const state = { q: '', focus: null, ecriture: scope.canRgd };
 
     const draw = () => {
       const tous = scope.rgd('rgd_apporteurs');
       const ts = terms(state.q);
-      const trouves = tous.filter(a =>
+      const vus = tous.filter(a =>
         hit([nomDe(a), a.societe, a.raison_sociale, a.profession, a.ville, adresseDe(a)], ts));
-      const vus = trouves.filter(a => dansSecteur(state.secteur, a.secteur));
 
       // Les deux tableaux ne portent plus les mêmes colonnes depuis le
       // 22/10/2026 : l'en-tête et les cellules sont donc décrits ensemble, ici,
@@ -1378,7 +1413,7 @@ export const rgdPartenairesPage = {
       const ligne = (a, sec) => `<tr ${
         state.ecriture ? `data-partenaire="${esc(String(a.id))}"` : ''}>
           ${'' /* La société en tête (13/10/2026, Élodie) : c'est elle qu'on cherche dans la liste. */}
-          <td>${pastilleSecteur(a.secteur)} <b>${esc(a.societe || a.raison_sociale || '—')}</b></td>
+          <td><b>${esc(a.societe || a.raison_sociale || '—')}</b></td>
           ${COLONNES[sec.colonnes].cellules(a)}
         </tr>`;
 
@@ -1387,12 +1422,9 @@ export const rgdPartenairesPage = {
         // populations partagent un tableau (22/10/2026), rien ne les séparerait
         // plus à l'œil. `sort` est stable, donc l'ordre interne de chaque groupe
         // est celui qu'avait la liste — on ne retrie pas sur le nom ici.
-        // Puis, dans chaque groupe, Côte d'Azur, Oise, à classer (27/10/2026) :
-        // en vue « Tout », les pastilles d'une même couleur se suivent.
+        // Le tri vaut dans chaque sous-tableau de secteur (27/10/2026).
         const lignes = vus.filter(sec.prend)
-          .sort((x, y) => ((estActif(y) ? 1 : 0) - (estActif(x) ? 1 : 0))
-            || (ORDRE_SECTEUR(x.secteur) - ORDRE_SECTEUR(y.secteur)));
-        const nbColonnes = COLONNES[sec.colonnes].entete.split('<th').length - 1;
+          .sort((x, y) => (estActif(y) ? 1 : 0) - (estActif(x) ? 1 : 0));
         return `
         <section class="card pa-sect" style="--pa-trait:${sec.couleur}">
           <div class="pa-head">
@@ -1403,16 +1435,10 @@ export const rgdPartenairesPage = {
               ? `<button type="button" class="btn primary" data-nouveau="${esc(sec.cle)}">${esc(sec.bouton)}</button>`
               : ''}
           </div>
-          <div class="table-wrap">
-            <table>
-              <thead><tr>${COLONNES[sec.colonnes].entete}</tr></thead>
-              ${'' /* Le colspan est compté sur l'en-tête, jamais écrit à la main : une colonne ajoutée sans lui laisse la ligne « Personne pour le moment » plus courte que le tableau. */}
-              <tbody>${lignes.map(a => ligne(a, sec)).join('')
-                || `<tr><td colspan="${nbColonnes}"><div class="empty">${
-                  state.q ? 'Aucun résultat dans cette catégorie.'
-                    : 'Personne pour le moment.'}</div></td></tr>`}</tbody>
-            </table>
-          </div>
+          ${'' /* Le colspan est compté sur l'en-tête, dans `sousTableaux`, jamais écrit à la main. */}
+          ${sousTableaux(lignes, COLONNES[sec.colonnes].entete, (a) => ligne(a, sec),
+            state.q ? 'Aucun résultat dans ce secteur.' : 'Personne pour le moment.',
+            state.ecriture ? sec.cle : null)}
         </section>`;
       };
 
@@ -1438,7 +1464,6 @@ export const rgdPartenairesPage = {
         const lignes = trierSortants(scope.rgd('rgd_apports_sortants')).filter(x => {
           const fiche = parId.has(String(x.apporteur_id));
           if (x.apporteur_id && !fiche) return false;   // fiche hors de ma portée
-          if (!dansSecteur(state.secteur, x.secteur)) return false;
           return (fiche && vusIds.has(String(x.apporteur_id)))
             || hit([x.client, x.objet, x.partenaire], ts);
         });
@@ -1470,7 +1495,7 @@ export const rgdPartenairesPage = {
           // deux. On ne le marque pas davantage — « hors annuaire » se lirait
           // comme un reproche sur une ligne que rien n'oblige à ficher.
           return `<tr data-sortant="${esc(String(x.id))}">
-            <td>${pastilleSecteur(x.secteur)}<div><b>${esc(destinataire(x, parId) || '—')}</b></div>${p && p.profession
+            <td><b>${esc(destinataire(x, parId) || '—')}</b>${p && p.profession
               ? `<div class="s muted">${esc(p.profession)}</div>` : ''}</td>
             <td class="pa-serre">${x.date_apport
               ? esc(fmtDate(x.date_apport)) : '<span class="muted">—</span>'}</td>
@@ -1499,19 +1524,12 @@ export const rgdPartenairesPage = {
               : ''}
           </div>
           ${resume ? `<p class="pa-note">${resume}</p>` : ''}
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>Partenaire</th><th>Date</th><th>Client</th>
+          ${sousTableaux(lignes, `<th>Partenaire</th><th>Date</th><th>Client</th>
                 <th>Ce que RGD lui a apporté</th><th>Issue</th>
-                <th class="num">Montant estimé</th><th class="num">Commission attendue</th></tr></thead>
-              <tbody>${lignes.map(ligneS).join('')
-                || `<tr><td colspan="7"><div class="empty">${state.q
-                  ? 'Aucune affaire apportée ne correspond à cette recherche.'
-                  : 'Rien d’enregistré pour l’instant. Notez ici les affaires que RGD a '
-                    + 'passées à un partenaire — un financement à un courtier, des plans à '
-                    + 'un architecte, une cuisine à un fournisseur.'}</div></td></tr>`}</tbody>
-            </table>
-          </div>
+                <th class="num">Montant estimé</th><th class="num">Commission attendue</th>`,
+            ligneS, state.q ? 'Aucune affaire apportée ne correspond à cette recherche.'
+              : 'Rien d’enregistré pour l’instant.',
+            state.ecriture ? 'sortant' : null)}
           <p class="pa-note">La commission n’entre dans le total que sur une affaire
             <b>gagnée</b> par le partenaire. ${state.ecriture
               ? 'Un clic sur une ligne l’ouvre pour la modifier. Le partenaire n’est pas '
@@ -1526,23 +1544,9 @@ export const rgdPartenairesPage = {
       // sont en face l'un de l'autre. Les colonnes de ce tableau-ci portent déjà
       // les totaux, ce qui suffit à comparer les partenaires entre eux.
 
-      // Le compte de chaque bouton suit la recherche, pas le filtre : il dit ce
-      // qu'on trouverait en cliquant. « À classer » ne paraît que s'il reste des
-      // fiches à ranger — un bouton à zéro serait un rappel pour rien.
-      const sortantsTous = scope.rgd('rgd_apports_sortants');
-      const compte = (f) => trouves.filter(a => dansSecteur(f, a.secteur)).length
-        + sortantsTous.filter(x => dansSecteur(f, x.secteur)).length;
-      const nAClasser = compte('aclasser');
-      const filtres = [['', 'Tout'], ['cote_azur', 'Côte d’Azur'], ['oise', 'Oise']]
-        .concat(nAClasser || state.secteur === 'aclasser' ? [['aclasser', 'À classer']] : []);
-      const barreSecteur = `<div class="seg pa-filtre" role="group" aria-label="Secteur">${filtres.map(([k, l]) =>
-        `<button type="button" data-secteur="${k}" class="${state.secteur === k ? 'active' : ''}${k ? ` est-${k}` : ''}">${
-          k ? '<i></i>' : ''}${esc(l)}${k === 'aclasser' ? `<span class="cnt">${nAClasser}</span>` : ''}</button>`).join('')}</div>`;
-
       const corps = `
         <div class="toolbar">
           ${searchInput('rpa-q', state, 'Rechercher un partenaire, un métier, une ville…')}
-          ${barreSecteur}
           <span class="grow"></span>
           <span class="muted small">${state.ecriture
             ? 'Cliquez sur une ligne pour ouvrir la fiche'
@@ -1556,11 +1560,15 @@ export const rgdPartenairesPage = {
       restoreFocus(root, state);
 
       root.querySelectorAll('[data-nouveau]').forEach(b => b.onclick = () => {
+        // Le « + Ajouter » d'un sous-tableau crée dans son secteur ; le bouton
+        // de la section laisse le choix au formulaire.
+        const secteur = SECTEURS[b.dataset.sect] ? b.dataset.sect : null;
+        if (b.dataset.nouveau === 'sortant') return formulaireSortant(null, draw, secteur);
         const sec = SECTIONS.find(s => s.cle === b.dataset.nouveau);
         // `sec.cree` a disparu avec la section des inactifs (22/10/2026) : elle
         // seule creait sous un autre role que le sien. Les deux sections qui
         // restent portent le role qu'elles creent.
-        nouveauPartenaire(draw, sec?.cle || 'apporteur', SECTEURS[state.secteur] ? state.secteur : null);
+        nouveauPartenaire(draw, sec?.cle || 'apporteur', secteur);
       });
       // Le clic ouvre la FICHE, pas le formulaire : on vient d'abord lire.
       root.querySelectorAll('[data-partenaire]').forEach(tr => tr.onclick = () =>
@@ -1580,14 +1588,7 @@ export const rgdPartenairesPage = {
       });
 
       const bRep = root.querySelector('#pa-reperer');
-      if (bRep) bRep.onclick = () => formulaireSortant(null, draw,
-        SECTEURS[state.secteur] ? state.secteur : null);
-
-      root.querySelectorAll('[data-secteur]').forEach(b => b.onclick = () => {
-        state.secteur = b.dataset.secteur;
-        try { localStorage.setItem('rgd_partenaires_secteur', state.secteur); } catch { /* navigation privée */ }
-        draw();
-      });
+      if (bRep) bRep.onclick = () => formulaireSortant(null, draw);
     };
 
     draw();
