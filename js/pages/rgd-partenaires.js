@@ -67,11 +67,16 @@
 // devant chaque ligne + filtre en haut) a été publiée puis REFUSÉE le jour même
 // — « je ne trouve pas que ce soit clair, je voudrais plus qu'ils soient
 // répartis en deux tableaux dans un tableau avec deux couleurs différentes ».
-// Ne pas y revenir. Puis la version en sous-tableaux encadrés a été jugée
-// « un peu trop lourde » : chaque section est maintenant UN tableau, coupé en
-// un groupe bleu (Côte d'Azur) et un groupe ambre (Oise), toujours affichés ;
-// un groupe gris « À classer » n'apparaît que s'il reste des fiches sans
-// secteur — ne rien savoir ne vaut pas un secteur. Voir `sousTableaux`.
+// Ne pas y revenir. Puis des sous-tableaux encadrés par secteur (« un peu trop
+// lourd »), puis des groupes teintés dans un seul tableau (« je ne trouve pas
+// ça clair »). Quatre versions le même jour.
+// ⚠ RETENU, SUR CHOIX D'ÉLODIE ENTRE QUATRE MAQUETTES : DEUX ONGLETS. Un gros
+// onglet bleu Côte d'Azur, un ambre Oise ; on ne voit qu'un secteur à la fois,
+// et la page prend sa couleur. Les trois sections restent ce qu'elles étaient
+// avant le 27/10, un tableau simple chacune — c'est l'onglet qui trie. Un
+// troisième onglet gris « À classer » n'apparaît que s'il reste des fiches sans
+// secteur : ne rien savoir ne vaut pas un secteur. L'onglet ouvert se retient
+// d'une visite à l'autre.
 //
 // LE TABLEAU DES APPORTS, EN BAS
 // Une ligne par affaire présentée : apporteur, date, client, issue, montant du
@@ -177,50 +182,32 @@ const SECTEURS = {
   oise: { label: 'Oise', court: 'Oise' },
 };
 const OPTIONS_SECTEUR = [['', 'À classer'], ['cote_azur', 'Côte d’Azur'], ['oise', 'Oise']];
-// Ne sert plus qu'en tête de la fiche : dans les listes, c'est le sous-tableau
-// qui dit le secteur.
+// Ne sert plus qu'en tête de la fiche : dans les listes, c'est l'onglet qui
+// dit le secteur.
 const pastilleSecteur = (s) => SECTEURS[s]
   ? `<span class="pa-secteur est-${s}">${esc(SECTEURS[s].court)}</span>`
   : '<span class="pa-secteur est-aclasser">À classer</span>';
 
 /**
- * Les lignes d'une section, réparties par secteur DANS UN SEUL TABLEAU.
- *
- * ⚠ TROISIÈME VERSION, LE 27/10/2026. La deuxième posait un tableau encadré
- * par secteur, chacun avec son bandeau, son « + Ajouter » et ses intitulés de
- * colonnes : clair, mais « un peu trop lourd » (Élodie). Ici, une seule ligne
- * d'intitulés, puis pour chaque secteur une ligne de titre teintée (bleu Côte
- * d'Azur, ambre Oise) et ses lignes, marquées d'un trait de la même couleur à
- * gauche. La séparation en deux couleurs demandée reste, sans les cadres.
- *
- * ⚠ CÔTE D'AZUR ET OISE S'AFFICHENT TOUJOURS, MÊME VIDES — sur une ligne fine,
- * pas un grand encart. « À classer » seul se retire quand il est vide.
- *
- * @param {object[]} lignes   les lignes, déjà triées
- * @param {string} entete      les `<th>` du tableau
- * @param {function} rendre    une ligne → son `<tr>`
- * @param {string} vide        le message d'un secteur vide
+ * Un tableau de section : l'en-tête, les lignes, ou une ligne « vide ».
+ * Le colspan est compté sur l'en-tête, jamais écrit à la main : une colonne
+ * ajoutée sans lui laisserait la ligne vide plus courte que le tableau.
  */
-function sousTableaux(lignes, entete, rendre, vide) {
-  // Le colspan est compté sur l'en-tête, jamais écrit à la main.
+function tableau(lignes, entete, rendre, vide) {
   const nbColonnes = entete.split('<th').length - 1;
-  const groupes = Object.entries(SECTEURS).map(([k, s]) =>
-    ({ cle: k, label: s.label, lignes: lignes.filter(x => x.secteur === k) }));
-  const sans = lignes.filter(x => !SECTEURS[x.secteur]);
-  if (sans.length) groupes.push({ cle: 'aclasser', label: 'À classer', lignes: sans });
   return `
     <div class="table-wrap">
-      <table class="pa-groupes">
+      <table>
         <thead><tr>${entete}</tr></thead>
-        ${groupes.map(g => `
-        <tbody class="pa-groupe est-${g.cle}">
-          <tr class="pa-groupe-titre"><td colspan="${nbColonnes}">${esc(g.label)}<span>${g.lignes.length}</span></td></tr>
-          ${g.lignes.map(rendre).join('')
-            || `<tr class="pa-groupe-vide"><td colspan="${nbColonnes}">${esc(vide)}</td></tr>`}
-        </tbody>`).join('')}
+        <tbody>${lignes.map(rendre).join('')
+          || `<tr><td colspan="${nbColonnes}"><div class="empty">${esc(vide)}</div></td></tr>`}</tbody>
       </table>
     </div>`;
 }
+
+// L'onglet d'une ligne : son secteur, ou « à classer » s'il n'en a pas.
+const ongletDe = (secteur) => (SECTEURS[secteur] ? secteur : 'aclasser');
+const ONGLET_MEMO = 'rgd_partenaires_onglet';
 
 const ISSUES = {
   gagne: { label: 'Gagné', ton: 'green' },
@@ -1355,13 +1342,32 @@ export const rgdPartenairesPage = {
     const coquille = poserEspace(root);
     // Une seule porte : la policy `rgd_apporteurs_acces`, dont `scope.canRgd`
     // est le miroir exact. Plus aucun compte de l'application RGD n'est exigé.
-    const state = { q: '', focus: null, ecriture: scope.canRgd };
+    let memo = '';
+    try { memo = localStorage.getItem(ONGLET_MEMO) || ''; } catch { /* navigation privée */ }
+    const state = { q: '', focus: null, ecriture: scope.canRgd,
+      onglet: ['cote_azur', 'oise', 'aclasser'].includes(memo) ? memo : 'cote_azur' };
 
     const draw = () => {
       const tous = scope.rgd('rgd_apporteurs');
       const ts = terms(state.q);
-      const vus = tous.filter(a =>
+      const trouves = tous.filter(a =>
         hit([nomDe(a), a.societe, a.raison_sociale, a.profession, a.ville, adresseDe(a)], ts));
+      // Les affaires apportées, avant l'onglet : elles servent aussi au compte
+      // affiché sur chaque onglet.
+      const parId = new Map(tous.map(p => [String(p.id), p]));
+      const trouvesIds = new Set(trouves.map(p => String(p.id)));
+      const sortantsTrouves = trierSortants(scope.rgd('rgd_apports_sortants')).filter(x => {
+        const fiche = parId.has(String(x.apporteur_id));
+        if (x.apporteur_id && !fiche) return false;   // fiche hors de ma portée
+        return (fiche && trouvesIds.has(String(x.apporteur_id)))
+          || hit([x.client, x.objet, x.partenaire], ts);
+      });
+      // ⚠ « À CLASSER » DISPARAÎT QUAND IL EST VIDE ; s'il était l'onglet ouvert,
+      // on revient sur la Côte d'Azur plutôt que sur une page blanche.
+      const nAClasser = tous.filter(a => !SECTEURS[a.secteur]).length
+        + scope.rgd('rgd_apports_sortants').filter(x => !SECTEURS[x.secteur]).length;
+      if (state.onglet === 'aclasser' && !nAClasser) state.onglet = 'cote_azur';
+      const vus = trouves.filter(a => ongletDe(a.secteur) === state.onglet);
 
       // Les deux tableaux ne portent plus les mêmes colonnes depuis le
       // 22/10/2026 : l'en-tête et les cellules sont donc décrits ensemble, ici,
@@ -1431,7 +1437,7 @@ export const rgdPartenairesPage = {
               ? `<button type="button" class="btn primary" data-nouveau="${esc(sec.cle)}">${esc(sec.bouton)}</button>`
               : ''}
           </div>
-          ${sousTableaux(lignes, COLONNES[sec.colonnes].entete, (a) => ligne(a, sec),
+          ${tableau(lignes, COLONNES[sec.colonnes].entete, (a) => ligne(a, sec),
             state.q ? 'Aucun résultat dans ce secteur.' : 'Personne pour le moment.')}
         </section>`;
       };
@@ -1453,14 +1459,10 @@ export const rgdPartenairesPage = {
       // apparaître ici alors que son partenaire ne figure dans aucune des trois
       // sections du dessus — c'est voulu, la question posée n'est pas la même.
       const sectionSortants = () => {
-        const parId = new Map(tous.map(p => [String(p.id), p]));
-        const vusIds = new Set(vus.map(p => String(p.id)));
-        const lignes = trierSortants(scope.rgd('rgd_apports_sortants')).filter(x => {
-          const fiche = parId.has(String(x.apporteur_id));
-          if (x.apporteur_id && !fiche) return false;   // fiche hors de ma portée
-          return (fiche && vusIds.has(String(x.apporteur_id)))
-            || hit([x.client, x.objet, x.partenaire], ts);
-        });
+        // Le tri par la recherche est fait plus haut, dans `sortantsTrouves` ;
+        // l'onglet se lit sur le secteur de l'AFFAIRE, pas sur celui du
+        // partenaire : l'agence de l'Oise peut apporter à un fournisseur d'Antibes.
+        const lignes = sortantsTrouves.filter(x => ongletDe(x.secteur) === state.onglet);
         // Rien à résumer, rien à écrire : le message du tableau vide dit déjà
         // à quoi sert ce bloc, et une phrase de bilan au-dessus de lui ferait
         // deux fois la même annonce.
@@ -1518,7 +1520,7 @@ export const rgdPartenairesPage = {
               : ''}
           </div>
           ${resume ? `<p class="pa-note">${resume}</p>` : ''}
-          ${sousTableaux(lignes, `<th>Partenaire</th><th>Date</th><th>Client</th>
+          ${tableau(lignes, `<th>Partenaire</th><th>Date</th><th>Client</th>
                 <th>Ce que RGD lui a apporté</th><th>Issue</th>
                 <th class="num">Montant estimé</th><th class="num">Commission attendue</th>`,
             ligneS, state.q ? 'Aucune affaire apportée ne correspond à cette recherche.'
@@ -1537,16 +1539,30 @@ export const rgdPartenairesPage = {
       // sont en face l'un de l'autre. Les colonnes de ce tableau-ci portent déjà
       // les totaux, ce qui suffit à comparer les partenaires entre eux.
 
+      // Le compte d'un onglet suit la recherche : il dit ce qu'on trouvera en
+      // cliquant dessus.
+      const compte = (o) => trouves.filter(a => ongletDe(a.secteur) === o).length
+        + sortantsTrouves.filter(x => ongletDe(x.secteur) === o).length;
+      const onglets = [['cote_azur', 'Côte d’Azur'], ['oise', 'Oise']]
+        .concat(nAClasser ? [['aclasser', 'À classer']] : []);
+
       const corps = `
-        <div class="toolbar">
-          ${searchInput('rpa-q', state, 'Rechercher un partenaire, un métier, une ville…')}
-          <span class="grow"></span>
-          <span class="muted small">${state.ecriture
-            ? 'Cliquez sur une ligne pour ouvrir la fiche'
-            : 'Lecture seule'}</span>
+        <div class="pa-onglets" role="tablist">
+          ${onglets.map(([k, l]) => `<button type="button" role="tab" data-onglet="${k}"
+            class="pa-onglet est-${k}${state.onglet === k ? ' active' : ''}"
+            aria-selected="${state.onglet === k}">${esc(l)}<span>${compte(k)}</span></button>`).join('')}
         </div>
-        ${SECTIONS.map(section).join('')}
-        ${sectionSortants()}`;
+        <div class="pa-zone est-${state.onglet}">
+          <div class="toolbar">
+            ${searchInput('rpa-q', state, 'Rechercher un partenaire, un métier, une ville…')}
+            <span class="grow"></span>
+            <span class="muted small">${state.ecriture
+              ? 'Cliquez sur une ligne pour ouvrir la fiche'
+              : 'Lecture seule'}</span>
+          </div>
+          ${SECTIONS.map(section).join('')}
+          ${sectionSortants()}
+        </div>`;
 
       root.innerHTML = cadre('#/rgd/partenaires', 'Partenaires', corps);
       bindSearch(root, 'rpa-q', state, draw);
@@ -1557,7 +1573,8 @@ export const rgdPartenairesPage = {
         // `sec.cree` a disparu avec la section des inactifs (22/10/2026) : elle
         // seule creait sous un autre role que le sien. Les deux sections qui
         // restent portent le role qu'elles creent.
-        nouveauPartenaire(draw, sec?.cle || 'apporteur');
+        // Créé dans l'onglet Oise, il est de l'Oise ; le formulaire le change.
+        nouveauPartenaire(draw, sec?.cle || 'apporteur', SECTEURS[state.onglet] ? state.onglet : null);
       });
       // Le clic ouvre la FICHE, pas le formulaire : on vient d'abord lire.
       root.querySelectorAll('[data-partenaire]').forEach(tr => tr.onclick = () =>
@@ -1577,7 +1594,14 @@ export const rgdPartenairesPage = {
       });
 
       const bRep = root.querySelector('#pa-reperer');
-      if (bRep) bRep.onclick = () => formulaireSortant(null, draw);
+      if (bRep) bRep.onclick = () => formulaireSortant(null, draw,
+        SECTEURS[state.onglet] ? state.onglet : null);
+
+      root.querySelectorAll('[data-onglet]').forEach(b => b.onclick = () => {
+        state.onglet = b.dataset.onglet;
+        try { localStorage.setItem(ONGLET_MEMO, state.onglet); } catch { /* navigation privée */ }
+        draw();
+      });
     };
 
     draw();
