@@ -67,10 +67,11 @@
 // devant chaque ligne + filtre en haut) a été publiée puis REFUSÉE le jour même
 // — « je ne trouve pas que ce soit clair, je voudrais plus qu'ils soient
 // répartis en deux tableaux dans un tableau avec deux couleurs différentes ».
-// Ne pas y revenir. Chaque section porte donc un sous-tableau bleu (Côte
-// d'Azur) et un sous-tableau ambre (Oise), toujours affichés, même vides ; un
-// troisième, gris, « À classer », n'apparaît que s'il reste des fiches sans
-// secteur — ne rien savoir ne vaut pas un secteur.
+// Ne pas y revenir. Puis la version en sous-tableaux encadrés a été jugée
+// « un peu trop lourde » : chaque section est maintenant UN tableau, coupé en
+// un groupe bleu (Côte d'Azur) et un groupe ambre (Oise), toujours affichés ;
+// un groupe gris « À classer » n'apparaît que s'il reste des fiches sans
+// secteur — ne rien savoir ne vaut pas un secteur. Voir `sousTableaux`.
 //
 // LE TABLEAU DES APPORTS, EN BAS
 // Une ligne par affaire présentée : apporteur, date, client, issue, montant du
@@ -183,45 +184,42 @@ const pastilleSecteur = (s) => SECTEURS[s]
   : '<span class="pa-secteur est-aclasser">À classer</span>';
 
 /**
- * Les lignes d'une section, réparties en sous-tableaux par secteur.
+ * Les lignes d'une section, réparties par secteur DANS UN SEUL TABLEAU.
  *
- * ⚠ CÔTE D'AZUR ET OISE S'AFFICHENT TOUJOURS, MÊME VIDES : c'est la structure
- * demandée, et un sous-tableau qui disparaît faute de ligne ferait croire que
- * le secteur n'existe pas. « À classer » seul se retire quand il est vide.
- * ⚠ L'EN-TÊTE DE COLONNES EST RÉPÉTÉ DANS CHAQUE SOUS-TABLEAU : deux tables
- * séparées n'alignent pas leurs colonnes, et une table sans en-tête oblige à
- * remonter pour savoir ce qu'on lit.
+ * ⚠ TROISIÈME VERSION, LE 27/10/2026. La deuxième posait un tableau encadré
+ * par secteur, chacun avec son bandeau, son « + Ajouter » et ses intitulés de
+ * colonnes : clair, mais « un peu trop lourd » (Élodie). Ici, une seule ligne
+ * d'intitulés, puis pour chaque secteur une ligne de titre teintée (bleu Côte
+ * d'Azur, ambre Oise) et ses lignes, marquées d'un trait de la même couleur à
+ * gauche. La séparation en deux couleurs demandée reste, sans les cadres.
+ *
+ * ⚠ CÔTE D'AZUR ET OISE S'AFFICHENT TOUJOURS, MÊME VIDES — sur une ligne fine,
+ * pas un grand encart. « À classer » seul se retire quand il est vide.
  *
  * @param {object[]} lignes   les lignes, déjà triées
  * @param {string} entete      les `<th>` du tableau
  * @param {function} rendre    une ligne → son `<tr>`
- * @param {string} vide        le message d'un sous-tableau vide
- * @param {string} [ajout]     clé de section : pose un « + » qui crée dans ce secteur
+ * @param {string} vide        le message d'un secteur vide
  */
-function sousTableaux(lignes, entete, rendre, vide, ajout) {
+function sousTableaux(lignes, entete, rendre, vide) {
+  // Le colspan est compté sur l'en-tête, jamais écrit à la main.
   const nbColonnes = entete.split('<th').length - 1;
   const groupes = Object.entries(SECTEURS).map(([k, s]) =>
     ({ cle: k, label: s.label, lignes: lignes.filter(x => x.secteur === k) }));
   const sans = lignes.filter(x => !SECTEURS[x.secteur]);
   if (sans.length) groupes.push({ cle: 'aclasser', label: 'À classer', lignes: sans });
-  return groupes.map(g => `
-    <div class="pa-sous est-${g.cle}">
-      <div class="pa-sous-titre">
-        <span class="pa-sous-nom">${esc(g.label)}</span>
-        <span class="pa-sous-n">${g.lignes.length}</span>
-        <span class="grow"></span>
-        ${ajout && g.cle !== 'aclasser'
-          ? `<button type="button" class="pa-sous-ajout" data-nouveau="${esc(ajout)}" data-sect="${g.cle}">+ Ajouter</button>`
-          : ''}
-      </div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr>${entete}</tr></thead>
-          <tbody>${g.lignes.map(rendre).join('')
-            || `<tr><td colspan="${nbColonnes}"><div class="empty">${esc(vide)}</div></td></tr>`}</tbody>
-        </table>
-      </div>
-    </div>`).join('');
+  return `
+    <div class="table-wrap">
+      <table class="pa-groupes">
+        <thead><tr>${entete}</tr></thead>
+        ${groupes.map(g => `
+        <tbody class="pa-groupe est-${g.cle}">
+          <tr class="pa-groupe-titre"><td colspan="${nbColonnes}">${esc(g.label)}<span>${g.lignes.length}</span></td></tr>
+          ${g.lignes.map(rendre).join('')
+            || `<tr class="pa-groupe-vide"><td colspan="${nbColonnes}">${esc(vide)}</td></tr>`}
+        </tbody>`).join('')}
+      </table>
+    </div>`;
 }
 
 const ISSUES = {
@@ -596,8 +594,6 @@ function ficheFournisseur(a) {
 
 /** Créer un partenaire : le formulaire seul, dans sa propre fenêtre. */
 function nouveauPartenaire(apres, typeDefaut = 'apporteur', secteur = null) {
-  // Créé par le « + Ajouter » du sous-tableau Oise, il est de l'Oise : la
-  // liste du formulaire le change d'un clic.
   const v = { type_partenaire: typeDefaut, actif: true, secteur };
   openModal('Nouveau partenaire', corpsFormulaire(v, true), { wide: true, onOpen: (m) => {
     brancherFormulaire(m, null, () => { closeModal(); apres?.(); });
@@ -1435,10 +1431,8 @@ export const rgdPartenairesPage = {
               ? `<button type="button" class="btn primary" data-nouveau="${esc(sec.cle)}">${esc(sec.bouton)}</button>`
               : ''}
           </div>
-          ${'' /* Le colspan est compté sur l'en-tête, dans `sousTableaux`, jamais écrit à la main. */}
           ${sousTableaux(lignes, COLONNES[sec.colonnes].entete, (a) => ligne(a, sec),
-            state.q ? 'Aucun résultat dans ce secteur.' : 'Personne pour le moment.',
-            state.ecriture ? sec.cle : null)}
+            state.q ? 'Aucun résultat dans ce secteur.' : 'Personne pour le moment.')}
         </section>`;
       };
 
@@ -1528,8 +1522,7 @@ export const rgdPartenairesPage = {
                 <th>Ce que RGD lui a apporté</th><th>Issue</th>
                 <th class="num">Montant estimé</th><th class="num">Commission attendue</th>`,
             ligneS, state.q ? 'Aucune affaire apportée ne correspond à cette recherche.'
-              : 'Rien d’enregistré pour l’instant.',
-            state.ecriture ? 'sortant' : null)}
+              : 'Rien d’enregistré pour l’instant.')}
           <p class="pa-note">La commission n’entre dans le total que sur une affaire
             <b>gagnée</b> par le partenaire. ${state.ecriture
               ? 'Un clic sur une ligne l’ouvre pour la modifier. Le partenaire n’est pas '
@@ -1560,15 +1553,11 @@ export const rgdPartenairesPage = {
       restoreFocus(root, state);
 
       root.querySelectorAll('[data-nouveau]').forEach(b => b.onclick = () => {
-        // Le « + Ajouter » d'un sous-tableau crée dans son secteur ; le bouton
-        // de la section laisse le choix au formulaire.
-        const secteur = SECTEURS[b.dataset.sect] ? b.dataset.sect : null;
-        if (b.dataset.nouveau === 'sortant') return formulaireSortant(null, draw, secteur);
         const sec = SECTIONS.find(s => s.cle === b.dataset.nouveau);
         // `sec.cree` a disparu avec la section des inactifs (22/10/2026) : elle
         // seule creait sous un autre role que le sien. Les deux sections qui
         // restent portent le role qu'elles creent.
-        nouveauPartenaire(draw, sec?.cle || 'apporteur', secteur);
+        nouveauPartenaire(draw, sec?.cle || 'apporteur');
       });
       // Le clic ouvre la FICHE, pas le formulaire : on vient d'abord lire.
       root.querySelectorAll('[data-partenaire]').forEach(tr => tr.onclick = () =>
