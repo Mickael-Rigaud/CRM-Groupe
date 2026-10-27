@@ -60,7 +60,7 @@ function renderLogin(error = '') {
   app.querySelector('#login-form')?.addEventListener('submit', async e => {
     e.preventDefault();
     const f = new FormData(e.target);
-    try { const u = await db.signIn(f.get('email'), f.get('password')); if (!u) throw new Error('Profil utilisateur introuvable — demandez à la direction de créer votre profil.'); await db.loadAll(); start(u); }
+    try { const u = await db.signIn(f.get('email'), f.get('password')); if (!u) throw new Error('Profil utilisateur introuvable — demandez à la direction de créer votre profil.'); await db.loadAll(u); start(u); }
     catch (err) { renderLogin(err.message); }
   });
 }
@@ -477,6 +477,31 @@ async function start(user) {
 
 window.addEventListener('hashchange', route);
 
+// Derrière une ouverture sur la copie locale. Le profil d'abord : supprimé, on
+// déconnecte ; modifié (rôle, accès), on repart du profil neuf, car les droits
+// de tout l'écran en dépendent. Hors ligne, on garde la copie à l'écran.
+async function rafraichirApresCopie(copie) {
+  let u;
+  try { u = await db.currentUser(); } catch { return; }
+  if (!u) { await db.signOut(); location.reload(); return; }
+  try { await db.rafraichirTout(u); } catch { return; }
+  if (JSON.stringify(u) !== JSON.stringify(copie)) { await db.memoriser(u, 0); location.reload(); }
+}
+
+// Copie locale du CODE : voir sw.js. On lui passe la liste de ce que la page a
+// chargé, puisque la toute première ouverture ne passe pas encore par lui.
+// ⚠ PAS EN DÉMO : servie depuis un dossier de test, la copie survivrait aux
+// modifications qu'on y fait et fausserait l'essai suivant.
+function garderLeCode() {
+  if (db.demo || !('serviceWorker' in navigator)) return;
+  navigator.serviceWorker.register('./sw.js', { scope: './' }).then(() => navigator.serviceWorker.ready).then((reg) => {
+    setTimeout(() => {
+      const adresses = performance.getEntriesByType('resource').map(e => e.name).concat(location.href);
+      reg.active?.postMessage({ type: 'garder', adresses });
+    }, 5000);
+  }).catch(() => { /* sans service worker, le CRM marche comme avant */ });
+}
+
 // Un lien d'accès qui n'a pas abouti, DIT EN FRANÇAIS.
 //
 // ⚠ CE SILENCE A COÛTÉ DEUX JOURS (28-29/09/2026). Quand un lien d'invitation
@@ -537,8 +562,15 @@ function refusDeLien() {
     // elle), puis recommençait en entier une fois connecté : deux fois les
     // 75 tables à chaque ouverture. Le formulaire de connexion charge de son côté.
     if (db.demo) await db.loadAll();
+    garderLeCode();
+    // Ouverture sur la copie locale : l'écran s'affiche avec ce que l'appareil a
+    // gardé de la dernière fois, et tout se recharge derrière (voir
+    // `db.reprendreCopie`). Pas sur un retour de lien : la session vient de
+    // changer de mains, la copie peut être celle de quelqu'un d'autre.
+    const copie = retourDeLien() ? null : await db.reprendreCopie();
+    if (copie) { start(copie); rafraichirApresCopie(copie); return; }
     const u = await db.currentUser();
-    if (u) { if (!db.demo) await db.loadAll(); start(u); } else renderLogin(refusDeLien());
+    if (u) { if (!db.demo) await db.loadAll(u); start(u); } else renderLogin(refusDeLien());
   } catch (e) {
     console.error(e);
     app.innerHTML = `<div class="login"><div class="card"><h2>Erreur de démarrage</h2><p>${esc(e.message)}</p><p class="muted small">Vérifiez la configuration dans <code>js/config.js</code>.</p></div></div>`;

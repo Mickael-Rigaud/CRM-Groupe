@@ -650,7 +650,11 @@ const supabaseAdapter = {
   // une, les 75 tables coûtaient 75 allers-retours mis bout à bout — invisible
   // sur la fibre, une quinzaine de secondes en 4G (mesuré le 27/10/2026). Le
   // volume n'y était pour rien (1,8 Mo en tout) : c'était l'attente.
-  async load(tables = TABLES) {
+  // `exigeant` : une coupure réseau LÈVE au lieu de rendre une table vide. Le
+  // rafraîchissement qui suit la copie locale en a besoin — sans quoi, hors
+  // ligne, il remplacerait des données justes par des tables vides, et les
+  // enregistrerait. (Une table absente, elle, a un `code` : on continue.)
+  async load(tables = TABLES, { exigeant = false } = {}) {
     const out = {};
     const PAGE = 1000; // Supabase limite chaque requête à 1 000 lignes : on pagine
     const EN_VOL = 12;
@@ -658,6 +662,7 @@ const supabaseAdapter = {
       const rows = []; let from = 0; let failed = false;
       while (true) {
         const { data, error } = await this.client.from(t).select('*').range(from, from + PAGE - 1);
+        if (error && exigeant && !error.code) throw new Error(`Table ${t} : ${error.message}`);
         if (error) { console.warn(`Table ${t} : ${error.message}`); failed = true; break; } // table absente (module non installé) : on continue
         rows.push(...(data || []));
         if (!data || data.length < PAGE) break;
@@ -692,8 +697,18 @@ const supabaseAdapter = {
   async currentUser() {
     const { data: { session } } = await this.client.auth.getSession();
     if (!session) return null;
-    const { data } = await this.client.from('profiles').select('*').eq('id', session.user.id).single();
+    const { data, error } = await this.client.from('profiles').select('*').eq('id', session.user.id).single();
+    // ⚠ Hors ligne, on LÈVE : « pas de réponse » n'est pas « pas de profil ».
+    // Le confondre déconnecterait quelqu'un qui passe dans un tunnel.
+    // (`PGRST116` = aucune ligne : le profil n'existe vraiment pas.)
+    if (error && !data && error.code !== 'PGRST116') throw new Error(error.message);
     return data ? { ...data, email: session.user.email } : null;
+  },
+  // Qui a une session sur cet appareil, sans aller au réseau (sauf jeton à
+  // renouveler) : de quoi savoir à qui appartient la copie locale.
+  async sessionUid() {
+    const { data: { session } } = await this.client.auth.getSession();
+    return session?.user.id || null;
   },
   async signIn(email, password) {
     const { error } = await this.client.auth.signInWithPassword({ email, password });
@@ -752,11 +767,46 @@ const supabaseAdapter = {
   },
 };
 
+// ---------- Copie locale des données (production) ----------
+// L'ouverture affiche ce que l'appareil a gardé de la dernière fois, puis
+// rafraîchit derrière (voir `reprendreCopie` / `rafraichirTout`). Sur téléphone,
+// c'est la différence entre un écran tout de suite et une attente de 1 à 2 s.
+// Une seule entrée, celle de la personne connectée ; effacée à la déconnexion.
+// IndexedDB et non localStorage : 1,8 Mo de données au 27/10/2026, et
+// localStorage plafonne à ~5 Mo sur certains téléphones.
+// ⚠ En cas d'échec (navigation privée, stockage plein), on fait comme s'il n'y
+// avait pas de copie : l'application marche comme avant, juste moins vite.
+function ouvrirMemoire() {
+  return new Promise((ok, ko) => {
+    const q = indexedDB.open('crm-groupe', 1);
+    q.onupgradeneeded = () => q.result.createObjectStore('copie');
+    q.onsuccess = () => ok(q.result);
+    q.onerror = () => ko(q.error);
+  });
+}
+async function memoire(mode, fn) {
+  const base = await ouvrirMemoire();
+  try {
+    return await new Promise((ok, ko) => {
+      const tx = base.transaction('copie', mode);
+      const q = fn(tx.objectStore('copie'));
+      tx.oncomplete = () => ok(q.result);
+      tx.onerror = tx.onabort = () => ko(tx.error);
+    });
+  } finally { base.close(); }
+}
+const lireCopie = () => memoire('readonly', s => s.get('donnees')).catch(() => null);
+const ecrireCopie = (v) => memoire('readwrite', s => s.put(v, 'donnees')).catch(() => {});
+const effacerCopie = () => memoire('readwrite', s => s.delete('donnees')).catch(() => {});
+
 // ---------- Façade ----------
 export const db = {
   adapter: null,
   cache: {},
   listeners: new Set(),
+  // Compteur d'écritures : un rafraîchissement parti AVANT une écriture
+  // rapporterait l'état d'avant et l'effacerait de l'écran. On le relance.
+  ecritures: 0,
   get demo() { return CONFIG.DEMO; },
 
   async init() {
@@ -764,10 +814,46 @@ export const db = {
     if (!CONFIG.DEMO) await this.adapter.connect();
     else this.adapter.load();
   },
-  async loadAll() {
+  async loadAll(user = null) {
     this.cache = await this.adapter.load();
     for (const t of TABLES) this.cache[t] ||= [];
     this.emit();
+    if (user) this.memoriser(user);
+  },
+  // Par défaut après le dessin de l'écran : la copie d'1,8 Mo prend quelques
+  // dizaines de millisecondes sur téléphone, autant ne pas les prendre à
+  // l'ouverture. `delai = 0` pour attendre qu'elle soit écrite (avant un
+  // rechargement, sinon on rouvrirait sur l'ancienne).
+  memoriser(user, delai = 1000) {
+    if (this.demo || !user) return Promise.resolve();
+    return new Promise(ok => setTimeout(() => ecrireCopie({ uid: user.id, profil: user, le: Date.now(), cache: this.cache }).then(ok), delai));
+  },
+  // Le profil gardé si la copie appartient à la session de cet appareil ;
+  // `null` sinon (aucune copie, autre personne, démo).
+  async reprendreCopie() {
+    if (this.demo || !this.adapter.sessionUid) return null;
+    const uid = await this.adapter.sessionUid();
+    if (!uid) return null;
+    const c = await lireCopie();
+    if (!c?.cache || c.uid !== uid) return null;
+    this.cache = c.cache;
+    for (const t of TABLES) this.cache[t] ||= [];
+    return c.profil;
+  },
+  // Après une ouverture sur la copie : tout recharger, ne redessiner que si
+  // quelque chose a bougé, garder la nouvelle copie. Lève si le réseau manque
+  // (la copie reste affichée).
+  async rafraichirTout(user) {
+    let frais, avant, essais = 0;
+    do { avant = this.ecritures; frais = await this.adapter.load(TABLES, { exigeant: true }); }
+    while (avant !== this.ecritures && ++essais < 3);
+    let change = false;
+    for (const t of TABLES) {
+      const rows = frais[t] || [];
+      if (JSON.stringify(rows) !== JSON.stringify(this.cache[t] || [])) { this.cache[t] = rows; change = true; }
+    }
+    if (change) this.emit();
+    this.memoriser(user);
   },
   // Recharge quelques tables seulement, sans toucher au reste du cache.
   // N'émet que si quelque chose a bougé : autrement un rafraîchissement
@@ -787,22 +873,25 @@ export const db = {
   setting(key) { return this.t('settings').find(s => s.key === key)?.value; },
 
   async insert(table, row) {
+    this.ecritures++;
     const r = await this.adapter.insert(table, row);
     this.cache[table].push(r); this.emit(); return r;
   },
   async update(table, id, patch) {
+    this.ecritures++;
     const r = await this.adapter.update(table, id, patch);
     const i = this.cache[table].findIndex(x => (x.id ?? x.key) === id);
     if (i >= 0) this.cache[table][i] = r; else this.cache[table].push(r);
     this.emit(); return r;
   },
   async remove(table, id) {
+    this.ecritures++;
     await this.adapter.remove(table, id);
     this.cache[table] = this.cache[table].filter(x => x.id !== id); this.emit();
   },
   // Appel d'une fonction côté base (ou son équivalent en mode démo). Le cache
   // n'est pas mis à jour tout seul : la table touchée est rechargée après coup.
-  async rpc(nom, args) { return this.adapter.rpc(nom, args); },
+  async rpc(nom, args) { this.ecritures++; return this.adapter.rpc(nom, args); },
   // Recharge une table après un appel de fonction. Passe par `refresh`, qui
   // pagine : un `select('*')` direct serait tronqué à 1 000 lignes sans le dire.
   async recharger(table) { return this.refresh([table]); },
@@ -819,7 +908,7 @@ export const db = {
   // auth
   currentUser() { return this.adapter.currentUser(); },
   signIn(a, b) { return this.adapter.signIn(a, b); },
-  signOut() { return this.adapter.signOut(); },
+  async signOut() { await effacerCopie(); return this.adapter.signOut(); },
   resetPassword(email) { return this.adapter.resetPassword(email); },
   updatePassword(pw) { return this.adapter.updatePassword(pw); },
   isRecovery() { return this.adapter.isRecovery(); },
