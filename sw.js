@@ -26,6 +26,9 @@
 const META = 'crm-meta';
 const CLE_COURANT = new URL('./__version-courante', self.registration.scope).href;
 const PAGE = new URL('./index.html', self.registration.scope).href;
+// L'application RGD Renova (27/10/2026) : la même application, ouverte sur
+// l'espace RGD, avec son nom et son icône — une seconde page d'entrée.
+const PAGE_RGD = new URL('./rgd.html', self.registration.scope).href;
 const RACINE = new URL('./', self.registration.scope).href;
 
 const empreinte = (r) => r.headers.get('ETag') || r.headers.get('Last-Modified') || null;
@@ -44,18 +47,22 @@ async function fixerCourant(nom) {
   await (await caches.open(META)).put(CLE_COURANT, new Response(nom));
 }
 
-// La clé d'un fichier dans la copie : son adresse sans la requête. La page
-// d'accueil, qu'on l'ouvre par `/` ou `/index.html`, est une seule entrée.
-function cleDe(url, navigation) {
-  if (navigation) return PAGE;
-  return url.origin + url.pathname;
+// La page d'entrée que désigne une adresse, ou `null`. La page du CRM, qu'on
+// l'ouvre par `/` ou `/index.html`, est une seule entrée.
+function pageDe(url) {
+  const sans = url.origin + url.pathname;
+  if (sans === RACINE || sans === PAGE) return PAGE;
+  if (sans === PAGE_RGD) return PAGE_RGD;
+  return null;
+}
+// La clé d'un fichier dans la copie : son adresse sans la requête.
+function cleDe(url) {
+  return pageDe(url) || url.origin + url.pathname;
 }
 function estDuCode(url) {
   return url.href.startsWith(RACINE) && /\.(js|css|html|json)$/i.test(url.pathname) && !url.pathname.endsWith('/sw.js');
 }
-function estLaPage(url) {
-  return url.origin + url.pathname === RACINE || url.origin + url.pathname === PAGE;
-}
+const estLaPage = (url) => !!pageDe(url);
 
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
@@ -68,7 +75,7 @@ self.addEventListener('fetch', (e) => {
   if (navigation ? !estLaPage(url) : !(estDuCode(url) || estLaPage(url))) return;
   // `js/maj.js` demande aussi la page par son adresse, hors navigation : même
   // entrée, sinon « Recharger » rafraîchirait les modules et pas la page.
-  e.respondWith(servir(r, cleDe(url, navigation || estLaPage(url)), navigation, e));
+  e.respondWith(servir(r, cleDe(url), navigation, e));
 });
 
 async function servir(r, cle, navigation, e) {
@@ -79,7 +86,7 @@ async function servir(r, cle, navigation, e) {
     if (rep.ok) await cache.put(cle, rep.clone());
     return rep;
   }
-  if (navigation) e.waitUntil(verifierVersion());
+  if (navigation) e.waitUntil(verifierVersion(cle));
   const garde = await cache.match(cle);
   if (garde) return garde;
   const rep = await fetch(r);
@@ -91,25 +98,28 @@ async function servir(r, cle, navigation, e) {
 // ouverts ensemble ne doivent pas télécharger la nouvelle version chacun.
 let dernierControle = 0;
 let controleEnCours = null;
-function verifierVersion() {
+function verifierVersion(page) {
   if (controleEnCours || Date.now() - dernierControle < 60_000) return controleEnCours || Promise.resolve();
   dernierControle = Date.now();
-  controleEnCours = basculerSiNouvelle().catch(() => {}).finally(() => { controleEnCours = null; });
+  controleEnCours = basculerSiNouvelle(page).catch(() => {}).finally(() => { controleEnCours = null; });
   return controleEnCours;
 }
 
-async function basculerSiNouvelle() {
+// `page` : celle qu'on ouvre. ⚠ PAS TOUJOURS `index.html` : sur un téléphone où
+// seule l'application RGD est installée, `index.html` n'est jamais copiée, et
+// un contrôle fondé sur elle ne verrait jamais aucune nouvelle version.
+async function basculerSiNouvelle(page = PAGE) {
   const nom = await nomCourant();
   const cache = await caches.open(nom);
-  const garde = await cache.match(PAGE);
+  const garde = await cache.match(page);
   if (!garde) return; // rien de copié encore : la page s'en chargera (message « garder »)
-  const neuve = await fetch(PAGE, { cache: 'no-store' });
+  const neuve = await fetch(page, { cache: 'no-store' });
   if (!neuve.ok || !empreinte(neuve) || empreinte(neuve) === empreinte(garde)) return;
   const nomNeuf = 'crm-code-' + Date.now();
   const neuf = await caches.open(nomNeuf);
   try {
-    await neuf.put(PAGE, neuve);
-    const adresses = (await cache.keys()).map(q => q.url).filter(u => u !== PAGE);
+    await neuf.put(page, neuve);
+    const adresses = (await cache.keys()).map(q => q.url).filter(u => u !== page);
     for (let i = 0; i < adresses.length; i += 8) {
       await Promise.all(adresses.slice(i, i + 8).map(async (u) => {
         const rep = await fetch(u, { cache: 'no-store' });
@@ -136,11 +146,10 @@ self.addEventListener('message', (e) => {
     for (const brute of e.data.adresses) {
       try {
         const url = new URL(brute);
-        const page = estLaPage(url);
-        if (!page && !estDuCode(url)) continue;
-        const cle = cleDe(url, page);
+        if (!estLaPage(url) && !estDuCode(url)) continue;
+        const cle = cleDe(url);
         if (await cache.match(cle)) continue;
-        const rep = await fetch(page ? PAGE : cle, { cache: 'force-cache' });
+        const rep = await fetch(cle, { cache: 'force-cache' });
         if (rep.ok) await cache.put(cle, rep);
       } catch { /* un fichier manquant n'empêche pas les autres */ }
     }

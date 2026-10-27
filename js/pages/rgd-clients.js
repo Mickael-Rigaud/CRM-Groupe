@@ -270,6 +270,19 @@ function ajusterNote(champ) {
   champ.style.height = `${Math.min(champ.scrollHeight, 220)}px`;
 }
 
+// Le même calage pour TOUT le tableau, en trois passes. ⚠ PAS `ajusterNote`
+// EN BOUCLE (mesuré le 27/10/2026) : écrire une hauteur puis lire
+// `scrollHeight` force le navigateur à refaire la mise en page de la page
+// entière, et la boucle le faisait une fois PAR LIGNE — 195 mises en page
+// d'affilée sur la base réelle, ce qui figeait l'écran sur téléphone. Toutes
+// les écritures, puis toutes les lectures, puis toutes les écritures : une
+// seule mise en page.
+function ajusterNotes(champs) {
+  champs.forEach(c => { c.style.height = 'auto'; });
+  const hauteurs = champs.map(c => c.scrollHeight);
+  champs.forEach((c, i) => { c.style.height = `${Math.min(hauteurs[i], 220)}px`; });
+}
+
 // ⚠ LES QUATRE RÉPONSES DE L'ANNUAIRE (07/10/2026, demandées mot pour mot par
 // Élodie). Elles remplacent le bouton « Écarter » livré le matin même : « je ne
 // trouve pas cela intuitif » — un bouton d'action à côté d'une colonne d'état
@@ -1730,11 +1743,12 @@ export const rgdClientsPage = {
       // l'ancienne valeur revient si l'enregistrement échoue. On écrit au
       // `change` (sortie du champ), pas à chaque frappe : un appel par lettre
       // ferait une écriture par lettre.
-      root.querySelectorAll('.note-champ').forEach(i => {
+      const notes = [...root.querySelectorAll('.note-champ')];
+      // La hauteur se cale au rendu, d'un bloc (voir `ajusterNotes`), puis à
+      // chaque frappe : le champ grandit sous la main pendant qu'on écrit.
+      ajusterNotes(notes);
+      notes.forEach(i => {
         i.dataset.avant = i.value;
-        // La hauteur se cale au rendu, puis à chaque frappe : le champ grandit
-        // sous la main pendant qu'on écrit, au lieu d'attendre un redessin.
-        ajusterNote(i);
         i.oninput = () => ajusterNote(i);
         i.onchange = async () => {
           const avant = i.dataset.avant;

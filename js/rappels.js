@@ -147,7 +147,7 @@ export function monterRappels(parent = document.body) {
     if (!t) return;
     const geste = t.dataset.rap;
     if (geste === 'reduire') { ecrire(CLE_REDUIT, '1'); dessiner(); }
-    else if (geste === 'ouvrir') { ecrire(CLE_REDUIT, null); dessiner(); }
+    else if (geste === 'ouvrir') { ecrire(CLE_REDUIT, '0'); dessiner(); }
     else if (geste === 'tache') {
       const a = db.byId('activities', t.dataset.id);
       if (a) activityForm({}, a, dessiner);
@@ -192,7 +192,13 @@ function dessiner() {
   if (!racine) return;
   const liste = tachesEcheance();
   const retards = liste.filter(x => x.retard).length;
-  const reduit = lire(CLE_REDUIT) === '1';
+  // ⚠ SUR TÉLÉPHONE, RÉDUIT TANT QU'ON NE L'A PAS OUVERT (27/10/2026). Déplié,
+  // le panneau couvrait la moitié de l'écran à chaque ouverture du CRM, sur
+  // l'écran qu'on venait voir. Réduit, il reste une pastille avec le nombre et
+  // les retards — l'information est là, elle ne bouche plus la vue. Ouvert ou
+  // réduit à la main, le choix est retenu (`'0'` ou `'1'`) et l'emporte.
+  const choix = lire(CLE_REDUIT);
+  const reduit = choix === '1' || (choix == null && matchMedia('(max-width: 820px)').matches);
 
   // Rien à dire et rien à proposer : on ne laisse pas une pastille vide à l'écran.
   if (!liste.length && (etatPush === 'actif' || etatPush === 'demo' || reduit)) {

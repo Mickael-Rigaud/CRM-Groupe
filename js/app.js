@@ -174,6 +174,7 @@ function renderLayout() {
       <div class="topbar subnav" id="subnav"></div>
     </header>
     <main class="content" id="content"></main>
+    <nav class="barre-bas" id="barre-bas" aria-label="Navigation principale"></nav>
     <div id="tiroir" hidden></div>`;
   document.addEventListener('keydown', e => {
     if (e.key !== 'Escape') return;
@@ -247,6 +248,54 @@ function renderTiroir(gs, here, hash, u, ini) {
   });
 }
 
+// ---------- Barre du bas (téléphone) ----------
+// Demandée le 27/10/2026 (Élodie : une application « intuitive » sur téléphone
+// et tablette). Les quatre écrans qu'on ouvre le plus, sous le pouce, et
+// « Menu » pour tout le reste : c'est le tiroir, qui garde toute la carte.
+// Elle n'existe qu'en dessous de 820 px — le CSS la cache ailleurs
+// (`css/mobile.css`) —, le grand écran garde ses deux bandes du haut.
+//
+// ⚠ DEUX APPLICATIONS, UNE SEULE BARRE À CHANGER : `rgd.html` est le même CRM
+// ouvert sur l'espace RGD (son nom et son icône sont dans manifest-rgd.json).
+// Seules ses quatre entrées diffèrent. Quelqu'un qui n'a pas RGD dans ses
+// activités retombe sur la barre du CRM.
+const APPLI_RGD = /\/rgd\.html$/.test(location.pathname);
+const BAS_CRM = [
+  { cle: 'home', hash: '#/home', icon: 'home', label: 'Accueil' },
+  { cle: 'today', hash: '#/today', icon: 'check', label: 'To do', count: () => NAV[1].count() },
+  { cle: 'commercial', icon: 'kanban', label: 'Pilotage' },
+  { cle: 'messagerie', hash: '#/messagerie', icon: 'chat', label: 'Messages', count: () => messagesNonLus() },
+];
+const BAS_RGD = [
+  { hash: '#/rgd', icon: 'home', label: 'Accueil', ici: (h) => h === '#/rgd' || h.startsWith('#/rgd/pilotage') },
+  { hash: '#/rgd/clients', icon: 'users', label: 'Clients' },
+  { hash: '#/rgd/chantiers', icon: 'kanban', label: 'Pipeline' },
+  { hash: '#/rgd/agenda', icon: 'calendar', label: 'Agenda' },
+];
+const appliRgd = () => APPLI_RGD && scope.activityKeys.includes('rgd');
+
+function renderBarreBas(gs, here, hash) {
+  const hote = document.getElementById('barre-bas'); if (!hote) return;
+  const entrees = appliRgd()
+    ? BAS_RGD.map(e => ({ ...e, on: e.ici ? e.ici(hash) : hash.startsWith(e.hash) }))
+    : BAS_CRM.map(e => {
+      // Pilotage mène au premier écran de son univers, comme son onglet du haut.
+      const g = gs.find(x => x.key === e.cle);
+      if (!g) return null;
+      return { ...e, hash: e.hash || g.hash || itemsOf(g)[0].hash, on: here?.key === e.cle };
+    }).filter(Boolean);
+  hote.innerHTML = entrees.map(e => {
+    const n = e.count ? e.count() : 0;
+    return `<a href="${e.hash}" class="bb-lien ${e.on ? 'on' : ''}" ${e.on ? 'aria-current="page"' : ''}>
+      <span class="bb-ico">${icon(e.icon, 22)}${n ? `<i>${n > 99 ? '99+' : n}</i>` : ''}</span><span>${esc(e.label)}</span></a>`;
+  }).join('') + `<button type="button" class="bb-lien ${navState.tiroir ? 'on' : ''}" id="bb-menu" aria-expanded="${navState.tiroir}">
+      <span class="bb-ico">${icon('menu', 22)}</span><span>Menu</span></button>`;
+  hote.querySelector('#bb-menu').onclick = () => { navState.tiroir = !navState.tiroir; navState.open = null; renderNav(); };
+  // Toucher l'écran où l'on est déjà ramène en haut de page, comme partout ailleurs.
+  hote.querySelectorAll('a.bb-lien.on').forEach(a => a.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' })));
+  document.body.classList.toggle('appli-rgd', appliRgd());
+}
+
 // ---------- Couleur de la structure ouverte ----------
 // Sur un écran rattaché à une activité, l'interface prend la couleur de la structure ;
 // partout ailleurs elle revient à l'indigo du groupe. Une seule source : ACTIVITIES.
@@ -285,7 +334,7 @@ function renderNav() {
   univ.innerHTML = `
     <button type="button" class="u-burger" id="burger" aria-label="Ouvrir le menu" aria-expanded="${navState.tiroir}">${icon('menu', 21)}</button>
     <a class="u-mark" href="#/home">${esc(CONFIG.APP_NAME)}</a>
-    <span class="u-ici">${esc(here?.label || CONFIG.APP_NAME)}</span>
+    <span class="u-ici">${esc(appliRgd() && hash.startsWith('#/rgd') ? ACTIVITIES.rgd.label : here?.label || CONFIG.APP_NAME)}</span>
     <nav class="u-set" aria-label="Univers">${gs.filter(g => !g.bottom).map(tab).join('')}</nav>
     <div class="u-right">
       ${gs.filter(g => g.bottom).map(g => `<a href="${g.hash}" class="u-ico ${here?.key === g.key ? 'on' : ''}" title="${esc(g.label)}" aria-label="${esc(g.label)}">${icon(g.icon, 18)}</a>`).join('')}
@@ -329,6 +378,7 @@ function renderNav() {
   sub.hidden = !items.length && !posted;
 
   renderTiroir(gs, here, hash, u, ini);
+  renderBarreBas(gs, here, hash);
 
   // Garder l'onglet courant sous les yeux quand les barres défilent (mobile)
   for (const el of [univ.querySelector('.u-tab.on'), sub.querySelector('.s-tab.on')]) {
@@ -471,6 +521,8 @@ async function start(user) {
   probeLogos();
   unsubscribe?.();
   unsubscribe = db.onChange(() => { renderNav(); current?.refresh?.(); });
+  // L'application RGD s'ouvre sur son espace, pas sur le tableau du groupe.
+  if (appliRgd() && !location.hash) history.replaceState(null, '', location.pathname + location.search + '#/rgd');
   route();
   db.ecouterLesChangements();
   if (retourDeLien()) setTimeout(() => passwordForm(true), 300);

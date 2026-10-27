@@ -3,13 +3,28 @@ import { db } from './data/db.js';
 import { ACTIVITIES } from './data/schema.js';
 
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-export const eur = (n, opts = {}) => (Number(n) || 0).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0, ...opts });
-export const num = (n) => (Number(n) || 0).toLocaleString('fr-FR');
+// ⚠ LES FORMATEURS SONT GARDÉS, PAS RECRÉÉS (27/10/2026). `toLocaleString`
+// avec des options construit un formateur neuf à CHAQUE appel ; sur l'écran
+// Locatif, des centaines de montants coûtaient 72 ms de processeur de
+// téléphone à eux seuls. `Intl.NumberFormat(...).format` donne exactement le
+// même texte, une fois le formateur construit.
+const formateurs = new Map();
+const formateur = (Classe, options) => {
+  const cle = Classe.name + JSON.stringify(options);
+  let f = formateurs.get(cle);
+  if (!f) { f = new Classe('fr-FR', options); formateurs.set(cle, f); }
+  return f;
+};
+// Une date invalide : `toLocaleDateString` rendait « Invalid Date »,
+// `DateTimeFormat.format` lèverait. On garde l'ancien comportement.
+const dateFr = (d, options) => (isNaN(d) ? 'Invalid Date' : formateur(Intl.DateTimeFormat, options).format(d));
+export const eur = (n, opts = {}) => formateur(Intl.NumberFormat, { style: 'currency', currency: 'EUR', maximumFractionDigits: 0, ...opts }).format(Number(n) || 0);
+export const num = (n) => formateur(Intl.NumberFormat, {}).format(Number(n) || 0);
 export const pct = (n) => (isFinite(n) ? Math.round(n) : 0) + ' %';
 export const today = () => { const x = new Date(); x.setHours(0, 0, 0, 0); return x; };
 export const isoDay = (d = new Date()) => { const x = new Date(d); x.setMinutes(x.getMinutes() - x.getTimezoneOffset()); return x.toISOString().slice(0, 10); };
-export const fmtDate = (s) => s ? new Date(s.length === 10 ? s + 'T00:00:00' : s).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
-export const fmtDateTime = (s) => s ? new Date(s).toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
+export const fmtDate = (s) => s ? dateFr(new Date(s.length === 10 ? s + 'T00:00:00' : s), { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+export const fmtDateTime = (s) => s ? dateFr(new Date(s), { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
 export const daysSince = (s) => s ? Math.floor((today() - new Date(s.length === 10 ? s + 'T00:00:00' : s).setHours(0, 0, 0, 0)) / 86400000) : null;
 export const relDay = (s) => {
   const n = daysSince(s);
