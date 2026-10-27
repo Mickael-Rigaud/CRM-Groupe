@@ -646,10 +646,15 @@ const supabaseAdapter = {
   // `tables` sert à ne recharger qu'une partie du cache : la messagerie se
   // rafraîchit toutes les quelques secondes, il serait absurde de retélécharger
   // les loyers et le patrimoine à chaque fois.
+  // Les tables partent EN PARALLÈLE, par paquets de `EN_VOL` : chargées une à
+  // une, les 75 tables coûtaient 75 allers-retours mis bout à bout — invisible
+  // sur la fibre, une quinzaine de secondes en 4G (mesuré le 27/10/2026). Le
+  // volume n'y était pour rien (1,8 Mo en tout) : c'était l'attente.
   async load(tables = TABLES) {
     const out = {};
     const PAGE = 1000; // Supabase limite chaque requête à 1 000 lignes : on pagine
-    for (const t of tables) {
+    const EN_VOL = 12;
+    const chargerTable = async (t) => {
       const rows = []; let from = 0; let failed = false;
       while (true) {
         const { data, error } = await this.client.from(t).select('*').range(from, from + PAGE - 1);
@@ -659,7 +664,10 @@ const supabaseAdapter = {
         from += PAGE;
       }
       out[t] = failed ? [] : rows;
-    }
+    };
+    const file = [...tables];
+    const ouvrier = async () => { while (file.length) await chargerTable(file.shift()); };
+    await Promise.all(Array.from({ length: Math.min(EN_VOL, file.length) }, ouvrier));
     // Gestion locative sans accès patrimoine : les biens viennent d'une vue allégée (sans prix ni financement)
     if (out.properties && !out.properties.length) { const { data } = await this.client.from('v_properties_rental').select('*'); if (data?.length) out.properties = data; }
     return out;

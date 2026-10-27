@@ -530,7 +530,13 @@ function refusDeLien() {
     // Dit quand une nouvelle version est en ligne : voir js/maj.js.
     surveillerVersion();
     await db.init();
-    await db.loadAll().catch(e => { if (db.demo) throw e; /* en prod, sans session, RLS renvoie vide : normal */ });
+    // En démo, les données sont locales et `currentUser` les lit : on charge
+    // d'abord. En production, on regarde d'abord s'il y a une session, et on ne
+    // charge qu'une fois — et seulement si quelqu'un est connecté. Le
+    // chargement fait avant la session partait pour rien (RLS renvoie vide sans
+    // elle), puis recommençait en entier une fois connecté : deux fois les
+    // 75 tables à chaque ouverture. Le formulaire de connexion charge de son côté.
+    if (db.demo) await db.loadAll();
     const u = await db.currentUser();
     if (u) { if (!db.demo) await db.loadAll(); start(u); } else renderLogin(refusDeLien());
   } catch (e) {
