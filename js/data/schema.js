@@ -1297,13 +1297,17 @@ export const ROLES = {
   // de la base n'accepte qu'elle : direction, propulsion, charge_affaires.
   // 'commercial' a ete renomme le 18/09/2026, en base et ici d'un seul geste.
   charge_affaires: { label: "Chargé d'affaires", description: 'Uniquement les affaires et contacts dont il est responsable' },
+  // Le 27/10/2026 (Élodie). Côté base, l'ouvrier a les droits d'un chargé
+  // d'affaires — il ne lit que ce qui est à son nom ; ce sont les ÉCRANS qui
+  // lui sont restreints, voir `scope.ouvrierPeut`.
+  ouvrier: { label: 'Ouvrier', description: 'To do list, messagerie et, chez RGD Renova, sa vue d’ensemble, ses clients & prospects et son agenda' },
 };
 
 // Les rôles qu'on propose en créant un compte. « Propulsion » n'y figure plus :
 // l'agence ne recrute pas par le CRM, et un rôle qu'on n'attribue jamais n'a pas
 // sa place dans un choix. Il reste dans ROLES, sans quoi le compte qui le porte
 // déjà s'afficherait avec sa clé brute au lieu de son libellé.
-export const ROLES_ATTRIBUABLES = ['direction', 'charge_affaires'];
+export const ROLES_ATTRIBUABLES = ['direction', 'charge_affaires', 'ouvrier'];
 
 // À quelle mission une affaire appartient : 'amo' ou 'expertise'.
 //

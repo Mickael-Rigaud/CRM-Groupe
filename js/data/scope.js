@@ -9,6 +9,31 @@ export const scope = {
   // se retrouver avec plus de droits qu'il n'en a.
   get role() { return this.user?.role || 'charge_affaires'; },
   get isDirection() { return this.role === 'direction'; },
+
+  // ⚠ L'OUVRIER (27/10/2026, Élodie) : « un rôle qui ne donne l'accès qu'à la
+  // to do list et la messagerie, et pour le tableau de bord de RGD Renova je
+  // veux que l'ouvrier ne puisse voir que sa vue d'ensemble, sa base de données
+  // clients & prospects et son agenda Google ».
+  //
+  // ⚠ POUR TOUT LE RESTE, C'EST UN CHARGÉ D'AFFAIRES : il n'est pas la
+  // direction, donc il ne lit que les fiches à son nom, son propre agenda, ses
+  // tâches. La base le traite exactement ainsi (aucune policy ni fonction ne
+  // nomme `charge_affaires`, vérifié le 27/10). Ce qui lui est propre, c'est la
+  // LISTE DES ÉCRANS : `ouvrierPeut` en est la seule source, lue par le menu du
+  // haut, la barre du téléphone, le menu de l'espace RGD et le routeur — qui
+  // renvoie ailleurs toute adresse tapée à la main.
+  get isOuvrier() { return this.role === 'ouvrier'; },
+  ouvrierPeut(hash) {
+    const [, nom, reste] = String(hash || '').split('/');
+    const param = String(reste || '').split('?')[0];
+    if (nom === 'today' || nom === 'messagerie') return true;
+    // `pilotage` et `app` sont deux anciens noms de la vue d'ensemble,
+    // `prospects` un ancien nom de Clients & prospects.
+    if (nom === 'rgd') return ['', 'pilotage', 'app', 'clients', 'prospects', 'agenda'].includes(param);
+    return false;
+  },
+  // Où l'on renvoie un ouvrier qui demande un écran fermé.
+  get accueilOuvrier() { return this.activityKeys.includes('rgd') ? '#/rgd' : '#/today'; },
   get canPatrimony() { return this.isDirection && this.user?.patrimony_access === true; },
   get canRental() { return this.canPatrimony || this.user?.rental_access === true; },
   // Supprimer definitivement une fiche : la direction, et elle seule. Un charge

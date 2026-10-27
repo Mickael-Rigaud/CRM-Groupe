@@ -221,8 +221,15 @@ export const cadre = (actif, titre, corps) => coquilleEspace({
   corps: (SANS_BANDEAU.includes(actif) || SANS_VUE.includes(actif) ? '' : bandeauVue()) + corps,
   commandes: SANS_VUE.includes(actif) ? undefined : selecteurVue(),
   cle: KEY, marque: act().label, baseline: 'Rénovation tous corps d’état',
-  onglets: scope.isDirection ? ONGLETS : sansDirection(ONGLETS),
+  onglets: scope.isDirection ? ONGLETS : scope.isOuvrier ? pourOuvrier(ONGLETS) : sansDirection(ONGLETS),
 });
+
+// L'ouvrier : Vue d'ensemble, Clients & prospects, Agenda (27/10/2026). Même
+// règle que `sansDirection` — un groupe vidé sort du menu avec ses entrées.
+const pourOuvrier = (liste) => liste
+  .filter(o => !o.hash || scope.ouvrierPeut(o.hash))
+  .map(o => (o.sous ? { ...o, sous: pourOuvrier(o.sous) } : o))
+  .filter(o => !o.sous || o.sous.length);
 
 // ⚠ L'ÉCOUTEUR EST POSÉ UNE SEULE FOIS, SUR LE DOCUMENT, et pas sur le champ :
 // l'en-tête est réécrit à chaque `draw()` d'un écran, donc un gestionnaire

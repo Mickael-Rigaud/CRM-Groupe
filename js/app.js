@@ -129,8 +129,11 @@ function probeLogos() {
 }
 const navState = { open: null, tiroir: false };   // menu « mon compte », tiroir de navigation
 // Entrées visibles d'un univers, selon le rôle et les activités du profil
-const itemsOf = (g) => (g.items || []).filter(i => (!i.direction || scope.isDirection) && (!i.activity || scope.activityKeys.includes(i.activity)));
-const groups = () => NAV.filter(g => !g.show || g.show()).filter(g => !g.items || itemsOf(g).length);
+// ⚠ L'OUVRIER NE VOIT QUE SES ÉCRANS (27/10/2026) : la liste est dans
+// `scope.ouvrierPeut`, une seule source pour le menu et le routeur.
+const pourOuvrier = (hash) => !scope.isOuvrier || scope.ouvrierPeut(hash);
+const itemsOf = (g) => (g.items || []).filter(i => (!i.direction || scope.isDirection) && (!i.activity || scope.activityKeys.includes(i.activity)) && pourOuvrier(i.hash));
+const groups = () => NAV.filter(g => !g.show || g.show()).filter(g => !g.hash || pourOuvrier(g.hash)).filter(g => !g.items || itemsOf(g).length);
 const isOn = (i, hash) => i.exact ? hash === i.hash : hash.startsWith(i.hash);
 const groupOf = (hash) => groups().find(g => g.hash ? isOn(g, hash) : itemsOf(g).some(i => isOn(i, hash)));
 
@@ -300,11 +303,11 @@ const appliRgd = () => APPLI_RGD && scope.activityKeys.includes('rgd');
 function renderBarreBas(gs, here, hash) {
   const hote = document.getElementById('barre-bas'); if (!hote) return;
   const entrees = appliRgd()
-    ? BAS_RGD.map(e => ({ ...e, on: e.ici ? e.ici(hash) : hash.startsWith(e.hash) }))
+    ? BAS_RGD.filter(e => pourOuvrier(e.hash)).map(e => ({ ...e, on: e.ici ? e.ici(hash) : hash.startsWith(e.hash) }))
     : BAS_CRM.map(e => {
       // Pilotage mène au premier écran de son univers, comme son onglet du haut.
       const g = gs.find(x => x.key === e.cle);
-      if (!g) return null;
+      if (!g || (e.hash && !pourOuvrier(e.hash))) return null;
       return { ...e, hash: e.hash || g.hash || itemsOf(g)[0].hash, on: here?.key === e.cle };
     }).filter(Boolean);
   hote.innerHTML = entrees.map(e => {
@@ -438,6 +441,9 @@ function route() {
   // La to do list de BTP Expertise a disparu au profit de celle du CRM, commune
   // aux quatre structures : un signet sur l'ancienne adresse y mene.
   if (name === 'btp' && param === 'todo') { location.hash = '#/today'; return; }
+  // Un écran fermé à l'ouvrier — y compris l'accueil `#/home` par défaut — le
+  // renvoie à l'espace RGD, ou à sa to do list s'il n'a pas RGD.
+  if (scope.isOuvrier && !scope.ouvrierPeut(hash)) { location.hash = scope.accueilOuvrier; return; }
   let page = pages[name] || pages.home;
   if (name === 'patrimoine') page = pages['patrimoine_' + (param || 'home')] || pages.patrimoine_home;
   if (name === 'locatif') page = pages['locatif_' + (param || 'home')] || pages.locatif_home;
