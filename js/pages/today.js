@@ -195,9 +195,16 @@ export const todayPage = {
       // ⚠ LE COMPTE SE FAIT MÊME QUAND LA CASE EST DÉCOCHÉE : c'est lui qui dit
       // où est passée une tâche qu'on vient de cocher. Sans ce chiffre, la
       // seule trace d'une tâche disparue était son absence.
-      const faitesDuJour = vues.filter(a => a.done && a.done_at && daysSince(a.done_at) === 0).filter(surStructure);
-      const faitesAujourdhui = faitesDuJour.length;
-      const faites = state.showDone ? faitesDuJour : [];
+      // ⚠ « CE QUI EST FAIT » MONTRE LE MOIS ÉCOULÉ DEPUIS LE 27/10/2026, plus la
+      // seule journée (Élodie : « j'ai l'impression qu'elles se suppriment au bout
+      // d'une semaine, c'est possible de rallonger ce délai à un mois ») : RIEN
+      // n'était supprimé — les tâches faites restent en base —, c'est l'écran qui
+      // ne montrait que celles cochées aujourd'hui. 30 jours, la plus récente en
+      // tête ; au-delà elles restent dans l'historique des fiches.
+      const JOURS_FAIT = 30;
+      const faitesDuMois = vues.filter(a => a.done && a.done_at && daysSince(a.done_at) < JOURS_FAIT).filter(surStructure);
+      const faitesAujourdhui = faitesDuMois.length;
+      const faites = state.showDone ? faitesDuMois : [];
 
       const tri = (l) => l.slice().sort((x, y) => (x.due_date || '9999').localeCompare(y.due_date || '9999')
         || (x.due_time || '99').localeCompare(y.due_time || '99'));
@@ -253,7 +260,7 @@ export const todayPage = {
           ${dossiers.length ? `<div class="todo-groupe dossiers">Dossiers en attente<i>${dossiers.length}</i></div>
             <div class="todo-dossiers">${dossiers.map(carteDossier).join('')}</div>` : ''}
           ${groupes.map(gr => `<div class="todo-groupe ${gr.key}">${gr.titre}<i>${gr.l.filter(a => !a.done).length}</i></div>${tri(gr.l).map(a => carte(a, pour)).join('')}`).join('')}
-          ${faites.length ? `<div class="todo-groupe fait">Fait aujourd&rsquo;hui<i>${faites.length}</i></div>${tri(faites).map(a => carte(a, pour)).join('')}` : ''}
+          ${faites.length ? `<div class="todo-groupe fait">Fait ces 30 derniers jours<i>${faites.length}</i></div>${faites.slice().sort((x, y) => String(y.done_at).localeCompare(String(x.done_at))).map(a => carte(a, pour)).join('')}` : ''}
           ${!retenues.length && !faites.length && !dossiers.length ? `<div class="empty">${onglet.key === 'mienne'
             ? 'Rien à faire — tout est à jour.'
             : 'Aucune tâche envoyée. Le bouton « Envoyer une tâche » sert à en confier une.'}</div>` : ''}
