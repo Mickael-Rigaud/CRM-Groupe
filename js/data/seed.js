@@ -510,16 +510,16 @@ export const SEED = {
   ],
 
   rgd_apporteurs: [
-    { id: 'ap1', owner_id: 'u-mickael', d1_id: 8001, nom: 'Vasseur', prenom: 'Claire', societe: 'Cabinet Vasseur',
+    { id: 'ap1', secteur: 'oise', owner_id: 'u-mickael', d1_id: 8001, nom: 'Vasseur', prenom: 'Claire', societe: 'Cabinet Vasseur',
       profession: 'Courtier en prets', telephone: '03 44 00 11 22', email: 'claire@example.com',
       adresse: '18 rue des Tilleuls', code_postal: '60300', ville: 'Senlis',
       type_partenaire: 'apporteur', actif: true, partenariat_signe: true,
       date_signature: '2026-03-14', source: 'demo' },
-    { id: 'ap2', owner_id: 'u-charge', d1_id: 8002, nom: 'Bouchard', prenom: 'Yanis', societe: 'Archi Bouchard',
+    { id: 'ap2', secteur: 'oise', owner_id: 'u-charge', d1_id: 8002, nom: 'Bouchard', prenom: 'Yanis', societe: 'Archi Bouchard',
       profession: 'Architecte', telephone: '03 44 00 11 23',
       adresse: '5 place du Marche', code_postal: '60500', ville: 'Chantilly',
       type_partenaire: 'apporteur', actif: true, partenariat_signe: false, source: 'demo' },
-    { id: 'ap3', owner_id: 'u-mickael', d1_id: 8003, nom: 'Leroy', prenom: 'Sabine', societe: 'Leroy Immobilier',
+    { id: 'ap3', secteur: 'cote_azur', owner_id: 'u-mickael', d1_id: 8003, nom: 'Leroy', prenom: 'Sabine', societe: 'Leroy Immobilier',
       profession: 'Agent immobilier', telephone: '03 44 00 11 24',
       code_postal: '60200', ville: 'Compiegne',
       // Inactif : c'est lui qui fait apparaitre la troisieme section.
@@ -541,7 +541,7 @@ export const SEED = {
     // Celui-la n'a pas d'interlocuteur et son compte pro reste inconnu : c'est
     // l'etat de la plupart des fiches, et il doit se voir tel quel — « Non
     // renseigne » n'est pas « Non ».
-    { id: 'ap5', owner_id: 'u-mickael', d1_id: 8005, societe: 'Carrelages Oise',
+    { id: 'ap5', secteur: 'oise', owner_id: 'u-mickael', d1_id: 8005, societe: 'Carrelages Oise',
       profession: 'Carrelage et faience', telephone: '03 44 00 11 26',
       code_postal: '60100', ville: 'Creil',
       type_partenaire: 'fournisseur', actif: true, partenariat_signe: false, source: 'demo' },
@@ -583,17 +583,17 @@ export const SEED = {
   // Les textes de `objet` sont des PHRASES, pas des etiquettes : c'est ce qui
   // met a l'epreuve la zone de texte qui grandit avec son contenu.
   rgd_apports_sortants: [
-    { id: 'srt1', apporteur_id: 'ap1', date_apport: '2026-08-18', client: 'Famille Ferrand',
+    { id: 'srt1', secteur: 'oise', apporteur_id: 'ap1', date_apport: '2026-08-18', client: 'Famille Ferrand',
       objet: 'Le financement du projet : compromis signe, pas encore de pret.',
       issue: 'gagne', montant_estime: 142000, commission: 700,
       // Le commentaire se relit SOUS ce qu'on a apporte, dans la meme
       // cellule : sans cette ligne de demo, le champ du formulaire
       // s'enregistrait sans que rien ne le reaffiche.
       notes: 'Commission versee a la signature, pas au depot du dossier.' },
-    { id: 'srt2', apporteur_id: 'ap1', date_apport: '2026-09-19', client: 'Mme Chevalier',
+    { id: 'srt2', secteur: 'oise', apporteur_id: 'ap1', date_apport: '2026-09-19', client: 'Mme Chevalier',
       objet: 'Le financement des 63 500 € de travaux, elle cherchait une banque.',
       issue: null, montant_estime: 63500, commission: 500 },
-    { id: 'srt3', apporteur_id: 'ap2', date_apport: '2026-09-24', client: 'SCI du Pre Long',
+    { id: 'srt3', secteur: 'cote_azur', apporteur_id: 'ap2', date_apport: '2026-09-24', client: 'SCI du Pre Long',
       objet: 'Les plans de la surelevation et le depot du permis.',
       issue: null, montant_estime: 9000, commission: 450 },
     { id: 'srt4', apporteur_id: 'ap2', date_apport: '2026-07-05', client: 'M. Delaunay',

@@ -6994,3 +6994,17 @@ span.rpv-statut { display: inline-block; margin-bottom: 4px; }
 .mads-barre-piste i { display: block; height: 100%; border-radius: 999px; background: var(--rs); }
 .mads-barre-val { color: var(--muted); white-space: nowrap; }
 @media screen and (max-width: 760px) { .mads-tuiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* Partenaires RGD : le secteur (27/10/2026). Une pastille devant chaque
+   société, et le filtre de la barre qui reprend les mêmes couleurs. Ni vert
+   (réservé au suivi des apporteurs) ni rouge (l'issue « perdu »). */
+.pa-secteur { display: inline-block; font-size: 11px; font-weight: 700; line-height: 1.5;
+  padding: 1px 8px; border-radius: 999px; white-space: nowrap; vertical-align: 1px; }
+.pa-secteur.est-cote_azur { background: #e0f2fe; color: #075985; }
+.pa-secteur.est-oise { background: #fef3c7; color: #92400e; }
+.pa-secteur.est-aclasser { background: var(--card-2); color: var(--muted); border: 1px dashed var(--line); }
+.pa-filtre button { display: inline-flex; align-items: center; gap: 6px; }
+.pa-filtre button i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.pa-filtre button.est-cote_azur i { background: #0284c7; }
+.pa-filtre button.est-oise i { background: #d97706; }
+.pa-filtre button.est-aclasser i { background: transparent; border: 1px dashed var(--muted); }

@@ -37,7 +37,9 @@ const CHAMPS = ['nom', 'prenom', 'societe', 'raison_sociale', 'profession',
   'type_partenaire', 'actif', 'partenariat_signe', 'date_signature', 'notes',
   // La fiche fournisseur : la societe, puis la personne qu'on appelle.
   'site_internet', 'compte_pro_ouvert',
-  'email_interlocuteur', 'telephone_interlocuteur', 'role_interlocuteur'];
+  'email_interlocuteur', 'telephone_interlocuteur', 'role_interlocuteur',
+  // L'agence concernée (27/10/2026) : `cote_azur`, `oise`, ou null = à classer.
+  'secteur'];
 
 // ⚠ `apporte_par` N'EST PAS UN SECOND APPORTEUR : c'est un nom dans l'équipe du
 // partenaire, en texte libre. L'apport reste rattaché au PARTENAIRE, donc ses
@@ -234,7 +236,7 @@ export async function supprimerApport(id) {
 // au-dessus »). Quand `apporteur_id` est là, c'est lui qui fait foi — sinon la
 // ligne n'apparaîtrait dans aucune fiche et n'entrerait dans aucun total.
 const CHAMPS_SORTANT = ['apporteur_id', 'partenaire', 'date_apport', 'client', 'objet',
-  'issue', 'montant_estime', 'commission', 'notes'];
+  'issue', 'montant_estime', 'commission', 'notes', 'secteur'];
 
 /** Ce que RGD a apporté à un partenaire, du plus récent au plus ancien. */
 export const sortantsDe = (apporteurId) => db.t('rgd_apports_sortants')
