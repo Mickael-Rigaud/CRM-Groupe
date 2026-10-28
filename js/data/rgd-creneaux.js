@@ -176,10 +176,14 @@ export function occupationDuJour(occupes, jour) {
  * courante pour aujourd'hui, rien pour les autres jours. Proposer 9 h à 14 h
  * ferait prendre un rendez-vous dans le passé.
  */
-export function placesLibres(occupation, { duree = 60, avant = null } = {}) {
+export function placesLibres(occupation, { duree = 60, avant = null, fenetres = null } = {}) {
   const libres = [];
   for (let t = OUVERTURE; t + duree <= FERMETURE; t += PAS) {
     if (avant != null && t < avant) continue;
+    // ⚠ LE RENDEZ-VOUS DOIT TENIR ENTIER DANS UNE FENÊTRE, pas seulement y
+    // commencer : un créneau de 12 h 30 proposé sur un samedi qui s'arrête à
+    // 13 h ferait poser une visite d'une heure dont la moitié n'existe pas.
+    if (fenetres && !fenetres.some(([de, a2]) => t >= de && t + duree <= a2)) continue;
     const pris = occupation.some(o => t < o.fin && (t + duree) > o.debut);
     if (!pris) libres.push(t);
   }

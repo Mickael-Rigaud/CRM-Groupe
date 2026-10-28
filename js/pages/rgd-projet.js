@@ -50,7 +50,8 @@
 // Septième occurrence du piège dans ce dépôt. Il n'y a donc aucune
 // confirmation : le formulaire n'efface rien.
 import { scope } from '../data/scope.js';
-import { esc, openModal, closeModal, toast, fmtDate } from '../ui.js';
+import { metierDe, fenetresDuJour } from '../data/rgd-metiers.js';
+import { esc, openModal, closeModal, toast, toastGeste, fmtDate } from '../ui.js';
 // ⚠ `aujourdhui` DE `rgd-etapes.js` N'EST PAS IMPORTÉ ICI, ET C'EST VOULU :
 // deux fonctions de ce fichier déclarent déjà un `const aujourdhui` local, qui
 // la MASQUERAIT sans un mot — le piège s'est déjà payé dans `rgd-fiche.js`.
@@ -148,6 +149,34 @@ export function ficheProjetRgd({ dans, cible = null, apporteurs = null,
       || [a.prenom, a.nom].filter(Boolean).join(' ') || '(sans nom)'])
     .sort((a, b) => a[1].localeCompare(b[1], 'fr'));
 
+  // ⚠ DÉCLARÉ AVANT `v`, ET CE N'EST PAS UN DÉTAIL DE RANGEMENT : `v` s'en sert
+  // deux lignes plus bas pour poser les travaux de l'ouvrier. Plus bas dans le
+  // fichier, il tombait dans la zone morte du `const` — « Cannot access
+  // 'monMetier' before initialization », et la fenêtre s'ouvrait VIDE, sans
+  // autre signe que la console.
+  //
+  // Le métier de la personne connectée, lu une seule fois. `null` pour tout le
+  // monde sauf les comptes que `rgd-metiers.js` nomme — et c'est lui qui
+  // décide lequel des deux écrans « Le projet » s'affiche.
+  const monMetier = metierDe(scope.user);
+
+  // ⚠ LES HEURES SONT CELLES DE QUI REÇOIT LE RENDEZ-VOUS, pas de qui le pose.
+  // La direction choisit l'agenda visé (`v.rdv_agenda` porte un identifiant de
+  // profil) : poser une visite chez l'électricien un mardi parce que MICKAEL
+  // est libre le mardi mettrait le rendez-vous dans un agenda où personne ne
+  // sera. Hors direction, `rdv_agenda` est vide et c'est le sien.
+  const quiRecoitLeRdv = () => {
+    const id = String(v.rdv_agenda || '').trim();
+    // `scope.users()` plutôt qu'un import de `db` : cet écran ne parle qu'au
+    // scope, et y faire entrer la base pour une recherche par identifiant
+    // ajouterait une dépendance que rien d'autre ici ne justifie.
+    if (id && id !== 'commun') return scope.users().find(u => u.id === id) || scope.user;
+    // ⚠ « commun » N'EST À PERSONNE, donc aucune contrainte : c'est l'agenda où
+    // tombent les leads, et le borner sur les heures de qui le regarde
+    // fermerait la moitié de la semaine à toute l'équipe.
+    return id === 'commun' ? null : scope.user;
+  };
+
   const etatPas = { pas: 1 };
   const v = {
     prenom: pro ? '' : (l.first_name ?? f.prenom ?? ''),
@@ -163,6 +192,7 @@ export function ficheProjetRgd({ dans, cible = null, apporteurs = null,
     type_intervention: proj.type_intervention || '',
     superficie: proj.superficie || '',
     types_travaux: listeTravaux(proj.types_travaux),
+    intervention_electrique: proj.intervention_electrique || '',
     budget_annonce: proj.budget_annonce || '',
     adresse_chantier: proj.adresse_chantier || '',
     code_postal_chantier: proj.code_postal_chantier || '',
@@ -182,6 +212,14 @@ export function ficheProjetRgd({ dans, cible = null, apporteurs = null,
     // enregistrement, et il n'existe aucune colonne qui le porterait.
     rappel_jour: '', rappel_heure: '', rappel_objet: '',
   };
+
+  // ⚠ LE MÉTIER SE POSE À LA CRÉATION, ET SEULEMENT À LA CRÉATION (28/10/2026).
+  // La fiche de l'ouvrier affiche ses travaux au lieu de les proposer : sans
+  // cette ligne, une demande qu'il saisit partirait SANS type de travaux, donc
+  // sans rien pour l'aiguiller ni la retrouver. Et `!x` est essentiel — une
+  // fiche existante ouverte en modification garde ce qu'elle porte, fût-ce
+  // « Plomberie » : écraser là serait détruire une donnée pour faire joli.
+  if (!x && monMetier && !v.types_travaux.length) v.types_travaux = [monMetier];
 
   // ⚠ LA CASE SE DEVINE À L'OUVERTURE, ET ELLE NE SE DEVINE QU'UNE FOIS. Une
   // fiche dont le prospect habite ailleurs que son chantier doit rouvrir avec
@@ -286,6 +324,21 @@ export function ficheProjetRgd({ dans, cible = null, apporteurs = null,
       </div>
     </div>`;
 
+  // ⚠ UNE VALEUR QU'ON MONTRE SANS LA PROPOSER. Le formulaire de l'ouvrier
+  // électricien affiche ses travaux au lieu de les offrir au choix : la rangée
+  // de douze puces ne lui servait qu'à cocher toujours la même. Elle MONTRE
+  // `v[cle]` tel qu'il est — jamais « Électricité » en dur : une fiche déjà
+  // enregistrée en « Plomberie » afficherait sinon un métier qui n'est pas le
+  // sien, et le premier enregistrement l'écraserait.
+  const fige = (cle, libelle) => `
+    <div class="mail-champ plein" data-champ="${cle}">
+      <span>${esc(libelle)}</span>
+      <div class="fa-chips">
+        ${(v[cle] || []).map(o => `<span class="fa-chip on est-fige">${esc(o)}</span>`).join('')
+          || '<span class="muted small">—</span>'}
+      </div>
+    </div>`;
+
   const puces = (cle, libelle, liste) => bloc(cle, libelle, liste, v[cle], true);
   const puce = (cle, libelle, liste, classe = '') =>
     bloc(cle, libelle, liste, v[cle] ? [v[cle]] : [], false, classe);
@@ -295,7 +348,22 @@ export function ficheProjetRgd({ dans, cible = null, apporteurs = null,
   // « Détails du projet » AVANT le budget : on décrit ce qu'il y a à faire,
   // puis ce que ça peut coûter. L'inverse fait annoncer un prix sur un projet
   // qu'on n'a pas fini d'entendre.
-  const ecranProjet = () => `
+  // ⚠ DEUX ÉCRANS « LE PROJET » DEPUIS LE 28/10/2026, ET C'EST DEMANDÉ. Élodie,
+  // pour Franck : « je voudrais que pour franck son formulaire soit simplifié »,
+  // avec la liste exacte des champs. Un ouvrier électricien ne qualifie pas une
+  // affaire, il note une intervention : le budget annoncé et le choix du métier
+  // ne lui servent à rien, et l'intervention électrique n'existe que pour lui.
+  //
+  // ⚠ LE PARTAGE SE FAIT PAR LES HELPERS, PAS PAR COPIE. `champ`, `zone`,
+  // `puce` et le bloc d'adresse sont les mêmes des deux côtés : c'est ce qui
+  // fait qu'une correction d'adresse — celle du 01/10, trois colonnes sur une
+  // ligne — vaut pour les deux écrans sans qu'on y pense. Le jour où un champ
+  // s'ajoute pour tout le monde, il s'ajoute DEUX fois ici ; c'est le prix de
+  // deux formulaires, et il est plus petit que celui d'un seul qui essaierait
+  // de servir les deux usages.
+  const ecranProjet = () => (monMetier ? ecranProjetMetier() : ecranProjetComplet());
+
+  const ecranProjetComplet = () => `
     <div class="mf-grille">
       ${puce('type_projet', 'Type de bien', BIEN)}
       ${puce('type_intervention', 'Usage du bien', RESIDENCE)}
@@ -310,6 +378,41 @@ export function ficheProjetRgd({ dans, cible = null, apporteurs = null,
       ${zone('projet_description', 'Détails du projet', 4,
         'Ce qu’il y a à faire, pièce par pièce : l’état actuel, ce que la personne veut obtenir, ses délais, ce qui l’inquiète…')}
       ${puce('budget_annonce', 'Budget annoncé', BUDGETS)}
+      <!-- ⚠ L'ADRESSE DU CHANTIER EST EN TROIS CHAMPS depuis le 01/10/2026
+           (demande du jour) et ce n'est pas qu'une affaire de saisie : le
+           chantier que le CRM ecrit porte adresse, code postal et ville en
+           trois colonnes. Avec un seul champ libre, la visite partait avec la
+           rue du chantier et le code postal DU PROSPECT. -->
+      <div class="rgp-adresse plein">
+        ${champ('adresse_chantier', 'Adresse du chantier')}
+        ${champ('code_postal_chantier', 'Code postal')}
+        ${champ('ville_chantier', 'Ville')}
+      </div>
+    </div>`;
+
+  // L'écran de l'ouvrier : l'ordre est celui qu'Élodie a écrit, champ par
+  // champ. Pas de budget annoncé — ce n'est pas lui qui chiffre.
+  const ecranProjetMetier = () => `
+    <div class="mf-grille">
+      ${puce('type_projet', 'Type de bien', BIEN)}
+      ${puce('type_intervention', 'Usage du bien', RESIDENCE)}
+      ${champ('superficie', 'Superficie', { type: 'number', inputmode: 'numeric', placeholder: 'm²' })}
+      ${'' /* Son métier, montré et non proposé : voir `fige`. Il est posé à la
+         création (`valeursProjet`), pas ici — pour qu'une fiche ouverte en
+         modification garde ce qu'elle porte. */}
+      ${fige('types_travaux', 'Types de travaux')}
+      ${'' /* ⚠ LE CHAMP EXISTE, LE TABLEAU DES PRESTATIONS N'EXISTE PAS ENCORE.
+         Élodie : « Intervention électrique : (tableau à venir avec les
+         prestations et tarifs pour en extraire une facture) ». D'ici là c'est
+         du texte libre, et la colonne est faite pour ça — y mettre un
+         identifiant de prestation aujourd'hui demanderait d'inventer un
+         catalogue et des prix que personne n'a écrits. Quand le tableau
+         arrivera, il aura sa table à lui (une ligne par prestation, son prix),
+         et ce champ redeviendra ce qu'il est : la note à côté du devis. */}
+      ${champ('intervention_electrique', 'Intervention électrique',
+        { plein: true, placeholder: 'Ce qu’il y a à faire : tableau, mise aux normes, point lumineux…' })}
+      ${zone('projet_description', 'Détails du projet', 4,
+        'Ce qu’il y a à faire, pièce par pièce : l’état actuel, ce que la personne veut obtenir, ses délais, ce qui l’inquiète…')}
       <!-- ⚠ L'ADRESSE DU CHANTIER EST EN TROIS CHAMPS depuis le 01/10/2026
            (demande du jour) et ce n'est pas qu'une affaire de saisie : le
            chantier que le CRM ecrit porte adresse, code postal et ville en
@@ -529,14 +632,23 @@ export function ficheProjetRgd({ dans, cible = null, apporteurs = null,
 
     const colonnes = jours.map((jour, i) => {
       const occ = occupationDuJour(agenda.occupes, jour);
+      const fen = fenetresDuJour(quiRecoitLeRdv(), jour);
       const libres = placesLibres(occ, {
         duree: Number(v.rdv_duree) || 60,
         // ⚠ PAS DE CRÉNEAU DANS LE PASSÉ : seulement pour aujourd'hui, et
         // seulement aujourd'hui — borner les autres jours sur l'heure courante
         // masquerait toutes les matinées à partir de midi.
         avant: jour === aujourdhui ? maintenantParis() : null,
+        fenetres: fen,
       });
       const passe = jour < aujourdhui;
+      // ⚠ « COMPLET » ET « NE TRAVAILLE PAS » NE SE DISENT PAS PAREIL. Les deux
+      // donnent une colonne vide, et les confondre ferait chercher un trou dans
+      // un agenda là où il n'y a tout simplement personne — on rappellerait le
+      // client pour proposer « un autre créneau ce jeudi » qui n'existera
+      // jamais. `fen` vaut `[]` quand la journée est hors de ses heures, et
+      // `null` quand la personne n'a pas d'horaires déclarés.
+      const horsHeures = Array.isArray(fen) && !fen.length;
       return `
         <div class="rgp-jour ${passe ? 'est-passe' : ''}">
           <div class="rgp-jour-tete">
@@ -550,7 +662,7 @@ export function ficheProjetRgd({ dans, cible = null, apporteurs = null,
             : libres.length ? `<div class="rgp-libres">${libres.map(t => `
                 <button type="button" class="rgp-creneau ${v.rdv_jour === jour && v.rdv_heure === hhmm(t) ? 'on' : ''}"
                   data-jour="${jour}" data-heure="${esc(hhmm(t))}">${esc(hhmm(t))}</button>`).join('')}</div>`
-              : '<p class="rgp-jour-rien">complet</p>'}
+              : `<p class="rgp-jour-rien">${horsHeures ? 'ne travaille pas' : 'complet'}</p>`}
         </div>`;
     }).join('');
 
@@ -816,7 +928,14 @@ export function ficheProjetRgd({ dans, cible = null, apporteurs = null,
     if (!agenda.occupes || !v.rdv_jour || !v.rdv_heure) return true;
     const occ = occupationDuJour(agenda.occupes, v.rdv_jour);
     const [h, m] = v.rdv_heure.split(':').map(Number);
-    return placesLibres(occ, { duree: Number(v.rdv_duree) || 60 }).includes(h * 60 + m);
+    return placesLibres(occ, {
+      duree: Number(v.rdv_duree) || 60,
+      // ⚠ LE MÊME FILTRE QU'À L'AFFICHAGE, et c'est le point : ce contrôle
+      // relit l'heure retenue au moment d'enregistrer. Sans les fenêtres ici,
+      // un créneau choisi puis rendu invalide par un changement d'agenda ou de
+      // durée passerait quand même.
+      fenetres: fenetresDuJour(quiRecoitLeRdv(), v.rdv_jour),
+    }).includes(h * 60 + m);
   };
 
   /**
@@ -845,6 +964,13 @@ export function ficheProjetRgd({ dans, cible = null, apporteurs = null,
     }
     if (nomEcran() === 'rendezvous') dessine();
   }
+
+  // Le code postal qui a décidé de l'aiguillage, pour que le message dise
+  // POURQUOI la demande est partie — « dans le 06 » et non « parce que c'est la
+  // règle ». Même ordre que `rgd-metiers.js` : le chantier, le prospect à
+  // défaut.
+  const depDit = (q) => (String(q.code_postal_chantier || '').trim()
+    || String(q.code_postal || '').trim()).slice(0, 2);
 
   async function enregistrer() {
     // ⚠ LE NOM ET UN MOYEN DE RAPPEL, RIEN DE PLUS, ET SEULEMENT À LA CRÉATION.
@@ -887,6 +1013,24 @@ export function ficheProjetRgd({ dans, cible = null, apporteurs = null,
       } else {
         toast(`Rendez-vous pris${r.rdv.mail ? ' et confirmation envoyée' : ''}`);
       }
+    }
+    // ⚠ UN AIGUILLAGE SE DIT, ET SE DÉFAIT (28/10/2026, Élodie : un message
+    // « avec possibilité d'annuler »). La demande vient de partir chez
+    // quelqu'un d'autre : muette, elle disparaîtrait de la liste de celui qui
+    // vient de la saisir sans qu'il sache pourquoi — le genre de magie qui fait
+    // ressaisir la fiche une seconde fois. Le bouton rend la main sans rouvrir
+    // la fiche.
+    if (r.aiguillage) {
+      toastGeste(
+        `${r.aiguillage.metier} dans le ${depDit(v)} — envoyée à ${r.aiguillage.vers.full_name}`,
+        {
+          libelle: 'Garder',
+          action: async () => {
+            await r.aiguillage.reprendre();
+            toast('Demande gardée');
+            apres?.(r);
+          },
+        });
     }
     // Le rappel se dit aussi : il crée une tâche dans la to-do de quelqu'un.
     if (r.rappel && !r.rappel.ok) {

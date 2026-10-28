@@ -25,6 +25,11 @@ export const SEED_USERS = [
   { id: 'u-stephanie', full_name: 'Stéphanie', email: 'stephanie@example.com', role: 'propulsion', activities: ['propulsion'], active: true, rental_access: true },
   { id: 'u-elodie', full_name: 'Élodie', email: 'elodie@example.com', role: 'propulsion', activities: ['propulsion'], active: true },
   { id: 'u-charge', full_name: "Chargé d'affaires (démo)", email: 'charge@example.com', role: 'charge_affaires', activities: ['rgd', 'btp'], active: true },
+  // ⚠ L'OUVRIER DE LA DEMO PORTE L'IDENTIFIANT QUE NOMME `rgd-metiers.js`
+  // (`u-franck`). Sans lui, la demonstration ne montrerait NI le formulaire
+  // resserre sur l'electricite, NI l'aiguillage des demandes du 06 et du 83 :
+  // les deux se decident sur ce compte, et le defaut ne se verrait qu'en vrai.
+  { id: 'u-franck', full_name: 'Franck', email: 'franck@example.com', role: 'ouvrier', activities: ['rgd'], active: true },
 ];
 
 // Les statistiques des réseaux en démo (12/10/2026) : 60 jours fabriqués à

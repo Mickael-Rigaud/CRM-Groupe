@@ -57,11 +57,58 @@ export const actBadge = (key) => { const a = ACTIVITIES[key]; return a ? `<span 
 
 // ---------- Toasts ----------
 export function toast(msg, kind = 'ok') {
+  const el = poserToast(msg, kind);
+  setTimeout(() => retirerToast(el), 3200);
+}
+
+// Le corps commun aux deux : un `toast` qui s'en va tout seul, et celui qui
+// porte un bouton et attend.
+function poserToast(msg, kind) {
   let box = document.getElementById('toasts');
   if (!box) { box = document.createElement('div'); box.id = 'toasts'; document.body.appendChild(box); }
   const el = document.createElement('div'); el.className = `toast ${kind}`; el.textContent = msg;
   box.appendChild(el); setTimeout(() => el.classList.add('show'), 10);
-  setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 300); }, 3200);
+  return el;
+}
+const retirerToast = (el) => {
+  el.classList.remove('show');
+  setTimeout(() => el.remove(), 300);
+};
+
+/**
+ * Un message qui porte un geste — « envoyée à Franck · Garder ».
+ *
+ * ⚠ IL DURE QUINZE SECONDES, PAS TROIS, et c'est tout le sujet : un `toast`
+ * ordinaire disparaît avant qu'on ait fini de le lire, ce qui est sans
+ * conséquence quand il ne fait qu'informer, et absurde quand il propose de
+ * revenir en arrière. Un geste qu'on n'a pas le temps de faire n'est pas offert.
+ *
+ * ⚠ ET IL NE SE FERME PAS TOUT SEUL UNE FOIS LE BOUTON PRESSÉ AVANT D'AVOIR
+ * AGI : `action` peut écrire en base, donc échouer. Le message reste, devient
+ * un avertissement, et laisse réessayer — le faire disparaître sur le clic
+ * donnerait à croire que c'est fait.
+ */
+export function toastGeste(msg, { libelle, action, duree = 15000 } = {}) {
+  const el = poserToast(msg, 'ok');
+  if (!libelle || !action) { setTimeout(() => retirerToast(el), duree); return el; }
+  el.classList.add('avec-geste');
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'toast-geste'; b.textContent = libelle;
+  el.appendChild(b);
+  const minuteur = setTimeout(() => retirerToast(el), duree);
+  b.onclick = async () => {
+    clearTimeout(minuteur);
+    b.disabled = true; b.textContent = '…';
+    try {
+      await action();
+      retirerToast(el);
+    } catch (e) {
+      el.classList.add('warn');
+      el.firstChild.textContent = e?.message || 'Le retour en arrière a échoué';
+      b.disabled = false; b.textContent = libelle;
+    }
+  };
+  return el;
 }
 
 // ---------- Modales ----------

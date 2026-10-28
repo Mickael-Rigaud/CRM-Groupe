@@ -49,6 +49,7 @@
 import { db } from './db.js';
 import { CONFIG } from '../config.js';
 import { scope } from './scope.js';
+import { aiguillagePour } from './rgd-metiers.js';
 import { texteTravaux } from './rgd-formulaire.js';
 import { COLONNE_NOTE } from './rgd-clients.js';
 import { creerEvenement, finApres } from './evenements.js';
@@ -111,6 +112,7 @@ export function valeursProjet(x) {
     type_intervention: f.type_intervention || '',
     superficie: f.superficie || '',
     types_travaux: f.types_travaux || '',
+    intervention_electrique: f.intervention_electrique || '',
     budget_annonce: f.budget || '',
     projet_description: f.projet_description || '',
     adresse_chantier: f.adresse_chantier || '',
@@ -122,6 +124,7 @@ export function valeursProjet(x) {
     type_intervention: f.type_intervention || '',
     superficie: f.superficie || '',
     types_travaux: f.types_travaux || '',
+    intervention_electrique: f.intervention_electrique || '',
     budget_annonce: f.budget_annonce || '',
     projet_description: f.projet_description || '',
     adresse_chantier: f.adresse_chantier || '',
@@ -278,6 +281,16 @@ const adressePourLaDemande = (v) => {
  */
 async function creer(v) {
   const travaux = txt(texteTravaux(v.types_travaux));
+
+  // ⚠ L'AIGUILLAGE SE DÉCIDE **AVANT** LA PREMIÈRE ÉCRITURE, et une seule fois.
+  // Le contact et la demande doivent partir chez la MÊME personne : les écrire
+  // chacun avec son propre calcul laisserait, au premier changement de règle,
+  // un dossier dont la fiche est à l'un et le contact à l'autre — celui qui
+  // reçoit la demande verrait un dossier sans nom de client, et personne ne
+  // saurait d'où vient le trou. Voir `rgd-metiers.js` pour la règle.
+  const aig = aiguillagePour(v, scope.user);
+  const porteur = aig ? aig.profil.id : (scope.user?.id || null);
+
   // ⚠ `activities: ['rgd']` NE REND RIEN VISIBLE : la policy `contacts_select`
   // ne regarde `activities` que pour le rôle `propulsion`, et demande
   // `owner_id = auth.uid()` pour tous les autres. Tant que les seuls comptes
@@ -288,7 +301,7 @@ async function creer(v) {
   const contact = await db.insert('contacts', {
     ...identite(v, false), ...coordonnees(v),
     type: 'Prospect', channel: 'Saisie manuelle', activities: ['rgd'],
-    owner_id: scope.user?.id || null,
+    owner_id: porteur,
   });
 
   // Pas de `d1_id` : elle naît ici, la synchronisation ne la verra jamais et ne
@@ -304,7 +317,7 @@ async function creer(v) {
   // créée », ligne écrite en base, et zéro ligne à l'écran.
   const demande = await db.insert('rgd_demandes', {
     contact_id: contact.id,
-    owner_id: scope.user?.id || null,
+    owner_id: porteur,
     date_demande: new Date().toISOString(),
     source: 'manuel', statut: 'nouveau_prospect',
     // `rgd_demandes` porte l'identité EN DOUBLE du contact : c'est une table en
@@ -316,6 +329,7 @@ async function creer(v) {
     type_demandeur: txt(v.type_demandeur),
     type_projet: txt(v.type_projet), type_intervention: txt(v.type_intervention),
     superficie: txt(v.superficie), types_travaux: travaux,
+    intervention_electrique: txt(v.intervention_electrique),
     budget: txt(v.budget_annonce), projet_description: txt(v.projet_description),
     adresse_chantier: txt(v.adresse_chantier),
     code_postal_chantier: txt(v.code_postal_chantier),
@@ -324,7 +338,21 @@ async function creer(v) {
     apporteur_id: txt(v.apporteur_id),
     commentaire_admin: txt(v.commentaire),
   });
-  return { contact, demande };
+
+  // ⚠ ON REND DE QUOI DÉFAIRE, PAS SEULEMENT DE QUOI AFFICHER. Élodie a demandé
+  // un message « avec possibilité d'annuler » : sans `reprendre`, l'écran
+  // n'aurait qu'un texte, et reprendre la main supposerait de rouvrir la fiche
+  // et de la ré-attribuer à la main — c'est-à-dire de ne pas pouvoir annuler.
+  const aiguillage = !aig ? null : {
+    vers: aig.profil,
+    metier: aig.regle.metier,
+    reprendre: async () => {
+      const moi = scope.user?.id || null;
+      await db.update('rgd_demandes', demande.id, { owner_id: moi });
+      await db.update('contacts', contact.id, { owner_id: moi });
+    },
+  };
+  return { contact, demande, aiguillage };
 }
 
 /**
@@ -347,7 +375,7 @@ export async function enregistrerProjet(x, v) {
       // ne remet pas la fiche en cause — on a noté un prospect, c'est l'essentiel.
       const rdv = await avecRendezVous(v, { contactId: creee.contact?.id });
       const rappel = await poserRappel(v, { contactId: creee.contact?.id });
-      return { ok: true, creee, rdv, rappel };
+      return { ok: true, creee, rdv, rappel, aiguillage: creee.aiguillage || null };
     }
 
     const f = x.ligne;
@@ -363,6 +391,7 @@ export async function enregistrerProjet(x, v) {
         type_demandeur: txt(v.type_demandeur),
         type_projet: txt(v.type_projet), type_intervention: txt(v.type_intervention),
         superficie: txt(v.superficie), types_travaux: travaux,
+        intervention_electrique: txt(v.intervention_electrique),
         budget: txt(v.budget_annonce), projet_description: txt(v.projet_description),
         adresse_chantier: txt(v.adresse_chantier),
         code_postal_chantier: txt(v.code_postal_chantier),
@@ -379,6 +408,7 @@ export async function enregistrerProjet(x, v) {
         type_intervention: txt(v.type_intervention),
         superficie: txt(v.superficie),
         types_travaux: travaux, nature_travaux: travaux,
+        intervention_electrique: txt(v.intervention_electrique),
         projet_description: txt(v.projet_description),
         budget_annonce: txt(v.budget_annonce),
         adresse_chantier: txt(v.adresse_chantier),
