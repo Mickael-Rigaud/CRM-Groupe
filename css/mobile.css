@@ -188,6 +188,33 @@
   .rgdf-piste { flex-wrap: wrap; flex-direction: row; justify-content: flex-end; }
   .rgdf-piste > .rgdf-jalons { flex: 1 1 100%; }
 
+  /* ---- Les étapes de Clients & prospects : une grille de tuiles ----
+     Demandé le 28/10/2026 (Élodie : « plus ergonomique et clair
+     visuellement », grille de tuiles choisie, téléphone seulement). La frise
+     d'ordinateur défilait de côté : on n'en voyait que deux étapes et demie,
+     et la troisième était coupée au milieu du mot. Ici les huit sont visibles
+     d'un coup, le nombre en gros, l'étape ouverte en couleur. Le balisage ne
+     change pas (`.pill-tabs.rcl-etapes`, js/pages/rgd-clients.js) : le
+     nombre vient APRÈS le libellé, `column-reverse` le remonte. */
+  .rcl-barres { flex-direction: column; align-items: stretch; gap: 10px; }
+  .rcl-annuaire { padding-left: 0; border-left: 0; }
+  .pill-tabs.rcl-etapes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px;
+                          overflow: visible; padding: 0; }
+  .pill-tabs.rcl-etapes button {
+    margin: 0; min-height: 60px; padding: 9px 12px;
+    flex-direction: column-reverse; align-items: flex-start; justify-content: flex-end; gap: 1px;
+    white-space: normal; text-align: left; line-height: 1.2; font-size: 13px; font-weight: 600;
+    background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 12px;
+    box-shadow: 0 1px 3px -2px rgba(17, 21, 28, .25);
+  }
+  .pill-tabs.rcl-etapes button::after { display: none; }   /* les chevrons de la frise */
+  .pill-tabs.rcl-etapes button:hover:not(.on) { transform: none; background: var(--card); }
+  .pill-tabs.rcl-etapes button span { background: none; padding: 0; font-size: 21px; font-weight: 800;
+                                      color: var(--text); letter-spacing: -.01em; }
+  .pill-tabs.rcl-etapes button.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent);
+                                    box-shadow: 0 4px 12px -6px var(--accent); }
+  .pill-tabs.rcl-etapes button.on span { background: none; color: var(--on-accent); }
+
   /* Dans la liste : le statut et sa flèche de retour sur la même ligne. */
   table.tbl-fiches td.rcl-statut-cell > * { grid-column: 2; }
   table.tbl-fiches td.rcl-statut-cell { grid-template-columns: 32% minmax(0, 1fr) auto; }
