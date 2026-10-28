@@ -40,6 +40,7 @@ import { esc, eur, isoDay, fmtDate, daysSince } from '../ui.js';
 import { poserEspace } from './espace.js';
 import { cadre, guard, KEY } from './rgd-espace.js';
 import { etapesRgd, ETAPES_HORS_CYCLE } from '../data/rgd-etapes.js';
+import { encadreCaOuvrier } from './rgd-ca-ouvrier.js';
 
 // L'exercice comptable de RGD Renova : 1er octobre → 30 septembre, aligné sur
 // Costructor. Ce n'est pas l'année civile, et s'y tromper décale tout le CA.
@@ -318,7 +319,11 @@ function vueOuvrier({ etapes, rdv, aujourdhui, vide }) {
         <span class="grow"></span>
         <a class="btn ghost sm" href="#/rgd/clients">Voir la liste →</a></div>
       <div class="rgd-frise rgd-frise-ouvrier">${tuiles}</div>
-    </section>`;
+    </section>
+
+    ${'' /* Son chiffre d'affaires du mois, en attente de la facturation : `null`
+         = la facturation n'existe pas encore (voir rgd-ca-ouvrier.js). */}
+    ${encadreCaOuvrier(null)}`;
 }
 
 export const rgdPilotagePage = {
