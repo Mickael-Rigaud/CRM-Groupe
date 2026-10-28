@@ -21,6 +21,27 @@ carte de visite. Il ne sert pas au menu : il sert à fabriquer les icônes de
 l'application `btp.html` (`python assets/faire-icones.py`), posées sur fond
 sombre, où le cercle bleu nuit de `btp.png` disparaîtrait.
 
+⚠ **SON MANCHE DE LOUPE EST REDESSINÉ, ET IL FALLAIT LE FAIRE** (28/10/2026,
+Élodie : « le logo de BTP Expertise je n'aime pas, il est coupé »). Tous les
+pictogrammes livrés coupent ce manche : `picto.png` le tranche à plat juste
+au-dessus de la ligne de texte, et le logo maître lui-même le fait descendre
+**jusqu'au bord bas de son image**, où il s'arrête net — il n'a jamais eu de
+bout dessiné, parce qu'il passe derrière le mot « EXPERTISE ». Sur un carré
+d'icône, ce moignon se lit comme une image mal recadrée.
+
+Mesuré sur `logo-fond-sombre.png` (1600 × 1303) :
+
+| | |
+|---|---|
+| cercle | centre (863,5 ; 523,5), rayon 515,5 — donc y 8 à 1039 |
+| manche | barre droite, **largeur 130**, penchée de **dx/dy = 0,404** |
+| bord gauche | x = 989 + 0,404 × (y − 1047) |
+
+On reprend donc le fichier coupé à y = 1047 et on **prolonge la barre de
+120 px**, fermée par un demi-rond de rayon 65. Le mark devient plus haut que
+large, le cercle rétrécit un peu dans la tuile — c'est le prix d'une loupe
+entière, et il se paie une fois.
+
 Les trois autres structures n'ont pas de fichier équivalent : le symbole de La
 Référence Courtage et celui de Propulsion sont **redessinés** par le script —
 quatre et trois formes géométriques —, parce qu'un PNG de 128 px agrandi à
