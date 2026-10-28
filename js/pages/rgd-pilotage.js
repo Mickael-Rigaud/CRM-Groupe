@@ -258,6 +258,64 @@ function courbeCa(mois) {
     ${colonnes}${legendes}</svg>`;
 }
 
+// LA VUE D'ENSEMBLE DE L'OUVRIER (28/10/2026, Élodie : « pour la pipeline de
+// la vue d'ensemble de Franck, je voudrais l'alléger. Il ne va faire que du
+// dépannage, des petites interventions et des remises en état de
+// l'installation complète »). Proposition retenue :
+// - sa journée EN PREMIER : pour un technicien, c'est ce qu'on ouvre ;
+// - CINQ étapes au lieu de dix (voir `GROUPES_OUVRIER`) ;
+// - ni barres, ni pourcentages, ni paragraphe d'explication, ni chiffre
+//   d'affaires de l'entreprise.
+//
+// ⚠ CE SONT DES REGROUPEMENTS D'AFFICHAGE, PAS DE NOUVELLES ÉTAPES. Les
+// nombres viennent de `etapesRgd()`, comme pour tout le monde : quand Franck
+// fait avancer un dossier, la direction le voit au bon endroit dans SA frise.
+// Inventer ici des étapes propres à l'ouvrier aurait fait deux vocabulaires
+// pour les mêmes personnes — exactement le défaut que `etapesRgd` a supprimé.
+// ⚠ SAV, Archivés et Indésirables ne sont pas montrés : ce ne sont pas des
+// étapes de son travail. Ils restent dans Clients & prospects.
+// ⚠ LES CINQ ÉTAPES ET LEURS NOMS SONT CEUX D'ÉLODIE (28/10/2026, après une
+// première version à quatre « mots de terrain » — « À planifier »,
+// « Intervention prévue » — et « Terminé » relégué sous les tuiles) : « mets
+// ces 5 étapes dans la pipeline : Nouvelle demande, RDV, Devis en cours /
+// envoyé, En cours, Terminé ». Les noms restent ceux de Clients & prospects.
+const GROUPES_OUVRIER = [
+  { label: 'Nouvelle demande', cles: ['demande'], couleur: '#9CA3AF' },
+  { label: 'RDV', cles: ['rdv'], couleur: '#2A6FBF' },
+  { label: 'Devis en cours / envoyé', cles: ['devis_encours', 'devis_envoye'], couleur: '#B45C00' },
+  { label: 'En cours', cles: ['devis_accepte', 'chantier_encours'], couleur: '#22C55E' },
+  { label: 'Terminé', cles: ['chantier_termine'], couleur: '#059669' },
+];
+
+function vueOuvrier({ etapes, rdv, aujourdhui }) {
+  const n = (cles) => etapes.filter(e => cles.includes(e.key)).reduce((t, e) => t + e.n, 0);
+  const tuiles = GROUPES_OUVRIER.map(g => `<a class="rgd-et" href="#/rgd/clients?vue=${esc(g.cles[0])}"
+      style="--c:${esc(g.couleur)}" title="Ouvrir dans Clients &amp; prospects">
+    <span class="rgd-et-n">${n(g.cles)}</span>
+    <span class="rgd-et-label">${esc(g.label)}</span></a>`).join('');
+  return `
+    <section class="card rgd-jour">
+      <div class="card-head"><h2>Aujourd’hui</h2>
+        <span class="grow"></span>
+        <span class="muted small">${fmtDate(aujourdhui)}</span></div>
+      ${rdv.length ? `<ul class="pil-liste">${rdv
+        .sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at))
+        .map(e => `<li>
+          <b>${e.all_day ? 'journée' : esc(new Date(e.starts_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }))}</b>
+          <span>${esc(e.title || '(sans titre)')}</span>
+          ${e.location ? `<span class="muted small">${esc(e.location)}</span>` : ''}
+        </li>`).join('')}</ul>`
+        : '<div class="empty">Aucune intervention prévue aujourd’hui.</div>'}
+    </section>
+
+    <section class="card rgd-pipe">
+      <div class="card-head"><h2>Mes dossiers</h2>
+        <span class="grow"></span>
+        <a class="btn ghost sm" href="#/rgd/clients">Voir la liste →</a></div>
+      <div class="rgd-frise rgd-frise-ouvrier">${tuiles}</div>
+    </section>`;
+}
+
 export const rgdPilotagePage = {
   title: () => 'RGD Renova — Vue d’ensemble',
   render(root) {
@@ -274,7 +332,13 @@ export const rgdPilotagePage = {
       const sousTraitants = scope.rgd('rgd_sous_traitants');
       const demandes = scope.rgd('rgd_demandes');
       const rdv = scope.rgd('agenda_events').filter(e => e.activity === KEY && e.day === aujourdhui);
-      const reglage = (cle) => scope.rgd('rgd_reglages').find(r => r.cle === cle)?.valeur ?? null;
+      // L'ouvrier a sa propre vue, plus courte (voir `vueOuvrier`) : on s'arrête
+      // avant de calculer un chiffre d'affaires qu'il ne verra pas.
+      if (scope.isOuvrier) {
+        root.innerHTML = cadre('#/rgd', 'Vue d’ensemble', vueOuvrier({ etapes: etapesRgd(), rdv, aujourdhui }));
+        return;
+      }
+      const reglage =(cle) => scope.rgd('rgd_reglages').find(r => r.cle === cle)?.valeur ?? null;
 
       // CA DE L'EXERCICE — calculé, puis la correction manuelle par-dessus.
       // Les deux sont montrés : l'écart dit à quel point Costructor est en retard.

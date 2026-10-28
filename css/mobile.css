@@ -225,6 +225,10 @@
   .pill-tabs.rcl-etapes button.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
   .pill-tabs.rcl-etapes button.on span { background: none; color: var(--on-accent); }
 
+  /* La vue d'ensemble de l'ouvrier (js/pages/rgd-pilotage.js, `vueOuvrier`) :
+     ses cinq étapes en trois puis deux. */
+  .rgd-frise-ouvrier .rgd-et { flex: 1 1 28%; }
+
   /* Dans la liste : le statut et sa flèche de retour sur la même ligne. */
   table.tbl-fiches td.rcl-statut-cell > * { grid-column: 2; }
   table.tbl-fiches td.rcl-statut-cell { grid-template-columns: 32% minmax(0, 1fr) auto; }
