@@ -225,6 +225,20 @@
   .pill-tabs.rcl-etapes button.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
   .pill-tabs.rcl-etapes button.on span { background: none; color: var(--on-accent); }
 
+  /* ---- « Tous les contacts », « Corbeille », « Clients indésirables » ----
+     (28/10/2026, Élodie : « mieux présentés visuellement, ça prend beaucoup
+     de place »). Trois grosses pastilles sur deux lignes ; ici une seule
+     rangée de trois boutons égaux, plus petits, le nombre dessous — même
+     lecture que les tuiles des étapes juste au-dessus. Le libellé passe à la
+     ligne entre les mots, jamais au milieu d'un mot (même règle que les
+     étapes). */
+  .rcl-annuaire { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px;
+                  padding: 10px 0 0; }
+  .rcl-onglet-annuaire { flex-direction: column; justify-content: center; gap: 0; min-width: 0;
+                         padding: 6px 6px 7px; border-radius: 10px; font-size: 11.5px; line-height: 1.15;
+                         white-space: normal; text-align: center; hyphens: manual; overflow-wrap: normal; }
+  .rcl-onglet-annuaire span { font-size: 13px; }
+
   /* La vue d'ensemble de l'ouvrier (js/pages/rgd-pilotage.js, `vueOuvrier`) :
      ses cinq étapes en trois puis deux. */
   .rgd-frise-ouvrier .rgd-et { flex: 1 1 28%; }
