@@ -54,12 +54,17 @@ export const AIGUILLAGES = [
     //
     // `jour` suit `Date.getUTCDay()` : 0 dimanche, 1 lundi… 6 samedi. Les
     // bornes sont en minutes après minuit, comme tout `rgd-creneaux.js`.
+    //
+    // ⚠ RESSERRÉES LE 28/10/2026 PAR ÉLODIE : « mets 12h et mets 16h à 18h pour
+    // lundi, mercredi et vendredi ». Le samedi s'arrêtait à 13 h pour qu'un
+    // rendez-vous d'une heure commencé à midi tienne ; il s'arrête désormais à
+    // midi, donc le dernier départ d'une visite d'une heure est 11 h. Et la
+    // semaine finit à 18 h, plus à la fermeture de 19 h.
     disponibilites: [
-      { jour: 1, de: 16 * 60, a: 19 * 60 },   // lundi, de 16 h à la fermeture
-      { jour: 3, de: 16 * 60, a: 19 * 60 },   // mercredi
-      { jour: 5, de: 16 * 60, a: 19 * 60 },   // vendredi
-      { jour: 6, de: 8 * 60,  a: 13 * 60 },   // samedi matin — 13 h, pas midi,
-      //    pour qu'un rendez-vous d'une heure commencé à midi tienne (Élodie).
+      { jour: 1, de: 16 * 60, a: 18 * 60 },   // lundi, de 16 h à 18 h
+      { jour: 3, de: 16 * 60, a: 18 * 60 },   // mercredi
+      { jour: 5, de: 16 * 60, a: 18 * 60 },   // vendredi
+      { jour: 6, de: 8 * 60,  a: 12 * 60 },   // samedi, de 8 h à midi
     ],
   },
 ];

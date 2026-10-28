@@ -22,6 +22,12 @@
 // grisés ferait un formulaire à moitié mort, et les afficher actifs ferait
 // perdre la saisie. On montre ce qui marche.
 import { esc, openModal, closeModal, toast } from '../ui.js';
+import { scope } from '../data/scope.js';
+// ⚠ LES HEURES DE CHACUN VIENNENT DE `rgd-metiers.js`, LA SEULE SOURCE
+// (28/10/2026) : la fiche projet les lit déjà là. Les redire ici — ou en base,
+// ce qui a été tenté une heure — ferait proposer à la fiche et à ce formulaire
+// deux semaines différentes pour la même personne.
+import { fenetresDuJour } from '../data/rgd-metiers.js';
 import { creerEvenement, decale, finApres } from '../data/evenements.js';
 // La semaine de la personne, à côté du formulaire (28/10/2026) : les mêmes
 // briques que l'écran rendez-vous de la fiche projet — lues chez Google, pas
@@ -220,11 +226,19 @@ export function formulaireEvenement({
         hote.innerHTML = `${tete}<p class="rgp-cal-vide">Lecture de l’agenda…</p>`;
       } else {
         const choisi = `${champ('date').value} ${champ('heure').value}`;
+        // La personne dont c'est l'agenda — personne pour l'agenda commun, qui
+        // n'a donc aucune heure à respecter. Même règle que la fiche projet.
+        const pour = champ('pour')?.value;
+        const personne = pour && pour !== 'commun' ? scope.users().find(u => u.id === pour) || null : null;
         const colonnes = jours.map((j, i) => {
           const occ = occupationDuJour(cal.occupes, j);
           const passe = j < auj;
+          // `null` = pas d'horaires déclarés, la journée entière ; `[]` = ce
+          // jour-là, il ne travaille pas. Voir `fenetresDuJour`.
+          const fen = personne ? fenetresDuJour(personne, j) : null;
+          const horsHeures = Array.isArray(fen) && !fen.length;
           const libres = passe ? [] : placesLibres(occ, {
-            duree: dureeVoulue(), avant: j === auj ? maintenantParis() : null,
+            duree: dureeVoulue(), avant: j === auj ? maintenantParis() : null, fenetres: fen,
           });
           return `
             <div class="rgp-jour ${passe ? 'est-passe' : ''}${j === champ('date').value ? ' est-choisi' : ''}">
@@ -236,7 +250,7 @@ export function formulaireEvenement({
                 : libres.length ? `<div class="rgp-libres">${libres.map(t => `
                     <button type="button" class="rgp-creneau ${choisi === `${j} ${hhmm(t)}` ? 'on' : ''}"
                       data-cr-jour="${j}" data-cr-heure="${esc(hhmm(t))}">${esc(hhmm(t))}</button>`).join('')}</div>`
-                : '<p class="rgp-jour-rien">complet</p>'}
+                : `<p class="rgp-jour-rien">${horsHeures ? 'ne travaille pas' : 'complet'}</p>`}
             </div>`;
         }).join('');
         hote.innerHTML = `${tete}<div class="rgp-cal ev-sem-cal">${colonnes}</div>
