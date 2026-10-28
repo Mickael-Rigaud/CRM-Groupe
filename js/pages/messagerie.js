@@ -557,7 +557,6 @@ export function monterBulle(parent) {
       <header class="msg-panneau-tete">
         <button type="button" class="icon-btn msg-retour" title="Toutes les conversations" hidden>←</button>
         <div class="msg-panneau-titre"></div>
-        <button type="button" class="icon-btn" data-plein title="Ouvrir en grand">⤢</button>
         <button type="button" class="icon-btn" data-fermer title="Fermer">✕</button>
       </header>
       <div class="msg-panneau-corps">
@@ -673,7 +672,8 @@ export function monterBulle(parent) {
   declencheur.onclick = () => ouvert ? fermer() : ouvrir();
   boite.querySelector('[data-fermer]').onclick = () => fermer();
   retour.onclick = () => montrerListe();
-  boite.querySelector('[data-plein]').onclick = () => { const c = courant; fermer(); location.hash = `#/messagerie/${c || ''}`; };
+  // ⚠ LE BOUTON « OUVRIR EN GRAND » (⤢) EST PARTI LE 28/10/2026 : Élodie,
+  // « ne redirige pas au bon endroit ». L'écran Messagerie reste au menu.
   recherche.oninput = (e) => { q = e.target.value; dessinerListe(); };
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && ouvert && !document.getElementById('modal')) fermer(); });
 
