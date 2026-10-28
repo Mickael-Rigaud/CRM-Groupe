@@ -460,12 +460,22 @@ export const messageriePage = {
       return {};
     }
     const ouvert = filPar(param) || tous[0];
+    // Sur téléphone, sans fil désigné, seule la liste se voit : le premier fil
+    // n'y est ni surligné ni marqué lu — on ne l'a pas ouvert.
+    const listeSeule = !param && matchMedia('screen and (max-width: 820px)').matches;
     const etat = { q: '' };
     const pose = poserEspace(root);
     const t = teinteDe(ouvert.conv);
 
+    // ⚠ SUR TÉLÉPHONE, LA LISTE OU LE FIL, JAMAIS LES DEUX (28/10/2026,
+    // Élodie : « quand je clique sur la notification la messagerie ne s'affiche
+    // pas très bien sur le téléphone »). Les deux colonnes de l'ordinateur
+    // s'empilaient : la liste en haut, le fil repoussé dessous, sa zone de
+    // saisie cachée par la barre du bas. `#/messagerie` montre la liste,
+    // `#/messagerie/<fil>` — l'adresse d'une notification — le fil en plein
+    // écran, avec une flèche de retour. Voir `.msg-app` dans mobile.css.
     root.innerHTML = `
-      <div class="esp-app msg-app" ${t ? `style="--t:${t}"` : ''}>
+      <div class="esp-app msg-app ${param ? 'avec-fil' : ''}" ${t ? `style="--t:${t}"` : ''}>
         <aside class="msg-cote">
           <div class="msg-cote-tete">
             <input type="search" id="msg-q" placeholder="Rechercher une personne, un message…" autocomplete="off">
@@ -474,6 +484,7 @@ export const messageriePage = {
         </aside>
         <section class="msg-vue">
           <header class="msg-tete ${ouvert.genre}">
+            <a href="#/messagerie" class="msg-retour-liste" aria-label="Toutes les conversations">←</a>
             ${vignette(ouvert, 'lg')}
             <div>
               <h2>${esc(nomDe(ouvert.conv, ouvert.user))}</h2>
@@ -485,6 +496,10 @@ export const messageriePage = {
         </section>
       </div>`;
 
+    // Sur téléphone l'écran est posé entre l'en-tête et la barre du bas : la
+    // hauteur de l'en-tête n'est connue qu'une fois la page dessinée.
+    root.querySelector('.msg-app').style.setProperty('--msg-haut', `${Math.max(0, root.getBoundingClientRect().top)}px`);
+
     const vue = vueConversation(root.querySelector('#msg-hote'), ouvert, { apresEnvoi: () => dessinerListe() });
 
     const dessinerListe = () => {
@@ -492,7 +507,7 @@ export const messageriePage = {
       const gardes = fils().filter(f => !ts.length
         || hit([nomDe(f.conv, f.user)], ts)
         || messagesDe(f.conv?.id).some(m => hit([m.body], ts)));
-      root.querySelector('#msg-liste').innerHTML = listeHtml(gardes, ouvert.cle);
+      root.querySelector('#msg-liste').innerHTML = listeHtml(gardes, listeSeule ? null : ouvert.cle);
     };
 
     const sousTitre = () => {
@@ -508,12 +523,14 @@ export const messageriePage = {
 
     const dessiner = () => { dessinerListe(); vue.redessiner(); sousTitre(); };
     dessiner();
-    vue.focus();
-    marquerLu(ouvert.conv?.id);
+    // Sur téléphone, pas de curseur posé d'office : le clavier couvrirait le
+    // fil qu'on vient ouvrir pour le lire.
+    if (!matchMedia('screen and (max-width: 820px)').matches) vue.focus();
+    if (!listeSeule) marquerLu(ouvert.conv?.id);
 
     const minuteur = setInterval(async () => {
       if (document.hidden) return;
-      try { if (await db.refresh(TABLES)) marquerLu(ouvert.conv?.id); } catch { /* réseau : on réessaiera */ }
+      try { if (await db.refresh(TABLES) && !listeSeule) marquerLu(ouvert.conv?.id); } catch { /* réseau : on réessaiera */ }
     }, RAFRAICHIR_MS);
 
     return {
