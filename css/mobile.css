@@ -119,6 +119,13 @@
   .tir-esp-titre { padding: 10px 13px 4px; font-size: 10.5px; font-weight: 800; letter-spacing: .08em;
                    text-transform: uppercase; color: var(--tir-titre); }
   .tir-espace .tir-ecran { padding-left: 13px; }
+  /* ⚠ LE BLOC IMBRIQUE SOUS SA STRUCTURE N'A NI BORDURE NI MARGE DU HAUT : il
+     n'est plus une section du tiroir mais la suite de la ligne au-dessus. Le
+     trait de `.tir-ecrans` qui l'englobe dit deja l'appartenance ; un second
+     trait ferait deux niveaux pour un seul. */
+  .tir-espace.est-imbrique { padding: 2px 0 6px; border-bottom: 0; }
+  .tir-espace.est-imbrique .tir-ecran { padding-left: 10px; font-size: 13px; }
+  .tir-espace.est-imbrique .tir-esp-titre { padding: 8px 10px 3px; font-size: 10px; }
 
   /* ---- Les filtres ----
      La recherche prend la largeur, les menus vont par deux : quatre lignes de

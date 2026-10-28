@@ -232,6 +232,14 @@ function renderTiroir(gs, here, hash, u, ini) {
   if (!navState.tiroir) { hote.innerHTML = ''; hote.hidden = true; return; }
   hote.hidden = false;
 
+  // ⚠ SOUS LA STRUCTURE **SEULEMENT S'IL Y EN A PLUSIEURS**, et c'est la demande
+  // mot pour mot : « quand il y a plusieurs structures ». Chez quelqu'un qui
+  // n'en a qu'une, « Pilotage » ne s'affiche pas du tout (voir
+  // `montrerDansLeTiroir`) — y ranger ses écrans les ferait DISPARAÎTRE. Ils
+  // restent donc en tête du tiroir pour lui, où ils sont sans ambiguïté :
+  // il n'y a pas d'autre entreprise à confondre.
+  const sousLaStructure = gs.some(g => g.key === 'commercial' && montrerDansLeTiroir(g));
+
   const ligne = (g) => {
     const items = itemsOf(g);
     const cnt = g.count ? g.count() : items.reduce((s, i) => s + (i.count ? i.count() : 0), 0);
@@ -242,7 +250,16 @@ function renderTiroir(gs, here, hash, u, ini) {
       const c = i.count ? i.count() : 0;
       const mark = i.activity && LOGOS.has(i.activity) ? `<span class="brandmark"><img src="assets/logos/${i.activity}.png" alt=""></span>`
         : `<span class="dot" style="background:${i.dot || 'var(--line-strong)'}"></span>`;
-      return `<a href="${i.hash}" class="tir-ecran ${isOn(i, hash) ? 'on' : ''}">${mark}<span>${esc(i.label)}</span>${c ? `<i>${c}</i>` : ''}</a>`;
+      const ici = isOn(i, hash);
+      // ⚠ LES ÉCRANS DE LA STRUCTURE SE RANGENT SOUS ELLE (28/10/2026, Élodie :
+      // « je trouve ça bizarre d'avoir le menu au-dessus de l'activité. On ne
+      // pourrait pas plutôt mettre le menu de l'activité correspondante en
+      // dessous de l'entreprise dans pilotage ? »). Ils étaient en TÊTE du
+      // tiroir, donc avant la ligne dont ils dépendent : on lisait vingt écrans
+      // sans savoir de quelle entreprise, puis on trouvait l'entreprise plus
+      // bas. L'ordre dit maintenant l'appartenance.
+      const dedans = ici && sousLaStructure ? ecransDeLEspace(false) : '';
+      return `<a href="${i.hash}" class="tir-ecran ${ici ? 'on' : ''}">${mark}<span>${esc(i.label)}</span>${c ? `<i>${c}</i>` : ''}</a>${dedans}`;
     }).join('')}</div>` : '';
     return `<a href="${g.hash || items[0].hash}" class="tir-univ ${ouvert ? 'on' : ''}">${icon(g.icon, 19)}<span>${esc(g.label)}</span>${cnt ? `<i>${cnt}</i>` : ''}</a>${ecrans}`;
   };
@@ -259,7 +276,7 @@ function renderTiroir(gs, here, hash, u, ini) {
          les univers etaient deux fenetres a ascenseur, posees l'une sur
          l'autre dans 310 px de large. Voir `.tir-corps` dans app.css. */}
       <div class="tir-corps">
-        ${ecransDeLEspace()}
+        ${sousLaStructure ? '' : ecransDeLEspace(true)}
         <nav class="tir-nav" aria-label="Univers">${gs.filter(montrerDansLeTiroir).map(ligne).join('')}</nav>
       </div>
       <div class="tir-pied">
@@ -290,9 +307,12 @@ function renderTiroir(gs, here, hash, u, ini) {
 // que deux entrées et demie. Il vit désormais ici, en entier et dans l'ordre.
 // Lu dans la page plutôt que recopié : c'est `coquilleEspace` qui sait quelles
 // entrées ce profil peut voir, et il n'y aurait pas deux listes à tenir.
-function ecransDeLEspace() {
+function ecransDeLEspace(avecLaMarque) {
   const nav = document.querySelector('#content .esp-side-nav');
   if (!nav) return '';
+  // ⚠ LE NOM DE L'ENTREPRISE NE SE RÉPÈTE PAS quand le bloc est rangé SOUS la
+  // ligne qui le porte déjà : « RGD Renova » suivi de « RGD Renova » se lirait
+  // comme deux niveaux là où il n'y en a qu'un.
   const marque = document.querySelector('#content .esp-side-brand b')?.textContent || '';
   const lien = (a) => `<a href="${esc(a.getAttribute('href'))}" class="tir-ecran ${a.classList.contains('on') ? 'on' : ''}"><span>${esc(a.textContent.trim())}</span></a>`;
   // ⚠ UN GROUPE SE REPLIE, SAUF CELUI OU L'ON EST (28/10/2026). L'espace RGD
@@ -320,8 +340,8 @@ function ecransDeLEspace() {
     return `<details class="tir-grp"${ici ? ' open' : ''}>
       <summary class="tir-esp-titre">${esc(titre)}<i>${as.length}</i></summary>${liens}</details>`;
   }).join('');
-  return `<nav class="tir-espace" aria-label="Écrans ${esc(marque)}">
-    <span class="tir-esp-marque">${esc(marque)}</span>${blocs}</nav>`;
+  return `<nav class="tir-espace ${avecLaMarque ? '' : 'est-imbrique'}" aria-label="Écrans ${esc(marque)}">
+    ${avecLaMarque ? `<span class="tir-esp-marque">${esc(marque)}</span>` : ''}${blocs}</nav>`;
 }
 
 // ---------- Barre du bas (téléphone) ----------
