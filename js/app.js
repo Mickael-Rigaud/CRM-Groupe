@@ -9,7 +9,7 @@ import { messagesNonLus, monterBulle } from './pages/messagerie.js';
 import { icon } from './icons.js';
 import { actualiser, poserGesteActualiser } from './actualiser.js';
 import { surveillerVersion } from './maj.js';
-import { monterRappels, demonterRappels } from './rappels.js';
+import { monterRappels, demonterRappels, brancherBoutonNotifications } from './rappels.js';
 
 
 // ⚠ L'ADRESSE D'ARRIVÉE EST CAPTURÉE ICI, AVANT TOUT LE RESTE, ET C'EST CE QUI
@@ -281,6 +281,7 @@ function renderTiroir(gs, here, hash, u, ini) {
       </div>
       <div class="tir-pied">
         ${gs.filter(g => g.bottom).map(g => `<a href="${g.hash}" class="tir-univ ${here?.key === g.key ? 'on' : ''}">${icon(g.icon, 19)}<span>${esc(g.label)}</span></a>`).join('')}
+        ${db.demo ? '' : '<button type="button" class="tir-act tir-notif" id="tir-notif" hidden></button>'}
         ${db.demo ? '' : '<button type="button" class="tir-act" id="tir-pwd">Changer mon mot de passe</button>'}
         <button type="button" class="tir-act danger" id="tir-out">Déconnexion</button>
       </div>
@@ -292,6 +293,8 @@ function renderTiroir(gs, here, hash, u, ini) {
   // (on retouche l'écran où l'on est déjà) : sinon il resterait ouvert sur place.
   hote.querySelectorAll('a').forEach(a => a.addEventListener('click', fermerTiroir));
   hote.querySelector('#tir-pwd')?.addEventListener('click', () => { fermerTiroir(); passwordForm(false); });
+  // Rendez-vous, messages, échéances : un seul abonnement par appareil.
+  brancherBoutonNotifications(hote.querySelector('#tir-notif'));
   hote.querySelector('#tir-out')?.addEventListener('click', async () => {
     await db.signOut(); location.hash = ''; scope.set(null);
     navState.open = null; navState.tiroir = false;

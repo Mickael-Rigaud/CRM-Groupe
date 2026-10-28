@@ -128,6 +128,67 @@ export async function activerNotifications() {
   });
 }
 
+// ------------------------------------------------------- le bouton du menu
+// Le 28/10/2026, les notifications ne portent plus seulement les échéances :
+// les rendez-vous de l'ouvrier et les messages passent par le même abonnement
+// (Edge Function `notifications-crm`). Le seul bouton d'activation vivait dans
+// le pop-up des échéances, qu'un ouvrier sans tâche datée ne voit jamais — d'où
+// celui-ci, dans le menu.
+//
+// ⚠ UN APPAREIL DÉJÀ ABONNÉ EST RÉENREGISTRÉ, UNE FOIS PAR OUVERTURE. Le même
+// navigateur peut avoir servi à quelqu'un d'autre : `push_abonner` le reprend
+// au nom de la personne connectée. Sans cela, les notifications de Franck
+// partiraient vers le téléphone de celui qui s'y était connecté avant lui.
+
+const TEXTES_PUSH = {
+  actif: ['Notifications activées sur cet appareil', ''],
+  'ios-installer': ['Notifications : installer l’appli d’abord',
+    "Sur iPhone : Partager → Sur l'écran d'accueil, puis ouvrez le CRM depuis son icône."],
+  impossible: ['Notifications indisponibles ici', 'Ce navigateur ne reçoit pas de notifications.'],
+  refuse: ['Notifications bloquées', 'Autorisez les notifications dans les réglages du téléphone, pour ce site.'],
+  'a-activer': ['Activer les notifications', ''],
+};
+
+let reabonne = false;
+async function reabonnerUneFois() {
+  if (reabonne) return;
+  reabonne = true;
+  try {
+    const reg = await navigator.serviceWorker.getRegistration('./');
+    const j = (await reg?.pushManager.getSubscription())?.toJSON();
+    if (j?.endpoint) await db.rpc('push_abonner', {
+      p_endpoint: j.endpoint, p_p256dh: j.keys.p256dh, p_auth: j.keys.auth,
+      p_appareil: navigator.userAgent.slice(0, 200),
+    });
+  } catch { reabonne = false; /* on réessaiera à la prochaine ouverture du menu */ }
+}
+
+/** Branche un bouton (celui du menu) sur l'état de l'appareil. */
+export async function brancherBoutonNotifications(el) {
+  if (!el) return;
+  const peindre = async () => {
+    etatPush = await lireEtatPush();
+    if (etatPush === 'demo') { el.hidden = true; return; }
+    if (etatPush === 'actif') reabonnerUneFois();
+    el.hidden = false;
+    el.textContent = `🔔 ${TEXTES_PUSH[etatPush]?.[0] || TEXTES_PUSH['a-activer'][0]}`;
+    el.classList.toggle('est-actif', etatPush === 'actif');
+  };
+  el.onclick = async () => {
+    if (etatPush === 'actif') return;
+    if (etatPush !== 'a-activer') { toast(TEXTES_PUSH[etatPush]?.[1] || ''); return; }
+    el.disabled = true; el.textContent = 'Activation…';
+    try {
+      await activerNotifications();
+      toast('Notifications activées sur cet appareil');
+    } catch (err) { toast(err.message || String(err), 'err'); }
+    el.disabled = false;
+    await peindre();
+    dessiner();
+  };
+  await peindre();
+}
+
 // ---------------------------------------------------------------- le pop-up
 
 let racine = null;
@@ -184,7 +245,7 @@ function ligneNotif() {
     case 'ios-installer': return `<p class="rap-notif">Pour les recevoir sur iPhone : <b>Partager → Sur l'écran d'accueil</b>, puis ouvrez le CRM depuis son icône.</p>`;
     case 'impossible': return `<p class="rap-notif muted">Ce navigateur ne reçoit pas de notifications.</p>`;
     case 'refuse': return `<p class="rap-notif">Notifications bloquées sur cet appareil : autorisez-les dans les réglages du navigateur.</p>`;
-    default: return `<button type="button" class="rap-activer" data-rap="activer">🔔 Recevoir les échéances sur cet appareil</button>`;
+    default: return `<button type="button" class="rap-activer" data-rap="activer">🔔 Recevoir les notifications sur cet appareil</button>`;
   }
 }
 

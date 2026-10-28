@@ -188,9 +188,10 @@ self.addEventListener('message', (e) => {
   })());
 });
 
-// ---------- Notifications d'échéance ----------
-// Le message vient de l'Edge Function `rappels-echeances` :
-// { titre, corps, url, tag }.
+// ---------- Notifications ----------
+// Le message vient de l'Edge Function `rappels-echeances` (échéances) ou de
+// `notifications-crm` (rendez-vous de l'ouvrier, messages, depuis le
+// 28/10/2026) : { titre, corps, url, tag }.
 
 self.addEventListener('push', (e) => {
   let m = {};
@@ -209,16 +210,21 @@ self.addEventListener('push', (e) => {
 
 self.addEventListener('notificationclick', (e) => {
   e.notification.close();
-  const cible = new URL(e.notification.data?.url || './#/today', self.registration.scope).href;
+  const cible = new URL(e.notification.data?.url || './#/today', self.registration.scope);
   e.waitUntil((async () => {
     const fenetres = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     for (const c of fenetres) {
       if (c.url.startsWith(self.registration.scope)) {
         await c.focus();
-        try { await c.navigate(cible); } catch { /* le CRM déjà ouvert suffit */ }
+        // ⚠ ON GARDE LA PAGE OUVERTE, ON NE CHANGE QUE L'ÉCRAN : l'application
+        // RGD (`rgd.html`) ne doit pas se changer en CRM Groupe parce que
+        // l'adresse de la notification désigne `index.html`.
+        const ici = new URL(c.url);
+        try { await c.navigate(cible.hash ? ici.origin + ici.pathname + ici.search + cible.hash : cible.href); }
+        catch { /* le CRM déjà ouvert suffit */ }
         return;
       }
     }
-    await self.clients.openWindow(cible);
+    await self.clients.openWindow(cible.href);
   })());
 });

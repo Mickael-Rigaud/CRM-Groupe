@@ -3727,6 +3727,9 @@ body.tiroir-ouvert { overflow: hidden; }
            padding: 12px 13px; border-radius: 11px; font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; }
 .tir-act:hover { background: rgba(255,255,255,.09); color: #fff; }
 .tir-act.danger { color: #ffb4ab; }
+/* Notifications (28/10/2026) : à activer = mis en avant ; déjà actives = discret. */
+.tir-notif { color: #fff; font-weight: 600; }
+.tir-notif.est-actif { color: rgba(255,255,255,.55); font-weight: 400; cursor: default; }
 .tir-act.danger:hover { background: rgba(255,120,110,.16); }
 
 @media (prefers-reduced-motion: reduce) { .tir, .tir-fond { animation: none; } }
