@@ -278,7 +278,14 @@
      La journée d'abord, puis le mini-calendrier et les prochains rendez-vous.
      Le paragraphe sur la fenêtre de relevé, utile au bureau, prenait un
      demi-écran au-dessus de la journée. */
-  .ag-hub { display: flex; flex-direction: column; }
+  /* ⚠ `align-items: stretch` EST INDISPENSABLE ICI, et son absence ne se voyait
+     que sur le calendrier (28/10/2026, Elodie : « je voudrais que le calendrier
+     mensuel prenne toute la largeur »). La mise en page a deux colonnes pose
+     `align-items: start`, utile en grille ; passee en colonne, cette meme regle
+     empeche les blocs de s'etirer et chacun garde sa largeur naturelle. Mesure
+     a 375 px : le calendrier faisait 194 px dans un conteneur de 343, avec des
+     cases de 22 px de large. */
+  .ag-hub { display: flex; flex-direction: column; align-items: stretch; }
   /* ⚠ `display: contents` SUR LA COLONNE DE COTE, ET C'EST LA CLE DE L'ORDRE
      (28/10/2026, Elodie : « je voudrais en tout premier l'encadre des prochains
      rendez-vous »). `order` ne traverse pas un conteneur : tant que l'encadre
@@ -308,6 +315,11 @@
   /* Le mini-calendrier passe APRES la journee, il n'est pas retire : la bande
      des sept jours sert au quotidien, lui sert a sauter a une autre semaine. */
   .ag-mini { order: 1; }
+  /* ⚠ LES CASES GRANDISSENT AVEC LE CALENDRIER : pleine largeur, elles font
+     44 px de large pour 29 de haut, et une cible tactile ecrasee se rate. On
+     les ramene a une hauteur comparable a leur largeur. Le chiffre reste petit,
+     c'est la SURFACE qui compte pour le doigt. */
+  .ag-case { padding: 11px 0; font-size: 13px; }
   .ag-fenetre { display: none; }
   .ag-barre { gap: 8px; }
   .ag-barre .ag-titre { flex: 1 1 auto; min-width: 0; font-size: 15px; }
