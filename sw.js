@@ -26,9 +26,16 @@
 const META = 'crm-meta';
 const CLE_COURANT = new URL('./__version-courante', self.registration.scope).href;
 const PAGE = new URL('./index.html', self.registration.scope).href;
-// L'application RGD Renova (27/10/2026) : la même application, ouverte sur
-// l'espace RGD, avec son nom et son icône — une seconde page d'entrée.
-const PAGE_RGD = new URL('./rgd.html', self.registration.scope).href;
+// Les applications de structure : la même application, ouverte sur une
+// structure, avec son nom et son icône — autant de pages d'entrée. RGD Renova
+// a inauguré le procédé le 27/10/2026, les trois autres ont suivi le 28.
+//
+// ⚠ CHACUNE EST UNE ENTRÉE À PART ENTIÈRE DANS LA COPIE LOCALE, et il le faut :
+// un téléphone n'installe pas forcément `index.html`. Sur celui où seule
+// l'application BTP est posée, c'est `btp.html` qui est copiée, et c'est elle
+// qu'il faut interroger pour savoir s'il existe une version plus récente.
+const PAGES_STRUCTURE = ['rgd', 'btp', 'courtage', 'propulsion']
+  .map(k => new URL(`./${k}.html`, self.registration.scope).href);
 const RACINE = new URL('./', self.registration.scope).href;
 
 const empreinte = (r) => r.headers.get('ETag') || r.headers.get('Last-Modified') || null;
@@ -52,8 +59,7 @@ async function fixerCourant(nom) {
 function pageDe(url) {
   const sans = url.origin + url.pathname;
   if (sans === RACINE || sans === PAGE) return PAGE;
-  if (sans === PAGE_RGD) return PAGE_RGD;
-  return null;
+  return PAGES_STRUCTURE.includes(sans) ? sans : null;
 }
 // La clé d'un fichier dans la copie : son adresse sans la requête.
 function cleDe(url) {
@@ -106,8 +112,9 @@ function verifierVersion(page) {
 }
 
 // `page` : celle qu'on ouvre. ⚠ PAS TOUJOURS `index.html` : sur un téléphone où
-// seule l'application RGD est installée, `index.html` n'est jamais copiée, et
-// un contrôle fondé sur elle ne verrait jamais aucune nouvelle version.
+// seule une application de structure est installée, `index.html` n'est jamais
+// copiée, et un contrôle fondé sur elle ne verrait jamais aucune nouvelle
+// version.
 async function basculerSiNouvelle(page = PAGE) {
   const nom = await nomCourant();
   const cache = await caches.open(nom);
@@ -157,8 +164,8 @@ self.addEventListener('message', (e) => {
       let nouvelle = false;
       try {
         // ⚠ LA PAGE DIT LAQUELLE ELLE EST, et ce n'est pas toujours
-        // `index.html` : sur un téléphone où seule l'application RGD est
-        // installée, c'est `rgd.html` qui est copiée, et un contrôle fondé sur
+        // `index.html` : sur un téléphone où seule l'application BTP est
+        // installée, c'est `btp.html` qui est copiée, et un contrôle fondé sur
         // `index.html` ne verrait jamais aucune nouvelle version.
         const quelle = typeof e.data.page === 'string'
           && new URL(e.data.page).origin === self.location.origin
@@ -216,9 +223,10 @@ self.addEventListener('notificationclick', (e) => {
     for (const c of fenetres) {
       if (c.url.startsWith(self.registration.scope)) {
         await c.focus();
-        // ⚠ ON GARDE LA PAGE OUVERTE, ON NE CHANGE QUE L'ÉCRAN : l'application
-        // RGD (`rgd.html`) ne doit pas se changer en CRM Groupe parce que
-        // l'adresse de la notification désigne `index.html`.
+        // ⚠ ON GARDE LA PAGE OUVERTE, ON NE CHANGE QUE L'ÉCRAN : une
+        // application de structure (`rgd.html`, `btp.html`…) ne doit pas se
+        // changer en CRM Groupe parce que l'adresse de la notification désigne
+        // `index.html`.
         const ici = new URL(c.url);
         try { await c.navigate(cible.hash ? ici.origin + ici.pathname + ici.search + cible.hash : cible.href); }
         catch { /* le CRM déjà ouvert suffit */ }

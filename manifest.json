@@ -1,6 +1,7 @@
 {
+  "id": "./index.html",
   "name": "CRM Groupe",
-  "short_name": "CRM",
+  "short_name": "CRM Groupe",
   "description": "Pilotage commercial — RGD Renova, BTP Expertise, La Référence Courtage, Propulsion",
   "start_url": "./index.html",
   "scope": "./",

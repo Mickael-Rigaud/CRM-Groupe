@@ -354,11 +354,21 @@ function ecransDeLEspace(avecLaMarque) {
 // Elle n'existe qu'en dessous de 820 px — le CSS la cache ailleurs
 // (`css/mobile.css`) —, le grand écran garde ses deux bandes du haut.
 //
-// ⚠ DEUX APPLICATIONS, UNE SEULE BARRE À CHANGER : `rgd.html` est le même CRM
-// ouvert sur l'espace RGD (son nom et son icône sont dans manifest-rgd.json).
-// Seules ses quatre entrées diffèrent. Quelqu'un qui n'a pas RGD dans ses
-// activités retombe sur la barre du CRM.
-const APPLI_RGD = /\/rgd\.html$/.test(location.pathname);
+// ⚠ UNE APPLICATION PAR STRUCTURE, UNE SEULE BARRE À CHANGER. `rgd.html`,
+// `btp.html`, `courtage.html` et `propulsion.html` sont le MÊME CRM — mêmes
+// fichiers, mêmes données — ouvert sur une structure, avec son nom et son icône
+// (manifest-<clé>.json). Rien n'est dupliqué : seules les quatre entrées de la
+// barre du bas et l'écran d'ouverture diffèrent.
+//
+// ⚠ ET LA CLÉ VIENT DU NOM DU FICHIER, pas d'un réglage : ajouter une structure,
+// c'est ajouter sa page, son manifeste, ses icônes et sa ligne ici. Une page
+// dont la clé n'est pas dans `BAS_STRUCTURE` se comporte comme le CRM entier,
+// ce qui est le bon repli : on ne perd jamais l'accès, on perd le raccourci.
+//
+// ⚠ ET SEULEMENT SI L'UTILISATEUR A CETTE ACTIVITÉ : quelqu'un qui ouvre
+// `courtage.html` sans avoir La Référence Courtage dans ses accès retombe sur
+// la barre du CRM, et ses écrans restent gardés comme ailleurs (`scope`).
+const CLE_APPLI = (location.pathname.match(/\/([a-z]+)\.html$/) || ['', ''])[1];
 const BAS_CRM = [
   { cle: 'home', hash: '#/home', icon: 'home', label: 'Accueil' },
   { cle: 'today', hash: '#/today', icon: 'check', label: 'To do', count: () => NAV[1].count() },
@@ -379,20 +389,67 @@ const BAS_CRM = [
 // ⚠ C'EST UNE FONCTION, PAS UNE CONSTANTE, et il le faut : `scope.user` n'est
 // pas encore connu au chargement du module. Une liste figée ici aurait lu le
 // rôle avant la connexion, donc toujours « pas la direction ».
-const basRgd = () => [
-  { hash: '#/rgd', icon: 'home', label: 'Accueil', ici: (h) => h === '#/rgd' || h.startsWith('#/rgd/pilotage') },
-  { hash: '#/rgd/clients', icon: 'users', label: 'Clients' },
-  scope.isDirection
-    ? { hash: '#/rgd/partenaires', icon: 'building', label: 'Partenaires' }
-    : { hash: '#/rgd/chantiers', icon: 'kanban', label: 'Pipeline' },
-  { hash: '#/rgd/agenda', icon: 'calendar', label: 'Agenda' },
-];
-const appliRgd = () => APPLI_RGD && scope.activityKeys.includes('rgd');
+//
+// ⚠ QUATRE ENTRÉES, PAS PLUS : la cinquième place est prise par « Menu », qui
+// ouvre le tiroir et garde TOUTE la carte. Ce qui est ici, ce sont les écrans
+// qu'on ouvre sous le pouce ; rien n'est retiré de l'application.
+const BAS_STRUCTURE = {
+  rgd: () => [
+    { hash: '#/rgd', icon: 'home', label: 'Accueil', ici: (h) => h === '#/rgd' || h.startsWith('#/rgd/pilotage') },
+    { hash: '#/rgd/clients', icon: 'users', label: 'Clients' },
+    scope.isDirection
+      ? { hash: '#/rgd/partenaires', icon: 'building', label: 'Partenaires' }
+      : { hash: '#/rgd/chantiers', icon: 'kanban', label: 'Pipeline' },
+    { hash: '#/rgd/agenda', icon: 'calendar', label: 'Agenda' },
+  ],
+  // Les deux métiers du cabinet d'abord — c'est le travail du jour —, puis la
+  // base de données qui l'alimente. « Chargés d'affaires » reste dans le menu :
+  // on l'ouvre pour RÉPARTIR, pas pour avancer un dossier.
+  btp: () => [
+    { hash: '#/btp', icon: 'home', label: 'Accueil', ici: (h) => h === '#/btp' },
+    { hash: '#/btp/expertise', icon: 'search', label: 'Expertise' },
+    { hash: '#/btp/amo', icon: 'building', label: 'AMO' },
+    { hash: '#/btp/base', icon: 'users', label: 'Base' },
+  ],
+  // L'espace n'a que trois écrans ouverts à tous : la quatrième place va donc à
+  // la messagerie, qui sert partout, plutôt qu'à un doublon.
+  courtage: () => [
+    { hash: '#/courtage', icon: 'home', label: 'Accueil', ici: (h) => h === '#/courtage' },
+    { hash: '#/courtage/base', icon: 'users', label: 'Base' },
+    { hash: '#/courtage/vivier', icon: 'target', label: 'Vivier' },
+    { hash: '#/messagerie', icon: 'chat', label: 'Messages', count: () => messagesNonLus() },
+  ],
+  // ⚠ PROPULSION N'A PAS D'ESPACE, ET SON APPLICATION S'OUVRE DONC SUR SON
+  // PIPELINE. C'est la seule des quatre dans ce cas : les trois autres ont des
+  // écrans à elles, celle-ci a un déroulé d'affaires et les écrans communs.
+  propulsion: () => [
+    { hash: '#/pipeline/propulsion', icon: 'kanban', label: 'Pipeline' },
+    { hash: '#/today', icon: 'check', label: 'To do', count: () => NAV[1].count() },
+    { hash: '#/contacts', icon: 'users', label: 'Contacts' },
+    { hash: '#/messagerie', icon: 'chat', label: 'Messages', count: () => messagesNonLus() },
+  ],
+};
+// L'écran d'ouverture de chaque application, et le préfixe qui dit « on est
+// chez elle » — c'est le même texte, et ce n'est pas un hasard.
+const ACCUEIL_STRUCTURE = {
+  rgd: '#/rgd', btp: '#/btp', courtage: '#/courtage', propulsion: '#/pipeline/propulsion',
+};
+const appliStructure = () => (BAS_STRUCTURE[CLE_APPLI] && scope.activityKeys.includes(CLE_APPLI) ? CLE_APPLI : null);
+
+// Dans une application de structure, la bande du haut annonce la structure
+// tant qu'on est chez elle, et l'écran courant dès qu'on en sort (la to-do, la
+// messagerie, les réglages) : c'est ce qui dit qu'on a quitté son périmètre.
+function nomDeLEcran(hash, here) {
+  const cle = appliStructure();
+  if (cle && hash.startsWith(ACCUEIL_STRUCTURE[cle])) return ACTIVITIES[cle].label;
+  return here?.label || CONFIG.APP_NAME;
+}
 
 function renderBarreBas(gs, here, hash) {
   const hote = document.getElementById('barre-bas'); if (!hote) return;
-  const entrees = appliRgd()
-    ? basRgd().filter(e => pourOuvrier(e.hash)).map(e => ({ ...e, on: e.ici ? e.ici(hash) : hash.startsWith(e.hash) }))
+  const cle = appliStructure();
+  const entrees = cle
+    ? BAS_STRUCTURE[cle]().filter(e => pourOuvrier(e.hash)).map(e => ({ ...e, on: e.ici ? e.ici(hash) : hash.startsWith(e.hash) }))
     : BAS_CRM.map(e => {
       // Pilotage mène au premier écran de son univers, comme son onglet du haut.
       const g = gs.find(x => x.key === e.cle);
@@ -408,7 +465,7 @@ function renderBarreBas(gs, here, hash) {
   hote.querySelector('#bb-menu').onclick = () => { navState.tiroir = !navState.tiroir; navState.open = null; renderNav(); };
   // Toucher l'écran où l'on est déjà ramène en haut de page, comme partout ailleurs.
   hote.querySelectorAll('a.bb-lien.on').forEach(a => a.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' })));
-  document.body.classList.toggle('appli-rgd', appliRgd());
+  document.body.classList.toggle('appli-structure', !!cle);
 }
 
 // ---------- Les tableaux en fiches, sur telephone ----------
@@ -497,7 +554,7 @@ function renderNav() {
   univ.innerHTML = `
     <button type="button" class="u-burger" id="burger" aria-label="Ouvrir le menu" aria-expanded="${navState.tiroir}">${icon('menu', 21)}</button>
     <a class="u-mark" href="#/home">${esc(CONFIG.APP_NAME)}</a>
-    <span class="u-ici">${esc(appliRgd() && hash.startsWith('#/rgd') ? ACTIVITIES.rgd.label : here?.label || CONFIG.APP_NAME)}</span>
+    <span class="u-ici">${esc(nomDeLEcran(hash, here))}</span>
     <nav class="u-set" aria-label="Univers">${gs.filter(g => !g.bottom).map(tab).join('')}</nav>
     <div class="u-right">
       ${gs.filter(g => g.bottom).map(g => `<a href="${g.hash}" class="u-ico ${here?.key === g.key ? 'on' : ''}" title="${esc(g.label)}" aria-label="${esc(g.label)}">${icon(g.icon, 18)}</a>`).join('')}
@@ -706,8 +763,9 @@ async function start(user) {
   probeLogos();
   unsubscribe?.();
   unsubscribe = db.onChange(() => { renderNav(); current?.refresh?.(); });
-  // L'application RGD s'ouvre sur son espace, pas sur le tableau du groupe.
-  if (appliRgd() && !location.hash) history.replaceState(null, '', location.pathname + location.search + '#/rgd');
+  // Une application de structure s'ouvre chez elle, pas sur le tableau du groupe.
+  const ouverture = appliStructure();
+  if (ouverture && !location.hash) history.replaceState(null, '', location.pathname + location.search + ACCUEIL_STRUCTURE[ouverture]);
   route();
   db.ecouterLesChangements();
   if (retourDeLien()) setTimeout(() => passwordForm(true), 300);

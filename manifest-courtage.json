@@ -1,0 +1,17 @@
+{
+  "id": "./courtage.html",
+  "name": "La Référence Courtage",
+  "short_name": "Courtage",
+  "description": "La Référence Courtage — base de données, vivier courtiers",
+  "start_url": "./courtage.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#15384E",
+  "theme_color": "#1D5B78",
+  "lang": "fr",
+  "icons": [
+    { "src": "assets/icon-courtage-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "assets/icon-courtage-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icon-courtage-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

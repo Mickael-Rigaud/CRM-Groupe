@@ -13,3 +13,15 @@ sinon le pictogramme, sinon il écrit le nom de la structure.
 
 Le pictogramme ne doit pas contenir de texte : à 20 px, un nom écrit est
 illisible. Le logo complet, lui, est fait pour être lu.
+
+## `btp-sombre.png` — à part, et pour une seule chose
+
+Le pictogramme de BTP Expertise **à cercle blanc**, celui du verso de leur
+carte de visite. Il ne sert pas au menu : il sert à fabriquer les icônes de
+l'application `btp.html` (`python assets/faire-icones.py`), posées sur fond
+sombre, où le cercle bleu nuit de `btp.png` disparaîtrait.
+
+Les trois autres structures n'ont pas de fichier équivalent : le symbole de La
+Référence Courtage et celui de Propulsion sont **redessinés** par le script —
+quatre et trois formes géométriques —, parce qu'un PNG de 128 px agrandi à
+380 serait flou là où ces formes-là sont nettes à toute taille.

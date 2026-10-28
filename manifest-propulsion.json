@@ -1,0 +1,17 @@
+{
+  "id": "./propulsion.html",
+  "name": "Propulsion",
+  "short_name": "Propulsion",
+  "description": "Propulsion — pipeline des contrats, contacts et to-do",
+  "start_url": "./propulsion.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#2F101C",
+  "theme_color": "#E24C86",
+  "lang": "fr",
+  "icons": [
+    { "src": "assets/icon-propulsion-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "assets/icon-propulsion-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "assets/icon-propulsion-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

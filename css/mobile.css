@@ -90,11 +90,12 @@
   body:has(input:focus, textarea:focus, select:focus, [contenteditable]:focus) .barre-bas { display: none; }
   body:has(input:focus, textarea:focus, [contenteditable]:focus) .msg-bulle-zone:not(.ouverte) { bottom: 12px; }
 
-  /* L'application RGD : la bande des structures (RGD / BTP / Courtage) n'a rien
-     à faire dans une application qui n'en montre qu'une. Les commandes que
-     l'écran y pose restent. */
-  .appli-rgd .subnav .s-set, .appli-rgd .subnav .datepill { display: none; }
-  .appli-rgd .subnav:not(:has(.embed-actions)) { display: none; }
+  /* Une application de structure (rgd.html, btp.html, courtage.html,
+     propulsion.html) : la bande des structures n'a rien à faire dans une
+     application qui n'en montre qu'une. Les commandes que l'écran y pose
+     restent. */
+  .appli-structure .subnav .s-set, .appli-structure .subnav .datepill { display: none; }
+  .appli-structure .subnav:not(:has(.embed-actions)) { display: none; }
 }
 
 /* =====================================================================
