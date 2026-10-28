@@ -139,7 +139,39 @@ async function basculerSiNouvelle(page = PAGE) {
 // La toute première ouverture n'est pas encore passée par ce service worker :
 // sans ce message, il faudrait attendre la troisième pour aller vite.
 // `force-cache` reprend la version que la page EXÉCUTE, pas une plus récente.
+// « Actualiser » demandé par la page (28/10/2026) : on va voir TOUT DE SUITE
+// s'il existe une version plus récente, et on répond si l'on a basculé.
+//
+// ⚠ IL CONTOURNE LE DÉLAI DE GARDE DE 60 s de `verifierVersion`, et c'est tout
+// son intérêt : ce délai évite d'interroger le réseau à chaque fetch, mais il
+// rendait le geste inopérant — on tirait, rien ne changeait, on recommençait.
+// Ici la demande est explicite et rare : elle mérite un aller-retour.
+//
+// ⚠ ON RÉPOND TOUJOURS, MÊME EN CAS D'ÉCHEC : sans réponse, la page attendrait
+// son délai de garde entier avant de continuer, et le voyant tournerait pour
+// rien pendant huit secondes.
 self.addEventListener('message', (e) => {
+  if (e.data?.type === 'verifier') {
+    const port = e.ports && e.ports[0];
+    e.waitUntil((async () => {
+      let nouvelle = false;
+      try {
+        // ⚠ LA PAGE DIT LAQUELLE ELLE EST, et ce n'est pas toujours
+        // `index.html` : sur un téléphone où seule l'application RGD est
+        // installée, c'est `rgd.html` qui est copiée, et un contrôle fondé sur
+        // `index.html` ne verrait jamais aucune nouvelle version.
+        const quelle = typeof e.data.page === 'string'
+          && new URL(e.data.page).origin === self.location.origin
+          ? e.data.page : PAGE;
+        const avant = await nomCourant();
+        await basculerSiNouvelle(quelle);
+        nouvelle = (await nomCourant()) !== avant;
+      } catch { /* hors reseau : on garde la copie en place */ }
+      dernierControle = Date.now();
+      port?.postMessage({ nouvelle });
+    })());
+    return;
+  }
   if (e.data?.type !== 'garder' || !Array.isArray(e.data.adresses)) return;
   e.waitUntil((async () => {
     const cache = await caches.open(await nomCourant());

@@ -7,6 +7,7 @@ import { esc, toast, isoDay, daysSince, closeModal, openModal } from './ui.js';
 import { pages } from './pages/index.js';
 import { messagesNonLus, monterBulle } from './pages/messagerie.js';
 import { icon } from './icons.js';
+import { actualiser, poserGesteActualiser } from './actualiser.js';
 import { surveillerVersion } from './maj.js';
 import { monterRappels, demonterRappels } from './rappels.js';
 
@@ -417,6 +418,7 @@ function renderNav() {
         <button type="button" class="u-me" id="me-btn" aria-expanded="${navState.open === '__me'}"><span class="av">${esc(ini)}</span><span class="nm">${esc((u.full_name || '').split(' ')[0])}</span></button>
         ${navState.open === '__me' ? `<div class="acct-menu">
           <div class="acct-head"><div class="role">${esc(ROLES[u.role]?.label || u.role)}</div><div class="name">${esc(u.full_name)}</div>${u.email ? `<div class="mail">${esc(u.email)}</div>` : ''}</div>
+          <button type="button" class="acct-act" id="actu">↻ Actualiser l’application</button>
           ${db.demo ? '' : '<button type="button" class="acct-act" id="pwd">Changer mon mot de passe</button>'}
           <button type="button" class="acct-act danger" id="logout">Déconnexion</button>
         </div>` : ''}
@@ -463,6 +465,20 @@ function renderNav() {
 
   univ.querySelector('#burger').onclick = () => { navState.tiroir = !navState.tiroir; navState.open = null; renderNav(); };
   univ.querySelector('#me-btn').onclick = () => { navState.open = navState.open === '__me' ? null : '__me'; renderNav(); };
+  // ⚠ L'ENTRÉE DU MENU DOUBLE LE GESTE, ELLE NE LE REMPLACE PAS : le geste
+  // n'existe qu'au doigt, et l'application se consulte aussi au bureau.
+  univ.querySelector('#actu')?.addEventListener('click', async (e) => {
+    const b = e.currentTarget;
+    b.disabled = true; b.textContent = 'Actualisation…';
+    try {
+      const { recharge } = await actualiser();
+      // Si la page recharge, inutile de remettre le bouton : il disparaît avec.
+      if (!recharge) { closeMenu(); toast('Application à jour'); }
+    } catch {
+      b.disabled = false; b.textContent = '↻ Actualiser l’application';
+      toast('Actualisation impossible — réseau indisponible');
+    }
+  });
   univ.querySelector('#pwd')?.addEventListener('click', () => { closeMenu(); passwordForm(false); });
   univ.querySelector('#logout')?.addEventListener('click', async () => { await db.signOut(); location.hash = ''; scope.set(null); navState.open = null; document.getElementById('msg-bulle')?.remove(); demonterRappels(); renderLogin(); });
   // Un univers ouvert conduit à son premier écran ; la bande 2 fait le reste
@@ -589,6 +605,9 @@ export function passwordForm(forced = false) {
 async function start(user) {
   scope.set(user);
   if (!scope.isDirection && location.hash === '#/dashboard') location.hash = '#/home';
+  // Le geste « tirer vers le bas », posé une seule fois, à l'ouverture d'une
+  // session : avant la connexion il n'y a rien à actualiser.
+  poserGesteActualiser();
   renderLayout();
   // La bulle de messagerie vit sur <body>, hors de #content : elle reste en place
   // d'un écran à l'autre, donc un message en cours de frappe survit à une
