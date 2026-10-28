@@ -291,6 +291,8 @@ export const settingsPage = {
           historique: ['trace d’historique', 'traces d’historique'],
           documents: ['document', 'documents'],
           agenda: ['relevé d’agenda', 'relevés d’agenda'],
+          partages: ['tâche partagée', 'tâches partagées'],
+          amo: ['suivi AMO', 'suivis AMO'], releves: ['relevé de visite', 'relevés de visite'],
         };
         const dit = (cle, n) => `${n} ${(NOMS[cle] || [cle, cle])[n > 1 ? 1 : 0]}`;
 
@@ -305,8 +307,25 @@ export const settingsPage = {
               <div class="card u-suppr-zone">
                 <p class="mf-aide attention">Ce compte ne peut pas être supprimé : il porte encore
                   ${porte.map(([k, n]) => `<b>${dit(k, n)}</b>`).join(', ')}.</p>
-                <p class="mf-aide">Confiez ces dossiers à quelqu'un d'autre, ou mettez le compte
-                  en sommeil : la personne ne pourra plus se connecter, et tout restera lisible.</p>
+                ${'' /* ⚠ CONFIER PUIS SUPPRIMER (28/10/2026, Élodie : « je veux vraiment
+                   les supprimer »). Tout passe à la personne choisie, puis le compte
+                   part. La mise en sommeil reste dite : c'est souvent la bonne réponse. */}
+                <p class="mf-aide">Pour le supprimer quand même, confiez tous ses dossiers à
+                  quelqu'un d'autre : ils passeront à son nom, rien ne sera perdu.</p>
+                <label class="mail-champ"><span>Confier ses dossiers à</span>
+                  <select id="u-repreneur">${scope.users()
+                    .filter(u => u.id !== profil.id && u.active !== false)
+                    .sort((a, b) => (a.role === 'direction' ? 0 : 1) - (b.role === 'direction' ? 0 : 1)
+                      || String(a.full_name).localeCompare(String(b.full_name), 'fr'))
+                    .map(u => `<option value="${esc(u.id)}">${esc(u.full_name)}</option>`).join('')}</select></label>
+                ${messages ? `<p class="mf-aide attention">Ses <b>${messages} message${messages > 1 ? 's' : ''}</b>
+                  de la messagerie seront effacés, y compris dans les conversations partagées.</p>` : ''}
+                <p class="mf-aide">Ou mettez le compte en sommeil : la personne ne pourra plus se
+                  connecter, et tout restera lisible.</p>
+                <div class="form-actions">
+                  <button type="button" class="btn ghost" id="u-nonsuppr">Ne rien faire</button>
+                  <button type="button" class="btn danger" id="u-suppr-ok" data-confier>Confier et supprimer</button>
+                </div>
               </div>` : `
               <div class="card u-suppr-zone">
                 <p class="mf-aide">Ce compte ne porte aucun dossier : rien ne sera perdu du travail
@@ -335,14 +354,19 @@ export const settingsPage = {
 
         async function confirmerSuppression() {
           const ok = zone.querySelector('#u-suppr-ok');
+          const libelle = ok.textContent;
+          const confierA = ok.hasAttribute('data-confier') ? zone.querySelector('#u-repreneur')?.value : null;
+          const qui = confierA ? db.byId('profiles', confierA)?.full_name : '';
           ok.disabled = true; ok.textContent = 'Suppression…';
           try {
-            await supprimerCompte(profil.id, { confirmer: true });
+            const rep = await supprimerCompte(profil.id, { confirmer: true, confierA });
             closeModal(true);
-            toast(`Compte de ${profil.full_name} supprimé`);
+            toast(confierA
+              ? `Compte de ${profil.full_name} supprimé — ${rep.transferes || 0} élément${(rep.transferes || 0) > 1 ? 's' : ''} confié${(rep.transferes || 0) > 1 ? 's' : ''} à ${qui}`
+              : `Compte de ${profil.full_name} supprimé`);
             draw();
           } catch (err) {
-            ok.disabled = false; ok.textContent = 'Supprimer définitivement';
+            ok.disabled = false; ok.textContent = libelle;
             toast(err.message, 'err');
           }
         }

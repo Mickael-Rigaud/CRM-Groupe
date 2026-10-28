@@ -122,7 +122,9 @@ export async function renvoyerLienAcces(email) {
 // Ce n'est pas de la prudence décorative. La base REFUSE de supprimer quelqu'un
 // qui porte des affaires — mais elle EFFACE ses messages en cascade, sans rien
 // demander. L'inventaire sert à montrer les deux avant d'agir.
-export async function supprimerCompte(id, { confirmer = false } = {}) {
+// `confierA` (28/10/2026) : un profil à qui passer tous les dossiers du compte
+// avant de le supprimer. Sans lui, un compte qui porte des dossiers est refusé.
+export async function supprimerCompte(id, { confirmer = false, confierA = null } = {}) {
   if (CONFIG.DEMO) throw new Error('Mode démo : aucun compte réel n’est supprimé.');
   const jeton = await db.accessToken();
   if (!jeton) throw new Error('Session expirée : reconnectez-vous.');
@@ -134,7 +136,7 @@ export async function supprimerCompte(id, { confirmer = false } = {}) {
       Authorization: `Bearer ${jeton}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ id, confirmer }),
+    body: JSON.stringify({ id, confirmer, ...(confierA ? { confier_a: confierA } : {}) }),
   });
   const rep = await r.json().catch(() => ({}));
   if (!r.ok || rep.ok === false) {
