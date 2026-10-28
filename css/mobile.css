@@ -99,9 +99,14 @@
      mesurer par son contenu, et c'est le tiroir entier qui defile. */
   .tir-espace { display: flex; flex-direction: column; gap: 2px; padding: 10px 10px 12px;
                 border-bottom: 1px solid rgba(255, 255, 255, .12); }
-  .tir-esp-marque { padding: 4px 13px 6px; font-size: 15px; font-weight: 700; color: #fff; }
-  .tir-esp-titre { padding: 10px 13px 3px; font-size: 10.5px; font-weight: 800; letter-spacing: .08em;
-                   text-transform: uppercase; color: rgba(255, 255, 255, .5); }
+  /* Le nom de la structure porte sa couleur : c'est le premier repere du menu,
+     et il change d'un espace a l'autre. */
+  .tir-esp-marque { padding: 4px 13px 6px; font-size: 15px; font-weight: 700;
+                    color: var(--tir-marque); letter-spacing: -.01em; }
+  /* Les titres de groupe sont le SEUL element colore de la colonne, hors
+     selection : c'est ce qui les detache des ecrans, qui restent blancs. */
+  .tir-esp-titre { padding: 10px 13px 4px; font-size: 10.5px; font-weight: 800; letter-spacing: .08em;
+                   text-transform: uppercase; color: var(--tir-titre); }
   .tir-espace .tir-ecran { padding-left: 13px; }
 
   /* ---- Les filtres ----

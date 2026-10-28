@@ -3639,6 +3639,17 @@ body.tiroir-ouvert { overflow: hidden; }
    univers : deux ascenseurs cote a cote dans un menu de 310 px de large, et
    une ligne coupee au bas de chacun. On ne savait plus laquelle des deux
    bouger. Le corps du tiroir defile desormais d'un bloc. */
+/* ⚠ LA COULEUR DE LA STRUCTURE, ECLAIRCIE — JAMAIS `--accent` TEL QUEL
+   (28/10/2026, Elodie : « rajoute un peu de couleur pour distinguer les menus
+   des sous-menus »). Le fond du tiroir EST `--accent-ink`, c'est-a-dire la
+   version sombre de la meme couleur : chez La Reference Courtage, `--accent`
+   (#1D5B78) et `--accent-ink` (#174A61) sont presque identiques, et un titre
+   ecrit dans l'accent y serait illisible. On melange donc avec du blanc, ce
+   qui garantit l'ecart sur les quatre structures. */
+.tir { --tir-marque: color-mix(in srgb, var(--accent) 60%, #fff);
+       --tir-titre: color-mix(in srgb, var(--accent) 42%, #fff);
+       --tir-rail: color-mix(in srgb, var(--accent) 55%, transparent); }
+
 .tir-corps { flex: 1; overflow-y: auto; overscroll-behavior: contain; }
 .tir-nav { padding: 10px 10px 14px; }
 .tir-univ { display: flex; align-items: center; gap: 12px; padding: 12px 13px; border-radius: 11px;
@@ -3652,8 +3663,11 @@ body.tiroir-ouvert { overflow: hidden; }
 .tir-univ.on i { background: color-mix(in srgb, var(--on-accent) 22%, transparent); color: var(--on-accent); }
 
 /* Les ecrans de l'univers ouvert, en retrait sous lui. */
+/* Le trait de gauche dit « ceci depend de la ligne du dessus ». Teinte de la
+   structure plutot que blanc : c'est le seul signe de hierarchie dans une
+   liste sans encadres. */
 .tir-ecrans { display: flex; flex-direction: column; gap: 1px; margin: 3px 0 8px 13px;
-              padding-left: 13px; border-left: 1px solid rgba(255,255,255,.16); }
+              padding-left: 13px; border-left: 2px solid var(--tir-rail); }
 .tir-ecran { display: flex; align-items: center; gap: 10px; padding: 10px 11px; border-radius: 9px;
              text-decoration: none; color: rgba(255,255,255,.7); font-size: 13.5px; font-weight: 600; }
 .tir-ecran span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -3673,11 +3687,16 @@ body.tiroir-ouvert { overflow: hidden; }
 .tir-grp > summary::-webkit-details-marker { display: none; }
 .tir-grp > summary::after { content: '\203A'; margin-left: auto; font-size: 17px;
                             line-height: 1; transform: rotate(90deg); transition: transform .15s;
-                            color: rgba(255,255,255,.45); }
+                            color: var(--tir-titre); }
 .tir-grp[open] > summary::after { transform: rotate(-90deg); }
 .tir-grp > summary i { font-style: normal; font-size: 10.5px; font-weight: 700;
-                       color: rgba(255,255,255,.45); }
+                       color: var(--tir-titre); opacity: .8; }
 .tir-grp > summary:hover { background: rgba(255,255,255,.07); }
+/* ⚠ LE RETRAIT EST SUR LES ENTREES, PAS SUR LE `details` : un `padding` sur le
+   bloc aurait decale le titre AUSSI, et c'est justement lui qui doit rester a
+   la marge pour qu'on voie ce qui depend de quoi. */
+.tir-grp > .tir-ecran { margin-left: 13px; padding-left: 12px;
+                        border-left: 2px solid var(--tir-rail); border-radius: 0 9px 9px 0; }
 
 .tir-pied { padding: 10px; border-top: 1px solid rgba(255,255,255,.12); display: flex; flex-direction: column; gap: 2px; }
 .tir-act { border: 0; background: transparent; color: rgba(255,255,255,.78); text-align: left;
