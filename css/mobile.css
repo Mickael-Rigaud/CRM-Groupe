@@ -279,7 +279,35 @@
      Le paragraphe sur la fenêtre de relevé, utile au bureau, prenait un
      demi-écran au-dessus de la journée. */
   .ag-hub { display: flex; flex-direction: column; }
+  /* ⚠ `display: contents` SUR LA COLONNE DE COTE, ET C'EST LA CLE DE L'ORDRE
+     (28/10/2026, Elodie : « je voudrais en tout premier l'encadre des prochains
+     rendez-vous »). `order` ne traverse pas un conteneur : tant que l'encadre
+     restait enferme dans `.ag-cote`, on ne pouvait deplacer que le bloc entier,
+     mini-calendrier compris. `contents` fait disparaitre la boite sans toucher
+     a son contenu, et les trois morceaux deviennent ordonnables un par un. */
+  .ag-cote { display: contents; }
+  .ag-prochains { order: -2; }
+  /* ⚠ L'ENCADRE EST RESSERRE PARCE QU'IL EST PASSE EN TETE : trois lignes de
+     trois niveaux faisaient 318 px, et repoussaient la journee hors de l'ecran
+     — on remplacait un defaut par un autre. Le quand et l'heure tiennent sur
+     la meme ligne, le titre dessous. Mesure a 375 px. */
+     ⚠ LA SPECIFICITE COMPTE ICI : `app.css` pose `.ag-prochain b, .ag-prochain
+     span { display: block }`, qui vaut (0,1,1). Ecrire `.ag-prochain-q` seul
+     (0,1,0) ne suffisait pas — la regle etait ignoree en silence, et la mesure
+     le montrait sans rien dire du pourquoi. On repasse donc par le parent. */
+  .ag-prochain { padding: 6px 9px; }
+  .ag-prochain + .ag-prochain { margin-top: 4px; }
+  .ag-prochain .ag-prochain-q { display: inline; }
+  .ag-prochain .s { display: inline; margin-left: 6px; }
+  /* ⚠ LE TITRE AUSSI PASSE EN `inline`, SANS QUOI RIEN NE CHANGE : un bloc au
+     milieu separe le « quand » de l'heure, et on garde trois lignes meme avec
+     les deux autres en ligne. Mesure : 318 px avant, et la cause n'etait pas
+     celle qu'on croyait. */
+  .ag-prochain b { display: inline; font-size: 14px; line-height: 1.3; }
   .ag-principal { order: -1; }
+  /* Le mini-calendrier passe APRES la journee, il n'est pas retire : la bande
+     des sept jours sert au quotidien, lui sert a sauter a une autre semaine. */
+  .ag-mini { order: 1; }
   .ag-fenetre { display: none; }
   .ag-barre { gap: 8px; }
   .ag-barre .ag-titre { flex: 1 1 auto; min-width: 0; font-size: 15px; }

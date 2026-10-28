@@ -230,14 +230,77 @@ function miniCalendrier(mois, jourSel, parJour, min, max) {
 // qu'on peut attraper et déposer alors que le serveur refusera l'écriture est
 // pire qu'un rendez-vous fixe — le geste a l'air d'avoir marché jusqu'à ce que
 // la grille revienne en arrière.
-function grille(jours, parJour, calendriers, ecriture) {
+/**
+ * ⚠ `pxParHeure` EXISTE POUR QUE LA JOURNÉE TIENNE À L'ÉCRAN SUR TÉLÉPHONE
+ * (28/10/2026, Élodie : « du premier abord on ne voit pas les rendez-vous de
+ * fin de journée »). Mesuré à 375 px avant correction : la grille faisait
+ * 618 px et commençait à 399, donc tout ce qui suivait 17 h tombait sous le
+ * bord de l'écran — invisible sans dérouler, et rien ne le signalait.
+ *
+ * ⚠ CE N'EST PAS UN RÉGLAGE DE CONFORT : une heure vaut 52 px sur ordinateur,
+ * et cette valeur était écrite en dur ici. Elle le reste pour l'ordinateur,
+ * où la place ne manque pas ; seul le téléphone la resserre.
+ */
+/**
+ * La plage d'heures que la grille doit couvrir : 8 h - 19 h par défaut, élargie
+ * à ce que les rendez-vous du jour exigent.
+ *
+ * ⚠ UNE SEULE DÉFINITION, LUE PAR LA GRILLE ET PAR LE CALCUL DE SON ÉCHELLE.
+ * Deux copies finiraient par ne plus donner la même plage, et l'échelle serait
+ * calculée pour une journée que la grille ne dessine pas — le genre d'écart qui
+ * ne se voit qu'à l'écran, sur un téléphone, et seulement certains jours.
+ */
+function plageHoraire(jours, parJour) {
   const evts = jours.flatMap(j => parJour.get(j) || []).filter(e => !e.all_day);
   let debut = 8 * 60, fin = 19 * 60;
   for (const e of evts) {
     debut = Math.min(debut, Math.floor(minutes(e.starts_at) / 60) * 60);
     fin = Math.max(fin, Math.ceil(minutes(e.ends_at || e.starts_at) / 60) * 60);
   }
-  const hauteur = (fin - debut) / 60 * 52;
+  return { debut, fin, heures: (fin - debut) / 60 };
+}
+
+/**
+ * Les rendez-vous d'une journée qui se chevauchent, côte à côte.
+ *
+ * ⚠ DEMANDÉ LE 28/10/2026 PAR ÉLODIE pour la vue « Tout le monde » : « si des
+ * rendez-vous se chevauchent je voudrais qu'on les voie sur la même ligne avec
+ * des couleurs différentes ». Ils s'empilaient l'un sur l'autre sur toute la
+ * largeur de la colonne, et celui du dessous disparaissait — on ne voyait pas
+ * que Franck et Mickael étaient pris à la même heure. Les couleurs, elles,
+ * existaient déjà (une par personne).
+ *
+ * Rend, pour chaque rendez-vous, sa voie et le nombre de voies de SON groupe :
+ * deux rendez-vous qui se touchent partagent la colonne en deux ; un rendez-vous
+ * seul garde toute la largeur, même le même jour qu'un groupe.
+ */
+function voies(evts) {
+  const bornes = (e) => {
+    const d = minutes(e.starts_at);
+    return [d, e.ends_at ? Math.max(minutes(e.ends_at), d + 30) : d + 60];
+  };
+  const tries = evts.slice().sort((a, b) => bornes(a)[0] - bornes(b)[0] || bornes(b)[1] - bornes(a)[1]);
+  const out = new Map();
+  let groupe = [], finGroupe = -1, finsDesVoies = [];
+  const clore = () => { for (const e of groupe) out.get(e).n = finsDesVoies.length; };
+  for (const e of tries) {
+    const [d, f] = bornes(e);
+    // Un rendez-vous qui commence après la fin de tout le groupe en ouvre un
+    // nouveau : il reprend la largeur entière.
+    if (d >= finGroupe) { clore(); groupe = []; finsDesVoies = []; finGroupe = -1; }
+    let v = finsDesVoies.findIndex(fin => fin <= d);
+    if (v < 0) { v = finsDesVoies.length; finsDesVoies.push(f); } else finsDesVoies[v] = f;
+    out.set(e, { v, n: 1 });
+    groupe.push(e);
+    finGroupe = Math.max(finGroupe, f);
+  }
+  clore();
+  return out;
+}
+
+function grille(jours, parJour, calendriers, ecriture, pxParHeure = 52) {
+  const { debut, fin } = plageHoraire(jours, parJour);
+  const hauteur = (fin - debut) / 60 * pxParHeure;
   const y = (min) => (min - debut) / (fin - debut) * hauteur;
 
   const heures = [];
@@ -264,8 +327,12 @@ function grille(jours, parJour, calendriers, ecriture) {
           const m = new Date().getHours() * 60 + new Date().getMinutes();
           return m >= debut && m <= fin ? `<div class="ag-now" style="top:${y(m)}px"></div>` : '';
         })() : ''}
-        ${cales.map(e => {
+        ${((voie) => cales.map(e => {
           const d = minutes(e.starts_at);
+          // La voie du rendez-vous : `left` et `width` en ligne, qui priment
+          // sur `.ag-evt` (pleine largeur) seulement quand il y a chevauchement.
+          const { v, n } = voie.get(e) || { v: 0, n: 1 };
+          const cote = n > 1 ? `left:calc(3px + (100% - 6px) * ${v} / ${n});right:auto;width:calc((100% - 6px) / ${n} - 2px);` : '';
           const f = e.ends_at ? Math.max(minutes(e.ends_at), d + 30) : d + 60;
           // ⚠ UN BOUTON, PLUS UN LIEN VERS GOOGLE (30/09/2026, demandé :
           // « pouvoir cliquer sur le rdv pour en savoir plus »). Le lien
@@ -274,13 +341,13 @@ function grille(jours, parJour, calendriers, ecriture) {
           // supprimer. Il n'est pas perdu : le panneau le propose.
           return `<button type="button" class="ag-evt" data-ev="${esc(e.id)}"
                 ${ecriture ? 'draggable="true"' : ''}
-                style="top:${y(d)}px;height:${Math.max(18, y(f) - y(d))}px;
+                style="top:${y(d)}px;height:${Math.max(18, y(f) - y(d))}px;${cote}
                 --ag-teinte:${teinteDe(calendriers, e.calendar_id)}"
                 title="${esc(e.title || '')}${e.location ? ' — ' + esc(e.location) : ''}">
             <b>${esc(e.title || '(sans titre)')}</b>
             <span>${esc(hhmm(e.starts_at))}${e.location ? ' · ' + esc(e.location) : ''}</span>
           </button>`;
-        }).join('')}
+        }).join(''))(voies(cales))}
       </div>
     </div>`;
   }).join('');
@@ -862,12 +929,34 @@ export const rgdAgendaPage = {
 
       // Les prochains rendez-vous, toutes dates confondues : c'est ce qu'on
       // vient chercher quand on ouvre un agenda sans savoir quel jour regarder.
+      //
+      // ⚠ TROIS SUR TÉLÉPHONE, SIX SUR ORDINATEUR (28/10/2026). Sur ordinateur
+      // la liste vit dans une colonne de côté, où elle ne coûte rien ; sur
+      // téléphone elle passe EN TÊTE, demandé par Élodie, et six lignes y
+      // faisaient 475 px — l'agenda du jour était repoussé hors de l'écran, ce
+      // qui remplaçait un défaut par un autre.
       const maintenant = Date.now();
       const prochains = tous
         .filter(e => e.all_day ? e.day >= aujourdhui : new Date(e.starts_at).getTime() >= maintenant)
         .sort((a, b) => String(a.day).localeCompare(String(b.day))
           || (a.all_day === b.all_day ? new Date(a.starts_at) - new Date(b.starts_at) : a.all_day ? -1 : 1))
-        .slice(0, 6);
+        .slice(0, telephone ? 3 : 6);
+
+      // ⚠ L'ÉCHELLE DE LA GRILLE SE CALCULE SUR LA PLACE QUI RESTE, et non sur
+      // une valeur choisie une fois pour toutes : une journée de 8 h à 19 h
+      // tient en onze heures, une journée qui déborde en compte quinze, et la
+      // même échelle donnerait un écran plein dans un cas et un débordement
+      // dans l'autre.
+      //
+      // ⚠ LE PLANCHER DE 30 px EST UNE LIMITE DE LISIBILITÉ, PAS UN DÉTAIL :
+      // en dessous, un rendez-vous d'une heure n'a plus la hauteur d'une ligne
+      // de texte et son titre devient illisible. Une journée très étalée
+      // débordera donc un peu plutôt que de devenir impossible à lire — et
+      // c'est le bon compromis, parce qu'une grille illisible ne se répare pas
+      // en déroulant.
+      const pxParHeure = telephone
+        ? Math.max(30, Math.min(52, Math.floor(430 / Math.max(1, plageHoraire(affiches, parJour).heures))))
+        : 52;
 
       const titre = telephone ? majuscule(jourLongAn(state.jour)) : majuscule(`semaine du ${jourLongAn(lundiDe(state.jour))}`);
 
@@ -925,7 +1014,7 @@ export const rgdAgendaPage = {
             ${bandeJours}
             <section class="card ag-cadre">
               ${vide ? `<p class="ag-libre">Aucun rendez-vous ${telephone ? 'ce jour-là' : 'cette semaine'}.</p>` : ''}
-              ${grille(affiches, parJour, teintes, state.ecriture)}
+              ${grille(affiches, parJour, teintes, state.ecriture, pxParHeure)}
             </section>
           </section>
         </div>`;
