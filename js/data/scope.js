@@ -645,7 +645,15 @@ export const scope = {
       .map(a => ({ valeur: a.profile_id, calendriers: [a.calendar_id],
         libelle: db.byId('profiles', a.profile_id)?.full_name || 'Sans nom' }))
       .sort((a, b) => a.libelle.localeCompare(b.libelle, 'fr'));
-    return (commun.length ? [{ valeur: 'commun', libelle: 'Agenda commun', calendriers: commun }] : [])
+    // ⚠ L'AGENDA « COMMUN » PORTE LE NOM DE MICKAEL (28/10/2026, Élodie : « je
+    // veux l'agenda de Mickael à la place de l'agenda commun »). C'est bien le
+    // sien — m.rigaud@rgdrenova.fr, où arrivent les leads. Le nom vient de ceux
+    // de la direction qui portent des dossiers, comme l'entrée « Mickael » du
+    // sélecteur de vue ; la VALEUR reste `commun`, que lisent les fonctions
+    // serveur.
+    const nomCommun = (structure === 'rgd' ? this.producteursDirectionRgd() : [])
+      .map(u => u.full_name).filter(Boolean).join(' · ') || 'Agenda commun';
+    return (commun.length ? [{ valeur: 'commun', libelle: nomCommun, calendriers: commun }] : [])
       .concat(gens);
   },
 

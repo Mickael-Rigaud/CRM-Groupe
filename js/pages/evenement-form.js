@@ -112,11 +112,15 @@ export function formulaireEvenement({
   // l'on peut sélectionner »). Toutes les personnes se voient d'un coup, comme
   // les boutons au-dessus de la grille de l'Agenda. La valeur choisie vit dans
   // un champ caché du même nom : le reste du formulaire la lit comme avant.
+  // ⚠ ET ON PEUT EN COCHER PLUSIEURS (28/10/2026, « des rendez-vous communs à
+  // deux ou trois personnes du CRM ») : le premier coché reçoit le rendez-vous
+  // (`pour`), les autres y sont invités (`aussi`) — un seul événement, présent
+  // chez chacun. Voir `creer-evenement`.
   const choixAgenda = agendas?.length ? `
       <div class="ev-ligne">
         <span class="ev-ico" aria-hidden="true">📅</span>
         <div class="ev-champ">
-          <span class="ev-agenda-lib">Dans l’agenda de</span>
+          <span class="ev-agenda-lib">Dans l’agenda de <span class="muted">— plusieurs possibles</span></span>
           <input type="hidden" name="pour" value="${esc(agenda || agendas[0][0])}">
           <div class="ev-agendas" role="group" aria-label="Agenda">${agendas.map(([k, l]) =>
             `<button type="button" class="ev-agenda-b${k === (agenda || agendas[0][0]) ? ' on' : ''}"
@@ -198,6 +202,10 @@ export function formulaireEvenement({
     // personne ou de semaine relit Google ; changer l'heure ou la durée ne fait
     // que redessiner — ce qui est pris ne dépend pas de ce qu'on cherche.
     const cal = { semaine: lundiDe(jour || aujourdhuiParis()), occupes: null, erreur: null, lu: 0 };
+    // Les agendas cochés, DANS L'ORDRE DU CLIC : le premier reçoit le
+    // rendez-vous, les suivants sont invités.
+    const choisis = agendas?.length ? [champ('pour').value] : [];
+    const nomDe = (k) => (agendas || []).find(([v]) => v === k)?.[1] || '';
     const JOURS = 6;
     const NOMS = ['lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.'];
     const dureeVoulue = () => (champ('journee')?.checked ? 60 : Number(champ('duree')?.value) || 60);
@@ -205,14 +213,14 @@ export function formulaireEvenement({
     const dessineSemaine = () => {
       const hote = q('#ev-semaine');
       if (!hote) return;
-      const qui = m.querySelector('.ev-agenda-b.on')?.textContent.trim() || '';
+      const qui = choisis.map(nomDe).join(' + ');
       const jours = Array.from({ length: JOURS }, (_, i) => decale(cal.semaine, i));
       const auj = aujourdhuiParis();
       const m2 = (j) => new Date(`${j}T12:00:00Z`)
         .toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', timeZone: 'UTC' });
       const tete = `
         <div class="ev-sem-tete">
-          <b>${champ('pour')?.value === 'commun' ? 'Agenda commun' : `Agenda de ${esc(qui)}`}</b>
+          <b>${choisis.length > 1 ? `Agendas de ${esc(qui)}` : `Agenda de ${esc(qui)}`}</b>
           <div class="rgp-cal-nav">
             <button type="button" class="btn ghost sm" data-sem="-7"
               ${cal.semaine <= lundiDe(auj) ? 'disabled' : ''} aria-label="Semaine précédente">‹</button>
@@ -226,16 +234,25 @@ export function formulaireEvenement({
         hote.innerHTML = `${tete}<p class="rgp-cal-vide">Lecture de l’agenda…</p>`;
       } else {
         const choisi = `${champ('date').value} ${champ('heure').value}`;
-        // La personne dont c'est l'agenda — personne pour l'agenda commun, qui
-        // n'a donc aucune heure à respecter. Même règle que la fiche projet.
-        const pour = champ('pour')?.value;
-        const personne = pour && pour !== 'commun' ? scope.users().find(u => u.id === pour) || null : null;
+        // Les personnes dont ce sont les agendas — personne pour l'agenda
+        // commun, qui n'a donc aucune heure à respecter. Même règle que la
+        // fiche projet. ⚠ À PLUSIEURS, SEULES LES HEURES COMMUNES À TOUS
+        // RESTENT : l'intersection de leurs plages, jour par jour.
+        const personnes = choisis.filter(k => k !== 'commun')
+          .map(k => scope.users().find(u => u.id === k)).filter(Boolean);
+        const croise = (a, b) => a.flatMap(([d1, f1]) => b
+          .map(([d2, f2]) => [Math.max(d1, d2), Math.min(f1, f2)]).filter(([d, f]) => f > d));
+        const fenetresDe = (j) => personnes.reduce((acc, u) => {
+          const f = fenetresDuJour(u, j);
+          if (f == null) return acc;
+          return acc == null ? f : croise(acc, f);
+        }, null);
         const colonnes = jours.map((j, i) => {
           const occ = occupationDuJour(cal.occupes, j);
           const passe = j < auj;
           // `null` = pas d'horaires déclarés, la journée entière ; `[]` = ce
           // jour-là, il ne travaille pas. Voir `fenetresDuJour`.
-          const fen = personne ? fenetresDuJour(personne, j) : null;
+          const fen = fenetresDe(j);
           const horsHeures = Array.isArray(fen) && !fen.length;
           const libres = passe ? [] : placesLibres(occ, {
             duree: dureeVoulue(), avant: j === auj ? maintenantParis() : null, fenetres: fen,
@@ -278,10 +295,17 @@ export function formulaireEvenement({
       const n = ++cal.lu;
       cal.occupes = null; cal.erreur = null;
       dessineSemaine();
-      const r = await lireCreneaux({ activite, du: cal.semaine, au: decale(cal.semaine, JOURS - 1),
-        pour: champ('pour')?.value || null });
+      // Un agenda lu par personne cochée, en parallèle ; leurs rendez-vous
+      // sont superposés, et préfixés du nom dès qu'il y a plus d'une personne
+      // — sinon on ne saurait pas QUI est pris.
+      const lus = await Promise.all(choisis.map(k => lireCreneaux({
+        activite, du: cal.semaine, au: decale(cal.semaine, JOURS - 1), pour: k || null,
+      }).then(r => ({ k, r }))));
       if (n !== cal.lu) return;
-      if (r.ok) cal.occupes = r.occupes; else { cal.occupes = []; cal.erreur = r.motif; }
+      const rate = lus.find(x => !x.r.ok);
+      cal.erreur = rate ? rate.r.motif : null;
+      cal.occupes = lus.flatMap(({ k, r }) => (r.ok ? r.occupes : [])
+        .map(o => (choisis.length > 1 ? { ...o, titre: `${nomDe(k)} · ${o.titre}` } : o)));
       dessineSemaine();
     };
 
@@ -350,12 +374,17 @@ export function formulaireEvenement({
     };
     // La durée change les places assez larges, pas ce qui est pris.
     champ('duree').onchange = () => dessineSemaine();
+    // Cocher ajoute, décocher retire ; on ne peut pas tout décocher — un
+    // rendez-vous doit bien aller quelque part.
     m.querySelectorAll('[data-pour]').forEach(b => b.onclick = () => {
-      if (champ('pour').value === b.dataset.pour) return;
-      champ('pour').value = b.dataset.pour;
+      const k = b.dataset.pour;
+      const i = choisis.indexOf(k);
+      if (i >= 0) { if (choisis.length === 1) return; choisis.splice(i, 1); } else choisis.push(k);
+      champ('pour').value = choisis[0];
       m.querySelectorAll('[data-pour]').forEach(x => {
-        x.classList.toggle('on', x === b);
-        x.setAttribute('aria-pressed', String(x === b));
+        const on = choisis.includes(x.dataset.pour);
+        x.classList.toggle('on', on);
+        x.setAttribute('aria-pressed', String(on));
       });
       chargeSemaine();
     });
@@ -387,6 +416,7 @@ export function formulaireEvenement({
       const champs = { titre, date_debut: debut, date_fin: fin, all_day: journee ? 1 : 0, activite };
       if (metier) champs.metier = metier;
       if (agendas?.length && champ('pour')?.value) champs.pour = champ('pour').value;
+      if (choisis.length > 1) champs.aussi = choisis.slice(1);
       const lieu = champ('lieu').value.trim();
       const desc = champ('description').value.trim();
       if (lieu) champs.lieu = lieu;
