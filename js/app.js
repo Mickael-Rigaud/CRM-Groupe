@@ -214,7 +214,7 @@ function fermerTiroir() { navState.tiroir = false; renderNav(); }
 // structure ou l'on est deja. Le retirer enfermerait dans son espace.
 //
 // ⚠ ET IL NE S'AGIT PAS DE RELIRE `BAS_CRM` ICI : la barre de l'application
-// RGD (`BAS_RGD`) ne porte pas les memes entrees, et un ouvrier n'en voit pas
+// RGD (`basRgd()`) ne porte pas les memes entrees, et un ouvrier n'en voit pas
 // toutes. On nomme donc les deux qui se repetent VRAIMENT dans les deux
 // barres, et `Messagerie` qui y est aussi.
 const TIROIR_SANS = new Set(['home', 'today', 'messagerie']);
@@ -362,10 +362,26 @@ const BAS_CRM = [
   { cle: 'commercial', icon: 'kanban', label: 'Pilotage' },
   { cle: 'messagerie', hash: '#/messagerie', icon: 'chat', label: 'Messages', count: () => messagesNonLus() },
 ];
-const BAS_RGD = [
+// ⚠ LA TROISIÈME ENTRÉE DÉPEND DU RÔLE (28/10/2026, Élodie : « pour les rôles
+// direction je voudrais que tu remplaces "pipeline" [...] par une page que l'on
+// utilise plus »). La direction y met **Partenaires** ; un chargé d'affaires
+// garde le **Pipeline**, qui est son outil de travail à lui — ses dossiers,
+// étape par étape. La demande nomme la direction, elle ne vaut donc pas pour
+// tout le monde.
+//
+// ⚠ LE PIPELINE N'EST PAS PERDU : il garde sa place dans le menu latéral de
+// l'espace (groupe « Autres »), et `#/rgd/chantiers` continue de répondre. On
+// change ce qui est sous le pouce, pas ce qui existe.
+//
+// ⚠ C'EST UNE FONCTION, PAS UNE CONSTANTE, et il le faut : `scope.user` n'est
+// pas encore connu au chargement du module. Une liste figée ici aurait lu le
+// rôle avant la connexion, donc toujours « pas la direction ».
+const basRgd = () => [
   { hash: '#/rgd', icon: 'home', label: 'Accueil', ici: (h) => h === '#/rgd' || h.startsWith('#/rgd/pilotage') },
   { hash: '#/rgd/clients', icon: 'users', label: 'Clients' },
-  { hash: '#/rgd/chantiers', icon: 'kanban', label: 'Pipeline' },
+  scope.isDirection
+    ? { hash: '#/rgd/partenaires', icon: 'building', label: 'Partenaires' }
+    : { hash: '#/rgd/chantiers', icon: 'kanban', label: 'Pipeline' },
   { hash: '#/rgd/agenda', icon: 'calendar', label: 'Agenda' },
 ];
 const appliRgd = () => APPLI_RGD && scope.activityKeys.includes('rgd');
@@ -373,7 +389,7 @@ const appliRgd = () => APPLI_RGD && scope.activityKeys.includes('rgd');
 function renderBarreBas(gs, here, hash) {
   const hote = document.getElementById('barre-bas'); if (!hote) return;
   const entrees = appliRgd()
-    ? BAS_RGD.filter(e => pourOuvrier(e.hash)).map(e => ({ ...e, on: e.ici ? e.ici(hash) : hash.startsWith(e.hash) }))
+    ? basRgd().filter(e => pourOuvrier(e.hash)).map(e => ({ ...e, on: e.ici ? e.ici(hash) : hash.startsWith(e.hash) }))
     : BAS_CRM.map(e => {
       // Pilotage mène au premier écran de son univers, comme son onglet du haut.
       const g = gs.find(x => x.key === e.cle);
