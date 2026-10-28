@@ -239,6 +239,13 @@
                          white-space: normal; text-align: center; hyphens: manual; overflow-wrap: normal; }
   .rcl-onglet-annuaire span { font-size: 13px; }
 
+  /* La Corbeille : « Restaurer » et « Supprimer définitivement » côte à côte
+     sortaient de la fiche sous 360 px (vu le 28/10/2026). Ils passent à la
+     ligne au besoin et se partagent la largeur. */
+  table.tbl-fiches td:has(> [data-restaurer-fiche]) { flex-wrap: wrap; gap: 8px; padding-top: 8px; }
+  table.tbl-fiches td > [data-restaurer-fiche], table.tbl-fiches td > [data-purger-fiche] {
+    flex: 1 1 auto; justify-content: center; white-space: normal; }
+
   /* La vue d'ensemble de l'ouvrier (js/pages/rgd-pilotage.js, `vueOuvrier`) :
      ses cinq étapes en trois puis deux. */
   .rgd-frise-ouvrier .rgd-et { flex: 1 1 28%; }
