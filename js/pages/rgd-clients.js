@@ -95,7 +95,8 @@ import { ORDRE_ETAPES, ETAPES_RGD, ETAPES_CLES, ETAPE_DU_STATUT, STATUT_DE_L_ETA
          montantDevisDe, etapeAvecMontant, ecrireStatut, derniereRelance,
          rangRelanceDuStatut, majDateRelance, aujourdhui, ecrireStatutAnnuaire,
          aSigneUnDevis, ORDRE_ETAPES as ORDRE,
-         visiteDeLaFiche, finDeChantierDe, envoisDevisDe } from '../data/rgd-etapes.js';
+         visiteDeLaFiche, finDeChantierDe, envoisDevisDe,
+         confirmationSmsDe } from '../data/rgd-etapes.js';
 import { sansNoteAuto } from '../data/rgd-projet.js';
 import { db } from '../data/db.js';
 import { esc, eur, fmtDate, fmtDateTime, terms, hit, searchInput, bindSearch, restoreFocus, etiqueterColonnes } from '../ui.js';
@@ -1296,6 +1297,8 @@ export const rgdClientsPage = {
       // journée entière n'a pas d'heure non plus : afficher « 00:00 » ferait
       // croire à un rendez-vous à minuit, le défaut déjà corrigé sur la fiche.
       const evenements = surRdv ? scope.rgd('agenda_events') : [];
+      // Lue une fois pour tout le tableau, pas une fois par ligne.
+      const envoisAuto = surRdv ? scope.rgd('rgd_envois_auto') : [];
       const celluleRdv = (f) => {
         const visite = visiteDeLaFiche(f, chantiers, joursVisite);
         if (!visite) return '<span class="muted">—</span>';
@@ -1308,11 +1311,26 @@ export const rgdClientsPage = {
         // Passé = grisé, jamais caché : une visite d'hier sans devis derrière
         // est précisément ce qu'on vient chercher dans cet onglet.
         const passe = jour && jour < new Date().toISOString().slice(0, 10);
+
+        // Le SMS de confirmation, sous la date — et non dans une colonne à part :
+        // il ne veut rien dire sans le rendez-vous auquel il se rapporte.
+        //
+        // ⚠ TROIS ÉTATS, PAS DEUX. « Rien » serait ambigu : on ne saurait pas
+        // si le message n'est pas encore dû, s'il a échoué, ou si le dispositif
+        // est éteint. Une visite à venir sans envoi dit « SMS à venir » ; une
+        // visite passée sans envoi dit « pas de SMS », ce qui se remarque et se
+        // vérifie. Le SMS part 24 h avant l'heure du rendez-vous.
+        const sms = confirmationSmsDe(visite, envoisAuto);
+        const ligneSms = sms
+          ? `<span class="rcl-rdv-sms" title="Confirmation envoyée au client">SMS envoyé le ${
+              esc(fmtDateTime(sms.le))}</span>`
+          : `<span class="rcl-rdv-sms muted">${passe ? 'pas de SMS' : 'SMS à venir'}</span>`;
+
         return `<span class="rcl-rdv${passe ? ' est-passe' : ''}">
           <b>${jour ? esc(fmtDate(jour)) : '—'}</b>
           ${heure ? `<span>${esc(heure)}</span>`
             : '<span class="muted" title="Aucun rendez-vous lié dans l’agenda : l’heure n’est pas connue">heure inconnue</span>'}
-        </span>`;
+        </span>${ligneSms}`;
       };
 
       // Ce que la sélection retient : des lignes de l'onglet ouvert, jamais des

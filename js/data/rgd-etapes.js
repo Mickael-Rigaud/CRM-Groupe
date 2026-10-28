@@ -438,6 +438,27 @@ export function visiteDeLaFiche(f, chantiers, joursVisite) {
   return miennes.find(c => jourDe(c) >= aujourdhui) || miennes[miennes.length - 1] || null;
 }
 
+/**
+ * Le SMS de confirmation parti pour CETTE visite, s'il est parti.
+ *
+ * ⚠ ON NE REND QUE LES ENVOIS RÉUSSIS : la table garde aussi les échecs, avec
+ * leur motif. Afficher « confirmé le 27/10 » sur un message qui n'est jamais
+ * parti dirait l'inverse de ce qui s'est passé — c'est la même règle que pour
+ * les relances de devis, et pour la même raison.
+ *
+ * ⚠ LA TRACE EST ICI, PAS CHEZ LE PRESTATAIRE : le journal de l'expéditeur dit
+ * qu'un SMS est parti, il ne dit pas POUR QUELLE VISITE. Le rattachement n'existe
+ * que dans `rgd_envois_auto.chantier_id`.
+ */
+export function confirmationSmsDe(visite, envois) {
+  if (!visite) return null;
+  const e = (envois || []).find(x => x.chantier_id === visite.id
+    && x.nature === 'confirmation_rdv'
+    && x.statut === 'envoye'
+    && x.envoye_le);
+  return e ? { le: e.envoye_le } : null;
+}
+
 // L'étape d'une fiche `rgd_clients`. Les deux tables sont passées en argument
 // pour que l'appelant qui en tient déjà une copie ne la relise pas à chaque
 // ligne — `etapesRgd()` ci-dessous les lit une fois pour toutes.

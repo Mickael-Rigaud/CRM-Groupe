@@ -1917,6 +1917,11 @@ tr.btp-mission .btp-pts { color: var(--m-encre); }
    ⚠ `white-space: nowrap` SUR LES RELANCES : « R1 17/10 » coupe entre le rang
    et la date devient illisible, et la colonne est etroite. Les points
    separateurs portent la coupure. */
+/* La confirmation par SMS, sous la date du rendez-vous (28/10/2026).
+   ⚠ `display: block` PARCE QU'ELLE SUIT UN `span` : sans lui elle se colle a
+   l'heure et se lit comme une partie du rendez-vous, pas comme son suivi. */
+.rcl-rdv-sms { display: block; font-size: 11px; line-height: 1.4; margin-top: 2px; }
+
 .rcl-env-td { min-width: 190px; }
 .rcl-env-devis + .rcl-env-devis { margin-top: 6px; padding-top: 6px;
   border-top: 1px solid var(--line); }

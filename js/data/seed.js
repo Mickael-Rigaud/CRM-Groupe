@@ -1031,6 +1031,20 @@ export const SEED = {
       canal: 'email', statut: 'envoye', envoye_le: d(-5) },
     { id: 'rea2', nature: 'relance_devis', rang: 2, devis_id: 'rdv2',
       canal: 'email', statut: 'envoye', envoye_le: d(0) },
+
+    // La confirmation partie pour la visite Dumas (`rch6`, dans deux jours).
+    //
+    // ⚠ ELLE PORTE SUR UNE VISITE QUI S'AFFICHE DANS L'ONGLET « RDV », et ce
+    // n'est pas un détail : la première version la posait sur `rch1`, dont la
+    // fiche a un devis et vit donc dans l'onglet « Devis en cours ». La trace
+    // existait, la cellule fonctionnait, et l'écran ne montrait rien — un essai
+    // qui vérifie la mauvaise ligne ne vérifie rien.
+    //
+    // ⚠ UNE SEULE TRACE, ET C'EST VOULU : les autres visites restent sans, ce
+    // qui montre les deux autres états — « SMS à venir » pour une visite future,
+    // « pas de SMS » pour une visite déjà passée. Les trois se voient d'un coup.
+    { id: 'rea3', nature: 'confirmation_rdv', chantier_id: 'rch6',
+      canal: 'sms', statut: 'envoye', envoye_le: d(0) },
   ],
 
   // Une seule pièce déposée, chez le premier : assez pour voir la pastille
