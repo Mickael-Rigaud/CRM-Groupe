@@ -200,6 +200,31 @@ function fermerTiroir() { navState.tiroir = false; renderNav(); }
 // celui qui est ouvert déplie ses écrans — la même information que les deux
 // bandes du grand écran, mais lisible d'un coup d'oeil au lieu de deux barres
 // qui défilent.
+// ⚠ CE QUI EST DEJA SOUS LE POUCE NE SE REPETE PAS DANS LE MENU (28/10/2026,
+// Elodie : « je voudrais que le menu soit plus allege et clair, la je trouve
+// qu'il y a trop d'elements »). Quatre des sept univers sont les quatre
+// entrees de la barre du bas — Accueil, To do, Pilotage, Messages : les
+// reprendre dans le tiroir allongeait la liste d'un tiers sans rien ouvrir de
+// nouveau. On ne retire donc AUCUN acces, on retire une redite.
+//
+// ⚠ « Pilotage » RESTE, ET CE N'EST PAS UNE EXCEPTION ARBITRAIRE : c'est la
+// SEULE porte pour changer de structure sur telephone (ses entrees sont RGD,
+// BTP, Courtage, Propulsion). Le bouton de la barre du bas, lui, mene a la
+// structure ou l'on est deja. Le retirer enfermerait dans son espace.
+//
+// ⚠ ET IL NE S'AGIT PAS DE RELIRE `BAS_CRM` ICI : la barre de l'application
+// RGD (`BAS_RGD`) ne porte pas les memes entrees, et un ouvrier n'en voit pas
+// toutes. On nomme donc les deux qui se repetent VRAIMENT dans les deux
+// barres, et `Messagerie` qui y est aussi.
+const TIROIR_SANS = new Set(['home', 'today', 'messagerie']);
+// ⚠ ET « Pilotage » DISPARAIT AUSSI QUAND IL N'Y A QU'UNE STRUCTURE : il n'est
+// garde que pour CHANGER d'espace, et on ne change pas pour celui ou l'on est.
+// Chez un ouvrier de RGD, il affichait « Pilotage » puis « RGD Renova » en
+// dessous — deux lignes pour l'ecran que le pouce ouvre deja depuis la barre
+// du bas.
+const montrerDansLeTiroir = (g) => !g.bottom && !TIROIR_SANS.has(g.key)
+  && !(g.key === 'commercial' && itemsOf(g).length < 2);
+
 function renderTiroir(gs, here, hash, u, ini) {
   const hote = document.getElementById('tiroir'); if (!hote) return;
   document.body.classList.toggle('tiroir-ouvert', navState.tiroir);
@@ -229,8 +254,13 @@ function renderTiroir(gs, here, hash, u, ini) {
         <div class="tir-qui"><b>${esc(u.full_name)}</b><span>${esc(ROLES[u.role]?.label || u.role)}</span></div>
         <button type="button" class="tir-x" id="tir-x" aria-label="Fermer le menu">${icon('x', 18)}</button>
       </div>
-      ${ecransDeLEspace()}
-      <nav class="tir-nav" aria-label="Univers">${gs.filter(g => !g.bottom).map(ligne).join('')}</nav>
+      ${'' /* ⚠ UN SEUL BLOC QUI DEFILE (28/10/2026) : les ecrans de l'espace et
+         les univers etaient deux fenetres a ascenseur, posees l'une sur
+         l'autre dans 310 px de large. Voir `.tir-corps` dans app.css. */}
+      <div class="tir-corps">
+        ${ecransDeLEspace()}
+        <nav class="tir-nav" aria-label="Univers">${gs.filter(montrerDansLeTiroir).map(ligne).join('')}</nav>
+      </div>
       <div class="tir-pied">
         ${gs.filter(g => g.bottom).map(g => `<a href="${g.hash}" class="tir-univ ${here?.key === g.key ? 'on' : ''}">${icon(g.icon, 19)}<span>${esc(g.label)}</span></a>`).join('')}
         ${db.demo ? '' : '<button type="button" class="tir-act" id="tir-pwd">Changer mon mot de passe</button>'}
@@ -264,11 +294,30 @@ function ecransDeLEspace() {
   if (!nav) return '';
   const marque = document.querySelector('#content .esp-side-brand b')?.textContent || '';
   const lien = (a) => `<a href="${esc(a.getAttribute('href'))}" class="tir-ecran ${a.classList.contains('on') ? 'on' : ''}"><span>${esc(a.textContent.trim())}</span></a>`;
+  // ⚠ UN GROUPE SE REPLIE, SAUF CELUI OU L'ON EST (28/10/2026). L'espace RGD
+  // compte vingt ecrans : tout deplier faisait un menu de trente lignes ou l'on
+  // ne retrouvait plus la sienne — le reproche exact d'Elodie. Le groupe qui
+  // porte l'ecran ouvert reste deplie, les autres se touchent pour s'ouvrir.
+  //
+  // ⚠ `<details>` PLUTOT QU'UN ETAT EN MEMOIRE, et c'est ce qui rend la chose
+  // sure : le navigateur garde l'ouverture tant que le noeud vit, il n'y a
+  // aucun registre a tenir, et toucher une entree ferme le tiroir de toute
+  // facon. Un `Set` ici aurait survecu a la fermeture du menu et rouvert des
+  // groupes qu'on avait laisses fermes.
   const blocs = [...nav.children].map(el => {
     if (el.matches('a')) return lien(el);
     const titre = el.querySelector('.esp-side-titre')?.textContent.trim();
-    const liens = [...el.querySelectorAll('a')].map(lien).join('');
-    return `${titre ? `<span class="tir-esp-titre">${esc(titre)}</span>` : ''}${liens}`;
+    const as = [...el.querySelectorAll('a')];
+    const liens = as.map(lien).join('');
+    if (!titre) return liens;
+    // ⚠ UN GROUPE DE UNE OU DEUX ENTREES NE SE REPLIE PAS : le titre et son
+    // chevron prennent autant de place que ce qu'ils cachent, et il faudrait
+    // un geste pour atteindre un ecran qui tenait deja sous les yeux. C'est le
+    // cas du menu de l'ouvrier, qui ne porte que trois ecrans en tout.
+    if (as.length < 3) return `<span class="tir-esp-titre">${esc(titre)}</span>${liens}`;
+    const ici = as.some(a2 => a2.classList.contains('on'));
+    return `<details class="tir-grp"${ici ? ' open' : ''}>
+      <summary class="tir-esp-titre">${esc(titre)}<i>${as.length}</i></summary>${liens}</details>`;
   }).join('');
   return `<nav class="tir-espace" aria-label="Écrans ${esc(marque)}">
     <span class="tir-esp-marque">${esc(marque)}</span>${blocs}</nav>`;

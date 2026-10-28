@@ -94,7 +94,10 @@
   .esp-body { padding-top: 14px; gap: 14px; }
 
   /* Les écrans de l'espace, en tête du tiroir. */
-  .tir-espace { display: flex; flex-direction: column; gap: 2px; padding: 10px 10px 12px; max-height: 55vh; overflow-y: auto;
+  /* ⚠ PLUS DE `max-height` NI D'`overflow` ICI : c'est ce qui fabriquait le
+     second ascenseur (voir `.tir-corps` dans app.css). Le bloc se laisse
+     mesurer par son contenu, et c'est le tiroir entier qui defile. */
+  .tir-espace { display: flex; flex-direction: column; gap: 2px; padding: 10px 10px 12px;
                 border-bottom: 1px solid rgba(255, 255, 255, .12); }
   .tir-esp-marque { padding: 4px 13px 6px; font-size: 15px; font-weight: 700; color: #fff; }
   .tir-esp-titre { padding: 10px 13px 3px; font-size: 10.5px; font-weight: 800; letter-spacing: .08em;

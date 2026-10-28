@@ -3606,8 +3606,18 @@ button.lien { border: 0; background: none; padding: 0; color: var(--accent); fon
 .tir-fond { position: fixed; inset: 0; background: rgba(10, 13, 20, .5); z-index: 70;
             animation: tir-fondu .16s ease both; }
 @keyframes tir-fondu { from { opacity: 0; } }
+/* ⚠ LES ZONES SURES DU TELEPHONE, EN HAUT COMME EN BAS (28/10/2026, Elodie :
+   « dans menu, sur le telephone, les elements du haut sont coupes »). Le tiroir
+   est en `position: fixed; inset: 0` : il couvre donc l'encoche et la barre
+   d'etat, et son en-tete — l'avatar, le nom, la croix de fermeture — passait
+   DESSOUS. Invisible sur un ecran d'ordinateur, invisible aussi en capture
+   sans encoche : ca ne se voit que sur un vrai telephone. Le bas a le meme
+   besoin, pour la barre de geste de l'iPhone. */
 .tir { position: fixed; inset: 0 auto 0 0; z-index: 71; width: min(310px, 86vw);
        display: flex; flex-direction: column; background: var(--accent-ink); color: #fff;
+       padding-top: env(safe-area-inset-top, 0px);
+       padding-bottom: env(safe-area-inset-bottom, 0px);
+       padding-left: env(safe-area-inset-left, 0px);
        box-shadow: 0 0 40px rgba(10, 13, 20, .45); animation: tir-entre .2s cubic-bezier(.2,.8,.3,1) both; }
 @keyframes tir-entre { from { transform: translateX(-100%); } }
 /* Le fond de page ne defile plus derriere le tiroir ouvert. */
@@ -3624,7 +3634,13 @@ body.tiroir-ouvert { overflow: hidden; }
          border-radius: 10px; display: grid; place-items: center; flex: none; cursor: pointer; }
 .tir-x:hover { background: rgba(255,255,255,.12); color: #fff; }
 
-.tir-nav { flex: 1; overflow-y: auto; padding: 10px 10px 14px; }
+/* ⚠ UN SEUL DEFILEMENT, PAS DEUX (28/10/2026). Les ecrans de l'espace avaient
+   leur propre fenetre de 55vh qui defilait, posee au-dessus de celle des
+   univers : deux ascenseurs cote a cote dans un menu de 310 px de large, et
+   une ligne coupee au bas de chacun. On ne savait plus laquelle des deux
+   bouger. Le corps du tiroir defile desormais d'un bloc. */
+.tir-corps { flex: 1; overflow-y: auto; overscroll-behavior: contain; }
+.tir-nav { padding: 10px 10px 14px; }
 .tir-univ { display: flex; align-items: center; gap: 12px; padding: 12px 13px; border-radius: 11px;
             text-decoration: none; color: rgba(255,255,255,.82); font-size: 14.5px; font-weight: 600; }
 .tir-univ span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -3649,6 +3665,19 @@ body.tiroir-ouvert { overflow: hidden; }
 .tir-ecran .brandmark { width: 22px; height: 22px; border-radius: 6px; overflow: hidden; background: #fff;
                         display: grid; place-items: center; flex: none; }
 .tir-ecran .brandmark img { width: 100%; height: 100%; object-fit: contain; }
+
+/* Un groupe d'ecrans qui se replie. Le chevron est celui du navigateur,
+   retourne : rien a dessiner, rien a tenir a jour. */
+.tir-grp > summary { display: flex; align-items: center; gap: 8px; cursor: pointer;
+                     list-style: none; border-radius: 9px; }
+.tir-grp > summary::-webkit-details-marker { display: none; }
+.tir-grp > summary::after { content: '\203A'; margin-left: auto; font-size: 17px;
+                            line-height: 1; transform: rotate(90deg); transition: transform .15s;
+                            color: rgba(255,255,255,.45); }
+.tir-grp[open] > summary::after { transform: rotate(-90deg); }
+.tir-grp > summary i { font-style: normal; font-size: 10.5px; font-weight: 700;
+                       color: rgba(255,255,255,.45); }
+.tir-grp > summary:hover { background: rgba(255,255,255,.07); }
 
 .tir-pied { padding: 10px; border-top: 1px solid rgba(255,255,255,.12); display: flex; flex-direction: column; gap: 2px; }
 .tir-act { border: 0; background: transparent; color: rgba(255,255,255,.78); text-align: left;
