@@ -476,6 +476,13 @@ export function formulaireEvenement({
       toast(r.donnees?.releve === false
         ? `Rendez-vous créé dans Google Agenda${avec} — il apparaîtra ici au prochain relevé`
         : `Rendez-vous créé dans Google Agenda${avec}`);
+      // ⚠ UNE COPIE MANQUÉE SE DIT (28/10/2026) : le rendez-vous existe chez la
+      // personne principale, mais pas chez celle de « Avec ». Le taire ferait
+      // croire qu'elle l'a — c'est exactement le défaut du premier essai.
+      const rates = r.donnees?.copies_echouees || [];
+      if (rates.length) {
+        toast(`Le rendez-vous n’a pas pu être ajouté dans ${rates.length} des agendas associés — à poser à la main`, 'warn');
+      }
       apres?.();
     };
 
