@@ -7056,5 +7056,31 @@ span.rpv-statut { display: inline-block; margin-bottom: 4px; }
   font-size: 13px; font-weight: 600; cursor: pointer; }
 .ag-qui-b i { width: 10px; height: 10px; border-radius: 50%; background: var(--ag-teinte, var(--accent)); }
 .ag-qui-b.on { background: var(--text); color: var(--card); border-color: var(--text); }
-.ev-agenda { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--muted); }
-.ev-agenda select { flex: 1; max-width: 260px; }
+/* « Dans l'agenda de » : des boutons à cocher, plus une liste (28/10/2026). */
+.ev-agenda-lib { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+.ev-agendas { display: flex; flex-wrap: wrap; gap: 6px; }
+.ev-agenda-b { border: 1px solid var(--line-strong); background: var(--card); color: var(--text);
+  border-radius: 999px; padding: 6px 14px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.ev-agenda-b:hover { border-color: var(--accent); }
+.ev-agenda-b.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent, #fff); }
+
+/* « Nouveau rendez-vous » pour la direction (28/10/2026) : le formulaire à
+   gauche, la semaine de la personne choisie à droite. Les colonnes de jours
+   reprennent celles de l'écran rendez-vous de la fiche projet (.rgp-*). */
+.ev-deux { display: grid; grid-template-columns: minmax(300px, 380px) minmax(0, 1fr); gap: 22px; align-items: start; }
+.ev-semaine { border-left: 1px solid var(--line); padding-left: 18px; min-width: 0; }
+.ev-sem-tete { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.ev-sem-tete > b { font-size: 14px; }
+.ev-sem-tete .rgp-cal-nav span { font-size: 13px; min-width: 170px; text-align: center; }
+.ev-sem-cal { max-height: 480px; overflow-y: auto; align-items: start; }
+/* Une seule barre de défilement pour la semaine entière, pas une par jour :
+   on la parcourt d'un regard, comme une page d'agenda. Les rendez-vous pris
+   s'écrivent en entier — c'est ce qu'on vient voir chez la personne. */
+.ev-sem-cal .rgp-jour { max-height: none; overflow: visible; }
+.ev-sem-cal .rgp-occupe li { white-space: normal; color: var(--text); background: var(--card-2);
+  border-radius: 6px; padding: 3px 5px; margin-bottom: 3px; }
+.rgp-jour.est-choisi { border-color: var(--accent); }
+@media screen and (max-width: 900px) {
+  .ev-deux { grid-template-columns: 1fr; }
+  .ev-semaine { border-left: 0; padding-left: 0; border-top: 1px solid var(--line); padding-top: 14px; }
+}

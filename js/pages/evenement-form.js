@@ -23,6 +23,13 @@
 // perdre la saisie. On montre ce qui marche.
 import { esc, openModal, closeModal, toast } from '../ui.js';
 import { creerEvenement, decale, finApres } from '../data/evenements.js';
+// La semaine de la personne, à côté du formulaire (28/10/2026) : les mêmes
+// briques que l'écran rendez-vous de la fiche projet — lues chez Google, pas
+// dans le reflet, pour la raison écrite en tête de `rgd-creneaux.js`.
+import {
+  lireCreneaux, occupationDuJour, placesLibres, hhmm, lundiDe,
+  aujourdhuiParis, maintenantParis,
+} from '../data/rgd-creneaux.js';
 
 // ⚠ `decale` ET `finApres` ONT QUITTÉ CE FICHIER LE 01/10/2026 pour
 // `js/data/evenements.js`. Ils comptaient en minutes de pendule pour un
@@ -94,18 +101,33 @@ export function formulaireEvenement({
 
   // ⚠ LA LISTE DES AGENDAS EST EN TÊTE AUSSI, pour la même raison que le
   // métier : elle décide où part le rendez-vous, donc qui le recevra.
+  // ⚠ DES BOUTONS, PAS UNE LISTE DÉROULANTE (28/10/2026, Élodie : « je ne veux
+  // pas de liste déroulante pour "dans l'agenda de", je veux des éléments que
+  // l'on peut sélectionner »). Toutes les personnes se voient d'un coup, comme
+  // les boutons au-dessus de la grille de l'Agenda. La valeur choisie vit dans
+  // un champ caché du même nom : le reste du formulaire la lit comme avant.
   const choixAgenda = agendas?.length ? `
       <div class="ev-ligne">
         <span class="ev-ico" aria-hidden="true">📅</span>
         <div class="ev-champ">
-          <label class="ev-agenda">Dans l’agenda de
-            <select name="pour" aria-label="Agenda">${agendas.map(([k, l]) =>
-              `<option value="${esc(k)}"${k === agenda ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>
-          </label>
+          <span class="ev-agenda-lib">Dans l’agenda de</span>
+          <input type="hidden" name="pour" value="${esc(agenda || agendas[0][0])}">
+          <div class="ev-agendas" role="group" aria-label="Agenda">${agendas.map(([k, l]) =>
+            `<button type="button" class="ev-agenda-b${k === (agenda || agendas[0][0]) ? ' on' : ''}"
+              data-pour="${esc(k)}" aria-pressed="${k === (agenda || agendas[0][0])}">${esc(l)}</button>`).join('')}</div>
         </div>
       </div>` : '';
 
-  const corps = `
+  // ⚠ LA SEMAINE N'APPARAÎT QUE QUAND ON CHOISIT UN AGENDA, c'est-à-dire pour
+  // la direction (28/10/2026, Élodie : « pour caler un rendez-vous dans
+  // l'agenda de quelqu'un d'autre je voudrais que ce soit plus ergonomique et
+  // avoir une vue d'ensemble sur le calendrier de la personne »). Choisie entre
+  // trois maquettes : le formulaire à gauche, la semaine à droite ; un clic
+  // sur un créneau libre remplit la date et l'heure. Pour les autres, rien ne
+  // change — ils posent dans leur propre agenda, qu'ils ont déjà sous les yeux.
+  const avecSemaine = !!agendas?.length;
+
+  const corps = `${avecSemaine ? '<div class="ev-deux">' : ''}
     <div class="ev">
       <input class="ev-titre" name="titre" required placeholder="Ajouter un titre"
              aria-label="Titre du rendez-vous">
@@ -157,11 +179,97 @@ export function formulaireEvenement({
         <button type="button" class="btn ghost" data-close>Annuler</button>
         <button type="button" class="btn primary" id="ev-ok">Enregistrer</button>
       </div>
-    </div>`;
+    </div>${avecSemaine ? `
+    <aside class="ev-semaine" id="ev-semaine" aria-label="Agenda de la personne"></aside>
+    </div>` : ''}`;
 
-  openModal('Nouveau rendez-vous', corps, { onOpen: (m) => {
+  openModal('Nouveau rendez-vous', corps, { wide: avecSemaine, onOpen: (m) => {
     const q = (s) => m.querySelector(s);
     const champ = (n) => m.querySelector(`[name="${n}"]`);
+
+    // ── la semaine de la personne ──────────────────────────────────────────
+    // ⚠ L'ÉTAT DE LA LECTURE VIT ICI, PAS DANS LE FORMULAIRE : changer de
+    // personne ou de semaine relit Google ; changer l'heure ou la durée ne fait
+    // que redessiner — ce qui est pris ne dépend pas de ce qu'on cherche.
+    const cal = { semaine: lundiDe(jour || aujourdhuiParis()), occupes: null, erreur: null, lu: 0 };
+    const JOURS = 6;
+    const NOMS = ['lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.'];
+    const dureeVoulue = () => (champ('journee')?.checked ? 60 : Number(champ('duree')?.value) || 60);
+
+    const dessineSemaine = () => {
+      const hote = q('#ev-semaine');
+      if (!hote) return;
+      const qui = m.querySelector('.ev-agenda-b.on')?.textContent.trim() || '';
+      const jours = Array.from({ length: JOURS }, (_, i) => decale(cal.semaine, i));
+      const auj = aujourdhuiParis();
+      const m2 = (j) => new Date(`${j}T12:00:00Z`)
+        .toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', timeZone: 'UTC' });
+      const tete = `
+        <div class="ev-sem-tete">
+          <b>${champ('pour')?.value === 'commun' ? 'Agenda commun' : `Agenda de ${esc(qui)}`}</b>
+          <div class="rgp-cal-nav">
+            <button type="button" class="btn ghost sm" data-sem="-7"
+              ${cal.semaine <= lundiDe(auj) ? 'disabled' : ''} aria-label="Semaine précédente">‹</button>
+            <span>${esc(m2(jours[0]))} → ${esc(m2(jours[JOURS - 1]))}</span>
+            <button type="button" class="btn ghost sm" data-sem="7" aria-label="Semaine suivante">›</button>
+          </div>
+        </div>`;
+      if (cal.erreur) {
+        hote.innerHTML = `${tete}<p class="rgp-cal-vide">L’agenda n’a pas pu être lu — ${esc(cal.erreur)}.</p>`;
+      } else if (!cal.occupes) {
+        hote.innerHTML = `${tete}<p class="rgp-cal-vide">Lecture de l’agenda…</p>`;
+      } else {
+        const choisi = `${champ('date').value} ${champ('heure').value}`;
+        const colonnes = jours.map((j, i) => {
+          const occ = occupationDuJour(cal.occupes, j);
+          const passe = j < auj;
+          const libres = passe ? [] : placesLibres(occ, {
+            duree: dureeVoulue(), avant: j === auj ? maintenantParis() : null,
+          });
+          return `
+            <div class="rgp-jour ${passe ? 'est-passe' : ''}${j === champ('date').value ? ' est-choisi' : ''}">
+              <div class="rgp-jour-tete"><b>${esc(NOMS[i])}</b>
+                <span>${esc(String(Number(j.slice(8, 10))))}/${esc(j.slice(5, 7))}</span></div>
+              ${occ.length ? `<ul class="rgp-occupe">${occ.map(o => `
+                <li title="${esc(o.titre)}">${o.journee ? 'journée' : esc(hhmm(o.debut))} · ${esc(o.titre)}</li>`).join('')}</ul>` : ''}
+              ${passe ? '<p class="rgp-jour-rien">passé</p>'
+                : libres.length ? `<div class="rgp-libres">${libres.map(t => `
+                    <button type="button" class="rgp-creneau ${choisi === `${j} ${hhmm(t)}` ? 'on' : ''}"
+                      data-cr-jour="${j}" data-cr-heure="${esc(hhmm(t))}">${esc(hhmm(t))}</button>`).join('')}</div>`
+                : '<p class="rgp-jour-rien">complet</p>'}
+            </div>`;
+        }).join('');
+        hote.innerHTML = `${tete}<div class="rgp-cal ev-sem-cal">${colonnes}</div>
+          <p class="ev-note">Un clic sur une heure libre remplit la date et l’heure du rendez-vous.</p>`;
+      }
+      hote.querySelectorAll('[data-sem]').forEach(b => b.onclick = () => {
+        cal.semaine = decale(cal.semaine, Number(b.dataset.sem));
+        chargeSemaine();
+      });
+      hote.querySelectorAll('[data-cr-jour]').forEach(b => b.onclick = () => {
+        champ('journee').checked = false;
+        champ('journee').onchange?.();
+        champ('date').value = b.dataset.crJour;
+        champ('heure').value = b.dataset.crHeure;
+        refaitFins();
+        dessineSemaine();
+      });
+    };
+
+    // ⚠ UNE RÉPONSE PÉRIMÉE EST JETÉE : la lecture prend une seconde, et on a
+    // pu changer de personne ou de semaine entre-temps. Afficher les créneaux
+    // de l'ancienne ferait poser le rendez-vous sur une place prise.
+    const chargeSemaine = async () => {
+      if (!avecSemaine) return;
+      const n = ++cal.lu;
+      cal.occupes = null; cal.erreur = null;
+      dessineSemaine();
+      const r = await lireCreneaux({ activite, du: cal.semaine, au: decale(cal.semaine, JOURS - 1),
+        pour: champ('pour')?.value || null });
+      if (n !== cal.lu) return;
+      if (r.ok) cal.occupes = r.occupes; else { cal.occupes = []; cal.erreur = r.motif; }
+      dessineSemaine();
+    };
 
     // ── le métier ──────────────────────────────────────────────────────────
     // Le premier proposé est le choix courant, mais il n'est pas un défaut
@@ -218,8 +326,25 @@ export function formulaireEvenement({
       champ('duree').innerHTML = optionsFin(champ('date').value, champ('heure').value);
       champ('duree').value = garde;
     };
-    champ('heure').onchange = refaitFins;
-    champ('date').onchange = refaitFins;
+    champ('heure').onchange = () => { refaitFins(); dessineSemaine(); };
+    // Une date hors de la semaine affichée fait aller la chercher.
+    champ('date').onchange = () => {
+      refaitFins();
+      const d = champ('date').value;
+      if (avecSemaine && d && lundiDe(d) !== cal.semaine) { cal.semaine = lundiDe(d); chargeSemaine(); }
+      else dessineSemaine();
+    };
+    // La durée change les places assez larges, pas ce qui est pris.
+    champ('duree').onchange = () => dessineSemaine();
+    m.querySelectorAll('[data-pour]').forEach(b => b.onclick = () => {
+      if (champ('pour').value === b.dataset.pour) return;
+      champ('pour').value = b.dataset.pour;
+      m.querySelectorAll('[data-pour]').forEach(x => {
+        x.classList.toggle('on', x === b);
+        x.setAttribute('aria-pressed', String(x === b));
+      });
+      chargeSemaine();
+    });
 
     champ('journee').onchange = () => {
       const j = champ('journee').checked;
@@ -274,6 +399,7 @@ export function formulaireEvenement({
       apres?.();
     };
 
+    chargeSemaine();
     champ('titre').focus();
   } });
 }
