@@ -112,21 +112,37 @@ export function formulaireEvenement({
   // l'on peut sélectionner »). Toutes les personnes se voient d'un coup, comme
   // les boutons au-dessus de la grille de l'Agenda. La valeur choisie vit dans
   // un champ caché du même nom : le reste du formulaire la lit comme avant.
-  // ⚠ ET ON PEUT EN COCHER PLUSIEURS (28/10/2026, « des rendez-vous communs à
-  // deux ou trois personnes du CRM ») : le premier coché reçoit le rendez-vous
-  // (`pour`), les autres y sont invités (`aussi`) — un seul événement, présent
-  // chez chacun. Voir `creer-evenement`.
+  // ⚠ DEUX LIGNES POUR UN RENDEZ-VOUS À PLUSIEURS (28/10/2026, Élodie, après
+  // une première version où l'on cochait plusieurs agendas sur la même ligne :
+  // « je ne trouve pas que ce soit clair, je pensais à mettre deux lignes :
+  // d'abord on sélectionne un agenda et si on veut faire le rendez-vous avec
+  // quelqu'un d'autre, mettre une autre ligne où on peut sélectionner le
+  // deuxième agenda »). La première ligne choisit UN agenda — celui qui reçoit
+  // le rendez-vous (`pour`) ; la seconde, facultative, ceux qu'on y associe
+  // (`aussi`, invités) — un seul événement, présent chez chacun. Voir
+  // `creer-evenement`. La personne de la première ligne n'apparaît pas dans la
+  // seconde : on ne s'invite pas à son propre rendez-vous.
+  const premier = agenda || agendas?.[0]?.[0];
   const choixAgenda = agendas?.length ? `
       <div class="ev-ligne">
         <span class="ev-ico" aria-hidden="true">📅</span>
         <div class="ev-champ">
-          <span class="ev-agenda-lib">Dans l’agenda de <span class="muted">— plusieurs possibles</span></span>
-          <input type="hidden" name="pour" value="${esc(agenda || agendas[0][0])}">
-          <div class="ev-agendas" role="group" aria-label="Agenda">${agendas.map(([k, l]) =>
-            `<button type="button" class="ev-agenda-b${k === (agenda || agendas[0][0]) ? ' on' : ''}"
-              data-pour="${esc(k)}" aria-pressed="${k === (agenda || agendas[0][0])}">${esc(l)}</button>`).join('')}</div>
+          <span class="ev-agenda-lib">Dans l’agenda de</span>
+          <input type="hidden" name="pour" value="${esc(premier)}">
+          <div class="ev-agendas" role="radiogroup" aria-label="Agenda">${agendas.map(([k, l]) =>
+            `<button type="button" class="ev-agenda-b${k === premier ? ' on' : ''}"
+              data-pour="${esc(k)}" role="radio" aria-checked="${k === premier}">${esc(l)}</button>`).join('')}</div>
         </div>
-      </div>` : '';
+      </div>
+      ${agendas.length > 1 ? `<div class="ev-ligne">
+        <span class="ev-ico" aria-hidden="true">🤝</span>
+        <div class="ev-champ">
+          <span class="ev-agenda-lib">Avec <span class="muted">— facultatif</span></span>
+          <div class="ev-agendas" role="group" aria-label="Agendas associés">${agendas.map(([k, l]) =>
+            `<button type="button" class="ev-agenda-b est-avec" data-avec="${esc(k)}"
+              aria-pressed="false"${k === premier ? ' hidden' : ''}>${esc(l)}</button>`).join('')}</div>
+        </div>
+      </div>` : ''}` : '';
 
   // ⚠ LA SEMAINE N'APPARAÎT QUE QUAND ON CHOISIT UN AGENDA, c'est-à-dire pour
   // la direction (28/10/2026, Élodie : « pour caler un rendez-vous dans
@@ -376,16 +392,36 @@ export function formulaireEvenement({
     champ('duree').onchange = () => dessineSemaine();
     // Cocher ajoute, décocher retire ; on ne peut pas tout décocher — un
     // rendez-vous doit bien aller quelque part.
-    m.querySelectorAll('[data-pour]').forEach(b => b.onclick = () => {
-      const k = b.dataset.pour;
-      const i = choisis.indexOf(k);
-      if (i >= 0) { if (choisis.length === 1) return; choisis.splice(i, 1); } else choisis.push(k);
-      champ('pour').value = choisis[0];
+    // Première ligne : UN agenda. Seconde : ceux qu'on y associe. `choisis`
+    // garde l'ordre [principal, …associés] que lisent la semaine et l'envoi.
+    const marque = () => {
       m.querySelectorAll('[data-pour]').forEach(x => {
-        const on = choisis.includes(x.dataset.pour);
+        const on = x.dataset.pour === choisis[0];
+        x.classList.toggle('on', on);
+        x.setAttribute('aria-checked', String(on));
+      });
+      m.querySelectorAll('[data-avec]').forEach(x => {
+        // La personne choisie en première ligne quitte la seconde.
+        x.hidden = x.dataset.avec === choisis[0];
+        const on = choisis.indexOf(x.dataset.avec) > 0;
         x.classList.toggle('on', on);
         x.setAttribute('aria-pressed', String(on));
       });
+    };
+    m.querySelectorAll('[data-pour]').forEach(b => b.onclick = () => {
+      const k = b.dataset.pour;
+      if (k === choisis[0]) return;
+      const avec = choisis.slice(1).filter(x => x !== k);
+      choisis.splice(0, choisis.length, k, ...avec);
+      champ('pour').value = k;
+      marque();
+      chargeSemaine();
+    });
+    m.querySelectorAll('[data-avec]').forEach(b => b.onclick = () => {
+      const k = b.dataset.avec;
+      const i = choisis.indexOf(k);
+      if (i > 0) choisis.splice(i, 1); else if (i < 0) choisis.push(k);
+      marque();
       chargeSemaine();
     });
 
