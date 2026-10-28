@@ -3,7 +3,7 @@ import { CONFIG } from './config.js';
 import { db } from './data/db.js';
 import { scope } from './data/scope.js';
 import { ACTIVITIES, ROLES } from './data/schema.js';
-import { esc, toast, isoDay, daysSince, closeModal, openModal } from './ui.js';
+import { esc, toast, isoDay, daysSince, closeModal, openModal , etiqueterColonnes } from './ui.js';
 import { pages } from './pages/index.js';
 import { messagesNonLus, monterBulle } from './pages/messagerie.js';
 import { icon } from './icons.js';
@@ -408,6 +408,54 @@ function renderBarreBas(gs, here, hash) {
   document.body.classList.toggle('appli-rgd', appliRgd());
 }
 
+// ---------- Les tableaux en fiches, sur telephone ----------
+//
+// ⚠ UN SEUL POINT, ET IL SURVIT AUX REDESSINS (28/10/2026, Elodie : « les
+// tableaux ne s'adaptent pas du tout a l'ecran, tu peux me trouver un systeme
+// ou je peux voir toutes les informations a chaque fois ? »). Poser les
+// intitules apres `page.render()` ne suffirait PAS : la plupart des ecrans se
+// redessinent eux-memes — une recherche, un filtre, une cellule modifiee — sans
+// repasser par le routeur. Les tableaux reapparaitraient alors sans etiquettes,
+// c'est-a-dire en colonnes illisibles, et seulement apres une interaction : le
+// genre de defaut qu'on ne voit qu'en production.
+//
+// ⚠ L'OBSERVATEUR SE DEBRANCHE PENDANT QU'IL ECRIT. Il pose des attributs DANS
+// l'arbre qu'il surveille : sans cette coupure, chaque etiquette poserait une
+// mutation, qui relancerait l'etiquetage — une boucle qui ne s'arrete jamais.
+//
+// ⚠ ET IL NE TOURNE QUE SOUS 820 px : sur un grand ecran les tableaux sont des
+// tableaux, et parcourir 75 tableaux a chaque frappe pour rien serait payer un
+// travail que personne ne regarde.
+const SOUS_820 = window.matchMedia('(max-width: 820px)');
+let etiquetageEnAttente = false;
+let observateurTableaux = null;
+
+function etiqueterMaintenant(hote) {
+  observateurTableaux?.disconnect();
+  try { etiqueterColonnes(hote); } catch (e) { console.error('Etiquetage des tableaux —', e); }
+  if (SOUS_820.matches) observateurTableaux?.observe(hote, { childList: true, subtree: true });
+}
+
+function surveillerLesTableaux() {
+  const hote = document.getElementById('content');
+  if (!hote) return;
+  if (!observateurTableaux) {
+    // `requestAnimationFrame` et non `queueMicrotask` : un redessin pose
+    // souvent plusieurs morceaux a la suite, et on n'etiquette qu'une fois la
+    // rafale finie.
+    observateurTableaux = new MutationObserver(() => {
+      if (etiquetageEnAttente) return;
+      etiquetageEnAttente = true;
+      requestAnimationFrame(() => { etiquetageEnAttente = false; etiqueterMaintenant(hote); });
+    });
+    // Passer la barre des 820 px dans un sens ou dans l'autre rebranche ou
+    // coupe la surveillance : on redimensionne une fenetre, on tourne une
+    // tablette.
+    SOUS_820.addEventListener('change', () => etiqueterMaintenant(hote));
+  }
+  etiqueterMaintenant(hote);
+}
+
 // ---------- Couleur de la structure ouverte ----------
 // Sur un écran rattaché à une activité, l'interface prend la couleur de la structure ;
 // partout ailleurs elle revient à l'indigo du groupe. Une seule source : ACTIVITIES.
@@ -582,6 +630,7 @@ function route() {
   // premier, avant même le détail technique.
   try {
     current = page.render(content, param);
+    surveillerLesTableaux();
   } catch (e) {
     console.error('Écran en échec —', e);
     current = null;

@@ -56,6 +56,18 @@
   /* Ce qui flottait en bas remonte au-dessus de la barre. */
   .content { padding-bottom: calc(92px + var(--h-barre-bas)); }
 
+  /* ⚠ UN EN-TETE DE SECTION PASSE A LA LIGNE PLUTOT QUE DE DEBORDER. Titre,
+     compteur et bouton de creation tiennent sur une rangee a 1200 px, jamais a
+     390 : le bouton sortait de l'ecran, a demi coupe. `.grow` qui poussait le
+     bouton a droite n'a plus de sens sur deux lignes, on le neutralise. */
+  /* ⚠ UNE LISTE DEROULANTE NE DEPASSE PAS L'ECRAN : sur Costructor, un `select`
+     sortait de 3 px et faisait defiler la page entiere de cote. Trois pixels
+     suffisent : le defilement horizontal, lui, est tout ou rien. */
+  #content select, #content input[type="search"] { max-width: 100%; }
+
+  .card-head, .pa-head { flex-wrap: wrap; }
+  .card-head > .grow, .pa-head > .grow { flex-basis: 100%; height: 0; }
+
   /* ⚠ LE BANDEAU « NOUVELLE VERSION » SE POSAIT SUR LA BARRE DU BAS (28/10/2026).
      `bottom: 16px` le mettait pile sur « Accueil » et « To do » : il passe
      par-dessus (z-index 60 contre 45), donc il ne disparaissait pas — il
@@ -139,19 +151,24 @@
   .rcl-outils > .btn { flex: 1 1 100%; justify-content: center; }
 
   /* ---- Les tableaux deviennent des fiches ----
-     `table.tbl-fiches` (opt-in, voir `etiqueterColonnes` dans js/ui.js) : une
+     `:is(.table-wrap > table, table.tbl-fiches):not(.tbl-grille)` (opt-in, voir `etiqueterColonnes` dans js/ui.js) : une
      fiche par ligne, le nom en titre, chaque valeur sous l'intitulé de sa
      colonne. Plus de défilement de côté. */
-  .table-wrap:has(> table.tbl-fiches) { overflow: visible; background: none; border: 0; box-shadow: none; padding: 0; }
-  table.tbl-fiches, table.tbl-fiches > tbody { display: block; width: 100%; }
-  table.tbl-fiches > thead { display: none; }
-  table.tbl-fiches > tbody > tr {
+  /* ⚠ OPT-OUT DEPUIS LE 28/10/2026 : tout tableau range dans un `.table-wrap`
+     devient une pile de fiches, `tbl-grille` est la porte de sortie. Avant, il
+     fallait poser `tbl-fiches` sur chaque tableau — 3 sur ~75 l'avaient, et
+     c'est le defaut qu'Elodie a rencontre. La classe `tbl-fiches` reste
+     reconnue : les ecrans qui la portent n'ont pas a changer. */
+  .table-wrap:has(> table:not(.tbl-grille)) { overflow: visible; background: none; border: 0; box-shadow: none; padding: 0; }
+  :is(.table-wrap > table, table.tbl-fiches):not(.tbl-grille), :is(.table-wrap > table, table.tbl-fiches):not(.tbl-grille) > tbody { display: block; width: 100%; }
+  :is(.table-wrap > table, table.tbl-fiches):not(.tbl-grille) > thead { display: none; }
+  :is(.table-wrap > table, table.tbl-fiches):not(.tbl-grille) > tbody > tr {
     display: flex; flex-direction: column; position: relative;
     background: var(--card); border: 1px solid var(--line); border-radius: 14px;
     padding: 12px 14px; margin: 0 0 10px; box-shadow: 0 2px 8px -6px rgba(17, 21, 28, .25);
   }
-  table.tbl-fiches > tbody > tr.tbl-seule { padding: 0; border: 0; background: none; box-shadow: none; }
-  table.tbl-fiches td { display: flex; align-items: baseline; gap: 12px; padding: 4px 0; border: 0; min-width: 0;
+  :is(.table-wrap > table, table.tbl-fiches):not(.tbl-grille) > tbody > tr.tbl-seule { padding: 0; border: 0; background: none; box-shadow: none; }
+  :is(.table-wrap > table, table.tbl-fiches):not(.tbl-grille) td { display: flex; align-items: baseline; gap: 12px; padding: 4px 0; border: 0; min-width: 0;
                         text-align: left; overflow-wrap: anywhere; }
   /* Intitulé à gauche, et TOUT le contenu empilé à droite : en ligne, un mail
      et un téléphone se serraient côte à côte sur deux demi-colonnes. */
@@ -161,28 +178,45 @@
   /* ⚠ `row-gap: 0` : le `gap: 12px` hérité de la règle du dessus s'applique
      aussi entre les six rangées que réserve l'intitulé — 60 px de vide par
      ligne de fiche, mesuré le 27/10. */
-  table.tbl-fiches td[data-label] { display: grid; grid-template-columns: 32% minmax(0, 1fr); column-gap: 12px; row-gap: 0; align-items: start; }
-  table.tbl-fiches td[data-label] > * { grid-column: 2; }
-  table.tbl-fiches td[data-label] > span { justify-self: start; }   /* une pastille garde sa taille */
-  table.tbl-fiches td[data-label]::before { content: attr(data-label); grid-column: 1; grid-row: 1 / span 6;
-                                            padding-top: 2px; color: var(--muted); font-size: 12px; font-weight: 600; }
+  :is(.table-wrap > table, table.tbl-fiches):not(.tbl-grille) td[data-label] { display: grid; grid-template-columns: 32% minmax(0, 1fr); column-gap: 12px; row-gap: 0; align-items: start; }
+  :is(.table-wrap > table, table.tbl-fiches):not(.tbl-grille) td[data-label] > * { grid-column: 2; }
+  :is(.table-wrap > table, table.tbl-fiches):not(.tbl-grille) td[data-label] > span { justify-self: start; }   /* une pastille garde sa taille */
+  :is(.table-wrap > table, table.tbl-fiches):not(.tbl-grille) td[data-label]::before { content: attr(data-label); grid-column: 1; grid-row: 1 / span 6;
+                                            padding-top: 2px; color: var(--muted); font-size: 12px; font-weight: 600;
+                                            /* ⚠ L'INTITULE DOIT POUVOIR PASSER A LA LIGNE : « Montant commissions »
+                                               ne tient pas dans 32 % de 310 px, et il DEBORDAIT sur sa propre valeur
+                                               (« Montant commissions1 450 € », vu sur Partenaires le 28/10). Une
+                                               colonne de grille ne coupe pas ce qui la deborde, elle le laisse passer. */
+                                            /* ⚠ ET `white-space: normal` : les colonnes de chiffres portent
+                                               `td.num { white-space: nowrap }` (app.css), dont l'intitule HERITE.
+                                               `overflow-wrap` seul n'y pouvait rien — un texte qu'on interdit de
+                                               passer a la ligne ne passe pas a la ligne. Les valeurs, elles,
+                                               gardent leur nowrap : c'est un montant, il ne se coupe pas. */
+                                            min-width: 0; white-space: normal; overflow-wrap: anywhere; }
   .lien-tel { font-weight: 600; text-decoration: none; }
-  table.tbl-fiches td > * { min-width: 0; }
-  table.tbl-fiches td.tbl-rien { display: none; }
+  :is(.table-wrap > table, table.tbl-fiches):not(.tbl-grille) td > * { min-width: 0; }
+  /* ⚠ LES RANGEES DE BOUTONS PASSENT A LA LIGNE. Une cellule d'actions —
+     « Pieces · Relancer · En prospection · Desactiver » — tient sur une
+     colonne de tableau, jamais dans une fiche de 310 px : le dernier bouton
+     sortait de l'ecran. C'est la seule cellule dont le contenu est une LISTE
+     d'elements et non une valeur. */
+  :is(.table-wrap > table, table.tbl-fiches):not(.tbl-grille) td,
+  :is(.table-wrap > table, table.tbl-fiches):not(.tbl-grille) td > div { flex-wrap: wrap; }
+  :is(.table-wrap > table, table.tbl-fiches):not(.tbl-grille) td.tbl-rien { display: none; }
   /* Le nom en titre, en premier, sans intitulé. */
-  table.tbl-fiches td.tbl-titre { order: -1; display: block; font-size: 16px; padding: 0 76px 6px 0; }
-  table.tbl-fiches td.tbl-titre::before { display: none; }
+  :is(.table-wrap > table, table.tbl-fiches):not(.tbl-grille) td.tbl-titre { order: -1; display: block; font-size: 16px; padding: 0 76px 6px 0; }
+  :is(.table-wrap > table, table.tbl-fiches):not(.tbl-grille) td.tbl-titre::before { display: none; }
   /* La case à cocher et la corbeille en haut à droite de la fiche. */
-  table.tbl-fiches td.rcl-coche, table.tbl-fiches td.rcl-suppr { position: absolute; top: 8px; padding: 0; }
-  table.tbl-fiches td.rcl-coche { right: 10px; }
-  table.tbl-fiches td.rcl-suppr { right: 46px; }
-  table.tbl-fiches td.rcl-coche::before, table.tbl-fiches td.rcl-suppr::before { display: none; }
-  table.tbl-fiches td.rcl-coche input { width: 22px; height: 22px; }
+  :is(.table-wrap > table, table.tbl-fiches):not(.tbl-grille) td.rcl-coche, :is(.table-wrap > table, table.tbl-fiches):not(.tbl-grille) td.rcl-suppr { position: absolute; top: 8px; padding: 0; }
+  :is(.table-wrap > table, table.tbl-fiches):not(.tbl-grille) td.rcl-coche { right: 10px; }
+  :is(.table-wrap > table, table.tbl-fiches):not(.tbl-grille) td.rcl-suppr { right: 46px; }
+  :is(.table-wrap > table, table.tbl-fiches):not(.tbl-grille) td.rcl-coche::before, :is(.table-wrap > table, table.tbl-fiches):not(.tbl-grille) td.rcl-suppr::before { display: none; }
+  :is(.table-wrap > table, table.tbl-fiches):not(.tbl-grille) td.rcl-coche input { width: 22px; height: 22px; }
   /* Le commentaire sur toute la largeur, sous son intitulé. */
-  table.tbl-fiches td.rcl-note { flex-direction: column; align-items: stretch; gap: 4px; }
-  table.tbl-fiches td.rcl-note::before { flex: none; }
-  table.tbl-fiches td.rcl-note textarea { width: 100%; font-size: 16px; }
-  table.tbl-fiches td.num { justify-content: flex-start; }
+  :is(.table-wrap > table, table.tbl-fiches):not(.tbl-grille) td.rcl-note { flex-direction: column; align-items: stretch; gap: 4px; }
+  :is(.table-wrap > table, table.tbl-fiches):not(.tbl-grille) td.rcl-note::before { flex: none; }
+  :is(.table-wrap > table, table.tbl-fiches):not(.tbl-grille) td.rcl-note textarea { width: 100%; font-size: 16px; }
+  :is(.table-wrap > table, table.tbl-fiches):not(.tbl-grille) td.num { justify-content: flex-start; }
 
   /* ---- La fiche d'un client RGD (`.rgdf`, js/pages/rgd-clients.js) ----
      Signalé le 27/10/2026 : « les fiches projets ne sont pas très claires,
@@ -268,8 +302,8 @@
   /* La Corbeille : « Restaurer » et « Supprimer définitivement » côte à côte
      sortaient de la fiche sous 360 px (vu le 28/10/2026). Ils passent à la
      ligne au besoin et se partagent la largeur. */
-  table.tbl-fiches td:has(> [data-restaurer-fiche]) { flex-wrap: wrap; gap: 8px; padding-top: 8px; }
-  table.tbl-fiches td > [data-restaurer-fiche], table.tbl-fiches td > [data-purger-fiche] {
+  :is(.table-wrap > table, table.tbl-fiches):not(.tbl-grille) td:has(> [data-restaurer-fiche]) { flex-wrap: wrap; gap: 8px; padding-top: 8px; }
+  :is(.table-wrap > table, table.tbl-fiches):not(.tbl-grille) td > [data-restaurer-fiche], :is(.table-wrap > table, table.tbl-fiches):not(.tbl-grille) td > [data-purger-fiche] {
     flex: 1 1 auto; justify-content: center; white-space: normal; }
 
   /* La vue d'ensemble de l'ouvrier (js/pages/rgd-pilotage.js, `vueOuvrier`) :
@@ -277,9 +311,9 @@
   .rgd-frise-ouvrier .rgd-et { flex: 1 1 28%; }
 
   /* Dans la liste : le statut et sa flèche de retour sur la même ligne. */
-  table.tbl-fiches td.rcl-statut-cell > * { grid-column: 2; }
-  table.tbl-fiches td.rcl-statut-cell { grid-template-columns: 32% minmax(0, 1fr) auto; }
-  table.tbl-fiches td.rcl-statut-cell > .rcl-fleches { grid-column: 3; grid-row: 1; }
+  :is(.table-wrap > table, table.tbl-fiches):not(.tbl-grille) td.rcl-statut-cell > * { grid-column: 2; }
+  :is(.table-wrap > table, table.tbl-fiches):not(.tbl-grille) td.rcl-statut-cell { grid-template-columns: 32% minmax(0, 1fr) auto; }
+  :is(.table-wrap > table, table.tbl-fiches):not(.tbl-grille) td.rcl-statut-cell > .rcl-fleches { grid-column: 3; grid-row: 1; }
 
   /* ---- L'agenda : un jour à la fois (js/pages/rgd-agenda.js) ----
      La journée d'abord, puis le mini-calendrier et les prochains rendez-vous.

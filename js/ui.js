@@ -248,10 +248,31 @@ export const hit = (haystack, ts) => { if (!ts.length) return true; const H = Ar
 // ceci après son rendu. Elle marque aussi les cases vides (« — ») pour que la
 // fiche ne montre que ce qui est renseigné : sur un téléphone, dix lignes
 // « — » noient les trois qui comptent.
+// ⚠ DEVENU AUTOMATIQUE LE 28/10/2026 (Élodie : « les tableaux ne s'adaptent pas
+// du tout à l'écran, tu peux me trouver un système où je peux voir toutes les
+// informations à chaque fois ? »). Le mécanisme existait depuis le 27/10 mais
+// il fallait l'activer tableau par tableau : il n'était branché que sur Clients
+// & prospects, soit 3 tableaux sur ~75. Un réglage qu'il faut penser à poser
+// sur chaque écran finit toujours par manquer quelque part — c'est le défaut
+// qu'elle a rencontré.
+//
+// ⚠ C'EST DONC UN OPT-OUT, PAS UN OPT-IN : tout tableau rangé dans un
+// `.table-wrap` devient une pile de fiches sur téléphone. `tbl-grille` est la
+// porte de sortie, pour les rares tableaux qui perdent leur sens en perdant
+// leurs colonnes.
+export const SELECTEUR_FICHES = '.table-wrap table:not(.tbl-grille), table.tbl-fiches:not(.tbl-grille)';
+
 export function etiqueterColonnes(root) {
-  root.querySelectorAll('table.tbl-fiches').forEach(t => {
-    const titres = [...t.querySelectorAll('thead th')].map(th => th.textContent.trim());
+  root.querySelectorAll(SELECTEUR_FICHES).forEach(t => {
+    // ⚠ L'EN-TETE N'EST PAS TOUJOURS DANS UN `thead` : quelques tableaux posent
+    // leurs `th` dans la premiere rangee du corps. Sans ce repli, ils
+    // deviendraient des fiches SANS INTITULES — c'est-a-dire une colonne de
+    // valeurs nues, pire que le defilement de cote.
+    const rangeeTitres = t.querySelector('thead tr') || t.querySelector('tr:has(th)');
+    const titres = rangeeTitres ? [...rangeeTitres.querySelectorAll('th')].map(th => th.textContent.trim()) : [];
+    if (!titres.filter(Boolean).length) { t.classList.add('tbl-grille'); return; }
     t.querySelectorAll('tbody tr').forEach(tr => {
+      if (tr.closest('table') !== t) return;   // un tableau imbrique garde le sien
       const cases = [...tr.children];
       if (cases.length === 1 && cases[0].colSpan > 1) { tr.classList.add('tbl-seule'); return; }
       let col = 0;
