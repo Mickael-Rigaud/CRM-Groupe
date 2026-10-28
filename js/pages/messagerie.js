@@ -584,6 +584,21 @@ export function monterBulle(parent) {
   const hote = boite.querySelector('.msg-panneau-corps .msg-hote');
   const pastille = declencheur.querySelector('.msg-cnt');
 
+  // Sur téléphone, pas de clavier sorti d'office : il cacherait le fil qu'on
+  // vient ouvrir pour lire (même règle que l'écran Messagerie).
+  const surTelephone = () => matchMedia('screen and (max-width: 820px)').matches;
+  // La bulle ouverte suit la partie VISIBLE de l'écran, qui rétrécit quand le
+  // clavier sort : sans cela la zone de saisie passe dessous (mobile.css).
+  const vv = window.visualViewport;
+  const suivreEcran = () => {
+    if (!vv) return;
+    boite.style.setProperty('--vv-haut', `${Math.round(vv.offsetTop)}px`);
+    boite.style.setProperty('--vv-h', `${Math.round(vv.height)}px`);
+  };
+  vv?.addEventListener('resize', suivreEcran);
+  vv?.addEventListener('scroll', suivreEcran);
+  suivreEcran();
+
   let ouvert = false;
   let vue = null;
   let courant = null;        // clé du fil ouvert, ou null = on est sur la liste
@@ -612,7 +627,7 @@ export function monterBulle(parent) {
     titre.innerHTML = '<b>Messagerie</b>';
     panneau.style.removeProperty('--t');
     dessinerListe();
-    recherche.focus();
+    if (!surTelephone()) recherche.focus();
   };
 
   const ouvrirFil = (cle) => {
@@ -632,7 +647,7 @@ export function monterBulle(parent) {
     });
     marquerLu(f.conv?.id);
     majPastille();
-    vue.focus();
+    if (!surTelephone()) vue.focus();
   };
 
   const ouvrir = () => {

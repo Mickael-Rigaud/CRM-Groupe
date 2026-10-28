@@ -405,6 +405,28 @@
   body:has(.msg-app) .rappels { display: none; }
 }
 
+/* ---- La bulle de messagerie ouverte sur téléphone : plein écran (28/10/2026) ----
+   Élodie : « le pop-up messagerie sur téléphone beug ». C'était une carte
+   flottante de 100vh - 150px : (1) les champs en 14 px faisaient ZOOMER l'iPhone
+   à la saisie, et la page restait agrandie ; (2) le clavier, sorti d'office à
+   l'ouverture, recouvrait la zone de saisie (100vh ignore le clavier) ; (3) le
+   doigt qui faisait défiler le fil faisait défiler la page derrière.
+   Ouverte, elle prend donc l'écran VISIBLE : `--vv-haut` / `--vv-h` suivent
+   `visualViewport` (messagerie.js), qui rétrécit quand le clavier sort. On la
+   ferme par ✕ dans l'en-tête : le rond flottant se retire. */
+@media screen and (max-width: 820px) {
+  .msg-bulle-zone.ouverte { top: var(--vv-haut, 0px); left: 0; right: 0; bottom: auto;
+    height: var(--vv-h, 100dvh); padding-top: env(safe-area-inset-top, 0px); background: var(--card); gap: 0; }
+  .msg-bulle-zone.ouverte .msg-declencheur { display: none; }
+  .msg-bulle-zone.ouverte .msg-panneau { flex: 1; width: auto; height: auto; max-width: none; max-height: none;
+    min-height: 0; border: 0; border-radius: 0; box-shadow: none; animation: none; }
+  .msg-bulle-zone.ouverte :is(input, textarea) { font-size: 16px; }
+  .msg-bulle-zone.ouverte :is(.msg-fil, .msg-liste) { overscroll-behavior: contain; }
+  .msg-bulle-zone.ouverte .msg-panneau-tete .icon-btn { min-width: 40px; min-height: 40px; font-size: 18px; }
+  body:has(.msg-bulle-zone.ouverte) { overflow: hidden; }
+  body:has(.msg-bulle-zone.ouverte) .barre-bas { display: none; }
+}
+
 /* Installée sur l'écran d'accueil d'un iPhone, l'application passe SOUS la
    barre d'état (`black-translucent`) : la barre du haut s'écarte d'autant. */
 .topnav { padding-top: env(safe-area-inset-top, 0px); background: var(--accent); }
