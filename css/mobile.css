@@ -210,7 +210,12 @@
     margin: 0; min-height: 0; padding: 5px 6px 6px;
     flex-direction: column-reverse; align-items: center; justify-content: center; gap: 0;
     white-space: normal; text-align: center; line-height: 1.15; font-size: 10.5px; font-weight: 600;
-    hyphens: auto; overflow-wrap: normal;
+    /* ⚠ JAMAIS DE COUPURE DANS UN MOT (28/10/2026, Élodie : « je ne veux pas
+       que les mots soient coupés, je veux que tu les mettes à la ligne »).
+       `hyphens: auto` coupait « de-mande » sur son téléphone. Le passage à la
+       ligne se fait entre les mots, et le plus long (« Chantier ») tient dans
+       une tuile même à 360 px. */
+    hyphens: manual; overflow-wrap: normal; word-break: normal;
     background: var(--card); color: var(--muted); border: 1px solid var(--line); border-radius: 10px;
   }
   .pill-tabs.rcl-etapes button::after { display: none; }   /* les chevrons de la frise */
