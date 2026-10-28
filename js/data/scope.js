@@ -580,7 +580,48 @@ export const scope = {
     // ⚠ ELLE NE VOIT PAS POUR AUTANT LES AGENDAS DES AUTRES : seuls les
     // calendriers que PERSONNE ne porte entrent ici. Celui d'Antoine lui
     // appartient, il reste invisible à tout le monde sauf à lui.
-    if (this.isDirection) return this.agendasDeStructure(structure).includes(e.calendar_id);
+    //
+    // ⚠ ET DEPUIS LE 28/10/2026 ELLE VOIT TOUS LES AGENDAS (Élodie : « les rôles
+    // direction doivent avoir la possibilité de voir les agendas de tout le
+    // monde et pouvoir leur caler des rendez-vous »). C'est un retour assumé sur
+    // la règle du 06/10 POUR LA DIRECTION SEULE : chargés d'affaires et ouvriers
+    // ne voient toujours que le leur. La base le permettait déjà (`agenda_read`
+    // rend tout à la direction) ; seul ce filtre la retenait. L'écran Agenda
+    // propose ensuite de n'en regarder qu'un — voir `agendasAViser`.
+    if (this.isDirection) return true;
     return false;
+  },
+
+  /**
+   * Les agendas d'une structure que la direction peut regarder et dans
+   * lesquels elle peut poser un rendez-vous (28/10/2026).
+   *
+   * Rend `[{ valeur, libelle, calendriers }]` : d'abord l'agenda commun — celui
+   * que personne ne porte, où arrivent les leads —, puis un par personne, dans
+   * l'ordre alphabétique. `valeur` est ce que les fonctions serveur attendent
+   * dans `pour` : `commun`, ou l'identifiant du profil. ⚠ JAMAIS UN
+   * CALENDRIER : le serveur retrouve lui-même l'agenda de la personne.
+   *
+   * Vide pour qui n'est pas de la direction : il n'a rien à choisir.
+   */
+  agendasAViser(structure) {
+    if (!this.isDirection) return [];
+    const commun = this.agendasDeStructure(structure);
+    const gens = db.t('agendas_personnels')
+      .filter(a => a.structure === structure && a.calendar_id)
+      .map(a => ({ valeur: a.profile_id, calendriers: [a.calendar_id],
+        libelle: db.byId('profiles', a.profile_id)?.full_name || 'Sans nom' }))
+      .sort((a, b) => a.libelle.localeCompare(b.libelle, 'fr'));
+    return (commun.length ? [{ valeur: 'commun', libelle: 'Agenda commun', calendriers: commun }] : [])
+      .concat(gens);
+  },
+
+  // L'agenda proposé d'office quand la direction pose un rendez-vous : celui
+  // de `qui` s'il en a un (le responsable d'une fiche), sinon le sien, sinon
+  // l'agenda commun.
+  agendaParDefaut(structure, qui = null) {
+    const liste = this.agendasAViser(structure);
+    const a = (id) => id && liste.some(x => x.valeur === id) ? id : null;
+    return a(qui) || a(this.user?.id) || (liste[0]?.valeur ?? '');
   },
 };

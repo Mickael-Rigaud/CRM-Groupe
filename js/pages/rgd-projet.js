@@ -206,6 +206,12 @@ export function ficheProjetRgd({ dans, cible = null, apporteurs = null,
     semaine: lundiDe(aujourdhuiParis()),
     occupes: null, lu_a: null, demo: false, erreur: null, charge: false,
   };
+  // ⚠ LA DIRECTION CHOISIT L'AGENDA OÙ POSER LA VISITE (28/10/2026) : celui du
+  // responsable de la fiche d'office, s'il en a un. Les créneaux montrés sont
+  // ceux de CET agenda — en montrer un et écrire dans un autre ferait poser
+  // la visite par-dessus un rendez-vous réel. Vide pour les autres rôles.
+  const agendasDirection = scope.agendasAViser('rgd');
+  if (agendasDirection.length && !v.rdv_agenda) v.rdv_agenda = scope.agendaParDefaut('rgd', f.owner_id);
 
   // Les visites déjà posées pour cette fiche. Elles viennent des chantiers, pas
   // de l'agenda : c'est le chantier qui relie un rendez-vous à une personne.
@@ -498,6 +504,12 @@ export function ficheProjetRgd({ dans, cible = null, apporteurs = null,
           <button type="button" class="btn ghost sm" id="rgp-sem-suiv"
             ${agenda.semaine >= derniereSemaine ? 'disabled' : ''}>›</button>
         </div>
+        ${agendasDirection.length > 1 ? `<div class="rgp-cal-duree">
+          <span>Agenda</span>
+          ${agendasDirection.map(a => `
+            <button type="button" class="fa-chip ${v.rdv_agenda === a.valeur ? 'on' : ''}"
+              data-agenda-de="${esc(a.valeur)}">${esc(a.libelle)}</button>`).join('')}
+        </div>` : ''}
         <div class="rgp-cal-duree">
           <span>Durée</span>
           ${DUREES.map(([m, lbl]) => `
@@ -771,6 +783,14 @@ export function ficheProjetRgd({ dans, cible = null, apporteurs = null,
     // ⚠ CHANGER LA DURÉE NE RELIT PAS L'AGENDA : ce qui est occupé ne dépend
     // pas de la durée qu'on cherche, seules les places libres se recalculent.
     // Relire ferait un appel réseau à chaque clic sur « 1 h 30 ».
+    // Changer d'agenda, c'est relire : ce qui est occupé n'est plus le même, et
+    // un créneau retenu dans l'autre agenda n'a plus de raison d'être libre.
+    dans.querySelectorAll('[data-agenda-de]').forEach(b2 => b2.onclick = () => {
+      if (v.rdv_agenda === b2.dataset.agendaDe) return;
+      v.rdv_agenda = b2.dataset.agendaDe;
+      v.rdv_jour = ''; v.rdv_heure = '';
+      chargerAgenda(true);
+    });
     dans.querySelectorAll('[data-duree]').forEach(b2 => b2.onclick = () => {
       v.rdv_duree = Number(b2.dataset.duree);
       // ⚠ UN CRÉNEAU RETENU PEUT NE PLUS TENIR : passer de 1 h à 2 h sur un
@@ -813,7 +833,7 @@ export function ficheProjetRgd({ dans, cible = null, apporteurs = null,
     agenda.charge = true;
     if (force) { agenda.occupes = null; agenda.erreur = null; dessine(); }
     const du = agenda.semaine;
-    const r = await lireCreneaux({ du, au: decale(du, JOURS_SEMAINE - 1) });
+    const r = await lireCreneaux({ du, au: decale(du, JOURS_SEMAINE - 1), pour: v.rdv_agenda || null });
     // La semaine a pu changer pendant l'appel : on jette une réponse périmée
     // plutôt que d'afficher les créneaux d'une autre semaine.
     if (agenda.semaine !== du) return;

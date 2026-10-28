@@ -47,11 +47,15 @@ const p2 = (n) => String(n).padStart(2, '0');
  *                  remplit seule, un cadre Google doit être rechargé.
  * - `avis`       : une conséquence à annoncer AVANT d'enregistrer, s'il y en a.
  * - `apres`      : appelé après un enregistrement réussi.
+ * - `agendas`    : `[[valeur, libellé], …]` — la direction choisit DANS QUEL
+ *                  AGENDA poser (28/10/2026) ; `valeur` part en `pour` vers le
+ *                  serveur, qui revérifie le droit. Absent pour les autres.
+ * - `agenda`     : la valeur cochée d'office.
  */
 export function formulaireEvenement({
   jour, activite = 'rgd', structure = 'RGD Renova', metiers = null,
   pied = 'Créé dans <b>Google Agenda</b>, puis relu aussitôt : il apparaît dans la grille dès la fermeture de cette fenêtre.',
-  avis = '', apres = null,
+  avis = '', apres = null, agendas = null, agenda = '',
 } = {}) {
   // L'état vit ici et non dans le DOM : la ligne des invités se redessine à
   // chaque ajout, et une saisie en cours ailleurs ne doit pas partir avec.
@@ -88,11 +92,25 @@ export function formulaireEvenement({
         </div>
       </div>` : '';
 
+  // ⚠ LA LISTE DES AGENDAS EST EN TÊTE AUSSI, pour la même raison que le
+  // métier : elle décide où part le rendez-vous, donc qui le recevra.
+  const choixAgenda = agendas?.length ? `
+      <div class="ev-ligne">
+        <span class="ev-ico" aria-hidden="true">📅</span>
+        <div class="ev-champ">
+          <label class="ev-agenda">Dans l’agenda de
+            <select name="pour" aria-label="Agenda">${agendas.map(([k, l]) =>
+              `<option value="${esc(k)}"${k === agenda ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>
+          </label>
+        </div>
+      </div>` : '';
+
   const corps = `
     <div class="ev">
       <input class="ev-titre" name="titre" required placeholder="Ajouter un titre"
              aria-label="Titre du rendez-vous">
       ${choixMetier}
+      ${choixAgenda}
 
       <div class="ev-ligne">
         <span class="ev-ico" aria-hidden="true">🕐</span>
@@ -229,6 +247,7 @@ export function formulaireEvenement({
 
       const champs = { titre, date_debut: debut, date_fin: fin, all_day: journee ? 1 : 0, activite };
       if (metier) champs.metier = metier;
+      if (agendas?.length && champ('pour')?.value) champs.pour = champ('pour').value;
       const lieu = champ('lieu').value.trim();
       const desc = champ('description').value.trim();
       if (lieu) champs.lieu = lieu;

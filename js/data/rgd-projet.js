@@ -695,6 +695,8 @@ export async function poserRendezVous(v, { contactId, organisationId }) {
   } else {
     const r = await creerEvenement({
       activite: 'rgd', titre,
+      // L'agenda choisi par la direction sur l'écran rendez-vous (28/10/2026).
+      ...(v.rdv_agenda ? { pour: v.rdv_agenda } : {}),
       date_debut: `${jour}T${heure}:00`,
       date_fin: finApres(jour, heure, duree),
       all_day: false,

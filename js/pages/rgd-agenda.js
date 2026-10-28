@@ -661,6 +661,9 @@ export const rgdAgendaPage = {
       // renonce avant de l'éteindre.
       releve: 'repos',
       motif: '',
+      // L'agenda regardé par la direction (28/10/2026) : '' = tous ensemble,
+      // `commun`, ou un profil. Retenu d'une visite à l'autre.
+      agendaVu: (() => { try { return localStorage.getItem('crm_rgd_agenda_vu') || ''; } catch { return ''; } })(),
     };
     // ⚠ LE DROIT D'ÉCRIRE EST `scope.canRgd`, PLUS LE JETON DE L'APPLICATION
     // RGD (25/09/2026) : la fonction serveur revérifie `has_activity('rgd')`
@@ -783,8 +786,24 @@ export const rgdAgendaPage = {
       // calendrier), et la direction y échappe de toute façon. Voir
       // `scope.voitAgenda` : chacun ne voit que ses calendriers dès qu'il en a
       // un, et rien ne change tant qu'il n'en a pas.
-      const tous = scope.rgd('agenda_events')
+      const visibles = scope.rgd('agenda_events')
         .filter(e => e.activity === KEY && scope.voitAgenda(e));
+
+      // ⚠ LA DIRECTION VOIT TOUS LES AGENDAS, ET CHOISIT LEQUEL REGARDER
+      // (28/10/2026). Les couleurs sont tirées de la liste ENTIÈRE et non de ce
+      // qui est affiché : un agenda garde sa teinte quand on en isole un autre,
+      // sinon le bleu de Franck deviendrait le vert de quelqu'un d'autre.
+      const agendas = scope.agendasAViser(KEY);
+      if (state.agendaVu && !agendas.some(a => a.valeur === state.agendaVu)) state.agendaVu = '';
+      const calendriersTous = [...new Set(visibles.map(e => e.calendar_id).filter(Boolean))].sort();
+      const vise = state.agendaVu ? agendas.find(a => a.valeur === state.agendaVu).calendriers : null;
+      const tous = vise ? visibles.filter(e => vise.includes(e.calendar_id)) : visibles;
+      const choixAgendas = agendas.length > 1 ? `<div class="ag-qui" role="group" aria-label="Agenda affiché">
+        <button type="button" class="ag-qui-b${state.agendaVu ? '' : ' on'}" data-agenda-vu="">Tout le monde</button>
+        ${agendas.map(a => `<button type="button" class="ag-qui-b${state.agendaVu === a.valeur ? ' on' : ''}"
+          data-agenda-vu="${esc(a.valeur)}" style="--ag-teinte:${teinteDe(calendriersTous, a.calendriers[0])}">
+          <i></i>${esc(a.libelle)}</button>`).join('')}
+      </div>` : '';
 
       // La fenêtre relevée, CALCULÉE et non déduite des lignes reçues : un jour
       // sans rendez-vous est un jour libre, pas un jour inconnu, et il doit
@@ -799,7 +818,7 @@ export const rgdAgendaPage = {
         if (!parJour.has(e.day)) parJour.set(e.day, []);
         parJour.get(e.day).push(e);
       }
-      const calendriers = [...new Set(tous.map(e => e.calendar_id).filter(Boolean))].sort();
+      const calendriers = calendriersTous;
       const vu = tous.map(e => e.synced_at).filter(Boolean)
         .reduce((m, s) => Math.max(m, new Date(s).getTime()), 0);
 
@@ -885,6 +904,7 @@ export const rgdAgendaPage = {
               ${state.ecriture ? '<button type="button" class="btn primary" id="ag-nouveau">+ Événement</button>' : ''}
             </div>
 
+            ${choixAgendas}
             ${bandeJours}
             <section class="card ag-cadre">
               ${vide ? `<p class="ag-libre">Aucun rendez-vous ${telephone ? 'ce jour-là' : 'cette semaine'}.</p>` : ''}
@@ -916,9 +936,17 @@ export const rgdAgendaPage = {
       // ⚠ APRÈS UNE CRÉATION, ON RELÈVE — on ne redessine pas. Le rendez-vous
       // vient de partir dans Google par le tableau de bord ; c'est de Google
       // qu'il doit revenir, sinon l'écran ne le montrerait qu'au cron suivant.
+      // La direction choisit l'agenda ; l'agenda regardé est proposé d'office.
       if (nouveau) nouveau.onclick = () => formulaireEvenement({
         jour: state.jour, activite: 'rgd', structure: 'RGD Renova',
+        agendas: agendas.map(a => [a.valeur, a.libelle]),
+        agenda: agendas.some(a => a.valeur === state.agendaVu) ? state.agendaVu : scope.agendaParDefaut(KEY),
         apres: () => rafraichir({ force: true }),
+      });
+      root.querySelectorAll('[data-agenda-vu]').forEach(b => b.onclick = () => {
+        state.agendaVu = b.dataset.agendaVu;
+        try { localStorage.setItem('crm_rgd_agenda_vu', state.agendaVu); } catch { /* navigation privée */ }
+        draw();
       });
       root.querySelector('#ag-relever').onclick = () => rafraichir({ force: true });
     };

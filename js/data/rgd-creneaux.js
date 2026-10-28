@@ -89,8 +89,10 @@ export function lundiDe(jour) {
  * existe pour ne PAS utiliser en production. Le drapeau `demo` remonte pour
  * que l'écran l'écrive au lieu de laisser croire à une lecture en direct.
  */
-export async function lireCreneaux({ activite = 'rgd', metier = null, du, au }) {
-  if (db.demo) return { ok: true, demo: true, lu_a: null, occupes: duReflet(activite, du, au) };
+// `pour` (28/10/2026) : l'agenda de quelqu'un d'autre, pour la direction —
+// `commun` ou un profil. Absent, le serveur lit celui de l'appelant.
+export async function lireCreneaux({ activite = 'rgd', metier = null, du, au, pour = null }) {
+  if (db.demo) return { ok: true, demo: true, lu_a: null, occupes: duReflet(activite, du, au, pour) };
 
   const jeton = await db.accessToken();
   if (!jeton) return { ok: false, motif: 'Session expirée : reconnectez-vous.' };
@@ -102,7 +104,7 @@ export async function lireCreneaux({ activite = 'rgd', metier = null, du, au }) 
         Authorization: `Bearer ${jeton}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ activite, metier, du, au }),
+      body: JSON.stringify({ activite, metier, du, au, ...(pour ? { pour } : {}) }),
     });
     const rep = await r.json().catch(() => ({}));
     if (!r.ok || rep.ok === false) {
@@ -115,9 +117,11 @@ export async function lireCreneaux({ activite = 'rgd', metier = null, du, au }) 
 }
 
 // Le repli du mode démo : le reflet, remis à la forme que rend le serveur.
-function duReflet(activite, du, au) {
+function duReflet(activite, du, au, pour) {
+  const vise = pour ? scope.agendasAViser(activite).find(a => a.valeur === pour)?.calendriers : null;
   return (scope.rgd('agenda_events') || [])
     .filter(e => e.activity === activite && e.day >= du && e.day <= au)
+    .filter(e => !vise || vise.includes(e.calendar_id))
     .map(e => ({
       id: e.google_id || e.id,
       titre: e.title || '(sans titre)',

@@ -7029,3 +7029,14 @@ span.rpv-statut { display: inline-block; margin-bottom: 4px; }
   .pa-onglet { padding: 10px 14px; font-size: 13px; }
   .pa-zone { padding: 10px; }
 }
+
+/* Le choix de l'agenda regardé par la direction (28/10/2026). Chaque bouton
+   porte la teinte de son agenda dans la grille. */
+.ag-qui { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
+.ag-qui-b { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--line);
+  background: var(--card); color: var(--text); border-radius: 999px; padding: 5px 13px;
+  font-size: 13px; font-weight: 600; cursor: pointer; }
+.ag-qui-b i { width: 10px; height: 10px; border-radius: 50%; background: var(--ag-teinte, var(--accent)); }
+.ag-qui-b.on { background: var(--text); color: var(--card); border-color: var(--text); }
+.ev-agenda { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--muted); }
+.ev-agenda select { flex: 1; max-width: 260px; }
