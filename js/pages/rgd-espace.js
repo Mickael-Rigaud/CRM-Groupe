@@ -214,7 +214,13 @@ const sansDirection = (liste) => liste
 // chargé d'affaires — le site, les réseaux, l'analyse : le sélecteur n'y
 // filtrerait rien et laisserait croire le contraire, et le bandeau d'une vue
 // restée mémorisée annoncerait un filtre qui n'existe pas.
-const SANS_VUE = ['#/rgd/realisations', '#/rgd/inspirations', '#/rgd/communication', '#/rgd/analyse'];
+//
+// ⚠ L'AGENDA NON PLUS (28/10/2026, Élodie : « enlève la liste déroulante de
+// vue »). Il ne l'a jamais suivie — `agenda_events` n'a pas de propriétaire,
+// seulement un calendrier —, et depuis que la direction voit tout le monde
+// c'est l'écran lui-même qui sépare les agendas, par couleur et par boutons.
+// Le sélecteur y faisait croire à un filtre qui ne filtrait rien.
+const SANS_VUE = ['#/rgd/realisations', '#/rgd/inspirations', '#/rgd/communication', '#/rgd/analyse', '#/rgd/agenda'];
 
 export const cadre = (actif, titre, corps) => coquilleEspace({
   actif, titre,

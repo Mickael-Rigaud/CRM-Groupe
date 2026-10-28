@@ -169,7 +169,12 @@ const depuis = (d) => {
 // dans les variables du thème ; au-delà on recommence, deux calendriers de la
 // même couleur valant mieux qu'une teinte inventée à l'exécution.
 const TEINTES = ['var(--accent)', 'var(--blue)', 'var(--green)', 'var(--violet)', 'var(--amber)', 'var(--sea)'];
+// ⚠ `calendriers` PEUT ÊTRE UNE PALETTE (`Map` calendrier → teinte) depuis le
+// 28/10/2026 : la direction voit tout le monde dans la même grille, et c'est
+// alors LA PERSONNE qui donne la couleur — l'agenda commun, qui peut compter
+// plusieurs calendriers, n'en a qu'une. Voir `palette` dans `draw`.
 const teinteDe = (calendriers, id) => {
+  if (calendriers instanceof Map) return calendriers.get(id) || TEINTES[0];
   const i = calendriers.indexOf(id);
   return TEINTES[(i < 0 ? 0 : i) % TEINTES.length];
 };
@@ -793,7 +798,16 @@ export const rgdAgendaPage = {
       // (28/10/2026). Les couleurs sont tirées de la liste ENTIÈRE et non de ce
       // qui est affiché : un agenda garde sa teinte quand on en isole un autre,
       // sinon le bleu de Franck deviendrait le vert de quelqu'un d'autre.
+      //
+      // ⚠ UNE COULEUR PAR PERSONNE, PAS PAR CALENDRIER (28/10/2026, Élodie :
+      // « une couleur différente par utilisateur pour qu'on puisse voir les rdv
+      // de tout le monde dans le même agenda »). L'agenda commun en a une seule,
+      // même s'il réunit plusieurs calendriers ; chaque personne la sienne,
+      // dans l'ordre de la liste — donc la même d'un jour à l'autre. Les
+      // boutons au-dessus de la grille servent de légende.
       const agendas = scope.agendasAViser(KEY);
+      const palette = new Map();
+      agendas.forEach((a, i) => a.calendriers.forEach(c => palette.set(c, TEINTES[i % TEINTES.length])));
       if (state.agendaVu && !agendas.some(a => a.valeur === state.agendaVu)) state.agendaVu = '';
       const calendriersTous = [...new Set(visibles.map(e => e.calendar_id).filter(Boolean))].sort();
       const vise = state.agendaVu ? agendas.find(a => a.valeur === state.agendaVu).calendriers : null;
@@ -801,7 +815,7 @@ export const rgdAgendaPage = {
       const choixAgendas = agendas.length > 1 ? `<div class="ag-qui" role="group" aria-label="Agenda affiché">
         <button type="button" class="ag-qui-b${state.agendaVu ? '' : ' on'}" data-agenda-vu="">Tout le monde</button>
         ${agendas.map(a => `<button type="button" class="ag-qui-b${state.agendaVu === a.valeur ? ' on' : ''}"
-          data-agenda-vu="${esc(a.valeur)}" style="--ag-teinte:${teinteDe(calendriersTous, a.calendriers[0])}">
+          data-agenda-vu="${esc(a.valeur)}" style="--ag-teinte:${teinteDe(palette, a.calendriers[0])}">
           <i></i>${esc(a.libelle)}</button>`).join('')}
       </div>` : '';
 
@@ -819,6 +833,9 @@ export const rgdAgendaPage = {
         parJour.get(e.day).push(e);
       }
       const calendriers = calendriersTous;
+      // Pour qui n'est pas de la direction, rien ne change : une teinte par
+      // calendrier, comme avant.
+      const teintes = palette.size ? palette : calendriers;
       const vu = tous.map(e => e.synced_at).filter(Boolean)
         .reduce((m, s) => Math.max(m, new Date(s).getTime()), 0);
 
@@ -863,7 +880,7 @@ export const rgdAgendaPage = {
               <div class="card-head"><h2>Prochains rendez-vous</h2></div>
               ${prochains.length ? prochains.map(e => `
                 <a class="ag-prochain" ${e.link ? `href="${esc(e.link)}" target="_blank" rel="noopener"` : ''}
-                   style="--ag-teinte:${teinteDe(calendriers, e.calendar_id)}">
+                   style="--ag-teinte:${teinteDe(teintes, e.calendar_id)}">
                   <span class="ag-prochain-q">${esc(relDay(e.day))}</span>
                   <b>${esc(e.title || '(sans titre)')}</b>
                   <span class="muted s">${e.all_day ? 'journée entière' : esc(hhmm(e.starts_at))}${
@@ -908,7 +925,7 @@ export const rgdAgendaPage = {
             ${bandeJours}
             <section class="card ag-cadre">
               ${vide ? `<p class="ag-libre">Aucun rendez-vous ${telephone ? 'ce jour-là' : 'cette semaine'}.</p>` : ''}
-              ${grille(affiches, parJour, calendriers, state.ecriture)}
+              ${grille(affiches, parJour, teintes, state.ecriture)}
             </section>
           </section>
         </div>`;
