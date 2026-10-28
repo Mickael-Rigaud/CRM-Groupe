@@ -248,6 +248,24 @@ export const SEED = {
     { key: 'btp_calendar_expertise', value: 'demo-expertise@group.calendar.google.com' },
     { key: 'btp_calendar_amo', value: 'demo-amo@group.calendar.google.com' },
     { key: 'btp_calendar_id', value: 'demo-expertise@group.calendar.google.com,demo-amo@group.calendar.google.com' },
+    // ⚠ LES DEUX CALENDRIERS RGD, ET L'ORDRE N'EST PAS ANODIN : ce reglage
+    // accumule TOUS les agendas de la structure, et `agendasDeStructure` en
+    // deduit l'agenda d'ENTREE par soustraction — celui que personne ne porte.
+    // Sans ce reglage, la demonstration n'avait aucun agenda commun, donc
+    // `estMonRdv` ne rendait rien a personne et la journee de la vue d'ensemble
+    // s'affichait vide pour tout le monde. Le cloisonnement ne se verrait pas,
+    // ou pire : il se verrait comme une panne.
+    { key: 'rgd_calendar_id', value: 'demo-rgd@group.calendar.google.com,demo-franck@group.calendar.google.com' },
+  ],
+
+  // ⚠ L'AGENDA QUI APPARTIENT A QUELQU'UN (28/10/2026). `agenda_events` ne
+  // porte aucun proprietaire : c'est CETTE table qui dit de qui est un
+  // calendrier, et donc de qui est un rendez-vous. Sans elle, la demonstration
+  // ne pourrait pas montrer que la journee de Franck n'est pas celle de
+  // Mickael — ce qui est precisement ce qui vient d'etre demande.
+  agendas_personnels: [
+    { id: 'ag-franck', profile_id: 'u-franck', structure: 'rgd',
+      calendar_id: 'demo-franck@group.calendar.google.com', created_at: d(-1) },
   ],
   // Messagerie : les canaux existent d'office, un par structure plus le canal Groupe.
   // En production ils sont créés par supabase/lot12-messagerie.sql.
@@ -947,6 +965,18 @@ export const SEED = {
   // ⚠ `google_id` est ce que le chantier désigne par `source_event_id` : c'est
   // le lien exact, celui que le relevé pose, et pas un rapprochement par nom.
   agenda_events: [
+    // ⚠ DEUX RENDEZ-VOUS AUJOURD'HUI, SUR DEUX CALENDRIERS DIFFERENTS, et c'est
+    // tout leur interet : l'un sur l'agenda d'entree — celui que la direction
+    // regarde —, l'autre sur celui de Franck. La vue d'ensemble doit montrer
+    // l'un a Mickael et l'autre a Franck, jamais les deux a l'un des deux.
+    { id: 'rgd|demo-jour-commun|' + day(0), activity: 'rgd',
+      calendar_id: 'demo-rgd@group.calendar.google.com', google_id: 'demo-jour-commun',
+      title: 'Visite technique: M. Ferrand', location: 'Tours',
+      starts_at: d(0, 9), ends_at: d(0, 10), all_day: false, day: day(0) },
+    { id: 'rgd|demo-jour-franck|' + day(0), activity: 'rgd',
+      calendar_id: 'demo-franck@group.calendar.google.com', google_id: 'demo-jour-franck',
+      title: 'Depannage electrique: Mme Roux', location: 'Antibes',
+      starts_at: d(0, 16), ends_at: d(0, 17), all_day: false, day: day(0) },
     // ⚠ UNE VISITE PASSÉE, ET ELLE N'EXISTE QUE PARCE QUE CET ÉVÉNEMENT EXISTE :
     // `visiteEnCours` ne garde un jour révolu que si l'agenda le confirme
     // (`joursDeVisite`). Sans cette ligne, le chantier `rch7` sortirait de

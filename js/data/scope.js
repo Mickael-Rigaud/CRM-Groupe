@@ -565,6 +565,39 @@ export const scope = {
     return this.isDirection && this.agendasDeStructure(structure).length > 0;
   },
 
+  /**
+   * Ce rendez-vous est-il LE MIEN ? (28/10/2026, Élodie : « dans la vue
+   * d'ensemble de chaque personne le résumé des rendez-vous du jour
+   * "aujourd'hui" je voudrais que ce soit les rendez-vous de la personne
+   * concernée et pas ceux de mickael pour tout le monde ».)
+   *
+   * ⚠ CE N'EST PAS `voitAgenda`, ET LA DIFFÉRENCE TIENT EN UNE LIGNE : celui-là
+   * répond « oui » à tout pour la direction, parce que l'écran Agenda doit lui
+   * permettre de REGARDER les agendas de chacun. Ici la question est autre —
+   * « qu'est-ce que J'AI à faire aujourd'hui ? » —, et y répondre par la
+   * journée de toute l'équipe est précisément ce qui était reproché. Les deux
+   * questions se ressemblent assez pour qu'une seule fonction ait l'air de
+   * suffire ; elles n'ont pas la même réponse.
+   *
+   * ⚠ L'AGENDA D'ENTRÉE RESTE À LA DIRECTION, et c'est volontaire : il n'est à
+   * personne, c'est là qu'arrivent les leads, et c'est depuis lui qu'elle
+   * répartit. L'en retirer lui cacherait les rendez-vous qu'elle vient de
+   * prendre au téléphone.
+   *
+   * ⚠ SANS AGENDA À SOI, ON NE VOIT RIEN — la règle du 06/10 vaut ici aussi.
+   * Un chargé d'affaires qui n'a pas encore le sien aura une journée vide, et
+   * c'est à l'écran de dire pourquoi (`aUnAgendaAVoir`). Un écran vide avec sa
+   * raison vaut mieux qu'un écran plein de ce qui ne vous regarde pas.
+   */
+  estMonRdv(e) {
+    const structure = e?.activity;
+    if (!structure) return false;
+    if (this.STRUCTURES_A_AGENDA_COMMUN.includes(structure)) return true;
+    if (this.mesAgendas(structure).includes(e.calendar_id)) return true;
+    if (this.isDirection && this.agendasDeStructure(structure).includes(e.calendar_id)) return true;
+    return false;
+  },
+
   voitAgenda(e) {
     const structure = e?.activity;
     if (!structure || this.STRUCTURES_A_AGENDA_COMMUN.includes(structure)) return true;

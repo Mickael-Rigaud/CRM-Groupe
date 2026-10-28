@@ -287,7 +287,12 @@ const GROUPES_OUVRIER = [
   { label: 'Terminé', cles: ['chantier_termine'], couleur: '#059669' },
 ];
 
-function vueOuvrier({ etapes, rdv, aujourdhui }) {
+// ⚠ `vide` EST PASSÉ, PAS ÉCRIT ICI (28/10/2026). Depuis que la journée est
+// filtrée par calendrier, une liste vide peut vouloir dire deux choses — rien
+// de prévu, ou pas d'agenda connecté —, et l'ouvrier est celui qui a le plus de
+// chances d'être dans le second cas : son compte vient d'être créé. Les deux
+// écrans disent donc la même phrase, décidée au même endroit.
+function vueOuvrier({ etapes, rdv, aujourdhui, vide }) {
   const n = (cles) => etapes.filter(e => cles.includes(e.key)).reduce((t, e) => t + e.n, 0);
   const tuiles = GROUPES_OUVRIER.map(g => `<a class="rgd-et" href="#/rgd/clients?vue=${esc(g.cles[0])}"
       style="--c:${esc(g.couleur)}" title="Ouvrir dans Clients &amp; prospects">
@@ -305,7 +310,7 @@ function vueOuvrier({ etapes, rdv, aujourdhui }) {
           <span>${esc(e.title || '(sans titre)')}</span>
           ${e.location ? `<span class="muted small">${esc(e.location)}</span>` : ''}
         </li>`).join('')}</ul>`
-        : '<div class="empty">Aucune intervention prévue aujourd’hui.</div>'}
+        : `<div class="empty">${esc(vide || 'Aucune intervention prévue aujourd’hui.')}</div>`}
     </section>
 
     <section class="card rgd-pipe">
@@ -331,11 +336,33 @@ export const rgdPilotagePage = {
       const paiements = scope.rgd('rgd_paiements');
       const sousTraitants = scope.rgd('rgd_sous_traitants');
       const demandes = scope.rgd('rgd_demandes');
-      const rdv = scope.rgd('agenda_events').filter(e => e.activity === KEY && e.day === aujourdhui);
+      // ⚠ SA JOURNÉE À LUI, PAS CELLE DE L'ÉQUIPE (28/10/2026, Élodie : « je
+      // voudrais que ce soit les rendez-vous de la personne concernée et pas
+      // ceux de mickael pour tout le monde »). `scope.rgd` ne filtre PAS
+      // `agenda_events` — la table n'est pas dans `RGD_PORTEFEUILLE`, elle ne
+      // porte aucun propriétaire, seulement un `calendar_id` —, donc cet écran
+      // montrait à chacun la journée entière de RGD. `estMonRdv` tranche par le
+      // calendrier ; ce n'est pas `voitAgenda`, qui répond « oui » à tout pour
+      // la direction parce que l'écran Agenda, lui, doit la laisser REGARDER
+      // chez les autres.
+      const rdv = scope.rgd('agenda_events')
+        .filter(e => e.activity === KEY && e.day === aujourdhui && scope.estMonRdv(e));
+
+      // ⚠ UNE JOURNÉE VIDE DOIT DIRE POURQUOI. Depuis que la liste est filtrée
+      // par calendrier, quelqu'un sans agenda à lui n'y verra JAMAIS rien — et
+      // sans cette phrase il chercherait un défaut là où il n'y a qu'un agenda
+      // à connecter. C'est la règle du 06/10 : un écran vide avec sa raison
+      // vaut mieux qu'un écran plein de ce qui ne vous regarde pas.
+      const journeeVide = (mot = 'rendez-vous') => scope.aUnAgendaAVoir(KEY)
+        ? (mot === 'intervention'
+          ? 'Aucune intervention prévue aujourd’hui.'
+          : 'Aucun rendez-vous relevé aujourd’hui.')
+        : 'Aucun agenda n’est encore connecté à votre compte : la direction peut vous en créer un depuis les réglages.';
       // L'ouvrier a sa propre vue, plus courte (voir `vueOuvrier`) : on s'arrête
       // avant de calculer un chiffre d'affaires qu'il ne verra pas.
       if (scope.isOuvrier) {
-        root.innerHTML = cadre('#/rgd', 'Vue d’ensemble', vueOuvrier({ etapes: etapesRgd(), rdv, aujourdhui }));
+        root.innerHTML = cadre('#/rgd', 'Vue d’ensemble',
+          vueOuvrier({ etapes: etapesRgd(), rdv, aujourdhui, vide: journeeVide('intervention') }));
         return;
       }
       const reglage =(cle) => scope.rgd('rgd_reglages').find(r => r.cle === cle)?.valeur ?? null;
@@ -533,7 +560,7 @@ export const rgdPilotagePage = {
               <span>${esc(e.title || '(sans titre)')}</span>
               ${e.location ? `<span class="muted small">${esc(e.location)}</span>` : ''}
             </li>`).join('')}</ul>`
-            : '<div class="empty">Aucun rendez-vous relevé aujourd’hui.</div>'}
+            : `<div class="empty">${esc(journeeVide())}</div>`}
           <p class="small muted">Relevé depuis Google Agenda. Les notes Google Keep du
           tableau de bord ne sont pas reprises : elles vivent chez Google et le CRM
           ne les lit pas.</p>
