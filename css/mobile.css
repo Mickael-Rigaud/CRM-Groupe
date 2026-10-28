@@ -55,6 +55,17 @@
 
   /* Ce qui flottait en bas remonte au-dessus de la barre. */
   .content { padding-bottom: calc(92px + var(--h-barre-bas)); }
+
+  /* ⚠ LE BANDEAU « NOUVELLE VERSION » SE POSAIT SUR LA BARRE DU BAS (28/10/2026).
+     `bottom: 16px` le mettait pile sur « Accueil » et « To do » : il passe
+     par-dessus (z-index 60 contre 45), donc il ne disparaissait pas — il
+     recouvrait la navigation, et on le prenait pour une bulle a chasser. Or
+     c'est le SEUL chemin fiable pour prendre une mise a jour dans l'application
+     installee : il n'y a pas de « rechargement force » sur un telephone. Un
+     bouton qu'on n'ose pas toucher vaut un bouton absent.
+     ⚠ ET IL S'ETEND SUR LA LARGEUR : a 310 px, « Nouvelle version · Recharger »
+     tenait a peine, et le texte passait sous le bouton. */
+  .maj-bandeau { left: 12px; right: 12px; bottom: calc(var(--h-barre-bas) + 12px); }
   .msg-bulle-zone { bottom: calc(12px + var(--h-barre-bas)); }
   .rappels { bottom: calc(78px + var(--h-barre-bas)); }
   #toasts { bottom: calc(12px + var(--h-barre-bas)); }
