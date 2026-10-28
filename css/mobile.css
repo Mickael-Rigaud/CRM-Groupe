@@ -12,11 +12,16 @@
 
    ⚠ TOUT CE QUI FLOTTAIT EN BAS REMONTE D'UNE BARRE : la bulle de messagerie,
    le panneau des échéances, les notifications. Sans ça, la barre les
-   recouvre — ou eux la recouvrent, selon le z-index. */
+   recouvre — ou eux la recouvrent, selon le z-index.
+
+   ⚠ `screen and` DANS CHAQUE @media : une feuille A4 fait moins de 820 px
+   de large, et une règle sans `screen` s'appliquerait AUSSI à l'impression
+   (fiche projet, PV de réception) — invisible à l'écran, découvert sur le
+   papier remis au client. */
 
 .barre-bas { display: none; }
 
-@media (max-width: 820px) {
+@media screen and (max-width: 820px) {
   :root { --h-barre-bas: calc(60px + env(safe-area-inset-bottom, 0px)); }
 
   .barre-bas {
@@ -74,7 +79,7 @@
    =====================================================================
    Élodie : « pas du tout ergonomique » — précisé : « tableaux illisibles » et
    « trop de bandeaux en haut », sur Clients, Pipeline, Agenda et To do. */
-@media (max-width: 820px) {
+@media screen and (max-width: 820px) {
   /* ---- Le haut de l'écran ----
      Avant : barre de couleur, bande noire d'onglets qui défilait, grand titre,
      puis le sélecteur « Vue » sur sa propre ligne — 300 px avant le contenu.
@@ -152,6 +157,41 @@
   table.tbl-fiches td.rcl-note::before { flex: none; }
   table.tbl-fiches td.rcl-note textarea { width: 100%; font-size: 16px; }
   table.tbl-fiches td.num { justify-content: flex-start; }
+
+  /* ---- La fiche d'un client RGD (`.rgdf`, js/pages/rgd-clients.js) ----
+     Signalé le 27/10/2026 : « les fiches projets ne sont pas très claires,
+     les éléments se chevauchent ». Mesuré à 375 px :
+     - la frise des sept étapes ne gardait que 163 px — « Perdu » et
+       « Indésirable » partagent sa ligne —, soit 20 px par étape : les mots
+       se coupaient lettre par lettre (« No / uve / lle / de / ma / nde ») ;
+     - la croix de fermeture (38 px) débordait d'un en-tête de 13 px, sur le
+       haut de la fiche ;
+     - le cadre « À imprimer » restait poussé à droite (`margin-left: auto`
+       d'une règle écrite plus bas dans app.css, qui écrase celle du téléphone) ;
+     - l'en-tête gris débordait de 8 px : sa marge négative vaut le retrait de
+       la fenêtre sur ordinateur (20 px), elle n'est que de 16 sur téléphone. */
+  .rgdf .modal-head { position: relative; height: 0; z-index: 3; }
+  .rgdf .modal-head .icon-btn { position: absolute; top: 10px; right: 10px; background: #fff;
+                                border-radius: 50%; box-shadow: 0 2px 8px rgba(17, 21, 28, .18); }
+  .rgdf-hero { margin-left: -16px; margin-right: -16px; padding: 18px 16px 16px; }
+  .rgdf-hero-haut { padding-right: 44px; }   /* la croix ne passe plus sur le nom */
+  .rgdf-docs { margin-left: 0; width: 100%; }
+  /* Côte à côte. ⚠ 50 % MOINS 6 px, PAS 4 : ce sont des éléments en ligne,
+     et l'espace entre les deux balises compte — à 4 px le second passait
+     dessous. */
+  .rgdf-hero > .btn { width: calc(50% - 6px); vertical-align: top; justify-content: center; text-align: center; white-space: normal; }
+  .rgdf-hero > .btn + .btn { margin-left: 6px; }
+  .rgdf-piste { flex-direction: column; align-items: stretch; gap: 10px; }
+  .rgdf-jalons { gap: 2px; }
+  .rgdf-jalons button span { overflow-wrap: normal; word-break: normal; font-size: 10.5px; }
+  .rgdf-piste > .rgdf-bouton-perdu { align-self: flex-end; }
+  .rgdf-piste { flex-wrap: wrap; flex-direction: row; justify-content: flex-end; }
+  .rgdf-piste > .rgdf-jalons { flex: 1 1 100%; }
+
+  /* Dans la liste : le statut et sa flèche de retour sur la même ligne. */
+  table.tbl-fiches td.rcl-statut-cell > * { grid-column: 2; }
+  table.tbl-fiches td.rcl-statut-cell { grid-template-columns: 32% minmax(0, 1fr) auto; }
+  table.tbl-fiches td.rcl-statut-cell > .rcl-fleches { grid-column: 3; grid-row: 1; }
 
   /* ---- L'agenda : un jour à la fois (js/pages/rgd-agenda.js) ----
      La journée d'abord, puis le mini-calendrier et les prochains rendez-vous.
