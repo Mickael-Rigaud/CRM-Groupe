@@ -1403,8 +1403,13 @@ export const rgdClientsPage = {
             <td>${x.email ? `<a href="mailto:${esc(x.email)}">${esc(x.email)}</a>` : ''}
                 ${x.tel ? `<div class="s"><a href="tel:${esc(String(x.tel).replace(/[^\d+]/g, ''))}" class="lien-tel">${esc(x.tel)}</a></div>` : ''}
                 ${!x.email && !x.tel ? '<span class="muted">—</span>' : ''}</td>
-            ${surRdv ? `<td class="rcl-rdv-cell">${x.cible === 'demande'
-              ? '<span class="muted">—</span>' : celluleRdv(x.ligne)}</td>` : ''}
+            ${'' /* ⚠ LES DEMANDES AUSSI (28/10/2026, Élodie : « un rendez-vous a été calé et cela a
+               créé une fiche prospect, mais je voudrais retrouver la date et l'heure dans le
+               tableau »). Une visite posée depuis la fiche projet laisse une DEMANDE au
+               statut « rdv_planifie », et son chantier « visite technique » porte le même
+               `contact_id` : `visiteDeLaFiche` la retrouve comme pour un client. La cellule
+               était forcée à un tiret pour les demandes, d'où la date absente. */}
+            ${surRdv ? `<td class="rcl-rdv-cell">${celluleRdv(x.ligne)}</td>` : ''}
             ${surTermine ? `<td class="small">${finDe.get(x) ? esc(fmtDate(finDe.get(x))) : '<span class="muted">—</span>'}</td>` : ''}
             <td class="muted">${esc(x.projet || '—')}</td>
             <td class="${surMontant ? 'num' : 'muted'}">${surMontant
