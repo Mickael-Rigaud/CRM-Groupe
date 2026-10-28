@@ -274,13 +274,13 @@ function vueConversation(hote, fil, { contexte = null, apresEnvoi = null, surRen
       bloc += `<div class="msg-ligne ${moi ? 'moi' : ''} ${suite ? 'suite' : ''}" data-msg="${m.id}">
         ${suite ? '<span class="msg-gouttiere"></span>' : `<span class="avatar sm">${esc(initials(m.author_id))}</span>`}
         <div class="msg-bulle">
+          ${moi ? '<span class="msg-actions"><button type="button" class="icon-btn" data-editer title="Modifier">✎</button><button type="button" class="icon-btn" data-suppr title="Supprimer">🗑</button></span>' : ''}
           ${suite ? '' : `<div class="msg-qui"><b>${esc(userName(m.author_id))}</b><time>${heure(m.created_at)}</time>${m.edited_at ? '<em>modifié</em>' : ''}</div>`}
           ${m.body ? `<div class="msg-corps">${lier(m.body)}${suite && m.edited_at ? '<em class="msg-modifie">modifié</em>' : ''}</div>` : ''}
           ${pieces.length ? `<div class="msg-pieces">${pieces.map(p => estImage(p)
             ? `<a href="#" class="msg-photo" data-piece="${p.id}"><img alt="${esc(p.name)}" data-src="${esc(p.storage_path)}"><span>${esc(p.name)}</span></a>`
             : `<a href="#" class="msg-fichier" data-piece="${p.id}"><span class="msg-fichier-ico">📄</span><span class="msg-fichier-nom"><b>${esc(p.name)}</b><small class="muted">${poids(p.size || 0)}</small></span></a>`).join('')}</div>` : ''}
         </div>
-        ${moi ? '<span class="msg-actions"><button type="button" class="icon-btn" data-editer title="Modifier">✎</button><button type="button" class="icon-btn" data-suppr title="Supprimer">🗑</button></span>' : ''}
       </div>`;
       return bloc;
     }).join('');
