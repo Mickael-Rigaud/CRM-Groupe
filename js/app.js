@@ -436,18 +436,45 @@ const ACCUEIL_STRUCTURE = {
 };
 const appliStructure = () => (BAS_STRUCTURE[CLE_APPLI] && scope.activityKeys.includes(CLE_APPLI) ? CLE_APPLI : null);
 
+// ⚠ LA BARRE DU BAS SUIT LA STRUCTURE OÙ L'ON EST, PAS CELLE DE L'APPLICATION
+// (29/10/2026, Élodie : « pour les personnes qui ont accès à plusieurs
+// structures [...] quand je suis sur le tableau de bord de rgd renova et que
+// je veux passer dans la structure de BTP Expertise je ne peux naviguer que
+// sur le tableau de bord de rgd renova »). Passé chez BTP par le menu
+// (Pilotage), on gardait les quatre raccourcis de RGD : chaque geste du pouce
+// ramenait chez RGD. L'application garde son nom, son icône et son écran
+// d'ouverture ; ses raccourcis deviennent ceux de la structure ouverte.
+//
+// Sur un écran commun (to-do, messagerie, réglages), on garde la dernière
+// structure visitée : en sortir pour lire un message ne doit pas renvoyer chez
+// RGD au retour. Elle est retenue pour la session seulement — rouvrir
+// l'application la remet sur la sienne.
+const CLE_DERNIERE_STRUCTURE = 'crm_appli_structure';
+function structureOuverte(hash) {
+  const appli = appliStructure();
+  if (!appli) return null;
+  const ici = Object.keys(ACCUEIL_STRUCTURE).find(k => scope.activityKeys.includes(k)
+    && (hash === ACCUEIL_STRUCTURE[k] || hash.startsWith(ACCUEIL_STRUCTURE[k] + '/')));
+  try {
+    if (ici) sessionStorage.setItem(CLE_DERNIERE_STRUCTURE, ici);
+    const retenue = ici || sessionStorage.getItem(CLE_DERNIERE_STRUCTURE);
+    if (retenue && BAS_STRUCTURE[retenue] && scope.activityKeys.includes(retenue)) return retenue;
+  } catch { if (ici) return ici; }
+  return appli;
+}
+
 // Dans une application de structure, la bande du haut annonce la structure
 // tant qu'on est chez elle, et l'écran courant dès qu'on en sort (la to-do, la
 // messagerie, les réglages) : c'est ce qui dit qu'on a quitté son périmètre.
 function nomDeLEcran(hash, here) {
-  const cle = appliStructure();
+  const cle = structureOuverte(hash);
   if (cle && hash.startsWith(ACCUEIL_STRUCTURE[cle])) return ACTIVITIES[cle].label;
   return here?.label || CONFIG.APP_NAME;
 }
 
 function renderBarreBas(gs, here, hash) {
   const hote = document.getElementById('barre-bas'); if (!hote) return;
-  const cle = appliStructure();
+  const cle = structureOuverte(hash);
   const entrees = cle
     ? BAS_STRUCTURE[cle]().filter(e => pourOuvrier(e.hash)).map(e => ({ ...e, on: e.ici ? e.ici(hash) : hash.startsWith(e.hash) }))
     : BAS_CRM.map(e => {
