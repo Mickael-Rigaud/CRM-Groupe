@@ -7201,56 +7201,72 @@ span.rpv-statut { display: inline-block; margin-bottom: 4px; }
 .rdc-ligne:hover td { background: var(--card-2); }
 .rdc .form { margin-bottom: 14px; }
 .rdc-note { margin: 0 0 12px; padding: 9px 12px; border-radius: 9px; background: var(--amber-soft); color: var(--amber); font-size: 13px; }
-.rdc-grille { margin-bottom: 14px; }
-.rdc-grille-titre { margin: 0 0 8px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted-2); }
-.rdc-grille-titre .muted { text-transform: none; letter-spacing: 0; font-weight: 400; }
-.rdc-famille + .rdc-famille { margin-top: 12px; }
-.rdc-cat { margin: 0 0 6px; padding-bottom: 4px; font-size: 12.5px; font-weight: 700; color: var(--accent);
-  border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); }
-.rdc-lignes .rdc-cat-ligne th { padding: 14px 6px 6px; font-size: 12.5px; font-weight: 700; text-transform: none;
-  letter-spacing: 0; color: var(--accent); border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); }
-.rdc-lignes tbody.rdc-groupe:first-of-type .rdc-cat-ligne th { padding-top: 8px; }
-.rdc-tarifs { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; }
-.rdc-tarif { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 9px 11px; text-align: left;
-  border: 1px solid var(--line-strong); border-radius: 10px; background: var(--card); cursor: pointer; font: inherit; color: inherit; }
-.rdc-tarif:hover { border-color: var(--accent); background: var(--accent-soft); }
-.rdc-tarif span { font-size: 13px; line-height: 1.3; }
-.rdc-tarif b { font-size: 13px; color: var(--accent); }
-.rdc-libre { border-style: dashed; }
-.rdc-libre b { color: var(--muted); font-weight: 400; }
-.rdc-lignes table { width: 100%; border-collapse: collapse; }
-.rdc-lignes th { text-align: left; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em;
-  color: var(--muted-2); padding: 6px; border-bottom: 1px solid var(--line-strong); }
-.rdc-lignes td { padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
-.rdc-lignes input, .rdc-lignes select { width: 100%; border: 1px solid var(--line-strong); border-radius: 8px; padding: 7px 9px; background: #fff; font: inherit; }
-.rdc-designation { display: grid; gap: 5px; min-width: 220px; }
-.rdc-designation .rdc-libelle { font-weight: 600; }
-.rdc-precision { font-size: 12.5px; }
-.rdc-qte { white-space: nowrap; }
-.rdc-qte input { width: 74px; }
-.rdc-qte span { margin-left: 5px; color: var(--muted); font-size: 12px; }
-.rdc-pu input { width: 104px; }
-.rdc-pu small { display: block; margin-top: 3px; font-size: 11.5px; }
-.rdc-alerte { color: var(--red); font-weight: 700; }
-.rdc-total { white-space: nowrap; font-weight: 600; padding-top: 15px !important; }
-.rdc-totaux { margin: 12px 0 14px auto; width: min(300px, 100%); }
-.rdc-totaux div { display: flex; justify-content: space-between; padding: 4px 6px; font-size: 14px; }
-.rdc-totaux .rdc-ttc { margin-top: 4px; padding-top: 8px; border-top: 2px solid var(--accent); font-size: 16px; }
+/* La fenêtre du devis, refaite le 29/10/2026 : on coche une prestation et on
+   la règle sur place. Une rangée cochée se voit de loin (fond, bord, coche). */
+.rdc-aide { margin: 0 0 14px; padding: 9px 12px; border-radius: 9px; background: var(--card-2); font-size: 13px; color: var(--muted); }
+.rdc-aide b { color: var(--accent); margin-left: 6px; }
+.rdc-aide b:first-child { margin-left: 0; }
+.rdc-famille { margin-bottom: 16px; }
+.rdc-cat { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; padding-bottom: 5px; font-size: 13px; font-weight: 700;
+  color: var(--accent); border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); }
+.rdc-compte { padding: 1px 8px; border-radius: 99px; background: var(--accent); color: #fff; font-size: 11px; font-weight: 700; }
+.rdc-presta { border: 1px solid var(--line-strong); border-radius: 10px; background: var(--card); margin-bottom: 6px; overflow: hidden; }
+.rdc-presta.est-choisie { border: 2px solid var(--accent); background: var(--accent-soft); }
+/* Le pied collant ne doit pas recouvrir la rangee qu'on vient d'ouvrir :
+   scrollIntoView tient compte de cette marge. */
+.rdc-presta { scroll-margin: 12px 0 120px; }
+.rdc-presta-tete { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border: 0; background: none;
+  font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.rdc-presta-tete:disabled, .rdc-presta-tete.est-fixe { cursor: default; }
+.rdc-presta:not(.est-choisie) .rdc-presta-tete:hover { background: var(--card-2); }
+.rdc-coche { flex: none; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%;
+  border: 1.5px solid var(--line-strong); color: var(--muted); font-size: 15px; font-weight: 700; line-height: 1; }
+.est-choisie .rdc-coche { border-color: var(--accent); background: var(--accent); color: #fff; font-size: 13px; }
+.rdc-presta-nom { flex: 1; min-width: 0; font-size: 14px; line-height: 1.3; }
+.est-choisie .rdc-presta-nom { font-weight: 700; }
+.rdc-presta-nom small { display: block; font-size: 11px; color: var(--muted); font-weight: 400; }
+.rdc-presta-prix { flex: none; font-size: 13.5px; color: var(--accent); white-space: nowrap; }
+.rdc-libre { border: 1px dashed var(--line-strong); border-radius: 10px; color: var(--muted); }
+.rdc-libre:hover { border-color: var(--accent); color: var(--accent); }
+.rdc-saisie { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 12px; padding: 4px 12px 12px 46px; }
+.rdc-saisie + .rdc-saisie { border-top: 1px dashed color-mix(in srgb, var(--accent) 35%, transparent); padding-top: 10px; }
+.rdc-champ { display: flex; flex-direction: column; gap: 4px; font-size: 11px; font-weight: 700; color: var(--muted-2);
+  text-transform: uppercase; letter-spacing: .05em; }
+.rdc-champ input, .rdc-champ select { border: 1px solid var(--line-strong); border-radius: 8px; padding: 7px 9px; background: #fff;
+  font: inherit; font-size: 14px; font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--text); }
+.rdc-court input { width: 92px; }
+.rdc-large { flex: 1 1 220px; }
+.rdc-large input { width: 100%; }
+.rdc-unite { display: inline-flex; align-items: center; gap: 5px; }
+.rdc-unite i { font-style: normal; font-weight: 400; font-size: 13px; text-transform: none; color: var(--muted); }
+.rdc-plancher { font-size: 11px; font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--muted); }
+.rdc-alerte { color: var(--red) !important; font-weight: 700; }
+.rdc-sous b { font-size: 15px; text-transform: none; letter-spacing: 0; color: var(--text); padding: 7px 0; }
+.rdc-retirer { margin-left: auto; }
 .rdc-statut { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 10px; }
 .rdc-statut .muted { margin-right: 4px; }
+.rdc-suppr { margin-left: auto; }
+/* Le total et les boutons restent collés en bas : on n'a jamais à descendre. */
+.rdc-pied { position: sticky; bottom: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: 10px 16px; margin: 6px -24px -22px; padding: 12px 24px; background: var(--card); border-top: 1px solid var(--line-strong);
+  box-shadow: 0 -8px 16px -12px rgba(17,21,28,.25); border-radius: 0 0 14px 14px; }
+.rdc-totaux { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; font-size: 13px; color: var(--muted); }
+.rdc-totaux b { color: var(--text); margin-left: 4px; }
+.rdc-totaux .rdc-ttc { font-size: 16px; color: inherit; font-weight: 700; }
+.rdc-totaux .rdc-ttc b { color: var(--accent); }
+.rdc-boutons { display: flex; gap: 8px; margin-left: auto; }
 @media screen and (max-width: 720px) {
-  /* Sur téléphone, une ligne de devis se lit en carte : la désignation en
-     haut, quantité, prix et total en dessous. */
-  .rdc-lignes thead { display: none; }
-  .rdc-lignes tr.rdc-cat-ligne { display: block; padding: 0; border: 0; }
-  .rdc-lignes tr.rdc-cat-ligne th { display: block; }
-  .rdc-lignes tr:not(.rdc-cat-ligne) { display: grid; grid-template-columns: auto auto 1fr auto; gap: 6px 10px; align-items: start;
-    padding: 10px 0; border-bottom: 1px solid var(--line); }
-  .rdc-lignes td { padding: 0; border: 0; }
-  .rdc-lignes td.rdc-designation { grid-column: 1 / -1; min-width: 0; }
-  .rdc-total { padding-top: 8px !important; text-align: right; }
-  .rdc-lignes :is(input, select) { font-size: 16px; }
-  .rdc-tarifs { grid-template-columns: 1fr 1fr; }
+  .rdc-saisie { padding-left: 12px; }
+  .rdc-presta { scroll-margin-bottom: 150px; }
+  .rdc-court { flex: 1 1 40%; }
+  .rdc-court input { width: 100%; }
+  .rdc-unite { display: flex; }
+  .rdc-unite input { flex: 1; min-width: 0; }
+  .rdc-champ :is(input, select) { font-size: 16px; }
+  .rdc-retirer { margin-left: 0; }
+  .rdc-pied { margin: 6px -16px -20px; padding: 10px 16px; border-radius: 0; }
+  .rdc-boutons { width: 100%; }
+  .rdc-boutons .btn { flex: 1; }
 }
 
 /* La grille des tarifs, éditable par la direction (29/10/2026). */
