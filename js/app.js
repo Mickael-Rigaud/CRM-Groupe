@@ -186,7 +186,7 @@ function renderLayout() {
   });
   // Capture : la barre est réécrite à chaque rendu, la cible d'un clic « bulle » n'y est plus rattachée
   document.addEventListener('click', e => {
-    if (navState.open && !e.target.closest('#acct')) closeMenu();
+    if (navState.open && !e.target.closest('#acct, #u-struct')) closeMenu();
   }, { capture: true });
   renderNav();
   suivreBarre();
@@ -472,6 +472,36 @@ function nomDeLEcran(hash, here) {
   return here?.label || CONFIG.APP_NAME;
 }
 
+// ⚠ LE TITRE DU HAUT CHANGE DE STRUCTURE EN UN GESTE (29/10/2026, Élodie, après
+// le passage par Menu → Pilotage → structure : trois touches pour un geste
+// qu'on fait plusieurs fois par jour). Toucher « RGD Renova » déroule les
+// structures de l'utilisateur ; en choisir une ouvre son accueil, et
+// `structureOuverte` fait suivre la barre du bas. Seulement dans une
+// application de structure, et seulement s'il en a au moins deux : pour Franck,
+// qui n'a que RGD, le titre reste un simple titre.
+function structuresAuChoix() {
+  if (!appliStructure()) return [];
+  const ks = Object.keys(ACCUEIL_STRUCTURE).filter(k => scope.activityKeys.includes(k) && pourOuvrier(ACCUEIL_STRUCTURE[k]));
+  return ks.length > 1 ? ks : [];
+}
+function titreDuHaut(hash, here) {
+  const nom = esc(nomDeLEcran(hash, here));
+  const ks = structuresAuChoix();
+  if (!ks.length) return `<span class="u-ici">${nom}</span>`;
+  const ouverte = navState.open === '__struct';
+  const cle = structureOuverte(hash);
+  const ligne = (k) => {
+    const a = ACTIVITIES[k];
+    const mark = LOGOS.has(k) ? `<span class="brandmark"><img src="assets/logos/${k}.png" alt=""></span>`
+      : `<span class="brandmark" style="--c:${a.color}"></span>`;
+    return `<a href="${ACCUEIL_STRUCTURE[k]}" class="acct-act u-struct-ligne ${k === cle ? 'on' : ''}" ${k === cle ? 'aria-current="true"' : ''}>${mark}<span>${esc(a.label)}</span>${k === cle ? '<span class="u-struct-ok" aria-hidden="true">✓</span>' : ''}</a>`;
+  };
+  return `<div class="u-ici u-struct" id="u-struct">
+    <button type="button" class="u-struct-btn" id="u-struct-btn" aria-haspopup="true" aria-expanded="${ouverte}"><span>${nom}</span><span class="u-struct-fl" aria-hidden="true">▾</span></button>
+    ${ouverte ? `<div class="acct-menu u-struct-menu"><div class="u-struct-tete">Changer de structure</div>${ks.map(ligne).join('')}</div>` : ''}
+  </div>`;
+}
+
 function renderBarreBas(gs, here, hash) {
   const hote = document.getElementById('barre-bas'); if (!hote) return;
   const cle = structureOuverte(hash);
@@ -581,7 +611,7 @@ function renderNav() {
   univ.innerHTML = `
     <button type="button" class="u-burger" id="burger" aria-label="Ouvrir le menu" aria-expanded="${navState.tiroir}">${icon('menu', 21)}</button>
     <a class="u-mark" href="#/home">${esc(CONFIG.APP_NAME)}</a>
-    <span class="u-ici">${esc(nomDeLEcran(hash, here))}</span>
+    ${titreDuHaut(hash, here)}
     <nav class="u-set" aria-label="Univers">${gs.filter(g => !g.bottom).map(tab).join('')}</nav>
     <div class="u-right">
       ${gs.filter(g => g.bottom).map(g => `<a href="${g.hash}" class="u-ico ${here?.key === g.key ? 'on' : ''}" title="${esc(g.label)}" aria-label="${esc(g.label)}">${icon(g.icon, 18)}</a>`).join('')}
@@ -636,6 +666,8 @@ function renderNav() {
 
   univ.querySelector('#burger').onclick = () => { navState.tiroir = !navState.tiroir; navState.open = null; renderNav(); };
   univ.querySelector('#me-btn').onclick = () => { navState.open = navState.open === '__me' ? null : '__me'; renderNav(); };
+  univ.querySelector('#u-struct-btn')?.addEventListener('click', () => { navState.open = navState.open === '__struct' ? null : '__struct'; renderNav(); });
+  univ.querySelectorAll('.u-struct-ligne').forEach(a => a.addEventListener('click', () => setTimeout(closeMenu)));   // après la navigation : la structure déjà ouverte ne change pas d'adresse
   // ⚠ L'ENTRÉE DU MENU DOUBLE LE GESTE, ELLE NE LE REMPLACE PAS : le geste
   // n'existe qu'au doigt, et l'application se consulte aussi au bureau.
   univ.querySelector('#actu')?.addEventListener('click', async (e) => {

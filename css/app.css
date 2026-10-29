@@ -3636,6 +3636,26 @@ button.lien { border: 0; background: none; padding: 0; color: var(--accent); fon
    disait pas. Il prend la place laissee par les onglets. */
 .u-ici { flex: 1; min-width: 0; font-family: var(--font-display); font-weight: 700; font-size: 16px;
          letter-spacing: -.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Le titre qui change de structure (29/10/2026). ⚠ `overflow: visible` sur le
+   conteneur : le `hidden` de `.u-ici` couperait la liste déroulée ; c'est le
+   bouton qui porte les points de suspension. */
+.u-struct { position: relative; overflow: visible; }
+.u-struct-btn { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; border: 0; background: transparent;
+                color: inherit; font: inherit; letter-spacing: inherit; padding: 6px 10px 6px 8px; margin-left: -8px;
+                border-radius: 10px; cursor: pointer; }
+.u-struct-btn > span:first-child { overflow: hidden; text-overflow: ellipsis; }
+/* `:hover` réservé à la souris : au doigt, iOS le garde collé après le toucher. */
+@media (hover: hover) { .u-struct-btn:hover { background: color-mix(in srgb, var(--on-accent) 12%, transparent); } }
+.u-struct-btn[aria-expanded="true"] { background: color-mix(in srgb, var(--on-accent) 12%, transparent); }
+.u-struct-btn:focus-visible { outline: 2px solid var(--on-accent); outline-offset: -3px; }
+.u-struct-fl { font-size: 12px; opacity: .8; flex: none; }
+.u-struct-menu { left: -8px; right: auto; z-index: 60; font-family: var(--font-body, inherit); letter-spacing: 0; }
+.u-struct-tete { color: var(--muted-2); font-weight: 800; text-transform: uppercase; letter-spacing: .1em;
+                 font-size: 10.5px; padding: 6px 11px 8px; }
+.u-struct-ligne { display: flex; align-items: center; gap: 10px; text-decoration: none; padding: 10px 11px; font-size: 15px; }
+.u-struct-ligne .brandmark { width: 24px; height: 24px; border-radius: 6px; }
+.u-struct-ligne.on { color: var(--text); background: var(--card-2); }
+.u-struct-ok { margin-left: auto; color: var(--accent-ink, var(--text)); font-weight: 800; }
 
 .tir-fond { position: fixed; inset: 0; background: rgba(10, 13, 20, .5); z-index: 70;
             animation: tir-fondu .16s ease both; }
