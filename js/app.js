@@ -276,8 +276,9 @@ function renderTiroir(gs, here, hash, u, ini) {
          les univers etaient deux fenetres a ascenseur, posees l'une sur
          l'autre dans 310 px de large. Voir `.tir-corps` dans app.css. */}
       <div class="tir-corps">
+        ${structureOuverte(hash) ? menuDeLaStructure(structureOuverte(hash), hash) : `
         ${sousLaStructure ? '' : ecransDeLEspace(true)}
-        <nav class="tir-nav" aria-label="Univers">${gs.filter(montrerDansLeTiroir).map(ligne).join('')}</nav>
+        <nav class="tir-nav" aria-label="Univers">${gs.filter(montrerDansLeTiroir).map(ligne).join('')}</nav>`}
       </div>
       <div class="tir-pied">
         ${gs.filter(g => g.bottom).map(g => `<a href="${g.hash}" class="tir-univ ${here?.key === g.key ? 'on' : ''}">${icon(g.icon, 19)}<span>${esc(g.label)}</span></a>`).join('')}
@@ -310,6 +311,40 @@ function renderTiroir(gs, here, hash, u, ini) {
 // que deux entrées et demie. Il vit désormais ici, en entier et dans l'ordre.
 // Lu dans la page plutôt que recopié : c'est `coquilleEspace` qui sait quelles
 // entrées ce profil peut voir, et il n'y aurait pas deux listes à tenir.
+// ⚠ DANS UNE APPLICATION DE STRUCTURE, LE MENU NE MONTRE QUE LA STRUCTURE
+// OUVERTE (29/10/2026, Élodie : « lorsque l'on clique sur menu que ce soit
+// seulement le menu de la structure en question »). Les autres univers du CRM
+// — Pilotage, les autres espaces — en sortent : on change de structure par le
+// titre du haut (`titreDuHaut`), et l'application CRM Groupe (`index.html`)
+// garde la carte entière. Le pied du tiroir (Paramètres, notifications,
+// déconnexion) ne bouge pas.
+//
+// ⚠ LE MENU D'UN ESPACE N'EXISTE QUE DANS LA PAGE OUVERTE (`ecransDeLEspace`
+// lit le DOM). Sur un écran commun — to-do, messagerie — il n'y est plus : on
+// ressert donc celui relevé à la dernière visite de l'espace, gardé pour la
+// session. Faute de visite (application rouverte sur un message par une
+// notification), et pour Propulsion qui n'a pas d'espace, ce sont les
+// raccourcis de sa barre du bas, sous son nom : jamais un menu vide.
+//
+// ⚠ LE RELEVÉ SE FAIT AUSSI EN QUITTANT L'ESPACE (`route`, avant de vider la
+// page) : on passe souvent de RGD à la to-do sans avoir ouvert le menu.
+function releverMenuDeLEspace() {
+  const cle = document.querySelector('#content .esp-app[data-espace]')?.dataset.espace;
+  const html = cle ? ecransDeLEspace(true) : '';
+  if (html) { try { sessionStorage.setItem('crm_tiroir_' + cle, html); } catch { /* stockage bloqué : rien de grave */ } }
+  return cle ? { cle, html } : null;
+}
+function menuDeLaStructure(cle, hash) {
+  const ici = releverMenuDeLEspace();
+  if (ici?.cle === cle && ici.html) return ici.html;
+  let garde = '';
+  try { garde = sessionStorage.getItem('crm_tiroir_' + cle) || ''; } catch { /* idem */ }
+  if (garde) return garde.replace(/class="tir-ecran on"/g, 'class="tir-ecran"');
+  const liens = BAS_STRUCTURE[cle]().filter(e => pourOuvrier(e.hash))
+    .map(e => `<a href="${e.hash}" class="tir-ecran ${hash.startsWith(e.hash) ? 'on' : ''}"><span>${esc(e.label)}</span></a>`).join('');
+  return `<nav class="tir-espace" aria-label="Écrans ${esc(ACTIVITIES[cle].label)}"><span class="tir-esp-marque">${esc(ACTIVITIES[cle].label)}</span>${liens}</nav>`;
+}
+
 function ecransDeLEspace(avecLaMarque) {
   const nav = document.querySelector('#content .esp-side-nav');
   if (!nav) return '';
@@ -721,6 +756,7 @@ function route() {
   if (page.directionOnly && !scope.isDirection) page = pages.today;
   if (name === 'pipeline' && !scope.activityKeys.includes(param)) { location.hash = `#/pipeline/${scope.activityKeys[0] || 'rgd'}`; return; }
   closeModal(true);
+  releverMenuDeLEspace();   // le menu de l'espace qu'on quitte, pour le tiroir des écrans communs
   current?.destroy?.();
   const content = document.getElementById('content');
   // Une page qui affiche une application entière (RGD Renova) garde la barre pour ses
