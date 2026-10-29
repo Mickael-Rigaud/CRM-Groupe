@@ -59,8 +59,23 @@ export function blocDevisCrm(devis, peutFaire) {
  * prestation est une rangée qui se coche ; cochée, elle s'ouvre sur place avec
  * sa quantité, son prix et sa précision. Le total reste collé en bas.
  *
- * ⚠ RE-TOUCHER UNE RANGÉE COCHÉE NE LA DÉCOCHE PAS : on y perdrait ce qu'on
- * vient de taper. On la retire par son bouton « Retirer ».
+ * ⚠ RE-TOUCHER UNE RANGÉE COCHÉE LA DÉCOCHE (29/10/2026, Élodie : « on ne peut
+ * pas déselctionner facilement des éléments »). La version d'avant ne le
+ * faisait pas, et pour une raison juste : on y perdait ce qu'on venait de
+ * taper. Mais une rangée qui porte une coche et qui ne se décoche pas fait
+ * l'inverse du geste attendu — on touchait une seconde fois en croyant
+ * annuler, et il ne se passait rien.
+ *
+ * La protection reste, elle est seulement devenue conditionnelle :
+ *   · rien n'a été saisi depuis qu'on l'a cochée → elle se décoche aussitôt,
+ *     c'est l'annulation d'une touche malheureuse ;
+ *   · une quantité, un prix, un choix ou une précision a changé → la rangée
+ *     demande « Retirer ? » et il faut toucher une seconde fois.
+ *
+ * ⚠ LA QUESTION SE POSE SUR LA RANGÉE, PAS DANS UNE FENÊTRE. Une modale
+ * par-dessus la modale du devis se ferme mal (les deux partagent `closeModal`),
+ * et sur téléphone la réponse doit rester sous le doigt, pas à l'autre bout de
+ * l'écran. Même procédé que `confirmerSuppr` pour la suppression du devis.
  */
 export function ouvrirDevisCrm(x, existant = null, retour = null) {
   const metiers = metiersAvecGrille();
@@ -76,6 +91,8 @@ export function ouvrirDevisCrm(x, existant = null, retour = null) {
     lignes: structuredClone(existant?.lignes || []),
   };
   let confirmerSuppr = false;
+  // La prestation qui attend un second appui pour être retirée, s'il y en a une.
+  let aRetirer = null;
 
   const titre = existant ? `Devis ${existant.numero || ''}` : `Nouveau devis${x.nom ? ' — ' + x.nom : ''}`;
   const m = openModal(titre, '<div id="rdc-hote" class="rdc"></div>', { wide: true, onClose: () => retour?.() });
@@ -83,6 +100,26 @@ export function ouvrirDevisCrm(x, existant = null, retour = null) {
 
   const totalLigne = (l) => (Number(l.quantite) || 0) * (Number(l.prix_ht) || 0);
   const dis = signe ? 'disabled' : '';
+
+  /**
+   * Une prestation est « intacte » quand rien n'y a été saisi depuis qu'on l'a
+   * cochée : elle vaut encore exactement ce que la grille lui donnait.
+   *
+   * ⚠ ON COMPARE À UNE LIGNE NEUVE, PAS À DES VALEURS ÉCRITES ICI. Le prix de
+   * départ, la quantité déduite de la surface, la variante par défaut — tout
+   * cela vient de `ligneDepuisTarif`, et le recopier ferait diverger les deux
+   * le jour où elle change. Une prestation dont le tarif a disparu de la grille
+   * n'est jamais intacte : dans le doute, on demande.
+   */
+  const estIntacte = (l) => {
+    const t = l.code ? tarifsDe(l.metier || etat.metier).find(g => g.code === l.code) : null;
+    if (!t) return false;
+    const neuve = ligneDepuisTarif(t, { surface });
+    return Number(l.quantite) === Number(neuve.quantite)
+      && Number(l.prix_ht) === Number(neuve.prix_ht)
+      && String(l.variante ?? '') === String(neuve.variante ?? '')
+      && String(l.precision || '') === String(neuve.precision || '');
+  };
 
   // Les champs d'une ligne, sous la prestation cochée. Une ligne libre porte
   // en plus sa désignation, qu'aucune grille ne lui donne.
@@ -121,11 +158,14 @@ export function ouvrirDevisCrm(x, existant = null, retour = null) {
         const siennes = lignesDe(g.code);
         const choisie = siennes.length > 0;
         if (signe && !choisie) return '';
-        return `<div class="rdc-presta ${choisie ? 'est-choisie' : ''}">
+        const enDoute = aRetirer === g.code;
+        return `<div class="rdc-presta ${choisie ? 'est-choisie' : ''}${enDoute ? ' est-a-retirer' : ''}">
           <button type="button" class="rdc-presta-tete" data-tarif="${esc(g.code)}" aria-pressed="${choisie}" ${signe ? 'disabled' : ''}>
-            <span class="rdc-coche" aria-hidden="true">${choisie ? '✓' : '+'}</span>
+            <span class="rdc-coche" aria-hidden="true">${enDoute ? '✕' : choisie ? '✓' : '+'}</span>
             <span class="rdc-presta-nom">${g.reference ? `<small>${esc(g.reference)}</small>` : ''}${esc(g.libelle)}</span>
-            <b class="rdc-presta-prix">${g.a_partir_de ? 'dès ' : ''}${euros(g.prix_ht)}${PAR_UNITE[g.unite] || ''}</b>
+            ${enDoute
+              ? '<b class="rdc-presta-prix rdc-alerte">Retirer ?</b>'
+              : `<b class="rdc-presta-prix">${g.a_partir_de ? 'dès ' : ''}${euros(g.prix_ht)}${PAR_UNITE[g.unite] || ''}</b>`}
           </button>
           ${siennes.map(({ l, i }) => saisie(l, i, false)).join('')}
         </div>`;
@@ -237,13 +277,26 @@ export function ouvrirDevisCrm(x, existant = null, retour = null) {
 
   const ajouter = (code) => {
     lire();
+    // Toucher une AUTRE prestation annule la question en cours : on n'a pas
+    // répondu, on est passé à autre chose.
+    if (aRetirer && aRetirer !== code) aRetirer = null;
     if (!code) {
       etat.lignes.push({ code: null, metier: null, libelle: '', precision: '', variante: null, unite: 'forfait', quantite: 1, prix_ht: 0 });
       const i = etat.lignes.length - 1;
       return redessiner(() => viser(i));
     }
     const existante = etat.lignes.findIndex(l => l.code === code);
-    if (existante >= 0) return viser(existante);
+    if (existante >= 0) {
+      // Déjà cochée : le second appui la retire. On ne demande que si quelque
+      // chose y a été saisi — sinon ce serait un obstacle pour rien.
+      if (!estIntacte(etat.lignes[existante]) && aRetirer !== code) {
+        aRetirer = code;
+        return redessiner();
+      }
+      aRetirer = null;
+      etat.lignes.splice(existante, 1);
+      return redessiner();
+    }
     const grille = tarifsDe(etat.metier);
     const t = grille.find(g => g.code === code);
     if (!t) return;

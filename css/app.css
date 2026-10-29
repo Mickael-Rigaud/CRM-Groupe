@@ -7222,6 +7222,9 @@ span.rpv-statut { display: inline-block; margin-bottom: 4px; }
 .rdc-coche { flex: none; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%;
   border: 1.5px solid var(--line-strong); color: var(--muted); font-size: 15px; font-weight: 700; line-height: 1; }
 .est-choisie .rdc-coche { border-color: var(--accent); background: var(--accent); color: #fff; font-size: 13px; }
+/* La prestation qui attend un second appui pour être retirée. Elle passe au
+   rouge : c'est une question, et la réponse se donne sur la rangée même. */
+.est-a-retirer .rdc-coche { border-color: var(--red); background: var(--red); color: #fff; font-size: 13px; }
 .rdc-presta-nom { flex: 1; min-width: 0; font-size: 14px; line-height: 1.3; }
 .est-choisie .rdc-presta-nom { font-weight: 700; }
 .rdc-presta-nom small { display: block; font-size: 11px; color: var(--muted); font-weight: 400; }
