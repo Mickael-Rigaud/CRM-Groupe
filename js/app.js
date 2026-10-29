@@ -407,7 +407,14 @@ const CLE_APPLI = (location.pathname.match(/\/([a-z]+)\.html$/) || ['', ''])[1];
 const BAS_CRM = [
   { cle: 'home', hash: '#/home', icon: 'home', label: 'Accueil' },
   { cle: 'today', hash: '#/today', icon: 'check', label: 'To do', count: () => NAV[1].count() },
-  { cle: 'commercial', icon: 'kanban', label: 'Pilotage' },
+  // ⚠ PILOTAGE A QUITTÉ LA BARRE (29/10/2026, Élodie : « enlève "pilotage"
+  // puisque ça revient à mettre les différentes structures »). On change de
+  // structure par le titre du haut ; Pilotage reste dans le menu. Sa place va à
+  // Patrimoine et à la Gestion locative, SEULEMENT pour qui y a accès : leur
+  // univers absent de `groups()`, l'entrée tombe (filtre de `renderBarreBas`)
+  // et les autres se répartissent la largeur — la grille est en `1fr`.
+  { cle: 'patrimoine', icon: 'building', label: 'Patrimoine' },
+  { cle: 'locatif', icon: 'key', label: 'Locatif' },
   { cle: 'messagerie', hash: '#/messagerie', icon: 'chat', label: 'Messages', count: () => messagesNonLus() },
 ];
 // ⚠ LA TROISIÈME ENTRÉE DÉPEND DU RÔLE (28/10/2026, Élodie : « pour les rôles
