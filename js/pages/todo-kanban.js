@@ -308,7 +308,13 @@ export function carteDossier(x) {
  * `taches` est déjà filtré (recherche, « ce qui est fait ») par l'appelant :
  * cette fonction range, elle ne décide pas de ce qui entre.
  */
-export function kanbanHtml(taches, recentes) {
+// `faitesEnTete` : « Ce qui est fait » coché, les tâches faites passent EN HAUT
+// de leur colonne, la plus récemment faite d'abord (29/10/2026, Élodie : « quand
+// on clique sur "ce qui est fait" je voudrais que les tâches réalisées remontent
+// en premier »). Cocher la case, c'est venir les voir : en fin de colonne, il
+// fallait faire défiler toutes les tâches ouvertes pour les trouver. Une tâche
+// qu'on vient de cocher (`recentes`) reste à sa place le temps de l'annuler.
+export function kanbanHtml(taches, recentes, faitesEnTete = false) {
   // ⚠ LES COLONNES VIENNENT DE `structuresDeLUtilisateur`, PAS DE `ACTIVITIES` :
   // depuis le 05/10/2026 une tâche peut appartenir à un MODULE — la gestion
   // locative — qui n'est pas une activité et n'a ni espace ni pipeline. La
@@ -333,8 +339,10 @@ export function kanbanHtml(taches, recentes) {
   const tri = (l) => l.slice().sort((x, y) => {
     // L'urgent remonte, puis le retard, puis l'échéance. Une colonne se lit du
     // haut : ce qui brûle doit y être.
-    const poids = (a) => (a.done ? 3 : a.priority === 'urgent' ? 0 : (ecart(a) ?? -1) > 0 ? 1 : 2);
+    const enTete = (a) => faitesEnTete && a.done && !recentes?.has(a.id);
+    const poids = (a) => (enTete(a) ? -1 : a.done ? 3 : a.priority === 'urgent' ? 0 : (ecart(a) ?? -1) > 0 ? 1 : 2);
     return poids(x) - poids(y)
+      || (enTete(x) && enTete(y) ? String(y.done_at || '').localeCompare(String(x.done_at || '')) : 0)
       || (x.due_date || '9999').localeCompare(y.due_date || '9999')
       || (x.due_time || '99').localeCompare(y.due_time || '99');
   });

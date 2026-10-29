@@ -255,12 +255,13 @@ export const todayPage = {
         ${sansProchaine.length ? `<div class="alert"><b>${sansProchaine.length}</b><div><b>affaire${sansProchaine.length > 1 ? 's' : ''} sans prochaine action</b> — ${sansProchaine.slice(0, 6).map(d => `<a href="#" data-open-deal="${d.id}">${esc(d.title)}</a>`).join(', ')}${sansProchaine.length > 6 ? '…' : ''}</div></div>` : ''}
 
         ${surTableau
-          ? kanbanHtml([...retenues, ...faites], recentes)
+          ? kanbanHtml([...retenues, ...faites], recentes, state.showDone)
           : `<section class="card todo-liste">
           ${dossiers.length ? `<div class="todo-groupe dossiers">Dossiers en attente<i>${dossiers.length}</i></div>
             <div class="todo-dossiers">${dossiers.map(carteDossier).join('')}</div>` : ''}
-          ${groupes.map(gr => `<div class="todo-groupe ${gr.key}">${gr.titre}<i>${gr.l.filter(a => !a.done).length}</i></div>${tri(gr.l).map(a => carte(a, pour)).join('')}`).join('')}
+          ${'' /* Les tâches faites EN TÊTE quand on les demande (29/10/2026), comme dans le tableau par structure. */}
           ${faites.length ? `<div class="todo-groupe fait">Fait ces 30 derniers jours<i>${faites.length}</i></div>${faites.slice().sort((x, y) => String(y.done_at).localeCompare(String(x.done_at))).map(a => carte(a, pour)).join('')}` : ''}
+          ${groupes.map(gr => `<div class="todo-groupe ${gr.key}">${gr.titre}<i>${gr.l.filter(a => !a.done).length}</i></div>${tri(gr.l).map(a => carte(a, pour)).join('')}`).join('')}
           ${!retenues.length && !faites.length && !dossiers.length ? `<div class="empty">${onglet.key === 'mienne'
             ? 'Rien à faire — tout est à jour.'
             : 'Aucune tâche envoyée. Le bouton « Envoyer une tâche » sert à en confier une.'}</div>` : ''}
