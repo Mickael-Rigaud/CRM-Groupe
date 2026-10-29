@@ -490,11 +490,19 @@ function structureOuverte(hash) {
   if (!appli) return null;
   const ici = Object.keys(ACCUEIL_STRUCTURE).find(k => scope.activityKeys.includes(k)
     && (hash === ACCUEIL_STRUCTURE[k] || hash.startsWith(ACCUEIL_STRUCTURE[k] + '/')));
+  // ⚠ ET LE CRM GROUPE ENTIER EST UNE DESTINATION COMME LES AUTRES (29/10/2026,
+  // Élodie : « sur l'application je voudrais pouvoir avoir accès au crm groupe,
+  // avec le tableau de bord, la to do list »). Son tableau de bord `#/home`
+  // n'appartient à aucune structure : y aller remet l'application en mode CRM
+  // (barre du bas, menu et titre du CRM entier, `null` ici) jusqu'à ce qu'on
+  // rentre dans une structure.
+  const crm = hash === '#/home' || hash.startsWith('#/home/');
   try {
-    if (ici) sessionStorage.setItem(CLE_DERNIERE_STRUCTURE, ici);
-    const retenue = ici || sessionStorage.getItem(CLE_DERNIERE_STRUCTURE);
+    if (ici || crm) sessionStorage.setItem(CLE_DERNIERE_STRUCTURE, ici || 'crm');
+    const retenue = ici || (crm ? 'crm' : sessionStorage.getItem(CLE_DERNIERE_STRUCTURE));
+    if (retenue === 'crm') return null;
     if (retenue && BAS_STRUCTURE[retenue] && scope.activityKeys.includes(retenue)) return retenue;
-  } catch { if (ici) return ici; }
+  } catch { if (ici) return ici; if (crm) return null; }
   return appli;
 }
 
@@ -517,6 +525,8 @@ function nomDeLEcran(hash, here) {
 function structuresAuChoix() {
   if (!appliStructure()) return [];
   const ks = Object.keys(ACCUEIL_STRUCTURE).filter(k => scope.activityKeys.includes(k) && pourOuvrier(ACCUEIL_STRUCTURE[k]));
+  // Le CRM Groupe en tête : c'est le niveau au-dessus des structures.
+  if (pourOuvrier('#/home')) ks.unshift('crm');
   return ks.length > 1 ? ks : [];
 }
 function titreDuHaut(hash, here) {
@@ -526,10 +536,13 @@ function titreDuHaut(hash, here) {
   const ouverte = navState.open === '__struct';
   const cle = structureOuverte(hash);
   const ligne = (k) => {
-    const a = ACTIVITIES[k];
-    const mark = LOGOS.has(k) ? `<span class="brandmark"><img src="assets/logos/${k}.png" alt=""></span>`
+    const estCrm = k === 'crm';
+    const a = estCrm ? { label: CONFIG.APP_NAME } : ACTIVITIES[k];
+    const on = estCrm ? !cle : k === cle;
+    const mark = estCrm ? '<span class="brandmark"><img src="assets/icon-192.png" alt=""></span>'
+      : LOGOS.has(k) ? `<span class="brandmark"><img src="assets/logos/${k}.png" alt=""></span>`
       : `<span class="brandmark" style="--c:${a.color}"></span>`;
-    return `<a href="${ACCUEIL_STRUCTURE[k]}" class="acct-act u-struct-ligne ${k === cle ? 'on' : ''}" ${k === cle ? 'aria-current="true"' : ''}>${mark}<span>${esc(a.label)}</span>${k === cle ? '<span class="u-struct-ok" aria-hidden="true">✓</span>' : ''}</a>`;
+    return `<a href="${estCrm ? '#/home' : ACCUEIL_STRUCTURE[k]}" class="acct-act u-struct-ligne ${on ? 'on' : ''}" ${on ? 'aria-current="true"' : ''}>${mark}<span>${esc(a.label)}</span>${on ? '<span class="u-struct-ok" aria-hidden="true">✓</span>' : ''}</a>`;
   };
   return `<div class="u-ici u-struct" id="u-struct">
     <button type="button" class="u-struct-btn" id="u-struct-btn" aria-haspopup="true" aria-expanded="${ouverte}"><span>${nom}</span><span class="u-struct-fl" aria-hidden="true">▾</span></button>
