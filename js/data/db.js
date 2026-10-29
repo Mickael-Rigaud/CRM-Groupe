@@ -88,6 +88,9 @@ export const TABLES = ['profiles', 'organisations', 'contacts', 'deals', 'activi
   'rgd_apports_sortants',
   // Les dossiers SAV (13/10/2026), saisis dans le CRM.
   'rgd_sav',
+  // La grille des tarifs (lecture RGD, écriture direction) et les devis faits
+  // dans le CRM (29/10/2026). Nés ici, jamais relevés : rien ne les réécrit.
+  'rgd_tarifs', 'rgd_devis_crm',
   // Les inspirations ajoutées dans le CRM (14/10/2026), à côté des réalisations
   // du site : elles n'y partent jamais. Direction seule.
   'rgd_inspirations',

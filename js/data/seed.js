@@ -881,6 +881,17 @@ export const SEED = {
   // Les dossiers SAV (13/10/2026) : un EN COURS, urgent, sur une fiche rangée
   // en « SAV », et un RÉSOLU sur une fiche revenue en « Chantier terminé » —
   // sans eux ni l'onglet ni son filtre « Résolus » ne s'essayaient.
+  // Une grille de tarifs pour essayer les devis du CRM (29/10/2026).
+  // ⚠ PRIX INVENTÉS : le dépôt est public, la vraie grille vit en base.
+  rgd_tarifs: [
+    { id: 'tf1', metier: 'electricite', code: 'deplacement', ordre: 10, libelle: 'Déplacement', unite: 'forfait', prix_ht: 50, a_partir_de: false, variantes: [], ajoute_aussi: [], precision: null, actif: true },
+    { id: 'tf2', metier: 'electricite', code: 'main_oeuvre', ordre: 20, libelle: 'Main-d’œuvre', unite: 'heure', prix_ht: 40, a_partir_de: false, variantes: [], ajoute_aussi: [], precision: null, actif: true },
+    { id: 'tf3', metier: 'electricite', code: 'diagnostic', ordre: 30, libelle: 'Recherche de panne', unite: 'forfait', prix_ht: 100, a_partir_de: true, variantes: [], ajoute_aussi: ['main_oeuvre'], precision: 'Forfait de base, plus la main-d’œuvre à l’heure', actif: true },
+    { id: 'tf4', metier: 'electricite', code: 'tableau', ordre: 40, libelle: 'Tableau électrique', unite: 'forfait', prix_ht: 800, a_partir_de: true,
+      variantes: [{ libelle: '1 rangée', prix_ht: 800 }, { libelle: '2 rangées', prix_ht: 950 }], ajoute_aussi: [], precision: null, actif: true },
+    { id: 'tf5', metier: 'electricite', code: 'renovation', ordre: 50, libelle: 'Rénovation complète', unite: 'm2', prix_ht: 90, a_partir_de: false, variantes: [], ajoute_aussi: [], precision: null, actif: true },
+  ],
+  rgd_devis_crm: [],
   rgd_sav: [
     { id: 'sav1', fiche_id: 'rc10', contact_id: 'c16', owner_id: null, ouvert_le: day(-6),
       objet: 'Fuite sous l’évier de la cuisine refaite', urgence: 'urgente', statut: 'intervention',

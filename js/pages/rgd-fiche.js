@@ -98,6 +98,9 @@ import { attribuerFicheRgd, proprietaireDeLaFiche } from './rgd-attribuer.js';
 // La porte unique du commentaire, partagée avec le tableau : deux écritures de
 // la même colonne finiraient par ne plus appliquer les mêmes règles.
 import { majNote, COLONNE_NOTE } from '../data/rgd-clients.js';
+// Les devis faits dans le CRM avec la grille des tarifs (29/10/2026).
+import { devisCrmDe } from '../data/rgd-devis-crm.js';
+import { blocDevisCrm, ouvrirDevisCrm, peutFaireDevisCrm } from './rgd-devis-crm.js';
 import { lienAvis, messageAvis, envoyerDemandeAvis, avisDejaDemande, KIND_AVIS,
   enveloppeApercu, htmlDepuisTexte } from '../data/rgd-avis.js';
 import { dossiersDe, statutSav, garantie, finDuChantier } from '../data/rgd-sav.js';
@@ -481,6 +484,9 @@ export function ouvrirFicheRgd(x, onChange, retour = null) {
 
   const dessine = () => {
     const devis = x.genre === 'fiche' ? siens(scope.rgd('rgd_devis'), f) : [];
+    // ⚠ CEUX-LÀ NE DÉPENDENT PAS DE L'ÉTAPE : un dépannage se chiffre au
+    // premier appel, sans passer par « Devis en cours ».
+    const devisCrm = devisCrmDe(x);
     const chantiers = x.genre === 'fiche'
       ? siens(scope.rgd('rgd_chantiers'), f).filter(c => c.etat || c.date_debut_prevue)
       : [];
@@ -820,6 +826,8 @@ export function ouvrirFicheRgd(x, onChange, retour = null) {
           ${devis.length || chantiers.length ? `<p class="rgdf-source">Devis et chantiers viennent de
             Costructor, relevés toutes les 30 minutes. Ils se modifient dans
             l’application RGD.</p>` : ''}
+
+          ${blocDevisCrm(devisCrm, peutFaireDevisCrm())}
         </div>
 
         <div class="rgdf-colonne">
@@ -958,6 +966,18 @@ export function ouvrirFicheRgd(x, onChange, retour = null) {
     if (bProjet) bProjet.onclick = () => imprimer('projet');
     const bReception = m.querySelector('#rgdf-doc-reception');
     if (bReception) bReception.onclick = () => imprimer('reception');
+
+    // Les devis du CRM : la fenêtre du devis remplace la fiche, et la fiche se
+    // reconstruit à sa fermeture — comme pour « Modifier les informations ».
+    m.querySelector('#rdc-nouveau')?.addEventListener('click', () => ouvrirDevisCrm(x, null, () => dessine()));
+    m.querySelectorAll('[data-devis-crm]').forEach(tr => {
+      const ouvrir = () => {
+        const d = db.byId('rgd_devis_crm', tr.dataset.devisCrm);
+        if (d) ouvrirDevisCrm(x, d, () => dessine());
+      };
+      tr.onclick = ouvrir;
+      tr.onkeydown = (e) => { if (e.key === 'Enter') ouvrir(); };
+    });
 
     // ⚠ `dessine` EST PASSE EN REDESSIN : un depot ou un retrait change la
     // liste ET le compteur du titre, et seule la fiche entiere les porte.

@@ -394,6 +394,101 @@ ${bandeau('4 · Signatures')}
 ${pied('Document à établir contradictoirement et à conserver par chaque partie.')}`);
 }
 
+// ------------------------------------------------- devis fait dans le CRM
+// ⚠ LE PIED PORTE LES MENTIONS LÉGALES DE RGD RENOVA (Chantilly), celles du bon
+// d'attachement validé le 28/10/2026 : un devis est un document commercial,
+// et SIRET, RCS et TVA intracommunautaire y sont obligatoires.
+const MENTIONS_RGD = 'RGD Renova · SASU au capital de 1 000 € · 20 avenue du Maréchal Joffre, 60500 Chantilly · RCS Compiègne · SIRET 979 294 030 00015 · TVA FR34979294030';
+
+// Pourquoi ce taux : la mention qui le justifie, telle que l'administration
+// l'attend sur un devis de travaux dans un logement.
+const MENTION_TVA = {
+  10: 'TVA au taux de 10 % : travaux d’amélioration, de transformation, d’aménagement ou d’entretien portant sur un local à usage d’habitation achevé depuis plus de deux ans (article 279-0 bis du CGI).',
+  5.5: 'TVA au taux de 5,5 % : travaux d’amélioration de la qualité énergétique d’un local à usage d’habitation achevé depuis plus de deux ans (article 278-0 bis A du CGI).',
+};
+
+const euros = (n) => (Number(n) || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+const unite = { forfait: 'u', heure: 'h', m2: 'm²' };
+
+const styleDevis = `
+  table.lignes { width: 100%; border-collapse: collapse; margin-top: 4px; font-size: 9.8pt; }
+  table.lignes th { text-align: left; font-size: 7.5pt; text-transform: uppercase; letter-spacing: .07em; color: ${GRIS};
+    font-weight: 700; padding: 5px 6px; border-bottom: 1pt solid ${ENCRE}; }
+  table.lignes td { padding: 6px; border-bottom: .75pt solid ${FILET}; vertical-align: top; }
+  table.lignes td small { display: block; color: ${GRIS}; font-size: 8.5pt; }
+  table.lignes .n { text-align: right; white-space: nowrap; }
+  table.lignes tr { break-inside: avoid; }
+  .totaux { margin: 8px 0 0 auto; width: 72mm; font-size: 10pt; }
+  .totaux div { display: flex; justify-content: space-between; padding: 3px 6px; }
+  .totaux .ttc { margin-top: 3px; padding: 6px; font-weight: 700; font-size: 11.5pt; border-top: 1.5pt solid ${ORANGE}; }
+  .parties { display: flex; gap: 14px; margin-top: 10px; }
+  .partie { flex: 1; padding: 7px 9px; border: .75pt solid ${FILET}; font-size: 9.8pt; }
+  .partie > span { display: block; font-size: 7.5pt; text-transform: uppercase; letter-spacing: .07em; color: ${GRIS}; margin-bottom: 2px; }
+  .mention { margin: 10px 0 0; font-size: 8.5pt; color: ${GRIS}; }
+  .accord { break-inside: avoid; }
+  .pied-legal { margin-top: 14px; padding-top: 6px; border-top: .75pt solid ${FILET}; font-size: 7.6pt; color: ${GRIS}; }
+`;
+
+export function devisCrmHtml(d, devis) {
+  const lignes = devis.lignes || [];
+  const ech = new Date(`${devis.date_devis || new Date().toISOString().slice(0, 10)}T00:00:00`);
+  ech.setDate(ech.getDate() + (Number(devis.validite_jours) || 30));
+  const taux = Number(devis.tva_taux);
+  const pageDevis = `<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><title>${esc(titreDocument(`Devis ${devis.numero || ''}`.trim(), d))}</title>
+<style>${style}${styleDevis}</style></head><body>
+${entete('DEVIS', devis.numero ? `N° ${devis.numero}` : '')}
+
+<div class="parties">
+  <div class="partie"><span>Entreprise</span><b>RGD Renova</b><br>
+    20 avenue du Maréchal Joffre<br>60500 Chantilly</div>
+  <div class="partie"><span>Client</span><b>${esc(d.nom || '')}</b><br>
+    ${d.adresseChantier ? esc(d.adresseChantier) + '<br>' : ''}${[d.telephone, d.email].filter(Boolean).map(esc).join(' · ')}</div>
+</div>
+
+<div class="champs" style="margin-top:9px">
+  ${champ('Date du devis', jour(devis.date_devis || new Date()), 'etroit')}
+  ${champ('Valable jusqu’au', jour(ech), 'etroit')}
+  ${champ('Adresse des travaux', d.adresseChantier)}
+</div>
+${devis.objet ? `<div class="champs" style="margin-top:7px">${champ('Objet', devis.objet)}</div>` : ''}
+
+<h2>Détail des prestations</h2>
+<table class="lignes">
+  <thead><tr><th>Désignation</th><th class="n">Qté</th><th class="n">Prix unitaire HT</th><th class="n">Total HT</th></tr></thead>
+  <tbody>
+    ${lignes.map(l => `<tr>
+      <td><b>${esc(l.libelle)}</b>${l.variante ? ` — ${esc(l.variante)}` : ''}${l.precision ? `<small>${esc(l.precision)}</small>` : ''}</td>
+      <td class="n">${esc(String(l.quantite).replace('.', ','))} ${esc(unite[l.unite] || '')}</td>
+      <td class="n">${euros(l.prix_ht)}</td>
+      <td class="n">${euros((Number(l.quantite) || 0) * (Number(l.prix_ht) || 0))}</td>
+    </tr>`).join('')}
+  </tbody>
+</table>
+
+<div class="totaux">
+  <div><span>Total HT</span><span>${euros(devis.montant_ht)}</span></div>
+  <div><span>TVA ${esc(String(taux).replace('.', ','))} %</span><span>${euros(devis.montant_tva)}</span></div>
+  <div class="ttc"><span>Total TTC</span><span>${euros(devis.montant_ttc)}</span></div>
+</div>
+
+${MENTION_TVA[taux] ? `<p class="mention">${esc(MENTION_TVA[taux])}</p>` : ''}
+${devis.notes ? `<h2>Remarques</h2><p style="margin:0;font-size:9.8pt;white-space:pre-line">${esc(devis.notes)}</p>` : ''}
+
+<div class="accord">
+  <h2>Bon pour accord</h2>
+  <p style="margin:0;font-size:9pt;color:${GRIS}">Date et signature du client, précédées de la mention manuscrite « Bon pour accord ».</p>
+  <div class="sign">
+    <div><b>Le client</b><span>${esc(d.nom || 'Nom, signature')}</span><u></u></div>
+    <div><b>Pour RGD Renova</b><span>Nom, signature</span><u></u></div>
+  </div>
+</div>
+
+<p class="pied-legal">${esc(MENTIONS_RGD)}</p>
+</body></html>`;
+  return pageDevis;
+}
+
 // ------------------------------------------------------------------ portes
 // ⚠ `donneesDocument` N'EST LUE QU'UNE FOIS : elle interroge la base et calcule
 // l'etape, et deux lectures pourraient rendre deux noms si une ecriture tombe
@@ -405,4 +500,8 @@ export const imprimerFicheProjet = (x, devis) => {
 export const imprimerReception = (x, devis) => {
   const d = donneesDocument(x, devis);
   imprimerPage(receptionHtml(d), titreDocument('PV de réception', d));
+};
+export const imprimerDevisCrm = (x, devis) => {
+  const d = donneesDocument(x);
+  imprimerPage(devisCrmHtml(d, devis), titreDocument(`Devis ${devis.numero || ''}`.trim(), d));
 };

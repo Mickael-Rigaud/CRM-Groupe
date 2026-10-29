@@ -242,6 +242,8 @@ export const scope = {
     rgd_apports_sortants: 'apporteur_ou_libre',
     // Un dossier SAV prend le propriétaire de sa fiche (13/10/2026).
     rgd_sav: 'moi',
+    // Un devis du CRM prend le propriétaire de sa fiche (29/10/2026).
+    rgd_devis_crm: 'moi',
   },
 
   rgdVoitLigne(table, r) {
