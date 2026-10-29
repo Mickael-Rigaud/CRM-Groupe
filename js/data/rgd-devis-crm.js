@@ -40,6 +40,46 @@ export const UNITES = { forfait: 'u', heure: 'h', m2: 'm²', ml: 'ml' };
 export const PAR_UNITE = { heure: '/h', m2: '/m²', ml: '/ml' };
 
 export const METIERS = { electricite: 'Électricité' };
+
+// ⚠ LES PRESTATIONS SONT RANGÉES PAR CATÉGORIE (29/10/2026, Élodie : « je
+// voudrais que ce soit plus clair visuellement, sépare les prestations »). La
+// catégorie vit sur le tarif (`rgd_tarifs.categorie`) et chaque ligne de devis
+// en garde une copie, comme le libellé et le prix : un devis se relit tel
+// qu'il a été fait. Une ligne libre, ou un tarif sans catégorie, tombe dans
+// « Autres », toujours en dernier.
+export const AUTRES = 'Autres';
+
+/** La catégorie d'une ligne : sa copie, sinon celle de son tarif, sinon « Autres ». */
+export function categorieDe(l) {
+  if (l.categorie) return l.categorie;
+  const t = l.code ? db.t('rgd_tarifs').find(x => x.code === l.code && (!l.metier || x.metier === l.metier)) : null;
+  return t?.categorie || AUTRES;
+}
+
+// La place d'une catégorie : celle de sa première prestation dans la grille.
+// Les lignes d'un devis se rangent ainsi dans le même ordre que la grille, et
+// non dans l'ordre où l'on a cliqué.
+const rangCategorie = (c) => {
+  const ordres = db.t('rgd_tarifs').filter(t => t.categorie === c).map(t => Number(t.ordre) || 0);
+  return ordres.length ? Math.min(...ordres) : Infinity;
+};
+
+/**
+ * Regroupe une liste par catégorie, dans l'ordre de la grille ; dans une
+ * catégorie, les éléments gardent leur ordre. « Autres » ferme la marche.
+ * Rend [{ categorie, items: [{ item, i }] }] — `i` est l'index d'origine.
+ */
+export function parCategorie(liste, lire = categorieDe) {
+  const groupes = new Map();
+  liste.forEach((item, i) => {
+    const c = lire(item) || AUTRES;
+    if (!groupes.has(c)) groupes.set(c, []);
+    groupes.get(c).push({ item, i });
+  });
+  const tous = [...groupes].map(([categorie, items]) => ({ categorie, items }))
+    .sort((x, y) => rangCategorie(x.categorie) - rangCategorie(y.categorie));
+  return [...tous.filter(g => g.categorie !== AUTRES), ...tous.filter(g => g.categorie === AUTRES)];
+}
 export const nomMetier = (m) => METIERS[m] || m;
 
 const arrondi = (n) => Math.round((Number(n) || 0) * 100) / 100;
@@ -78,6 +118,7 @@ export function ligneDepuisTarif(t, { surface = null } = {}) {
   return {
     code: t.code,
     reference: t.reference || null,
+    categorie: t.categorie || null,
     metier: t.metier,
     libelle: t.libelle,
     precision: t.precision || '',
@@ -116,7 +157,8 @@ const numeroDemo = () => {
 export async function enregistrerDevisCrm(x, valeurs, existant = null) {
   const f = x.ligne;
   const lignes = (valeurs.lignes || []).map(l => ({
-    code: l.code || null, reference: l.reference || null, metier: l.metier || null, libelle: String(l.libelle || '').trim(),
+    code: l.code || null, reference: l.reference || null, categorie: l.code ? categorieDe(l) : AUTRES,
+    metier: l.metier || null, libelle: String(l.libelle || '').trim(),
     precision: String(l.precision || '').trim(), variante: l.variante || null, unite: l.unite || 'forfait',
     quantite: Number(l.quantite) || 0, prix_ht: arrondi(l.prix_ht),
   })).filter(l => l.libelle);

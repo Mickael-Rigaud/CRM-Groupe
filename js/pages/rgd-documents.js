@@ -42,6 +42,7 @@ import { esc } from '../ui.js';
 import { imprimerPage } from './btp-fiche.js';
 import { valeursProjet, personneDe, nomComplet, adresseChantier } from '../data/rgd-projet.js';
 import { montantDevisDe, etapeAvecMontant } from '../data/rgd-etapes.js';
+import { parCategorie } from '../data/rgd-devis-crm.js';
 
 const LOGO = new URL('../../assets/logos/rgd-complet.png', import.meta.url).href;
 
@@ -418,6 +419,12 @@ const styleDevis = `
   table.lignes td small { display: block; color: ${GRIS}; font-size: 8.5pt; }
   table.lignes .n { text-align: right; white-space: nowrap; }
   table.lignes tr { break-inside: avoid; }
+  /* Une catégorie par bloc, son titre en tête et son sous-total au pied. */
+  table.lignes tbody { break-inside: avoid; }
+  table.lignes tr.cat td { padding: 10px 6px 4px; font-size: 8.5pt; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .07em; color: ${ORANGE}; border-bottom: .75pt solid ${ORANGE}; }
+  table.lignes tbody:first-of-type tr.cat td { padding-top: 6px; }
+  table.lignes tr.sous-total td { padding: 4px 6px 8px; font-size: 9pt; color: ${GRIS}; text-align: right; border-bottom: 0; }
   .totaux { margin: 8px 0 0 auto; width: 72mm; font-size: 10pt; }
   .totaux div { display: flex; justify-content: space-between; padding: 3px 6px; }
   .totaux .ttc { margin-top: 3px; padding: 6px; font-weight: 700; font-size: 11.5pt; border-top: 1.5pt solid ${ORANGE}; }
@@ -456,14 +463,17 @@ ${devis.objet ? `<div class="champs" style="margin-top:7px">${champ('Objet', dev
 <h2>Détail des prestations</h2>
 <table class="lignes">
   <thead><tr><th>Désignation</th><th class="n">Qté</th><th class="n">Prix unitaire HT</th><th class="n">Total HT</th></tr></thead>
-  <tbody>
-    ${lignes.map(l => `<tr>
+  ${parCategorie(lignes).map(({ categorie, items }) => `<tbody>
+    <tr class="cat"><td colspan="4">${esc(categorie)}</td></tr>
+    ${items.map(({ item: l }) => `<tr>
       <td><b>${esc(l.libelle)}</b>${l.variante ? ` — ${esc(l.variante)}` : ''}${l.precision ? `<small>${esc(l.precision)}</small>` : ''}${l.reference ? `<small>Réf. ${esc(l.reference)}</small>` : ''}</td>
       <td class="n">${esc(String(l.quantite).replace('.', ','))} ${esc(unite[l.unite] || '')}</td>
       <td class="n">${euros(l.prix_ht)}</td>
       <td class="n">${euros((Number(l.quantite) || 0) * (Number(l.prix_ht) || 0))}</td>
     </tr>`).join('')}
-  </tbody>
+    ${items.length > 1 ? `<tr class="sous-total"><td colspan="3">Sous-total ${esc(categorie.toLowerCase())}</td>
+      <td class="n">${euros(items.reduce((s, { item: l }) => s + (Number(l.quantite) || 0) * (Number(l.prix_ht) || 0), 0))}</td></tr>` : ''}
+  </tbody>`).join('')}
 </table>
 
 <div class="totaux">

@@ -22,7 +22,7 @@ import { scope } from '../data/scope.js';
 import { valeursProjet } from '../data/rgd-projet.js';
 import {
   TVA, TVA_DEFAUT, STATUTS_DEVIS_CRM, UNITES, PAR_UNITE, nomMetier, tarifsDe, metiersAvecGrille,
-  totaux, plancher, ligneDepuisTarif, enregistrerDevisCrm, changerStatutDevisCrm, supprimerDevisCrm,
+  totaux, plancher, ligneDepuisTarif, parCategorie, enregistrerDevisCrm, changerStatutDevisCrm, supprimerDevisCrm,
 } from '../data/rgd-devis-crm.js';
 
 const euros = (n) => eur(n, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -108,19 +108,31 @@ export function ouvrirDevisCrm(x, existant = null, retour = null) {
 
       ${signe ? '' : `<div class="rdc-grille">
         <p class="rdc-grille-titre">Ajouter une prestation <span class="muted">— grille ${esc(nomMetier(etat.metier))}, prix HT</span></p>
-        <div class="rdc-tarifs">
-          ${grille.map(g => `<button type="button" class="rdc-tarif" data-tarif="${esc(g.code)}">
-            <span>${g.reference ? `<small class="muted">${esc(g.reference)}</small> ` : ''}${esc(g.libelle)}</span>
-            <b>${g.a_partir_de ? 'dès ' : ''}${euros(g.prix_ht)}${PAR_UNITE[g.unite] || ''}</b>
-          </button>`).join('')}
-          <button type="button" class="rdc-tarif rdc-libre" data-tarif=""><span>Ligne libre</span><b>prix à saisir</b></button>
+        ${parCategorie(grille, g => g.categorie).map(({ categorie, items }) => `
+          <div class="rdc-famille">
+            <p class="rdc-cat">${esc(categorie)}</p>
+            <div class="rdc-tarifs">
+              ${items.map(({ item: g }) => `<button type="button" class="rdc-tarif" data-tarif="${esc(g.code)}">
+                <span>${g.reference ? `<small class="muted">${esc(g.reference)}</small> ` : ''}${esc(g.libelle)}</span>
+                <b>${g.a_partir_de ? 'dès ' : ''}${euros(g.prix_ht)}${PAR_UNITE[g.unite] || ''}</b>
+              </button>`).join('')}
+            </div>
+          </div>`).join('')}
+        <div class="rdc-famille">
+          <p class="rdc-cat">Hors grille</p>
+          <div class="rdc-tarifs">
+            <button type="button" class="rdc-tarif rdc-libre" data-tarif=""><span>Ligne libre</span><b>prix à saisir</b></button>
+          </div>
         </div>
       </div>`}
 
       <div class="rdc-lignes">
         ${etat.lignes.length ? `<table>
           <thead><tr><th>Désignation</th><th>Qté</th><th>PU HT</th><th class="num">Total HT</th><th></th></tr></thead>
-          <tbody>${etat.lignes.map(ligneHtml).join('')}</tbody>
+          ${parCategorie(etat.lignes).map(({ categorie, items }) => `<tbody class="rdc-groupe">
+            <tr class="rdc-cat-ligne"><th colspan="5">${esc(categorie)}</th></tr>
+            ${items.map(({ item, i }) => ligneHtml(item, i)).join('')}
+          </tbody>`).join('')}
         </table>` : '<p class="rgdf-rien">Aucune prestation pour l’instant : choisissez-en dans la grille ci-dessus.</p>'}
       </div>
 

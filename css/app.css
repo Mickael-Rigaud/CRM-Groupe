@@ -7204,6 +7204,12 @@ span.rpv-statut { display: inline-block; margin-bottom: 4px; }
 .rdc-grille { margin-bottom: 14px; }
 .rdc-grille-titre { margin: 0 0 8px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted-2); }
 .rdc-grille-titre .muted { text-transform: none; letter-spacing: 0; font-weight: 400; }
+.rdc-famille + .rdc-famille { margin-top: 12px; }
+.rdc-cat { margin: 0 0 6px; padding-bottom: 4px; font-size: 12.5px; font-weight: 700; color: var(--accent);
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); }
+.rdc-lignes .rdc-cat-ligne th { padding: 14px 6px 6px; font-size: 12.5px; font-weight: 700; text-transform: none;
+  letter-spacing: 0; color: var(--accent); border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); }
+.rdc-lignes tbody.rdc-groupe:first-of-type .rdc-cat-ligne th { padding-top: 8px; }
 .rdc-tarifs { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; }
 .rdc-tarif { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 9px 11px; text-align: left;
   border: 1px solid var(--line-strong); border-radius: 10px; background: var(--card); cursor: pointer; font: inherit; color: inherit; }
@@ -7236,7 +7242,9 @@ span.rpv-statut { display: inline-block; margin-bottom: 4px; }
   /* Sur téléphone, une ligne de devis se lit en carte : la désignation en
      haut, quantité, prix et total en dessous. */
   .rdc-lignes thead { display: none; }
-  .rdc-lignes tr { display: grid; grid-template-columns: auto auto 1fr auto; gap: 6px 10px; align-items: start;
+  .rdc-lignes tr.rdc-cat-ligne { display: block; padding: 0; border: 0; }
+  .rdc-lignes tr.rdc-cat-ligne th { display: block; }
+  .rdc-lignes tr:not(.rdc-cat-ligne) { display: grid; grid-template-columns: auto auto 1fr auto; gap: 6px 10px; align-items: start;
     padding: 10px 0; border-bottom: 1px solid var(--line); }
   .rdc-lignes td { padding: 0; border: 0; }
   .rdc-lignes td.rdc-designation { grid-column: 1 / -1; min-width: 0; }
@@ -7252,6 +7260,10 @@ span.rpv-statut { display: inline-block; margin-bottom: 4px; }
 .rtf-presta { display: grid; gap: 5px; min-width: 260px; }
 .rtf-presta input[data-champ=libelle] { font-weight: 600; }
 .rtf-precision { font-size: 12.5px; }
+.rtf-categorie { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.rtf-categorie input { flex: 1; font-size: 12.5px !important; padding: 5px 8px !important; }
+.rtf-table tr.rtf-cat th { padding: 16px 8px 6px; font-size: 13px; font-weight: 700; text-transform: none; letter-spacing: 0;
+  color: var(--accent); border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); }
 .rtf-retire { color: var(--amber); }
 .rtf-unite select { min-width: 110px; }
 .rtf-prix { min-width: 170px; }
@@ -7270,7 +7282,9 @@ tr.est-modifie td { background: var(--accent-soft); }
 .rtf-nouvelle { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
 @media screen and (max-width: 720px) {
   .rtf-table thead { display: none; }
-  .rtf-table tr { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+  .rtf-table tr.rtf-cat { display: block; padding: 0; border: 0; }
+  .rtf-table tr.rtf-cat th { display: block; padding: 14px 0 6px !important; }
+  .rtf-table tr:not(.rtf-cat) { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 12px 0; border-bottom: 1px solid var(--line); }
   .rtf-table td { padding: 0 !important; border: 0 !important; }
   .rtf-table td.rtf-presta, .rtf-table td.rtf-prix, .rtf-table td.rtf-actions { grid-column: 1 / -1; min-width: 0; }
   .rtf-table td.rtf-actions { text-align: left; }

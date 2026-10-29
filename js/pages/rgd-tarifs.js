@@ -24,7 +24,7 @@ import { db } from '../data/db.js';
 import { esc, eur, toast } from '../ui.js';
 import { poserEspace } from './espace.js';
 import { cadre, guard } from './rgd-espace.js';
-import { METIERS, nomMetier, PAR_UNITE } from '../data/rgd-devis-crm.js';
+import { METIERS, nomMetier, PAR_UNITE, parCategorie, AUTRES } from '../data/rgd-devis-crm.js';
 
 const euros = (n) => eur(n, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 const LIBELLE_UNITE = { forfait: 'Forfait', heure: 'À l’heure', m2: 'Au m²', ml: 'Au mètre linéaire' };
@@ -64,6 +64,7 @@ export const rgdTarifsPage = {
           ${t.reference ? `<small class="muted">Réf. ${esc(t.reference)}</small>` : ''}
           <input data-champ="libelle" value="${esc(t.libelle)}" aria-label="Prestation">
           <input data-champ="precision" value="${esc(t.precision || '')}" placeholder="Précision (facultatif)" aria-label="Précision" class="rtf-precision">
+          <label class="rtf-categorie"><span>Catégorie</span><input data-champ="categorie" value="${esc(t.categorie || '')}" list="rtf-categories" placeholder="${esc(AUTRES)}" aria-label="Catégorie"></label>
           ${lies.length ? `<small class="muted">Ajoute aussi sur le devis : ${esc(lies.join(', '))}</small>` : ''}
           ${t.actif === false ? '<small class="rtf-retire">Retirée : elle n’est plus proposée sur les nouveaux devis.</small>' : ''}
         </td>
@@ -108,10 +109,15 @@ export const rgdTarifsPage = {
             <span class="muted small">${liste.filter(t => t.actif !== false).length} prestation(s)</span></div>
           <div class="table-wrap rtf-table"><table class="tbl-grille">
             <thead><tr><th>Prestation</th><th>Unité</th><th>Prix HT</th><th title="Le prix est un minimum : il se monte sur le devis, il ne se baisse pas">Dès</th><th></th></tr></thead>
-            <tbody>${liste.map(ligneHtml).join('')}</tbody>
+            ${parCategorie(liste, t => t.categorie).map(({ categorie, items }) => `<tbody>
+              <tr class="rtf-cat"><th colspan="5">${esc(categorie)}</th></tr>
+              ${items.map(({ item }) => ligneHtml(item)).join('')}
+            </tbody>`).join('')}
           </table></div>
+          <datalist id="rtf-categories">${[...new Set(liste.map(t => t.categorie).filter(Boolean))].map(c => `<option value="${esc(c)}">`).join('')}</datalist>
           ${state.ajout ? `<form class="form rtf-nouvelle" id="rtf-nouvelle">
             <div class="field"><label>Nouvelle prestation</label><input name="libelle" required placeholder="Pose d’un point lumineux…"></div>
+            <div class="field half"><label>Catégorie</label><input name="categorie" list="rtf-categories" placeholder="Prises et interrupteurs…"></div>
             <div class="field half"><label>Unité</label><select name="unite">${Object.entries(LIBELLE_UNITE).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></div>
             <div class="field half"><label>Prix HT (€)</label><input name="prix_ht" type="number" inputmode="decimal" min="0" step="1" required></div>
             <div class="field"><label class="check"><input type="checkbox" name="a_partir_de"> Prix « dès » (un minimum)</label></div>
@@ -159,6 +165,7 @@ export const rgdTarifsPage = {
         await db.update('rgd_tarifs', id, {
           libelle: String(t.libelle).trim(),
           precision: String(t.precision || '').trim() || null,
+          categorie: String(t.categorie || '').trim() || null,
           unite: t.unite,
           // Avec des variantes, le prix de la ligne est la moins chère : c'est
           // celui qu'affiche la grille du devis (« dès 1 090 € »).
@@ -232,7 +239,7 @@ export const rgdTarifsPage = {
             metier: state.metier,
             code: codeDepuis(libelle, new Set(toutes.map(t => t.code))),
             ordre: Math.max(0, ...toutes.map(t => t.ordre || 0)) + 10,
-            libelle, unite: f.get('unite'), prix_ht: prix, a_partir_de: f.get('a_partir_de') === 'on',
+            libelle, categorie: String(f.get('categorie') || '').trim() || null, unite: f.get('unite'), prix_ht: prix, a_partir_de: f.get('a_partir_de') === 'on',
             variantes: [], ajoute_aussi: [], actif: true,
           });
           state.ajout = false;
