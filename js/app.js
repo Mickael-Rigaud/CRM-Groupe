@@ -223,8 +223,13 @@ const TIROIR_SANS = new Set(['home', 'today', 'messagerie']);
 // Chez un ouvrier de RGD, il affichait « Pilotage » puis « RGD Renova » en
 // dessous — deux lignes pour l'ecran que le pouce ouvre deja depuis la barre
 // du bas.
-const montrerDansLeTiroir = (g) => !g.bottom && !TIROIR_SANS.has(g.key)
-  && !(g.key === 'commercial' && itemsOf(g).length < 2);
+//
+// ⚠ PUIS PILOTAGE A QUITTÉ LE TIROIR TOUT À FAIT (29/10/2026, Élodie : « dans
+// le menu du crm groupe enlève pilotage »), après la barre du bas le même jour.
+// Il n'était plus la seule porte : le titre du haut déroule les structures
+// (`titreDuHaut`), dans l'application CRM Groupe comme dans celles de
+// structure. Le grand écran garde son onglet Pilotage dans la barre du haut.
+const montrerDansLeTiroir = (g) => !g.bottom && !TIROIR_SANS.has(g.key) && g.key !== 'commercial';
 
 function renderTiroir(gs, here, hash, u, ini) {
   const hote = document.getElementById('tiroir'); if (!hote) return;
@@ -493,8 +498,10 @@ const appliStructure = () => (BAS_STRUCTURE[CLE_APPLI] && scope.activityKeys.inc
 // l'application la remet sur la sienne.
 const CLE_DERNIERE_STRUCTURE = 'crm_appli_structure';
 function structureOuverte(hash) {
+  // ⚠ AUSSI DANS L'APPLICATION CRM GROUPE (`index.html`, 29/10/2026) : Pilotage
+  // a quitté son menu, on y entre dans une structure par le titre du haut, et
+  // la barre du bas suit comme ailleurs. Sans structure retenue, c'est le CRM.
   const appli = appliStructure();
-  if (!appli) return null;
   const ici = Object.keys(ACCUEIL_STRUCTURE).find(k => scope.activityKeys.includes(k)
     && (hash === ACCUEIL_STRUCTURE[k] || hash.startsWith(ACCUEIL_STRUCTURE[k] + '/')));
   // ⚠ ET LE CRM GROUPE ENTIER EST UNE DESTINATION COMME LES AUTRES (29/10/2026,
@@ -530,7 +537,6 @@ function nomDeLEcran(hash, here) {
 // application de structure, et seulement s'il en a au moins deux : pour Franck,
 // qui n'a que RGD, le titre reste un simple titre.
 function structuresAuChoix() {
-  if (!appliStructure()) return [];
   const ks = Object.keys(ACCUEIL_STRUCTURE).filter(k => scope.activityKeys.includes(k) && pourOuvrier(ACCUEIL_STRUCTURE[k]));
   // Le CRM Groupe en tête : c'est le niveau au-dessus des structures.
   if (pourOuvrier('#/home')) ks.unshift('crm');
