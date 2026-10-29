@@ -24,10 +24,10 @@ import { db } from '../data/db.js';
 import { esc, eur, toast } from '../ui.js';
 import { poserEspace } from './espace.js';
 import { cadre, guard } from './rgd-espace.js';
-import { METIERS, nomMetier } from '../data/rgd-devis-crm.js';
+import { METIERS, nomMetier, PAR_UNITE } from '../data/rgd-devis-crm.js';
 
 const euros = (n) => eur(n, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
-const LIBELLE_UNITE = { forfait: 'Forfait', heure: 'À l’heure', m2: 'Au m²' };
+const LIBELLE_UNITE = { forfait: 'Forfait', heure: 'À l’heure', m2: 'Au m²', ml: 'Au mètre linéaire' };
 
 // Un code stable pour une prestation créée ici : il ne sert qu'à relier les
 // lignes de la grille entre elles (« ajoute aussi »), jamais à l'affichage.
@@ -61,6 +61,7 @@ export const rgdTarifsPage = {
       const lies = (t.ajoute_aussi || []).map(c => db.t('rgd_tarifs').find(x => x.metier === t.metier && x.code === c)?.libelle || c);
       return `<tr data-tarif="${esc(t0.id)}" class="${t.actif === false ? 'est-retire' : ''} ${modifie ? 'est-modifie' : ''}">
         <td class="rtf-presta">
+          ${t.reference ? `<small class="muted">Réf. ${esc(t.reference)}</small>` : ''}
           <input data-champ="libelle" value="${esc(t.libelle)}" aria-label="Prestation">
           <input data-champ="precision" value="${esc(t.precision || '')}" placeholder="Précision (facultatif)" aria-label="Précision" class="rtf-precision">
           ${lies.length ? `<small class="muted">Ajoute aussi sur le devis : ${esc(lies.join(', '))}</small>` : ''}
@@ -76,7 +77,7 @@ export const rgdTarifsPage = {
               <span class="rtf-euro"><input type="number" inputmode="decimal" min="0" step="1" data-variante="${i}" data-vchamp="prix_ht" value="${esc(v.prix_ht)}" aria-label="Prix HT de la variante"> €</span>
               <button type="button" class="icon-btn" data-retirer-variante="${i}" aria-label="Retirer la variante">✕</button>
             </div>`).join('')}
-          </div>` : `<span class="rtf-euro"><input type="number" inputmode="decimal" min="0" step="1" data-champ="prix_ht" value="${esc(t.prix_ht)}" aria-label="Prix HT"> €${t.unite === 'heure' ? '/h' : t.unite === 'm2' ? '/m²' : ''}</span>`}
+          </div>` : `<span class="rtf-euro"><input type="number" inputmode="decimal" min="0" step="1" data-champ="prix_ht" value="${esc(t.prix_ht)}" aria-label="Prix HT"> €${PAR_UNITE[t.unite] || ''}</span>`}
           <button type="button" class="lien rtf-ajout-variante" data-ajouter-variante>+ variante</button>
         </td>
         <td class="rtf-des"><label class="check"><input type="checkbox" data-champ="a_partir_de" ${t.a_partir_de ? 'checked' : ''}> Dès</label></td>

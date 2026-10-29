@@ -35,7 +35,9 @@ export const STATUTS_DEVIS_CRM = {
   refuse: { label: 'Refusé', ton: 'red' },
 };
 
-export const UNITES = { forfait: 'u', heure: 'h', m2: 'm²' };
+// `ml` (mètre linéaire) depuis le 29/10/2026 : le passage des câbles.
+export const UNITES = { forfait: 'u', heure: 'h', m2: 'm²', ml: 'ml' };
+export const PAR_UNITE = { heure: '/h', m2: '/m²', ml: '/ml' };
 
 export const METIERS = { electricite: 'Électricité' };
 export const nomMetier = (m) => METIERS[m] || m;
@@ -75,6 +77,7 @@ export function ligneDepuisTarif(t, { surface = null } = {}) {
   const v = (t.variantes || [])[0] || null;
   return {
     code: t.code,
+    reference: t.reference || null,
     metier: t.metier,
     libelle: t.libelle,
     precision: t.precision || '',
@@ -113,7 +116,7 @@ const numeroDemo = () => {
 export async function enregistrerDevisCrm(x, valeurs, existant = null) {
   const f = x.ligne;
   const lignes = (valeurs.lignes || []).map(l => ({
-    code: l.code || null, metier: l.metier || null, libelle: String(l.libelle || '').trim(),
+    code: l.code || null, reference: l.reference || null, metier: l.metier || null, libelle: String(l.libelle || '').trim(),
     precision: String(l.precision || '').trim(), variante: l.variante || null, unite: l.unite || 'forfait',
     quantite: Number(l.quantite) || 0, prix_ht: arrondi(l.prix_ht),
   })).filter(l => l.libelle);

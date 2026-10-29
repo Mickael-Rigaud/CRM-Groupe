@@ -408,7 +408,7 @@ const MENTION_TVA = {
 };
 
 const euros = (n) => (Number(n) || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
-const unite = { forfait: 'u', heure: 'h', m2: 'm²' };
+const unite = { forfait: 'u', heure: 'h', m2: 'm²', ml: 'ml' };
 
 const styleDevis = `
   table.lignes { width: 100%; border-collapse: collapse; margin-top: 4px; font-size: 9.8pt; }
@@ -458,7 +458,7 @@ ${devis.objet ? `<div class="champs" style="margin-top:7px">${champ('Objet', dev
   <thead><tr><th>Désignation</th><th class="n">Qté</th><th class="n">Prix unitaire HT</th><th class="n">Total HT</th></tr></thead>
   <tbody>
     ${lignes.map(l => `<tr>
-      <td><b>${esc(l.libelle)}</b>${l.variante ? ` — ${esc(l.variante)}` : ''}${l.precision ? `<small>${esc(l.precision)}</small>` : ''}</td>
+      <td><b>${esc(l.libelle)}</b>${l.variante ? ` — ${esc(l.variante)}` : ''}${l.precision ? `<small>${esc(l.precision)}</small>` : ''}${l.reference ? `<small>Réf. ${esc(l.reference)}</small>` : ''}</td>
       <td class="n">${esc(String(l.quantite).replace('.', ','))} ${esc(unite[l.unite] || '')}</td>
       <td class="n">${euros(l.prix_ht)}</td>
       <td class="n">${euros((Number(l.quantite) || 0) * (Number(l.prix_ht) || 0))}</td>

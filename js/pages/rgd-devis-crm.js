@@ -21,7 +21,7 @@ import { esc, eur, toast, openModal, closeModal, fmtDate } from '../ui.js';
 import { scope } from '../data/scope.js';
 import { valeursProjet } from '../data/rgd-projet.js';
 import {
-  TVA, TVA_DEFAUT, STATUTS_DEVIS_CRM, UNITES, nomMetier, tarifsDe, metiersAvecGrille,
+  TVA, TVA_DEFAUT, STATUTS_DEVIS_CRM, UNITES, PAR_UNITE, nomMetier, tarifsDe, metiersAvecGrille,
   totaux, plancher, ligneDepuisTarif, enregistrerDevisCrm, changerStatutDevisCrm, supprimerDevisCrm,
 } from '../data/rgd-devis-crm.js';
 
@@ -110,8 +110,8 @@ export function ouvrirDevisCrm(x, existant = null, retour = null) {
         <p class="rdc-grille-titre">Ajouter une prestation <span class="muted">— grille ${esc(nomMetier(etat.metier))}, prix HT</span></p>
         <div class="rdc-tarifs">
           ${grille.map(g => `<button type="button" class="rdc-tarif" data-tarif="${esc(g.code)}">
-            <span>${esc(g.libelle)}</span>
-            <b>${g.a_partir_de ? 'dès ' : ''}${euros(g.prix_ht)}${g.unite === 'heure' ? '/h' : g.unite === 'm2' ? '/m²' : ''}</b>
+            <span>${g.reference ? `<small class="muted">${esc(g.reference)}</small> ` : ''}${esc(g.libelle)}</span>
+            <b>${g.a_partir_de ? 'dès ' : ''}${euros(g.prix_ht)}${PAR_UNITE[g.unite] || ''}</b>
           </button>`).join('')}
           <button type="button" class="rdc-tarif rdc-libre" data-tarif=""><span>Ligne libre</span><b>prix à saisir</b></button>
         </div>
