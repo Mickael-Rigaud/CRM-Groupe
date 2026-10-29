@@ -314,6 +314,26 @@ export function carteDossier(x) {
 // en premier »). Cocher la case, c'est venir les voir : en fin de colonne, il
 // fallait faire défiler toutes les tâches ouvertes pour les trouver. Une tâche
 // qu'on vient de cocher (`recentes`) reste à sa place le temps de l'annuler.
+// L'onglet choisi survit aux redessins (une case cochée redessine tout) et au
+// changement d'écran, le temps de la session de la page.
+let kbChoisie = null;
+// ⚠ UN SEUL ÉCOUTEUR, SUR LE DOCUMENT : le tableau est réécrit à chaque
+// `draw()`, un écouteur posé sur les boutons disparaîtrait au premier redessin.
+// Le changement d'onglet ne redessine rien : il bascule deux classes.
+let ongletsEcoutes = false;
+function ecouterLesOnglets() {
+  if (ongletsEcoutes) return;
+  ongletsEcoutes = true;
+  document.addEventListener('click', (e) => {
+    const b = e.target instanceof Element && e.target.closest('[data-kb-onglet]');
+    if (!b) return;
+    kbChoisie = b.dataset.kbOnglet;
+    const bande = b.parentElement;
+    bande.querySelectorAll('.kb-onglet').forEach(x => { const on = x === b; x.classList.toggle('on', on); x.setAttribute('aria-selected', String(on)); });
+    bande.nextElementSibling?.querySelectorAll('.kb-col').forEach(c => c.classList.toggle('est-choisie', c.dataset.col === kbChoisie));
+  });
+}
+
 export function kanbanHtml(taches, recentes, faitesEnTete = false) {
   // ⚠ LES COLONNES VIENNENT DE `structuresDeLUtilisateur`, PAS DE `ACTIVITIES` :
   // depuis le 05/10/2026 une tâche peut appartenir à un MODULE — la gestion
@@ -351,11 +371,30 @@ export function kanbanHtml(taches, recentes, faitesEnTete = false) {
   // (06/10/2026 : « peu importe le nombre de structures, adapte-toi à la largeur
   // de l'écran »). Une colonne seule ne fait pas pour autant des cartes d'un
   // mètre : sa pile passe en grille de cartes (requête de conteneur, `app.css`).
-  return `<div class="kb-plateau">
+  //
+  // ⚠ SUR TÉLÉPHONE, UNE STRUCTURE À LA FOIS, CHOISIE PAR DES ONGLETS DE
+  // COULEUR (29/10/2026, Élodie : « je n'aime pas que les structures soient à
+  // la suite comme ça, il faut aller tout en bas pour voir la dernière
+  // structure » ; onglets choisis parmi quatre maquettes). Les colonnes, posées
+  // en une seule file sous 820 px, faisaient défiler toutes les tâches de RGD
+  // avant d'atteindre Propulsion. Les onglets n'existent qu'à cette largeur
+  // (`css/mobile.css`) : le grand écran garde ses colonnes côte à côte.
+  const choisie = colonnes.some(c => c.cle === kbChoisie) ? kbChoisie : colonnes[0]?.cle;
+  ecouterLesOnglets();
+  // Jusqu'à quatre onglets sur une rangée ; au-delà (Locatif, « Sans
+  // structure »), deux rangées de trois plutôt que des noms coupés.
+  const parRangee = colonnes.length <= 4 ? colonnes.length : 3;
+  const onglets = colonnes.length > 1 ? `<div class="kb-onglets" role="tablist" aria-label="Structures" style="--n:${parRangee}">${colonnes.map(c => {
+    const n = c.l.filter(t => !t.done).length + c.d.length;
+    const on = c.cle === choisie;
+    return `<button type="button" role="tab" class="kb-onglet ${on ? 'on' : ''}" aria-selected="${on}" data-kb-onglet="${esc(c.cle)}"
+      style="--c:${c.couleur};--ci:${c.encre}"><span>${esc(c.cle ? (c.court || c.nom) : c.nom)}</span>${n ? `<i>${n}</i>` : ''}</button>`;
+  }).join('')}</div>` : '';
+  return `${onglets}<div class="kb-plateau" ${onglets ? 'data-onglets' : ''}>
     ${colonnes.map(c => {
       const ouvertes = c.l.filter(t => !t.done);
       const tard = ouvertes.filter(t => ecart(t) > 0).length;
-      return `<section class="kb-col" data-col="${esc(c.cle)}" style="--c:${c.couleur};--ci:${c.encre}">
+      return `<section class="kb-col ${c.cle === choisie ? 'est-choisie' : ''}" data-col="${esc(c.cle)}" style="--c:${c.couleur};--ci:${c.encre}">
         <header class="kb-tete">
           <div class="kb-tete-haut">
             <h3>${esc(c.nom)}</h3>

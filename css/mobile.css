@@ -433,3 +433,31 @@
 .topnav { padding-top: env(safe-area-inset-top, 0px); background: var(--accent); }
 
 @media print { .barre-bas { display: none !important; } }
+
+/* ---- To-do par structure : des onglets de couleur, une structure a la fois ----
+   (29/10/2026, Elodie : « il faut aller tout en bas pour voir la derniere
+   structure ».) Les colonnes empilees faisaient defiler toutes les taches de la
+   premiere structure avant d'atteindre la derniere. Au-dessus de 820 px, les
+   onglets n'existent pas et les colonnes restent cote a cote. */
+.kb-onglets { display: none; }
+@media screen and (max-width: 820px) {
+  /* ⚠ TOUS LES ONGLETS TIENNENT SUR LA LARGEUR, sans defilement de cote : un
+     onglet coupe au bord est un onglet qu'on ne voit pas, et c'est justement la
+     derniere structure qu'il fallait rendre visible. Le compteur passe donc en
+     pastille dans le coin, comme sur la barre du bas, pour laisser au nom toute
+     la place. */
+  .kb-onglets { display: grid; grid-template-columns: repeat(var(--n, 4), minmax(0, 1fr)); gap: 12px 6px; margin: 2px 0 14px; padding-top: 8px; }
+  .kb-onglet { position: relative; min-width: 0;
+               border: 2px solid var(--c); background: color-mix(in srgb, var(--c) 10%, var(--card));
+               color: var(--ci, var(--text)); border-radius: 12px; padding: 9px 4px;
+               font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; text-align: center;
+               white-space: nowrap; -webkit-tap-highlight-color: transparent; }
+  .kb-onglet > span { display: block; overflow: hidden; text-overflow: ellipsis; }
+  .kb-onglet i { position: absolute; top: -9px; right: -4px; font-style: normal; font-size: 11px; font-weight: 800;
+                 min-width: 19px; height: 19px; padding: 0 5px; border-radius: 999px;
+                 display: grid; place-items: center; background: var(--c); color: #fff;
+                 box-shadow: 0 0 0 2px var(--bg, #fff); }
+  .kb-onglet.on { background: var(--c); color: #fff; }
+  .kb-onglet.on i { background: #fff; color: var(--ci, var(--c)); box-shadow: 0 0 0 2px var(--c); }
+  .kb-plateau[data-onglets] > .kb-col:not(.est-choisie) { display: none; }
+}
