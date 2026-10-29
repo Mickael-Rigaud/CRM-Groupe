@@ -192,3 +192,70 @@ export const changerStatutDevisCrm = (d, statut) => db.update('rgd_devis_crm', d
 });
 
 export const supprimerDevisCrm = (d) => db.remove('rgd_devis_crm', d.id);
+
+// ------------------------------------------------------ l'envoi par mail
+// ⚠ IL PART PAR `envoyer-email`, LA MÊME PORTE QUE LES RELANCES : même
+// expéditeur (contact@rgdrenova.fr), même fournisseur. La réponse du client
+// revient à contact@rgdrenova.fr.
+//
+// ⚠ ENVELOPPE DE MARQUE, PAS LA SOBRE : Élodie a fixé le périmètre de la sobre
+// (les trois relances et la demande d'avis) et demande qu'on ne l'élargisse
+// pas sans elle. La question lui est posée le 29/10 ; d'ici sa réponse, le
+// devis part dans l'enveloppe par défaut.
+//
+// ⚠ CE N'EST PAS LA RELANCE AUTOMATIQUE J+3/8/15 : celle-ci ne suit que les
+// devis Costructor (`rgd_devis`). Un devis du CRM envoyé ici ne sera relancé
+// par personne d'autre que Franck ou Mickael.
+
+/** Le message par défaut, modifiable avant l'envoi. */
+export function messageDevisCrm(devis, nomClient) {
+  const salut = nomClient ? `Bonjour ${nomClient},` : 'Bonjour,';
+  return `${salut}
+
+Vous trouverez ci-joint notre devis n° ${devis.numero || ''} d’un montant de ${Number(devis.montant_ttc || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} € TTC, valable ${devis.validite_jours || 30} jours.
+
+Pour l’accepter, il vous suffit de nous le retourner daté et signé avec la mention « Bon pour accord », en réponse à ce mail.
+
+Nous restons à votre disposition pour toute question.
+
+Bien cordialement,
+L’équipe RGD Renova`;
+}
+
+const echappe = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+// Le texte tapé devient des paragraphes : une ligne vide sépare deux blocs.
+const enParagraphes = (t) => String(t || '').trim().split(/\n\s*\n/)
+  .map(p => `<p>${echappe(p).replace(/\n/g, '<br>')}</p>`).join('');
+
+/**
+ * Envoyer le devis. `pdf` vient de `pdfDevisCrm` : { base64, nom }.
+ * Rend { ok } ou { ok: false, motif }. Un brouillon passe en « Envoyé ».
+ */
+export async function envoyerDevisCrm(devis, { a, nom, objet, message, copie }, pdf) {
+  if (CONFIG.DEMO) return { ok: false, motif: 'Mode démonstration : aucun mail ne part.' };
+  const jeton = await db.accessToken();
+  if (!jeton) return { ok: false, motif: 'Session expirée : reconnectez-vous.' };
+  try {
+    const r = await fetch(`${CONFIG.SUPABASE_URL}/functions/v1/envoyer-email`, {
+      method: 'POST',
+      headers: { apikey: CONFIG.SUPABASE_ANON_KEY, Authorization: `Bearer ${jeton}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        to: { email: a, name: nom || a },
+        subject: objet,
+        html: enParagraphes(message),
+        replyTo: { email: 'contact@rgdrenova.fr', name: 'RGD Renova' },
+        ...(copie ? { bcc: [{ email: 'contact@rgdrenova.fr', name: 'RGD Renova' }] } : {}),
+        attachment: [{ name: pdf.nom, content: pdf.base64 }],
+      }),
+    });
+    const rep = await r.json().catch(() => ({}));
+    if (!r.ok || rep.ok === false) return { ok: false, motif: rep.detail || rep.erreur || `Erreur ${r.status}` };
+  } catch (e) {
+    return { ok: false, motif: String(e.message || e).slice(0, 160) };
+  }
+  // Le mail est parti : une trace qui échoue ne le rend pas non envoyé.
+  if (devis.statut === 'brouillon') {
+    try { await changerStatutDevisCrm(devis, 'envoye'); } catch (e) { console.warn('[RGD] devis envoyé, statut non changé :', e.message); }
+  }
+  return { ok: true };
+}

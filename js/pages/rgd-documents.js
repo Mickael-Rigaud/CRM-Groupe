@@ -515,3 +515,59 @@ export const imprimerDevisCrm = (x, devis) => {
   const d = donneesDocument(x);
   imprimerPage(devisCrmHtml(d, devis), titreDocument(`Devis ${devis.numero || ''}`.trim(), d));
 };
+
+// ------------------------------------------- le devis en PDF, pour le mail
+// ⚠ UN PDF FABRIQUÉ DANS LE NAVIGATEUR, PAS PAR L'IMPRESSION (29/10/2026,
+// Élodie : « un bouton pour envoyer directement le devis par mail »). La boîte
+// d'impression rend un fichier que la page ne peut pas reprendre ; pour le
+// joindre au mail il faut ses octets. On photographie donc le même gabarit
+// (`devisCrmHtml`, la seule mise en page du devis) et on le pose dans un A4.
+//
+// ⚠ LES DEUX BIBLIOTHÈQUES SONT DANS `assets/`, PAS SUR UN CDN : une version
+// ouverte sur un CDN tiers a déjà fait tomber le CRM. Elles ne se chargent
+// qu'au premier envoi — une fiche qu'on ouvre n'a pas à télécharger 560 ko.
+const charge = (src) => new Promise((ok, ko) => {
+  if (document.querySelector(`script[data-lib="${src}"]`)) return ok();
+  const s = Object.assign(document.createElement('script'), { src: new URL(`../../assets/${src}`, import.meta.url).href });
+  s.dataset.lib = src;
+  s.onload = () => ok(); s.onerror = () => ko(new Error(`Bibliothèque ${src} introuvable`));
+  document.head.appendChild(s);
+});
+
+/** Le devis en PDF : { base64, nom }. */
+export async function pdfDevisCrm(x, devis) {
+  await charge('html2canvas.min.js');
+  await charge('jspdf.umd.min.js');
+  const d = donneesDocument(x);
+  const cadre = document.createElement('iframe');
+  // 794 px = un A4 à 96 points par pouce : la page se met en forme comme à
+  // l'impression. Hors de l'écran, mais RENDUE (pas de display:none, sinon
+  // rien à photographier).
+  cadre.style.cssText = 'position:fixed;left:-10000px;top:0;width:794px;height:1123px;border:0;visibility:hidden';
+  document.body.appendChild(cadre);
+  try {
+    await new Promise((ok) => { cadre.onload = ok; cadre.srcdoc = devisCrmHtml(d, devis); });
+    const doc = cadre.contentDocument;
+    await Promise.all([...doc.images].map(i => (i.complete ? null : new Promise(r => { i.onload = r; i.onerror = r; }))));
+    const toile = await window.html2canvas(doc.body, { scale: 2, backgroundColor: '#ffffff', windowWidth: 794, useCORS: true });
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
+    // La toile est découpée en tranches de la hauteur d'une page A4.
+    const hauteurPage = Math.floor(toile.width * 297 / 210);
+    for (let y = 0, n = 0; y < toile.height; y += hauteurPage, n++) {
+      const tranche = document.createElement('canvas');
+      tranche.width = toile.width;
+      tranche.height = Math.min(hauteurPage, toile.height - y);
+      // Un reste de quelques pixels (la marge du bas) ferait une page blanche :
+      // mesuré, le premier essai sortait 2 pages pour un devis qui en tient une.
+      if (n && tranche.height < hauteurPage * 0.05) break;
+      tranche.getContext('2d').drawImage(toile, 0, y, toile.width, tranche.height, 0, 0, toile.width, tranche.height);
+      if (n) pdf.addPage();
+      pdf.addImage(tranche.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, 210, tranche.height * 210 / toile.width);
+    }
+    const nom = `${titreDocument(`Devis ${devis.numero || ''}`.trim(), d)}.pdf`;
+    return { base64: pdf.output('datauristring').split(',')[1], nom };
+  } finally {
+    cadre.remove();
+  }
+}

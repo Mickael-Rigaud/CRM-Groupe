@@ -22,7 +22,7 @@ import { scope } from '../data/scope.js';
 import { valeursProjet } from '../data/rgd-projet.js';
 import {
   TVA, TVA_DEFAUT, STATUTS_DEVIS_CRM, UNITES, PAR_UNITE, nomMetier, tarifsDe, metiersAvecGrille,
-  totaux, plancher, ligneDepuisTarif, parCategorie, enregistrerDevisCrm, changerStatutDevisCrm, supprimerDevisCrm,
+  totaux, plancher, ligneDepuisTarif, parCategorie, messageDevisCrm, envoyerDevisCrm, enregistrerDevisCrm, changerStatutDevisCrm, supprimerDevisCrm,
 } from '../data/rgd-devis-crm.js';
 
 const euros = (n) => eur(n, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -182,6 +182,7 @@ export function ouvrirDevisCrm(x, existant = null, retour = null) {
         <div class="rdc-boutons">
           <button type="button" class="btn ghost" data-close>Fermer</button>
           ${signe ? '' : '<button type="button" class="btn ghost" id="rdc-enregistrer">Enregistrer</button>'}
+          <button type="button" class="btn ghost" id="rdc-mail">Envoyer par mail</button>
           <button type="button" class="btn" id="rdc-pdf">${signe ? 'Imprimer le PDF' : 'Enregistrer et PDF'}</button>
         </div>
       </div>`;
@@ -358,12 +359,69 @@ export function ouvrirDevisCrm(x, existant = null, retour = null) {
       const d = await enregistrer();
       if (d) { closeModal(true); ouvrirDevisCrm(x, d, retour); }
     };
+    hote.querySelector('#rdc-mail').onclick = async () => {
+      const d = signe ? existant : await enregistrer();
+      if (d) ouvrirEnvoi(d);
+    };
     hote.querySelector('#rdc-pdf').onclick = async () => {
       const d = signe ? existant : await enregistrer();
       if (!d) return;
       imprimer(d);
       closeModal(true);
       ouvrirDevisCrm(x, d, retour);
+    };
+  }
+
+  // ⚠ L'ENVOI SE PRÉPARE DANS LA MÊME FENÊTRE (29/10/2026, Élodie : « un
+  // bouton pour envoyer directement le devis par mail »). Destinataire, objet
+  // et message sont pré-remplis et se corrigent ; le PDF est fabriqué au
+  // moment d'envoyer, depuis le devis ENREGISTRÉ — ce qui part est ce qui est
+  // en base, numéro compris.
+  async function ouvrirEnvoi(d) {
+    const docs = await import('./rgd-documents.js');
+    const qui = docs.donneesDocument(x);
+    m.querySelector('.modal-head h2').textContent = `Envoyer le devis ${d.numero || ''}`;
+    hote.innerHTML = `
+      <p class="rdc-aide">Le devis part en <b>pièce jointe PDF</b>, depuis contact@rgdrenova.fr. La réponse du client arrive à la même adresse.</p>
+      <div class="form">
+        <div class="field"><label>Destinataire</label>
+          <input id="rdc-a" type="email" value="${esc(qui.email || '')}" placeholder="adresse@client.fr" required></div>
+        <div class="field"><label>Objet</label>
+          <input id="rdc-objet-mail" value="${esc(`Votre devis RGD Renova n° ${d.numero || ''}`)}"></div>
+        <div class="field"><label>Message</label>
+          <textarea id="rdc-message" rows="11">${esc(messageDevisCrm(d, qui.nom))}</textarea></div>
+        <div class="field"><label class="check"><input type="checkbox" id="rdc-copie" checked> Garder une copie à contact@rgdrenova.fr</label></div>
+      </div>
+      <p class="small muted">Pièce jointe : <b>Devis ${esc(d.numero || '')}</b> — ${euros(d.montant_ttc)} TTC.</p>
+      <div class="rdc-pied">
+        <div class="rdc-totaux"><span>${d.statut === 'brouillon' ? 'Le devis passera en <b>Envoyé</b>.' : ''}</span></div>
+        <div class="rdc-boutons">
+          <button type="button" class="btn ghost" id="rdc-retour">← Retour au devis</button>
+          <button type="button" class="btn" id="rdc-envoyer">Envoyer</button>
+        </div>
+      </div>`;
+    hote.querySelector('#rdc-a').focus();
+    hote.querySelector('#rdc-retour').onclick = () => { closeModal(true); ouvrirDevisCrm(x, d, retour); };
+    const bouton = hote.querySelector('#rdc-envoyer');
+    bouton.onclick = async () => {
+      const a = hote.querySelector('#rdc-a').value.trim();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(a)) { toast('Adresse mail du client invalide', 'error'); return; }
+      bouton.disabled = true; bouton.textContent = 'Envoi…';
+      try {
+        const pdf = await docs.pdfDevisCrm(x, d);
+        const r = await envoyerDevisCrm(d, {
+          a, nom: qui.nom,
+          objet: hote.querySelector('#rdc-objet-mail').value.trim() || `Votre devis RGD Renova n° ${d.numero || ''}`,
+          message: hote.querySelector('#rdc-message').value,
+          copie: hote.querySelector('#rdc-copie').checked,
+        }, pdf);
+        if (!r.ok) throw new Error(r.motif);
+        toast(`Devis ${d.numero || ''} envoyé à ${a}`);
+        closeModal();
+      } catch (e) {
+        bouton.disabled = false; bouton.textContent = 'Envoyer';
+        toast(`Non envoyé — ${String(e.message || e).slice(0, 140)}`, 'error');
+      }
     };
   }
 

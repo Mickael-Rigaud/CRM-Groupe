@@ -7254,7 +7254,7 @@ span.rpv-statut { display: inline-block; margin-bottom: 4px; }
 .rdc-totaux b { color: var(--text); margin-left: 4px; }
 .rdc-totaux .rdc-ttc { font-size: 16px; color: inherit; font-weight: 700; }
 .rdc-totaux .rdc-ttc b { color: var(--accent); }
-.rdc-boutons { display: flex; gap: 8px; margin-left: auto; }
+.rdc-boutons { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-left: auto; }
 @media screen and (max-width: 720px) {
   .rdc-saisie { padding-left: 12px; }
   .rdc-presta { scroll-margin-bottom: 150px; }
