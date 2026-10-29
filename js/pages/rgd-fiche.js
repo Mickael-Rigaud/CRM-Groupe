@@ -718,9 +718,16 @@ export function ouvrirFicheRgd(x, onChange, retour = null) {
             : ''}
         </div>
         ${retour ? `<button type="button" class="btn ghost sm rgdf-retour" id="rgdf-retour">← ${esc(retour.label || 'Retour')}</button>` : ''}
+        <!-- Faire un devis EN HAUT, a cote de Modifier (29/10/2026, Elodie ne
+             trouvait pas le bloc, range en bas de la colonne de gauche : « je
+             voudrais qu'on puisse faire le devis directement dans la fiche
+             prospect »). Le bloc des devis reste plus bas, pour les relire. -->
+        <div class="rgdf-gestes">
         ${refusDeProjet(x)
           ? `<p class="rgdf-origine" title="${esc(refusDeProjet(x))}">Lecture seule</p>`
           : '<button type="button" class="btn ghost sm rgdf-modifier" id="rgdf-modifier">Modifier les informations</button>'}
+        ${peutFaireDevisCrm() ? '<button type="button" class="btn sm rgdf-devis" data-faire-devis>+ Faire un devis</button>' : ''}
+        </div>
         <!-- Attribuer ne dépend pas de refusDeProjet : une fiche en lecture
              seule (un reflet de l'application RGD) se confie tout de même, car
              c'est le CRM qui décide qui la porte, pas le relevé. -->
@@ -826,11 +833,11 @@ export function ouvrirFicheRgd(x, onChange, retour = null) {
           ${devis.length || chantiers.length ? `<p class="rgdf-source">Devis et chantiers viennent de
             Costructor, relevés toutes les 30 minutes. Ils se modifient dans
             l’application RGD.</p>` : ''}
-
-          ${blocDevisCrm(devisCrm, peutFaireDevisCrm())}
         </div>
 
         <div class="rgdf-colonne">
+          ${/* Le bouton est en haut de la fiche : le bloc ne montre que les devis faits. */ blocDevisCrm(devisCrm, false)}
+
           ${x.genre === 'fiche' && (dossiersDe(f).length || ['chantier_termine', 'sav'].includes(etapeCourante)) ? (() => {
             // ⚠ LE BLOC « SAV » (13/10/2026) : les dossiers après-vente de la
             // personne, et de quoi en ouvrir un. Il n'apparaît qu'une fois le
@@ -969,7 +976,8 @@ export function ouvrirFicheRgd(x, onChange, retour = null) {
 
     // Les devis du CRM : la fenêtre du devis remplace la fiche, et la fiche se
     // reconstruit à sa fermeture — comme pour « Modifier les informations ».
-    m.querySelector('#rdc-nouveau')?.addEventListener('click', () => ouvrirDevisCrm(x, null, () => dessine()));
+    m.querySelectorAll('#rdc-nouveau, [data-faire-devis]').forEach(b =>
+      b.addEventListener('click', () => ouvrirDevisCrm(x, null, () => dessine())));
     m.querySelectorAll('[data-devis-crm]').forEach(tr => {
       const ouvrir = () => {
         const d = db.byId('rgd_devis_crm', tr.dataset.devisCrm);

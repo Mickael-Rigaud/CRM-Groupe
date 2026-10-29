@@ -1128,6 +1128,9 @@ button.esp-side-titre { background: none; border: 0; font-family: inherit; color
 /* Le bouton d'entree se tient dans l'en-tete, au-dessus des chiffres : c'est
    la premiere chose qu'on cherche quand on vient corriger quelque chose. */
 .rgdf-modifier { align-self: flex-start; margin-bottom: 12px; }
+/* Modifier et Faire un devis cote a cote (29/10/2026). */
+.rgdf-gestes { display: flex; flex-wrap: wrap; gap: 8px; align-self: flex-start; margin-bottom: 12px; }
+.rgdf-gestes .rgdf-modifier { margin-bottom: 0; }
 
 /* ---- l'historique ---- */
 .rgdf-ajout { display: flex; gap: 8px; margin-bottom: 14px; }
