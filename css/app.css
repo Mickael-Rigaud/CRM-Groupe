@@ -7241,3 +7241,35 @@ span.rpv-statut { display: inline-block; margin-bottom: 4px; }
   .rdc-lignes :is(input, select) { font-size: 16px; }
   .rdc-tarifs { grid-template-columns: 1fr 1fr; }
 }
+
+/* La grille des tarifs, éditable par la direction (29/10/2026). */
+.rtf-table td { vertical-align: top; padding-top: 10px; padding-bottom: 10px; }
+.rtf-table input:not([type=checkbox]), .rtf-table select { width: 100%; border: 1px solid var(--line-strong); border-radius: 8px;
+  padding: 7px 9px; background: #fff; font: inherit; }
+.rtf-presta { display: grid; gap: 5px; min-width: 260px; }
+.rtf-presta input[data-champ=libelle] { font-weight: 600; }
+.rtf-precision { font-size: 12.5px; }
+.rtf-retire { color: var(--amber); }
+.rtf-unite select { min-width: 110px; }
+.rtf-prix { min-width: 170px; }
+.rtf-euro { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.rtf-euro input { width: 96px !important; }
+.rtf-variantes { display: grid; gap: 6px; }
+.rtf-variante { display: grid; grid-template-columns: 1fr auto auto; gap: 6px; align-items: center; }
+.rtf-ajout-variante { margin-top: 6px; padding: 0; border: 0; background: none; color: var(--accent); font: inherit;
+  font-size: 12.5px; cursor: pointer; }
+.rtf-des { white-space: nowrap; }
+.rtf-actions { white-space: nowrap; text-align: right; }
+.rtf-actions .btn + .btn { margin-left: 6px; }
+tr.est-retire td { opacity: .6; }
+tr.est-retire .rtf-actions { opacity: 1; }
+tr.est-modifie td { background: var(--accent-soft); }
+.rtf-nouvelle { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+@media screen and (max-width: 720px) {
+  .rtf-table thead { display: none; }
+  .rtf-table tr { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+  .rtf-table td { padding: 0 !important; border: 0 !important; }
+  .rtf-table td.rtf-presta, .rtf-table td.rtf-prix, .rtf-table td.rtf-actions { grid-column: 1 / -1; min-width: 0; }
+  .rtf-table td.rtf-actions { text-align: left; }
+  .rtf-table :is(input, select) { font-size: 16px; }
+}

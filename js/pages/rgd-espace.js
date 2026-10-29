@@ -111,6 +111,9 @@ export const ONGLETS = [
     // chaîne ; l'y intercaler la casserait, le poser devant la laisse intacte.
     { hash: '#/rgd/chantiers', label: 'Pipeline' },
     { hash: '#/rgd/devis', label: 'Devis' },
+    // La grille des devis du CRM (29/10/2026) : à côté des devis, réservée à
+    // la direction comme la Prospection.
+    { hash: '#/rgd/tarifs', label: 'Tarifs' },
     { hash: '#/rgd/paiements', label: 'Encaissements' },
     { hash: '#/rgd/costructor', label: 'Costructor' },
     { hash: '#/rgd/reglages', label: 'Réglages' },
@@ -200,7 +203,7 @@ const SANS_BANDEAU = ['#/rgd/clients'];
 // ⚠ LE GROUPE « COMMUNICATION » ENTIER est réservé depuis le 08/10/2026,
 // Réalisations comprises (Élodie : « tu ne dois donner les accès qu'à la
 // direction et pas aux chargés d'affaires »). Le groupe vidé sort du menu.
-const RESERVES_DIRECTION = ['#/rgd/prospection', '#/rgd/realisations', '#/rgd/inspirations', '#/rgd/communication', '#/rgd/analyse'];
+const RESERVES_DIRECTION = ['#/rgd/tarifs', '#/rgd/prospection', '#/rgd/realisations', '#/rgd/inspirations', '#/rgd/communication', '#/rgd/analyse'];
 const sansDirection = (liste) => liste
   .filter(o => !RESERVES_DIRECTION.includes(o.hash))
   .map(o => (o.sous ? { ...o, sous: sansDirection(o.sous) } : o))
@@ -220,7 +223,7 @@ const sansDirection = (liste) => liste
 // seulement un calendrier —, et depuis que la direction voit tout le monde
 // c'est l'écran lui-même qui sépare les agendas, par couleur et par boutons.
 // Le sélecteur y faisait croire à un filtre qui ne filtrait rien.
-const SANS_VUE = ['#/rgd/realisations', '#/rgd/inspirations', '#/rgd/communication', '#/rgd/analyse', '#/rgd/agenda'];
+const SANS_VUE = ['#/rgd/tarifs', '#/rgd/realisations', '#/rgd/inspirations', '#/rgd/communication', '#/rgd/analyse', '#/rgd/agenda'];
 
 export const cadre = (actif, titre, corps) => coquilleEspace({
   actif, titre,
