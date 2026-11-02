@@ -7288,6 +7288,11 @@ span.rpv-statut { display: inline-block; margin-bottom: 4px; }
 .rdc-statut { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 10px; }
 .rdc-statut .muted { margin-right: 4px; }
 .rdc-suppr { margin-left: auto; }
+/* Le motif d'annulation se tape SUR la rangée, pas dans une seconde fenêtre
+   (deux modales partagent closeModal et se ferment mal). Il lui faut donc
+   de la place : sans largeur propre, le champ se réduisait à la taille de
+   son contenu entre deux boutons. */
+.rdc-motif { flex: 1 1 260px; min-width: 180px; }
 /* Le total et les boutons restent collés en bas : on n'a jamais à descendre. */
 .rdc-pied { position: sticky; bottom: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
   gap: 10px 16px; margin: 6px -24px -22px; padding: 12px 24px; background: var(--card); border-top: 1px solid var(--line-strong);
@@ -7347,4 +7352,43 @@ tr.est-modifie td { background: var(--accent-soft); }
   .rtf-table td.rtf-presta, .rtf-table td.rtf-prix, .rtf-table td.rtf-actions { grid-column: 1 / -1; min-width: 0; }
   .rtf-table td.rtf-actions { text-align: left; }
   .rtf-table :is(input, select) { font-size: 16px; }
+}
+
+/* ------------------------------------------------- bon d'attachement (02/11/2026)
+   Élodie : « je voudrais pouvoir remplir directement depuis l'interface ». Le
+   formulaire suit l'ordre du papier — on le remplit en regardant le document,
+   et une section dans un autre ordre se saute.
+   ⚠ `@media screen`, PAS `@media` SEUL : une requête sans `screen` s'applique
+   aussi au PAPIER, et la mise en page téléphone est déjà sortie une fois sur
+   un PDF remis à un client. */
+.rba .rba-section { margin: 20px 0 8px; padding-top: 14px; border-top: 1px solid var(--line);
+  font-size: 13px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted-2); }
+.rba .rba-section:first-of-type { margin-top: 12px; }
+.rba .rba-rangee { padding: 10px 12px; margin-bottom: 8px; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--card-2); }
+.rba .rba-rangee .mf-grille { margin-bottom: 0; }
+.rba .rba-titre-rangee { font-weight: 600; font-size: 13.5px; margin-bottom: 8px; }
+.rba .rba-titre-rangee span { margin-left: 6px; font-weight: 400; }
+/* ⚠ `text-transform` S'HÉRITE, ET LES CASES SORTAIENT EN MAJUSCULES. L'étiquette
+   d'un groupe est en petites capitales — c'est le style de la maison — mais une
+   case à cocher est une PHRASE qu'on lit, pas un intitulé de champ : « DÉPANNAGE
+   / RECHERCHE DE PANNE » en capitales sur douze lignes ne se lit plus. */
+.rba .checks .check { align-items: center; text-transform: none; letter-spacing: normal;
+  font-weight: 500; font-size: 13.5px; color: var(--ink); }
+.rba .rba-aussi { width: 9em; margin-left: 6px; padding: 3px 7px; font: inherit; font-size: 13px;
+  border: 1px solid var(--line); border-radius: 7px; background: var(--card); color: inherit; }
+.rba .rba-aussi:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.rba .form-actions { position: sticky; bottom: 0; padding: 12px 0 2px; margin-top: 18px;
+  background: var(--card); border-top: 1px solid var(--line); }
+@media screen and (max-width: 720px) {
+  /* 16 px : en dessous, les navigateurs de téléphone zooment sur le champ au
+     premier appui et la fenêtre part de travers. */
+  .rba :is(input, select, textarea) { font-size: 16px; }
+  .rba .rba-aussi { width: 100%; margin: 4px 0 0 26px; }
+  .rba .checks .check { width: 100%; }
+  /* ⚠ QUATRE BOUTONS NE TIENNENT PAS SUR 388 px — MESURÉ : « Fermer » sortait
+     du cadre, à gauche, et on ne pouvait plus fermer la fenêtre autrement que
+     par la croix. La rangée se replie. */
+  .rba .form-actions { flex-wrap: wrap; gap: 8px; }
+  .rba .form-actions .btn { flex: 1 1 auto; }
 }

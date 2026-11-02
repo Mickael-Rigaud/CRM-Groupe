@@ -42,7 +42,11 @@ import { esc } from '../ui.js';
 import { imprimerPage } from './btp-fiche.js';
 import { valeursProjet, personneDe, nomComplet, adresseChantier } from '../data/rgd-projet.js';
 import { montantDevisDe, etapeAvecMontant } from '../data/rgd-etapes.js';
-import { parCategorie, signatureRgd, MOYENS_PAIEMENT, estDevis } from '../data/rgd-devis-crm.js';
+import { parCategorie, signatureRgd, MOYENS_PAIEMENT, estDevis, estAnnulee } from '../data/rgd-devis-crm.js';
+import {
+  GROUPES, coche, totalHeures, numeroBon, nomFourniPar,
+  lignesFourniture, saisieDepart,
+} from '../data/rgd-bon-attachement.js';
 
 const LOGO = new URL('../../assets/logos/rgd-complet.png', import.meta.url).href;
 
@@ -154,6 +158,10 @@ export function donneesDocument(x, devis = []) {
     nomFichier: nomDeFichier,
     adresseChantier: enUneLigne(ouSontLesTravaux),
     villeChantier: ch.ville || '',
+    cpChantier: ch.code_postal || '',
+    // La rue seule : le bon d'attachement porte le code postal et la ville sur
+    // leur propre ligne, et l'adresse entiere les y repetait en debordant.
+    rueChantier: ch.adresse || '',
     budget: chiffre ? eur(chiffre) : (v.budget_annonce || ''),
     budgetTitre: chiffre ? 'MONTANT HT' : 'BUDGET',
     typeBien: v.type_projet || '',
@@ -526,6 +534,18 @@ const styleDevis = `
   .mention { margin: 10px 0 0; font-size: 8.5pt; color: ${GRIS}; }
   .accord { break-inside: avoid; }
   .acquittee { border-left: 2.5pt solid ${ORANGE}; padding-left: 7px; color: #111827; }
+  /* ⚠ UNE FACTURE ANNULÉE DOIT SE VOIR AU PREMIER COUP D'ŒIL, et de loin : une
+     copie imprimée avant l'annulation circule encore, et les deux feuilles se
+     ressemblent trait pour trait. D'où un bandeau en tête, pas une ligne
+     perdue dans les mentions du bas.
+     ⚠ UN CONTOUR, PAS UN APLAT ROUGE PLEIN : la feuille part aussi par mail, et
+     un grand rectangle de couleur sur un PDF se photocopie en gris illisible.
+     Le contour, lui, reste net en noir et blanc. */
+  .annul-bandeau { margin: 4mm 0 0; padding: 2.4mm 3.4mm; border: 1.6pt solid #B91C1C;
+    border-radius: 2mm; display: flex; align-items: baseline; gap: 8px; }
+  .annul-bandeau b { font-size: 13.5pt; letter-spacing: .04em; text-transform: uppercase; color: #B91C1C; }
+  .annul-bandeau span { font-size: 9pt; color: #7F1D1D; }
+  .annulee-txt { border-left: 2.5pt solid #B91C1C; padding-left: 7px; color: #111827; }
   .pied-legal { margin-top: 14px; padding-top: 6px; border-top: .75pt solid ${FILET}; font-size: 7.6pt; color: ${GRIS}; }
 `;
 
@@ -543,6 +563,13 @@ export function devisCrmHtml(d, devis) {
   // Ce qui change est nommé ici, en un endroit.
   const dev = estDevis(devis);
   const mot = dev ? 'Devis' : 'Facture';
+  // ⚠ SEULE UNE FACTURE SE DIT « ANNULÉE » SUR LE PAPIER. Un devis refusé
+  // porte le même statut en base, mais il ne se réimprime pas : c'est le
+  // client qui a dit non, il n'y a rien à lui remettre.
+  const annul = !dev && estAnnulee(devis) ? {
+    le: devis.annule_le ? String(devis.annule_le).slice(0, 10) : null,
+    motif: String(devis.annule_motif || '').trim(),
+  } : null;
 
   // ⚠ UNE FACTURE RÉGLÉE NE RÉCLAME PLUS RIEN (02/11/2026, Élodie : « la
   // facture arrive au moment du paiement »). Tant que `regle_le` est vide, le
@@ -554,7 +581,13 @@ export function devisCrmHtml(d, devis) {
   // erreur : il n'appelle aucun paiement. On ferme la porte ici plutôt que de
   // compter sur l'écran, qui ne propose le règlement que sur une facture — un
   // document rendu au client ne doit pas dépendre d'un bouton caché.
-  const regle = (!dev && devis.regle_le)
+  //
+  // ⚠ ET UNE FACTURE ANNULÉE N'EST PAS « ACQUITTÉE » non plus, même si elle
+  // avait été marquée réglée avant : les deux mentions côte à côte diraient à
+  // la fois « tout est payé » et « rien n'est dû ». L'annulation prime, et un
+  // encaissement à rendre se traite entre la facture annulée et le
+  // remboursement, pas sur la feuille.
+  const regle = (!dev && !estAnnulee(devis) && devis.regle_le)
     ? { le: devis.regle_le, par: MOYENS_PAIEMENT[devis.regle_par] || devis.regle_par || '' }
     : null;
 
@@ -596,6 +629,8 @@ export function devisCrmHtml(d, devis) {
   </div>
 </header>
 <div class="fh-filet"></div>
+${annul ? `<div class="annul-bandeau"><b>Facture annulée</b>
+  <span>${annul.le ? 'Le ' + esc(jour(annul.le)) + '. ' : ''}Cette facture ne donne lieu à aucun règlement.</span></div>` : ''}
 
 <div class="parties">
   <div class="partie"><span>Entreprise</span><b>RGD Renova</b><br>
@@ -607,6 +642,7 @@ export function devisCrmHtml(d, devis) {
 <div class="champs" style="margin-top:9px">
   ${champ(dev ? 'Date du devis' : 'Date de la facture', jour(devis.date_devis || new Date()), 'etroit')}
   ${dev ? champ('Valable jusqu’au', jour(ech), 'etroit')
+    : annul ? champ('Annulée le', annul.le ? jour(annul.le) : '—', 'etroit')
     : regle ? champ('Réglée le', jour(regle.le) + (regle.par ? ' · ' + regle.par : ''), 'etroit')
     : champ('À régler avant le', jour(ech), 'etroit')}
   ${champ('Adresse des travaux', d.adresseChantier)}
@@ -640,6 +676,10 @@ ${devis.notes ? `<h2>Remarques</h2><p style="margin:0;font-size:9.8pt;white-spac
 
 ${dev
   ? `<p class="mention">${esc(MENTIONS_DEVIS)}</p>`
+  : annul
+  ? `<p class="mention annulee-txt"><b>Facture annulée.</b> Cette facture a été annulée${
+      annul.le ? ' le ' + esc(jour(annul.le)) : ''} et ne donne lieu à aucun règlement.${
+      annul.motif ? ' Motif : ' + esc(annul.motif) + '.' : ''}</p>`
   : regle
   ? `<p class="mention acquittee"><b>Facture acquittée.</b> Le règlement de ${euros(devis.montant_ttc)} TTC
       a été reçu le ${esc(jour(regle.le))}${regle.par ? ' par ' + esc(regle.par) : ''}. Aucune somme ne reste due.</p>`
@@ -719,11 +759,30 @@ const bonStyle = `
 .ba .champ label { color: #5e5e5e; white-space: nowrap; font-size: 9.5pt; padding-bottom: .4mm; }
 .ba .champ i { flex: 1; border-bottom: .7pt solid #b9b9b9; height: 100%; font-style: normal; padding-bottom: .4mm; }
 .ba .cases { display: grid; grid-template-columns: repeat(2, 1fr); gap: 2.2mm 6mm; }
+.ba .cases .c.large, .ba .controles .c.large { grid-column: 1 / -1; }
 .ba .ligne-cases { display: flex; flex-wrap: wrap; gap: 2mm 7mm; margin-top: 2.6mm; }
+/* ⚠ UN INTITULÉ DE RANGÉE N'EST PAS UNE CASE À COCHER. « Déplacement »,
+   « Matériel déposé » et « Installation remise sous tension » portaient une
+   case sur le papier : elle ne voulait rien dire (on coche Forfait ou
+   Kilométrique, Oui ou Non), et maintenant que les cases se remplissent depuis
+   l'écran elle resterait vide à jamais — on lirait un oubli. */
+.ba .lc-titre { font-weight: 700; }
+.ba .lc-nb { color: #5e5e5e; }
 .ba .c { display: flex; align-items: center; gap: 2.2mm; }
 .ba .c::before { content: ""; width: 4mm; height: 4mm; border: 1pt solid #1A1A1A; border-radius: .6mm; flex: none; }
+/* ⚠ UNE CASE COCHÉE EST UNE CASE NOIRE, pas seulement un signe : les
+   navigateurs n'impriment pas les fonds par défaut, mais ici la BORDURE reste
+   et le ✓ est en blanc sur noir — si le fond ne sort pas, le ✓ disparaît avec
+   lui et la case redevient vide. On garde donc les deux : le fond noir pour
+   l'écran et le PDF (photographié, fonds compris), et le ✓ qui se lit même
+   imprimé sans les fonds, en encre sur une case vide. */
+.ba .c.on::before { content: "✓"; background: #1A1A1A; color: #fff; font-size: 8pt;
+  line-height: 3.4mm; text-align: center; font-weight: 700; }
+.ba .c.on { font-weight: 600; }
 .ba .lignes div { height: 8mm; border-bottom: .7pt solid #b9b9b9; padding-top: 1mm; }
-.ba .mesure { display: inline-block; width: 18mm; border-bottom: .7pt solid #b9b9b9; margin: 0 1mm; height: 4.5mm; vertical-align: bottom; }
+.ba .mesure { display: inline-block; width: 18mm; border-bottom: .7pt solid #b9b9b9; margin: 0 1mm; height: 4.5mm;
+  vertical-align: bottom; text-align: center; font-weight: 600; }
+.ba .mesure.long { width: 52mm; text-align: left; padding-left: 1mm; }
 .ba table { width: 100%; border-collapse: collapse; }
 .ba th { background: #1A1A1A; color: #fff; font-weight: 600; font-size: 9pt; text-align: left; padding: 1.6mm 2mm; }
 .ba td { border-bottom: .7pt solid #b9b9b9; height: 8.5mm; padding: 0 2mm; }
@@ -745,12 +804,34 @@ const bonStyle = `
 .ba footer span:last-child { white-space: nowrap; }
 `;
 
-/** Le bon d'attachement, pré-rempli depuis une facture du CRM. */
+/**
+ * Les cases d'un groupe, cochées depuis la saisie.
+ *
+ * ⚠ C'EST LA DÉCLARATION DE `rgd-bon-attachement.js` QUI LES ÉCRIT, pas ce
+ * fichier. Les douze natures d'intervention étaient ici en dur ; le jour où le
+ * formulaire en a proposé une treizième, le PDF ne l'aurait pas imprimée — une
+ * observation saisie qui n'arrive jamais chez le client, et rien pour le dire.
+ */
+const casesDu = (nom, s) => GROUPES[nom].options.map((o) => {
+  const champ = o.aussi
+    ? ` : <span class="mesure${o.long ? ' long' : ''}">${esc(s?.[o.aussi] || '')}</span>${o.unite ? ' ' + o.unite : ''}`
+    : '';
+  const mot = o.gras ? `<b>${esc(o.l)}</b>` : esc(o.l);
+  // ⚠ UNE OPTION QUI OUVRE UN CHAMP LONG PREND TOUTE LA LARGEUR. Mesuré :
+  // « Autre : ____ » dans une colonne de 60 mm repliait le mot au-dessus de son
+  // trait, et on lisait « Autre » seul sur une ligne.
+  return `<span class="c${coche(s, nom, o.c) ? ' on' : ''}${o.large ? ' large' : ''}">${mot}${champ}</span>`;
+}).join('');
+
+/** Le bon d'attachement, pré-rempli depuis une facture du CRM et sa saisie. */
 export function bonAttachementHtml(d, devis) {
-  const lignes = devis.lignes || [];
-  const heures = lignes.filter(l => l.unite === 'heure');
-  const fournitures = lignes.filter(l => l.unite !== 'heure');
-  const totalHeures = heures.reduce((n, l) => n + (Number(l.quantite) || 0), 0);
+  // ⚠ `saisieDepart` RÉPOND MÊME SUR UN BON JAMAIS OUVERT : elle complète ce
+  // qui manque depuis la facture. C'est ce qui garde au bon imprimé son
+  // pré-remplissage d'avant le formulaire — date, objet, heures de chaque
+  // ligne — sans qu'il faille d'abord le remplir à l'écran pour l'imprimer.
+  const s = saisieDepart(devis, d, devis.bon_saisie);
+  const fournitures = lignesFourniture(devis);
+  const heures = totalHeures(s);
   const laDate = jour(devis.date_devis || new Date());
   const num = devis.numero || '';
   const sig = devis.bon_signature ? {
@@ -761,12 +842,27 @@ export function bonAttachementHtml(d, devis) {
       : laDate,
   } : null;
 
-  // Trois lignes vierges au minimum : un constat tient rarement en une, et une
-  // page qui respire se remplit mieux qu'une grille serrée.
-  const vides = (n) => Array.from({ length: n }, () => '<div></div>').join('');
-  const rangsMo = heures.map(l => `<tr><td>${esc(laDate)}</td><td>${esc(l.libelle)}${l.precision ? ' — ' + esc(l.precision) : ''}</td><td></td><td></td><td></td><td></td><td>${esc(String(l.quantite).replace('.', ','))}</td></tr>`).join('')
-    + Array.from({ length: Math.max(1, 3 - heures.length) }, () => '<tr><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>').join('');
-  const rangsFourn = fournitures.map(l => `<tr><td>${esc(l.libelle)}${l.variante ? ' — ' + esc(l.variante) : ''}${l.precision ? ' — ' + esc(l.precision) : ''}</td><td>${esc(l.reference || '')}</td><td>${esc(unite[l.unite] || '')}</td><td>${esc(String(l.quantite).replace('.', ','))}</td><td></td></tr>`).join('')
+  // Le texte saisi devient des lignes écrites ; on complète toujours par des
+  // lignes vides, pour qu'il reste de la place à la main sur le papier.
+  // ⚠ UN BON ENVOYÉ PAR MAIL GARDE CES LIGNES VIDES, et c'est voulu : le
+  // client doit voir ce qui n'a pas été renseigné. Les faire disparaître
+  // donnerait un document qui a l'air complet quoi qu'on y ait mis.
+  const vides = (n) => Array.from({ length: Math.max(0, n) }, () => '<div></div>').join('');
+  const enLignes = (texte, mini) => {
+    const l = String(texte || '').split('\n').filter(x => x.trim());
+    return l.map(x => `<div>${esc(x)}</div>`).join('') + vides(mini - l.length);
+  };
+  const rangsMo = (Array.isArray(s.mo) ? s.mo : []).map(r => `<tr><td>${esc(r.date ? jour(r.date) : '')}</td>`
+    + `<td>${esc(r.qui || '')}</td><td>${esc(r.habilitation || '')}</td><td>${esc(r.arrivee || '')}</td>`
+    + `<td>${esc(r.depart || '')}</td><td>${esc(r.pause || '')}</td>`
+    + `<td>${esc(String(r.duree ?? '').replace('.', ','))}</td></tr>`).join('')
+    + Array.from({ length: Math.max(0, 3 - (s.mo?.length || 0)) }, () => '<tr><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>').join('');
+  const rangsFourn = fournitures.map((l, i) => {
+    const f = (Array.isArray(s.fournitures) && s.fournitures[i]) || {};
+    return `<tr><td>${esc(l.libelle)}${l.variante ? ' — ' + esc(l.variante) : ''}${l.precision ? ' — ' + esc(l.precision) : ''}</td>`
+      + `<td>${esc(f.reference || l.reference || '')}</td><td>${esc(unite[l.unite] || '')}</td>`
+      + `<td>${esc(String(l.quantite).replace('.', ','))}</td><td>${esc(nomFourniPar(f.fourni_par))}</td></tr>`;
+  }).join('')
     + Array.from({ length: Math.max(1, 6 - fournitures.length) }, () => '<tr><td></td><td></td><td></td><td></td><td></td></tr>').join('');
 
   const piedLegal = `<footer>
@@ -790,7 +886,7 @@ export function bonAttachementHtml(d, devis) {
     <h1>Bon <b>d'attachement</b></h1>
     <div class="sous">Travaux d'électricité</div>
     <div class="ref">
-      <span>N°</span><span>${esc(num ? 'BA' + num.replace(/^FA/, '') : '')}</span>
+      <span>N°</span><span>${esc(numeroBon(devis))}</span>
       <span>Date</span><span>${esc(laDate)}</span>
       <span>Facture n°</span><span>${esc(num)}</span>
     </div>
@@ -805,53 +901,35 @@ export function bonAttachementHtml(d, devis) {
     <div class="champ"><label></label><i></i></div>
     <div class="champ"><label>Téléphone</label><i>${esc(d.telephone || '')}</i></div>
     <div class="champ"><label>E-mail</label><i>${esc(d.email || '')}</i></div>
-    <div class="ligne-cases">
-      <span class="c">Particulier</span><span class="c">Syndic / bailleur</span><span class="c">Professionnel</span><span class="c">Sous-traitance</span>
-    </div>
+    <div class="ligne-cases">${casesDu('client_type', s)}</div>
   </div>
   <div>
     <h2>Lieu d'intervention</h2>
-    <div class="champ"><label>Adresse du chantier</label><i>${esc(d.adresseChantier || '')}</i></div>
-    <div class="champ"><label>Code postal / ville</label><i></i></div>
-    <div class="champ"><label>Bât. / étage / lot</label><i></i></div>
-    <div class="champ"><label>Accès / code</label><i></i></div>
-    <div class="champ"><label>Contact sur place</label><i></i></div>
-    <div class="ligne-cases">
-      <span class="c">Logement</span><span class="c">Local pro</span><span class="c">Parties communes</span><span class="c">Extérieur</span>
-    </div>
+    <div class="champ"><label>Adresse du chantier</label><i>${esc(d.rueChantier || d.adresseChantier || '')}</i></div>
+    <div class="champ"><label>Code postal / ville</label><i>${esc(s.lieu_cp_ville || '')}</i></div>
+    <div class="champ"><label>Bât. / étage / lot</label><i>${esc(s.lieu_batiment || '')}</i></div>
+    <div class="champ"><label>Accès / code</label><i>${esc(s.lieu_acces || '')}</i></div>
+    <div class="champ"><label>Contact sur place</label><i>${esc(s.lieu_contact || '')}</i></div>
+    <div class="ligne-cases">${casesDu('lieu_type', s)}</div>
   </div>
 </div>
 
 <h2>Nature de l'intervention</h2>
-<div class="cases" style="grid-template-columns: 1.25fr 1fr 1fr; gap: 2.2mm 4mm;">
-  <span class="c">Dépannage / recherche de panne</span>
-  <span class="c">Mise en sécurité</span>
-  <span class="c">Mise aux normes NF C 15-100</span>
-  <span class="c">Remplacement de tableau</span>
-  <span class="c">Installation neuve</span>
-  <span class="c">Rénovation partielle / totale</span>
-  <span class="c">Prises, circuits spécialisés</span>
-  <span class="c">Éclairage int. / ext.</span>
-  <span class="c">Borne de recharge (IRVE)</span>
-  <span class="c">Chauffage, VMC, chauffe-eau</span>
-  <span class="c">Réseau, interphone</span>
-  <span class="c">Autre :</span>
-</div>
-<div class="ligne-cases">
-  <span class="c"><b>Urgence</b></span><span class="c">Intervention programmée</span><span class="c">Astreinte (soir, week-end, jour férié)</span>
-</div>
+<div class="cases" style="grid-template-columns: 1.25fr 1fr 1fr; gap: 2.2mm 4mm;">${casesDu('nature', s)}</div>
+<div class="ligne-cases">${casesDu('regime', s)}</div>
 
 <h2>Constat et travaux réalisés</h2>
-<div class="lignes">${devis.objet ? `<div>${esc(devis.objet)}</div>` : ''}${vides(devis.objet ? 4 : 5)}</div>
+<div class="lignes">${enLignes(s.constat, 5)}</div>
 
 <h2>Main-d'œuvre</h2>
 <table>
   <thead><tr><th style="width:15%">Date</th><th>Intervenant(s)</th><th style="width:14%">Habilitation</th><th style="width:11%">Arrivée</th><th style="width:11%">Départ</th><th style="width:10%">Pause</th><th style="width:12%">Durée (h)</th></tr></thead>
   <tbody>${rangsMo}</tbody>
-  <tfoot><tr><td colspan="6">Total heures</td><td class="tot">${totalHeures ? esc(String(totalHeures).replace('.', ',')) : ''}</td></tr></tfoot>
+  <tfoot><tr><td colspan="6">Total heures</td><td class="tot">${heures ? esc(String(heures).replace('.', ',')) : ''}</td></tr></tfoot>
 </table>
 <div class="ligne-cases">
-  <span class="c"><b>Déplacement</b></span><span class="c">Forfait</span><span class="c">Kilométrique : <span class="mesure"></span> km</span><span class="c">Nb : <span class="mesure" style="width:10mm"></span></span>
+  <span class="lc-titre">Déplacement</span>${casesDu('deplacement', s)}
+  <span class="lc-nb">Nb : <span class="mesure" style="width:10mm">${esc(s.deplacement_nb || '')}</span></span>
 </div>
 
 <div class="vide"></div>
@@ -873,32 +951,20 @@ ${piedLegal}
 </table>
 <div class="note">Fourni par : RGD (stock ou achat) ou client.</div>
 <div class="ligne-cases" style="margin-top:2mm">
-  <span class="c"><b>Matériel déposé</b></span><span class="c">Laissé au client</span><span class="c">Évacué par RGD Renova</span>
+  <span class="lc-titre">Matériel déposé</span>${casesDu('materiel', s)}
 </div>
 
 <h2>Contrôles avant remise sous tension</h2>
-<div class="controles">
-  <span class="c">Essai des différentiels 30 mA</span>
-  <span class="c">Continuité des conducteurs de protection</span>
-  <span class="c">Résistance de terre : <span class="mesure"></span> Ω</span>
-  <span class="c">Résistance d'isolement : <span class="mesure"></span> MΩ</span>
-  <span class="c">Serrage des connexions, repérage des circuits</span>
-  <span class="c">Essai de fonctionnement devant le client</span>
-</div>
+<div class="controles">${casesDu('controles', s)}</div>
 <div class="ligne-cases" style="margin-top:3mm">
-  <span class="c"><b>Installation remise sous tension</b></span><span class="c">Oui</span><span class="c">Non, motif : <span class="mesure" style="width:55mm"></span></span>
+  <span class="lc-titre">Installation remise sous tension</span>${casesDu('sous_tension', s)}
 </div>
 
 <h2>Anomalies constatées hors intervention</h2>
-<div class="lignes">${vides(2)}</div>
+<div class="lignes">${enLignes(s.anomalies, 2)}</div>
 
 <h2>Suite à donner</h2>
-<div class="cases">
-  <span class="c">Travaux terminés</span>
-  <span class="c">Nouveau passage à prévoir</span>
-  <span class="c">Devis complémentaire à établir</span>
-  <span class="c">Attestation Consuel à prévoir</span>
-</div>
+<div class="cases">${casesDu('suite', s)}</div>
 
 <div class="encadre">
   Le présent bon constate contradictoirement les temps passés et les fournitures réellement mises en œuvre.
@@ -909,7 +975,10 @@ ${piedLegal}
 <div class="signatures">
   <div class="sig">
     <b>L'intervenant RGD Renova</b>
-    <div class="mention">Nom, date et signature</div>
+    ${s.signature_rgd
+      ? `<div class="mention">${esc(s.intervenant || '')}${s.signature_rgd_le ? ' — le ' + esc(jour(s.signature_rgd_le)) : ''}</div>
+         <img src="${esc(s.signature_rgd)}" alt="Signature de l'intervenant">`
+      : `<div class="mention">${s.intervenant ? esc(s.intervenant) + ' — date et signature' : 'Nom, date et signature'}</div>`}
   </div>
   <div class="sig">
     <b>Le client</b>
@@ -917,7 +986,7 @@ ${piedLegal}
       ? `<div class="mention">${esc(sig.nom)} — signé sur place le ${esc(sig.quand)}</div>
          <img src="${esc(sig.image)}" alt="Signature du client">`
       : '<div class="mention">Nom, date et signature précédés de « Lu et approuvé »</div>'}
-    <div class="cases"><span class="c">Travaux réceptionnés sans réserve</span><span class="c">Avec réserves (voir anomalies)</span></div>
+    <div class="cases">${casesDu('reception', s)}</div>
   </div>
 </div>
 
@@ -968,11 +1037,25 @@ const charge = (src) => new Promise((ok, ko) => {
   document.head.appendChild(s);
 });
 
-/** Le devis en PDF : { base64, nom }. */
-export async function pdfDevisCrm(x, devis) {
+/**
+ * N'importe lequel de ces gabarits en PDF : { base64, nom }.
+ *
+ * ⚠ UN SEUL FABRICANT DE PDF, ET C'EST TOUT L'INTÉRÊT DE L'AVOIR SORTI DU
+ * DEVIS (02/11/2026, en ajoutant l'envoi du bon d'attachement). Il porte
+ * quatre corrections payées une à une — la marge, la coupe sur une ligne
+ * blanche, la page blanche de fin, les bibliothèques servies depuis `assets/`.
+ * Un second fabricant pour le bon aurait recommencé à les payer, une par une.
+ *
+ * ⚠ `feuilles` CHANGE LA DÉCOUPE, ET LE BON EN A BESOIN. Sans lui, on
+ * photographie le corps entier et on le tranche tous les 277 mm : ça convient
+ * à un devis, qui COULE sur autant de pages qu'il faut. Le bon, lui, est deux
+ * A4 FIXES de 296 mm — la tranche serait tombée 9 mm dans le verso, et le pied
+ * du recto aurait fini en haut de la page suivante. Avec un sélecteur, chaque
+ * feuille est photographiée pour elle-même et posée sur sa propre page.
+ */
+async function pdfDepuisHtml(html, nom, { feuilles = null } = {}) {
   await charge('html2canvas.min.js');
   await charge('jspdf.umd.min.js');
-  const d = donneesDocument(x);
   const cadre = document.createElement('iframe');
   // 794 px = un A4 à 96 points par pouce : la page se met en forme comme à
   // l'impression. Hors de l'écran, mais RENDUE (pas de display:none, sinon
@@ -980,12 +1063,33 @@ export async function pdfDevisCrm(x, devis) {
   cadre.style.cssText = 'position:fixed;left:-10000px;top:0;width:794px;height:1123px;border:0;visibility:hidden';
   document.body.appendChild(cadre);
   try {
-    await new Promise((ok) => { cadre.onload = ok; cadre.srcdoc = devisCrmHtml(d, devis); });
+    await new Promise((ok) => { cadre.onload = ok; cadre.srcdoc = html; });
     const doc = cadre.contentDocument;
     await Promise.all([...doc.images].map(i => (i.complete ? null : new Promise(r => { i.onload = r; i.onerror = r; }))));
-    const toile = await window.html2canvas(doc.body, { scale: 2, backgroundColor: '#ffffff', windowWidth: 794, useCORS: true });
+    const photo = (el) => window.html2canvas(el, { scale: 2, backgroundColor: '#ffffff', windowWidth: 794, useCORS: true });
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
+
+    // Une feuille déjà au format A4 : on la pose entière, sans découpe.
+    const pages = feuilles ? [...doc.querySelectorAll(feuilles)] : [];
+    if (pages.length) {
+      const MARGE_F = 10;
+      const large = 210 - 2 * MARGE_F;
+      const hauteurMax = 297 - 2 * MARGE_F;
+      for (let n = 0; n < pages.length; n++) {
+        const t = await photo(pages[n]);
+        if (n) pdf.addPage();
+        // On garde les proportions : c'est une page dessinée, pas une image à
+        // étirer. Si elle dépasse en hauteur, c'est la hauteur qui commande.
+        let l = large;
+        let h = large * t.height / t.width;
+        if (h > hauteurMax) { h = hauteurMax; l = hauteurMax * t.width / t.height; }
+        pdf.addImage(t.toDataURL('image/jpeg', 0.92), 'JPEG', (210 - l) / 2, MARGE_F, l, h);
+      }
+      return { base64: pdf.output('datauristring').split(',')[1], nom };
+    }
+
+    const toile = await photo(doc.body);
 
     // ⚠ UNE MARGE, PARCE QUE L'IMAGE ÉTAIT POSÉE BORD À BORD (02/11/2026,
     // Élodie : « je voudrais avoir de la marge sur le pdf »). Elle occupait les
@@ -1035,9 +1139,22 @@ export async function pdfDevisCrm(x, devis) {
       pdf.addImage(tranche.toDataURL('image/jpeg', 0.92), 'JPEG', MARGE, MARGE, largeurUtile, haut / pxParMm);
       y = fin;
     }
-    const nom = `${titreDocument(`${estDevis(devis) ? 'Devis' : 'Facture'} ${devis.numero || ''}`.trim(), d)}.pdf`;
     return { base64: pdf.output('datauristring').split(',')[1], nom };
   } finally {
     cadre.remove();
   }
+}
+
+/** Le devis ou la facture en PDF, pour le mail. */
+export async function pdfDevisCrm(x, devis) {
+  const d = donneesDocument(x);
+  const titre = `${estDevis(devis) ? 'Devis' : 'Facture'} ${devis.numero || ''}`.trim();
+  return pdfDepuisHtml(devisCrmHtml(d, devis), `${titreDocument(titre, d)}.pdf`);
+}
+
+/** Le bon d'attachement en PDF, pour le mail — recto et verso. */
+export async function pdfBonAttachement(x, devis) {
+  const d = donneesDocument(x);
+  const titre = `Bon d'attachement ${numeroBon(devis)}`.trim();
+  return pdfDepuisHtml(bonAttachementHtml(d, devis), `${titreDocument(titre, d)}.pdf`, { feuilles: '.ba-page' });
 }

@@ -363,6 +363,53 @@ export const signerBonAttachement = (d, { signature, nom }) => db.update('rgd_de
 export const annulerReglement = (d) =>
   db.update('rgd_devis_crm', d.id, { regle_le: null, regle_par: null });
 
+// ------------------------------------------ annuler une facture émise
+// Élodie, le 02/11/2026 : « je voudrais avoir la possibilité de supprimer des
+// factures ». Question posée, réponse arrêtée par elle : ANNULER.
+//
+// ⚠ UNE FACTURE ÉMISE NE SE SUPPRIME PAS, et la base le refusait déjà sans que
+// l'écran l'explique : la policy `rgd_devis_crm_suppr` porte
+// `statut = 'brouillon'`. Un numéro effacé laisse un TROU dans une suite qui ne
+// doit pas en avoir (L123-22 du code de commerce) — le premier point que
+// regarde un contrôle. Le brouillon, lui, se supprime toujours : il n'a pas de
+// numéro, il n'est parti nulle part.
+//
+// ⚠ ANNULER N'EST PAS EFFACER. La facture garde son numéro, sa place dans la
+// suite et son contenu ; elle cesse d'être due, sort des totaux (`refuse` n'est
+// compté nulle part) et le PDF le dit en grand, pour qu'une copie déjà
+// imprimée ne puisse pas passer pour valable.
+
+/** Une facture annulée : numéro attribué, statut `refuse`. */
+export const estAnnulee = (d) => !!d && d.statut === 'refuse' && !!d.numero;
+
+/**
+ * Annuler la facture, avec son motif.
+ *
+ * ⚠ LA DATE EST POSÉE PAR LA BASE, pas ici : le déclencheur la met dès que le
+ * statut passe en `refuse`, par quelque porte que ce soit — le bouton, la
+ * pastille de statut, ou une correction en base. Une date posée par le seul
+ * écran aurait fini par manquer.
+ */
+export const annulerFacture = (d, motif) => db.update('rgd_devis_crm', d.id, {
+  statut: 'refuse',
+  annule_motif: String(motif || '').trim() || null,
+  // En démonstration, aucun déclencheur : on imite ce qu'il fait.
+  ...(CONFIG.DEMO ? { annule_le: new Date().toISOString() } : {}),
+});
+
+/**
+ * Rétablir une facture annulée par erreur.
+ *
+ * ⚠ ELLE REVIENT À CE QU'ELLE ÉTAIT, PAS À « ENVOYÉE » PAR DÉFAUT : une
+ * facture que le client avait signée sur place est signée, et le dire
+ * autrement reviendrait à perdre la trace de sa réception. La base efface
+ * d'elle-même la date et le motif.
+ */
+export const retablirFacture = (d) => db.update('rgd_devis_crm', d.id, {
+  statut: d.signature ? 'signe' : 'envoye',
+  ...(CONFIG.DEMO ? { annule_le: null, annule_motif: null } : {}),
+});
+
 // ------------------------------------------ la signature de RGD Renova
 // Élodie, le 02/11/2026 : « on pourrait mettre en place la signature sur la
 // facture numérique avant de l'envoyer au client ». Jusqu'ici une facture
@@ -475,6 +522,23 @@ export function messageDevisCrm(devis, nomClient) {
   // texte pour les deux donnait à un devis le ton d'une affaire conclue — et
   // taisait la seule chose qui compte au client à cet instant : jusqu'à quand
   // le prix tient, et comment il dit oui.
+  // ⚠ ET UNE FACTURE ANNULÉE NE REMERCIE PAS DE LA CONFIANCE : on l'envoie pour
+  // dire au client que celle qu'il a reçue ne vaut plus rien. Le texte
+  // d'origine lui aurait annoncé « votre facture » une seconde fois, du même
+  // ton que la première.
+  if (estAnnulee(devis)) {
+    return `${salut}
+
+Vous trouverez ci-joint la facture n° ${devis.numero || ''} d’un montant de ${montant} € TTC, que nous avons annulée.
+
+Elle ne donne lieu à aucun règlement : merci de ne pas en tenir compte et de remplacer par celle-ci l’exemplaire que vous aviez reçu.
+
+Nous restons à votre disposition pour toute question.
+
+Bien cordialement,
+L’équipe RGD Renova`;
+  }
+
   if (estDevis(devis)) {
     return `${salut}
 
@@ -539,10 +603,21 @@ const corpsMail = (texte, lien, mot) => {
 };
 
 /**
- * Envoyer le devis. `pdf` vient de `pdfDevisCrm` : { base64, nom }.
- * Rend { ok } ou { ok: false, motif }. Un brouillon passe en « Envoyé ».
+ * Envoyer un document de la facture par mail.
+ *
+ * ⚠ UNE SEULE PORTE POUR LE DEVIS, LA FACTURE ET LE BON D'ATTACHEMENT
+ * (02/11/2026, en ajoutant l'envoi du bon). Elle porte le dépôt qui ne doit
+ * pas pouvoir empêcher l'envoi, l'adresse signée d'un an, le bouton en contour
+ * et la copie cachée. Un second envoi pour le bon aurait fini par ne plus
+ * ressembler à celui-ci, et c'est le genre d'écart qui ne se voit que dans la
+ * boîte d'un client.
+ *
+ * ⚠ ET IL A SON PROPRE CHEMIN DANS LE SEAU. Le nom du fichier déposé était
+ * `<id>.pdf`, l'identifiant de la facture : y déposer le bon l'aurait ÉCRASÉ,
+ * et le bouton « Voir ma facture » d'un mail parti la semaine d'avant aurait
+ * ouvert le bon d'attachement — chez le client, sans que rien ne le dise.
  */
-export async function envoyerDevisCrm(devis, { a, nom, objet, message, copie }, pdf) {
+async function envoyerDocument(devis, { a, nom, objet, message, copie }, pdf, { chemin, mot }) {
   if (CONFIG.DEMO) return { ok: false, motif: 'Mode démonstration : aucun mail ne part.' };
   const jeton = await db.accessToken();
   if (!jeton) return { ok: false, motif: 'Session expirée : reconnectez-vous.' };
@@ -557,16 +632,15 @@ export async function envoyerDevisCrm(devis, { a, nom, objet, message, copie }, 
   let lien = null;
   try {
     const octets = Uint8Array.from(atob(pdf.base64), (c) => c.charCodeAt(0));
-    // ⚠ MÊME SEAU POUR LES DEUX, ET C'EST VOULU : le nom du fichier est l'`id`
+    // ⚠ MÊME SEAU POUR TOUS, ET C'EST VOULU : le nom du fichier part de l'`id`
     // du document, qui est unique dans toute la table. Un second seau aurait
     // demandé une seconde policy, pour ranger des PDF que personne ne liste
     // par dossier.
-    const chemin = `${devis.id}.pdf`;
     await db.uploadFile(chemin, new Blob([octets], { type: 'application/pdf' }),
       { bucket: 'factures', upsert: true });
     lien = await db.fileUrl(chemin, { bucket: 'factures', secondes: 31536000 });
   } catch (e) {
-    console.warn('[RGD] facture non déposée, le mail part sans bouton :', e.message);
+    console.warn('[RGD] document non déposé, le mail part sans bouton :', e.message);
   }
   try {
     const r = await fetch(`${CONFIG.SUPABASE_URL}/functions/v1/envoyer-email`, {
@@ -575,7 +649,7 @@ export async function envoyerDevisCrm(devis, { a, nom, objet, message, copie }, 
       body: JSON.stringify({
         to: { email: a, name: nom || a },
         subject: objet,
-        html: corpsMail(message, lien, estDevis(devis) ? 'mon devis' : 'ma facture'),
+        html: corpsMail(message, lien, mot),
         replyTo: { email: 'contact@rgdrenova.fr', name: 'RGD Renova' },
         ...(copie ? { bcc: [{ email: 'contact@rgdrenova.fr', name: 'RGD Renova' }] } : {}),
         attachment: [{ name: pdf.nom, content: pdf.base64 }],
@@ -586,9 +660,43 @@ export async function envoyerDevisCrm(devis, { a, nom, objet, message, copie }, 
   } catch (e) {
     return { ok: false, motif: String(e.message || e).slice(0, 160) };
   }
+  return { ok: true };
+}
+
+/**
+ * Envoyer le devis ou la facture. `pdf` vient de `pdfDevisCrm`.
+ * Rend { ok } ou { ok: false, motif }. Un brouillon passe en « Envoyé ».
+ */
+export async function envoyerDevisCrm(devis, dest, pdf) {
+  const r = await envoyerDocument(devis, dest, pdf, {
+    // ⚠ UNE FACTURE ANNULÉE RÉÉCRIT SON PROPRE PDF, ET C'EST VOULU. Le chemin
+    // ne porte que l'`id` du document : renvoyer la facture après annulation
+    // écrase le fichier que le bouton « Voir ma facture » d'un mail DÉJÀ PARTI
+    // va rouvrir. C'est exactement ce qu'on veut ici — même numéro, même
+    // document, et le client qui reviendra sur l'ancien lien tombera sur la
+    // version annulée plutôt que sur une facture qu'il croirait encore due.
+    // Un AUTRE document (le bon d'attachement) prend un chemin à lui, sans
+    // quoi il effacerait la facture dans le dos d'un mail parti.
+    chemin: `${devis.id}.pdf`,
+    mot: estDevis(devis) ? 'mon devis' : estAnnulee(devis) ? 'la facture annulée' : 'ma facture',
+  });
+  if (!r.ok) return r;
   // Le mail est parti : une trace qui échoue ne le rend pas non envoyé.
   if (devis.statut === 'brouillon') {
     try { await changerStatutDevisCrm(devis, 'envoye'); } catch (e) { console.warn('[RGD] devis envoyé, statut non changé :', e.message); }
   }
   return { ok: true };
 }
+
+/**
+ * Envoyer le bon d'attachement. `pdf` vient de `pdfBonAttachement`.
+ *
+ * ⚠ IL NE TOUCHE PAS AU STATUT DE LA FACTURE. Envoyer le bon ne fait pas
+ * passer une facture en « Envoyée » : ce sont deux documents, et c'est le
+ * suivi des règlements qui s'en trouverait faussé.
+ */
+export const envoyerBonAttachement = (devis, dest, pdf) =>
+  envoyerDocument(devis, dest, pdf, {
+    chemin: `${devis.id}-bon.pdf`,
+    mot: 'mon bon d’attachement',
+  });

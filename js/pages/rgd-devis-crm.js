@@ -26,9 +26,12 @@ import {
   MOYENS_PAIEMENT, marquerReglee, annulerReglement,
   signerBonAttachement,
   GENRES, genreDe, estDevis, statutsDe, statutDoc, facturerLeDevis, factureDuDevis, devisDeLaFacture,
+  estAnnulee, annulerFacture, retablirFacture,
 } from '../data/rgd-devis-crm.js';
 import { posePadSignature } from '../pad-signature.js';
 import { ouvrirImportFacture, peutImporterFacture } from './rgd-facture-import.js';
+import { db } from '../data/db.js';
+import { bonRempli } from '../data/rgd-bon-attachement.js';
 
 const euros = (n) => eur(n, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -107,7 +110,14 @@ export function ouvrirDevisCrm(x, existant = null, retour = null, genreNeuf = 'f
   const metiers = metiersAvecGrille();
   if (!existant && !metiers.length) { toast('Aucune grille de tarifs n’est en place', 'error'); return; }
   const surface = Number(valeursProjet(x).superficie) || null;
-  const signe = existant?.statut === 'signe';
+  // ⚠ `signe` VEUT DIRE « FIGÉ », ET UNE FACTURE ANNULÉE L'EST AUSSI. Sans
+  // cela, une annulée restait modifiable à l'écran — alors que la base la
+  // refuse désormais, et que réécrire une pièce du dossier serait pire que de
+  // l'effacer. Le mot est gardé parce qu'il porte déjà ce sens partout dans
+  // cette fenêtre (champs grisés, « Retirer » caché, pas de nouvelle
+  // signature) ; seule la phrase affichée distingue les deux cas.
+  const annulee = estAnnulee(existant);
+  const signe = existant?.statut === 'signe' || annulee;
 
   // ⚠ LE GENRE EST FIXÉ DÈS L'OUVERTURE ET NE SE CHOISIT PAS ICI. Un sélecteur
   // dans la fenêtre aurait laissé croire qu'on peut changer d'avis après coup :
@@ -129,6 +139,11 @@ export function ouvrirDevisCrm(x, existant = null, retour = null, genreNeuf = 'f
     lignes: structuredClone(existant?.lignes || []),
   };
   let confirmerSuppr = false;
+  // La demande d'annulation, et le motif en cours de frappe. ⚠ PAS DE FENÊTRE
+  // PAR-DESSUS CELLE-CI : deux modales partagent `closeModal` et se ferment
+  // mal. Même procédé que la suppression — on demande SUR la rangée.
+  let demandeAnnulation = false;
+  let motifAnnulation = '';
   // La prestation qui attend un second appui pour être retirée, s'il y en a une.
   let aRetirer = null;
 
@@ -228,7 +243,9 @@ export function ouvrirDevisCrm(x, existant = null, retour = null, genreNeuf = 'f
     const suite = factureSuite();
 
     hote.innerHTML = `
-      ${signe ? `<p class="rdc-note">${dev
+      ${signe ? `<p class="rdc-note">${annulee
+          ? 'Cette facture est annulée : son contenu ne se modifie plus. Elle garde son numéro et sa place dans la suite — c’est ce que la loi demande — mais elle ne réclame plus rien.'
+          : dev
           ? 'Ce devis est accepté : son contenu ne se modifie plus. C’est le prix que le client a validé.'
           : 'Cette facture est signée : son contenu ne se modifie plus. Seul son statut peut encore changer.'}</p>`
         : `<p class="rdc-aide"><b>1.</b> Touchez les prestations ${dev ? 'à chiffrer' : 'à facturer'}
@@ -262,9 +279,30 @@ export function ouvrirDevisCrm(x, existant = null, retour = null, genreNeuf = 'f
         <textarea id="rdc-notes" rows="2" placeholder="${dev ? 'Délai de réalisation, fournitures comprises…' : 'Délai d’intervention, fournitures comprises…'}" ${dis}>${esc(etat.notes)}</textarea></div></div>
 
       ${existant ? `<div class="rdc-statut"><span class="muted small">Statut</span>
-        ${Object.entries(STATUTS).map(([k, st]) => `<button type="button" class="chip ${k === existant.statut ? st.ton : ''}" data-statut="${k}">${esc(st.label)}</button>`).join('')}
+        ${Object.entries(STATUTS).filter(([k]) => !(k === 'refuse' && !dev)).map(([k, st]) => `<button type="button" class="chip ${k === existant.statut ? st.ton : ''}" data-statut="${k}">${esc(st.label)}</button>`).join('')}
         ${existant.statut === 'brouillon' ? `<button type="button" class="btn ghost sm rdc-suppr" id="rdc-suppr">${confirmerSuppr ? 'Confirmer la suppression' : 'Supprimer le brouillon'}</button>` : ''}
       </div>
+      ${/* ⚠ « Annulée » N'EST PLUS UNE PASTILLE SUR UNE FACTURE (filtrée
+            ci-dessus) : annuler se motive, et un clic sur une pastille ne
+            demande rien. Le motif s'imprime sur le PDF remis au client, c'est
+            lui qui explique pourquoi une somme facturée n'a pas été encaissée.
+            Sur un DEVIS la pastille « Refusé » reste : un client qui dit non
+            n'a aucune formalité à remplir. */ ''}
+      ${dev || !existant.numero ? '' : `<div class="rdc-statut"><span class="muted small">Annulation</span>
+        ${annulee
+          ? `<span class="chip red">Annulée${existant.annule_le ? ' le ' + esc(fmtDate(String(existant.annule_le).slice(0, 10))) : ''}</span>
+             ${existant.annule_motif ? `<span class="small muted">${esc(existant.annule_motif)}</span>` : ''}
+             <button type="button" class="btn ghost sm" id="rdc-retablir">Rétablir</button>`
+          : demandeAnnulation
+          ? `<input id="rdc-annul-motif" class="rdc-motif" placeholder="Pourquoi ? (chantier annulé, erreur de montant…)" value="${esc(motifAnnulation)}">
+             <button type="button" class="btn sm" id="rdc-annul-ok">Confirmer l’annulation</button>
+             <button type="button" class="btn ghost sm" id="rdc-annul-non">Renoncer</button>`
+          : '<button type="button" class="btn ghost sm" id="rdc-annuler">Annuler la facture</button>'}
+      </div>
+      ${demandeAnnulation && !annulee ? `<p class="small muted">Elle gardera son numéro ${esc(existant.numero)}
+        et sortira des totaux. ${['envoye', 'signe'].includes(existant.statut)
+          ? 'Elle est déjà sortie du brouillon : si le client l’a reçue, prévenez-le et remettez-lui la facture annulée.'
+          : ''}</p>` : ''}`}
       ${dev ? '' : `<div class="rdc-statut"><span class="muted small">Règlement</span>
         ${existant.regle_le
           ? `<span class="chip green">Réglée le ${esc(fmtDate(existant.regle_le))}${existant.regle_par ? ' · ' + esc(MOYENS_PAIEMENT[existant.regle_par] || existant.regle_par) : ''}</span>
@@ -273,6 +311,8 @@ export function ouvrirDevisCrm(x, existant = null, retour = null, genreNeuf = 'f
              <button type="button" class="btn sm" id="rdc-regl-on">Marquer réglée</button>`}
       </div>`}
       ${dev ? '' : `<div class="rdc-statut"><span class="muted small">Bon d’attachement</span>
+        ${bonRempli(existant) ? '<span class="chip green">Rempli</span>' : '<span class="chip">Vierge</span>'}
+        <button type="button" class="btn ghost sm" id="rdc-bon-remplir">Remplir et envoyer</button>
         ${existant.bon_signature
           ? `<span class="chip green">Signé${existant.bon_signe_par ? ' par ' + esc(existant.bon_signe_par) : ''}</span>`
           : '<button type="button" class="btn ghost sm" id="rdc-bon-signer">Faire signer</button>'}
@@ -586,6 +626,55 @@ export function ouvrirDevisCrm(x, existant = null, retour = null, genreNeuf = 'f
     };
     const bBonSign = hote.querySelector('#rdc-bon-signer');
     if (bBonSign) bBonSign.onclick = () => faireSignerBon();
+    const bAnnul = hote.querySelector('#rdc-annuler');
+    if (bAnnul) bAnnul.onclick = () => { lire(); demandeAnnulation = true; redessiner(() => {
+      const c = hote.querySelector('#rdc-annul-motif'); c?.focus();
+    }); };
+    const bAnnulNon = hote.querySelector('#rdc-annul-non');
+    if (bAnnulNon) bAnnulNon.onclick = () => { demandeAnnulation = false; motifAnnulation = ''; redessiner(); };
+    const champMotif = hote.querySelector('#rdc-annul-motif');
+    // Le motif est retenu hors du champ : le moindre redessin le perdrait.
+    if (champMotif) champMotif.oninput = () => { motifAnnulation = champMotif.value; };
+    const bAnnulOk = hote.querySelector('#rdc-annul-ok');
+    if (bAnnulOk) bAnnulOk.onclick = async () => {
+      const motif = (hote.querySelector('#rdc-annul-motif')?.value || '').trim();
+      if (!motif) { toast('Dites pourquoi : le motif s’imprime sur la facture', 'error'); return; }
+      bAnnulOk.disabled = true;
+      try {
+        existant = await annulerFacture(existant, motif);
+        demandeAnnulation = false; motifAnnulation = '';
+        toast(`Facture ${existant.numero || ''} annulée`);
+        closeModal(true);
+        ouvrirDevisCrm(x, existant, retour);
+      } catch (e) {
+        bAnnulOk.disabled = false;
+        toast(e.message || 'Annulation impossible', 'error');
+      }
+    };
+    const bRetablir = hote.querySelector('#rdc-retablir');
+    if (bRetablir) bRetablir.onclick = async () => {
+      bRetablir.disabled = true;
+      try {
+        existant = await retablirFacture(existant);
+        toast(`Facture ${existant.numero || ''} rétablie`);
+        closeModal(true);
+        ouvrirDevisCrm(x, existant, retour);
+      } catch (e) {
+        bRetablir.disabled = false;
+        toast(e.message || 'Rétablissement impossible', 'error');
+      }
+    };
+    // ⚠ ON RELIT LA FACTURE AU RETOUR. Le bon enregistre sa saisie dans la
+    // même ligne ; revenir avec la copie qu'on tenait AVANT afficherait
+    // « Vierge » sur un bon qu'on vient de remplir.
+    const bBonRemplir = hote.querySelector('#rdc-bon-remplir');
+    if (bBonRemplir) bBonRemplir.onclick = async () => {
+      const { ouvrirBonAttachement } = await import('./rgd-bon-attachement.js');
+      closeModal(true);
+      ouvrirBonAttachement(x, existant, () => {
+        ouvrirDevisCrm(x, db.byId('rgd_devis_crm', existant.id) || existant, retour);
+      });
+    };
     const bSign = hote.querySelector('#rdc-signer');
     if (bSign) bSign.onclick = async () => {
       const d = await enregistrer();
@@ -636,7 +725,11 @@ export function ouvrirDevisCrm(x, existant = null, retour = null, genreNeuf = 'f
   async function ouvrirEnvoi(d) {
     const docs = await import('./rgd-documents.js');
     const qui = docs.donneesDocument(x);
-    const sujet = `Votre ${dev ? 'devis' : 'facture'} RGD Renova n° ${d.numero || ''}`;
+    // Une annulée s'annonce pour ce qu'elle est : le client reçoit une
+    // seconde fois le même numéro, et l'objet doit dire pourquoi.
+    const sujet = estAnnulee(d)
+      ? `Annulation de la facture RGD Renova n° ${d.numero || ''}`
+      : `Votre ${dev ? 'devis' : 'facture'} RGD Renova n° ${d.numero || ''}`;
     m.querySelector('.modal-head h2').textContent = `Envoyer ${dev ? 'le devis' : 'la facture'} ${d.numero || ''}`;
     hote.innerHTML = `
       <p class="rdc-aide">${dev ? 'Le devis' : 'La facture'} part en <b>pièce jointe PDF</b>, depuis contact@rgdrenova.fr. La réponse du client arrive à la même adresse.</p>
