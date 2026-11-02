@@ -34,7 +34,10 @@ import { typeDeFiche } from './rgd-docs-fiche.js';
 const MAX_MO = 25;
 
 // Le même motif que la contrainte de la base, à la lettre.
-const RESSEMBLE_A_LA_SUITE = /^FA\d{4}-\d{4}$/i;
+// ⚠ `DV` AUTANT QUE `FA` DEPUIS LE 02/11 : les devis du CRM ont leur propre
+// suite (`DV2026-0001`). Une importée qui lui emprunterait un rang
+// n'éclaterait qu'au vrai devis portant ce numéro, des mois plus tard.
+const RESSEMBLE_A_LA_SUITE = /^(FA|DV)\d{4}-\d{4}$/i;
 
 const nombre = (v) => {
   const n = Number(String(v).replace(',', '.').replace(/\s/g, ''));
@@ -98,7 +101,7 @@ export function ouvrirImportFacture(x, retour = null) {
     // collision avec un numéro que la séquence attribuera des mois plus tard,
     // et c'est une VRAIE émission qui échouerait alors, loin d'ici.
     if (RESSEMBLE_A_LA_SUITE.test(numero)) {
-      toast('Ce numéro est de la forme réservée aux factures du CRM (FA2026-0001). Gardez celui qui est écrit sur la facture.', 'error');
+      toast('Ce numéro est de la forme réservée aux documents du CRM (FA2026-0001, DV2026-0001). Gardez celui qui est écrit sur la facture.', 'error');
       return;
     }
     if (!Number.isFinite(ht) || !Number.isFinite(ttc)) { toast('Montants illisibles', 'error'); return; }

@@ -21,33 +21,55 @@ import { esc, eur, toast, openModal, closeModal, fmtDate } from '../ui.js';
 import { scope } from '../data/scope.js';
 import { valeursProjet } from '../data/rgd-projet.js';
 import {
-  TVA, TVA_DEFAUT, STATUTS_DEVIS_CRM, UNITES, PAR_UNITE, nomMetier, tarifsDe, metiersAvecGrille,
+  TVA, TVA_DEFAUT, UNITES, PAR_UNITE, nomMetier, tarifsDe, metiersAvecGrille,
   totaux, plancher, ligneDepuisTarif, parCategorie, messageDevisCrm, envoyerDevisCrm, enregistrerDevisCrm, changerStatutDevisCrm, supprimerDevisCrm, signerSurPlace,
   MOYENS_PAIEMENT, marquerReglee, annulerReglement,
   signerBonAttachement,
+  GENRES, genreDe, estDevis, statutsDe, statutDoc, facturerLeDevis, factureDuDevis, devisDeLaFacture,
 } from '../data/rgd-devis-crm.js';
 import { posePadSignature } from '../pad-signature.js';
 import { ouvrirImportFacture, peutImporterFacture } from './rgd-facture-import.js';
 
 const euros = (n) => eur(n, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-/** Le bloc de la fiche : les devis du CRM et le bouton pour en faire un. */
+/**
+ * Le bloc de la fiche : les factures, les devis, et le bouton pour en faire un.
+ *
+ * ⚠ DEUX TABLEAUX, PAS UN SEUL AVEC UNE COLONNE « nature » (02/11/2026,
+ * Élodie : « je voudrais distinguer deux choses »). Mêlés, ils ne
+ * s'additionnent pas : trois lignes à 1 200 € ne font pas 3 600 € de facturé
+ * si l'une est un devis qui attend une réponse. Une pastille demanderait de
+ * relire chaque ligne pour savoir ce qu'on regarde — et Élodie a déjà écarté
+ * ce procédé le 27/10 sur un autre écran.
+ */
 export function blocDevisCrm(devis, peutFaire) {
   if (!devis.length && !peutFaire) return '';
+  const factures = devis.filter(v => !estDevis(v));
+  const lesDevis = devis.filter(v => estDevis(v));
+  const rangee = (v) => { const e = statutDoc(v);
+    // Un devis déjà facturé se dit sur sa propre ligne : sans cela on le
+    // rouvre pour vérifier, ou on refacture les mêmes travaux deux fois.
+    const suite = estDevis(v) && factureDuDevis(v);
+    return `<tr class="rdc-ligne" data-devis-crm="${esc(v.id)}" tabindex="0">
+      <td><b>${esc(v.numero || '—')}</b>
+        <div class="s muted">${v.importe ? 'Importée · ' : ''}${esc(v.objet || nomMetier(v.metier))} · ${esc(fmtDate(v.date_devis || v.created_at))}${
+          suite ? ' · facturé' : ''}</div></td>
+      <td class="num">${euros(v.montant_ttc)} <span class="s muted">TTC</span></td>
+      <td class="rgdf-fin"><span class="chip ${e.ton}">${esc(e.label)}</span></td>
+    </tr>`; };
+  const tableau = (liste) => `<div class="rgdf-tableau"><table><tbody>${liste.map(rangee).join('')}</tbody></table></div>`;
   return `<section class="rgdf-bloc rdc-bloc">
-    <h3>Factures ${devis.length ? `<span class="rgdf-compte">${devis.length}</span>` : ''}
+    <h3>Factures ${factures.length ? `<span class="rgdf-compte">${factures.length}</span>` : ''}
       ${peutFaire ? `<button type="button" class="btn sm rdc-nouveau" id="rdc-nouveau">${libelleBoutonFacture()}</button>` : ''}</h3>
-    ${devis.length ? `<div class="rgdf-tableau"><table><tbody>
-      ${devis.map(v => { const e = STATUTS_DEVIS_CRM[v.statut] || STATUTS_DEVIS_CRM.brouillon;
-        return `<tr class="rdc-ligne" data-devis-crm="${esc(v.id)}" tabindex="0">
-          <td><b>${esc(v.numero || '—')}</b>
-            <div class="s muted">${v.importe ? 'Importée · ' : ''}${esc(v.objet || nomMetier(v.metier))} · ${esc(fmtDate(v.date_devis || v.created_at))}</div></td>
-          <td class="num">${euros(v.montant_ttc)} <span class="s muted">TTC</span></td>
-          <td class="rgdf-fin"><span class="chip ${e.ton}">${esc(e.label)}</span></td>
-        </tr>`; }).join('')}
-    </tbody></table></div>`
-    : '<p class="rgdf-rien">Aucune facture faite dans le CRM pour ce dossier.</p>'}
-  </section>`;
+    ${factures.length ? tableau(factures)
+      : '<p class="rgdf-rien">Aucune facture faite dans le CRM pour ce dossier.</p>'}
+  </section>
+  ${lesDevis.length ? `<section class="rgdf-bloc rdc-bloc">
+    <h3>Devis <span class="rgdf-compte">${lesDevis.length}</span></h3>
+    ${tableau(lesDevis)}
+    <p class="small muted">Un devis annonce un prix pour des travaux à venir : il ne réclame rien.
+    Quand les travaux sont faits, on ouvre le devis accepté et on en tire la facture.</p>
+  </section>` : ''}`;
 }
 
 /**
@@ -81,12 +103,24 @@ export function blocDevisCrm(devis, peutFaire) {
  * et sur téléphone la réponse doit rester sous le doigt, pas à l'autre bout de
  * l'écran. Même procédé que `confirmerSuppr` pour la suppression du devis.
  */
-export function ouvrirDevisCrm(x, existant = null, retour = null) {
+export function ouvrirDevisCrm(x, existant = null, retour = null, genreNeuf = 'facture') {
   const metiers = metiersAvecGrille();
   if (!existant && !metiers.length) { toast('Aucune grille de tarifs n’est en place', 'error'); return; }
   const surface = Number(valeursProjet(x).superficie) || null;
   const signe = existant?.statut === 'signe';
+
+  // ⚠ LE GENRE EST FIXÉ DÈS L'OUVERTURE ET NE SE CHOISIT PAS ICI. Un sélecteur
+  // dans la fenêtre aurait laissé croire qu'on peut changer d'avis après coup :
+  // la base refuse de basculer un document numéroté, parce que son numéro vient
+  // d'une suite qui n'est plus la bonne. On choisit AVANT, dans « + Facture ou
+  // devis » ; ensuite, toute la fenêtre parle le langage du document ouvert.
+  const g = existant ? genreDe(existant) : (genreNeuf === 'devis' ? 'devis' : 'facture');
+  const G = GENRES[g];
+  const dev = g === 'devis';
+  const STATUTS = statutsDe(g);
+
   const etat = {
+    genre: g,
     metier: existant?.metier || metiers[0],
     objet: existant?.objet || '',
     tva_taux: existant ? Number(existant.tva_taux) : TVA_DEFAUT,
@@ -98,12 +132,17 @@ export function ouvrirDevisCrm(x, existant = null, retour = null) {
   // La prestation qui attend un second appui pour être retirée, s'il y en a une.
   let aRetirer = null;
 
-  const titre = existant ? `Facture ${existant.numero || '(brouillon)'}` : `Nouvelle facture${x.nom ? ' — ' + x.nom : ''}`;
+  const titre = existant ? `${G.label} ${existant.numero || '(brouillon)'}` : `${G.nouveau}${x.nom ? ' — ' + x.nom : ''}`;
   const m = openModal(titre, '<div id="rdc-hote" class="rdc"></div>', { wide: true, onClose: () => retour?.() });
   const hote = m.querySelector('#rdc-hote');
 
   const totalLigne = (l) => (Number(l.quantite) || 0) * (Number(l.prix_ht) || 0);
   const dis = signe ? 'disabled' : '';
+  // Le devis d'où vient cette facture, et la facture tirée de ce devis. Relus
+  // à chaque dessin : établir la facture redessine, et le bloc doit montrer
+  // celle qui vient de naître, pas l'absence d'il y a une seconde.
+  const devisSource = () => (existant && !dev ? devisDeLaFacture(existant) : null);
+  const factureSuite = () => (existant && dev ? factureDuDevis(existant) : null);
 
   /**
    * Une prestation est « intacte » quand rien n'y a été saisi depuis qu'on l'a
@@ -141,7 +180,7 @@ export function ouvrirDevisCrm(x, existant = null, retour = null) {
       <label class="rdc-champ rdc-court"><span>Prix unitaire HT</span>
         <span class="rdc-unite"><input type="number" inputmode="decimal" min="${mini}" step="1" data-champ="prix_ht" value="${esc(l.prix_ht)}" ${dis}><i>€</i></span>
         ${mini && t?.a_partir_de ? `<small class="rdc-plancher ${Number(l.prix_ht) < mini ? 'rdc-alerte' : ''}">minimum ${euros(mini)}</small>` : ''}</label>
-      <label class="rdc-champ rdc-large"><span>Précision, imprimée sur la facture</span>
+      <label class="rdc-champ rdc-large"><span>Précision, imprimée sur ${dev ? 'le devis' : 'la facture'}</span>
         <input data-champ="precision" value="${esc(l.precision || '')}" placeholder="Facultatif : pièce, détail…" ${dis}></label>
       <div class="rdc-champ rdc-court rdc-sous"><span>Total HT</span><b class="rdc-total">${euros(totalLigne(l))}</b></div>
       ${signe ? '' : `<button type="button" class="btn ghost sm rdc-retirer" data-retirer="${i}">Retirer</button>`}
@@ -182,18 +221,29 @@ export function ouvrirDevisCrm(x, existant = null, retour = null) {
       </section>`;
     }).join('');
 
+    // Relus À CHAQUE DESSIN, et pas une fois à l'ouverture : établir la
+    // facture redessine la fenêtre, et le bloc doit montrer celle qui vient
+    // de naître, pas l'absence d'il y a une seconde.
+    const issu = devisSource();
+    const suite = factureSuite();
+
     hote.innerHTML = `
-      ${signe ? '<p class="rdc-note">Cette facture est signée : son contenu ne se modifie plus. Seul son statut peut encore changer.</p>'
-        : '<p class="rdc-aide"><b>1.</b> Touchez les prestations à facturer <b>2.</b> Réglez quantité et prix juste en dessous <b>3.</b> Enregistrez ou sortez le PDF, en bas</p>'}
+      ${signe ? `<p class="rdc-note">${dev
+          ? 'Ce devis est accepté : son contenu ne se modifie plus. C’est le prix que le client a validé.'
+          : 'Cette facture est signée : son contenu ne se modifie plus. Seul son statut peut encore changer.'}</p>`
+        : `<p class="rdc-aide"><b>1.</b> Touchez les prestations ${dev ? 'à chiffrer' : 'à facturer'}
+          <b>2.</b> Réglez quantité et prix juste en dessous <b>3.</b> Enregistrez ou sortez le PDF, en bas</p>`}
+      ${issu ? `<p class="small muted">Établie depuis le devis <b>${esc(issu.numero || 'en brouillon')}</b>
+        — ${euros(issu.montant_ttc)} TTC annoncés. Les écarts entre les deux sont normaux : on facture ce qui a été fait.</p>` : ''}
       <div class="form rdc-entete">
-        <div class="field"><label>Objet de la facture</label>
-          <input id="rdc-objet" value="${esc(etat.objet)}" placeholder="Dépannage électrique, mise aux normes du tableau…" ${dis}></div>
+        <div class="field"><label>Objet ${dev ? 'du devis' : 'de la facture'}</label>
+          <input id="rdc-objet" value="${esc(etat.objet)}" placeholder="${dev ? 'Rénovation électrique complète, mise aux normes…' : 'Dépannage électrique, mise aux normes du tableau…'}" ${dis}></div>
         ${metiers.length > 1 && !existant ? `<div class="field half"><label>Grille</label>
           <select id="rdc-metier">${metiers.map(k => `<option value="${esc(k)}" ${k === etat.metier ? 'selected' : ''}>${esc(nomMetier(k))}</option>`).join('')}</select></div>` : ''}
         <div class="field half"><label>TVA</label>
           <select id="rdc-tva" ${dis}>${TVA.map(v => `<option value="${v}" ${v === etat.tva_taux ? 'selected' : ''}>${String(v).replace('.', ',')} %${v === 10 ? ' — logement de plus de 2 ans' : v === 20 ? ' — neuf ou local professionnel' : ' — rénovation énergétique'}</option>`).join('')}</select></div>
-        <div class="field half"><label>Échéance de paiement</label>
-          <select id="rdc-validite" ${dis}>${[15, 30, 60, 90].map(j => `<option value="${j}" ${j === Number(etat.validite_jours) ? 'selected' : ''}>sous ${j} jours</option>`).join('')}</select></div>
+        <div class="field half"><label>${dev ? 'Validité du devis' : 'Échéance de paiement'}</label>
+          <select id="rdc-validite" ${dis}>${[15, 30, 60, 90].map(j => `<option value="${j}" ${j === Number(etat.validite_jours) ? 'selected' : ''}>${dev ? `valable ${j} jours` : `sous ${j} jours`}</option>`).join('')}</select></div>
       </div>
 
       ${familles}
@@ -208,26 +258,32 @@ export function ouvrirDevisCrm(x, existant = null, retour = null) {
         ${signe ? '' : '<button type="button" class="rdc-presta-tete rdc-libre" data-tarif=""><span class="rdc-coche" aria-hidden="true">+</span><span class="rdc-presta-nom">Ajouter une ligne libre (fournitures, prestation hors grille…)</span></button>'}
       </section>` : ''}
 
-      <div class="form"><div class="field"><label>Remarques — imprimées sur la facture</label>
-        <textarea id="rdc-notes" rows="2" placeholder="Délai d’intervention, fournitures comprises…" ${dis}>${esc(etat.notes)}</textarea></div></div>
+      <div class="form"><div class="field"><label>Remarques — imprimées sur ${dev ? 'le devis' : 'la facture'}</label>
+        <textarea id="rdc-notes" rows="2" placeholder="${dev ? 'Délai de réalisation, fournitures comprises…' : 'Délai d’intervention, fournitures comprises…'}" ${dis}>${esc(etat.notes)}</textarea></div></div>
 
       ${existant ? `<div class="rdc-statut"><span class="muted small">Statut</span>
-        ${Object.entries(STATUTS_DEVIS_CRM).map(([k, s]) => `<button type="button" class="chip ${k === existant.statut ? s.ton : ''}" data-statut="${k}">${esc(s.label)}</button>`).join('')}
+        ${Object.entries(STATUTS).map(([k, st]) => `<button type="button" class="chip ${k === existant.statut ? st.ton : ''}" data-statut="${k}">${esc(st.label)}</button>`).join('')}
         ${existant.statut === 'brouillon' ? `<button type="button" class="btn ghost sm rdc-suppr" id="rdc-suppr">${confirmerSuppr ? 'Confirmer la suppression' : 'Supprimer le brouillon'}</button>` : ''}
       </div>
-      <div class="rdc-statut"><span class="muted small">Règlement</span>
+      ${dev ? '' : `<div class="rdc-statut"><span class="muted small">Règlement</span>
         ${existant.regle_le
           ? `<span class="chip green">Réglée le ${esc(fmtDate(existant.regle_le))}${existant.regle_par ? ' · ' + esc(MOYENS_PAIEMENT[existant.regle_par] || existant.regle_par) : ''}</span>
              <button type="button" class="btn ghost sm" id="rdc-regl-off">Annuler le règlement</button>`
           : `<select id="rdc-regl-moyen">${Object.entries(MOYENS_PAIEMENT).map(([k, v]) => `<option value="${esc(k)}">${esc(v)}</option>`).join('')}</select>
              <button type="button" class="btn sm" id="rdc-regl-on">Marquer réglée</button>`}
-      </div>
-      <div class="rdc-statut"><span class="muted small">Bon d’attachement</span>
+      </div>`}
+      ${dev ? '' : `<div class="rdc-statut"><span class="muted small">Bon d’attachement</span>
         ${existant.bon_signature
           ? `<span class="chip green">Signé${existant.bon_signe_par ? ' par ' + esc(existant.bon_signe_par) : ''}</span>`
           : '<button type="button" class="btn ghost sm" id="rdc-bon-signer">Faire signer</button>'}
         <button type="button" class="btn ghost sm" id="rdc-bon-pdf">Imprimer</button>
-      </div>` : ''}
+      </div>`}
+      ${dev && existant.statut === 'signe' ? `<div class="rdc-statut"><span class="muted small">Travaux faits</span>
+        ${suite
+          ? `<span class="chip green">Facturés — ${esc(suite.numero || 'brouillon')}</span>
+             <button type="button" class="btn ghost sm" id="rdc-voir-facture">Ouvrir la facture</button>`
+          : '<button type="button" class="btn sm" id="rdc-facturer">Établir la facture</button>'}
+      </div>` : ''}` : ''}
 
       <div class="rdc-pied">
         <div class="rdc-totaux">
@@ -239,7 +295,7 @@ export function ouvrirDevisCrm(x, existant = null, retour = null) {
         <div class="rdc-boutons">
           <button type="button" class="btn ghost" data-close>Fermer</button>
           ${signe ? '' : '<button type="button" class="btn ghost" id="rdc-enregistrer">Enregistrer</button>'}
-          ${signe ? '' : '<button type="button" class="btn ghost" id="rdc-signer">Faire signer</button>'}
+          ${signe ? '' : `<button type="button" class="btn ghost" id="rdc-signer">${esc(G.signer)}</button>`}
           <button type="button" class="btn ghost" id="rdc-mail">Envoyer par mail</button>
           <button type="button" class="btn" id="rdc-pdf">${signe ? 'Imprimer le PDF' : 'Enregistrer et PDF'}</button>
         </div>
@@ -265,13 +321,21 @@ export function ouvrirDevisCrm(x, existant = null, retour = null) {
    */
   const faireSigner = () => {
     posePadSignature(hote, {
-      aide: `Signature de <b>${esc(x.nom || 'la personne présente')}</b>. Signer vaut reconnaissance `
-        + 'que les prestations facturées ont été exécutées, et acceptation sans réserve.',
+      // ⚠ CE QU'ON LIT AU CLIENT N'EST PAS LA MÊME CHOSE DANS LES DEUX CAS, et
+      // c'est tout l'objet de sa signature : sur une facture il reconnaît des
+      // travaux FAITS, sur un devis il accepte un prix AVANT qu'ils ne
+      // commencent. Lui faire reconnaître des travaux exécutés au premier
+      // rendez-vous n'aurait aucune valeur — et serait faux.
+      aide: dev
+        ? `Signature de <b>${esc(x.nom || 'la personne présente')}</b>. Signer vaut acceptation du `
+          + 'devis et des prix indiqués, avant l’exécution des travaux.'
+        : `Signature de <b>${esc(x.nom || 'la personne présente')}</b>. Signer vaut reconnaissance `
+          + 'que les prestations facturées ont été exécutées, et acceptation sans réserve.',
       nom: x.nom || '',
       surAnnuler: () => redessiner(),
       surValider: async ({ image, nom }) => {
         existant = await signerSurPlace(existant, { signature: image, signe_par: nom });
-        toast(`Facture ${existant.numero || ''} signée`);
+        toast(`${G.label} ${existant.numero || ''} ${dev ? 'accepté' : 'signée'}`);
         closeModal(true);
         ouvrirDevisCrm(x, existant, retour);
       },
@@ -399,7 +463,7 @@ export function ouvrirDevisCrm(x, existant = null, retour = null) {
     try {
       const d = await enregistrerDevisCrm(x, etat, existant);
       existant = d;
-      toast(`Facture ${d.numero || '(brouillon)'} enregistrée`);
+      toast(`${G.label} ${d.numero || '(brouillon)'} ${dev ? 'enregistré' : 'enregistrée'}`);
       return d;
     } catch (e) {
       toast(e.message || 'Enregistrement impossible', 'error');
@@ -465,7 +529,7 @@ export function ouvrirDevisCrm(x, existant = null, retour = null) {
       if (!existant || b.dataset.statut === existant.statut) return;
       try {
         existant = await changerStatutDevisCrm(existant, b.dataset.statut);
-        toast(`Facture ${existant.numero || ''} : ${STATUTS_DEVIS_CRM[existant.statut].label.toLowerCase()}`);
+        toast(`${G.label} ${existant.numero || ''} : ${statutDoc(existant).label.toLowerCase()}`);
         closeModal(true);
         ouvrirDevisCrm(x, existant, retour);
       } catch (e) { toast(e.message || 'Changement impossible', 'error'); }
@@ -527,6 +591,30 @@ export function ouvrirDevisCrm(x, existant = null, retour = null) {
       const d = await enregistrer();
       if (d) { existant = d; faireSigner(); }
     };
+    // ⚠ ON QUITTE LE DEVIS POUR OUVRIR LA FACTURE NEUVE : elle naît en
+    // brouillon, et c'est là qu'il faut corriger les écarts du chantier avant
+    // de l'émettre. Laisser le devis ouvert aurait fait croire que la facture
+    // est déjà prête.
+    const bFacturer = hote.querySelector('#rdc-facturer');
+    if (bFacturer) bFacturer.onclick = async () => {
+      bFacturer.disabled = true;
+      try {
+        const f = await facturerLeDevis(existant);
+        toast(`Facture établie depuis le devis ${existant.numero || ''} — à vérifier avant l’envoi`);
+        closeModal(true);
+        ouvrirDevisCrm(x, f, retour);
+      } catch (e) {
+        bFacturer.disabled = false;
+        toast(e.message || 'Facture non établie', 'error');
+      }
+    };
+    const bVoirFacture = hote.querySelector('#rdc-voir-facture');
+    if (bVoirFacture) bVoirFacture.onclick = () => {
+      const f = factureSuite();
+      if (!f) { toast('Facture introuvable', 'error'); return; }
+      closeModal(true);
+      ouvrirDevisCrm(x, f, retour);
+    };
     hote.querySelector('#rdc-mail').onclick = async () => {
       const d = signe ? existant : await enregistrer();
       if (d) ouvrirEnvoi(d);
@@ -548,23 +636,24 @@ export function ouvrirDevisCrm(x, existant = null, retour = null) {
   async function ouvrirEnvoi(d) {
     const docs = await import('./rgd-documents.js');
     const qui = docs.donneesDocument(x);
-    m.querySelector('.modal-head h2').textContent = `Envoyer la facture ${d.numero || ''}`;
+    const sujet = `Votre ${dev ? 'devis' : 'facture'} RGD Renova n° ${d.numero || ''}`;
+    m.querySelector('.modal-head h2').textContent = `Envoyer ${dev ? 'le devis' : 'la facture'} ${d.numero || ''}`;
     hote.innerHTML = `
-      <p class="rdc-aide">La facture part en <b>pièce jointe PDF</b>, depuis contact@rgdrenova.fr. La réponse du client arrive à la même adresse.</p>
+      <p class="rdc-aide">${dev ? 'Le devis' : 'La facture'} part en <b>pièce jointe PDF</b>, depuis contact@rgdrenova.fr. La réponse du client arrive à la même adresse.</p>
       <div class="form">
         <div class="field"><label>Destinataire</label>
           <input id="rdc-a" type="email" value="${esc(qui.email || '')}" placeholder="adresse@client.fr" required></div>
         <div class="field"><label>Objet</label>
-          <input id="rdc-objet-mail" value="${esc(`Votre facture RGD Renova n° ${d.numero || ''}`)}"></div>
+          <input id="rdc-objet-mail" value="${esc(sujet)}"></div>
         <div class="field"><label>Message</label>
           <textarea id="rdc-message" rows="11">${esc(messageDevisCrm(d, qui.nom))}</textarea></div>
         <div class="field"><label class="check"><input type="checkbox" id="rdc-copie" checked> Garder une copie à contact@rgdrenova.fr</label></div>
       </div>
-      <p class="small muted">Pièce jointe : <b>Facture ${esc(d.numero || '')}</b> — ${euros(d.montant_ttc)} TTC.</p>
+      <p class="small muted">Pièce jointe : <b>${esc(G.label)} ${esc(d.numero || '')}</b> — ${euros(d.montant_ttc)} TTC.</p>
       <div class="rdc-pied">
-        <div class="rdc-totaux"><span>${d.statut === 'brouillon' ? 'La facture passera en <b>Envoyée</b>.' : ''}</span></div>
+        <div class="rdc-totaux"><span>${d.statut === 'brouillon' ? `${dev ? 'Le devis' : 'La facture'} passera en <b>${esc(STATUTS.envoye.label)}</b>.` : ''}</span></div>
         <div class="rdc-boutons">
-          <button type="button" class="btn ghost" id="rdc-retour">← Retour à la facture</button>
+          <button type="button" class="btn ghost" id="rdc-retour">← Retour ${dev ? 'au devis' : 'à la facture'}</button>
           <button type="button" class="btn" id="rdc-envoyer">Envoyer</button>
         </div>
       </div>`;
@@ -579,12 +668,12 @@ export function ouvrirDevisCrm(x, existant = null, retour = null) {
         const pdf = await docs.pdfDevisCrm(x, d);
         const r = await envoyerDevisCrm(d, {
           a, nom: qui.nom,
-          objet: hote.querySelector('#rdc-objet-mail').value.trim() || `Votre facture RGD Renova n° ${d.numero || ''}`,
+          objet: hote.querySelector('#rdc-objet-mail').value.trim() || sujet,
           message: hote.querySelector('#rdc-message').value,
           copie: hote.querySelector('#rdc-copie').checked,
         }, pdf);
         if (!r.ok) throw new Error(r.motif);
-        toast(`Facture ${d.numero || ''} envoyée à ${a}`);
+        toast(`${G.label} ${d.numero || ''} ${dev ? 'envoyé' : 'envoyée'} à ${a}`);
         closeModal();
       } catch (e) {
         bouton.disabled = false; bouton.textContent = 'Envoyer';
@@ -613,24 +702,26 @@ export function ouvrirDevisCrm(x, existant = null, retour = null) {
  * fiche ne se reconstruirait plus en sortant du formulaire.
  */
 export function choisirFacture(x, retour = null) {
-  // Un seul chemin : on y va, sans faire choisir entre une chose et rien.
-  if (!peutImporterFacture()) { ouvrirDevisCrm(x, null, retour); return; }
-  const m = openModal('Factures', `
+  const m = openModal('Nouveau document', `
     <div class="rdc-choix">
       <button type="button" class="btn" id="rdc-creer">+ Créer une facture</button>
-      <p class="small muted">Depuis la grille des tarifs : on touche les prestations,
-      le CRM calcule et sort le PDF. Elle prend son numéro du CRM à l’envoi.</p>
+      <p class="small muted">${esc(GENRES.facture.aide)} Depuis la grille des tarifs : on touche les
+      prestations, le CRM calcule et sort le PDF. Elle porte « acquittée » dès qu’on la marque réglée.</p>
+      <button type="button" class="btn ghost" id="rdc-devis">+ Créer un devis</button>
+      <p class="small muted">${esc(GENRES.devis.aide)} Même grille, même PDF, mais il annonce un prix
+      au lieu de réclamer une somme. La facture se fera à la fin des travaux, depuis ce devis.</p>
       ${peutImporterFacture() ? `<button type="button" class="btn ghost" id="rdc-importer">↑ Importer une facture</button>
       <p class="small muted">Une facture faite ailleurs — Costructor, le comptable. On dépose
       son PDF et son montant ; elle garde son numéro d’origine.</p>` : ''}
     </div>`, { onClose: () => retour?.() });
-  m.querySelector('#rdc-creer').onclick = () => ouvrirDevisCrm(x, null, retour);
+  m.querySelector('#rdc-creer').onclick = () => ouvrirDevisCrm(x, null, retour, 'facture');
+  m.querySelector('#rdc-devis').onclick = () => ouvrirDevisCrm(x, null, retour, 'devis');
   const imp = m.querySelector('#rdc-importer');
   if (imp) imp.onclick = () => ouvrirImportFacture(x, retour);
 }
 
-/** Ce que dit le bouton : « + Factures » quand il ouvre un choix, sinon l'ancien libellé. */
-export const libelleBoutonFacture = () => (peutImporterFacture() ? '+ Factures' : '+ Faire une facture');
+/** Ce que dit le bouton, qui ouvre toujours un choix depuis le 02/11. */
+export const libelleBoutonFacture = () => '+ Facture ou devis';
 
 /** Qui peut faire un devis : toute personne de RGD, dès qu'une grille existe. */
 export const peutFaireDevisCrm = () => scope.activityKeys.includes('rgd') && metiersAvecGrille().length > 0;

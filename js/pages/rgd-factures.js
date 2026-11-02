@@ -38,7 +38,7 @@ import { scope } from '../data/scope.js';
 import { esc, eur, fmtDate, terms, hit, searchInput, bindSearch, restoreFocus } from '../ui.js';
 import { poserEspace, kpiEspace } from './espace.js';
 import { cadre, guard } from './rgd-espace.js';
-import { STATUTS_DEVIS_CRM, nomMetier } from '../data/rgd-devis-crm.js';
+import { statutsDe, statutDoc, estDevis, nomMetier } from '../data/rgd-devis-crm.js';
 import { ouvrirDevisCrm } from './rgd-devis-crm.js';
 import { ouvrirPdfImporte } from './rgd-facture-import.js';
 import { demandeDe, ficheDe } from './rgd-clients.js';
@@ -47,6 +47,15 @@ const euros = (n) => eur(n, { minimumFractionDigits: 2, maximumFractionDigits: 2
 
 // L'ordre des pastilles : celui de la vie d'une facture, pas l'alphabet.
 const ORDRE = ['brouillon', 'envoye', 'signe', 'refuse'];
+
+// ⚠ LES DEVIS ET LES FACTURES NE SE MÉLANGENT PAS DANS CETTE LISTE
+// (02/11/2026, Élodie : « je voudrais distinguer deux choses »). Et ce n'est
+// pas qu'une affaire de lisibilité : les totaux en haut de page s'en
+// trouveraient FAUX. Un devis de 3 800 € accepté n'est pas 3 800 € facturés —
+// les travaux n'ont pas eu lieu, rien n'est exigible, et la TVA n'est pas due.
+// L'écran s'ouvre donc sur les factures, les devis ont leur onglet, et les
+// chiffres d'argent ne comptent jamais que des factures.
+const GENRE_PAR_DEFAUT = 'facture';
 
 /**
  * Le client d'une facture. On prend le contact d'abord : c'est lui que la
@@ -95,14 +104,18 @@ export const rgdFacturesPage = {
   render(root) {
     if (guard(root)) return {};
     const coquille = poserEspace(root);
-    const state = { statut: '', qui: '', q: '', focus: null };
+    const state = { genre: GENRE_PAR_DEFAUT, statut: '', qui: '', q: '', focus: null };
 
     const draw = () => {
       // ⚠ LE FILTRE PAR PERSONNE S'APPLIQUE AVANT LES TOTAUX, PAS APRÈS : on
       // veut « les chiffres de Franck » quand on choisit Franck, pas ceux de
       // l'équipe avec sa seule liste en dessous.
-      const toutes = db.t('rgd_devis_crm')
-        .filter(d => !state.qui || d.owner_id === state.qui)
+      const genre = state.genre || GENRE_PAR_DEFAUT;
+      const dev = genre === 'devis';
+      const STATUTS = statutsDe(genre);
+      const tous = db.t('rgd_devis_crm').filter(d => !state.qui || d.owner_id === state.qui);
+      const toutes = tous
+        .filter(d => (estDevis(d) ? 'devis' : 'facture') === genre)
         .sort((a, b) => String(b.date_devis || b.created_at || '').localeCompare(String(a.date_devis || a.created_at || '')));
       const ts = terms(state.q);
       const vues = toutes
@@ -119,6 +132,9 @@ export const rgdFacturesPage = {
       const signees = par('signe');
       const envoyees = par('envoye');
       const brouillons = par('brouillon');
+      // Les devis qui attendent encore une réponse : ce sont eux qui donnent
+      // le travail à venir, et ils n'ont rien à faire dans un total facturé.
+      const devisOuverts = tous.filter(d => estDevis(d) && d.statut === 'envoye');
 
       // ⚠ CE QUI COMPTE DANS L'ARGENT, ET CE QUI N'Y COMPTE PAS.
       // Un BROUILLON n'a même pas de numéro : il n'est parti chez personne, le
@@ -126,28 +142,44 @@ export const rgdFacturesPage = {
       // l'argent qui ne viendra pas. Les deux se voient, aucune des deux ne
       // s'additionne — c'est la règle déjà tenue sur les encaissements.
       const mois = new Date().toISOString().slice(0, 7);
-      const duMois = toutes.filter(d => ['envoye', 'signe'].includes(d.statut)
+      // ⚠ « CE MOIS-CI » NE COMPTE QUE DES FACTURES, quel que soit l'onglet
+      // ouvert : c'est du chiffre facturé, pas du chiffre espéré.
+      const duMois = tous.filter(d => !estDevis(d) && ['envoye', 'signe'].includes(d.statut)
         && String(d.date_devis || d.created_at || '').slice(0, 7) === mois);
 
       const corps = `
         <div class="esp-kpis">
-          ${kpiEspace({ label: 'Signées', valeur: signees.length,
-            sous: signees.length ? `${euros(somme(signees))} TTC` : 'aucune facture signée',
+          ${kpiEspace({ label: dev ? 'Acceptés' : 'Signées', valeur: signees.length,
+            sous: signees.length ? `${euros(somme(signees))} TTC` : (dev ? 'aucun devis accepté' : 'aucune facture signée'),
             icone: '✍', ton: 'green', href: '#/rgd/factures' })}
-          ${kpiEspace({ label: 'Envoyées, en attente', valeur: envoyees.length,
-            sous: envoyees.length ? `${euros(somme(envoyees))} TTC à encaisser` : 'rien en attente',
-            icone: '⏳', ton: 'amber', href: '#/rgd/factures' })}
+          ${dev
+            ? kpiEspace({ label: 'Envoyés, sans réponse', valeur: envoyees.length,
+              sous: envoyees.length ? `${euros(somme(envoyees))} TTC proposés` : 'rien en attente',
+              icone: '⏳', ton: 'amber', href: '#/rgd/factures' })
+            : kpiEspace({ label: 'Envoyées, en attente', valeur: envoyees.length,
+              sous: envoyees.length ? `${euros(somme(envoyees))} TTC à encaisser` : 'rien en attente',
+              icone: '⏳', ton: 'amber', href: '#/rgd/factures' })}
           ${kpiEspace({ label: 'Brouillons', valeur: brouillons.length,
             sous: brouillons.length ? 'sans numéro, non envoyés' : 'aucun brouillon',
             icone: '✎', ton: 'muted', href: '#/rgd/factures' })}
-          ${kpiEspace({ label: 'Ce mois-ci', valeur: duMois.length,
-            sous: `${euros(somme(duMois))} TTC facturés`, icone: '📅', href: '#/rgd/factures' })}
+          ${dev
+            ? kpiEspace({ label: 'Devis sans réponse', valeur: devisOuverts.length,
+              sous: `${euros(somme(devisOuverts))} TTC en jeu`, icone: '📄', href: '#/rgd/factures' })
+            : kpiEspace({ label: 'Ce mois-ci', valeur: duMois.length,
+              sous: `${euros(somme(duMois))} TTC facturés`, icone: '📅', href: '#/rgd/factures' })}
         </div>
 
         <div class="pill-tabs">
-          <button type="button" data-statut="" class="${state.statut ? '' : 'on'}">Toutes<span>${toutes.length}</span></button>
+          <button type="button" data-genre="facture" class="${dev ? '' : 'on'}">Factures<span>${
+            tous.filter(d => !estDevis(d)).length}</span></button>
+          <button type="button" data-genre="devis" class="${dev ? 'on' : ''}">Devis<span>${
+            tous.filter(estDevis).length}</span></button>
+        </div>
+
+        <div class="pill-tabs">
+          <button type="button" data-statut="" class="${state.statut ? '' : 'on'}">${dev ? 'Tous' : 'Toutes'}<span>${toutes.length}</span></button>
           ${ORDRE.filter(k => toutes.some(d => d.statut === k)).map(k =>
-            `<button type="button" data-statut="${k}" class="${state.statut === k ? 'on' : ''}">${esc(STATUTS_DEVIS_CRM[k].label)}<span>${par(k).length}</span></button>`).join('')}
+            `<button type="button" data-statut="${k}" class="${state.statut === k ? 'on' : ''}">${esc(STATUTS[k].label)}<span>${par(k).length}</span></button>`).join('')}
         </div>
 
         <div class="toolbar">
@@ -160,7 +192,7 @@ export const rgdFacturesPage = {
                 esc(u.full_name || u.email || 'sans nom')}</option>`).join('')}
             </select></label>` : ''}
           <span class="grow"></span>
-          <span class="muted small">${vues.length} facture${vues.length > 1 ? 's' : ''}</span>
+          <span class="muted small">${vues.length} ${dev ? 'devis' : `facture${vues.length > 1 ? 's' : ''}`}</span>
         </div>
 
         <section class="card table-wrap">
@@ -168,7 +200,7 @@ export const rgdFacturesPage = {
             <thead><tr><th>Numéro</th><th>Date</th><th>Client</th><th>Objet</th>
               <th>Responsable</th><th class="num">Montant TTC</th><th>Statut</th></tr></thead>
             <tbody>${vues.map(d => {
-              const e = STATUTS_DEVIS_CRM[d.statut] || STATUTS_DEVIS_CRM.brouillon;
+              const e = statutDoc(d);
               const qui = d.owner_id ? scope.users().find(u => u.id === d.owner_id) : null;
               const client = clientDuDevis(d);
               return `<tr class="rfa-ligne" data-facture="${esc(String(d.id))}" tabindex="0">
@@ -182,22 +214,33 @@ export const rgdFacturesPage = {
                 <td><span class="chip ${e.ton}">${esc(e.label)}</span></td>
               </tr>`;
             }).join('') || `<tr><td colspan="7"><div class="empty">${toutes.length
-              ? 'Aucune facture ne correspond.'
-              : 'Aucune facture pour l’instant. On en fait une depuis la fiche d’un client, bouton « + Faire une facture ».'}</div></td></tr>`}</tbody>
+              ? `Aucun${dev ? '' : 'e'} ${dev ? 'devis' : 'facture'} ne correspond.`
+              : `Aucun${dev ? '' : 'e'} ${dev ? 'devis' : 'facture'} pour l’instant. On en fait un depuis la fiche d’un client, bouton « + Facture ou devis ».`}</div></td></tr>`}</tbody>
           </table>
-          <p class="small muted">Une facture <b>importée</b> — faite ailleurs, déposée en PDF —
-          garde son numéro d’origine et compte comme les autres ; on l’ouvre pour voir son PDF.
-          Les totaux ne comptent que les factures <b>envoyées</b> et
-          <b>signées</b> : un brouillon n’a pas de numéro et n’est parti chez personne, une
-          facture annulée est de l’argent qui ne viendra pas. Les deux se voient ici, aucune
-          des deux ne s’additionne.</p>
+          <p class="small muted">${dev
+            ? `Un <b>devis</b> annonce un prix pour des travaux à venir : rien n’est dû tant qu’ils
+              n’ont pas eu lieu, et c’est pourquoi il ne compte pas dans le chiffre facturé. Quand
+              les travaux sont faits, on ouvre le devis accepté et on en tire la facture — les deux
+              documents restent, chacun avec son numéro.`
+            : `Une facture <b>importée</b> — faite ailleurs, déposée en PDF — garde son numéro
+              d’origine et compte comme les autres ; on l’ouvre pour voir son PDF.
+              Les totaux ne comptent que les factures <b>envoyées</b> et <b>signées</b> : un
+              brouillon n’a pas de numéro et n’est parti chez personne, une facture annulée est de
+              l’argent qui ne viendra pas. Les deux se voient ici, aucune des deux ne s’additionne.`}</p>
         </section>`;
 
-      root.innerHTML = cadre('#/rgd/factures', 'Factures', corps);
+      root.innerHTML = cadre('#/rgd/factures', 'Factures & devis', corps);
       bindSearch(root, 'rfa-q', state, draw); restoreFocus(root, state);
 
       root.querySelectorAll('[data-statut]').forEach(b => b.onclick = () => {
         state.statut = b.dataset.statut; draw();
+      });
+      // ⚠ CHANGER D'ONGLET REMET LE FILTRE DE STATUT À ZÉRO : « Annulée » et
+      // « Refusé » sont la même clé en base mais pas le même mot, et un filtre
+      // hérité de l'autre onglet aurait montré une liste vide sous une pastille
+      // qui n'existe pas de ce côté.
+      root.querySelectorAll('[data-genre]').forEach(b => b.onclick = () => {
+        state.genre = b.dataset.genre; state.statut = ''; draw();
       });
       const qui = root.querySelector('#rfa-qui');
       if (qui) qui.onchange = () => { state.qui = qui.value; draw(); };

@@ -42,7 +42,7 @@ import { esc } from '../ui.js';
 import { imprimerPage } from './btp-fiche.js';
 import { valeursProjet, personneDe, nomComplet, adresseChantier } from '../data/rgd-projet.js';
 import { montantDevisDe, etapeAvecMontant } from '../data/rgd-etapes.js';
-import { parCategorie, signatureRgd, MOYENS_PAIEMENT } from '../data/rgd-devis-crm.js';
+import { parCategorie, signatureRgd, MOYENS_PAIEMENT, estDevis } from '../data/rgd-devis-crm.js';
 
 const LOGO = new URL('../../assets/logos/rgd-complet.png', import.meta.url).href;
 
@@ -430,6 +430,23 @@ const MENTIONS_PAIEMENT = 'Paiement à réception. Passé l’échéance, pénal
   + 'recouvrement de 40 € (articles L441-10 et D441-5 du code de commerce). Pas d’escompte pour '
   + 'paiement anticipé.';
 
+// ⚠ CE QU'UN DEVIS DOIT DIRE, ET QUI N'EST PAS CE QUE DIT UNE FACTURE
+// (02/11/2026, Élodie : « des travaux à faire plus tard et ce sera plus un
+// devis puisqu'il n'y aura pas de paiement au premier rdv »).
+//
+// ⚠ LES PÉNALITÉS DE RETARD N'ONT RIEN À FAIRE SUR UN DEVIS, et les y laisser
+// n'était pas une maladresse de style : rien n'est encore dû, donc rien ne
+// peut être en retard. Un document qui menace de pénalités sur une somme non
+// exigible se retourne contre celui qui l'envoie.
+//
+// ⚠ CE QU'UN DEVIS DOIT PORTER À LA PLACE : sa durée de validité, le
+// caractère gratuit de l'établissement (sans quoi le prix de l'étude est dû à
+// l'entreprise, et le client doit l'avoir su avant), et le fait que les
+// travaux seront facturés à leur achèvement.
+const MENTIONS_DEVIS = 'Devis gratuit, établi sans engagement. Les prix sont fermes pendant toute '
+  + 'la durée de validité indiquée ci-dessus. Le devis signé vaut commande ; les travaux seront '
+  + 'facturés à leur achèvement et réglés à ce moment-là.';
+
 /**
  * Le moment de la signature, tel qu'il s'imprime sous le tracé.
  *
@@ -518,12 +535,26 @@ export function devisCrmHtml(d, devis) {
   ech.setDate(ech.getDate() + (Number(devis.validite_jours) || 30));
   const taux = Number(devis.tva_taux);
 
+  // ⚠ UN SEUL GABARIT POUR LES DEUX DOCUMENTS, ET C'EST DÉLIBÉRÉ. Un devis et
+  // une facture se ressemblent à neuf dixièmes : mêmes parties, mêmes lignes,
+  // mêmes totaux, mêmes mentions d'entreprise et d'assurance. En écrire deux
+  // aurait voulu dire corriger deux fois chaque réglage — la marge du PDF, le
+  // cachet de l'entreprise, le taux de TVA — et en oublier un sur l'autre.
+  // Ce qui change est nommé ici, en un endroit.
+  const dev = estDevis(devis);
+  const mot = dev ? 'Devis' : 'Facture';
+
   // ⚠ UNE FACTURE RÉGLÉE NE RÉCLAME PLUS RIEN (02/11/2026, Élodie : « la
   // facture arrive au moment du paiement »). Tant que `regle_le` est vide, le
   // document garde son échéance et ses pénalités — elles restent OBLIGATOIRES
   // sur une facture non réglée, et les retirer du gabarit aurait rendu non
   // conforme la première facture payée plus tard.
-  const regle = devis.regle_le
+  //
+  // ⚠ UN DEVIS N'EST JAMAIS ACQUITTÉ, même si quelqu'un a coché « réglée » par
+  // erreur : il n'appelle aucun paiement. On ferme la porte ici plutôt que de
+  // compter sur l'écran, qui ne propose le règlement que sur une facture — un
+  // document rendu au client ne doit pas dépendre d'un bouton caché.
+  const regle = (!dev && devis.regle_le)
     ? { le: devis.regle_le, par: MOYENS_PAIEMENT[devis.regle_par] || devis.regle_par || '' }
     : null;
 
@@ -552,7 +583,7 @@ export function devisCrmHtml(d, devis) {
       <img src="${esc(sig.image)}" alt="Signature RGD Renova" style="display:block;height:${haut}px;margin-top:2px"></div>`;
   };
   const pageDevis = `<!doctype html>
-<html lang="fr"><head><meta charset="utf-8"><title>${esc(titreDocument(`Facture ${devis.numero || ''}`.trim(), d))}</title>
+<html lang="fr"><head><meta charset="utf-8"><title>${esc(titreDocument(`${mot} ${devis.numero || ''}`.trim(), d))}</title>
 <style>${style}${styleDevis}</style></head><body>
 <header class="fh">
   <div class="fh-g">
@@ -560,7 +591,7 @@ export function devisCrmHtml(d, devis) {
     <div class="fh-metiers">Électricité · Plomberie · Menuiserie · Carrelage · Peinture · Rénovation</div>
   </div>
   <div class="fh-d">
-    <div class="fh-mot">Facture</div>
+    <div class="fh-mot">${mot}</div>
     <div class="fh-num">${devis.numero ? 'N° ' + esc(devis.numero) : 'Brouillon'}</div>
   </div>
 </header>
@@ -574,8 +605,10 @@ export function devisCrmHtml(d, devis) {
 </div>
 
 <div class="champs" style="margin-top:9px">
-  ${champ('Date de la facture', jour(devis.date_devis || new Date()), 'etroit')}
-  ${regle ? champ('Réglée le', jour(regle.le) + (regle.par ? ' · ' + regle.par : ''), 'etroit') : champ('À régler avant le', jour(ech), 'etroit')}
+  ${champ(dev ? 'Date du devis' : 'Date de la facture', jour(devis.date_devis || new Date()), 'etroit')}
+  ${dev ? champ('Valable jusqu’au', jour(ech), 'etroit')
+    : regle ? champ('Réglée le', jour(regle.le) + (regle.par ? ' · ' + regle.par : ''), 'etroit')
+    : champ('À régler avant le', jour(ech), 'etroit')}
   ${champ('Adresse des travaux', d.adresseChantier)}
 </div>
 ${devis.objet ? `<div class="champs" style="margin-top:7px">${champ('Objet', devis.objet)}</div>` : ''}
@@ -605,22 +638,27 @@ ${devis.objet ? `<div class="champs" style="margin-top:7px">${champ('Objet', dev
 ${MENTION_TVA[taux] ? `<p class="mention">${esc(MENTION_TVA[taux])}</p>` : ''}
 ${devis.notes ? `<h2>Remarques</h2><p style="margin:0;font-size:9.8pt;white-space:pre-line">${esc(devis.notes)}</p>` : ''}
 
-${regle
+${dev
+  ? `<p class="mention">${esc(MENTIONS_DEVIS)}</p>`
+  : regle
   ? `<p class="mention acquittee"><b>Facture acquittée.</b> Le règlement de ${euros(devis.montant_ttc)} TTC
       a été reçu le ${esc(jour(regle.le))}${regle.par ? ' par ' + esc(regle.par) : ''}. Aucune somme ne reste due.</p>`
   : `<p class="mention">${esc(MENTIONS_PAIEMENT)}</p>`}
 
 <div class="accord">
-  <h2>Réception des travaux</h2>
+  <h2>${dev ? 'Bon pour accord' : 'Réception des travaux'}</h2>
   ${devis.signature ? `
-  <p style="margin:0;font-size:9pt;color:${GRIS}">Le client reconnaît que les prestations ci-dessus ont été exécutées et les accepte sans réserve.</p>
+  <p style="margin:0;font-size:9pt;color:${GRIS}">${dev
+    ? 'Le client déclare avoir reçu le présent devis avant l’exécution des travaux et l’accepter sans réserve.'
+    : 'Le client reconnaît que les prestations ci-dessus ont été exécutées et les accepte sans réserve.'}</p>
   <div class="sign">
     <div><b>Le client</b><span>${esc(devis.signe_par || d.nom || '')}</span>
       <img src="${esc(devis.signature)}" alt="Signature du client" style="display:block;height:58px;margin-top:2px">
-      <small style="display:block;color:${GRIS};font-size:8pt">Signé sur place le ${esc(momentSignature(devis))}</small></div>
+      <small style="display:block;color:${GRIS};font-size:8pt">${dev ? 'Accepté' : 'Signé'} sur place le ${esc(momentSignature(devis))}</small></div>
     ${blocRgd()}
   </div>` : `
-  <p style="margin:0;font-size:9pt;color:${GRIS}">Date et signature du client, précédées de la mention manuscrite « Travaux reçus et acceptés ».</p>
+  <p style="margin:0;font-size:9pt;color:${GRIS}">Date et signature du client, précédées de la mention manuscrite
+    « ${dev ? 'Devis reçu avant l’exécution des travaux' : 'Travaux reçus et acceptés'} ».</p>
   <div class="sign">
     <div><b>Le client</b><span>${esc(d.nom || 'Nom, signature')}</span><u></u></div>
     ${blocRgd()}
@@ -909,7 +947,7 @@ export const imprimerBonAttachement = (x, devis) => {
 };
 export const imprimerDevisCrm = (x, devis) => {
   const d = donneesDocument(x);
-  imprimerPage(devisCrmHtml(d, devis), titreDocument(`Facture ${devis.numero || ''}`.trim(), d));
+  imprimerPage(devisCrmHtml(d, devis), titreDocument(`${estDevis(devis) ? 'Devis' : 'Facture'} ${devis.numero || ''}`.trim(), d));
 };
 
 // ------------------------------------------- le devis en PDF, pour le mail
@@ -997,7 +1035,7 @@ export async function pdfDevisCrm(x, devis) {
       pdf.addImage(tranche.toDataURL('image/jpeg', 0.92), 'JPEG', MARGE, MARGE, largeurUtile, haut / pxParMm);
       y = fin;
     }
-    const nom = `${titreDocument(`Facture ${devis.numero || ''}`.trim(), d)}.pdf`;
+    const nom = `${titreDocument(`${estDevis(devis) ? 'Devis' : 'Facture'} ${devis.numero || ''}`.trim(), d)}.pdf`;
     return { base64: pdf.output('datauristring').split(',')[1], nom };
   } finally {
     cadre.remove();

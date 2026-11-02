@@ -119,7 +119,11 @@ export const ONGLETS = [
     // puis un encaissement. La facture n'avait pas d'entrée parce qu'elle
     // n'existait que dans la fiche d'un client (02/11/2026, Élodie : « oui
     // fais la page factures »).
-    { hash: '#/rgd/factures', label: 'Factures' },
+    // ⚠ « Facturation » ET NON « Factures & devis » : l'entrée « Devis »
+    // trois lignes plus haut est celle de COSTRUCTOR, et deux entrées nommées
+    // « devis » dans le même menu se lisent comme un doublon. Le mot couvre
+    // les deux documents du CRM sans empiéter sur l'autre.
+    { hash: '#/rgd/factures', label: 'Facturation' },
     { hash: '#/rgd/paiements', label: 'Encaissements' },
     { hash: '#/rgd/costructor', label: 'Costructor' },
     { hash: '#/rgd/reglages', label: 'Réglages' },

@@ -28,12 +28,66 @@ import { CONFIG } from '../config.js';
 export const TVA = [10, 20, 5.5];
 export const TVA_DEFAUT = 10;
 
-export const STATUTS_DEVIS_CRM = {
+// ------------------------------------------------ devis ou facture
+// Élodie, le 02/11/2026 : « je voudrais distinguer deux choses, les factures
+// acquittées pour des dépannages et des travaux fait directement sur place, et
+// des travaux à faire plus tard et ce sera plus un devis puisqu'il n'y aura pas
+// de paiement au premier rdv […] On peut mettre un système avec une date de
+// reglement pour savoir si c'est une facture acquittée ou une facture/devis ».
+//
+// ⚠ LA DATE DE RÈGLEMENT NE PEUT PAS PORTER CETTE DISTINCTION, et c'est ce qui
+// a décidé du reste : elle dit si un document est PAYÉ, pas ce qu'il EST. Un
+// dépannage réglé par virement deux jours plus tard a lui aussi un `regle_le`
+// vide pendant deux jours — il serait lu comme « travaux à venir ». La nature
+// du document se CHOISIT à la création ; `regle_le` garde exactement son rôle
+// d'avant, acquittée ou due.
+//
+// ⚠ ET ON NE FACTURE PAS DES TRAVAUX QUI N'ONT PAS EU LIEU (l'autre branche
+// qu'elle envisageait, « ou alors il faut facturer au premier rdv ») : une
+// facture émise prend un numéro dans une suite sans trou et rend la TVA
+// exigible. Si le chantier ne se fait pas, il faut un avoir pour l'annuler. Un
+// devis, lui, n'engage que le prix et s'abandonne sans rien.
+export const GENRES = {
+  facture: {
+    label: 'Facture', pluriel: 'Factures', le: 'la facture', cette: 'cette facture',
+    nouveau: 'Nouvelle facture', signer: 'Faire signer',
+    aide: 'Dépannage ou travaux faits sur place, réglés à la fin de l’intervention.',
+  },
+  devis: {
+    label: 'Devis', pluriel: 'Devis', le: 'le devis', cette: 'ce devis',
+    nouveau: 'Nouveau devis', signer: 'Faire accepter',
+    aide: 'Travaux à faire plus tard : rien n’est dû au premier rendez-vous.',
+  },
+};
+
+/** Le genre d'un document. Une ligne d'avant le 02/11 n'en porte pas : facture. */
+export const genreDe = (d) => (d && d.genre === 'devis' ? 'devis' : 'facture');
+export const estDevis = (d) => genreDe(d) === 'devis';
+/** « Facture » / « Devis », pour un titre. */
+export const motDoc = (d) => GENRES[genreDe(d)].label;
+/** « la facture » / « le devis », pour une phrase. */
+export const leDoc = (d) => GENRES[genreDe(d)].le;
+
+// ⚠ UN DEVIS N'EST PAS « SIGNÉ », IL EST ACCEPTÉ — et un devis refusé est
+// refusé, pas « annulé ». Les clés en base ne bougent pas (`signe`, `refuse`,
+// et la contrainte `rgd_devis_crm_statut_check` les impose) : ce sont les mots
+// LUS qui suivent le document. Un même écran dirait sinon « facture signée »
+// d'un devis que le client a seulement accepté.
+const STATUTS_FACTURE = {
   brouillon: { label: 'Brouillon', ton: 'muted' },
   envoye: { label: 'Envoyée', ton: 'amber' },
   signe: { label: 'Signée', ton: 'green' },
   refuse: { label: 'Annulée', ton: 'red' },
 };
+const STATUTS_DEVIS = {
+  brouillon: { label: 'Brouillon', ton: 'muted' },
+  envoye: { label: 'Envoyé', ton: 'amber' },
+  signe: { label: 'Accepté', ton: 'green' },
+  refuse: { label: 'Refusé', ton: 'red' },
+};
+export const statutsDe = (genre) => (genre === 'devis' ? STATUTS_DEVIS : STATUTS_FACTURE);
+/** L'étiquette du statut d'un document, dans les mots de son genre. */
+export const statutDoc = (d) => statutsDe(genreDe(d))[d.statut] || statutsDe(genreDe(d)).brouillon;
 
 // `ml` (mètre linéaire) depuis le 29/10/2026 : le passage des câbles.
 export const UNITES = { forfait: 'u', heure: 'h', m2: 'm²', ml: 'ml' };
@@ -154,11 +208,19 @@ export function devisCrmDe(x) {
 // ⚠ UN BROUILLON N'A PAS DE NUMÉRO, ici comme en production : une facture
 // reçoit le sien en SORTANT du brouillon, sans quoi un brouillon abandonné
 // laisserait un trou dans une suite qui ne doit pas en avoir.
-const numeroDemo = (statut) => {
+//
+// ⚠ DEUX SUITES, PAS UNE, ici comme en production : un devis qui puiserait
+// dans la numérotation des factures y creuserait un trou à chaque fois —
+// précisément ce qu'une numérotation continue interdit. Les factures sont
+// `FA<an>-<rang>`, les devis `DV<an>-<rang>`. Le préfixe est « DV » et non
+// « DE » parce que Costructor écrit `D2026-…` dans `rgd_devis` : à l'œil nu,
+// `DE2026-…` se lirait comme l'un des siens.
+const numeroDemo = (statut, genre) => {
   if (statut === 'brouillon') return null;
+  const pre = genre === 'devis' ? 'DV' : 'FA';
   const an = new Date().getFullYear();
-  const n = db.t('rgd_devis_crm').filter(d => String(d.numero || '').startsWith(`FA${an}-`)).length + 1;
-  return `FA${an}-${String(n).padStart(4, '0')}`;
+  const n = db.t('rgd_devis_crm').filter(d => String(d.numero || '').startsWith(`${pre}${an}-`)).length + 1;
+  return `${pre}${an}-${String(n).padStart(4, '0')}`;
 };
 
 /**
@@ -196,9 +258,72 @@ export async function enregistrerDevisCrm(x, valeurs, existant = null) {
     organisation_id: f.organisation_id || null,
     owner_id: (scope.isDirection ? f.owner_id : null) || moi,
     statut: 'brouillon',
-    ...(CONFIG.DEMO ? { numero: numeroDemo(valeurs.statut || 'brouillon'), date_devis: new Date().toISOString().slice(0, 10) } : {}),
+    // ⚠ LE GENRE NE SE DONNE QU'À LA CRÉATION. La base refuse de le changer
+    // une fois le numéro attribué : il viendrait d'une suite qui n'est plus la
+    // bonne. On ne le repasse donc pas dans `commun`, qui sert aussi aux
+    // modifications.
+    genre: valeurs.genre === 'devis' ? 'devis' : 'facture',
+    ...(CONFIG.DEMO ? { numero: numeroDemo(valeurs.statut || 'brouillon', valeurs.genre), date_devis: new Date().toISOString().slice(0, 10) } : {}),
   });
 }
+
+/**
+ * Les travaux du devis sont faits : on en établit la facture.
+ *
+ * ⚠ ON CRÉE UNE FACTURE, ON NE CONVERTIT PAS LE DEVIS. Le basculer lui ferait
+ * porter un numéro `DV` dans la suite des factures, et surtout effacerait la
+ * preuve de son acceptation — c'est le document que le client a signé AVANT
+ * les travaux, celui qu'on ressort si le prix est contesté. Les deux
+ * coexistent : le devis reste accepté, la facture naît à côté et le cite
+ * (`issu_de`).
+ *
+ * ⚠ ELLE NAÎT EN BROUILLON, DONC SANS NUMÉRO, et ce n'est pas une étape de
+ * plus pour rien : les travaux diffèrent presque toujours un peu du devis — une
+ * prise en plus, une heure de moins. On corrige, puis on émet.
+ */
+export async function facturerLeDevis(d) {
+  const lignes = structuredClone(d.lignes || []);
+  const t = totaux(lignes, d.tva_taux);
+  return db.insert('rgd_devis_crm', {
+    genre: 'facture',
+    issu_de: d.id,
+    objet: d.objet || null,
+    lignes,
+    tva_taux: Number(d.tva_taux) || TVA_DEFAUT,
+    validite_jours: Number(d.validite_jours) || 30,
+    notes: d.notes || null,
+    metier: d.metier || 'electricite',
+    fiche_id: d.fiche_id || null,
+    demande_id: d.demande_id || null,
+    contact_id: d.contact_id || null,
+    organisation_id: d.organisation_id || null,
+    owner_id: d.owner_id || scope.user?.id || null,
+    statut: 'brouillon',
+    // En démonstration, aucun déclencheur ne refait les montants.
+    ...(CONFIG.DEMO
+      ? { montant_ht: t.ht, montant_tva: t.tva, montant_ttc: t.ttc, date_devis: new Date().toISOString().slice(0, 10) }
+      : {}),
+  });
+}
+
+// ⚠ CES DEUX-LÀ LISENT `db.t`, PAS `scope.rgd`, ET LE CONTRAIRE A ÉTÉ MESURÉ :
+// `scope.rgd` applique la VUE choisie dans l'en-tête de l'espace (regarder
+// comme tel chargé d'affaires), et elle rendait ZÉRO ligne sur un devis
+// appartenant à quelqu'un d'autre — alors que le document était ouvert à
+// l'écran. Conséquences : la facture n'annonçait plus de quel devis elle
+// venait, et surtout le devis reproposait « Établir la facture » alors qu'elle
+// existait déjà. On aurait facturé deux fois les mêmes travaux.
+//
+// La base reste le vrai garde : `rgd_voit_ligne(owner_id)` ne rend à personne
+// ce qu'il n'a pas le droit de voir. Une préférence d'affichage n'a pas à
+// rompre le lien entre deux documents qu'on a déjà sous les yeux.
+/** La facture née de ce devis, s'il en existe une. */
+export const factureDuDevis = (d) => db.t('rgd_devis_crm').find(f => f.issu_de === d.id) || null;
+
+/** Le devis dont cette facture est née, s'il y en a un. */
+export const devisDeLaFacture = (f) => (f.issu_de
+  ? db.t('rgd_devis_crm').find(d => d.id === f.issu_de) || null
+  : null);
 
 export const changerStatutDevisCrm = (d, statut) => db.update('rgd_devis_crm', d.id, {
   statut,
@@ -307,7 +432,7 @@ export const signerSurPlace = (d, { signature, signe_par }) => db.update('rgd_de
   signature,
   // En démo, c'est ici qu'on imite ce que le trigger fait en production :
   // sortir du brouillon donne son numéro à la facture.
-  ...(CONFIG.DEMO && !d.numero ? { numero: numeroDemo('signe') } : {}),
+  ...(CONFIG.DEMO && !d.numero ? { numero: numeroDemo('signe', genreDe(d)) } : {}),
   signe_par: String(signe_par || '').trim() || null,
   signe_a: new Date().toISOString(),
   statut: 'signe',
@@ -345,9 +470,26 @@ export const signerSurPlace = (d, { signature, signe_par }) => db.update('rgd_de
  */
 export function messageDevisCrm(devis, nomClient) {
   const salut = nomClient ? `Bonjour ${nomClient},` : 'Bonjour,';
+  const montant = Number(devis.montant_ttc || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  // ⚠ UN DEVIS NE REMERCIE PAS DE LA CONFIANCE, IL ATTEND UNE RÉPONSE. Le même
+  // texte pour les deux donnait à un devis le ton d'une affaire conclue — et
+  // taisait la seule chose qui compte au client à cet instant : jusqu'à quand
+  // le prix tient, et comment il dit oui.
+  if (estDevis(devis)) {
+    return `${salut}
+
+Vous trouverez ci-joint votre devis n° ${devis.numero || ''} d’un montant de ${montant} € TTC.
+
+Ce devis est valable ${Number(devis.validite_jours) || 30} jours. Pour lancer les travaux, retournez-le nous signé, ou confirmez-nous simplement votre accord par retour de mail.
+
+Nous restons à votre disposition pour toute question.
+
+Bien cordialement,
+L’équipe RGD Renova`;
+  }
   return `${salut}
 
-Vous trouverez ci-joint votre facture n° ${devis.numero || ''} d’un montant de ${Number(devis.montant_ttc || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} € TTC.
+Vous trouverez ci-joint votre facture n° ${devis.numero || ''} d’un montant de ${montant} € TTC.
 
 Nous vous remercions de votre confiance.
 
@@ -377,9 +519,9 @@ const enParagraphes = (t) => String(t || '').trim().split(/\n\s*\n/)
  * ⚠ STYLES EN LIGNE ET `<table>` : les clients mail ignorent les feuilles de
  * style, et Outlook ne centre pas un bloc autrement.
  */
-const boutonFacture = (lien) => `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:18px 0">
+const boutonFacture = (lien, mot = 'ma facture') => `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:18px 0">
   <tr><td style="border:2px solid #FC5D00;border-radius:8px">
-    <a href="${echappe(lien)}" style="display:inline-block;padding:12px 26px;color:#FC5D00;text-decoration:none;font-weight:700;font-family:Arial,Helvetica,sans-serif;font-size:15px">Voir ma facture</a>
+    <a href="${echappe(lien)}" style="display:inline-block;padding:12px 26px;color:#FC5D00;text-decoration:none;font-weight:700;font-family:Arial,Helvetica,sans-serif;font-size:15px">Voir ${echappe(mot)}</a>
   </td></tr></table>`;
 
 /**
@@ -387,12 +529,12 @@ const boutonFacture = (lien) => `<table role="presentation" cellpadding="0" cell
  * QUI ANNONCE LA FACTURE — pas à la fin. C'était tout le reproche : ce qui
  * compte ne doit pas être en bas.
  */
-const corpsMail = (texte, lien) => {
+const corpsMail = (texte, lien, mot) => {
   const blocs = enParagraphes(texte);
   if (!lien) return blocs.join('');
   // Le premier bloc est la salutation, le second annonce la facture. Si le
   // texte a été réécrit et tient en un bloc, le bouton le suit quand même.
-  blocs.splice(Math.min(2, blocs.length), 0, boutonFacture(lien));
+  blocs.splice(Math.min(2, blocs.length), 0, boutonFacture(lien, mot));
   return blocs.join('');
 };
 
@@ -415,6 +557,10 @@ export async function envoyerDevisCrm(devis, { a, nom, objet, message, copie }, 
   let lien = null;
   try {
     const octets = Uint8Array.from(atob(pdf.base64), (c) => c.charCodeAt(0));
+    // ⚠ MÊME SEAU POUR LES DEUX, ET C'EST VOULU : le nom du fichier est l'`id`
+    // du document, qui est unique dans toute la table. Un second seau aurait
+    // demandé une seconde policy, pour ranger des PDF que personne ne liste
+    // par dossier.
     const chemin = `${devis.id}.pdf`;
     await db.uploadFile(chemin, new Blob([octets], { type: 'application/pdf' }),
       { bucket: 'factures', upsert: true });
@@ -429,7 +575,7 @@ export async function envoyerDevisCrm(devis, { a, nom, objet, message, copie }, 
       body: JSON.stringify({
         to: { email: a, name: nom || a },
         subject: objet,
-        html: corpsMail(message, lien),
+        html: corpsMail(message, lien, estDevis(devis) ? 'mon devis' : 'ma facture'),
         replyTo: { email: 'contact@rgdrenova.fr', name: 'RGD Renova' },
         ...(copie ? { bcc: [{ email: 'contact@rgdrenova.fr', name: 'RGD Renova' }] } : {}),
         attachment: [{ name: pdf.nom, content: pdf.base64 }],
