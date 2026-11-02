@@ -25,6 +25,7 @@ import {
   totaux, plancher, ligneDepuisTarif, parCategorie, messageDevisCrm, envoyerDevisCrm, enregistrerDevisCrm, changerStatutDevisCrm, supprimerDevisCrm, signerSurPlace,
 } from '../data/rgd-devis-crm.js';
 import { posePadSignature } from '../pad-signature.js';
+import { ouvrirImportFacture, peutImporterFacture } from './rgd-facture-import.js';
 
 const euros = (n) => eur(n, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -33,12 +34,12 @@ export function blocDevisCrm(devis, peutFaire) {
   if (!devis.length && !peutFaire) return '';
   return `<section class="rgdf-bloc rdc-bloc">
     <h3>Factures ${devis.length ? `<span class="rgdf-compte">${devis.length}</span>` : ''}
-      ${peutFaire ? '<button type="button" class="btn sm rdc-nouveau" id="rdc-nouveau">+ Faire une facture</button>' : ''}</h3>
+      ${peutFaire ? `<button type="button" class="btn sm rdc-nouveau" id="rdc-nouveau">${libelleBoutonFacture()}</button>` : ''}</h3>
     ${devis.length ? `<div class="rgdf-tableau"><table><tbody>
       ${devis.map(v => { const e = STATUTS_DEVIS_CRM[v.statut] || STATUTS_DEVIS_CRM.brouillon;
         return `<tr class="rdc-ligne" data-devis-crm="${esc(v.id)}" tabindex="0">
           <td><b>${esc(v.numero || '—')}</b>
-            <div class="s muted">${esc(v.objet || nomMetier(v.metier))} · ${esc(fmtDate(v.date_devis || v.created_at))}</div></td>
+            <div class="s muted">${v.importe ? 'Importée · ' : ''}${esc(v.objet || nomMetier(v.metier))} · ${esc(fmtDate(v.date_devis || v.created_at))}</div></td>
           <td class="num">${euros(v.montant_ttc)} <span class="s muted">TTC</span></td>
           <td class="rgdf-fin"><span class="chip ${e.ton}">${esc(e.label)}</span></td>
         </tr>`; }).join('')}
@@ -518,6 +519,42 @@ export function ouvrirDevisCrm(x, existant = null, retour = null) {
 
   dessine();
 }
+
+/**
+ * Le choix qui s'ouvre sous « + Factures » (02/11/2026, Élodie : « je voudrais
+ * que tu transformes en "+ factures" et avoir la possibilité d'importer une
+ * facture qui n'a pas été reliée avec Costructor »).
+ *
+ * ⚠ UNE FENÊTRE, PAS UN MENU FLOTTANT : la fiche EST déjà une fenêtre, et
+ * `openModal` ferme la courante avant d'ouvrir la suivante. Un menu posé en
+ * absolu dans la fiche aurait été coupé par son défilement, et il n'y a dans
+ * ce dépôt aucun composant de menu flottant à reprendre — en écrire un pour
+ * deux entrées serait une pièce de plus à tenir.
+ *
+ * ⚠ LE RETOUR EST PASSÉ AUX DEUX CHEMINS, PAS SEULEMENT AU CHOIX : chacun
+ * ouvre sa propre fenêtre, donc ferme celle-ci sans déclencher son `onClose`
+ * (c'est `closeModal(true)`, la fermeture pour remplacement). Sans cela, la
+ * fiche ne se reconstruirait plus en sortant du formulaire.
+ */
+export function choisirFacture(x, retour = null) {
+  // Un seul chemin : on y va, sans faire choisir entre une chose et rien.
+  if (!peutImporterFacture()) { ouvrirDevisCrm(x, null, retour); return; }
+  const m = openModal('Factures', `
+    <div class="rdc-choix">
+      <button type="button" class="btn" id="rdc-creer">+ Créer une facture</button>
+      <p class="small muted">Depuis la grille des tarifs : on touche les prestations,
+      le CRM calcule et sort le PDF. Elle prend son numéro du CRM à l’envoi.</p>
+      ${peutImporterFacture() ? `<button type="button" class="btn ghost" id="rdc-importer">↑ Importer une facture</button>
+      <p class="small muted">Une facture faite ailleurs — Costructor, le comptable. On dépose
+      son PDF et son montant ; elle garde son numéro d’origine.</p>` : ''}
+    </div>`, { onClose: () => retour?.() });
+  m.querySelector('#rdc-creer').onclick = () => ouvrirDevisCrm(x, null, retour);
+  const imp = m.querySelector('#rdc-importer');
+  if (imp) imp.onclick = () => ouvrirImportFacture(x, retour);
+}
+
+/** Ce que dit le bouton : « + Factures » quand il ouvre un choix, sinon l'ancien libellé. */
+export const libelleBoutonFacture = () => (peutImporterFacture() ? '+ Factures' : '+ Faire une facture');
 
 /** Qui peut faire un devis : toute personne de RGD, dès qu'une grille existe. */
 export const peutFaireDevisCrm = () => scope.activityKeys.includes('rgd') && metiersAvecGrille().length > 0;

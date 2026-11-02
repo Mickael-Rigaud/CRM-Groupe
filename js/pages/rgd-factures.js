@@ -40,6 +40,7 @@ import { poserEspace, kpiEspace } from './espace.js';
 import { cadre, guard } from './rgd-espace.js';
 import { STATUTS_DEVIS_CRM, nomMetier } from '../data/rgd-devis-crm.js';
 import { ouvrirDevisCrm } from './rgd-devis-crm.js';
+import { ouvrirPdfImporte } from './rgd-facture-import.js';
 import { demandeDe, ficheDe } from './rgd-clients.js';
 
 const euros = (n) => eur(n, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -171,10 +172,11 @@ export const rgdFacturesPage = {
               const qui = d.owner_id ? scope.users().find(u => u.id === d.owner_id) : null;
               const client = clientDuDevis(d);
               return `<tr class="rfa-ligne" data-facture="${esc(String(d.id))}" tabindex="0">
-                <td><b>${esc(d.numero || '—')}</b>${d.numero ? '' : '<div class="s muted">brouillon</div>'}</td>
+                <td><b>${esc(d.numero || '—')}</b>${d.numero ? '' : '<div class="s muted">brouillon</div>'}
+                  ${d.importe ? '<div class="s muted">importée</div>' : ''}</td>
                 <td>${fmtDate(d.date_devis || d.created_at)}</td>
                 <td>${client ? esc(client) : '<span class="muted small">sans client</span>'}</td>
-                <td class="muted">${esc(d.objet || nomMetier(d.metier))}</td>
+                <td class="muted">${esc(d.objet || nomMetier(d.metier) || 'Facture importée')}</td>
                 <td>${qui ? esc(qui.full_name) : '<span class="muted small">—</span>'}</td>
                 <td class="num">${euros(d.montant_ttc)}</td>
                 <td><span class="chip ${e.ton}">${esc(e.label)}</span></td>
@@ -183,7 +185,9 @@ export const rgdFacturesPage = {
               ? 'Aucune facture ne correspond.'
               : 'Aucune facture pour l’instant. On en fait une depuis la fiche d’un client, bouton « + Faire une facture ».'}</div></td></tr>`}</tbody>
           </table>
-          <p class="small muted">Les totaux ne comptent que les factures <b>envoyées</b> et
+          <p class="small muted">Une facture <b>importée</b> — faite ailleurs, déposée en PDF —
+          garde son numéro d’origine et compte comme les autres ; on l’ouvre pour voir son PDF.
+          Les totaux ne comptent que les factures <b>envoyées</b> et
           <b>signées</b> : un brouillon n’a pas de numéro et n’est parti chez personne, une
           facture annulée est de l’argent qui ne viendra pas. Les deux se voient ici, aucune
           des deux ne s’additionne.</p>
@@ -204,6 +208,10 @@ export const rgdFacturesPage = {
       const ouvrir = (tr) => {
         const d = db.byId('rgd_devis_crm', tr.dataset.facture);
         if (!d) return;
+        // ⚠ UNE IMPORTÉE N'A PAS DE LIGNES : l'éditeur montrerait un
+        // formulaire vide là où il existe une vraie facture. Son PDF EST la
+        // facture, c'est lui qu'on ouvre.
+        if (d.importe) { ouvrirPdfImporte(d); return; }
         ouvrirDevisCrm(ficheDuDevis(d), d, draw);
       };
       root.querySelectorAll('.rfa-ligne').forEach(tr => {

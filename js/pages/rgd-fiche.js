@@ -100,7 +100,8 @@ import { attribuerFicheRgd, proprietaireDeLaFiche } from './rgd-attribuer.js';
 import { majNote, COLONNE_NOTE } from '../data/rgd-clients.js';
 // Les devis faits dans le CRM avec la grille des tarifs (29/10/2026).
 import { devisCrmDe } from '../data/rgd-devis-crm.js';
-import { blocDevisCrm, ouvrirDevisCrm, peutFaireDevisCrm } from './rgd-devis-crm.js';
+import { blocDevisCrm, ouvrirDevisCrm, choisirFacture, libelleBoutonFacture, peutFaireDevisCrm } from './rgd-devis-crm.js';
+import { ouvrirPdfImporte } from './rgd-facture-import.js';
 import { lienAvis, messageAvis, envoyerDemandeAvis, avisDejaDemande, KIND_AVIS,
   enveloppeApercu, htmlDepuisTexte } from '../data/rgd-avis.js';
 import { dossiersDe, statutSav, garantie, finDuChantier } from '../data/rgd-sav.js';
@@ -726,7 +727,7 @@ export function ouvrirFicheRgd(x, onChange, retour = null) {
         ${refusDeProjet(x)
           ? `<p class="rgdf-origine" title="${esc(refusDeProjet(x))}">Lecture seule</p>`
           : '<button type="button" class="btn ghost sm rgdf-modifier" id="rgdf-modifier">Modifier les informations</button>'}
-        ${peutFaireDevisCrm() ? '<button type="button" class="btn sm rgdf-devis" data-faire-devis>+ Faire une facture</button>' : ''}
+        ${peutFaireDevisCrm() ? `<button type="button" class="btn sm rgdf-devis" data-faire-devis>${libelleBoutonFacture()}</button>` : ''}
         </div>
         <!-- Attribuer ne dépend pas de refusDeProjet : une fiche en lecture
              seule (un reflet de l'application RGD) se confie tout de même, car
@@ -977,11 +978,16 @@ export function ouvrirFicheRgd(x, onChange, retour = null) {
     // Les devis du CRM : la fenêtre du devis remplace la fiche, et la fiche se
     // reconstruit à sa fermeture — comme pour « Modifier les informations ».
     m.querySelectorAll('#rdc-nouveau, [data-faire-devis]').forEach(b =>
-      b.addEventListener('click', () => ouvrirDevisCrm(x, null, () => dessine())));
+      b.addEventListener('click', () => choisirFacture(x, () => dessine())));
     m.querySelectorAll('[data-devis-crm]').forEach(tr => {
+      // ⚠ UNE FACTURE IMPORTÉE N'A PAS DE LIGNES : l'ouvrir dans l'éditeur
+      // montrerait un formulaire vide à la place d'une facture qui existe.
+      // On ouvre son PDF, qui EST la facture.
       const ouvrir = () => {
         const d = db.byId('rgd_devis_crm', tr.dataset.devisCrm);
-        if (d) ouvrirDevisCrm(x, d, () => dessine());
+        if (!d) return;
+        if (d.importe) { ouvrirPdfImporte(d); return; }
+        ouvrirDevisCrm(x, d, () => dessine());
       };
       tr.onclick = ouvrir;
       tr.onkeydown = (e) => { if (e.key === 'Enter') ouvrir(); };

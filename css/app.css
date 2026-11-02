@@ -7209,6 +7209,13 @@ span.rpv-statut { display: inline-block; margin-bottom: 4px; }
    Le bouton se range au bout du titre du bloc, après le compteur. */
 .rdc-bloc h3 .rdc-nouveau { margin-left: auto; }
 .rdc-bloc h3 .rgdf-compte + .rdc-nouveau { margin-left: 8px; }
+/* Le choix sous « + Factures » (02/11/2026) : deux chemins, chacun suivi de
+   la phrase qui dit ce qu'il fait. Les boutons prennent toute la largeur —
+   sur un telephone, deux boutons cote a cote tombent sous 150 px chacun. */
+.rdc-choix { display: grid; gap: 4px; }
+.rdc-choix .btn { width: 100%; justify-content: center; }
+.rdc-choix p { margin: 0 0 14px; }
+.rdc-choix p:last-child { margin-bottom: 0; }
 .rdc-ligne { cursor: pointer; }
 .rdc-ligne:hover td { background: var(--card-2); }
 .rdc .form { margin-bottom: 14px; }
