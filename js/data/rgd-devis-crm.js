@@ -30,9 +30,9 @@ export const TVA_DEFAUT = 10;
 
 export const STATUTS_DEVIS_CRM = {
   brouillon: { label: 'Brouillon', ton: 'muted' },
-  envoye: { label: 'Envoyé', ton: 'amber' },
-  signe: { label: 'Signé', ton: 'green' },
-  refuse: { label: 'Refusé', ton: 'red' },
+  envoye: { label: 'Envoyée', ton: 'amber' },
+  signe: { label: 'Signée', ton: 'green' },
+  refuse: { label: 'Annulée', ton: 'red' },
 };
 
 // `ml` (mètre linéaire) depuis le 29/10/2026 : le passage des câbles.
@@ -141,10 +141,15 @@ export function devisCrmDe(x) {
 
 // En démo, aucune base ne pose le numéro : on l'imite, pour que l'écran et le
 // PDF se lisent comme en production.
-const numeroDemo = () => {
+//
+// ⚠ UN BROUILLON N'A PAS DE NUMÉRO, ici comme en production : une facture
+// reçoit le sien en SORTANT du brouillon, sans quoi un brouillon abandonné
+// laisserait un trou dans une suite qui ne doit pas en avoir.
+const numeroDemo = (statut) => {
+  if (statut === 'brouillon') return null;
   const an = new Date().getFullYear();
-  const n = db.t('rgd_devis_crm').filter(d => String(d.numero || '').startsWith(`DE${an}-`)).length + 1;
-  return `DE${an}-${String(n).padStart(4, '0')}`;
+  const n = db.t('rgd_devis_crm').filter(d => String(d.numero || '').startsWith(`FA${an}-`)).length + 1;
+  return `FA${an}-${String(n).padStart(4, '0')}`;
 };
 
 /**
@@ -182,7 +187,7 @@ export async function enregistrerDevisCrm(x, valeurs, existant = null) {
     organisation_id: f.organisation_id || null,
     owner_id: (scope.isDirection ? f.owner_id : null) || moi,
     statut: 'brouillon',
-    ...(CONFIG.DEMO ? { numero: numeroDemo(), date_devis: new Date().toISOString().slice(0, 10) } : {}),
+    ...(CONFIG.DEMO ? { numero: numeroDemo(valeurs.statut || 'brouillon'), date_devis: new Date().toISOString().slice(0, 10) } : {}),
   });
 }
 
@@ -192,6 +197,82 @@ export const changerStatutDevisCrm = (d, statut) => db.update('rgd_devis_crm', d
 });
 
 export const supprimerDevisCrm = (d) => db.remove('rgd_devis_crm', d.id);
+
+// ------------------------------------------ la signature de RGD Renova
+// Élodie, le 02/11/2026 : « on pourrait mettre en place la signature sur la
+// facture numérique avant de l'envoyer au client ». Jusqu'ici une facture
+// envoyée par mail partait avec le bloc « Pour RGD Renova » VIDE : une ligne
+// à remplir à la main sur un document que personne n'imprime.
+//
+// ⚠ ELLE VIT DANS `rgd_reglages`, ET C'EST TOUT L'INTÉRÊT : cette table se
+// LIT avec l'activité RGD — donc Franck aussi — et ne s'ÉCRIT que par la
+// direction. La signature de l'entreprise se pose donc UNE fois, par Élodie
+// ou Mickael, et toutes les factures la portent, y compris celles que Franck
+// envoie depuis son téléphone. Aucune policy à créer : `settings`, l'autre
+// candidat, ne se lit QUE par la direction, et les factures de Franck seraient
+// parties sans rien.
+//
+// ⚠ CE N'EST PAS LA SIGNATURE DU CLIENT. Celle-là se trace sur place, à la
+// fin de l'intervention, et vit dans la facture elle-même (`signature`).
+// Celle-ci est l'engagement de l'entreprise, apposée d'avance sur le document.
+const CLE_SIGNATURE_RGD = 'signature_facture';
+
+/** La signature de l'entreprise : `{ image, nom, le }`, ou `null`. */
+export function signatureRgd() {
+  const brut = db.t('rgd_reglages').find(r => r.cle === CLE_SIGNATURE_RGD)?.valeur;
+  if (!brut) return null;
+  try {
+    const v = typeof brut === 'string' ? JSON.parse(brut) : brut;
+    return v && v.image ? v : null;
+  } catch {
+    // Une valeur illisible ne doit pas emporter le document : la facture sort
+    // sans signature, comme avant, plutôt que de ne pas sortir du tout.
+    return null;
+  }
+}
+
+// ⚠ ON RECHARGE LA TABLE APRÈS AVOIR ÉCRIT. `db.insert` et `db.update`
+// envoient à Supabase et rendent la ligne, mais ne touchent PAS au cache que
+// `db.t` relit — l'écran des réglages le contourne en recopiant à la main. Sans
+// ce rechargement, le document continuerait à sortir sans signature jusqu'au
+// prochain chargement de l'application, et on croirait l'enregistrement perdu.
+export async function enregistrerSignatureRgd({ image, nom }) {
+  const valeur = JSON.stringify({ image, nom: String(nom || '').trim(), le: new Date().toISOString() });
+  const existe = db.t('rgd_reglages').some(r => r.cle === CLE_SIGNATURE_RGD);
+  if (existe) await db.update('rgd_reglages', CLE_SIGNATURE_RGD, { valeur });
+  else await db.insert('rgd_reglages', { cle: CLE_SIGNATURE_RGD, valeur });
+  await db.recharger('rgd_reglages');
+}
+
+/** On efface la valeur, on ne supprime pas la ligne : le réglage reste visible. */
+export async function retirerSignatureRgd() {
+  await db.update('rgd_reglages', CLE_SIGNATURE_RGD, { valeur: null });
+  await db.recharger('rgd_reglages');
+}
+
+/**
+ * La facture signée par le client, sur place, au doigt.
+ *
+ * ⚠ SIGNER, C'EST ÉMETTRE. Le passage en `signe` fait sortir la facture du
+ * brouillon, et c'est à cet instant que la base lui donne son numéro
+ * définitif (voir le trigger `rgd_devis_crm_calcul`). Après quoi son contenu
+ * ne se modifie plus : c'est ce que le client a reconnu avoir reçu.
+ *
+ * ⚠ `signe_par` N'EST PAS LE NOM DE LA FICHE. Celui qui signe n'est pas
+ * toujours le titulaire du dossier — un conjoint, un gardien, un locataire. On
+ * enregistre le nom tel qu'il a été confirmé devant le client, pas celui qu'on
+ * avait déjà.
+ */
+export const signerSurPlace = (d, { signature, signe_par }) => db.update('rgd_devis_crm', d.id, {
+  signature,
+  // En démo, c'est ici qu'on imite ce que le trigger fait en production :
+  // sortir du brouillon donne son numéro à la facture.
+  ...(CONFIG.DEMO && !d.numero ? { numero: numeroDemo('signe') } : {}),
+  signe_par: String(signe_par || '').trim() || null,
+  signe_a: new Date().toISOString(),
+  statut: 'signe',
+  ...(d.date_signature ? {} : { date_signature: new Date().toISOString().slice(0, 10) }),
+});
 
 // ------------------------------------------------------ l'envoi par mail
 // ⚠ IL PART PAR `envoyer-email`, LA MÊME PORTE QUE LES RELANCES : même
@@ -212,9 +293,9 @@ export function messageDevisCrm(devis, nomClient) {
   const salut = nomClient ? `Bonjour ${nomClient},` : 'Bonjour,';
   return `${salut}
 
-Vous trouverez ci-joint notre devis n° ${devis.numero || ''} d’un montant de ${Number(devis.montant_ttc || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} € TTC, valable ${devis.validite_jours || 30} jours.
+Vous trouverez ci-joint notre facture n° ${devis.numero || ''} d’un montant de ${Number(devis.montant_ttc || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} € TTC, à régler sous ${devis.validite_jours || 30} jours.
 
-Pour l’accepter, il vous suffit de nous le retourner daté et signé avec la mention « Bon pour accord », en réponse à ce mail.
+Nous vous remercions de votre confiance.
 
 Nous restons à votre disposition pour toute question.
 

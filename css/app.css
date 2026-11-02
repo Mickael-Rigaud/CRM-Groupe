@@ -7244,6 +7244,19 @@ span.rpv-statut { display: inline-block; margin-bottom: 4px; }
 .rdc-unite i { font-style: normal; font-weight: 400; font-size: 13px; text-transform: none; color: var(--muted); }
 .rdc-plancher { font-size: 11px; font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--muted); }
 .rdc-alerte { color: var(--red) !important; font-weight: 700; }
+/* La toile de signature. `touch-action: none` est indispensable : sans elle,
+   le doigt fait défiler la page au lieu de tracer. */
+.rdc-signature { display: grid; gap: 12px; }
+.rdc-toile { width: 100%; height: 190px; touch-action: none; cursor: crosshair;
+  border: 1.5px dashed var(--line-strong); border-radius: 10px; background: var(--card); }
+/* L'apercu de la signature enregistree, dans les reglages.
+   FOND BLANC IMPOSE, PAS LA COULEUR DE LA CARTE : le trace est sombre et
+   transparent — sur le theme sombre il disparaitrait purement et simplement,
+   alors qu'il s'imprime sur du papier blanc. L'apercu montre donc ce qui part
+   au client, pas ce que l'ecran aurait choisi. */
+.reg-signature { display: flex; align-items: center; gap: 14px; margin: 2px 0 10px; }
+.reg-signature img { height: 64px; background: #fff; border: 1px solid var(--line);
+  border-radius: 8px; padding: 4px 12px; }
 .rdc-sous b { font-size: 15px; text-transform: none; letter-spacing: 0; color: var(--text); padding: 7px 0; }
 .rdc-retirer { margin-left: auto; }
 .rdc-statut { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 10px; }

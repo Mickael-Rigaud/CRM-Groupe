@@ -892,6 +892,20 @@ export const SEED = {
     { id: 'tf5', metier: 'electricite', categorie: 'Mise en sécurité et rénovation', code: 'renovation', ordre: 50, libelle: 'Rénovation complète', unite: 'm2', prix_ht: 90, a_partir_de: false, variantes: [], ajoute_aussi: [], precision: null, actif: true },
   ],
   rgd_devis_crm: [],
+
+  // ⚠ `rgd_reglages` MANQUAIT AU JEU D'ESSAI, et la démo mentait déjà sans
+  // qu'on s'en aperçoive : l'écran Réglages y écrit, `db.insert` y fait un
+  // `push` sur une table absente, et la démonstration tombait sur une table
+  // introuvable là où la production enregistre sans rien dire. Constaté le
+  // 02/11/2026 en posant la signature des factures.
+  //
+  // Les clés sont celles de la production, valeurs d'exemple.
+  rgd_reglages: [
+    { cle: 'manual_ca_ht_exercice', valeur: null },
+    { cle: 'manual_ca_ttc_exercice', valeur: null },
+    { cle: 'manual_clients_actifs', valeur: '34' },
+    { cle: 'costructor_clients_uniques', valeur: '34' },
+  ],
   rgd_sav: [
     { id: 'sav1', fiche_id: 'rc10', contact_id: 'c16', owner_id: null, ouvert_le: day(-6),
       objet: 'Fuite sous l’évier de la cuisine refaite', urgence: 'urgente', statut: 'intervention',

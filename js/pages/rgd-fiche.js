@@ -726,7 +726,7 @@ export function ouvrirFicheRgd(x, onChange, retour = null) {
         ${refusDeProjet(x)
           ? `<p class="rgdf-origine" title="${esc(refusDeProjet(x))}">Lecture seule</p>`
           : '<button type="button" class="btn ghost sm rgdf-modifier" id="rgdf-modifier">Modifier les informations</button>'}
-        ${peutFaireDevisCrm() ? '<button type="button" class="btn sm rgdf-devis" data-faire-devis>+ Faire un devis</button>' : ''}
+        ${peutFaireDevisCrm() ? '<button type="button" class="btn sm rgdf-devis" data-faire-devis>+ Faire une facture</button>' : ''}
         </div>
         <!-- Attribuer ne dépend pas de refusDeProjet : une fiche en lecture
              seule (un reflet de l'application RGD) se confie tout de même, car

@@ -22,8 +22,9 @@ import { scope } from '../data/scope.js';
 import { valeursProjet } from '../data/rgd-projet.js';
 import {
   TVA, TVA_DEFAUT, STATUTS_DEVIS_CRM, UNITES, PAR_UNITE, nomMetier, tarifsDe, metiersAvecGrille,
-  totaux, plancher, ligneDepuisTarif, parCategorie, messageDevisCrm, envoyerDevisCrm, enregistrerDevisCrm, changerStatutDevisCrm, supprimerDevisCrm,
+  totaux, plancher, ligneDepuisTarif, parCategorie, messageDevisCrm, envoyerDevisCrm, enregistrerDevisCrm, changerStatutDevisCrm, supprimerDevisCrm, signerSurPlace,
 } from '../data/rgd-devis-crm.js';
+import { posePadSignature } from '../pad-signature.js';
 
 const euros = (n) => eur(n, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -31,8 +32,8 @@ const euros = (n) => eur(n, { minimumFractionDigits: 2, maximumFractionDigits: 2
 export function blocDevisCrm(devis, peutFaire) {
   if (!devis.length && !peutFaire) return '';
   return `<section class="rgdf-bloc rdc-bloc">
-    <h3>Devis du CRM ${devis.length ? `<span class="rgdf-compte">${devis.length}</span>` : ''}
-      ${peutFaire ? '<button type="button" class="btn sm rdc-nouveau" id="rdc-nouveau">+ Faire un devis</button>' : ''}</h3>
+    <h3>Factures ${devis.length ? `<span class="rgdf-compte">${devis.length}</span>` : ''}
+      ${peutFaire ? '<button type="button" class="btn sm rdc-nouveau" id="rdc-nouveau">+ Faire une facture</button>' : ''}</h3>
     ${devis.length ? `<div class="rgdf-tableau"><table><tbody>
       ${devis.map(v => { const e = STATUTS_DEVIS_CRM[v.statut] || STATUTS_DEVIS_CRM.brouillon;
         return `<tr class="rdc-ligne" data-devis-crm="${esc(v.id)}" tabindex="0">
@@ -42,7 +43,7 @@ export function blocDevisCrm(devis, peutFaire) {
           <td class="rgdf-fin"><span class="chip ${e.ton}">${esc(e.label)}</span></td>
         </tr>`; }).join('')}
     </tbody></table></div>`
-    : '<p class="rgdf-rien">Aucun devis fait dans le CRM pour ce dossier.</p>'}
+    : '<p class="rgdf-rien">Aucune facture faite dans le CRM pour ce dossier.</p>'}
   </section>`;
 }
 
@@ -94,7 +95,7 @@ export function ouvrirDevisCrm(x, existant = null, retour = null) {
   // La prestation qui attend un second appui pour être retirée, s'il y en a une.
   let aRetirer = null;
 
-  const titre = existant ? `Devis ${existant.numero || ''}` : `Nouveau devis${x.nom ? ' — ' + x.nom : ''}`;
+  const titre = existant ? `Facture ${existant.numero || '(brouillon)'}` : `Nouvelle facture${x.nom ? ' — ' + x.nom : ''}`;
   const m = openModal(titre, '<div id="rdc-hote" class="rdc"></div>', { wide: true, onClose: () => retour?.() });
   const hote = m.querySelector('#rdc-hote');
 
@@ -137,7 +138,7 @@ export function ouvrirDevisCrm(x, existant = null, retour = null) {
       <label class="rdc-champ rdc-court"><span>Prix unitaire HT</span>
         <span class="rdc-unite"><input type="number" inputmode="decimal" min="${mini}" step="1" data-champ="prix_ht" value="${esc(l.prix_ht)}" ${dis}><i>€</i></span>
         ${mini && t?.a_partir_de ? `<small class="rdc-plancher ${Number(l.prix_ht) < mini ? 'rdc-alerte' : ''}">minimum ${euros(mini)}</small>` : ''}</label>
-      <label class="rdc-champ rdc-large"><span>Précision, imprimée sur le devis</span>
+      <label class="rdc-champ rdc-large"><span>Précision, imprimée sur la facture</span>
         <input data-champ="precision" value="${esc(l.precision || '')}" placeholder="Facultatif : pièce, détail…" ${dis}></label>
       <div class="rdc-champ rdc-court rdc-sous"><span>Total HT</span><b class="rdc-total">${euros(totalLigne(l))}</b></div>
       ${signe ? '' : `<button type="button" class="btn ghost sm rdc-retirer" data-retirer="${i}">Retirer</button>`}
@@ -179,17 +180,17 @@ export function ouvrirDevisCrm(x, existant = null, retour = null) {
     }).join('');
 
     hote.innerHTML = `
-      ${signe ? '<p class="rdc-note">Ce devis est signé : son contenu ne se modifie plus. Seul son statut peut encore changer.</p>'
+      ${signe ? '<p class="rdc-note">Cette facture est signée : son contenu ne se modifie plus. Seul son statut peut encore changer.</p>'
         : '<p class="rdc-aide"><b>1.</b> Touchez les prestations à facturer <b>2.</b> Réglez quantité et prix juste en dessous <b>3.</b> Enregistrez ou sortez le PDF, en bas</p>'}
       <div class="form rdc-entete">
-        <div class="field"><label>Objet du devis</label>
+        <div class="field"><label>Objet de la facture</label>
           <input id="rdc-objet" value="${esc(etat.objet)}" placeholder="Dépannage électrique, mise aux normes du tableau…" ${dis}></div>
         ${metiers.length > 1 && !existant ? `<div class="field half"><label>Grille</label>
           <select id="rdc-metier">${metiers.map(k => `<option value="${esc(k)}" ${k === etat.metier ? 'selected' : ''}>${esc(nomMetier(k))}</option>`).join('')}</select></div>` : ''}
         <div class="field half"><label>TVA</label>
           <select id="rdc-tva" ${dis}>${TVA.map(v => `<option value="${v}" ${v === etat.tva_taux ? 'selected' : ''}>${String(v).replace('.', ',')} %${v === 10 ? ' — logement de plus de 2 ans' : v === 20 ? ' — neuf ou local professionnel' : ' — rénovation énergétique'}</option>`).join('')}</select></div>
-        <div class="field half"><label>Validité</label>
-          <select id="rdc-validite" ${dis}>${[15, 30, 60, 90].map(j => `<option value="${j}" ${j === Number(etat.validite_jours) ? 'selected' : ''}>${j} jours</option>`).join('')}</select></div>
+        <div class="field half"><label>Échéance de paiement</label>
+          <select id="rdc-validite" ${dis}>${[15, 30, 60, 90].map(j => `<option value="${j}" ${j === Number(etat.validite_jours) ? 'selected' : ''}>sous ${j} jours</option>`).join('')}</select></div>
       </div>
 
       ${familles}
@@ -204,7 +205,7 @@ export function ouvrirDevisCrm(x, existant = null, retour = null) {
         ${signe ? '' : '<button type="button" class="rdc-presta-tete rdc-libre" data-tarif=""><span class="rdc-coche" aria-hidden="true">+</span><span class="rdc-presta-nom">Ajouter une ligne libre (fournitures, prestation hors grille…)</span></button>'}
       </section>` : ''}
 
-      <div class="form"><div class="field"><label>Remarques — imprimées sur le devis</label>
+      <div class="form"><div class="field"><label>Remarques — imprimées sur la facture</label>
         <textarea id="rdc-notes" rows="2" placeholder="Délai d’intervention, fournitures comprises…" ${dis}>${esc(etat.notes)}</textarea></div></div>
 
       ${existant ? `<div class="rdc-statut"><span class="muted small">Statut</span>
@@ -222,11 +223,43 @@ export function ouvrirDevisCrm(x, existant = null, retour = null) {
         <div class="rdc-boutons">
           <button type="button" class="btn ghost" data-close>Fermer</button>
           ${signe ? '' : '<button type="button" class="btn ghost" id="rdc-enregistrer">Enregistrer</button>'}
+          ${signe ? '' : '<button type="button" class="btn ghost" id="rdc-signer">Faire signer</button>'}
           <button type="button" class="btn ghost" id="rdc-mail">Envoyer par mail</button>
           <button type="button" class="btn" id="rdc-pdf">${signe ? 'Imprimer le PDF' : 'Enregistrer et PDF'}</button>
         </div>
       </div>`;
     lier();
+  };
+
+  // ------------------------------------------------ la signature sur place
+  /**
+   * Le client signe au doigt, sur le téléphone de Franck, à la fin de
+   * l'intervention (29/10/2026, Élodie : « je voudrais que le client signe sur
+   * place »).
+   *
+   * ⚠ ELLE REMPLACE LE CONTENU DE LA FENÊTRE, ELLE N'EN OUVRE PAS UNE AUTRE.
+   * Deux fenêtres superposées partagent `closeModal` et se ferment mal ; et
+   * surtout, on tend le téléphone au client : il ne doit rien y avoir d'autre
+   * à l'écran que ce qu'il signe.
+   *
+   * ⚠ SIGNER ÉMET LA FACTURE. Le passage en `signe` lui donne son numéro
+   * définitif et verrouille son contenu. On enregistre donc AVANT d'ouvrir le
+   * tracé — sinon le client signerait une version qui n'est pas celle qui
+   * partira.
+   */
+  const faireSigner = () => {
+    posePadSignature(hote, {
+      aide: `Signature de <b>${esc(x.nom || 'la personne présente')}</b>. Signer vaut reconnaissance `
+        + 'que les prestations facturées ont été exécutées, et acceptation sans réserve.',
+      nom: x.nom || '',
+      surAnnuler: () => redessiner(),
+      surValider: async ({ image, nom }) => {
+        existant = await signerSurPlace(existant, { signature: image, signe_par: nom });
+        toast(`Facture ${existant.numero || ''} signée`);
+        closeModal(true);
+        ouvrirDevisCrm(x, existant, retour);
+      },
+    });
   };
 
   // Redessiner sans faire sauter la page : la fenêtre garde sa position.
@@ -327,7 +360,7 @@ export function ouvrirDevisCrm(x, existant = null, retour = null) {
     try {
       const d = await enregistrerDevisCrm(x, etat, existant);
       existant = d;
-      toast(`Devis ${d.numero || ''} enregistré`);
+      toast(`Facture ${d.numero || '(brouillon)'} enregistrée`);
       return d;
     } catch (e) {
       toast(e.message || 'Enregistrement impossible', 'error');
@@ -393,7 +426,7 @@ export function ouvrirDevisCrm(x, existant = null, retour = null) {
       if (!existant || b.dataset.statut === existant.statut) return;
       try {
         existant = await changerStatutDevisCrm(existant, b.dataset.statut);
-        toast(`Devis ${existant.numero || ''} : ${STATUTS_DEVIS_CRM[existant.statut].label.toLowerCase()}`);
+        toast(`Facture ${existant.numero || ''} : ${STATUTS_DEVIS_CRM[existant.statut].label.toLowerCase()}`);
         closeModal(true);
         ouvrirDevisCrm(x, existant, retour);
       } catch (e) { toast(e.message || 'Changement impossible', 'error'); }
@@ -411,6 +444,11 @@ export function ouvrirDevisCrm(x, existant = null, retour = null) {
     if (bEnr) bEnr.onclick = async () => {
       const d = await enregistrer();
       if (d) { closeModal(true); ouvrirDevisCrm(x, d, retour); }
+    };
+    const bSign = hote.querySelector('#rdc-signer');
+    if (bSign) bSign.onclick = async () => {
+      const d = await enregistrer();
+      if (d) { existant = d; faireSigner(); }
     };
     hote.querySelector('#rdc-mail').onclick = async () => {
       const d = signe ? existant : await enregistrer();
@@ -433,23 +471,23 @@ export function ouvrirDevisCrm(x, existant = null, retour = null) {
   async function ouvrirEnvoi(d) {
     const docs = await import('./rgd-documents.js');
     const qui = docs.donneesDocument(x);
-    m.querySelector('.modal-head h2').textContent = `Envoyer le devis ${d.numero || ''}`;
+    m.querySelector('.modal-head h2').textContent = `Envoyer la facture ${d.numero || ''}`;
     hote.innerHTML = `
-      <p class="rdc-aide">Le devis part en <b>pièce jointe PDF</b>, depuis contact@rgdrenova.fr. La réponse du client arrive à la même adresse.</p>
+      <p class="rdc-aide">La facture part en <b>pièce jointe PDF</b>, depuis contact@rgdrenova.fr. La réponse du client arrive à la même adresse.</p>
       <div class="form">
         <div class="field"><label>Destinataire</label>
           <input id="rdc-a" type="email" value="${esc(qui.email || '')}" placeholder="adresse@client.fr" required></div>
         <div class="field"><label>Objet</label>
-          <input id="rdc-objet-mail" value="${esc(`Votre devis RGD Renova n° ${d.numero || ''}`)}"></div>
+          <input id="rdc-objet-mail" value="${esc(`Votre facture RGD Renova n° ${d.numero || ''}`)}"></div>
         <div class="field"><label>Message</label>
           <textarea id="rdc-message" rows="11">${esc(messageDevisCrm(d, qui.nom))}</textarea></div>
         <div class="field"><label class="check"><input type="checkbox" id="rdc-copie" checked> Garder une copie à contact@rgdrenova.fr</label></div>
       </div>
-      <p class="small muted">Pièce jointe : <b>Devis ${esc(d.numero || '')}</b> — ${euros(d.montant_ttc)} TTC.</p>
+      <p class="small muted">Pièce jointe : <b>Facture ${esc(d.numero || '')}</b> — ${euros(d.montant_ttc)} TTC.</p>
       <div class="rdc-pied">
-        <div class="rdc-totaux"><span>${d.statut === 'brouillon' ? 'Le devis passera en <b>Envoyé</b>.' : ''}</span></div>
+        <div class="rdc-totaux"><span>${d.statut === 'brouillon' ? 'La facture passera en <b>Envoyée</b>.' : ''}</span></div>
         <div class="rdc-boutons">
-          <button type="button" class="btn ghost" id="rdc-retour">← Retour au devis</button>
+          <button type="button" class="btn ghost" id="rdc-retour">← Retour à la facture</button>
           <button type="button" class="btn" id="rdc-envoyer">Envoyer</button>
         </div>
       </div>`;
@@ -464,12 +502,12 @@ export function ouvrirDevisCrm(x, existant = null, retour = null) {
         const pdf = await docs.pdfDevisCrm(x, d);
         const r = await envoyerDevisCrm(d, {
           a, nom: qui.nom,
-          objet: hote.querySelector('#rdc-objet-mail').value.trim() || `Votre devis RGD Renova n° ${d.numero || ''}`,
+          objet: hote.querySelector('#rdc-objet-mail').value.trim() || `Votre facture RGD Renova n° ${d.numero || ''}`,
           message: hote.querySelector('#rdc-message').value,
           copie: hote.querySelector('#rdc-copie').checked,
         }, pdf);
         if (!r.ok) throw new Error(r.motif);
-        toast(`Devis ${d.numero || ''} envoyé à ${a}`);
+        toast(`Facture ${d.numero || ''} envoyée à ${a}`);
         closeModal();
       } catch (e) {
         bouton.disabled = false; bouton.textContent = 'Envoyer';

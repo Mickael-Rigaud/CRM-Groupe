@@ -42,7 +42,7 @@ import { esc } from '../ui.js';
 import { imprimerPage } from './btp-fiche.js';
 import { valeursProjet, personneDe, nomComplet, adresseChantier } from '../data/rgd-projet.js';
 import { montantDevisDe, etapeAvecMontant } from '../data/rgd-etapes.js';
-import { parCategorie } from '../data/rgd-devis-crm.js';
+import { parCategorie, signatureRgd } from '../data/rgd-devis-crm.js';
 
 const LOGO = new URL('../../assets/logos/rgd-complet.png', import.meta.url).href;
 
@@ -401,6 +401,32 @@ ${pied('Document à établir contradictoirement et à conserver par chaque parti
 // et SIRET, RCS et TVA intracommunautaire y sont obligatoires.
 const MENTIONS_RGD = 'RGD Renova · SASU au capital de 1 000 € · 20 avenue du Maréchal Joffre, 60500 Chantilly · RCS Compiègne · SIRET 979 294 030 00015 · TVA FR34979294030';
 
+// ⚠ MENTIONS OBLIGATOIRES D'UNE FACTURE, ET CE NE SONT PAS DES FORMULES DE
+// STYLE : leur absence est sanctionnable, et sans elles les pénalités de
+// retard ne sont pas exigibles. Les taux écrits ici sont ceux que la loi
+// applique À DÉFAUT d'accord contraire — c'est le choix le plus sûr tant
+// qu'Élodie n'a pas arrêté ses propres conditions (délai, acompte).
+// Articles L441-10 et D441-5 du code de commerce.
+const MENTIONS_PAIEMENT = 'Paiement à réception. Passé l’échéance, pénalités de retard au taux de '
+  + 'trois fois l’intérêt légal, exigibles sans rappel, et indemnité forfaitaire pour frais de '
+  + 'recouvrement de 40 € (articles L441-10 et D441-5 du code de commerce). Pas d’escompte pour '
+  + 'paiement anticipé.';
+
+/**
+ * Le moment de la signature, tel qu'il s'imprime sous le tracé.
+ *
+ * ⚠ ON PRÉFÈRE `signe_a` À `date_signature` : la seconde ne porte que le jour,
+ * et l'heure fait partie de la preuve. On retombe sur le jour seul pour les
+ * factures signées avant que `signe_a` n'existe (29/10/2026).
+ */
+const momentSignature = (devis) => {
+  if (devis.signe_a) {
+    const t = new Date(devis.signe_a);
+    return `${jour(t)} à ${t.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
+  }
+  return devis.date_signature ? jour(devis.date_signature) : '';
+};
+
 // Pourquoi ce taux : la mention qui le justifie, telle que l'administration
 // l'attend sur un devis de travaux dans un logement.
 const MENTION_TVA = {
@@ -441,10 +467,26 @@ export function devisCrmHtml(d, devis) {
   const ech = new Date(`${devis.date_devis || new Date().toISOString().slice(0, 10)}T00:00:00`);
   ech.setDate(ech.getDate() + (Number(devis.validite_jours) || 30));
   const taux = Number(devis.tva_taux);
+
+  // ⚠ LA SIGNATURE DE L'ENTREPRISE EST APPOSÉE D'AVANCE, pas laissée en
+  // blanc. Une facture envoyée par mail portait jusqu'ici un trait vide à
+  // côté de « Pour RGD Renova » — et un trait vide sur un PDF ne se remplit
+  // jamais : le client recevait une facture que personne n'avait signée.
+  //
+  // ⚠ SANS SIGNATURE ENREGISTRÉE, ON GARDE LE TRAIT. Le document reste
+  // valable et imprimable, exactement comme avant ; on ne bloque pas une
+  // facture parce qu'un réglage n'a pas été fait.
+  const blocRgd = () => {
+    const sig = signatureRgd();
+    return sig
+      ? `<div><b>Pour RGD Renova</b><span>${esc(sig.nom || '')}</span>
+          <img src="${esc(sig.image)}" alt="Signature RGD Renova" style="display:block;height:58px;margin-top:2px"></div>`
+      : '<div><b>Pour RGD Renova</b><span>Nom, signature</span><u></u></div>';
+  };
   const pageDevis = `<!doctype html>
-<html lang="fr"><head><meta charset="utf-8"><title>${esc(titreDocument(`Devis ${devis.numero || ''}`.trim(), d))}</title>
+<html lang="fr"><head><meta charset="utf-8"><title>${esc(titreDocument(`Facture ${devis.numero || ''}`.trim(), d))}</title>
 <style>${style}${styleDevis}</style></head><body>
-${entete('DEVIS', devis.numero ? `N° ${devis.numero}` : '')}
+${entete('FACTURE', devis.numero ? `N° ${devis.numero}` : 'BROUILLON — sans numéro')}
 
 <div class="parties">
   <div class="partie"><span>Entreprise</span><b>RGD Renova</b><br>
@@ -454,8 +496,8 @@ ${entete('DEVIS', devis.numero ? `N° ${devis.numero}` : '')}
 </div>
 
 <div class="champs" style="margin-top:9px">
-  ${champ('Date du devis', jour(devis.date_devis || new Date()), 'etroit')}
-  ${champ('Valable jusqu’au', jour(ech), 'etroit')}
+  ${champ('Date de la facture', jour(devis.date_devis || new Date()), 'etroit')}
+  ${champ('À régler avant le', jour(ech), 'etroit')}
   ${champ('Adresse des travaux', d.adresseChantier)}
 </div>
 ${devis.objet ? `<div class="champs" style="margin-top:7px">${champ('Objet', devis.objet)}</div>` : ''}
@@ -485,13 +527,23 @@ ${devis.objet ? `<div class="champs" style="margin-top:7px">${champ('Objet', dev
 ${MENTION_TVA[taux] ? `<p class="mention">${esc(MENTION_TVA[taux])}</p>` : ''}
 ${devis.notes ? `<h2>Remarques</h2><p style="margin:0;font-size:9.8pt;white-space:pre-line">${esc(devis.notes)}</p>` : ''}
 
+<p class="mention">${esc(MENTIONS_PAIEMENT)}</p>
+
 <div class="accord">
-  <h2>Bon pour accord</h2>
-  <p style="margin:0;font-size:9pt;color:${GRIS}">Date et signature du client, précédées de la mention manuscrite « Bon pour accord ».</p>
+  <h2>Réception des travaux</h2>
+  ${devis.signature ? `
+  <p style="margin:0;font-size:9pt;color:${GRIS}">Le client reconnaît que les prestations ci-dessus ont été exécutées et les accepte sans réserve.</p>
+  <div class="sign">
+    <div><b>Le client</b><span>${esc(devis.signe_par || d.nom || '')}</span>
+      <img src="${esc(devis.signature)}" alt="Signature du client" style="display:block;height:58px;margin-top:2px">
+      <small style="display:block;color:${GRIS};font-size:8pt">Signé sur place le ${esc(momentSignature(devis))}</small></div>
+    ${blocRgd()}
+  </div>` : `
+  <p style="margin:0;font-size:9pt;color:${GRIS}">Date et signature du client, précédées de la mention manuscrite « Travaux reçus et acceptés ».</p>
   <div class="sign">
     <div><b>Le client</b><span>${esc(d.nom || 'Nom, signature')}</span><u></u></div>
-    <div><b>Pour RGD Renova</b><span>Nom, signature</span><u></u></div>
-  </div>
+    ${blocRgd()}
+  </div>`}
 </div>
 
 <p class="pied-legal">${esc(MENTIONS_RGD)}</p>
@@ -513,7 +565,7 @@ export const imprimerReception = (x, devis) => {
 };
 export const imprimerDevisCrm = (x, devis) => {
   const d = donneesDocument(x);
-  imprimerPage(devisCrmHtml(d, devis), titreDocument(`Devis ${devis.numero || ''}`.trim(), d));
+  imprimerPage(devisCrmHtml(d, devis), titreDocument(`Facture ${devis.numero || ''}`.trim(), d));
 };
 
 // ------------------------------------------- le devis en PDF, pour le mail
@@ -565,7 +617,7 @@ export async function pdfDevisCrm(x, devis) {
       if (n) pdf.addPage();
       pdf.addImage(tranche.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, 210, tranche.height * 210 / toile.width);
     }
-    const nom = `${titreDocument(`Devis ${devis.numero || ''}`.trim(), d)}.pdf`;
+    const nom = `${titreDocument(`Facture ${devis.numero || ''}`.trim(), d)}.pdf`;
     return { base64: pdf.output('datauristring').split(',')[1], nom };
   } finally {
     cadre.remove();

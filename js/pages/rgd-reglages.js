@@ -43,11 +43,13 @@
 // table peut appartenir à deux endroits selon la clé — le croire basculée en
 // entier ferait écraser un chiffre qu'on ne sait pas produire ici.
 import { scope } from '../data/scope.js';
-import { esc, eur, toast } from '../ui.js';
+import { esc, eur, toast, openModal, closeModal } from '../ui.js';
 import { poserEspace } from './espace.js';
 import { cadre, guard } from './rgd-espace.js';
 import { db } from '../data/db.js';
 import { lienAvis, lienAvisValide, enregistrerLienAvis } from '../data/rgd-avis.js';
+import { signatureRgd, enregistrerSignatureRgd, retirerSignatureRgd } from '../data/rgd-devis-crm.js';
+import { posePadSignature } from '../pad-signature.js';
 
 const nombreDe = (v) => {
   const n = Number(String(v ?? '').replace(/\s/g, '').replace(',', '.'));
@@ -69,6 +71,7 @@ export const rgdReglagesPage = {
       const ttc = lire('manual_ca_ttc_exercice');
       const clients = lire('manual_clients_actifs');
       const avis = lienAvis();
+      const sig = signatureRgd();
 
       const champ = (id, label, valeur) => `
         <label class="reg-champ">
@@ -146,6 +149,26 @@ export const rgdReglagesPage = {
         </section>
 
         <section class="card">
+          <div class="card-head"><h2>Signature sur les factures</h2>
+            <span class="muted small">apposée d’avance sur le PDF</span></div>
+          ${sig ? `<div class="reg-signature">
+            <img src="${esc(sig.image)}" alt="Signature enregistrée">
+            <div><b>${esc(sig.nom || '')}</b><br>
+              <span class="muted small">enregistrée le ${esc(sig.le ? new Date(sig.le).toLocaleDateString('fr-FR') : '')}</span></div>
+          </div>` : `<p class="small muted"><b>Aucune signature enregistrée.</b> Les factures sortent
+            avec un trait vide à côté de « Pour RGD Renova » — et sur un PDF envoyé par mail,
+            ce trait ne se remplit jamais.</p>`}
+          <p class="small muted">Elle apparaît dans le bloc <b>« Pour RGD Renova »</b> de
+            <b>toutes</b> les factures, y compris celles que Franck envoie depuis son téléphone.</p>
+          <p class="small muted">Ce n’est <b>pas</b> la signature du client : celle-là se trace
+            sur place, à la fin de l’intervention, et appartient à la facture qu’il a signée.</p>
+          ${state.ecriture ? `<div class="toolbar">
+            <button type="button" class="btn primary" id="reg-sign-ok">${sig ? 'Refaire la signature' : 'Enregistrer une signature'}</button>
+            ${sig ? '<button type="button" class="btn ghost" id="reg-sign-off">Retirer</button>' : ''}
+          </div>` : ''}
+        </section>
+
+        <section class="card">
           <div class="card-head"><h2>Ce qui n’est pas réglable ici</h2></div>
           <div class="table-wrap"><table>
             <thead><tr><th>Réglage</th><th>Valeur</th><th>Pourquoi</th></tr></thead>
@@ -203,6 +226,39 @@ export const rgdReglagesPage = {
       if (bEssai) bEssai.onclick = () => {
         const v = root.querySelector('#reg-avis').value.trim();
         if (v) window.open(v, '_blank', 'noopener');
+      };
+
+      // ⚠ LE PAD VIT DANS SA PROPRE FENÊTRE, pas dans la carte : tracer une
+      // signature au doigt demande de la place, et sur téléphone une carte est
+      // large de trois centimètres.
+      const bSign = root.querySelector('#reg-sign-ok');
+      if (bSign) bSign.onclick = () => {
+        const fen = openModal('Signature de RGD Renova', '<div id="reg-pad"></div>', { wide: true });
+        posePadSignature(fen.querySelector('#reg-pad'), {
+          aide: 'Tracez la signature qui sera apposée sur les factures, au nom de RGD Renova.',
+          nom: scope.user?.full_name || '',
+          labelNom: 'Signée par',
+          libelleValider: 'Enregistrer',
+          surAnnuler: () => closeModal(true),
+          surValider: async ({ image, nom }) => {
+            await enregistrerSignatureRgd({ image, nom });
+            closeModal(true);
+            toast('Signature enregistrée');
+            draw();
+          },
+        });
+      };
+      const bSignOff = root.querySelector('#reg-sign-off');
+      if (bSignOff) bSignOff.onclick = async () => {
+        bSignOff.disabled = true;
+        try {
+          await retirerSignatureRgd();
+          toast('Signature retirée');
+          draw();
+        } catch (e) {
+          bSignOff.disabled = false;
+          toast(`Non retirée — ${String(e.message).slice(0, 120)}`, 'err');
+        }
       };
 
       const bouton = root.querySelector('#reg-ok');
