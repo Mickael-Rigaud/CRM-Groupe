@@ -992,6 +992,18 @@ export function ouvrirFicheRgd(x, onChange, retour = null) {
       tr.onclick = ouvrir;
       tr.onkeydown = (e) => { if (e.key === 'Enter') ouvrir(); };
     });
+    // ⚠ LE BOUTON DU BON EST DANS LA RANGÉE DE SA FACTURE : sans arrêter le
+    // clic, il ouvrirait AUSSI la facture — deux fenêtres l'une sur l'autre,
+    // et c'est la seconde qui gagne. Le geste vise le bon, pas la facture.
+    m.querySelectorAll('[data-bon]').forEach(b => {
+      b.onclick = async (e) => {
+        e.stopPropagation();
+        const d = db.byId('rgd_devis_crm', b.dataset.bon);
+        if (!d) return;
+        const { ouvrirBonAttachement } = await import('./rgd-bon-attachement.js');
+        ouvrirBonAttachement(x, d, () => dessine());
+      };
+    });
 
     // ⚠ `dessine` EST PASSE EN REDESSIN : un depot ou un retrait change la
     // liste ET le compteur du titre, et seule la fiche entiere les porte.

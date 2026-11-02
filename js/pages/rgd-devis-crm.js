@@ -45,6 +45,38 @@ const euros = (n) => eur(n, { minimumFractionDigits: 2, maximumFractionDigits: 2
  * relire chaque ligne pour savoir ce qu'on regarde — et Élodie a déjà écarté
  * ce procédé le 27/10 sur un autre écran.
  */
+/**
+ * L'état du bon d'attachement, sur la ligne même de sa facture.
+ *
+ * ⚠ IL FALLAIT OUVRIR LA FACTURE ET DESCENDRE JUSQU'EN BAS (02/11/2026,
+ * Élodie : « ce n'est pas intuitif pour trouver le bon d'attachement, parce
+ * qu'il faut aller dans facture et en bas trouver le bon »). Trois gestes pour
+ * le document qu'on remplit en sortant de chez le client, sur un téléphone.
+ * Emplacement choisi par elle entre trois propositions : ici, sur la ligne.
+ *
+ * ⚠ PAS DE BON POUR UNE FACTURE IMPORTÉE : elle n'a aucune ligne, donc rien à
+ * constater — son PDF vient d'ailleurs et le CRM n'a pas assisté aux travaux.
+ *
+ * ⚠ ET PAS D'INVITATION À EN REMPLIR UN SUR UNE FACTURE ANNULÉE. Un bon déjà
+ * rempli reste accessible — c'est une pièce du dossier, on peut avoir à la
+ * relire — mais proposer d'en commencer un attesterait de travaux pour un
+ * document qui ne vaut plus rien.
+ */
+const bonDeLaLigne = (v) => {
+  if (estDevis(v) || v.importe) return '';
+  const signe = !!v.bon_signature;
+  const fait = signe || bonRempli(v);
+  // ⚠ ET PAS SUR UN BROUILLON : il n'a pas encore de numéro, donc le bon
+  // n'aurait pas le sien (`BA` + celui de la facture) et porterait « accompagne
+  // la facture n° — ». Le bon constate des travaux faits, après l'émission.
+  if (!fait && (v.statut === 'brouillon' || estAnnulee(v) || !peutFaireDevisCrm())) return '';
+  return `<div class="rdc-bon">
+    <span class="rdc-bon-mot">Bon :</span>
+    <span class="rdc-bon-etat${fait ? ' est-fait' : ''}">${signe ? 'Signé' : fait ? 'Rempli' : 'Vierge'}</span>
+    <button type="button" class="btn ghost sm" data-bon="${esc(v.id)}">${fait ? 'Ouvrir' : 'Remplir'} ▸</button>
+  </div>`;
+};
+
 export function blocDevisCrm(devis, peutFaire) {
   if (!devis.length && !peutFaire) return '';
   const factures = devis.filter(v => !estDevis(v));
@@ -58,7 +90,7 @@ export function blocDevisCrm(devis, peutFaire) {
         <div class="s muted">${v.importe ? 'Importée · ' : ''}${esc(v.objet || nomMetier(v.metier))} · ${esc(fmtDate(v.date_devis || v.created_at))}${
           suite ? ' · facturé' : ''}</div></td>
       <td class="num">${euros(v.montant_ttc)} <span class="s muted">TTC</span></td>
-      <td class="rgdf-fin"><span class="chip ${e.ton}">${esc(e.label)}</span></td>
+      <td class="rgdf-fin"><span class="chip ${e.ton}">${esc(e.label)}</span>${bonDeLaLigne(v)}</td>
     </tr>`; };
   const tableau = (liste) => `<div class="rgdf-tableau"><table><tbody>${liste.map(rangee).join('')}</tbody></table></div>`;
   return `<section class="rgdf-bloc rdc-bloc">
@@ -376,11 +408,51 @@ export function ouvrirDevisCrm(x, existant = null, retour = null, genreNeuf = 'f
       surValider: async ({ image, nom }) => {
         existant = await signerSurPlace(existant, { signature: image, signe_par: nom });
         toast(`${G.label} ${existant.numero || ''} ${dev ? 'accepté' : 'signée'}`);
+        if (!dev && !bonRempli(existant)) { proposerLeBon(); return; }
         closeModal(true);
         ouvrirDevisCrm(x, existant, retour);
       },
     });
   };
+
+  /**
+   * Juste après la signature de la facture : on propose le bon d'attachement.
+   *
+   * ⚠ C'EST LE SEUL MOMENT OÙ LE CLIENT EST ENCORE LÀ (02/11/2026, Élodie, en
+   * réponse à « faut-il aussi le proposer après la signature ? » : « oui,
+   * enchaîner »). Le bon se signe à deux ; rempli le soir, de mémoire, il perd
+   * la signature du client et la moitié de ce qu'il doit constater — et c'est
+   * exactement le document qu'on ressort quand des heures sont contestées.
+   *
+   * ⚠ « PLUS TARD » EXISTE, ET SANS PÉNALITÉ. Enchaîner d'autorité sur un
+   * formulaire de trente champs, sur un téléphone, devant un client pressé,
+   * ferait fermer la fenêtre — et la fermer ici fermait aussi la facture.
+   */
+  function proposerLeBon() {
+    m.querySelector('.modal-head h2').textContent = `${G.label} ${existant.numero || ''} signée`;
+    hote.innerHTML = `
+      <div class="rdc-apres">
+        <p class="rdc-apres-titre">✓ ${esc(G.label)} ${esc(existant.numero || '')} signée</p>
+        <p class="rdc-aide">Le client est encore là : son <b>bon d’attachement</b> se remplit et se
+        signe maintenant. Il constate les heures passées et les fournitures posées — c’est la pièce
+        qu’on ressort si elles sont contestées.</p>
+        <div class="form-actions">
+          <button type="button" class="btn ghost" id="rdc-apres-tard">Plus tard</button>
+          <button type="button" class="btn" id="rdc-apres-bon">Remplir le bon ▸</button>
+        </div>
+      </div>`;
+    hote.querySelector('#rdc-apres-tard').onclick = () => {
+      closeModal(true);
+      ouvrirDevisCrm(x, existant, retour);
+    };
+    hote.querySelector('#rdc-apres-bon').onclick = async () => {
+      const { ouvrirBonAttachement } = await import('./rgd-bon-attachement.js');
+      closeModal(true);
+      ouvrirBonAttachement(x, existant, () => {
+        ouvrirDevisCrm(x, db.byId('rgd_devis_crm', existant.id) || existant, retour);
+      });
+    };
+  }
 
   /**
    * Le client signe le BON D'ATTACHEMENT — pas la facture.

@@ -7217,6 +7217,27 @@ span.rpv-statut { display: inline-block; margin-bottom: 4px; }
 .rdc-choix p { margin: 0 0 14px; }
 .rdc-choix p:last-child { margin-bottom: 0; }
 .rdc-ligne { cursor: pointer; }
+/* ------------------------------------------- le bon, sur la ligne de sa facture
+   Élodie, 02/11/2026 : « ce n'est pas intuitif pour trouver le bon
+   d'attachement ». Il vit sous la pastille de statut, à droite : c'est là que
+   l'œil finit sa lecture de la ligne, et c'est le geste qui suit la facture.
+   ⚠ `white-space: nowrap` est posé sur `.rgdf-fin` et casserait la ligne du
+   bon en une seule bande : on le relâche ICI, pas là-bas — la pastille, elle,
+   ne doit toujours pas se couper en deux. */
+.rdc-bon { display: flex; align-items: center; justify-content: flex-end; gap: 7px;
+  margin-top: 6px; white-space: normal; }
+.rdc-bon-mot { font-size: 12px; color: var(--muted-2); }
+.rdc-bon-etat { font-size: 12px; font-weight: 700; color: var(--muted-2); }
+.rdc-bon-etat.est-fait { color: var(--green); }
+/* Après la signature : la proposition d'enchaîner sur le bon. */
+.rdc-apres { padding: 6px 0 2px; }
+.rdc-apres-titre { margin: 0 0 10px; font-size: 17px; font-weight: 700; color: var(--green); }
+@media screen and (max-width: 720px) {
+  /* Sur téléphone la rangée est déjà étroite : le bon passe sous le reste et
+     son bouton prend la largeur, pour rester touchable au pouce. */
+  .rdc-bon { flex-wrap: wrap; }
+  .rdc-bon .btn { flex: 1 1 100%; }
+}
 .rdc-ligne:hover td { background: var(--card-2); }
 .rdc .form { margin-bottom: 14px; }
 .rdc-note { margin: 0 0 12px; padding: 9px 12px; border-radius: 9px; background: var(--amber-soft); color: var(--amber); font-size: 13px; }
