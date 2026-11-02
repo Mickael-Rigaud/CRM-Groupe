@@ -45,12 +45,6 @@ import { montantDevisDe, etapeAvecMontant } from '../data/rgd-etapes.js';
 import { parCategorie, signatureRgd, MOYENS_PAIEMENT } from '../data/rgd-devis-crm.js';
 
 const LOGO = new URL('../../assets/logos/rgd-complet.png', import.meta.url).href;
-// ⚠ LA BANNIÈRE EST CELLE DES DEVIS COSTRUCTOR, pas le logo du CRM
-// (02/11/2026, Élodie : « je voudrais quelque chose qui se rapproche d'un vrai
-// devis costructor avec le bon logo »). Le client reçoit déjà des devis
-// Costructor : une facture au logo différent se lirait comme venant d'ailleurs.
-// Extraite du PDF `devis-d202600194`, 733×491, telle quelle.
-const BANNIERE = new URL('../../assets/logos/rgd-banniere.png', import.meta.url).href;
 
 const ORANGE = '#FC5D00';
 const ENCRE = '#1A1714';
@@ -462,88 +456,61 @@ const euros = (n) => (Number(n) || 0).toLocaleString('fr-FR', { minimumFractionD
 const unite = { forfait: 'u', heure: 'h', m2: 'm²', ml: 'ml' };
 
 const styleDevis = `
-  /* ⚠ CETTE FEUILLE RECOPIE LE DEVIS COSTRUCTOR, elle ne s'en « inspire »
-     pas (02/11/2026, Élodie : « pourquoi tu ne reprends pas exactement la
-     même chose visuellement ? »). Les valeurs viennent de ses captures, pas
-     d'un goût : bandeau orange, cellules gris-bleu pâle séparées par du BLANC
-     (et non par des filets), titres de prestation orange soulignés, totaux
-     gris puis « Net à payer » en bandeau orange. */
-  .fx-tete { display: flex; justify-content: space-between; align-items: flex-start; gap: 12mm; }
-  .fx-marque { flex: 1; min-width: 0; }
-  .fx-banniere { display: block; width: 58mm; height: auto; }
-  .fx-metiers { margin: 2.5mm 0 1.5mm; font-size: 8.4pt; font-weight: 700; line-height: 1.35; }
-  .fx-coord { margin: 0 0 1.5mm; font-size: 8.2pt; color: #4A4541; line-height: 1.45; }
-  .fx-titre { text-align: right; flex: none; }
-  .fx-grand { font-size: 25pt; font-weight: 300; color: ${ORANGE}; line-height: 1; letter-spacing: .01em; }
-  .fx-num { font-size: 9pt; color: ${ORANGE}; margin-top: 1mm; }
-  .fx-meta { margin-top: 4mm; display: inline-grid; grid-template-columns: auto auto; gap: 1mm 4mm; font-size: 9pt; }
-  .fx-meta span { color: ${GRIS}; text-align: right; }
-  .fx-meta b { font-weight: 600; text-align: right; }
-  .fx-client { margin-top: 5mm; border-top: 1pt solid ${ORANGE}; padding-top: 2mm; font-size: 9.8pt; }
-  .fx-etiq { font-size: 7.5pt; letter-spacing: .08em; color: ${ORANGE}; font-weight: 700;
-    text-transform: uppercase; margin-bottom: 1mm; }
-  .fx-client > div { margin-top: .6mm; }
-  .fx-chantier, .fx-objet { color: #4A4541; font-size: 9.2pt; }
-  .fx-objet { margin-top: 1.5mm !important; font-weight: 600; color: ${ENCRE}; }
-
-  /* Les titres de section : orange, capitales, SANS bande ni barre — comme
-     « ACOMPTES » et « MODES DE PAIEMENT » sur le devis Costructor. */
-  h2 { margin: 6mm 0 2mm; font-size: 8.6pt; font-weight: 700; text-transform: uppercase;
-    letter-spacing: .07em; color: ${ORANGE}; background: none; border: 0; padding: 0; }
-  h2::before { content: none; }
-
-  /* ⚠ « border-collapse: collapse » AVEC DES BORDURES BLANCHES : c'est ce qui
-     fabrique les goutttières blanches du modèle. Un « border-spacing » aurait
-     aussi écarté les cellules de l'EN-TÊTE, qui doit rester une bande orange
-     d'un seul tenant. */
-  table.lignes { width: 100%; border-collapse: collapse; margin-top: 2mm; font-size: 9.6pt; }
-  table.lignes th { background: ${ORANGE}; color: #fff; font-weight: 700; font-size: 9pt;
-    text-align: left; padding: 5px 8px; border: 0; }
-  table.lignes th.n { text-align: right; }
-  table.lignes td { background: #EFF2F6; padding: 7px 8px; vertical-align: top;
-    border: 2px solid #fff; }
+  /* ⚠ L'EN-TÊTE EST LE SEUL ENDROIT QUI A CHANGÉ (02/11/2026, Élodie :
+     « reviens sur la toute première version et fais moi juste un en-tête sympa
+     dynamique et design »). Tout le reste du document est celui d'origine,
+     au pixel : six propositions de refonte ont été écartées avant d'arriver
+     là, et la leçon est de ne plus toucher à ce qui n'a pas été demandé.
+     ⚠ PAS D'APLAT DE COULEUR PLEIN : « le orange est trop pétant », dit d'un
+     bandeau orange sur toute la largeur. Le mouvement vient d'un DÉGRADÉ qui
+     s'éteint, pas d'une surface.
+     ⚠ NI « background-clip: text » NI « clip-path » : html2canvas, qui fabrique le
+     PDF envoyé au client, ne les rend pas — le titre serait sorti INVISIBLE.
+     Dégradés de fond et coins arrondis, eux, passent. */
+  /* ⚠ LA BORDURE DE L'EN-TÊTE PARTAGÉ EST NEUTRALISÉE ICI, et il le fallait :
+     la règle « header » du gabarit commun (fiche projet, PV de réception) pose un
+     filet orange plein de 2,5 points. Laissée en place, elle dessinait une
+     SECONDE barre juste au-dessus du dégradé — vu sur la toile du PDF, pas à
+     l'écran où les deux se confondaient. On ne touche pas à « header » lui-même :
+     les deux autres documents s'en servent toujours.
+     ⚠ LE DÉGRADÉ PASSE DANS LE PDF, mesuré sur la toile html2canvas :
+     #FC5F03 → #FE954E → #FFC499 → blanc. */
+  .fh { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px;
+    border-bottom: 0; padding-bottom: 0; }
+  .fh-g img { height: 15mm; display: block; }
+  .fh-metiers { margin-top: 2.5mm; font-size: 7.4pt; letter-spacing: .1em; text-transform: uppercase;
+    color: #9a938b; font-weight: 600; }
+  .fh-d { text-align: right; flex: none; }
+  .fh-mot { font-size: 25pt; font-weight: 700; letter-spacing: -.015em; line-height: 1; color: ${ENCRE}; }
+  .fh-num { display: inline-block; margin-top: 2.5mm; padding: 1.4mm 3.4mm; border-radius: 10mm;
+    background: linear-gradient(100deg, #FFE9D8 0%, #FFD9BC 100%); color: #B6460F;
+    font-size: 8.4pt; font-weight: 700; letter-spacing: .05em; }
+  .fh-filet { height: 1.5mm; border-radius: 1mm; margin: 3.5mm 0 0;
+    background: linear-gradient(90deg, ${ORANGE} 0%, #FFA463 42%, #FFE2CA 72%, #FFFFFF 100%); }
+  table.lignes { width: 100%; border-collapse: collapse; margin-top: 4px; font-size: 9.8pt; }
+  table.lignes th { text-align: left; font-size: 7.5pt; text-transform: uppercase; letter-spacing: .07em; color: ${GRIS};
+    font-weight: 700; padding: 5px 6px; border-bottom: 1pt solid ${ENCRE}; }
+  table.lignes td { padding: 6px; border-bottom: .75pt solid ${FILET}; vertical-align: top; }
+  table.lignes td small { display: block; color: ${GRIS}; font-size: 8.5pt; }
   table.lignes .n { text-align: right; white-space: nowrap; }
-  table.lignes .u { text-align: center; white-space: nowrap; }
-  table.lignes th.u { text-align: center; }
   table.lignes tr { break-inside: avoid; }
-  table.lignes td b { color: ${ORANGE}; text-decoration: underline; font-weight: 700; font-size: 9.6pt; }
-  table.lignes td small { display: block; color: #3A3733; font-size: 8.6pt; font-style: italic;
-    margin-top: 1.2mm; line-height: 1.45; }
-  table.lignes td small .tiret, table.lignes td small .suite { display: block; padding-left: 4.4mm; text-indent: -3.2mm; }
-  table.lignes td small .tiret::before { content: "–  "; }
-  table.lignes td small .suite { text-indent: 0; }
-
-  /* Les totaux : mêmes goutttières blanches, même gris, et le « Net à payer »
-     en bandeau orange — c'est le seul chiffre que le client cherche. */
-  .totaux { margin: 5mm 0 0 auto; width: 78mm; font-size: 10pt; }
-  .totaux div { display: flex; justify-content: space-between; gap: 6mm;
-    padding: 5px 9px; background: #F1F3F6; margin-bottom: 2px; }
-  .totaux .ttc { font-weight: 700; }
-  .totaux .recu { color: #4A4541; font-size: 9.2pt; }
-  .totaux .net { margin-top: 2mm; margin-bottom: 0; padding: 8px 9px; font-weight: 700;
-    font-size: 12.5pt; background: ${ORANGE}; color: #fff; }
-
-  .mention { margin: 4mm 0 0; font-size: 8.6pt; color: #4A4541; }
+  /* Une catégorie par bloc, son titre en tête et son sous-total au pied. */
+  table.lignes tbody { break-inside: avoid; }
+  table.lignes tr.cat td { padding: 10px 6px 4px; font-size: 8.5pt; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .07em; color: ${ORANGE}; border-bottom: .75pt solid ${ORANGE}; }
+  table.lignes tbody:first-of-type tr.cat td { padding-top: 6px; }
+  table.lignes tr.sous-total td { padding: 4px 6px 8px; font-size: 9pt; color: ${GRIS}; text-align: right; border-bottom: 0; }
+  .totaux { margin: 8px 0 0 auto; width: 72mm; font-size: 10pt; }
+  .totaux div { display: flex; justify-content: space-between; padding: 3px 6px; }
+  .totaux .ttc { margin-top: 3px; padding: 6px; font-weight: 700; font-size: 11.5pt; border-top: 1.5pt solid ${ORANGE}; }
+  .parties { display: flex; gap: 14px; margin-top: 10px; }
+  .partie { flex: 1; padding: 7px 9px; border: .75pt solid ${FILET}; font-size: 9.8pt; }
+  .partie > span { display: block; font-size: 7.5pt; text-transform: uppercase; letter-spacing: .07em; color: ${GRIS}; margin-bottom: 2px; }
+  .mention { margin: 10px 0 0; font-size: 8.5pt; color: ${GRIS}; }
   .accord { break-inside: avoid; }
   .acquittee { border-left: 2.5pt solid ${ORANGE}; padding-left: 7px; color: #111827; }
-  .pied-legal { margin-top: 6mm; padding-top: 2mm; border-top: .75pt solid ${FILET}; font-size: 7.6pt; color: ${GRIS}; }
+  .pied-legal { margin-top: 14px; padding-top: 6px; border-top: .75pt solid ${FILET}; font-size: 7.6pt; color: ${GRIS}; }
 `;
-
-/**
- * Le commentaire sous une prestation, à la manière de Costructor : un tiret
- * cadratin, puis le texte en italique, une ligne par phrase.
- *
- * ⚠ ON COUPE SUR LES RETOURS DE LIGNE DÉJÀ SAISIS, on n'invente pas de
- * découpage : une précision tapée d'un trait reste d'un trait. Costructor
- * met une puce par phrase parce que ses descriptions sont rédigées ainsi ;
- * ici elles sont libres, et les hacher au point ferait des bouts de phrase.
- */
-const detail = (texte) => {
-  const t = String(texte || '').trim();
-  if (!t) return '';
-  return `<small>${t.split(/\n+/).map((ligne, i) =>
-    `<span class="${i ? 'suite' : 'tiret'}">${esc(ligne.trim())}</span>`).join('')}</small>`;
-};
 
 export function devisCrmHtml(d, devis) {
   const lignes = devis.lignes || [];
@@ -587,56 +554,52 @@ export function devisCrmHtml(d, devis) {
   const pageDevis = `<!doctype html>
 <html lang="fr"><head><meta charset="utf-8"><title>${esc(titreDocument(`Facture ${devis.numero || ''}`.trim(), d))}</title>
 <style>${style}${styleDevis}</style></head><body>
-<div class="fx-tete">
-  <div class="fx-marque">
-    <img class="fx-banniere" src="${BANNIERE}" alt="RGD Renova">
-    <p class="fx-metiers">Isolation · Plomberie · Électricité · Menuiserie · Carrelage · Parquet ·
-      Peinture · Terrassement · Clôture · Aménagement d’intérieur</p>
-    <p class="fx-coord">20 AVENUE DU MARÉCHAL JOFFRE<br>60500 Chantilly</p>
-    <p class="fx-coord">06 72 06 88 36<br>contact@rgdrenova.fr<br>https://www.rgdrenova.fr/<br>
-      RCS Compiègne 979 294 030<br>TVA : FR34979294030</p>
+<header class="fh">
+  <div class="fh-g">
+    <img src="${LOGO}" alt="RGD Renova">
+    <div class="fh-metiers">Électricité · Plomberie · Menuiserie · Carrelage · Peinture · Rénovation</div>
   </div>
-  <div class="fx-titre">
-    <div class="fx-grand">FACTURE</div>
-    <div class="fx-num">${devis.numero ? 'n° ' + esc(devis.numero) : 'brouillon — sans numéro'}</div>
-    <div class="fx-meta">
-      <span>En date du :</span><b>${esc(jour(devis.date_devis || new Date()))}</b>
-      ${regle
-        ? `<span>Réglée le :</span><b>${esc(jour(regle.le))}</b>
-           ${regle.par ? `<span>Moyen de paiement :</span><b>${esc(regle.par)}</b>` : ''}`
-        : `<span>À régler avant le :</span><b>${esc(jour(ech))}</b>`}
-    </div>
+  <div class="fh-d">
+    <div class="fh-mot">Facture</div>
+    <div class="fh-num">${devis.numero ? 'N° ' + esc(devis.numero) : 'Brouillon'}</div>
   </div>
+</header>
+<div class="fh-filet"></div>
+
+<div class="parties">
+  <div class="partie"><span>Entreprise</span><b>RGD Renova</b><br>
+    20 avenue du Maréchal Joffre<br>60500 Chantilly</div>
+  <div class="partie"><span>Client</span><b>${esc(d.nom || '')}</b><br>
+    ${d.adresseChantier ? esc(d.adresseChantier) + '<br>' : ''}${[d.telephone, d.email].filter(Boolean).map(esc).join(' · ')}</div>
 </div>
 
-<div class="fx-client">
-  <div class="fx-etiq">Client</div>
-  <b>${esc(d.nom || '')}</b>
-  ${d.email ? `<div>${esc(d.email)}</div>` : ''}
-  ${d.telephone ? `<div>${esc(d.telephone)}</div>` : ''}
-  ${d.adresseChantier ? `<div class="fx-chantier">Adresse des travaux : ${esc(d.adresseChantier)}</div>` : ''}
-  ${devis.objet ? `<div class="fx-objet">${esc(devis.objet)}</div>` : ''}
+<div class="champs" style="margin-top:9px">
+  ${champ('Date de la facture', jour(devis.date_devis || new Date()), 'etroit')}
+  ${regle ? champ('Réglée le', jour(regle.le) + (regle.par ? ' · ' + regle.par : ''), 'etroit') : champ('À régler avant le', jour(ech), 'etroit')}
+  ${champ('Adresse des travaux', d.adresseChantier)}
 </div>
+${devis.objet ? `<div class="champs" style="margin-top:7px">${champ('Objet', devis.objet)}</div>` : ''}
 
+<h2>Détail des prestations</h2>
 <table class="lignes">
-  <thead><tr><th>Désignation</th><th class="n">Qté.</th><th class="u">Unité</th><th class="n">Prix U. HT</th><th class="n">Total HT</th></tr></thead>
-  <tbody>
-  ${parCategorie(lignes).flatMap(({ items }) => items).map(({ item: l }) => `<tr>
-      <td><b>${esc(l.libelle)}</b>${l.variante ? ` — ${esc(l.variante)}` : ''}${detail(l.precision)}${l.reference ? detail('Réf. ' + l.reference) : ''}</td>
-      <td class="n">${esc(String(l.quantite).replace('.', ','))}</td>
-      <td class="u">${esc(unite[l.unite] || '')}</td>
+  <thead><tr><th>Désignation</th><th class="n">Qté</th><th class="n">Prix unitaire HT</th><th class="n">Total HT</th></tr></thead>
+  ${parCategorie(lignes).map(({ categorie, items }) => `<tbody>
+    <tr class="cat"><td colspan="4">${esc(categorie)}</td></tr>
+    ${items.map(({ item: l }) => `<tr>
+      <td><b>${esc(l.libelle)}</b>${l.variante ? ` — ${esc(l.variante)}` : ''}${l.precision ? `<small>${esc(l.precision)}</small>` : ''}${l.reference ? `<small>Réf. ${esc(l.reference)}</small>` : ''}</td>
+      <td class="n">${esc(String(l.quantite).replace('.', ','))} ${esc(unite[l.unite] || '')}</td>
       <td class="n">${euros(l.prix_ht)}</td>
       <td class="n">${euros((Number(l.quantite) || 0) * (Number(l.prix_ht) || 0))}</td>
     </tr>`).join('')}
-  </tbody>
+    ${items.length > 1 ? `<tr class="sous-total"><td colspan="3">Sous-total ${esc(categorie.toLowerCase())}</td>
+      <td class="n">${euros(items.reduce((s, { item: l }) => s + (Number(l.quantite) || 0) * (Number(l.prix_ht) || 0), 0))}</td></tr>` : ''}
+  </tbody>`).join('')}
 </table>
 
 <div class="totaux">
   <div><span>Total HT</span><span>${euros(devis.montant_ht)}</span></div>
   <div><span>TVA ${esc(String(taux).replace('.', ','))} %</span><span>${euros(devis.montant_tva)}</span></div>
   <div class="ttc"><span>Total TTC</span><span>${euros(devis.montant_ttc)}</span></div>
-  ${regle ? `<div class="recu"><span>Règlement reçu le ${esc(jour(regle.le))}</span><span>− ${euros(devis.montant_ttc)}</span></div>` : ''}
-  <div class="net"><span>Net à payer</span><span>${euros(regle ? 0 : devis.montant_ttc)}</span></div>
 </div>
 
 ${MENTION_TVA[taux] ? `<p class="mention">${esc(MENTION_TVA[taux])}</p>` : ''}
@@ -986,23 +949,22 @@ export async function pdfDevisCrm(x, devis) {
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
 
-    // ⚠ UNE MARGE, PARCE QUE LE PDF ÉTAIT POSÉ BORD À BORD (02/11/2026, Élodie :
-    // « je voudrais avoir de la marge sur le pdf, je ne veux pas que les
-    // informations soient coupées »). L'image occupait les 210 mm de large et
-    // les 297 de haut : rien ne respirait, et la moindre imprimante rognait.
+    // ⚠ UNE MARGE, PARCE QUE L'IMAGE ÉTAIT POSÉE BORD À BORD (02/11/2026,
+    // Élodie : « je voudrais avoir de la marge sur le pdf »). Elle occupait les
+    // 210×297 entiers : rien ne respirait, et la moindre imprimante rognait.
     const MARGE = 10;                                   // mm
     const largeurUtile = 210 - 2 * MARGE;               // 190 mm
     const pxParMm = toile.width / largeurUtile;
     const hauteurPage = Math.floor((297 - 2 * MARGE) * pxParMm);
 
-    // ⚠ ET SURTOUT : ON NE COUPE PLUS AU MILIEU D'UNE LIGNE. Le découpage se
-    // faisait tous les N pixels, à l'aveugle — une phrase se retrouvait
-    // tranchée en deux, moitié en bas d'une page, moitié en haut de la suivante
-    // (constaté sur une vraie facture : la mention de TVA coupée en son milieu).
-    // On cherche donc, un peu AVANT la coupe idéale, une ligne de pixels
-    // entièrement blanche : un interligne, un blanc entre deux rangées. Faute
-    // d'en trouver une, on coupe au plus juste comme avant — mieux vaut une
-    // page un peu pleine qu'un document qui ne sort pas.
+    // ⚠ ET ON NE COUPE PLUS AU MILIEU D'UNE LIGNE. Le découpage se faisait tous
+    // les N pixels, à l'aveugle : une phrase se retrouvait tranchée en deux,
+    // moitié en bas d'une page, moitié en haut de la suivante (constaté sur une
+    // vraie facture, la mention de TVA coupée en son milieu). On cherche donc,
+    // un peu AVANT la coupe idéale, une ligne de pixels entièrement blanche :
+    // un interligne, un blanc entre deux rangées. Faute d'en trouver, on coupe
+    // au plus juste comme avant — mieux vaut une page pleine qu'un document
+    // qui ne sort pas.
     const ctx2 = toile.getContext('2d', { willReadFrequently: true });
     const ligneVide = (y) => {
       const px = ctx2.getImageData(0, y, toile.width, 1).data;
@@ -1012,7 +974,7 @@ export async function pdfDevisCrm(x, devis) {
       return true;
     };
     // 180 px à l'échelle 2, soit ~12 mm : de quoi enjamber une rangée de
-    // tableau. Remonter davantage laisserait un grand vide en bas de page.
+    // tableau. Remonter plus laisserait un grand vide en bas de page.
     const FENETRE = 180;
     const coupeNette = (ideal) => {
       if (ideal >= toile.height) return toile.height;
