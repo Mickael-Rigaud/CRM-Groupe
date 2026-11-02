@@ -1542,9 +1542,21 @@ body:has(.esp-app) .subnav .datepill { display: none; }
   .esp-head h1 { font-size: 21px; }
 }
 /* Deux indicateurs par rangee sur un telephone, mais serres : a 32 px la valeur
-   sortait de sa carte de 172 px. */
+   sortait de sa carte de 172 px.
+   ⚠ CETTE REGLE NE S'APPLIQUAIT PAS, ET ELLE EST RESTEE MORTE UN MOIS
+   (constate le 02/11/2026 en montant l'ecran Factures). `.esp-kpis` est
+   redeclare PLUS BAS dans ce fichier, hors media query, avec la meme
+   specificite (0,1,0) : la derniere declaration gagne, donc `auto-fit,
+   minmax(168px, 1fr)` l'emportait partout. A 390 px la colonne fait 343 px et
+   deux cartes de 168 px plus 14 px de gouttiere demandent 350 px — il n'en
+   tenait donc qu'UNE, et les quatre indicateurs prenaient tout le premier
+   ecran avant la liste. Mesure : `grid-template-columns` valait `343px` sur
+   Factures comme sur Devis.
+   ⚠ D'OU `.esp-body` DEVANT : specificite 0,2,0, elle passe devant la
+   declaration de plus bas sans qu'on ait a deplacer celle-ci. Ne pas retirer
+   ce prefixe en croyant simplifier — c'est lui qui rend la regle vivante. */
 @media (max-width: 560px) {
-  .esp-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .esp-body .esp-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
   .esp-kpi { padding: 12px 13px 14px; }
   .esp-kpi-val { font-size: 25px; margin: 7px 0 2px; }
   .esp-kpi-ico { width: 25px; height: 25px; font-size: 12px; }

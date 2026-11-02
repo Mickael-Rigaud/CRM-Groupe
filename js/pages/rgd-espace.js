@@ -114,6 +114,12 @@ export const ONGLETS = [
     // La grille des devis du CRM (29/10/2026) : à côté des devis, réservée à
     // la direction comme la Prospection.
     { hash: '#/rgd/tarifs', label: 'Tarifs' },
+    // ⚠ ENTRE TARIFS ET ENCAISSEMENTS, ET CE N'EST PAS ARBITRAIRE : ce groupe
+    // suit l'ordre de l'argent, dit plus haut — un devis devient une facture,
+    // puis un encaissement. La facture n'avait pas d'entrée parce qu'elle
+    // n'existait que dans la fiche d'un client (02/11/2026, Élodie : « oui
+    // fais la page factures »).
+    { hash: '#/rgd/factures', label: 'Factures' },
     { hash: '#/rgd/paiements', label: 'Encaissements' },
     { hash: '#/rgd/costructor', label: 'Costructor' },
     { hash: '#/rgd/reglages', label: 'Réglages' },
@@ -196,14 +202,17 @@ const bandeauVue = () => {
 // regarde, mieux et plus précisément qu'une phrase en tête. Ailleurs — la vue
 // d'ensemble, le Pipeline — rien ne le dit, et des chiffres qui ne sont pas
 // ceux de l'entreprise se lisent comme une entreprise au ralenti.
-const SANS_BANDEAU = ['#/rgd/clients'];
+// ⚠ FACTURES EST ICI POUR LA MÊME RAISON QUE CLIENTS & PROSPECTS : il porte
+// une colonne « Responsable » sur chaque ligne, qui dit à qui est ce qu'on
+// regarde — plus précisément qu'une phrase en tête, et sans la doubler.
+const SANS_BANDEAU = ['#/rgd/clients', '#/rgd/factures'];
 
 // Les écrans réservés à la direction sortent du menu des autres : une entrée
 // qui n'ouvre qu'un « réservé à la direction » est une porte peinte au mur.
 // ⚠ LE GROUPE « COMMUNICATION » ENTIER est réservé depuis le 08/10/2026,
 // Réalisations comprises (Élodie : « tu ne dois donner les accès qu'à la
 // direction et pas aux chargés d'affaires »). Le groupe vidé sort du menu.
-const RESERVES_DIRECTION = ['#/rgd/tarifs', '#/rgd/prospection', '#/rgd/realisations', '#/rgd/inspirations', '#/rgd/communication', '#/rgd/analyse'];
+const RESERVES_DIRECTION = ['#/rgd/tarifs', '#/rgd/factures', '#/rgd/prospection', '#/rgd/realisations', '#/rgd/inspirations', '#/rgd/communication', '#/rgd/analyse'];
 const sansDirection = (liste) => liste
   .filter(o => !RESERVES_DIRECTION.includes(o.hash))
   .map(o => (o.sous ? { ...o, sous: sansDirection(o.sous) } : o))
@@ -223,7 +232,12 @@ const sansDirection = (liste) => liste
 // seulement un calendrier —, et depuis que la direction voit tout le monde
 // c'est l'écran lui-même qui sépare les agendas, par couleur et par boutons.
 // Le sélecteur y faisait croire à un filtre qui ne filtrait rien.
-const SANS_VUE = ['#/rgd/tarifs', '#/rgd/realisations', '#/rgd/inspirations', '#/rgd/communication', '#/rgd/analyse', '#/rgd/agenda'];
+// ⚠ FACTURES NON PLUS (02/11/2026) : le sélecteur ouvre sur la vue
+// « direction », donc la page des factures se serait ouverte sur les seules
+// factures de Mickael — celles de Franck invisibles et les totaux à zéro, sous
+// un titre qui promet toutes les factures. L'écran a son propre filtre par
+// responsable, qui s'ouvre sur tout le monde.
+const SANS_VUE = ['#/rgd/tarifs', '#/rgd/factures', '#/rgd/realisations', '#/rgd/inspirations', '#/rgd/communication', '#/rgd/analyse', '#/rgd/agenda'];
 
 export const cadre = (actif, titre, corps) => coquilleEspace({
   actif, titre,

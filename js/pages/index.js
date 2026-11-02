@@ -21,6 +21,7 @@ import { rgdCostructorPage } from './rgd-costructor.js';
 import { rgdFormationsPage } from './rgd-formations.js';
 import { rgdReglagesPage } from './rgd-reglages.js';
 import { rgdTarifsPage } from './rgd-tarifs.js';
+import { rgdFacturesPage } from './rgd-factures.js';
 import { btpHomePage, btpExpertisePage, btpAmoPage, btpChargesPage, btpBasePage, btpDtuPage, btpMailsPage, btpFacturationPage, btpVivierPage } from './btp.js';
 import { btpChecklistPage } from './btp-checklist.js';
 import { btpRapportPage } from './btp-rapport.js';
@@ -66,6 +67,7 @@ export const pages = {
   rgd_reglages: rgdReglagesPage,
   // La grille des tarifs des devis du CRM (29/10/2026), direction seule.
   rgd_tarifs: rgdTarifsPage,
+  rgd_factures: rgdFacturesPage,
   // `#/rgd/prospects` menait à l'écran Clients de l'application, `#/rgd/app`
   // à l'application elle-même. Les deux mènent maintenant aux nôtres : un
   // signet ou un lien ancien continue de marcher au lieu de tomber à vide.
