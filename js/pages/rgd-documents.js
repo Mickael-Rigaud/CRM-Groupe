@@ -401,6 +401,24 @@ ${pied('Document à établir contradictoirement et à conserver par chaque parti
 // et SIRET, RCS et TVA intracommunautaire y sont obligatoires.
 const MENTIONS_RGD = 'RGD Renova · SASU au capital de 1 000 € · 20 avenue du Maréchal Joffre, 60500 Chantilly · RCS Compiègne · SIRET 979 294 030 00015 · TVA FR34979294030';
 
+// ⚠ MENTION OBLIGATOIRE SUR UN DEVIS ET UNE FACTURE DE TRAVAUX — article
+// L243-2 du code des assurances : l'assurance souscrite, les COORDONNÉES de
+// l'assureur, et la COUVERTURE GÉOGRAPHIQUE du contrat. Les trois, pas une.
+//
+// ⚠ LA ZONE N'EST PAS DÉCORATIVE, c'est elle qui décidait si la mention
+// pouvait seulement être écrite : RGD Renova siège à Chantilly et intervient
+// dans le Sud. Un contrat limité aux Hauts-de-France aurait rendu la mention
+// FAUSSE sur chaque facture d'Antibes — et une attestation qui ment vaut moins
+// que pas de mention du tout. Relevé sur l'attestation le 02/11/2026 : zone
+// « France », donc le Sud est couvert.
+//
+// ⚠ ÉCRIT EN DUR, COMME L'IDENTITÉ DE LA SOCIÉTÉ AU-DESSUS : ce numéro de
+// contrat figure sur chaque facture remise à un client, la loi EXIGE qu'il y
+// soit. Ce n'est pas un secret, et le dépôt est public : rien ici qui ne soit
+// déjà entre les mains de tous les clients de RGD.
+const MENTIONS_ASSURANCE = 'Assurance responsabilité civile et décennale : Mic insurance, '
+  + 'rue de l’Amiral Hamelin, 75116 Paris · Contrat n° LUN2309302 · Couverture : France.';
+
 // ⚠ MENTIONS OBLIGATOIRES D'UNE FACTURE, ET CE NE SONT PAS DES FORMULES DE
 // STYLE : leur absence est sanctionnable, et sans elles les pénalités de
 // retard ne sont pas exigibles. Les taux écrits ici sont ceux que la loi
@@ -546,7 +564,7 @@ ${devis.notes ? `<h2>Remarques</h2><p style="margin:0;font-size:9.8pt;white-spac
   </div>`}
 </div>
 
-<p class="pied-legal">${esc(MENTIONS_RGD)}</p>
+<p class="pied-legal">${esc(MENTIONS_RGD)}<br>${esc(MENTIONS_ASSURANCE)}</p>
 </body></html>`;
   return pageDevis;
 }
