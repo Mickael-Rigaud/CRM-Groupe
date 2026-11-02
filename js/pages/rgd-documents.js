@@ -399,7 +399,7 @@ ${pied('Document à établir contradictoirement et à conserver par chaque parti
 // ⚠ LE PIED PORTE LES MENTIONS LÉGALES DE RGD RENOVA (Chantilly), celles du bon
 // d'attachement validé le 28/10/2026 : un devis est un document commercial,
 // et SIRET, RCS et TVA intracommunautaire y sont obligatoires.
-const MENTIONS_RGD = 'RGD Renova · SASU au capital de 1 000 € · 20 avenue du Maréchal Joffre, 60500 Chantilly · RCS Compiègne · SIRET 979 294 030 00015 · TVA FR34979294030';
+const MENTIONS_RGD = 'RGD Renova · SASU au capital de 1 000 € · 20 avenue du Maréchal Joffre, 60500 Chantilly · RCS Compiègne · SIRET 979 294 030 00023 · TVA FR34979294030';
 
 // ⚠ MENTION OBLIGATOIRE SUR UN DEVIS ET UNE FACTURE DE TRAVAUX — article
 // L243-2 du code des assurances : l'assurance souscrite, les COORDONNÉES de
