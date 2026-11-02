@@ -190,6 +190,19 @@ const OPTIONS_SECTEUR = [['', 'À classer'], ['cote_azur', 'Côte d’Azur'], ['
 // `rgd_apports_sortants`. Un fournisseur basculé en apporteur retombe donc
 // « à classer » — sa liste n'a plus l'option, le `select` prend la première.
 const OPTIONS_SECTEUR_FOURNISSEUR = [...OPTIONS_SECTEUR, ['en_ligne', 'En ligne']];
+
+// ⚠ LES CONDITIONS DE PAIEMENT N'EXISTENT QUE POUR UN FOURNISSEUR (02/11/2026,
+// Élodie : « pour les fournisseurs je voudrais rajouter la possibilité de
+// sélectionner entre paiement comptant et paiement 30 jours »). C'est ce qu'on
+// a besoin de savoir AVANT de commander, pas au moment de régler. Un apporteur
+// d'affaires n'en a pas : on ne lui achète rien.
+//
+// ⚠ VIDE VEUT DIRE « ON NE SAIT PAS », ET SÛREMENT PAS « COMPTANT ». Afficher
+// un délai par défaut ferait croire à une condition négociée que personne n'a
+// vérifiée — et c'est en commandant qu'on s'en apercevrait.
+const PAIEMENTS = { comptant: 'Comptant', j30: 'À 30 jours' };
+const OPTIONS_PAIEMENT = [['', 'Non renseigné'], ...Object.entries(PAIEMENTS)];
+const nomPaiement = (v) => PAIEMENTS[v] || '';
 // Les onglets qui ne montrent QUE les fournisseurs.
 const ONGLETS_FOURNISSEURS = ['en_ligne'];
 // Ne sert plus qu'en tête de la fiche : dans les listes, c'est l'onglet qui
@@ -449,6 +462,7 @@ function corpsFournisseur(v, creation) {
       ${champ('ville', 'Ville', v.ville)}
       ${liste('actif', 'Suivi', [['1', 'Actif'], ['0', 'Inactif']], v.actif === false ? '0' : '1')}
       ${liste('compte_pro_ouvert', 'Compte pro ouvert', OUI_NON, ouiNonValeur(v.compte_pro_ouvert))}
+      ${liste('paiement', 'Paiement', OPTIONS_PAIEMENT, v.paiement || '')}
       ${liste('secteur', 'Secteur', OPTIONS_SECTEUR_FOURNISSEUR, v.secteur || '')}
       ${'' /* ⚠ DISCRET MAIS PRÉSENT (choix d'Élodie du 22/10) : c'est la seule
          porte entre les deux formulaires. Une fiche créée par erreur du côté
@@ -548,6 +562,12 @@ function brancherFormulaire(hote, a, apres, annuler) {
           champs.compte_pro_ouvert = lu.compte_pro_ouvert === ''
             ? null : lu.compte_pro_ouvert === '1';
         }
+        // ⚠ « NON RENSEIGNÉ » DOIT ARRIVER EN BASE COMME `null`, PAS COMME UNE
+        // CHAÎNE VIDE. Les deux s'affichent pareil à l'écran, mais une chaîne
+        // vide COMPTE comme une condition renseignée dès qu'on interroge la
+        // colonne — à commencer par le retour arrière de la migration, qui
+        // refuse de partir s'il existe des conditions saisies.
+        if ('paiement' in lu) champs.paiement = lu.paiement || null;
 
         const ok = m.querySelector('#paf-ok');
         ok.disabled = true; ok.textContent = 'Enregistrement…';
@@ -628,6 +648,8 @@ function ficheFournisseur(a) {
             ${info('lieu', 'Adresse', esc(adresseDe(a)), 'est-gris')}
             ${info('euro', 'Compte pro ouvert', esc(compte),
               a.compte_pro_ouvert === true ? 'est-vert' : 'est-gris')}
+            ${info('regle', 'Paiement', esc(nomPaiement(a.paiement)),
+              a.paiement === 'j30' ? 'est-vert' : 'est-gris')}
           </section>
         </div>
         <div class="rgdf-colonne">
@@ -1500,13 +1522,19 @@ export const rgdPartenairesPage = {
         // son siège ne dit rien à qui cherche où commander.
         fournisseur: {
           entete: `<th>Société</th><th>Nom</th><th>Prénom</th>
-            <th>Secteur d’activité</th><th>${enLigne ? 'Site internet' : 'Ville'}</th>`,
+            <th>Secteur d’activité</th><th>${enLigne ? 'Site internet' : 'Ville'}</th>
+            <th>Paiement</th>`,
           cellules: (a) => `
             <td>${esc(a.nom || '—')}</td>
             <td>${esc(a.prenom || '—')}</td>
             ${'' /* Même colonne `profession` que chez l'apporteur, autre intitulé : chez un fournisseur c'est son secteur, pas un métier exercé. */}
             <td class="pa-bleu">${esc(a.profession || '—')}</td>
-            <td>${enLigne ? lienSite(a) : esc(a.ville || '—')}</td>`,
+            <td>${enLigne ? lienSite(a) : esc(a.ville || '—')}</td>
+            ${'' /* ⚠ DANS LE TABLEAU AUSSI, et pas seulement dans la fiche : on
+               choisit chez qui commander en parcourant la liste, et une
+               condition qu'il faut ouvrir treize fiches pour lire ne sert à
+               personne. */}
+            <td>${a.paiement ? esc(nomPaiement(a.paiement)) : '<span class="muted">—</span>'}</td>`,
         },
       };
 

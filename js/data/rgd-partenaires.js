@@ -36,7 +36,8 @@ const CHAMPS = ['nom', 'prenom', 'societe', 'raison_sociale', 'profession',
   'email', 'telephone', 'adresse', 'code_postal', 'ville',
   'type_partenaire', 'actif', 'partenariat_signe', 'date_signature', 'notes',
   // La fiche fournisseur : la societe, puis la personne qu'on appelle.
-  'site_internet', 'compte_pro_ouvert',
+  // `paiement` depuis le 02/11/2026 : comptant ou a 30 jours.
+  'site_internet', 'compte_pro_ouvert', 'paiement',
   'email_interlocuteur', 'telephone_interlocuteur', 'role_interlocuteur',
   // L'agence concernée (27/10/2026) : `cote_azur`, `oise`, ou null = à classer.
   // `en_ligne` depuis le 02/11/2026, pour les fournisseurs qui vendent sur
