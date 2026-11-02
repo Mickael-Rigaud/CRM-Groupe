@@ -24,6 +24,7 @@ import {
   TVA, TVA_DEFAUT, STATUTS_DEVIS_CRM, UNITES, PAR_UNITE, nomMetier, tarifsDe, metiersAvecGrille,
   totaux, plancher, ligneDepuisTarif, parCategorie, messageDevisCrm, envoyerDevisCrm, enregistrerDevisCrm, changerStatutDevisCrm, supprimerDevisCrm, signerSurPlace,
   MOYENS_PAIEMENT, marquerReglee, annulerReglement,
+  signerBonAttachement,
 } from '../data/rgd-devis-crm.js';
 import { posePadSignature } from '../pad-signature.js';
 import { ouvrirImportFacture, peutImporterFacture } from './rgd-facture-import.js';
@@ -220,6 +221,12 @@ export function ouvrirDevisCrm(x, existant = null, retour = null) {
              <button type="button" class="btn ghost sm" id="rdc-regl-off">Annuler le règlement</button>`
           : `<select id="rdc-regl-moyen">${Object.entries(MOYENS_PAIEMENT).map(([k, v]) => `<option value="${esc(k)}">${esc(v)}</option>`).join('')}</select>
              <button type="button" class="btn sm" id="rdc-regl-on">Marquer réglée</button>`}
+      </div>
+      <div class="rdc-statut"><span class="muted small">Bon d’attachement</span>
+        ${existant.bon_signature
+          ? `<span class="chip green">Signé${existant.bon_signe_par ? ' par ' + esc(existant.bon_signe_par) : ''}</span>`
+          : '<button type="button" class="btn ghost sm" id="rdc-bon-signer">Faire signer</button>'}
+        <button type="button" class="btn ghost sm" id="rdc-bon-pdf">Imprimer</button>
       </div>` : ''}
 
       <div class="rdc-pied">
@@ -265,6 +272,29 @@ export function ouvrirDevisCrm(x, existant = null, retour = null) {
       surValider: async ({ image, nom }) => {
         existant = await signerSurPlace(existant, { signature: image, signe_par: nom });
         toast(`Facture ${existant.numero || ''} signée`);
+        closeModal(true);
+        ouvrirDevisCrm(x, existant, retour);
+      },
+    });
+  };
+
+  /**
+   * Le client signe le BON D'ATTACHEMENT — pas la facture.
+   *
+   * ⚠ DEUX SIGNATURES, DEUX DOCUMENTS. La mention qu'on lui lit n'est pas la
+   * même : ici il reconnaît les TEMPS PASSÉS et les FOURNITURES posées, pas une
+   * somme à payer. C'est ce document qu'on ressort si les heures sont
+   * contestées, et une signature recopiée de la facture n'y servirait à rien.
+   */
+  const faireSignerBon = () => {
+    posePadSignature(hote, {
+      aide: 'Signature de <b>' + esc(x.nom || 'la personne présente') + '</b> sur le <b>bon d’attachement</b>. '
+        + 'Signer vaut reconnaissance des temps passés et des fournitures posées.',
+      nom: x.nom || '',
+      surAnnuler: () => redessiner(),
+      surValider: async ({ image, nom }) => {
+        existant = await signerBonAttachement(existant, { signature: image, nom });
+        toast('Bon d’attachement signé');
         closeModal(true);
         ouvrirDevisCrm(x, existant, retour);
       },
@@ -481,6 +511,17 @@ export function ouvrirDevisCrm(x, existant = null, retour = null) {
         toast(e.message || 'Non enregistré', 'error');
       }
     };
+    const bBonPdf = hote.querySelector('#rdc-bon-pdf');
+    if (bBonPdf) bBonPdf.onclick = async () => {
+      try {
+        const mod = await import('./rgd-documents.js');
+        mod.imprimerBonAttachement(x, existant);
+      } catch (e) {
+        toast(e.message || 'Impression impossible', 'error');
+      }
+    };
+    const bBonSign = hote.querySelector('#rdc-bon-signer');
+    if (bBonSign) bBonSign.onclick = () => faireSignerBon();
     const bSign = hote.querySelector('#rdc-signer');
     if (bSign) bSign.onclick = async () => {
       const d = await enregistrer();

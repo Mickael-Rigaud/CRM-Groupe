@@ -219,6 +219,21 @@ export const marquerReglee = (d, moyen) => db.update('rgd_devis_crm', d.id, {
   regle_par: moyen || null,
 });
 
+/**
+ * Le bon d'attachement signé par le client, sur place.
+ *
+ * ⚠ SA SIGNATURE EST DISTINCTE DE CELLE DE LA FACTURE, et ce n'est pas une
+ * lourdeur : le bon CONSTATE des temps et des fournitures, la facture RÉCLAME
+ * une somme. Une seule signature reportée sur les deux ne prouverait ni l'un
+ * ni l'autre — et c'est précisément le bon d'attachement qu'on produit en cas
+ * de contestation sur les heures.
+ */
+export const signerBonAttachement = (d, { signature, nom }) => db.update('rgd_devis_crm', d.id, {
+  bon_signature: signature,
+  bon_signe_par: String(nom || '').trim() || null,
+  bon_signe_a: new Date().toISOString(),
+});
+
 /** Un clic malheureux se défait : la facture redevient due, échéance comprise. */
 export const annulerReglement = (d) =>
   db.update('rgd_devis_crm', d.id, { regle_le: null, regle_par: null });

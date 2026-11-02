@@ -591,6 +591,265 @@ ${regle
   return pageDevis;
 }
 
+// ------------------------------------------- le bon d'attachement
+// Élodie, le 02/11/2026 : « avec cette facture je voudrais que cela génère
+// automatiquement un bon d'attachement ». Le formulaire existait en A4
+// recto-verso, vierge, dans `bon-attachement-rgd-electricite/` ; il est repris
+// ici et PRÉ-REMPLI depuis la facture.
+//
+// ⚠ UN BON D'ATTACHEMENT N'EST PAS UNE FACTURE, et son propre encadré le dit :
+// il constate contradictoirement les TEMPS PASSÉS et les FOURNITURES mises en
+// œuvre. Le gabarit d'origine renvoyait au « devis référencé au recto » pour
+// les prix ; généré depuis une facture, cette phrase tournerait en rond. Elle
+// est donc réécrite pour dire ce qui est vrai ici : le bon accompagne la
+// facture établie sur ces quantités.
+//
+// ⚠ CE QUI VIENT DE LA FACTURE, ET CE QUI RESTE BLANC. On remplit ce que la
+// facture SAIT — client, chantier, date, numéro, prestations, heures,
+// fournitures. Constats, contrôles, anomalies et suites à donner restent
+// vierges : ce sont des observations de chantier, et les pré-cocher
+// reviendrait à attester de contrôles que personne n'a faits.
+//
+// ⚠ LES LIGNES À L'HEURE VONT EN MAIN-D'ŒUVRE, LES AUTRES EN FOURNITURES. Le
+// tri se fait sur l'unité (`heure`), pas sur le libellé : un intitulé se
+// réécrit, une unité est structurelle.
+const bonStyle = `
+@page { size: A4; margin: 0; }
+.ba { --or: #FD7A2C; --ink: #1A1A1A; --gris: #5e5e5e; --trait: #b9b9b9; --fond: #faf6f1; }
+.ba * { box-sizing: border-box; }
+.ba { font-family: "Segoe UI", Arial, sans-serif; color: #1A1A1A; font-size: 10pt; line-height: 1.3; }
+.ba-page { width: 210mm; height: 296mm; padding: 11mm 13mm 8mm; display: flex; flex-direction: column; overflow: hidden; }
+.ba-page + .ba-page { break-before: page; }
+.ba header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2.5pt solid #FD7A2C; padding-bottom: 3.5mm; }
+.ba .marque img { height: 13mm; display: block; }
+.ba .coord { margin-top: 2mm; color: #5e5e5e; font-size: 8.8pt; line-height: 1.4; }
+.ba .titre { text-align: right; }
+.ba .titre h1 { margin: 0; font-size: 21pt; font-weight: 300; }
+.ba .titre h1 b { font-weight: 700; }
+.ba .sous { font-size: 9.5pt; color: #FD7A2C; font-weight: 600; text-transform: uppercase; letter-spacing: .8pt; margin-top: .6mm; }
+.ba .ref { margin-top: 2.5mm; display: inline-grid; grid-template-columns: auto 44mm; gap: 1.6mm 2mm; font-size: 9.5pt; text-align: left; }
+.ba .ref span:nth-child(odd) { color: #5e5e5e; text-align: right; }
+.ba .ref span:nth-child(even) { border-bottom: .7pt solid #b9b9b9; font-weight: 600; }
+.ba .rappel { display: flex; justify-content: space-between; align-items: center; border-bottom: 2.5pt solid #FD7A2C; padding-bottom: 3mm; }
+.ba .rappel img { height: 9mm; }
+.ba .rappel .ref { margin-top: 0; }
+.ba h2 { margin: 5mm 0 2mm; font-size: 10.5pt; text-transform: uppercase; letter-spacing: .7pt; font-weight: 700; display: flex; align-items: center; gap: 2.5mm; }
+.ba h2::before { content: ""; width: 5mm; height: 2pt; background: #FD7A2C; }
+.ba .deux { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 0 8mm; }
+.ba .champ { display: flex; align-items: flex-end; gap: 2mm; height: 7.5mm; }
+.ba .champ label { color: #5e5e5e; white-space: nowrap; font-size: 9.5pt; padding-bottom: .4mm; }
+.ba .champ i { flex: 1; border-bottom: .7pt solid #b9b9b9; height: 100%; font-style: normal; padding-bottom: .4mm; }
+.ba .cases { display: grid; grid-template-columns: repeat(2, 1fr); gap: 2.2mm 6mm; }
+.ba .ligne-cases { display: flex; flex-wrap: wrap; gap: 2mm 7mm; margin-top: 2.6mm; }
+.ba .c { display: flex; align-items: center; gap: 2.2mm; }
+.ba .c::before { content: ""; width: 4mm; height: 4mm; border: 1pt solid #1A1A1A; border-radius: .6mm; flex: none; }
+.ba .lignes div { height: 8mm; border-bottom: .7pt solid #b9b9b9; padding-top: 1mm; }
+.ba .mesure { display: inline-block; width: 18mm; border-bottom: .7pt solid #b9b9b9; margin: 0 1mm; height: 4.5mm; vertical-align: bottom; }
+.ba table { width: 100%; border-collapse: collapse; }
+.ba th { background: #1A1A1A; color: #fff; font-weight: 600; font-size: 9pt; text-align: left; padding: 1.6mm 2mm; }
+.ba td { border-bottom: .7pt solid #b9b9b9; height: 8.5mm; padding: 0 2mm; }
+.ba td + td { border-left: .7pt solid #dedede; }
+.ba th + th { border-left: .7pt solid #444; }
+.ba tfoot td { border-bottom: none; font-weight: 600; text-align: right; color: #5e5e5e; }
+.ba tfoot td.tot { border: 1pt solid #1A1A1A; text-align: center; color: #1A1A1A; }
+.ba .note { font-size: 8.8pt; color: #5e5e5e; margin-top: 1.6mm; }
+.ba .controles { display: grid; grid-template-columns: 1fr 1fr; gap: 2.6mm 8mm; }
+.ba .encadre { background: #faf6f1; border-left: 2.5pt solid #FD7A2C; padding: 2.6mm 3.5mm; font-size: 8.8pt; color: #333; margin-top: 5mm; }
+.ba .signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 7mm; margin-top: 5mm; flex: 1; min-height: 40mm; }
+.ba .sig { border: 1pt solid #1A1A1A; border-radius: 1.2mm; padding: 3mm 4mm; display: flex; flex-direction: column; }
+.ba .sig b { font-size: 10pt; text-transform: uppercase; letter-spacing: .6pt; }
+.ba .sig .mention { color: #5e5e5e; font-size: 8.8pt; margin-top: .8mm; }
+.ba .sig .cases { margin-top: 2.4mm; grid-template-columns: 1fr; gap: 1.8mm; }
+.ba .sig img { display: block; max-height: 22mm; max-width: 100%; margin-top: 2mm; }
+.ba .vide { flex: 1; }
+.ba footer { margin-top: 4mm; padding-top: 2mm; border-top: .7pt solid #b9b9b9; font-size: 7.6pt; color: #5e5e5e; display: flex; justify-content: space-between; gap: 5mm; }
+.ba footer span:last-child { white-space: nowrap; }
+`;
+
+/** Le bon d'attachement, pré-rempli depuis une facture du CRM. */
+export function bonAttachementHtml(d, devis) {
+  const lignes = devis.lignes || [];
+  const heures = lignes.filter(l => l.unite === 'heure');
+  const fournitures = lignes.filter(l => l.unite !== 'heure');
+  const totalHeures = heures.reduce((n, l) => n + (Number(l.quantite) || 0), 0);
+  const laDate = jour(devis.date_devis || new Date());
+  const num = devis.numero || '';
+  const sig = devis.bon_signature ? {
+    image: devis.bon_signature,
+    nom: devis.bon_signe_par || d.nom || '',
+    quand: devis.bon_signe_a
+      ? `${jour(new Date(devis.bon_signe_a))} à ${new Date(devis.bon_signe_a).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`
+      : laDate,
+  } : null;
+
+  // Trois lignes vierges au minimum : un constat tient rarement en une, et une
+  // page qui respire se remplit mieux qu'une grille serrée.
+  const vides = (n) => Array.from({ length: n }, () => '<div></div>').join('');
+  const rangsMo = heures.map(l => `<tr><td>${esc(laDate)}</td><td>${esc(l.libelle)}${l.precision ? ' — ' + esc(l.precision) : ''}</td><td></td><td></td><td></td><td></td><td>${esc(String(l.quantite).replace('.', ','))}</td></tr>`).join('')
+    + Array.from({ length: Math.max(1, 3 - heures.length) }, () => '<tr><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>').join('');
+  const rangsFourn = fournitures.map(l => `<tr><td>${esc(l.libelle)}${l.variante ? ' — ' + esc(l.variante) : ''}${l.precision ? ' — ' + esc(l.precision) : ''}</td><td>${esc(l.reference || '')}</td><td>${esc(unite[l.unite] || '')}</td><td>${esc(String(l.quantite).replace('.', ','))}</td><td></td></tr>`).join('')
+    + Array.from({ length: Math.max(1, 6 - fournitures.length) }, () => '<tr><td></td><td></td><td></td><td></td><td></td></tr>').join('');
+
+  const piedLegal = `<footer>
+    <span>${esc(MENTIONS_RGD)}</span>`;
+
+  return `<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><title>${esc(titreDocument(`Bon d'attachement ${num}`.trim(), d))}</title>
+<style>${bonStyle}</style></head><body class="ba">
+
+<div class="ba-page">
+<header>
+  <div class="marque">
+    <img src="${LOGO}" alt="RGD Renova">
+    <div class="coord">
+      Électricité générale · Dépannage &amp; installation<br>
+      Intervention Alpes-Maritimes (06) et Var (83)<br>
+      06 72 06 88 36 · contact@rgdrenova.fr · rgdrenova.fr
+    </div>
+  </div>
+  <div class="titre">
+    <h1>Bon <b>d'attachement</b></h1>
+    <div class="sous">Travaux d'électricité</div>
+    <div class="ref">
+      <span>N°</span><span>${esc(num ? 'BA' + num.replace(/^FA/, '') : '')}</span>
+      <span>Date</span><span>${esc(laDate)}</span>
+      <span>Facture n°</span><span>${esc(num)}</span>
+    </div>
+  </div>
+</header>
+
+<div class="deux">
+  <div>
+    <h2>Client / donneur d'ordre</h2>
+    <div class="champ"><label>Nom / société</label><i>${esc(d.nom || '')}</i></div>
+    <div class="champ"><label>Adresse</label><i>${esc(d.adresseChantier || '')}</i></div>
+    <div class="champ"><label></label><i></i></div>
+    <div class="champ"><label>Téléphone</label><i>${esc(d.telephone || '')}</i></div>
+    <div class="champ"><label>E-mail</label><i>${esc(d.email || '')}</i></div>
+    <div class="ligne-cases">
+      <span class="c">Particulier</span><span class="c">Syndic / bailleur</span><span class="c">Professionnel</span><span class="c">Sous-traitance</span>
+    </div>
+  </div>
+  <div>
+    <h2>Lieu d'intervention</h2>
+    <div class="champ"><label>Adresse du chantier</label><i>${esc(d.adresseChantier || '')}</i></div>
+    <div class="champ"><label>Code postal / ville</label><i></i></div>
+    <div class="champ"><label>Bât. / étage / lot</label><i></i></div>
+    <div class="champ"><label>Accès / code</label><i></i></div>
+    <div class="champ"><label>Contact sur place</label><i></i></div>
+    <div class="ligne-cases">
+      <span class="c">Logement</span><span class="c">Local pro</span><span class="c">Parties communes</span><span class="c">Extérieur</span>
+    </div>
+  </div>
+</div>
+
+<h2>Nature de l'intervention</h2>
+<div class="cases" style="grid-template-columns: 1.25fr 1fr 1fr; gap: 2.2mm 4mm;">
+  <span class="c">Dépannage / recherche de panne</span>
+  <span class="c">Mise en sécurité</span>
+  <span class="c">Mise aux normes NF C 15-100</span>
+  <span class="c">Remplacement de tableau</span>
+  <span class="c">Installation neuve</span>
+  <span class="c">Rénovation partielle / totale</span>
+  <span class="c">Prises, circuits spécialisés</span>
+  <span class="c">Éclairage int. / ext.</span>
+  <span class="c">Borne de recharge (IRVE)</span>
+  <span class="c">Chauffage, VMC, chauffe-eau</span>
+  <span class="c">Réseau, interphone</span>
+  <span class="c">Autre :</span>
+</div>
+<div class="ligne-cases">
+  <span class="c"><b>Urgence</b></span><span class="c">Intervention programmée</span><span class="c">Astreinte (soir, week-end, jour férié)</span>
+</div>
+
+<h2>Constat et travaux réalisés</h2>
+<div class="lignes">${devis.objet ? `<div>${esc(devis.objet)}</div>` : ''}${vides(devis.objet ? 4 : 5)}</div>
+
+<h2>Main-d'œuvre</h2>
+<table>
+  <thead><tr><th style="width:15%">Date</th><th>Intervenant(s)</th><th style="width:14%">Habilitation</th><th style="width:11%">Arrivée</th><th style="width:11%">Départ</th><th style="width:10%">Pause</th><th style="width:12%">Durée (h)</th></tr></thead>
+  <tbody>${rangsMo}</tbody>
+  <tfoot><tr><td colspan="6">Total heures</td><td class="tot">${totalHeures ? esc(String(totalHeures).replace('.', ',')) : ''}</td></tr></tfoot>
+</table>
+<div class="ligne-cases">
+  <span class="c"><b>Déplacement</b></span><span class="c">Forfait</span><span class="c">Kilométrique : <span class="mesure"></span> km</span><span class="c">Nb : <span class="mesure" style="width:10mm"></span></span>
+</div>
+
+<div class="vide"></div>
+${piedLegal}
+    <span>Recto 1/2 · suite au verso</span>
+  </footer>
+</div>
+
+<div class="ba-page">
+<div class="rappel">
+  <img src="${LOGO}" alt="RGD Renova">
+  <div class="ref"><span>Bon d'attachement n°</span><span>${esc(num ? 'BA' + num.replace(/^FA/, '') : '')}</span></div>
+</div>
+
+<h2>Fournitures posées</h2>
+<table>
+  <thead><tr><th>Désignation</th><th style="width:24%">Marque / référence</th><th style="width:10%">Unité</th><th style="width:11%">Quantité</th><th style="width:15%">Fourni par</th></tr></thead>
+  <tbody>${rangsFourn}</tbody>
+</table>
+<div class="note">Fourni par : RGD (stock ou achat) ou client.</div>
+<div class="ligne-cases" style="margin-top:2mm">
+  <span class="c"><b>Matériel déposé</b></span><span class="c">Laissé au client</span><span class="c">Évacué par RGD Renova</span>
+</div>
+
+<h2>Contrôles avant remise sous tension</h2>
+<div class="controles">
+  <span class="c">Essai des différentiels 30 mA</span>
+  <span class="c">Continuité des conducteurs de protection</span>
+  <span class="c">Résistance de terre : <span class="mesure"></span> Ω</span>
+  <span class="c">Résistance d'isolement : <span class="mesure"></span> MΩ</span>
+  <span class="c">Serrage des connexions, repérage des circuits</span>
+  <span class="c">Essai de fonctionnement devant le client</span>
+</div>
+<div class="ligne-cases" style="margin-top:3mm">
+  <span class="c"><b>Installation remise sous tension</b></span><span class="c">Oui</span><span class="c">Non, motif : <span class="mesure" style="width:55mm"></span></span>
+</div>
+
+<h2>Anomalies constatées hors intervention</h2>
+<div class="lignes">${vides(2)}</div>
+
+<h2>Suite à donner</h2>
+<div class="cases">
+  <span class="c">Travaux terminés</span>
+  <span class="c">Nouveau passage à prévoir</span>
+  <span class="c">Devis complémentaire à établir</span>
+  <span class="c">Attestation Consuel à prévoir</span>
+</div>
+
+<div class="encadre">
+  Le présent bon constate contradictoirement les temps passés et les fournitures réellement mises en œuvre.
+  Il ne vaut pas facture : il accompagne la facture n° ${esc(num || '—')}, établie sur ces quantités.
+  Les anomalies signalées ci-dessus et non traitées restent sous la responsabilité du client jusqu'à leur reprise.
+</div>
+
+<div class="signatures">
+  <div class="sig">
+    <b>L'intervenant RGD Renova</b>
+    <div class="mention">Nom, date et signature</div>
+  </div>
+  <div class="sig">
+    <b>Le client</b>
+    ${sig
+      ? `<div class="mention">${esc(sig.nom)} — signé sur place le ${esc(sig.quand)}</div>
+         <img src="${esc(sig.image)}" alt="Signature du client">`
+      : '<div class="mention">Nom, date et signature précédés de « Lu et approuvé »</div>'}
+    <div class="cases"><span class="c">Travaux réceptionnés sans réserve</span><span class="c">Avec réserves (voir anomalies)</span></div>
+  </div>
+</div>
+
+${piedLegal}
+    <span>Verso 2/2 · Ex. 1 : client · Ex. 2 : RGD</span>
+  </footer>
+</div>
+
+</body></html>`;
+}
+
 // ------------------------------------------------------------------ portes
 // ⚠ `donneesDocument` N'EST LUE QU'UNE FOIS : elle interroge la base et calcule
 // l'etape, et deux lectures pourraient rendre deux noms si une ecriture tombe
@@ -602,6 +861,10 @@ export const imprimerFicheProjet = (x, devis) => {
 export const imprimerReception = (x, devis) => {
   const d = donneesDocument(x, devis);
   imprimerPage(receptionHtml(d), titreDocument('PV de réception', d));
+};
+export const imprimerBonAttachement = (x, devis) => {
+  const d = donneesDocument(x);
+  imprimerPage(bonAttachementHtml(d, devis), titreDocument(`Bon d'attachement ${devis.numero || ''}`.trim(), d));
 };
 export const imprimerDevisCrm = (x, devis) => {
   const d = donneesDocument(x);
