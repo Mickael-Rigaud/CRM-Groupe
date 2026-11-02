@@ -537,7 +537,10 @@ export const SEED = {
       profession: 'Courtier en prets', telephone: '03 44 00 11 22', email: 'claire@example.com',
       adresse: '18 rue des Tilleuls', code_postal: '60300', ville: 'Senlis',
       type_partenaire: 'apporteur', actif: true, partenariat_signe: true,
-      date_signature: '2026-03-14', source: 'demo' },
+      date_signature: '2026-03-14', source: 'demo',
+      // Son equipe : on choisit l'un d'eux dans « Apporte par ».
+      equipe: [{ nom: 'Lucie Berton', role: 'Courtiere', telephone: '06 00 00 11 01' },
+               { nom: 'Hugo Marchand', role: 'Courtier', email: 'hugo@example.com' }] },
     { id: 'ap2', secteur: 'oise', owner_id: 'u-charge', d1_id: 8002, nom: 'Bouchard', prenom: 'Yanis', societe: 'Archi Bouchard',
       profession: 'Architecte', telephone: '03 44 00 11 23',
       adresse: '5 place du Marche', code_postal: '60500', ville: 'Chantilly',
@@ -567,6 +570,11 @@ export const SEED = {
     { id: 'ap5', secteur: 'oise', owner_id: 'u-mickael', d1_id: 8005, societe: 'Carrelages Oise',
       profession: 'Carrelage et faience', telephone: '03 44 00 11 26',
       code_postal: '60100', ville: 'Creil',
+      type_partenaire: 'fournisseur', actif: true, partenariat_signe: false, source: 'demo' },
+    // Un marchand sur internet : il remplit l'onglet « En ligne ».
+    { id: 'ap6', secteur: 'en_ligne', owner_id: 'u-mickael', societe: 'Outillage Direct',
+      profession: 'Outillage et quincaillerie', site_internet: 'outillage-direct.example',
+      compte_pro_ouvert: true,
       type_partenaire: 'fournisseur', actif: true, partenariat_signe: false, source: 'demo' },
   ],
 

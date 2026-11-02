@@ -7163,6 +7163,27 @@ span.rpv-statut { display: inline-block; margin-bottom: 4px; }
   border-radius: 0 12px 12px 12px; padding: 16px; }
 .pa-zone.est-cote_azur { --pa-s: #0284c7; --pa-s-fond: color-mix(in srgb, #0284c7 7%, var(--card)); }
 .pa-zone.est-oise { --pa-s: #d97706; --pa-s-fond: color-mix(in srgb, #d97706 7%, var(--card)); }
+/* « En ligne » (02/11/2026) : les fournisseurs sur internet. Violet, la seule
+   teinte libre — ni le bleu ni l'ambre des agences, ni vert ni rouge. */
+.pa-secteur.est-en_ligne { background: #ede9fe; color: #5b21b6; }
+.pa-onglet.est-en_ligne { --pa-s: #7c3aed; --pa-s-fond: #ede9fe; --pa-s-texte: #5b21b6; }
+.pa-zone.est-en_ligne { --pa-s: #7c3aed; --pa-s-fond: color-mix(in srgb, #7c3aed 7%, var(--card)); }
+/* L'équipe d'un partenaire : saisie dans le formulaire, liste dans la fiche. */
+.paf-aide { margin: -4px 0 10px; font-size: 12.5px; color: var(--muted); }
+.paf-equipe { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.paf-equipe:empty { display: none; }
+.paf-membre { display: grid; grid-template-columns: 1.4fr 1fr 1fr 1.3fr 30px; gap: 6px; align-items: center; }
+.paf-membre input { min-width: 0; border: 1px solid var(--line); border-radius: 8px;
+  padding: 7px 9px; font: inherit; font-size: 13.5px; background: var(--card); color: var(--text); }
+.paf-membre input:focus { outline: none; border-color: var(--accent); }
+.pa-equipe { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.pa-equipe li { font-size: 14px; }
+.pa-equipe .s { font-size: 12.5px; margin-top: 2px; }
+@media screen and (max-width: 760px) {
+  .paf-membre { grid-template-columns: 1fr 1fr 30px; }
+  .paf-membre [data-eq="nom"] { grid-column: 1 / 3; }
+  .paf-membre [data-eq-suppr] { grid-column: 3; grid-row: 1; }
+}
 @media screen and (max-width: 760px) {
   .pa-onglet { padding: 10px 14px; font-size: 13px; }
   .pa-zone { padding: 10px; }

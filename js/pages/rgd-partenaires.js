@@ -180,8 +180,18 @@ const SECTIONS = [
 const SECTEURS = {
   cote_azur: { label: 'Côte d’Azur', court: 'Côte d’Azur' },
   oise: { label: 'Oise', court: 'Oise' },
+  en_ligne: { label: 'En ligne', court: 'En ligne' },
 };
 const OPTIONS_SECTEUR = [['', 'À classer'], ['cote_azur', 'Côte d’Azur'], ['oise', 'Oise']];
+// ⚠ « EN LIGNE » N'EXISTE QUE POUR UN FOURNISSEUR (02/11/2026, Élodie : un
+// onglet « en ligne » avec seulement le tableau de fournisseurs). Un marchand
+// sur internet ne dépend d'aucune agence ; un apporteur, une affaire apportée,
+// si. La base le dit aussi : seule `rgd_apporteurs` accepte la valeur, pas
+// `rgd_apports_sortants`. Un fournisseur basculé en apporteur retombe donc
+// « à classer » — sa liste n'a plus l'option, le `select` prend la première.
+const OPTIONS_SECTEUR_FOURNISSEUR = [...OPTIONS_SECTEUR, ['en_ligne', 'En ligne']];
+// Les onglets qui ne montrent QUE les fournisseurs.
+const ONGLETS_FOURNISSEURS = ['en_ligne'];
 // Ne sert plus qu'en tête de la fiche : dans les listes, c'est l'onglet qui
 // dit le secteur.
 const pastilleSecteur = (s) => SECTEURS[s]
@@ -204,6 +214,15 @@ function tableau(lignes, entete, rendre, vide) {
       </table>
     </div>`;
 }
+
+// Le site d'un fournisseur, cliquable. Saisi tel quel (« exemple.fr ») : sans
+// schéma, le navigateur le lirait comme un chemin du CRM.
+const lienSite = (a) => {
+  const site = String(a.site_internet || '').trim();
+  if (!site) return '<span class="muted">—</span>';
+  const url = /^https?:\/\//i.test(site) ? site : `https://${site}`;
+  return `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(site.replace(/^https?:\/\//i, ''))}</a>`;
+};
 
 // L'onglet d'une ligne : son secteur, ou « à classer » s'il n'en a pas.
 const ongletDe = (secteur) => (SECTEURS[secteur] ? secteur : 'aclasser');
@@ -324,6 +343,8 @@ function corpsFormulaire(v, creation) {
         [['1', 'Actif'], ['0', 'Inactif']], v.actif === false ? '0' : '1')}
       ${liste('secteur', 'Secteur', OPTIONS_SECTEUR, v.secteur || '')}`)}
 
+    ${blocEquipe(v)}
+
     ${bloc('Comment le joindre', `
       ${champ('telephone', 'Téléphone', v.telephone, { type: 'tel' })}
       ${champ('email', 'E-mail', v.email, { type: 'email' })}
@@ -341,6 +362,44 @@ function corpsFormulaire(v, creation) {
     ${pied(creation)}
   </form>`;
 }
+
+// ------------------------------------------------------------ l'équipe
+//
+// ⚠ LES CHAMPS D'UN MEMBRE N'ONT PAS DE `name`, ET C'EST VOULU : `valeursSaisies`
+// envoie tout ce qui en porte un, et quatre colonnes par membre partiraient
+// en base comme autant de colonnes inconnues. L'équipe se lit à part, par
+// `lireEquipe`, et part en UNE colonne `equipe`.
+const ligneMembre = (x = {}) => `
+  <div class="paf-membre" data-membre>
+    <input data-eq="nom" value="${esc(x.nom || '')}" placeholder="Prénom et nom" aria-label="Prénom et nom">
+    <input data-eq="role" value="${esc(x.role || '')}" placeholder="Rôle" aria-label="Rôle">
+    <input data-eq="telephone" type="tel" value="${esc(x.telephone || '')}" placeholder="Téléphone" aria-label="Téléphone">
+    <input data-eq="email" type="email" value="${esc(x.email || '')}" placeholder="E-mail" aria-label="E-mail">
+    <button type="button" class="pat-x" data-eq-suppr title="Retirer ce membre">✕</button>
+  </div>`;
+
+const blocEquipe = (v) => {
+  const membres = Array.isArray(v.equipe) ? v.equipe : [];
+  return `
+  <section class="paf-bloc">
+    <h4>L’équipe</h4>
+    <p class="paf-aide">Les personnes du cabinet qui peuvent vous apporter une affaire.
+      On les choisit ensuite dans « Ses apports ».</p>
+    <div class="paf-equipe" id="paf-equipe">${membres.map(ligneMembre).join('')}</div>
+    <button type="button" class="btn ghost sm" id="paf-eq-ajout">+ Ajouter un membre</button>
+  </section>`;
+};
+
+// L'équipe telle qu'elle est À L'ÉCRAN. Une ligne sans nom ne compte pas :
+// c'est une ligne ajoutée puis laissée vide, pas un membre.
+const lireEquipe = (form) => [...form.querySelectorAll('[data-membre]')].map(el => {
+  const m = {};
+  el.querySelectorAll('[data-eq]').forEach(i => {
+    const x = i.value.trim();
+    if (x) m[i.dataset.eq] = x;
+  });
+  return m;
+}).filter(m => m.nom);
 
 // Le pied est le même des deux côtés : les deux formulaires s'enregistrent et
 // se suppriment par le même code, et `brancherFormulaire` cherche ces trois
@@ -390,7 +449,7 @@ function corpsFournisseur(v, creation) {
       ${champ('ville', 'Ville', v.ville)}
       ${liste('actif', 'Suivi', [['1', 'Actif'], ['0', 'Inactif']], v.actif === false ? '0' : '1')}
       ${liste('compte_pro_ouvert', 'Compte pro ouvert', OUI_NON, ouiNonValeur(v.compte_pro_ouvert))}
-      ${liste('secteur', 'Secteur', OPTIONS_SECTEUR, v.secteur || '')}
+      ${liste('secteur', 'Secteur', OPTIONS_SECTEUR_FOURNISSEUR, v.secteur || '')}
       ${'' /* ⚠ DISCRET MAIS PRÉSENT (choix d'Élodie du 22/10) : c'est la seule
          porte entre les deux formulaires. Une fiche créée par erreur du côté
          fournisseur n'aurait aucun moyen de rejoindre les apporteurs. */}
@@ -404,6 +463,8 @@ function corpsFournisseur(v, creation) {
         { placeholder: 'Commercial, responsable d’agence…' })}
       ${champ('email_interlocuteur', 'Mail pro', v.email_interlocuteur, { type: 'email' })}
       ${champ('telephone_interlocuteur', 'Tel pro', v.telephone_interlocuteur, { type: 'tel' })}`)}
+
+    ${blocEquipe(v)}
 
     ${lie ? bloc('Ce qui nous lie', `
       ${liste('partenariat_signe', 'Convention de partenariat',
@@ -438,9 +499,21 @@ function brancherFormulaire(hote, a, apres, annuler) {
       // La saisie en cours est reprise, y compris ce qui n'a pas de case en
       // face dans l'autre présentation : elle repart en base si le champ
       // reparaît, et rien n'est effacé en attendant.
+      // L'équipe : ajouter une ligne, en retirer une.
+      const zoneEq = form.querySelector('#paf-equipe');
+      const brancherMembres = () => zoneEq?.querySelectorAll('[data-eq-suppr]').forEach(x =>
+        x.onclick = () => x.closest('[data-membre]').remove());
+      brancherMembres();
+      const bEq = form.querySelector('#paf-eq-ajout');
+      if (bEq && zoneEq) bEq.onclick = () => {
+        zoneEq.insertAdjacentHTML('beforeend', ligneMembre());
+        brancherMembres();
+        zoneEq.lastElementChild.querySelector('[data-eq="nom"]').focus();
+      };
+
       const typeSel = form.querySelector('[name="type_partenaire"]');
       if (typeSel) typeSel.onchange = () => {
-        const v = { ...(a || {}), ...valeursSaisies(form) };
+        const v = { ...(a || {}), ...valeursSaisies(form), equipe: lireEquipe(form) };
         form.parentElement.innerHTML = corpsFormulaire(v, creation);
         brancherFormulaire(m, a, apres, annuler);
         m.querySelector('[name="type_partenaire"]')?.focus();
@@ -465,6 +538,9 @@ function brancherFormulaire(hote, a, apres, annuler) {
         // restée en place pour dire le contraire. Même mécanique que le relevé
         // qui réécrivait les contacts : ce qui n'a pas été saisi ne doit pas être
         // reposé.
+        // Les deux formulaires portent le bloc : l'équipe part toujours, et une
+        // équipe vidée part vide — c'est ainsi qu'on retire le dernier membre.
+        if (form.querySelector('#paf-equipe')) champs.equipe = lireEquipe(form);
         if ('actif' in lu) champs.actif = lu.actif === '1';
         if ('partenariat_signe' in lu) champs.partenariat_signe = lu.partenariat_signe === '1';
         // Trois états : « Non renseigné » vaut `null`, et reste distinct de « Non ».
@@ -576,7 +652,24 @@ function ficheFournisseur(a) {
                 : 'Non signée', a.partenariat_signe ? 'est-vert' : 'est-gris')}
             ${info('texte', 'Notes', esc(a.notes || ''), 'est-gris')}
           </section>` : ''}
+          ${blocEquipeLecture(a)}
         </div>`;
+}
+
+// L'équipe en lecture : un membre par ligne, son rôle, de quoi le joindre.
+function blocEquipeLecture(a) {
+  const membres = equipeDe(a.id);
+  return `
+          <section class="rgdf-bloc">
+            <h3>L’équipe <span class="rgdf-compte">${membres.length}</span></h3>
+            ${membres.length ? `<ul class="pa-equipe">${membres.map(m => `
+              <li><b>${esc(m.nom)}</b>${m.role ? ` <span class="muted">· ${esc(m.role)}</span>` : ''}
+                ${m.telephone || m.email ? `<div class="s">${[
+                  m.telephone ? `<a href="tel:${esc(m.telephone)}">${esc(m.telephone)}</a>` : '',
+                  m.email ? `<a href="mailto:${esc(m.email)}">${esc(m.email)}</a>` : '',
+                ].filter(Boolean).join(' · ')}</div>` : ''}</li>`).join('')}</ul>`
+              : '<p class="rgdf-rien">Aucun membre enregistré. « Modifier les informations » pour en ajouter.</p>'}
+          </section>`;
 }
 
 /** Créer un partenaire : le formulaire seul, dans sa propre fenêtre. */
@@ -634,9 +727,22 @@ const celluleTauxLigne = (x) => {
     : `<span class="muted" title="Taux convenu. Cette commission n’entre pas dans les totaux : l’affaire n’est pas gagnée.">${txt}</span>`;
 };
 
-const ligneApport = (x) => `<tr data-ligne="${esc(String(x.id))}">
-  <td><input data-champ="apporte_par" list="pa-equipe"
-    value="${esc(x.apporte_par || '')}" placeholder="Qui a apporté ?"></td>
+// ⚠ UNE LISTE, PLUS UN CHAMP LIBRE (02/11/2026) : on choisit un membre de
+// l'équipe enregistrée sur la fiche. Un nom déjà posé sur une ligne et absent
+// de l'équipe reste proposé, marqué « hors équipe » : le perdre au premier
+// affichage effacerait qui a apporté l'affaire.
+const choixApportePar = (valeur, equipe) => {
+  const v = String(valeur || '').trim();
+  const noms = equipe.map(m => String(m.nom).trim());
+  return `<select data-champ="apporte_par">
+    <option value=""${v ? '' : ' selected'}>${noms.length ? 'Choisir…' : 'Aucun membre'}</option>
+    ${noms.map(n => `<option value="${esc(n)}"${n === v ? ' selected' : ''}>${esc(n)}</option>`).join('')}
+    ${v && !noms.includes(v) ? `<option value="${esc(v)}" selected>${esc(v)} (hors équipe)</option>` : ''}
+  </select>`;
+};
+
+const ligneApport = (x, equipe = []) => `<tr data-ligne="${esc(String(x.id))}">
+  <td>${choixApportePar(x.apporte_par, equipe)}</td>
   <td><input type="date" data-champ="date_apport" value="${esc(x.date_apport || '')}"></td>
   <td><input data-champ="client" value="${esc(x.client || '')}" placeholder="Nom du client"></td>
   <td><select data-champ="issue">
@@ -652,7 +758,7 @@ const ligneApport = (x) => `<tr data-ligne="${esc(String(x.id))}">
   <td><button type="button" class="pat-x" data-suppr title="Supprimer la ligne">✕</button></td>
 </tr>`;
 
-const corpsApports = (siens) => siens.map(x => ligneApport(x)).join('')
+const corpsApports = (siens, equipe = []) => siens.map(x => ligneApport(x, equipe)).join('')
   || '<tr class="pat-vide"><td colspan="8"><div class="empty">Aucun apport. Ajoutez une ligne pour commencer.</div></td></tr>';
 
 
@@ -1120,13 +1226,12 @@ function ouvrirFichePartenaire(id, apres) {
                 : 'Non signée', a.partenariat_signe ? 'est-vert' : 'est-gris')}
             ${info('texte', 'Notes', esc(a.notes || ''), 'est-gris')}
           </section>
+          ${blocEquipeLecture(a)}
         </div>` : ficheFournisseur(a))}
 
         <section class="rgdf-bloc rgdf-large">
           <h3>Ses apports <span class="rgdf-compte" id="pa-n">${siens.length}</span></h3>
           <div class="table-wrap pat-wrap">
-            <datalist id="pa-equipe">${equipeDe(a.id)
-              .map(n => `<option value="${esc(n)}"></option>`).join('')}</datalist>
             <table class="pat">
               <!-- « % » et non « Taux de commission » : l'intitulé entier ne
                    se coupe pas et imposerait une centaine de pixels à une
@@ -1139,7 +1244,7 @@ function ouvrirFichePartenaire(id, apres) {
                 <th class="num">Montant devis</th><th class="num">Commission</th>
                 <th class="num" title="Taux de commission : commission divisée par le devis de la ligne">%</th>
                 <th></th></tr></thead>
-              <tbody id="pa-corps">${corpsApports(siens)}</tbody>
+              <tbody id="pa-corps">${corpsApports(siens, equipeDe(a.id))}</tbody>
             </table>
           </div>
           ${ecriture ? `<div class="pat-pied">
@@ -1148,8 +1253,9 @@ function ouvrirFichePartenaire(id, apres) {
             <span class="small muted" id="pa-etat"></span>
           </div>` : ''}
           <p class="rgdf-source">Chaque cellule s’enregistre quand vous en sortez.
-            La commission n’entre dans les totaux que sur une affaire <b>gagnée</b>.
-            Changer l’apporteur d’une ligne la déplace vers sa fiche.</p>
+            « Apporté par » se choisit dans <b>l’équipe</b>, qu’on complète dans
+            « Modifier les informations ».
+            La commission n’entre dans les totaux que sur une affaire <b>gagnée</b>.</p>
         </section>
 
         <section class="rgdf-bloc rgdf-large" id="pa-sortants">
@@ -1219,12 +1325,6 @@ function brancherTableau(m, a, apres) {
     setTimeout(() => { if (etat.textContent === mot) etat.textContent = ''; }, 2200);
   };
 
-  // La liste de suggestions de l'équipe, reconstruite en place.
-  const majSuggestions = () => {
-    const dl = m.querySelector('#pa-equipe');
-    if (dl) dl.innerHTML = equipeDe(a.id).map(n => `<option value="${esc(n)}"></option>`).join('');
-  };
-
   // Les tuiles, recalculées sans toucher au reste de la fenêtre.
   //
   // ⚠ ON LES DÉSIGNE PAR LEUR NOM, PLUS PAR LEUR RANG — défaut vécu le
@@ -1259,9 +1359,8 @@ function brancherTableau(m, a, apres) {
   };
 
   const redessinerCorps = () => {
-    corps.innerHTML = corpsApports(apportsDe(a.id));
+    corps.innerHTML = corpsApports(apportsDe(a.id), equipeDe(a.id));
     brancherLignes();
-    majSuggestions();
     majChiffres();
     apres?.();
   };
@@ -1280,11 +1379,6 @@ function brancherTableau(m, a, apres) {
           const r = await majApport(ligneId, { [cle]: valeur });
           if (!r.ok) return toast(`Non enregistré — ${r.motif}`, 'err');
           dire('Enregistré');
-
-          // Un nom d'équipe neuf rejoint les suggestions des autres lignes,
-          // sans redessiner le tableau : on est peut-être déjà dans la cellule
-          // suivante.
-          if (cle === 'apporte_par') majSuggestions();
 
           // ⚠ LE TAUX DE LA LIGNE SE REFAIT ICI, ET SEULEMENT LUI. Il dépend
           // des deux montants ET de l'issue, donc trois des six champs le
@@ -1345,7 +1439,7 @@ export const rgdPartenairesPage = {
     let memo = '';
     try { memo = localStorage.getItem(ONGLET_MEMO) || ''; } catch { /* navigation privée */ }
     const state = { q: '', focus: null, ecriture: scope.canRgd,
-      onglet: ['cote_azur', 'oise', 'aclasser'].includes(memo) ? memo : 'cote_azur' };
+      onglet: ['cote_azur', 'oise', 'en_ligne', 'aclasser'].includes(memo) ? memo : 'cote_azur' };
 
     const draw = () => {
       const tous = scope.rgd('rgd_apporteurs');
@@ -1368,6 +1462,7 @@ export const rgdPartenairesPage = {
         + scope.rgd('rgd_apports_sortants').filter(x => !SECTEURS[x.secteur]).length;
       if (state.onglet === 'aclasser' && !nAClasser) state.onglet = 'cote_azur';
       const vus = trouves.filter(a => ongletDe(a.secteur) === state.onglet);
+      const enLigne = ONGLETS_FOURNISSEURS.includes(state.onglet);
 
       // Les deux tableaux ne portent plus les mêmes colonnes depuis le
       // 22/10/2026 : l'en-tête et les cellules sont donc décrits ensemble, ici,
@@ -1400,15 +1495,18 @@ export const rgdPartenairesPage = {
         },
         // Un fournisseur : ce qu'il vend et où il est. Ni devis ni commission —
         // on ne lui apporte pas d'affaires, on achète chez lui.
+        // ⚠ DANS L'ONGLET « EN LIGNE », LE SITE PREND LA PLACE DE LA VILLE :
+        // un marchand sur internet se trouve à son adresse web, et la ville de
+        // son siège ne dit rien à qui cherche où commander.
         fournisseur: {
           entete: `<th>Société</th><th>Nom</th><th>Prénom</th>
-            <th>Secteur d’activité</th><th>Ville</th>`,
+            <th>Secteur d’activité</th><th>${enLigne ? 'Site internet' : 'Ville'}</th>`,
           cellules: (a) => `
             <td>${esc(a.nom || '—')}</td>
             <td>${esc(a.prenom || '—')}</td>
             ${'' /* Même colonne `profession` que chez l'apporteur, autre intitulé : chez un fournisseur c'est son secteur, pas un métier exercé. */}
             <td class="pa-bleu">${esc(a.profession || '—')}</td>
-            <td>${esc(a.ville || '—')}</td>`,
+            <td>${enLigne ? lienSite(a) : esc(a.ville || '—')}</td>`,
         },
       };
 
@@ -1543,7 +1641,9 @@ export const rgdPartenairesPage = {
       // cliquant dessus.
       const compte = (o) => trouves.filter(a => ongletDe(a.secteur) === o).length
         + sortantsTrouves.filter(x => ongletDe(x.secteur) === o).length;
-      const onglets = [['cote_azur', 'Côte d’Azur'], ['oise', 'Oise']]
+      // « En ligne » s'affiche même vide : c'est un onglet demandé, il doit
+      // être là pour qu'on y range le premier fournisseur.
+      const onglets = [['cote_azur', 'Côte d’Azur'], ['oise', 'Oise'], ['en_ligne', 'En ligne']]
         .concat(nAClasser ? [['aclasser', 'À classer']] : []);
 
       const corps = `
@@ -1560,8 +1660,9 @@ export const rgdPartenairesPage = {
               ? 'Cliquez sur une ligne pour ouvrir la fiche'
               : 'Lecture seule'}</span>
           </div>
-          ${SECTIONS.map(section).join('')}
-          ${sectionSortants()}
+          ${enLigne
+            ? SECTIONS.filter(s => s.cle === 'fournisseur').map(section).join('')
+            : SECTIONS.map(section).join('') + sectionSortants()}
         </div>`;
 
       root.innerHTML = cadre('#/rgd/partenaires', 'Partenaires', corps);
@@ -1577,8 +1678,11 @@ export const rgdPartenairesPage = {
         nouveauPartenaire(draw, sec?.cle || 'apporteur', SECTEURS[state.onglet] ? state.onglet : null);
       });
       // Le clic ouvre la FICHE, pas le formulaire : on vient d'abord lire.
-      root.querySelectorAll('[data-partenaire]').forEach(tr => tr.onclick = () =>
-        ouvrirFichePartenaire(tr.dataset.partenaire, draw));
+      // Un clic sur le lien du site ouvre le site, pas la fiche.
+      root.querySelectorAll('[data-partenaire]').forEach(tr => tr.onclick = (e) => {
+        if (e.target.closest('a')) return;
+        ouvrirFichePartenaire(tr.dataset.partenaire, draw);
+      });
 
       // ⚠ UN CLIC SUR UNE AFFAIRE OUVRE L'AFFAIRE, PAS LA FICHE DU PARTENAIRE
       // (corrigé le 05/10/2026). La version d'avant ouvrait la fiche, posée sur

@@ -39,7 +39,11 @@ const CHAMPS = ['nom', 'prenom', 'societe', 'raison_sociale', 'profession',
   'site_internet', 'compte_pro_ouvert',
   'email_interlocuteur', 'telephone_interlocuteur', 'role_interlocuteur',
   // L'agence concernée (27/10/2026) : `cote_azur`, `oise`, ou null = à classer.
-  'secteur'];
+  // `en_ligne` depuis le 02/11/2026, pour les fournisseurs qui vendent sur
+  // internet et ne dépendent d'aucune agence.
+  'secteur',
+  // Les membres de l'équipe du partenaire (02/11/2026), voir `equipeDe`.
+  'equipe'];
 
 // ⚠ `apporte_par` N'EST PAS UN SECOND APPORTEUR : c'est un nom dans l'équipe du
 // partenaire, en texte libre. L'apport reste rattaché au PARTENAIRE, donc ses
@@ -117,12 +121,25 @@ export async function supprimerPartenaire(id) {
 // -------------------------------------------------------------------- apports
 
 /**
- * Les noms déjà employés dans l'équipe d'un partenaire, pour ne pas les
- * réécrire à chaque ligne. Rendus triés et sans doublon.
+ * Les membres de l'équipe d'un partenaire : [{ nom, role, telephone, email }].
+ *
+ * ⚠ ILS SONT ENREGISTRÉS SUR LA FICHE DEPUIS LE 02/11/2026 (Élodie : « pouvoir
+ * enregistrer les membres de l'équipe, et après dans "ses apports" pouvoir
+ * sélectionner la personne correspondante »). Avant, la liste se DEVINAIT
+ * dans les noms déjà tapés sur les apports : une faute de frappe y faisait un
+ * second collaborateur, et une personne sans apport n'existait nulle part.
+ *
+ * ⚠ L'APPORT GARDE LE NOM EN TEXTE (`apporte_par`), pas un identifiant de
+ * membre : les dix apports déjà nommés restent lisibles tels quels, et retirer
+ * quelqu'un de l'équipe n'efface pas qui a apporté une affaire passée. La
+ * migration a recopié dans `equipe` les noms déjà employés sur les apports.
  */
-export const equipeDe = (apporteurId) => [...new Set(
-  apportsDe(apporteurId).map(a => String(a.apporte_par || '').trim()).filter(Boolean),
-)].sort((a, b) => a.localeCompare(b, 'fr'));
+export function equipeDe(apporteurId) {
+  const fiche = db.t(TABLE).find(a => String(a.id) === String(apporteurId));
+  return (Array.isArray(fiche?.equipe) ? fiche.equipe : [])
+    .filter(m => String(m?.nom || '').trim())
+    .slice().sort((x, y) => String(x.nom).localeCompare(String(y.nom), 'fr'));
+}
 
 /** Les apports d'un partenaire, du plus récent au plus ancien. */
 export const apportsDe = (apporteurId) => db.t('rgd_apports')
