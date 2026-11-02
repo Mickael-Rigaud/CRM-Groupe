@@ -496,10 +496,19 @@ export function devisCrmHtml(d, devis) {
   // facture parce qu'un réglage n'a pas été fait.
   const blocRgd = () => {
     const sig = signatureRgd();
-    return sig
-      ? `<div><b>Pour RGD Renova</b><span>${esc(sig.nom || '')}</span>
-          <img src="${esc(sig.image)}" alt="Signature RGD Renova" style="display:block;height:58px;margin-top:2px"></div>`
-      : '<div><b>Pour RGD Renova</b><span>Nom, signature</span><u></u></div>';
+    if (!sig) return '<div><b>Pour RGD Renova</b><span>Nom, signature</span><u></u></div>';
+    // ⚠ UN CACHET NE SE POSE PAS COMME UN PARAPHE. Un tracé au doigt est large
+    // et plat (presque 4 pour 1) ; un cachet scanné est souvent carré, et le
+    // rendre à la même HAUTEUR le réduirait à un timbre de 15 mm où la raison
+    // sociale serait illisible. On vise donc une LARGEUR constante, bornée en
+    // hauteur pour qu'un cachet carré ne pousse pas le pied de page hors de la
+    // feuille. 58 px reste le repli pour les signatures enregistrées avant que
+    // les dimensions ne soient conservées (02/11/2026).
+    const haut = sig.w && sig.h
+      ? Math.max(30, Math.min(96, Math.round(200 * sig.h / sig.w)))
+      : 58;
+    return `<div><b>Pour RGD Renova</b><span>${esc(sig.nom || '')}</span>
+      <img src="${esc(sig.image)}" alt="Signature RGD Renova" style="display:block;height:${haut}px;margin-top:2px"></div>`;
   };
   const pageDevis = `<!doctype html>
 <html lang="fr"><head><meta charset="utf-8"><title>${esc(titreDocument(`Facture ${devis.numero || ''}`.trim(), d))}</title>

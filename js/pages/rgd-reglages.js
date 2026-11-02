@@ -235,13 +235,19 @@ export const rgdReglagesPage = {
       if (bSign) bSign.onclick = () => {
         const fen = openModal('Signature de RGD Renova', '<div id="reg-pad"></div>', { wide: true });
         posePadSignature(fen.querySelector('#reg-pad'), {
-          aide: 'Tracez la signature qui sera apposée sur les factures, au nom de RGD Renova.',
+          aide: 'Tracez la signature au doigt, ou <b>importez le cachet de l\u2019entreprise</b> (PNG ou JPEG). Elle sera apposée sur les factures, au nom de RGD Renova.',
           nom: scope.user?.full_name || '',
           labelNom: 'Signée par',
           libelleValider: 'Enregistrer',
+          importAutorise: true,
           surAnnuler: () => closeModal(true),
-          surValider: async ({ image, nom }) => {
-            await enregistrerSignatureRgd({ image, nom });
+          // ⚠ ON FAIT SUIVRE `w` ET `h`. Les oublier ici ne cassait rien
+          // visiblement : la signature s'enregistrait, l'aperçu s'affichait, et
+          // le document la rendait à la hauteur de REPLI — un cachet carré
+          // réduit à un timbre de 15 mm, sans le moindre message. Constaté le
+          // 02/11/2026 en relisant la ligne enregistrée, pas l'écran.
+          surValider: async ({ image, nom, w, h }) => {
+            await enregistrerSignatureRgd({ image, nom, w, h });
             closeModal(true);
             toast('Signature enregistrée');
             draw();

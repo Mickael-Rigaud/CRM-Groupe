@@ -236,8 +236,8 @@ export function signatureRgd() {
 // `db.t` relit — l'écran des réglages le contourne en recopiant à la main. Sans
 // ce rechargement, le document continuerait à sortir sans signature jusqu'au
 // prochain chargement de l'application, et on croirait l'enregistrement perdu.
-export async function enregistrerSignatureRgd({ image, nom }) {
-  const valeur = JSON.stringify({ image, nom: String(nom || '').trim(), le: new Date().toISOString() });
+export async function enregistrerSignatureRgd({ image, nom, w, h }) {
+  const valeur = JSON.stringify({ image, nom: String(nom || '').trim(), w: w || null, h: h || null, le: new Date().toISOString() });
   const existe = db.t('rgd_reglages').some(r => r.cle === CLE_SIGNATURE_RGD);
   if (existe) await db.update('rgd_reglages', CLE_SIGNATURE_RGD, { valeur });
   else await db.insert('rgd_reglages', { cle: CLE_SIGNATURE_RGD, valeur });

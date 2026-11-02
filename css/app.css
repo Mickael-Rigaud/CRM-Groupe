@@ -7269,6 +7269,13 @@ span.rpv-statut { display: inline-block; margin-bottom: 4px; }
 .reg-signature { display: flex; align-items: center; gap: 14px; margin: 2px 0 10px; }
 .reg-signature img { height: 64px; background: #fff; border: 1px solid var(--line);
   border-radius: 8px; padding: 4px 12px; }
+/* L'image importee, a la place de la toile. `contain` et PAS `cover` : un
+   cachet carre dans un cadre large se ferait rogner par les bords, et on
+   validerait une image amputee sans le voir. Fond blanc, comme l'apercu des
+   reglages : c'est sur du papier blanc que ca s'imprime. */
+.rdc-apercu { display: block; width: 100%; height: 190px; object-fit: contain;
+  background: #fff; border: 1.5px dashed var(--line-strong); border-radius: 10px; }
+.rdc-import { cursor: pointer; }
 .rdc-sous b { font-size: 15px; text-transform: none; letter-spacing: 0; color: var(--text); padding: 7px 0; }
 .rdc-retirer { margin-left: auto; }
 .rdc-statut { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 10px; }
