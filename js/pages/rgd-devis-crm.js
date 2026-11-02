@@ -24,14 +24,13 @@ import {
   TVA, TVA_DEFAUT, UNITES, PAR_UNITE, nomMetier, tarifsDe, metiersAvecGrille,
   totaux, plancher, ligneDepuisTarif, parCategorie, messageDevisCrm, envoyerDevisCrm, enregistrerDevisCrm, changerStatutDevisCrm, supprimerDevisCrm, signerSurPlace,
   MOYENS_PAIEMENT, marquerReglee, annulerReglement,
-  signerBonAttachement,
   GENRES, genreDe, estDevis, statutsDe, statutDoc, facturerLeDevis, factureDuDevis, devisDeLaFacture,
   estAnnulee, annulerFacture, retablirFacture,
 } from '../data/rgd-devis-crm.js';
 import { posePadSignature } from '../pad-signature.js';
 import { ouvrirImportFacture, peutImporterFacture } from './rgd-facture-import.js';
 import { db } from '../data/db.js';
-import { bonRempli } from '../data/rgd-bon-attachement.js';
+import { bonRempli, bonDuDevis, creerBon } from '../data/rgd-bon-attachement.js';
 
 const euros = (n) => eur(n, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -64,8 +63,11 @@ const euros = (n) => eur(n, { minimumFractionDigits: 2, maximumFractionDigits: 2
  */
 const bonDeLaLigne = (v) => {
   if (estDevis(v) || v.importe) return '';
-  const signe = !!v.bon_signature;
-  const fait = signe || bonRempli(v);
+  // ⚠ LE BON N'EST PLUS DANS LA FACTURE : il a sa table, et une facture peut
+  // n'en avoir aucun. `bonDuDevis` rend `null` tant qu'il n'a pas été ouvert.
+  const b = bonDuDevis(v);
+  const signe = !!b?.signature;
+  const fait = signe || bonRempli(b);
   // ⚠ ET PAS SUR UN BROUILLON : il n'a pas encore de numéro, donc le bon
   // n'aurait pas le sien (`BA` + celui de la facture) et porterait « accompagne
   // la facture n° — ». Le bon constate des travaux faits, après l'émission.
@@ -342,14 +344,20 @@ export function ouvrirDevisCrm(x, existant = null, retour = null, genreNeuf = 'f
           : `<select id="rdc-regl-moyen">${Object.entries(MOYENS_PAIEMENT).map(([k, v]) => `<option value="${esc(k)}">${esc(v)}</option>`).join('')}</select>
              <button type="button" class="btn sm" id="rdc-regl-on">Marquer réglée</button>`}
       </div>`}
-      ${dev ? '' : `<div class="rdc-statut"><span class="muted small">Bon d’attachement</span>
-        ${bonRempli(existant) ? '<span class="chip green">Rempli</span>' : '<span class="chip">Vierge</span>'}
+      ${dev ? '' : (() => {
+        // ⚠ « FAIRE SIGNER » A QUITTÉ CETTE RANGÉE (02/11/2026). La signature du
+        // client vit désormais DANS le formulaire du bon : un bon sans facture
+        // n'a pas de fenêtre de facture d'où la lancer, et deux portes vers le
+        // même geste auraient fini par ne plus faire la même chose.
+        const b = bonDuDevis(existant);
+        return `<div class="rdc-statut"><span class="muted small">Bon d’attachement</span>
+        ${b?.signature
+          ? `<span class="chip green">Signé${b.signe_par ? ' par ' + esc(b.signe_par) : ''}</span>`
+          : bonRempli(b) ? '<span class="chip green">Rempli</span>' : '<span class="chip">Vierge</span>'}
         <button type="button" class="btn ghost sm" id="rdc-bon-remplir">Remplir et envoyer</button>
-        ${existant.bon_signature
-          ? `<span class="chip green">Signé${existant.bon_signe_par ? ' par ' + esc(existant.bon_signe_par) : ''}</span>`
-          : '<button type="button" class="btn ghost sm" id="rdc-bon-signer">Faire signer</button>'}
         <button type="button" class="btn ghost sm" id="rdc-bon-pdf">Imprimer</button>
-      </div>`}
+      </div>`;
+      })()}
       ${dev && existant.statut === 'signe' ? `<div class="rdc-statut"><span class="muted small">Travaux faits</span>
         ${suite
           ? `<span class="chip green">Facturés — ${esc(suite.numero || 'brouillon')}</span>
@@ -446,36 +454,13 @@ export function ouvrirDevisCrm(x, existant = null, retour = null, genreNeuf = 'f
       ouvrirDevisCrm(x, existant, retour);
     };
     hote.querySelector('#rdc-apres-bon').onclick = async () => {
-      const { ouvrirBonAttachement } = await import('./rgd-bon-attachement.js');
+      const { ouvrirBonDeLaFacture } = await import('./rgd-bon-attachement.js');
       closeModal(true);
-      ouvrirBonAttachement(x, existant, () => {
+      ouvrirBonDeLaFacture(x, existant, () => {
         ouvrirDevisCrm(x, db.byId('rgd_devis_crm', existant.id) || existant, retour);
       });
     };
   }
-
-  /**
-   * Le client signe le BON D'ATTACHEMENT — pas la facture.
-   *
-   * ⚠ DEUX SIGNATURES, DEUX DOCUMENTS. La mention qu'on lui lit n'est pas la
-   * même : ici il reconnaît les TEMPS PASSÉS et les FOURNITURES posées, pas une
-   * somme à payer. C'est ce document qu'on ressort si les heures sont
-   * contestées, et une signature recopiée de la facture n'y servirait à rien.
-   */
-  const faireSignerBon = () => {
-    posePadSignature(hote, {
-      aide: 'Signature de <b>' + esc(x.nom || 'la personne présente') + '</b> sur le <b>bon d’attachement</b>. '
-        + 'Signer vaut reconnaissance des temps passés et des fournitures posées.',
-      nom: x.nom || '',
-      surAnnuler: () => redessiner(),
-      surValider: async ({ image, nom }) => {
-        existant = await signerBonAttachement(existant, { signature: image, nom });
-        toast('Bon d’attachement signé');
-        closeModal(true);
-        ouvrirDevisCrm(x, existant, retour);
-      },
-    });
-  };
 
   // Redessiner sans faire sauter la page : la fenêtre garde sa position.
   const conteneurs = () => [m, m.querySelector('.modal-body'), document.getElementById('modal')].filter(Boolean);
@@ -688,16 +673,30 @@ export function ouvrirDevisCrm(x, existant = null, retour = null, genreNeuf = 'f
       }
     };
     const bBonPdf = hote.querySelector('#rdc-bon-pdf');
+    // ⚠ ON VERROUILLE LE BOUTON PENDANT L'ATTENTE. Le premier appui charge
+    // `rgd-documents.js` par import dynamique — sur un téléphone, c'est
+    // exactement le moment où l'on retouche, croyant n'avoir rien déclenché.
+    // Sans verrou, les deux appuis passaient par `creerBon` (le garde lit le
+    // CACHE, pas encore écrit) : deux bons, dont un invisible ayant pris un
+    // numéro — et, une fois l'unicité posée en base, le second échoue, son
+    // erreur est avalée par le `catch`, et AUCUN PDF NE SORT.
     if (bBonPdf) bBonPdf.onclick = async () => {
+      bBonPdf.disabled = true;
       try {
         const mod = await import('./rgd-documents.js');
-        mod.imprimerBonAttachement(x, existant);
+        // ⚠ IMPRIMER CRÉE LE BON S'IL N'EXISTE PAS, et c'est ce qui donne son
+        // NUMÉRO à la feuille. Sans cela, le papier qu'on emporte sur le
+        // chantier sort avec un numéro vide : rempli au stylo, il revient sans
+        // rien pour le rattacher à son dossier. Ouvrir la fenêtre ne crée
+        // toujours rien ; imprimer, si — c'est un geste, pas un regard.
+        const b = bonDuDevis(existant) || await creerBon(x, existant);
+        mod.imprimerBonAttachement(x, b, existant);
       } catch (e) {
         toast(e.message || 'Impression impossible', 'error');
+      } finally {
+        bBonPdf.disabled = false;
       }
     };
-    const bBonSign = hote.querySelector('#rdc-bon-signer');
-    if (bBonSign) bBonSign.onclick = () => faireSignerBon();
     const bAnnul = hote.querySelector('#rdc-annuler');
     if (bAnnul) bAnnul.onclick = () => { lire(); demandeAnnulation = true; redessiner(() => {
       const c = hote.querySelector('#rdc-annul-motif'); c?.focus();
@@ -741,9 +740,9 @@ export function ouvrirDevisCrm(x, existant = null, retour = null, genreNeuf = 'f
     // « Vierge » sur un bon qu'on vient de remplir.
     const bBonRemplir = hote.querySelector('#rdc-bon-remplir');
     if (bBonRemplir) bBonRemplir.onclick = async () => {
-      const { ouvrirBonAttachement } = await import('./rgd-bon-attachement.js');
+      const { ouvrirBonDeLaFacture } = await import('./rgd-bon-attachement.js');
       closeModal(true);
-      ouvrirBonAttachement(x, existant, () => {
+      ouvrirBonDeLaFacture(x, existant, () => {
         ouvrirDevisCrm(x, db.byId('rgd_devis_crm', existant.id) || existant, retour);
       });
     };

@@ -44,8 +44,7 @@ import { valeursProjet, personneDe, nomComplet, adresseChantier } from '../data/
 import { montantDevisDe, etapeAvecMontant } from '../data/rgd-etapes.js';
 import { parCategorie, signatureRgd, MOYENS_PAIEMENT, estDevis, estAnnulee } from '../data/rgd-devis-crm.js';
 import {
-  GROUPES, coche, totalHeures, numeroBon, nomFourniPar,
-  lignesFourniture, saisieDepart,
+  GROUPES, coche, totalHeures, numeroBon, nomFourniPar, saisieDepart,
 } from '../data/rgd-bon-attachement.js';
 
 const LOGO = new URL('../../assets/logos/rgd-complet.png', import.meta.url).href;
@@ -823,22 +822,29 @@ const casesDu = (nom, s) => GROUPES[nom].options.map((o) => {
   return `<span class="c${coche(s, nom, o.c) ? ' on' : ''}${o.large ? ' large' : ''}">${mot}${champ}</span>`;
 }).join('');
 
-/** Le bon d'attachement, pré-rempli depuis une facture du CRM et sa saisie. */
-export function bonAttachementHtml(d, devis) {
+/**
+ * Le bon d'attachement. `bon` est la ligne de `rgd_bons` ; `devis` la facture
+ * qu'il accompagne, OU `null` — un bon peut n'en avoir aucune.
+ *
+ * ⚠ IL SORT MÊME SUR UN BON QUI N'EXISTE PAS ENCORE (`bon` à `null`) : c'est
+ * ce qui permet d'imprimer la feuille vierge pré-remplie par la facture, pour
+ * la remplir au stylo sur un chantier sans réseau, sans avoir à créer la ligne.
+ */
+export function bonAttachementHtml(d, bon, devis = null) {
   // ⚠ `saisieDepart` RÉPOND MÊME SUR UN BON JAMAIS OUVERT : elle complète ce
   // qui manque depuis la facture. C'est ce qui garde au bon imprimé son
   // pré-remplissage d'avant le formulaire — date, objet, heures de chaque
   // ligne — sans qu'il faille d'abord le remplir à l'écran pour l'imprimer.
-  const s = saisieDepart(devis, d, devis.bon_saisie);
-  const fournitures = lignesFourniture(devis);
+  const s = saisieDepart({ bon, devis, d });
+  const fournitures = Array.isArray(s.fournitures) ? s.fournitures : [];
   const heures = totalHeures(s);
-  const laDate = jour(devis.date_devis || new Date());
-  const num = devis.numero || '';
-  const sig = devis.bon_signature ? {
-    image: devis.bon_signature,
-    nom: devis.bon_signe_par || d.nom || '',
-    quand: devis.bon_signe_a
-      ? `${jour(new Date(devis.bon_signe_a))} à ${new Date(devis.bon_signe_a).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`
+  const laDate = jour(bon?.date_bon || devis?.date_devis || new Date());
+  const num = devis?.numero || '';
+  const sig = bon?.signature ? {
+    image: bon.signature,
+    nom: bon.signe_par || d.nom || '',
+    quand: bon.signe_a
+      ? `${jour(new Date(bon.signe_a))} à ${new Date(bon.signe_a).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`
       : laDate,
   } : null;
 
@@ -857,12 +863,10 @@ export function bonAttachementHtml(d, devis) {
     + `<td>${esc(r.depart || '')}</td><td>${esc(r.pause || '')}</td>`
     + `<td>${esc(String(r.duree ?? '').replace('.', ','))}</td></tr>`).join('')
     + Array.from({ length: Math.max(0, 3 - (s.mo?.length || 0)) }, () => '<tr><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>').join('');
-  const rangsFourn = fournitures.map((l, i) => {
-    const f = (Array.isArray(s.fournitures) && s.fournitures[i]) || {};
-    return `<tr><td>${esc(l.libelle)}${l.variante ? ' — ' + esc(l.variante) : ''}${l.precision ? ' — ' + esc(l.precision) : ''}</td>`
-      + `<td>${esc(f.reference || l.reference || '')}</td><td>${esc(unite[l.unite] || '')}</td>`
-      + `<td>${esc(String(l.quantite).replace('.', ','))}</td><td>${esc(nomFourniPar(f.fourni_par))}</td></tr>`;
-  }).join('')
+  const rangsFourn = fournitures.map(f => `<tr><td>${esc(f.designation || '')}</td>`
+    + `<td>${esc(f.reference || '')}</td><td>${esc(unite[f.unite] || '')}</td>`
+    + `<td>${esc(String(f.quantite ?? '').replace('.', ','))}</td>`
+    + `<td>${esc(nomFourniPar(f.fourni_par))}</td></tr>`).join('')
     + Array.from({ length: Math.max(1, 6 - fournitures.length) }, () => '<tr><td></td><td></td><td></td><td></td><td></td></tr>').join('');
 
   const piedLegal = `<footer>
@@ -886,9 +890,9 @@ export function bonAttachementHtml(d, devis) {
     <h1>Bon <b>d'attachement</b></h1>
     <div class="sous">Travaux d'électricité</div>
     <div class="ref">
-      <span>N°</span><span>${esc(numeroBon(devis))}</span>
+      <span>N°</span><span>${esc(numeroBon(bon))}</span>
       <span>Date</span><span>${esc(laDate)}</span>
-      <span>Facture n°</span><span>${esc(num)}</span>
+      ${num ? `<span>Facture n°</span><span>${esc(num)}</span>` : ''}
     </div>
   </div>
 </header>
@@ -941,7 +945,7 @@ ${piedLegal}
 <div class="ba-page">
 <div class="rappel">
   <img src="${LOGO}" alt="RGD Renova">
-  <div class="ref"><span>Bon d'attachement n°</span><span>${esc(num ? 'BA' + num.replace(/^FA/, '') : '')}</span></div>
+  <div class="ref"><span>Bon d'attachement n°</span><span>${esc(numeroBon(bon))}</span></div>
 </div>
 
 <h2>Fournitures posées</h2>
@@ -968,7 +972,9 @@ ${piedLegal}
 
 <div class="encadre">
   Le présent bon constate contradictoirement les temps passés et les fournitures réellement mises en œuvre.
-  Il ne vaut pas facture : il accompagne la facture n° ${esc(num || '—')}, établie sur ces quantités.
+  ${num
+    ? `Il ne vaut pas facture : il accompagne la facture n° ${esc(num)}, établie sur ces quantités.`
+    : 'Il ne vaut pas facture et ne porte aucun montant : il constate des quantités, pas des prix.'}
   Les anomalies signalées ci-dessus et non traitées restent sous la responsabilité du client jusqu'à leur reprise.
 </div>
 
@@ -1010,9 +1016,10 @@ export const imprimerReception = (x, devis) => {
   const d = donneesDocument(x, devis);
   imprimerPage(receptionHtml(d), titreDocument('PV de réception', d));
 };
-export const imprimerBonAttachement = (x, devis) => {
+export const imprimerBonAttachement = (x, bon, devis = null) => {
   const d = donneesDocument(x);
-  imprimerPage(bonAttachementHtml(d, devis), titreDocument(`Bon d'attachement ${devis.numero || ''}`.trim(), d));
+  imprimerPage(bonAttachementHtml(d, bon, devis),
+    titreDocument(`Bon d'attachement ${numeroBon(bon)}`.trim(), d));
 };
 export const imprimerDevisCrm = (x, devis) => {
   const d = donneesDocument(x);
@@ -1153,8 +1160,9 @@ export async function pdfDevisCrm(x, devis) {
 }
 
 /** Le bon d'attachement en PDF, pour le mail — recto et verso. */
-export async function pdfBonAttachement(x, devis) {
+export async function pdfBonAttachement(x, bon, devis = null) {
   const d = donneesDocument(x);
-  const titre = `Bon d'attachement ${numeroBon(devis)}`.trim();
-  return pdfDepuisHtml(bonAttachementHtml(d, devis), `${titreDocument(titre, d)}.pdf`, { feuilles: '.ba-page' });
+  const titre = `Bon d'attachement ${numeroBon(bon)}`.trim();
+  return pdfDepuisHtml(bonAttachementHtml(d, bon, devis), `${titreDocument(titre, d)}.pdf`,
+    { feuilles: '.ba-page' });
 }

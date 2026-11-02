@@ -244,6 +244,9 @@ export const scope = {
     rgd_sav: 'moi',
     // Un devis du CRM prend le propriétaire de sa fiche (29/10/2026).
     rgd_devis_crm: 'moi',
+    // Un bon d'attachement prend le propriétaire de sa facture quand il y en
+    // a une, celui de sa fiche sinon (02/11/2026).
+    rgd_bons: 'moi',
   },
 
   rgdVoitLigne(table, r) {

@@ -7247,7 +7247,9 @@ span.rpv-statut { display: inline-block; margin-bottom: 4px; }
    ne doit toujours pas se couper en deux. */
 .rdc-bon { display: flex; align-items: center; justify-content: flex-end; gap: 7px;
   margin-top: 6px; white-space: normal; }
-.rdc-bon-mot { font-size: 12px; color: var(--muted-2); }
+.rdc-bon-mot { font-size: 12px; color: var(--muted-2); white-space: nowrap; }
+/* « Bon : » se coupait entre le mot et son deux-points dans la colonne
+   étroite de la fiche — vu sur la planche, pas dans le code. */
 .rdc-bon-etat { font-size: 12px; font-weight: 700; color: var(--muted-2); }
 .rdc-bon-etat.est-fait { color: var(--green); }
 /* Après la signature : la proposition d'enchaîner sur le bon. */

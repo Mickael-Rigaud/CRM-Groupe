@@ -24,6 +24,7 @@
 // faits, sur un document que le client signe.
 import { db } from './db.js';
 import { scope } from './scope.js';
+import { isoDay } from '../ui.js';
 
 /**
  * Les groupes de cases du bon, dans l'ordre du papier.
@@ -169,9 +170,61 @@ export const nomDuResponsable = (devis) => {
 };
 
 /** Les lignes à l'heure de la facture — celles qui alimentent la feuille d'heures. */
-export const lignesHeure = (devis) => (devis.lignes || []).filter(l => l.unite === 'heure');
+export const lignesHeure = (devis) => (devis?.lignes || []).filter(l => l.unite === 'heure');
 /** Les autres : ce sont les fournitures posées. */
-export const lignesFourniture = (devis) => (devis.lignes || []).filter(l => l.unite !== 'heure');
+export const lignesFourniture = (devis) => (devis?.lignes || []).filter(l => l.unite !== 'heure');
+
+/** Le bon d'une facture, s'il existe. Un seul par facture, la base le garantit. */
+export const bonDuDevis = (devis) =>
+  (devis ? db.t('rgd_bons').find(b => b.devis_id === devis.id) : null) || null;
+
+/** Les bons d'un dossier, le plus récent en tête. */
+export const bonsDeLaFiche = (x) => {
+  const id = x?.ligne?.id;
+  if (!id) return [];
+  const cle = x.genre === 'demande' ? 'demande_id' : 'fiche_id';
+  return db.t('rgd_bons').filter(b => b[cle] === id)
+    .sort((a, b) => String(b.date_bon || '').localeCompare(String(a.date_bon || '')));
+};
+
+/**
+ * À qui appartient un bon.
+ *
+ * ⚠ LA RÈGLE EST CELLE DES DEVIS, COPIÉE ET NON RÉÉCRITE (`enregistrerDevisCrm`).
+ * Elle a DEUX sens, et n'en lire qu'un fabrique la panne inverse :
+ *   · la direction qui travaille sur le dossier de quelqu'un lui laisse ce
+ *     qu'elle crée — Mickael remplit, Franck doit le voir ;
+ *   · mais celui qui n'est PAS direction garde ce qu'il crée, même sur une
+ *     fiche dont un autre est propriétaire : c'est lui qui était sur place et
+ *     qui a fait signer, il doit retrouver son bon.
+ * Et un bon rattaché à une facture suit d'abord SA FACTURE : les deux
+ * documents du même chantier ne doivent pas se retrouver dans deux portefeuilles.
+ */
+export const proprietaireDuBon = (x, devis = null) => devis?.owner_id
+  || (scope.isDirection ? (x?.ligne?.owner_id || null) : null)
+  || scope.user?.id || null;
+
+/**
+ * Créer un bon. `devis` est la facture quand il y en a une, `null` sinon.
+ *
+ * ⚠ IL NAÎT NUMÉROTÉ, SANS BROUILLON. Un bon se crée pour être rempli tout de
+ * suite, sur place ; lui donner un état « brouillon » qui retiendrait son
+ * numéro ferait un document sans identité au moment précis où on le fait
+ * signer.
+ */
+export function creerBon(x, devis = null, objet = null) {
+  const f = x.ligne || {};
+  return db.insert('rgd_bons', {
+    date_bon: devis?.date_devis || isoDay(),
+    objet: objet || devis?.objet || null,
+    fiche_id: x.genre === 'fiche' ? f.id : null,
+    demande_id: x.genre === 'demande' ? f.id : null,
+    contact_id: f.contact_id || null,
+    organisation_id: f.organisation_id || null,
+    devis_id: devis?.id || null,
+    owner_id: proprietaireDuBon(x, devis),
+  });
+}
 
 /**
  * La saisie au premier remplissage : ce que la facture et la fiche SAVENT déjà.
@@ -181,45 +234,56 @@ export const lignesFourniture = (devis) => (devis.lignes || []).filter(l => l.un
  * de chaque ligne, le nom de celui qui remplit. Et rien d'autre : voir
  * l'en-tête sur les contrôles.
  *
+ * ⚠ SANS FACTURE, IL N'Y A RIEN À PRÉ-REMPLIR, et c'est à dire à l'écran :
+ * une feuille d'heures vide et aucune fourniture. Les inventer serait pire
+ * que de les demander.
+ *
  * ⚠ UNE SAISIE DÉJÀ FAITE N'EST JAMAIS RECOUVERTE. On ne complète que les
  * champs absents — rouvrir le bon pour corriger une faute ne doit pas rendre
  * ses heures à ce que la facture disait.
  */
-export function saisieDepart(devis, d = {}, saisie = null) {
-  const faite = saisie && typeof saisie === 'object' ? { ...saisie } : {};
+export function saisieDepart({ bon = null, devis = null, d = {} } = {}) {
+  const faite = (bon?.saisie && typeof bon.saisie === 'object') ? { ...bon.saisie } : {};
   const vide = (k) => faite[k] === undefined || faite[k] === null || faite[k] === '';
 
-  if (vide('constat') && devis.objet) faite.constat = devis.objet;
+  const objet = devis?.objet || bon?.objet || '';
+  if (vide('constat') && objet) faite.constat = objet;
   if (vide('lieu_cp_ville')) faite.lieu_cp_ville = [d.cpChantier, d.villeChantier].filter(Boolean).join(' ');
-  // ⚠ L'INTERVENANT EST CELUI DE LA FACTURE, PAS CELUI QUI OUVRE L'ÉCRAN. La
+  // ⚠ L'INTERVENANT EST CELUI DU DOCUMENT, PAS CELUI QUI OUVRE L'ÉCRAN. La
   // direction consulte et imprime depuis le bureau : son nom se serait posé
   // dans la case « intervenant RGD » d'un chantier où elle n'était pas.
-  if (vide('intervenant')) faite.intervenant = nomDuResponsable(devis);
+  if (vide('intervenant')) faite.intervenant = nomDuResponsable(bon || devis);
 
   // ⚠ LA FEUILLE D'HEURES EST UNE FEUILLE D'HEURES, PAS LA LISTE DES
-  // PRESTATIONS. Une rangée par ligne à l'heure, avec SA durée et la date de
-  // la facture ; le reste (qui, habilitation, arrivée, départ) reste à saisir,
+  // PRESTATIONS. Une rangée par ligne à l'heure, avec SA durée et la date du
+  // document ; le reste (qui, habilitation, arrivée, départ) reste à saisir,
   // parce que la facture ne le sait pas. Le libellé de la prestation n'y est
   // pas recopié : la colonne s'appelle « Intervenant(s) », et y imprimer
   // « Remplacement du tableau » donnerait un document qui dit faux.
   if (!Array.isArray(faite.mo) || !faite.mo.length) {
     const heures = lignesHeure(devis);
+    const quand = devis?.date_devis || bon?.date_bon || '';
     faite.mo = (heures.length ? heures : [null]).map(l => ({
-      date: devis.date_devis || '',
+      date: quand,
       qui: faite.intervenant || '',
       habilitation: '', arrivee: '', depart: '', pause: '',
       duree: l ? String(l.quantite ?? '').replace('.', ',') : '',
     }));
   }
 
-  // Les fournitures suivent l'ordre des lignes de la facture : on n'ajoute
-  // que ce que la facture ne sait pas — la marque exacte et qui l'a fournie.
-  const fournitures = lignesFourniture(devis);
-  if (!Array.isArray(faite.fournitures) || faite.fournitures.length !== fournitures.length) {
-    const avant = Array.isArray(faite.fournitures) ? faite.fournitures : [];
-    faite.fournitures = fournitures.map((l, i) => ({
-      reference: avant[i]?.reference ?? (l.reference || ''),
-      fourni_par: avant[i]?.fourni_par ?? '',
+  // ⚠ UNE FOURNITURE PORTE DÉSORMAIS TOUT CE QUI S'IMPRIME, pas seulement ce
+  // que la facture ignore. Avant, c'était `{reference, fourni_par}` aligné par
+  // RANG sur les lignes de la facture : un bon sans facture n'avait rien à
+  // aligner, et l'alignement par rang se décale au premier changement. Chaque
+  // rangée est maintenant complète et se suffit — on la dérive de la facture
+  // UNE FOIS, à la création, puis elle ne bouge plus que par la main.
+  if (!Array.isArray(faite.fournitures)) {
+    faite.fournitures = lignesFourniture(devis).map(l => ({
+      designation: [l.libelle, l.variante, l.precision].filter(Boolean).join(' — '),
+      unite: l.unite || 'forfait',
+      quantite: String(l.quantite ?? '').replace('.', ','),
+      reference: l.reference || '',
+      fourni_par: '',
     }));
   }
   return faite;
@@ -230,31 +294,46 @@ export const totalHeures = (saisie) => (Array.isArray(saisie?.mo) ? saisie.mo : 
   .reduce((n, r) => n + (nombre(r.duree) || 0), 0);
 
 /** Vrai dès qu'on a saisi quelque chose : le bon n'est plus vierge. */
-export const bonRempli = (devis) => {
-  const s = devis?.bon_saisie;
+export const bonRempli = (bon) => {
+  const s = bon?.saisie;
   if (!s || typeof s !== 'object') return false;
   return Object.entries(s).some(([k, v]) => {
     if (k === 'mo') return Array.isArray(v) && v.some(r => r && (r.qui || r.arrivee || r.depart || r.habilitation));
-    if (k === 'fournitures') return Array.isArray(v) && v.some(r => r && r.fourni_par);
+    if (k === 'fournitures') return Array.isArray(v) && v.some(r => r && (r.fourni_par || r.designation));
     return Array.isArray(v) ? v.length > 0 : !!String(v ?? '').trim();
   });
 };
 
-/**
- * Enregistrer la saisie.
- *
- * ⚠ ON N'ÉCRIT QUE `bon_saisie`, ET C'EST CE QUI PERMET DE LE REMPLIR APRÈS
- * SIGNATURE. Le déclencheur de la base refuse toute modification de `lignes`
- * ou du taux de TVA sur un document signé — et le bon se remplit justement à
- * la FIN de l'intervention, quand la facture est déjà signée. Lui envoyer la
- * facture entière la ferait refuser.
- */
-export const enregistrerBonAttachement = (devis, saisie) =>
-  db.update('rgd_devis_crm', devis.id, { bon_saisie: saisie });
+/** Enregistrer la saisie. */
+export const enregistrerBonAttachement = (bon, saisie) =>
+  db.update('rgd_bons', bon.id, { saisie });
 
-/** Le numéro du bon : celui de la facture, sur sa propre suite. */
-export const numeroBon = (devis) =>
-  (devis.numero ? 'BA' + String(devis.numero).replace(/^(FA|DV)/, '') : '');
+/**
+ * Le bon signé par le client, sur place.
+ *
+ * ⚠ DEUX SIGNATURES, DEUX DOCUMENTS. Sur la facture le client reconnaît une
+ * somme ; ici il reconnaît des TEMPS PASSÉS et des FOURNITURES posées. C'est
+ * ce document qu'on ressort si les heures sont contestées, et une signature
+ * recopiée de la facture n'y servirait à rien.
+ */
+export const signerBonAttachement = (bon, { signature, nom }) =>
+  db.update('rgd_bons', bon.id, {
+    signature,
+    signe_par: String(nom || '').trim() || null,
+    signe_a: new Date().toISOString(),
+  });
+
+/** Supprimer un bon — la base refuse dès qu'il est signé. */
+export const supprimerBon = (bon) => db.remove('rgd_bons', bon.id);
+
+/**
+ * Le numéro du bon.
+ *
+ * ⚠ IL NE SE DÉDUIT PLUS DE LA FACTURE (02/11/2026). Il valait `BA` + le
+ * numéro de la facture ; un bon sans facture n'en aurait eu aucun, et deux
+ * suites parallèles finissent par se percuter. Il vient d'une séquence à lui.
+ */
+export const numeroBon = (bon) => bon?.numero || '';
 
 /**
  * Le message qui accompagne le bon.
@@ -264,15 +343,21 @@ export const numeroBon = (devis) =>
  * document de facturation, et le client paierait deux fois ou croirait le
  * devoir. La facture a son propre mail.
  */
-export function messageBonAttachement(devis, nomClient) {
+export function messageBonAttachement(bon, devis, nomClient) {
   const salut = nomClient ? `Bonjour ${nomClient},` : 'Bonjour,';
+  // ⚠ SANS FACTURE, ON NE PROMET PAS QU'ELLE SUIVRA. « Il accompagne la
+  // facture n° … » sur un bon autonome annoncerait un document qui n'existe
+  // pas, et peut-être n'existera jamais (garantie, sous-traitance).
+  const suite = devis?.numero
+    ? `Il accompagne la facture n° ${devis.numero} et ne vous demande aucun règlement.`
+    : 'Il ne porte aucun montant et ne vous demande aucun règlement.';
   return `${salut}
 
-Vous trouverez ci-joint le bon d’attachement n° ${numeroBon(devis)} de notre intervention.
+Vous trouverez ci-joint le bon d’attachement n° ${numeroBon(bon)} de notre intervention.
 
-Il reprend le détail des temps passés, des fournitures posées et des contrôles effectués avant la remise sous tension. Il accompagne la facture n° ${devis.numero || ''} et ne vous demande aucun règlement.
+Il reprend le détail des temps passés, des fournitures posées et des contrôles effectués avant la remise sous tension. ${suite}
 
-Nous vous invitons à le conserver avec votre facture.
+Nous vous invitons à le conserver avec vos documents.
 
 Bien cordialement,
 L’équipe RGD Renova`;

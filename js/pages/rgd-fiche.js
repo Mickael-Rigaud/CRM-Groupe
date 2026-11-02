@@ -101,6 +101,7 @@ import { majNote, COLONNE_NOTE } from '../data/rgd-clients.js';
 // Les devis faits dans le CRM avec la grille des tarifs (29/10/2026).
 import { devisCrmDe } from '../data/rgd-devis-crm.js';
 import { blocDevisCrm, ouvrirDevisCrm, choisirFacture, libelleBoutonFacture, peutFaireDevisCrm } from './rgd-devis-crm.js';
+import { bonsDeLaFiche, bonRempli, numeroBon } from '../data/rgd-bon-attachement.js';
 import { ouvrirPdfImporte } from './rgd-facture-import.js';
 import { lienAvis, messageAvis, envoyerDemandeAvis, avisDejaDemande, KIND_AVIS,
   enveloppeApercu, htmlDepuisTexte } from '../data/rgd-avis.js';
@@ -727,7 +728,8 @@ export function ouvrirFicheRgd(x, onChange, retour = null) {
         ${refusDeProjet(x)
           ? `<p class="rgdf-origine" title="${esc(refusDeProjet(x))}">Lecture seule</p>`
           : '<button type="button" class="btn ghost sm rgdf-modifier" id="rgdf-modifier">Modifier les informations</button>'}
-        ${peutFaireDevisCrm() ? `<button type="button" class="btn sm rgdf-devis" data-faire-devis>${libelleBoutonFacture()}</button>` : ''}
+        ${peutFaireDevisCrm() ? `<button type="button" class="btn sm rgdf-devis" data-faire-devis>${libelleBoutonFacture()}</button>
+        <button type="button" class="btn ghost sm" data-bon-neuf>+ Bon d’attachement</button>` : ''}
         </div>
         <!-- Attribuer ne dépend pas de refusDeProjet : une fiche en lecture
              seule (un reflet de l'application RGD) se confie tout de même, car
@@ -838,6 +840,28 @@ export function ouvrirFicheRgd(x, onChange, retour = null) {
 
         <div class="rgdf-colonne">
           ${/* Le bouton est en haut de la fiche : le bloc ne montre que les devis faits. */ blocDevisCrm(devisCrm, false)}
+
+          ${(() => {
+            // ⚠ CE BLOC NE MONTRE QUE LES BONS SANS FACTURE, et c'est voulu :
+            // ceux qui en ont une s'affichent déjà sur la ligne de leur
+            // facture, juste au-dessus. Les lister ici aussi les ferait
+            // apparaître deux fois sur la même fiche, et on chercherait la
+            // différence entre les deux.
+            const seuls = bonsDeLaFiche(x).filter(b => !b.devis_id);
+            if (!seuls.length) return '';
+            return `<section class="rgdf-bloc rdc-bloc">
+              <h3>Bons d’attachement <span class="rgdf-compte">${seuls.length}</span></h3>
+              <div class="rgdf-tableau"><table><tbody>${seuls.map(b => `<tr class="rdc-ligne" data-bon-seul="${esc(b.id)}" tabindex="0">
+                <td><b>${esc(numeroBon(b))}</b>
+                  <div class="s muted">${esc(b.objet || 'Intervention')} · ${esc(fmtDate(b.date_bon))}</div></td>
+                <td class="rgdf-fin">${b.signature
+                  ? '<span class="chip green">Signé</span>'
+                  : bonRempli(b) ? '<span class="chip green">Rempli</span>' : '<span class="chip">Vierge</span>'}</td>
+              </tr>`).join('')}</tbody></table></div>
+              <p class="small muted">Ces bons ne sont rattachés à aucune facture : ils constatent des
+              heures et des fournitures sans rien réclamer.</p>
+            </section>`;
+          })()}
 
           ${x.genre === 'fiche' && (dossiersDe(f).length || ['chantier_termine', 'sav'].includes(etapeCourante)) ? (() => {
             // ⚠ LE BLOC « SAV » (13/10/2026) : les dossiers après-vente de la
@@ -1000,8 +1024,25 @@ export function ouvrirFicheRgd(x, onChange, retour = null) {
         e.stopPropagation();
         const d = db.byId('rgd_devis_crm', b.dataset.bon);
         if (!d) return;
+        const { ouvrirBonDeLaFacture } = await import('./rgd-bon-attachement.js');
+        ouvrirBonDeLaFacture(x, d, () => dessine());
+      };
+    });
+    // Un bon sans facture : on l'ouvre tel quel, il se suffit.
+    m.querySelectorAll('[data-bon-seul]').forEach(tr => {
+      const ouvrir = async () => {
+        const b = db.byId('rgd_bons', tr.dataset.bonSeul);
+        if (!b) return;
         const { ouvrirBonAttachement } = await import('./rgd-bon-attachement.js');
-        ouvrirBonAttachement(x, d, () => dessine());
+        ouvrirBonAttachement(x, { bon: b }, () => dessine());
+      };
+      tr.onclick = ouvrir;
+      tr.onkeydown = (e) => { if (e.key === 'Enter') ouvrir(); };
+    });
+    m.querySelectorAll('[data-bon-neuf]').forEach(b => {
+      b.onclick = async () => {
+        const { ouvrirBonNeuf } = await import('./rgd-bon-attachement.js');
+        ouvrirBonNeuf(x, () => dessine());
       };
     });
 

@@ -6,6 +6,12 @@
 // anomalies — s'écrivait au stylo. Un bon envoyé par mail ne peut pas avoir de
 // blancs.
 //
+// ⚠ ET IL PEUT N'AVOIR AUCUNE FACTURE (même jour, « si jamais on ne suit pas la
+// suite logique… »). Franck intervient sous garantie, en sous-traitance, ou
+// sur un chantier que le comptable facturera ailleurs : le bon se crée seul,
+// depuis la fiche. Sans facture, rien ne le pré-remplit — ni heures, ni
+// fournitures — et l'écran le dit au lieu d'inventer.
+//
 // ⚠ LES CASES NE SONT PAS ÉCRITES ICI, elles viennent de `GROUPES` dans
 // `data/rgd-bon-attachement.js`, que le PDF lit aussi. Voir l'en-tête de ce
 // fichier : une case ajoutée d'un seul côté, c'est une observation saisie qui
@@ -14,31 +20,45 @@
 // ⚠ UN SEUL CHOIX SE DÉCOCHE, ET C'EST POUR ÇA QUE TOUT EST EN CASES. Les
 // choix uniques auraient pu être des boutons radio : une fois l'un coché, on
 // ne peut plus revenir à « rien ». Sur un document qui atteste, se tromper de
-// case et ne plus pouvoir l'enlever est pire que de n'avoir rien coché. Les
-// cases d'un groupe à choix unique se vident donc les unes les autres, en JS.
+// case et ne plus pouvoir l'enlever est pire que de n'avoir rien coché.
 //
-// ⚠ IL SE REMPLIT APRÈS LA SIGNATURE DE LA FACTURE, et c'est le cas NORMAL :
-// on facture à la fin de l'intervention, puis on constate ce qui a été fait.
-// L'écriture ne porte que sur `bon_saisie` — voir `enregistrerBonAttachement`,
-// qui explique pourquoi envoyer la facture entière la ferait refuser.
-import { esc, openModal, closeModal, toast } from '../ui.js';
+// ⚠ LE BON N'EST CRÉÉ EN BASE QU'AU PREMIER ENREGISTREMENT. Le créer à
+// l'ouverture aurait laissé une ligne numérotée derrière chaque fenêtre
+// ouverte puis refermée — des bons vides dans une suite qui doit se lire.
+import { esc, openModal, closeModal, toast, fmtDate } from '../ui.js';
 import { posePadSignature } from '../pad-signature.js';
 import {
   GROUPES, COLONNES_MO, FOURNI_PAR, coche, saisieDepart, numeroBon,
-  enregistrerBonAttachement, lignesFourniture, totalHeures,
-  messageBonAttachement, nomDuResponsable,
+  enregistrerBonAttachement, creerBon, bonDuDevis, signerBonAttachement, supprimerBon,
+  totalHeures, messageBonAttachement, nomDuResponsable,
 } from '../data/rgd-bon-attachement.js';
-import { envoyerBonAttachement } from '../data/rgd-devis-crm.js';
+import { envoyerBonAttachement, UNITES } from '../data/rgd-devis-crm.js';
 
 const MAX_MO = 12;
+const MAX_FOURNITURES = 30;
 
-export function ouvrirBonAttachement(x, devis, retour = null) {
-  let courant = devis;
+/** Le bon d'une facture : on le retrouve, ou on l'ouvre neuf. */
+export function ouvrirBonDeLaFacture(x, devis, retour = null) {
+  ouvrirBonAttachement(x, { bon: bonDuDevis(devis), devis }, retour);
+}
+
+/** Un bon sans facture, créé depuis la fiche. */
+export function ouvrirBonNeuf(x, retour = null) {
+  ouvrirBonAttachement(x, { bon: null, devis: null }, retour);
+}
+
+export function ouvrirBonAttachement(x, { bon = null, devis = null } = {}, retour = null) {
+  let courant = bon;
   let s = null;        // la saisie en cours, jamais écrite tant qu'on n'enregistre pas
+  // ⚠ PAS DE `confirm()` : il ouvre sa propre fenêtre et ferme celle du bon,
+  // avec tout ce qui était saisi. On confirme par un second clic sur le même
+  // bouton — même procédé que la suppression d'un brouillon de facture.
+  let confirmerSuppr = false;
   let docs = null;     // `rgd-documents.js`, chargé à la demande
 
-  const m = openModal(`Bon d’attachement ${numeroBon(devis)}`,
-    '<div id="rba" class="rba"></div>', { wide: true, onClose: () => retour?.() });
+  const titre = () => `Bon d’attachement${courant?.numero ? ' ' + courant.numero : ''}`;
+  const m = openModal(titre(), '<div id="rba" class="rba"></div>',
+    { wide: true, onClose: () => retour?.() });
   const hote = m.querySelector('#rba');
 
   const charger = async () => {
@@ -58,11 +78,9 @@ export function ouvrirBonAttachement(x, devis, retour = null) {
       <textarea data-cle="${cle}" rows="${lignes}">${esc(s[cle] ?? '')}</textarea>
       ${aide ? `<small class="muted">${esc(aide)}</small>` : ''}</label>`;
 
-  // `titre: false` quand le titre de section dit deja la meme chose : le lire
-  // deux fois de suite fait chercher la difference entre les deux.
-  const groupe = (nom, { titre = true } = {}) => {
+  const groupe = (nom, { titre: avecTitre = true } = {}) => {
     const g = GROUPES[nom];
-    return `<div class="field">${titre ? `<label>${esc(g.titre)}${g.mode === 'plusieurs' ? ' <span class="muted small">(plusieurs possibles)</span>' : ''}</label>` : ''}
+    return `<div class="field">${avecTitre ? `<label>${esc(g.titre)}${g.mode === 'plusieurs' ? ' <span class="muted small">(plusieurs possibles)</span>' : ''}</label>` : ''}
       <div class="checks">${g.options.map(o => `<label class="check">
         <input type="checkbox" data-groupe="${nom}" data-code="${o.c}" ${coche(s, nom, o.c) ? 'checked' : ''}>
         <span>${esc(o.l)}</span>
@@ -80,40 +98,45 @@ export function ouvrirBonAttachement(x, devis, retour = null) {
     ${(s.mo || []).length > 1 ? `<button type="button" class="btn ghost sm" data-mo-suppr="${i}">Retirer cette rangée</button>` : ''}
   </div>`;
 
-  const blocFournitures = () => {
-    const l = lignesFourniture(courant);
-    if (!l.length) {
-      return '<p class="small muted">Aucune fourniture sur cette facture : elle ne porte que de la main-d’œuvre.</p>';
-    }
-    return `<p class="small muted">Les désignations et les quantités viennent de la facture.
-      Ici, on ajoute ce qu’elle ne sait pas : la marque exacte et qui a fourni.</p>
-      ${l.map((ligne, i) => {
-        const f = (s.fournitures && s.fournitures[i]) || {};
-        return `<div class="rba-rangee">
-          <div class="rba-titre-rangee">${esc(ligne.libelle || 'Ligne')}${ligne.variante ? ' — ' + esc(ligne.variante) : ''}
-            <span class="muted small">${esc(String(ligne.quantite ?? '').replace('.', ','))} ${esc(ligne.unite === 'forfait' ? 'u' : ligne.unite || '')}</span></div>
-          <div class="mf-grille mf-grille-serree">
-            <label class="mail-champ">Marque / référence
-              <input data-four="${i}" data-col="reference" value="${esc(f.reference ?? '')}" autocomplete="off"></label>
-            <label class="mail-champ">Fourni par
-              <select data-four="${i}" data-col="fourni_par">
-                <option value="">—</option>
-                ${FOURNI_PAR.map(o => `<option value="${esc(o.c)}" ${f.fourni_par === o.c ? 'selected' : ''}>${esc(o.l)}</option>`).join('')}
-              </select></label>
-          </div>
-        </div>`;
-      }).join('')}`;
-  };
+  // ⚠ UNE FOURNITURE PORTE TOUT CE QUI S'IMPRIME, et se saisit entièrement
+  // quand il n'y a pas de facture : désignation, unité, quantité. Avec une
+  // facture, ces trois-là sont déjà remplies — on les laisse modifiables,
+  // parce que ce qui a été posé sur le chantier peut différer de ce qui a été
+  // chiffré, et que c'est le bon qui dit la vérité du chantier.
+  const rangeeFourniture = (f, i) => `<div class="rba-rangee">
+    <div class="mf-grille mf-grille-serree">
+      <label class="mail-champ plein">Désignation
+        <input data-four="${i}" data-col="designation" value="${esc(f.designation ?? '')}" autocomplete="off"></label>
+      <label class="mail-champ">Marque / référence
+        <input data-four="${i}" data-col="reference" value="${esc(f.reference ?? '')}" autocomplete="off"></label>
+      <label class="mail-champ">Unité
+        <select data-four="${i}" data-col="unite">
+          ${Object.entries(UNITES).map(([k, v]) => `<option value="${esc(k)}" ${(f.unite || 'forfait') === k ? 'selected' : ''}>${esc(v)}</option>`).join('')}
+        </select></label>
+      <label class="mail-champ">Quantité
+        <input data-four="${i}" data-col="quantite" inputmode="decimal" value="${esc(f.quantite ?? '')}" autocomplete="off"></label>
+      <label class="mail-champ">Fourni par
+        <select data-four="${i}" data-col="fourni_par">
+          <option value="">—</option>
+          ${FOURNI_PAR.map(o => `<option value="${esc(o.c)}" ${f.fourni_par === o.c ? 'selected' : ''}>${esc(o.l)}</option>`).join('')}
+        </select></label>
+    </div>
+    <button type="button" class="btn ghost sm" data-four-suppr="${i}">Retirer cette fourniture</button>
+  </div>`;
 
   const dessine = () => {
     const heures = totalHeures(s);
+    const fournitures = Array.isArray(s.fournitures) ? s.fournitures : [];
     hote.innerHTML = `
       <p class="rdc-aide">Ce bon constate les <b>temps passés</b> et les <b>fournitures posées</b>.
-      Il accompagne la facture ${esc(courant.numero || '')} et ne réclame aucun règlement.
+      ${devis
+        ? `Il accompagne la facture ${esc(devis.numero || '')} et ne réclame aucun règlement.`
+        : '<b>Il n’est rattaché à aucune facture</b> : rien ne le pré-remplit, et il ne porte aucun montant.'}
       Ce qui reste vide reste vide sur le PDF : rien n’est coché à votre place.</p>
 
       <h4 class="rba-section">Client et lieu d’intervention</h4>
       <div class="mf-grille">
+        ${devis ? '' : champ('objet', 'Objet de l’intervention', { plein: true, placeholder: 'Dépannage, mise en sécurité…' })}
         ${champ('lieu_cp_ville', 'Code postal / ville')}
         ${champ('lieu_batiment', 'Bât. / étage / lot')}
         ${champ('lieu_acces', 'Accès / code')}
@@ -138,7 +161,11 @@ export function ouvrirBonAttachement(x, devis, retour = null) {
       <div class="mf-grille">${champ('deplacement_nb', 'Nombre de déplacements')}</div>
 
       <h4 class="rba-section">Fournitures posées</h4>
-      ${blocFournitures()}
+      <p class="small muted">${devis
+        ? 'Les désignations et les quantités viennent de la facture ; elles restent modifiables, parce que c’est ce bon qui dit ce qui a réellement été posé.'
+        : 'Aucune facture ne les donne : elles se saisissent une par une.'}</p>
+      <div id="rba-four">${fournitures.map(rangeeFourniture).join('')}</div>
+      <button type="button" class="btn ghost sm" id="rba-four-plus">+ Une fourniture</button>
       ${groupe('materiel')}
 
       <h4 class="rba-section">Contrôles avant remise sous tension</h4>
@@ -161,17 +188,23 @@ export function ouvrirBonAttachement(x, devis, retour = null) {
           : '<button type="button" class="btn ghost sm" id="rba-signer">Signer</button>'}
       </div>
       <div class="rdc-statut"><span class="muted small">Client</span>
-        ${courant.bon_signature
-          ? `<span class="chip green">Signé${courant.bon_signe_par ? ' par ' + esc(courant.bon_signe_par) : ''}</span>`
-          : '<span class="muted small">Pas encore signé — le client signe depuis la facture, sur place.</span>'}
+        ${courant?.signature
+          ? `<span class="chip green">Signé${courant.signe_par ? ' par ' + esc(courant.signe_par) : ''}${
+              courant.signe_a ? ' le ' + esc(fmtDate(courant.signe_a)) : ''}</span>`
+          : '<button type="button" class="btn ghost sm" id="rba-signer-client">Faire signer le client</button>'}
       </div>
 
       <div class="form-actions">
+        ${courant && !courant.signature
+          ? `<button type="button" class="btn ghost danger left" id="rba-suppr">${
+              confirmerSuppr ? 'Confirmer la suppression' : 'Supprimer ce bon'}</button>`
+          : ''}
         <button type="button" class="btn ghost" data-close>Fermer</button>
         <button type="button" class="btn ghost" id="rba-imprimer">Imprimer</button>
         <button type="button" class="btn ghost" id="rba-mail">Envoyer par mail</button>
         <button type="button" class="btn" id="rba-enregistrer">Enregistrer</button>
       </div>`;
+    m.querySelector('.modal-head h2').textContent = titre();
     lier();
   };
 
@@ -238,6 +271,18 @@ export function ouvrirBonAttachement(x, devis, retour = null) {
         redessiner();
       };
     });
+    hote.querySelector('#rba-four-plus').onclick = () => {
+      const l = Array.isArray(s.fournitures) ? s.fournitures : [];
+      if (l.length >= MAX_FOURNITURES) { toast(`${MAX_FOURNITURES} fournitures au plus`, 'error'); return; }
+      s.fournitures = [...l, { designation: '', unite: 'forfait', quantite: '', reference: '', fourni_par: '' }];
+      redessiner();
+    };
+    hote.querySelectorAll('[data-four-suppr]').forEach(b => {
+      b.onclick = () => {
+        s.fournitures = s.fournitures.filter((_, k) => k !== Number(b.dataset.fourSuppr));
+        redessiner();
+      };
+    });
 
     const bSigner = hote.querySelector('#rba-signer');
     if (bSigner) bSigner.onclick = () => faireSigner();
@@ -246,29 +291,73 @@ export function ouvrirBonAttachement(x, devis, retour = null) {
       delete s.signature_rgd; delete s.signature_rgd_le;
       redessiner();
     };
+    const bClient = hote.querySelector('#rba-signer-client');
+    if (bClient) bClient.onclick = () => faireSignerClient();
 
-    hote.querySelector('#rba-enregistrer').onclick = async () => {
-      if (await enregistrer()) { closeModal(); }
+    const bSuppr = hote.querySelector('#rba-suppr');
+    if (bSuppr) bSuppr.onclick = async () => {
+      // ⚠ UN BON SIGNÉ NE S'EFFACE PAS, et le bouton n'existe alors même pas :
+      // c'est la pièce qu'on ressort quand des heures sont contestées, et le
+      // client l'a reconnue. La base refuse aussi, de son côté.
+      if (!confirmerSuppr) { confirmerSuppr = true; redessiner(); return; }
+      bSuppr.disabled = true;
+      try {
+        await supprimerBon(courant);
+        toast('Bon d’attachement supprimé');
+        closeModal();
+      } catch (e) {
+        bSuppr.disabled = false; confirmerSuppr = false;
+        toast(`Non supprimé — ${String(e.message || e).slice(0, 140)}`, 'error');
+        redessiner();
+      }
     };
-    hote.querySelector('#rba-imprimer').onclick = async () => {
+    // ⚠ UN BOUTON QUI ATTEND SE VERROUILLE. Chacun de ces trois-là enregistre
+    // d'abord — donc CRÉE le bon s'il n'existe pas. Deux appuis rapprochés,
+    // le temps que l'écriture revienne, et c'étaient deux bons : le garde lit
+    // le cache, qui n'est pas encore à jour. Sur un téléphone, retoucher
+    // pendant l'attente est le geste normal, pas une maladresse.
+    const pendant = (bouton, action) => {
+      if (!bouton) return;
+      const mot = bouton.textContent;
+      bouton.onclick = async () => {
+        bouton.disabled = true;
+        try { await action(); } finally {
+          const vivant = hote.contains(bouton);
+          if (vivant) { bouton.disabled = false; bouton.textContent = mot; }
+        }
+      };
+    };
+    pendant(hote.querySelector('#rba-enregistrer'), async () => {
+      if (await enregistrer()) closeModal();
+    });
+    pendant(hote.querySelector('#rba-imprimer'), async () => {
       if (!await enregistrer()) return;
-      (await charger()).imprimerBonAttachement(x, courant);
-    };
-    hote.querySelector('#rba-mail').onclick = async () => {
+      (await charger()).imprimerBonAttachement(x, courant, devis);
+    });
+    pendant(hote.querySelector('#rba-mail'), async () => {
       if (await enregistrer()) ouvrirEnvoi();
-    };
+    });
   }
 
   /**
-   * ⚠ ON ENREGISTRE AVANT D'IMPRIMER ET AVANT D'ENVOYER. Le PDF se fabrique
-   * depuis la ligne EN BASE, pas depuis les champs à l'écran : sans cet
-   * enregistrement, on enverrait au client un bon sans ce qu'on vient de
+   * ⚠ ON ENREGISTRE AVANT D'IMPRIMER, D'ENVOYER ET DE FAIRE SIGNER. Le PDF se
+   * fabrique depuis la ligne EN BASE, pas depuis les champs à l'écran : sans
+   * cet enregistrement, on enverrait au client un bon sans ce qu'on vient de
    * saisir, et on ne s'en apercevrait pas.
+   *
+   * C'est aussi ici que le bon NAÎT, au premier enregistrement.
    */
   async function enregistrer() {
     const bouton = hote.querySelector('#rba-enregistrer');
     if (bouton) { bouton.disabled = true; bouton.textContent = 'Enregistrement…'; }
     try {
+      // ⚠ ON RELIT AVANT DE CRÉER. Entre l'ouverture de la fenêtre et le
+      // premier enregistrement, le bon de cette facture a pu naître
+      // ailleurs — l'autre téléphone, l'impression. La base refuse le
+      // doublon (un bon par facture), mais mieux vaut rejoindre celui qui
+      // existe que montrer une erreur de clé dupliquée.
+      if (!courant && devis) courant = bonDuDevis(devis);
+      if (!courant) courant = await creerBon(x, devis, s.objet);
       courant = await enregistrerBonAttachement(courant, s);
       return true;
     } catch (e) {
@@ -290,13 +379,39 @@ export function ouvrirBonAttachement(x, devis, retour = null) {
     posePadSignature(hote, {
       aide: 'Signature de l’intervenant qui a réalisé les travaux. Elle s’imprime sur le bon, '
         + 'en face de celle du client.',
-      nom: s.intervenant || nomDuResponsable(courant),
+      nom: s.intervenant || nomDuResponsable(courant || devis),
       labelNom: 'Nom de l’intervenant',
       surAnnuler: () => redessiner(),
       surValider: ({ image, nom }) => {
         s.signature_rgd = image;
         s.signature_rgd_le = new Date().toISOString();
         if (nom) s.intervenant = nom;
+        redessiner();
+      },
+    });
+  }
+
+  /**
+   * La signature du CLIENT, sur place, à la fin de l'intervention.
+   *
+   * ⚠ ELLE SE FAIT DEPUIS CE FORMULAIRE DEPUIS LE 02/11/2026. Elle ne vivait
+   * que dans la fenêtre de la facture : un bon sans facture n'aurait jamais pu
+   * être signé, c'est-à-dire n'aurait servi à rien.
+   *
+   * ⚠ ET ON ENREGISTRE AVANT DE TENDRE LE TÉLÉPHONE : le client doit signer ce
+   * qui est écrit, pas une version d'il y a dix minutes.
+   */
+  function faireSignerClient() {
+    posePadSignature(hote, {
+      aide: 'Signature de <b>' + esc(x.nom || 'la personne présente') + '</b> sur le '
+        + '<b>bon d’attachement</b>. Signer vaut reconnaissance des temps passés et des '
+        + 'fournitures posées.',
+      nom: x.nom || '',
+      surAnnuler: () => redessiner(),
+      surValider: async ({ image, nom }) => {
+        if (!await enregistrer()) return;
+        courant = await signerBonAttachement(courant, { signature: image, nom });
+        toast('Bon d’attachement signé');
         redessiner();
       },
     });
@@ -322,27 +437,24 @@ export function ouvrirBonAttachement(x, devis, retour = null) {
         <div class="field"><label>Objet</label>
           <input id="rba-objet" value="${esc(sujet)}"></div>
         <div class="field"><label>Message</label>
-          <textarea id="rba-message" rows="11">${esc(messageBonAttachement(courant, d.nom))}</textarea></div>
+          <textarea id="rba-message" rows="11">${esc(messageBonAttachement(courant, devis, d.nom))}</textarea></div>
         <div class="field"><label class="check"><input type="checkbox" id="rba-copie" checked> Garder une copie à contact@rgdrenova.fr</label></div>
       </div>
       <p class="small muted">Pièce jointe : <b>Bon d’attachement ${esc(numeroBon(courant))}</b> — recto et verso.
-      ${courant.bon_signature ? 'Il porte la signature du client.' : '<b>Le client ne l’a pas encore signé.</b>'}</p>
+      ${courant?.signature ? 'Il porte la signature du client.' : '<b>Le client ne l’a pas encore signé.</b>'}</p>
       <div class="form-actions">
         <button type="button" class="btn ghost" id="rba-retour">← Retour au bon</button>
         <button type="button" class="btn" id="rba-envoyer">Envoyer</button>
       </div>`;
     hote.querySelector('#rba-a').focus();
-    hote.querySelector('#rba-retour').onclick = () => {
-      m.querySelector('.modal-head h2').textContent = `Bon d’attachement ${numeroBon(courant)}`;
-      redessiner();
-    };
+    hote.querySelector('#rba-retour').onclick = () => redessiner();
     const bouton = hote.querySelector('#rba-envoyer');
     bouton.onclick = async () => {
       const a = hote.querySelector('#rba-a').value.trim();
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(a)) { toast('Adresse mail du client invalide', 'error'); return; }
       bouton.disabled = true; bouton.textContent = 'Envoi…';
       try {
-        const pdf = await (await charger()).pdfBonAttachement(x, courant);
+        const pdf = await (await charger()).pdfBonAttachement(x, courant, devis);
         const r = await envoyerBonAttachement(courant, {
           a, nom: d.nom,
           objet: hote.querySelector('#rba-objet').value.trim() || sujet,
@@ -362,7 +474,7 @@ export function ouvrirBonAttachement(x, devis, retour = null) {
   // Le pré-remplissage demande les données du dossier (le code postal du
   // chantier) : on charge le module des documents avant de dessiner.
   charger().then((mod) => {
-    s = saisieDepart(courant, mod.donneesDocument(x), courant.bon_saisie);
+    s = saisieDepart({ bon: courant, devis, d: mod.donneesDocument(x) });
     dessine();
   }).catch((e) => {
     hote.innerHTML = `<p class="empty">Bon d’attachement indisponible — ${esc(String(e.message || e))}</p>`;

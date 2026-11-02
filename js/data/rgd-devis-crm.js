@@ -229,6 +229,13 @@ const numeroDemo = (statut, genre) => {
  * ⚠ LE DEVIS PREND LE PROPRIÉTAIRE DE LA FICHE, pas celui qui le tape : quand
  * Mickael chiffre un dossier de Franck, c'est Franck qui doit le voir. Une
  * fiche sans propriétaire donne le devis à son auteur.
+ *
+ * ⚠ MAIS CE TRANSFERT NE VAUT QUE POUR LA DIRECTION, et ce commentaire ne le
+ * disait pas (ajouté le 02/11/2026, après qu'il a induit en erreur une lecture
+ * attentive). `(scope.isDirection ? f.owner_id : null) || moi` : dans l'autre
+ * sens, Franck qui travaille sur une fiche dont Mickael est propriétaire GARDE
+ * ce qu'il crée. Sans cela, celui qui a fait le document et l'a fait signer sur
+ * place le verrait partir chez quelqu'un d'autre — la même panne retournée.
  */
 export async function enregistrerDevisCrm(x, valeurs, existant = null) {
   const f = x.ligne;
@@ -344,21 +351,10 @@ export const marquerReglee = (d, moyen) => db.update('rgd_devis_crm', d.id, {
   regle_par: moyen || null,
 });
 
-/**
- * Le bon d'attachement signé par le client, sur place.
- *
- * ⚠ SA SIGNATURE EST DISTINCTE DE CELLE DE LA FACTURE, et ce n'est pas une
- * lourdeur : le bon CONSTATE des temps et des fournitures, la facture RÉCLAME
- * une somme. Une seule signature reportée sur les deux ne prouverait ni l'un
- * ni l'autre — et c'est précisément le bon d'attachement qu'on produit en cas
- * de contestation sur les heures.
- */
-export const signerBonAttachement = (d, { signature, nom }) => db.update('rgd_devis_crm', d.id, {
-  bon_signature: signature,
-  bon_signe_par: String(nom || '').trim() || null,
-  bon_signe_a: new Date().toISOString(),
-});
-
+// ⚠ LA SIGNATURE DU BON A DÉMÉNAGÉ AVEC LUI, dans
+// `data/rgd-bon-attachement.js` (02/11/2026) : elle écrivait dans quatre
+// colonnes de la facture, qui n'existent plus — un bon peut n'avoir aucune
+// facture. Chercher `signerBonAttachement` là-bas.
 /** Un clic malheureux se défait : la facture redevient due, échéance comprise. */
 export const annulerReglement = (d) =>
   db.update('rgd_devis_crm', d.id, { regle_le: null, regle_par: null });
@@ -617,7 +613,11 @@ const corpsMail = (texte, lien, mot) => {
  * et le bouton « Voir ma facture » d'un mail parti la semaine d'avant aurait
  * ouvert le bon d'attachement — chez le client, sans que rien ne le dise.
  */
-async function envoyerDocument(devis, { a, nom, objet, message, copie }, pdf, { chemin, mot }) {
+// ⚠ IL NE REÇOIT PLUS LE DOCUMENT : depuis que `chemin` et `mot` sont
+// donnés par l'appelant, il n'en lisait plus rien. Le garder aurait laissé
+// croire qu'il en dépend — et qu'il faut une facture pour envoyer un mail,
+// alors qu'un bon d'attachement peut n'en avoir aucune.
+async function envoyerDocument({ a, nom, objet, message, copie }, pdf, { chemin, mot }) {
   if (CONFIG.DEMO) return { ok: false, motif: 'Mode démonstration : aucun mail ne part.' };
   const jeton = await db.accessToken();
   if (!jeton) return { ok: false, motif: 'Session expirée : reconnectez-vous.' };
@@ -668,7 +668,7 @@ async function envoyerDocument(devis, { a, nom, objet, message, copie }, pdf, { 
  * Rend { ok } ou { ok: false, motif }. Un brouillon passe en « Envoyé ».
  */
 export async function envoyerDevisCrm(devis, dest, pdf) {
-  const r = await envoyerDocument(devis, dest, pdf, {
+  const r = await envoyerDocument(dest, pdf, {
     // ⚠ UNE FACTURE ANNULÉE RÉÉCRIT SON PROPRE PDF, ET C'EST VOULU. Le chemin
     // ne porte que l'`id` du document : renvoyer la facture après annulation
     // écrase le fichier que le bouton « Voir ma facture » d'un mail DÉJÀ PARTI
@@ -695,8 +695,11 @@ export async function envoyerDevisCrm(devis, dest, pdf) {
  * passer une facture en « Envoyée » : ce sont deux documents, et c'est le
  * suivi des règlements qui s'en trouverait faussé.
  */
-export const envoyerBonAttachement = (devis, dest, pdf) =>
-  envoyerDocument(devis, dest, pdf, {
-    chemin: `${devis.id}-bon.pdf`,
+export const envoyerBonAttachement = (bon, dest, pdf) =>
+  envoyerDocument(dest, pdf, {
+    // ⚠ LE CHEMIN PART DE L'IDENTIFIANT DU BON, plus de celui de la facture :
+    // un bon autonome n'en a pas, et deux bons du même dossier se seraient
+    // écrasés l'un l'autre dans le seau.
+    chemin: `bon-${bon.id}.pdf`,
     mot: 'mon bon d’attachement',
   });
