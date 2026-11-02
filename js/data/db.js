@@ -764,8 +764,12 @@ const supabaseAdapter = {
     const { error } = await this.client.storage.from(bucket).upload(path, file, { upsert, contentType: file.type || undefined });
     if (error) throw new Error(error.message);
   },
-  async fileUrl(path, { bucket = 'documents' } = {}) {
-    const { data, error } = await this.client.storage.from(bucket).createSignedUrl(path, 3600);
+  // ⚠ UNE HEURE PAR DÉFAUT, ET C'EST VOULU : un lien de pièce jointe se clique
+  // dans la minute. `secondes` ne s'allonge que pour un lien qui PART CHEZ UN
+  // TIERS — la facture envoyée au client — et qui ne peut donc pas être
+  // régénéré à la demande.
+  async fileUrl(path, { bucket = 'documents', secondes = 3600 } = {}) {
+    const { data, error } = await this.client.storage.from(bucket).createSignedUrl(path, secondes);
     if (error) throw new Error(error.message); return data.signedUrl;
   },
   async deleteFile(path, { bucket = 'documents' } = {}) {

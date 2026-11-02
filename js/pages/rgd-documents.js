@@ -42,7 +42,7 @@ import { esc } from '../ui.js';
 import { imprimerPage } from './btp-fiche.js';
 import { valeursProjet, personneDe, nomComplet, adresseChantier } from '../data/rgd-projet.js';
 import { montantDevisDe, etapeAvecMontant } from '../data/rgd-etapes.js';
-import { parCategorie, signatureRgd } from '../data/rgd-devis-crm.js';
+import { parCategorie, signatureRgd, MOYENS_PAIEMENT } from '../data/rgd-devis-crm.js';
 
 const LOGO = new URL('../../assets/logos/rgd-complet.png', import.meta.url).href;
 
@@ -477,6 +477,7 @@ const styleDevis = `
   .partie > span { display: block; font-size: 7.5pt; text-transform: uppercase; letter-spacing: .07em; color: ${GRIS}; margin-bottom: 2px; }
   .mention { margin: 10px 0 0; font-size: 8.5pt; color: ${GRIS}; }
   .accord { break-inside: avoid; }
+  .acquittee { border-left: 2.5pt solid ${ORANGE}; padding-left: 7px; color: #111827; }
   .pied-legal { margin-top: 14px; padding-top: 6px; border-top: .75pt solid ${FILET}; font-size: 7.6pt; color: ${GRIS}; }
 `;
 
@@ -485,6 +486,15 @@ export function devisCrmHtml(d, devis) {
   const ech = new Date(`${devis.date_devis || new Date().toISOString().slice(0, 10)}T00:00:00`);
   ech.setDate(ech.getDate() + (Number(devis.validite_jours) || 30));
   const taux = Number(devis.tva_taux);
+
+  // ⚠ UNE FACTURE RÉGLÉE NE RÉCLAME PLUS RIEN (02/11/2026, Élodie : « la
+  // facture arrive au moment du paiement »). Tant que `regle_le` est vide, le
+  // document garde son échéance et ses pénalités — elles restent OBLIGATOIRES
+  // sur une facture non réglée, et les retirer du gabarit aurait rendu non
+  // conforme la première facture payée plus tard.
+  const regle = devis.regle_le
+    ? { le: devis.regle_le, par: MOYENS_PAIEMENT[devis.regle_par] || devis.regle_par || '' }
+    : null;
 
   // ⚠ LA SIGNATURE DE L'ENTREPRISE EST APPOSÉE D'AVANCE, pas laissée en
   // blanc. Une facture envoyée par mail portait jusqu'ici un trait vide à
@@ -524,7 +534,7 @@ ${entete('FACTURE', devis.numero ? `N° ${devis.numero}` : 'BROUILLON — sans n
 
 <div class="champs" style="margin-top:9px">
   ${champ('Date de la facture', jour(devis.date_devis || new Date()), 'etroit')}
-  ${champ('À régler avant le', jour(ech), 'etroit')}
+  ${regle ? champ('Réglée le', jour(regle.le) + (regle.par ? ' · ' + regle.par : ''), 'etroit') : champ('À régler avant le', jour(ech), 'etroit')}
   ${champ('Adresse des travaux', d.adresseChantier)}
 </div>
 ${devis.objet ? `<div class="champs" style="margin-top:7px">${champ('Objet', devis.objet)}</div>` : ''}
@@ -554,7 +564,10 @@ ${devis.objet ? `<div class="champs" style="margin-top:7px">${champ('Objet', dev
 ${MENTION_TVA[taux] ? `<p class="mention">${esc(MENTION_TVA[taux])}</p>` : ''}
 ${devis.notes ? `<h2>Remarques</h2><p style="margin:0;font-size:9.8pt;white-space:pre-line">${esc(devis.notes)}</p>` : ''}
 
-<p class="mention">${esc(MENTIONS_PAIEMENT)}</p>
+${regle
+  ? `<p class="mention acquittee"><b>Facture acquittée.</b> Le règlement de ${euros(devis.montant_ttc)} TTC
+      a été reçu le ${esc(jour(regle.le))}${regle.par ? ' par ' + esc(regle.par) : ''}. Aucune somme ne reste due.</p>`
+  : `<p class="mention">${esc(MENTIONS_PAIEMENT)}</p>`}
 
 <div class="accord">
   <h2>Réception des travaux</h2>

@@ -37,6 +37,15 @@ export const STATUTS_DEVIS_CRM = {
 
 // `ml` (mètre linéaire) depuis le 29/10/2026 : le passage des câbles.
 export const UNITES = { forfait: 'u', heure: 'h', m2: 'm²', ml: 'ml' };
+
+// Les moyens de paiement, tels qu'ils s'impriment sur une facture acquittée.
+// La clé est ce qui va en base, la valeur ce que lit le client.
+export const MOYENS_PAIEMENT = {
+  especes: 'espèces',
+  cheque: 'chèque',
+  carte: 'carte bancaire',
+  virement: 'virement',
+};
 export const PAR_UNITE = { heure: '/h', m2: '/m²', ml: '/ml' };
 
 export const METIERS = { electricite: 'Électricité' };
@@ -198,6 +207,22 @@ export const changerStatutDevisCrm = (d, statut) => db.update('rgd_devis_crm', d
 
 export const supprimerDevisCrm = (d) => db.remove('rgd_devis_crm', d.id);
 
+/**
+ * La facture est réglée : elle cesse de réclamer.
+ *
+ * ⚠ ON DATE DU JOUR, PAS DE LA FACTURE. Le règlement a lieu quand on le
+ * constate ; une facture d'hier payée aujourd'hui porte la date d'aujourd'hui,
+ * sinon la mention d'acquittement dirait faux.
+ */
+export const marquerReglee = (d, moyen) => db.update('rgd_devis_crm', d.id, {
+  regle_le: new Date().toISOString().slice(0, 10),
+  regle_par: moyen || null,
+});
+
+/** Un clic malheureux se défait : la facture redevient due, échéance comprise. */
+export const annulerReglement = (d) =>
+  db.update('rgd_devis_crm', d.id, { regle_le: null, regle_par: null });
+
 // ------------------------------------------ la signature de RGD Renova
 // Élodie, le 02/11/2026 : « on pourrait mettre en place la signature sur la
 // facture numérique avant de l'envoyer au client ». Jusqu'ici une facture
@@ -288,12 +313,26 @@ export const signerSurPlace = (d, { signature, signe_par }) => db.update('rgd_de
 // devis Costructor (`rgd_devis`). Un devis du CRM envoyé ici ne sera relancé
 // par personne d'autre que Franck ou Mickael.
 
-/** Le message par défaut, modifiable avant l'envoi. */
+/**
+ * Le message par défaut, modifiable avant l'envoi.
+ *
+ * ⚠ PAS DE DÉLAI DE PAIEMENT DANS CE MAIL (02/11/2026, Élodie : « la facture
+ * arrive au moment du paiement, le paiement se fait directement sur place à la
+ * fin de la prestation avec le client »). « À régler sous 30 jours » réclamait
+ * donc un paiement DÉJÀ REÇU : au mieux on passe pour désorganisé, au pire le
+ * client paie une seconde fois.
+ *
+ * ⚠ LE PDF, LUI, PORTE ENCORE « À régler avant le … » ET LES PÉNALITÉS DE
+ * RETARD. Ces mentions ne sont pas des formules : les retirer ou les remplacer
+ * par « facture acquittée » change la nature du document. La question est posée
+ * à Élodie le 02/11 ; d'ici sa réponse, le PDF est inchangé et seul le mail
+ * cesse de réclamer.
+ */
 export function messageDevisCrm(devis, nomClient) {
   const salut = nomClient ? `Bonjour ${nomClient},` : 'Bonjour,';
   return `${salut}
 
-Vous trouverez ci-joint notre facture n° ${devis.numero || ''} d’un montant de ${Number(devis.montant_ttc || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} € TTC, à régler sous ${devis.validite_jours || 30} jours.
+Vous trouverez ci-joint votre facture n° ${devis.numero || ''} d’un montant de ${Number(devis.montant_ttc || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} € TTC.
 
 Nous vous remercions de votre confiance.
 
@@ -306,7 +345,41 @@ L’équipe RGD Renova`;
 const echappe = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 // Le texte tapé devient des paragraphes : une ligne vide sépare deux blocs.
 const enParagraphes = (t) => String(t || '').trim().split(/\n\s*\n/)
-  .map(p => `<p>${echappe(p).replace(/\n/g, '<br>')}</p>`).join('');
+  .map(p => `<p>${echappe(p).replace(/\n/g, '<br>')}</p>`);
+
+/**
+ * Le bouton qui ouvre la facture.
+ *
+ * Élodie, le 02/11/2026 : « je voudrais que tu rajoutes un bouton pour cliquer
+ * et avoir la facture. Le fait qu'elle soit en bas, je ne trouve pas ça
+ * intuitif. »
+ *
+ * ⚠ EN CONTOUR, JAMAIS EN APLAT. Mesuré sur les envois de RGD : un bouton
+ * plein part en indésirables, le même en contour arrive en boîte de réception.
+ * Une facture dans les spams, c'est un client qui ne paie pas et une relance
+ * pour rien.
+ *
+ * ⚠ STYLES EN LIGNE ET `<table>` : les clients mail ignorent les feuilles de
+ * style, et Outlook ne centre pas un bloc autrement.
+ */
+const boutonFacture = (lien) => `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:18px 0">
+  <tr><td style="border:2px solid #FC5D00;border-radius:8px">
+    <a href="${echappe(lien)}" style="display:inline-block;padding:12px 26px;color:#FC5D00;text-decoration:none;font-weight:700;font-family:Arial,Helvetica,sans-serif;font-size:15px">Voir ma facture</a>
+  </td></tr></table>`;
+
+/**
+ * Le corps du mail : les paragraphes, et le bouton POSÉ JUSTE APRÈS LA PHRASE
+ * QUI ANNONCE LA FACTURE — pas à la fin. C'était tout le reproche : ce qui
+ * compte ne doit pas être en bas.
+ */
+const corpsMail = (texte, lien) => {
+  const blocs = enParagraphes(texte);
+  if (!lien) return blocs.join('');
+  // Le premier bloc est la salutation, le second annonce la facture. Si le
+  // texte a été réécrit et tient en un bloc, le bouton le suit quand même.
+  blocs.splice(Math.min(2, blocs.length), 0, boutonFacture(lien));
+  return blocs.join('');
+};
 
 /**
  * Envoyer le devis. `pdf` vient de `pdfDevisCrm` : { base64, nom }.
@@ -316,6 +389,24 @@ export async function envoyerDevisCrm(devis, { a, nom, objet, message, copie }, 
   if (CONFIG.DEMO) return { ok: false, motif: 'Mode démonstration : aucun mail ne part.' };
   const jeton = await db.accessToken();
   if (!jeton) return { ok: false, motif: 'Session expirée : reconnectez-vous.' };
+
+  // ⚠ LE DÉPÔT NE DOIT PAS POUVOIR EMPÊCHER L'ENVOI. Le bouton est un confort ;
+  // la facture, elle, part en PIÈCE JOINTE quoi qu'il arrive. Un seau plein,
+  // une coupure, une policy modifiée — on perd le bouton, pas le mail.
+  //
+  // ⚠ UN AN, PARCE QUE CE LIEN PART CHEZ LE CLIENT et qu'on ne peut pas le
+  // régénérer dans sa boîte. Il finira par expirer, et c'est sans gravité : la
+  // pièce jointe, elle, ne s'éteint jamais.
+  let lien = null;
+  try {
+    const octets = Uint8Array.from(atob(pdf.base64), (c) => c.charCodeAt(0));
+    const chemin = `${devis.id}.pdf`;
+    await db.uploadFile(chemin, new Blob([octets], { type: 'application/pdf' }),
+      { bucket: 'factures', upsert: true });
+    lien = await db.fileUrl(chemin, { bucket: 'factures', secondes: 31536000 });
+  } catch (e) {
+    console.warn('[RGD] facture non déposée, le mail part sans bouton :', e.message);
+  }
   try {
     const r = await fetch(`${CONFIG.SUPABASE_URL}/functions/v1/envoyer-email`, {
       method: 'POST',
@@ -323,7 +414,7 @@ export async function envoyerDevisCrm(devis, { a, nom, objet, message, copie }, 
       body: JSON.stringify({
         to: { email: a, name: nom || a },
         subject: objet,
-        html: enParagraphes(message),
+        html: corpsMail(message, lien),
         replyTo: { email: 'contact@rgdrenova.fr', name: 'RGD Renova' },
         ...(copie ? { bcc: [{ email: 'contact@rgdrenova.fr', name: 'RGD Renova' }] } : {}),
         attachment: [{ name: pdf.nom, content: pdf.base64 }],

@@ -23,6 +23,7 @@ import { valeursProjet } from '../data/rgd-projet.js';
 import {
   TVA, TVA_DEFAUT, STATUTS_DEVIS_CRM, UNITES, PAR_UNITE, nomMetier, tarifsDe, metiersAvecGrille,
   totaux, plancher, ligneDepuisTarif, parCategorie, messageDevisCrm, envoyerDevisCrm, enregistrerDevisCrm, changerStatutDevisCrm, supprimerDevisCrm, signerSurPlace,
+  MOYENS_PAIEMENT, marquerReglee, annulerReglement,
 } from '../data/rgd-devis-crm.js';
 import { posePadSignature } from '../pad-signature.js';
 import { ouvrirImportFacture, peutImporterFacture } from './rgd-facture-import.js';
@@ -212,6 +213,13 @@ export function ouvrirDevisCrm(x, existant = null, retour = null) {
       ${existant ? `<div class="rdc-statut"><span class="muted small">Statut</span>
         ${Object.entries(STATUTS_DEVIS_CRM).map(([k, s]) => `<button type="button" class="chip ${k === existant.statut ? s.ton : ''}" data-statut="${k}">${esc(s.label)}</button>`).join('')}
         ${existant.statut === 'brouillon' ? `<button type="button" class="btn ghost sm rdc-suppr" id="rdc-suppr">${confirmerSuppr ? 'Confirmer la suppression' : 'Supprimer le brouillon'}</button>` : ''}
+      </div>
+      <div class="rdc-statut"><span class="muted small">Règlement</span>
+        ${existant.regle_le
+          ? `<span class="chip green">Réglée le ${esc(fmtDate(existant.regle_le))}${existant.regle_par ? ' · ' + esc(MOYENS_PAIEMENT[existant.regle_par] || existant.regle_par) : ''}</span>
+             <button type="button" class="btn ghost sm" id="rdc-regl-off">Annuler le règlement</button>`
+          : `<select id="rdc-regl-moyen">${Object.entries(MOYENS_PAIEMENT).map(([k, v]) => `<option value="${esc(k)}">${esc(v)}</option>`).join('')}</select>
+             <button type="button" class="btn sm" id="rdc-regl-on">Marquer réglée</button>`}
       </div>` : ''}
 
       <div class="rdc-pied">
@@ -445,6 +453,33 @@ export function ouvrirDevisCrm(x, existant = null, retour = null) {
     if (bEnr) bEnr.onclick = async () => {
       const d = await enregistrer();
       if (d) { closeModal(true); ouvrirDevisCrm(x, d, retour); }
+    };
+    // ⚠ MARQUER RÉGLÉE CHANGE LE DOCUMENT, PAS SEULEMENT UNE ÉTIQUETTE : la
+    // facture perd son échéance et ses pénalités et porte « acquittée ». On
+    // redéploie donc la fenêtre pour que le PDF suivant parte à jour.
+    const bReglOn = hote.querySelector('#rdc-regl-on');
+    if (bReglOn) bReglOn.onclick = async () => {
+      bReglOn.disabled = true;
+      try {
+        existant = await marquerReglee(existant, hote.querySelector('#rdc-regl-moyen').value);
+        toast('Facture marquée réglée');
+        redessiner();
+      } catch (e) {
+        bReglOn.disabled = false;
+        toast(e.message || 'Non enregistré', 'error');
+      }
+    };
+    const bReglOff = hote.querySelector('#rdc-regl-off');
+    if (bReglOff) bReglOff.onclick = async () => {
+      bReglOff.disabled = true;
+      try {
+        existant = await annulerReglement(existant);
+        toast('Règlement annulé — la facture redevient due');
+        redessiner();
+      } catch (e) {
+        bReglOff.disabled = false;
+        toast(e.message || 'Non enregistré', 'error');
+      }
     };
     const bSign = hote.querySelector('#rdc-signer');
     if (bSign) bSign.onclick = async () => {
