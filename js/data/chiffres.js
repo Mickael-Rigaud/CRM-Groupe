@@ -9,6 +9,7 @@
 import { db } from './db.js';
 import { scope } from './scope.js';
 import { ACTIVITIES, ACTIVITY_KEYS, aAtteint, missionDe, reachedRdv, stageIndex, stageOf } from './schema.js';
+import { estProspectParSource } from './rgd-etapes.js';
 import { inRange, isoDay } from '../ui.js';
 
 // ---------- Mois ----------
@@ -29,9 +30,98 @@ export const moisPrecedent = (cle) => {
 };
 
 // ---------- Chiffres déposés par un outil externe ----------
-export const externe = (k) => (scope.canPilotage
-  ? db.t('structure_stats').find(x => x.activity === k) || null
-  : null);
+// ⚠ RGD RENOVA N'EST PLUS LU DANS `structure_stats` DEPUIS LE 04/11/2026.
+// La ligne y existe toujours (tâche `rgd_structure_stats`, 6 h 50), mais elle
+// ne porte que le CA facturé et les signatures : ni leads datés, ni RDV, ni
+// devis. Le tableau de bord du groupe affichait donc pour RGD le total des
+// prospects au lieu des leads du mois, aucun RDV, et un entonnoir vide. Les
+// données, elles, sont dans le CRM : on les compte ici, en direct, avec les
+// définitions de l'espace RGD (voir `statsRgd`).
+export const externe = (k) => {
+  if (!scope.canPilotage) return null;
+  if (k === 'rgd' && db.t('rgd_paiements').length + db.t('rgd_clients').length) return statsRgd();
+  return db.t('structure_stats').find(x => x.activity === k) || null;
+};
+
+/**
+ * Les chiffres de RGD Renova, mois par mois, lus dans les tables de l'espace RGD.
+ * Même forme que `structure_stats` (`revenue` = un objet par mois), pour que
+ * tout le reste de ce fichier les lise sans exception.
+ *
+ *  - leads   : chaque NOUVELLE PERSONNE — demande du formulaire du site
+ *              (`date_demande`), fiche Meta (`meta_received_at`), fiche saisie
+ *              à la main ou née d'un rendez-vous (date de création du contact).
+ *              Le garde `estProspectParSource` écarte l'annuaire Costructor
+ *              repris en bloc le 21/09/2026 : ce ne sont pas des leads. Une
+ *              personne arrivée par une demande PUIS devenue fiche ne compte
+ *              qu'une fois, à sa première date.
+ *  - rdv     : les visites techniques (`rgd_chantiers.statut_d1`), à leur date
+ *              de visite. ⚠ PAS `agenda_events` : le relevé de l'agenda efface
+ *              les jours de plus d'une semaine, on n'y compterait jamais un mois
+ *              entier. Une visite à venir n'est pas encore un RDV réalisé.
+ *  - quotes  : les devis envoyés, à leur date d'envoi.
+ *  - deals   : les devis signés, à leur date de signature (`signedAmount` = leur HT).
+ *  - amount  : le CA HT FACTURÉ (`rgd_paiements`), la définition de la vue
+ *              d'ensemble RGD et de Costructor — pas le montant signé.
+ */
+let cacheRgd = null;
+function statsRgd() {
+  const tables = ['rgd_paiements', 'rgd_devis', 'rgd_chantiers', 'rgd_clients', 'rgd_demandes', 'contacts'];
+  const sources = tables.map(t => db.t(t));
+  if (cacheRgd && cacheRgd.sources.every((s, i) => s === sources[i])
+      && cacheRgd.jour === isoDay()) return cacheRgd.valeur;
+  const [paiements, devis, chantiers, fiches, demandes, contacts] = sources;
+  const aujourdhui = isoDay();
+  const mois = new Map();
+  const ligne = (cle) => {
+    if (!mois.has(cle)) mois.set(cle, { month: cle, amount: 0, deals: 0, signedAmount: 0, leads: 0, rdv: 0, quotes: 0 });
+    return mois.get(cle);
+  };
+  const cleDe = (d) => (d ? String(d).slice(0, 7) : null);
+
+  for (const p of paiements) {
+    if (p.statut === 'annule' || !p.date_facturation) continue;
+    ligne(cleDe(p.date_facturation)).amount += Number(p.montant_ht) || 0;
+  }
+  for (const d of devis) {
+    if (['signe', 'accepte'].includes(d.statut) && d.date_signature) {
+      const l = ligne(cleDe(d.date_signature));
+      l.deals += 1; l.signedAmount += Number(d.montant_ht) || 0;
+    }
+    if (d.date_envoi && d.statut !== 'brouillon') ligne(cleDe(d.date_envoi)).quotes += 1;
+  }
+  for (const c of chantiers) {
+    if (c.statut_d1 !== 'visite_technique') continue;
+    const jour = String(c.date_debut_prevue || c.created_at || '').slice(0, 10);
+    if (jour && jour <= aujourdhui) ligne(cleDe(jour)).rdv += 1;
+  }
+  // Les leads : une date par personne, la plus ancienne.
+  const creeLe = new Map(contacts.map(c => [c.id, c.created_at]));
+  const personnes = new Map();
+  const noter = (cle, date) => {
+    if (!date) return;
+    const d = String(date).slice(0, 10);
+    if (!personnes.has(cle) || d < personnes.get(cle)) personnes.set(cle, d);
+  };
+  for (const d of demandes) noter(d.contact_id ? 'c:' + d.contact_id : 'd:' + d.id, d.date_demande || d.created_at);
+  for (const f of fiches) {
+    if (!estProspectParSource(f)) continue;
+    noter(f.contact_id ? 'c:' + f.contact_id : 'f:' + f.id, f.meta_received_at || creeLe.get(f.contact_id));
+  }
+  for (const d of personnes.values()) ligne(cleDe(d)).leads += 1;
+
+  const revenue = [...mois.values()].filter(m => m.month).sort((a, b) => a.month.localeCompare(b.month));
+  const valeur = {
+    // `prospects` garde la définition de `rgd_pousser_structure_stats` (fiches
+    // venues de la publicité ou du site) : la vue d'ensemble de Pilotage
+    // l'affiche comme « prospects de la base », elle ne doit pas changer de sens.
+    activity: 'rgd', revenue,
+    prospects: fiches.filter(f => ['meta_ads', 'Formulaire site'].includes(f.source)).length,
+    source: 'l\'espace RGD Renova', direct: true, updated_at: new Date().toISOString(),
+  };
+  cacheRgd = { sources, jour: aujourdhui, valeur };
+  return valeur;
+}
 const aDesMoisExternes = (k) => { const e = externe(k); return !!(e && (e.revenue || []).length); };
 
 // ---------- Leads ----------
@@ -97,6 +187,50 @@ export function rdvPeriode(k, r, deals) {
 }
 export const signees = (k, r, deals) => deals.filter(d => d.activity === k && d.status === 'won' && inRange(d.won_at, r));
 
+// Les RDV et les signatures d'un mois donné, pour les micro-courbes : la même
+// règle que sur une période — l'outil externe fait foi dès qu'il les ventile.
+export function rdvMois(k, cle, deals) {
+  const e = externe(k);
+  if (aDesRdvExternes(k)) return Number(rdvDuMois((e.revenue || []).find(v => v.month === cle) || {})) || 0;
+  return deals.filter(d => d.activity === k && reachedRdv(d)
+    && ((d.stage_history || []).find(h => h.stage === ACTIVITIES[k].rdvStage)?.at || d.won_at || '').slice(0, 7) === cle).length;
+}
+export function signeesMois(k, cle, deals) {
+  const e = externe(k);
+  if (aDesMoisExternes(k) && (e.revenue || []).some(m => m.deals != null)) {
+    return Number((e.revenue || []).find(v => v.month === cle)?.deals) || 0;
+  }
+  return deals.filter(d => d.activity === k && d.status === 'won' && (d.won_at || '').slice(0, 7) === cle).length;
+}
+
+// Le montant HT des affaires SIGNÉES sur la période, quand l'outil le donne.
+// ⚠ C'EST LUI QUI FAIT LE PANIER MOYEN, PAS LE CA : chez RGD le CA est facturé,
+// et diviser des factures d'octobre par les signatures d'octobre ne donne le
+// prix d'aucune affaire.
+function montantSigne(k, r) {
+  const e = externe(k);
+  const mois = (e?.revenue || []).filter(m => inRange(m.month + '-01', r));
+  return mois.some(m => m.signedAmount != null)
+    ? mois.reduce((s, m) => s + (Number(m.signedAmount) || 0), 0) : null;
+}
+
+// La période qui précède, de même longueur EN MOIS quand elle couvre des mois
+// entiers : octobre se compare à septembre, pas aux 31 jours qui précèdent le
+// 1er octobre (soit du 31 août au 30 septembre).
+export function periodePrecedente(r) {
+  if (r.start.getDate() === 1 && r.end.getDate() === 1) {
+    const n = (r.end.getFullYear() - r.start.getFullYear()) * 12 + r.end.getMonth() - r.start.getMonth();
+    return { start: new Date(r.start.getFullYear(), r.start.getMonth() - n, 1), end: new Date(r.start) };
+  }
+  const duree = r.end - r.start;
+  return { start: new Date(r.start.getTime() - duree), end: new Date(r.start.getTime()) };
+}
+// Le mois en cours, comme période.
+export const moisEnCours = () => {
+  const d = new Date();
+  return { start: new Date(d.getFullYear(), d.getMonth(), 1), end: new Date(d.getFullYear(), d.getMonth() + 1, 1) };
+};
+
 // ---------- Chiffre d'affaires ----------
 // CA d'une structure sur un mois donné. L'outil externe fait foi dès qu'il a
 // déposé des mois — y compris quand il annonce zéro.
@@ -127,11 +261,12 @@ export function chiffres(k, r, deals = scope.deals()) {
   const c = ca(k, r, deals);
   const nbRdv = rdvPeriode(k, r, deals);
   const nbLeads = leadsPeriode(k, r, deals);
+  const signe = montantSigne(k, r);
   return {
     cle: k,
     leads: leads(k), leadsPeriode: nbLeads,
-    rdv: nbRdv, signees: c.nb, ca: c.montant,
-    panier: c.nb ? c.montant / c.nb : null,
+    rdv: nbRdv, signees: c.nb, ca: c.montant, montantSigne: signe,
+    panier: c.nb ? (signe ?? c.montant) / c.nb : null,
     tauxRdv: nbLeads ? nbRdv / nbLeads : null,
     tauxVente: nbRdv && c.nb !== null ? c.nb / nbRdv : null,
     leadsNonDates: leadsNonDates(k),
@@ -149,7 +284,7 @@ export function total(cles, r, deals = scope.deals()) {
     // Vrai dès qu'une structure ne sait donner qu'un total de prospects : le
     // compte « sur la période » est alors incomplet, il faut le dire.
     leadsNonDates: l.some(x => x.leadsNonDates),
-    panier: nb ? montant / nb : null,
+    panier: nb ? somme(x => x.montantSigne ?? x.ca) / nb : null,
     tauxRdv: leadsP ? rdv / leadsP : null,
     tauxVente: rdv && nb !== null ? nb / rdv : null,
   };

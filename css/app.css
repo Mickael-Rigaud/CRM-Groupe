@@ -3242,7 +3242,8 @@ body.impression #print-root { display: block; }
 .tb-filtres { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
 .tb-flabel { font-size: 11px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--muted-2); }
 .tb-chips { display: flex; gap: 8px; flex-wrap: wrap; }
-.tb-periode { margin-left: auto; }
+.tb-periode, .tb-periodes { margin-left: auto; }
+.tb-periodes .tb-periode { margin-left: 0; }
 .tb-chip { display: inline-flex; align-items: center; gap: 8px; background: var(--card); border: 1px solid var(--line);
   border-radius: 999px; padding: 6px 14px 6px 8px; font-size: 13.5px; font-weight: 600; color: var(--muted);
   box-shadow: var(--shadow); transition: .14s; }
@@ -3299,6 +3300,55 @@ body.impression #print-root { display: block; }
 .tb-jauge b { font-family: var(--font-display); font-size: 13px; min-width: 40px; text-align: right; }
 .tb-legend { display: flex; align-items: center; gap: 8px; margin: 12px 0 0; }
 .tb-legend i { display: inline-block; width: 2px; height: 12px; background: var(--text); opacity: .45; flex: none; }
+/* Objectifs & performance, refait le 04/11/2026 : un bloc par structure, deux
+   jauges (le mois en cours, l'année) lues contre le rythme, et la frise des
+   douze mois contre leur objectif mensuel. --c = la couleur de la structure. */
+.tb-periodes { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tb-mois { border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--text);
+  font: inherit; font-size: 13px; font-weight: 600; padding: 6px 10px; cursor: pointer; text-transform: capitalize; }
+.tb-mois:focus { outline: none; border-color: var(--accent); }
+.ob-liste { display: flex; flex-direction: column; gap: 14px; }
+.ob-bloc { border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; border-left: 4px solid var(--c); background: var(--card); }
+.ob-bloc.click { cursor: pointer; }
+.ob-bloc.click:hover { border-color: var(--c); }
+.ob-tete { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.ob-tete b { color: var(--text); font-variant-numeric: tabular-nums; }
+.ob-groupe { font-family: var(--font-display); font-size: 16px; font-weight: 700; }
+.ob-jauges { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.ob-jauge { min-width: 0; }
+.ob-ligne { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.ob-lbl { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.ob-lbl::first-letter { text-transform: uppercase; }
+.ob-pct { font-family: var(--font-display); font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.ob-pct.ok { color: var(--green); } .ob-pct.ko { color: var(--amber); }
+.ob-montants { margin: 2px 0 8px; font-variant-numeric: tabular-nums; }
+.ob-montants b { font-family: var(--font-display); font-size: 22px; letter-spacing: -.02em; }
+.ob-barre { position: relative; height: 12px; border-radius: 99px; background: var(--card-2); }
+.ob-rempli { position: absolute; inset: 0 auto 0 0; border-radius: 99px; background: var(--c); }
+.ob-repere { position: absolute; top: -5px; bottom: -5px; width: 2px; margin-left: -1px; border-radius: 2px; background: var(--text); opacity: .55; }
+.ob-verdict { margin: 8px 0 2px; font-size: 13px; font-weight: 700; }
+.ob-verdict.ok { color: var(--green); } .ob-verdict.ko { color: var(--amber); }
+.ob-jauge p { margin-top: 0; margin-bottom: 0; }
+.ob-frise { display: grid; grid-template-columns: repeat(12, 1fr); gap: 5px; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); }
+.ob-col { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; }
+.ob-col-zone { position: relative; width: 100%; max-width: 30px; height: 56px; border-radius: 5px; background: var(--card-2); overflow: hidden; }
+.ob-col-val { position: absolute; left: 0; right: 0; bottom: 0; background: var(--c); opacity: .55; border-radius: 4px 4px 0 0; }
+.ob-col-val.ok { background: var(--green); opacity: 1; }
+.ob-col-obj { position: absolute; left: 0; right: 0; height: 2px; margin-bottom: -1px; background: var(--text); opacity: .5; }
+.ob-col.futur .ob-col-zone { opacity: .45; }
+.ob-col.courant .ob-col-zone { outline: 2px solid var(--c); outline-offset: 1px; }
+.ob-col-nom { font-size: 10.5px; color: var(--muted); white-space: nowrap; }
+.ob-col.courant .ob-col-nom { color: var(--text); font-weight: 700; }
+.ob-legende { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; margin: 10px 0 0; }
+.ob-legende span { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-left: 6px; }
+.ob-legende span:first-child { margin-left: 0; }
+.ob-l-ok { background: var(--green); } .ob-l-val { background: var(--c); opacity: .55; }
+.ob-l-obj { height: 2px !important; background: var(--text); opacity: .5; }
+@media screen and (max-width: 640px) {
+  .ob-jauges { grid-template-columns: 1fr; gap: 14px; }
+  .ob-frise { gap: 3px; }
+  .ob-col-nom { font-size: 9px; }
+}
 
 /* ---- courbe ---- */
 .tb-chartwrap { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-start; margin-top: 8px; }
@@ -3356,7 +3406,7 @@ body.impression #print-root { display: block; }
 @media (max-width: 1200px) { .tb-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } .tb-grid { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 720px) {
   .tb-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .tb-periode { margin-left: 0; }
+  .tb-periode, .tb-periodes { margin-left: 0; }
   .tb-step { grid-template-columns: 104px minmax(0, 1fr); }
   .tb-rate { grid-column: 2; text-align: left; }
   .tb-totals { flex: 1 1 100%; }

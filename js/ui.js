@@ -216,6 +216,7 @@ export function periodRange(key) {
     case 'today': break;
     case 'week': { const dow = (start.getDay() + 6) % 7; start.setDate(start.getDate() - dow); end.setTime(start.getTime()); end.setDate(end.getDate() + 7); break; }
     case 'month': start.setDate(1); end.setTime(start.getTime()); end.setMonth(end.getMonth() + 1); break;
+    case 'lastmonth': start.setDate(1); start.setMonth(start.getMonth() - 1); end.setTime(start.getTime()); end.setMonth(end.getMonth() + 1); break;
     case 'quarter': { const q = Math.floor(start.getMonth() / 3) * 3; start.setMonth(q, 1); end.setTime(start.getTime()); end.setMonth(end.getMonth() + 3); break; }
     case 'year': start.setMonth(0, 1); end.setTime(start.getTime()); end.setFullYear(end.getFullYear() + 1); break;
     case 'all': start.setFullYear(2000, 0, 1); end.setFullYear(now.getFullYear() + 10); break;

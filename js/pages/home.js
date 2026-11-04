@@ -8,9 +8,10 @@ import { propertyMetrics, loanStatus } from '../data/finance.js';
 import {
   chiffres, total, entonnoir, entonnoirParCohorte, structuresHorsEntonnoir, caMois, leadsMois, derniersMois, moisCle, moisPrecedent,
   objectifs, objectif, objectifAnnuel, enregistrerObjectifs, ecoule, anneeEnCours, CLES_VISIBLES,
+  rdvMois, signeesMois, periodePrecedente, moisEnCours, externe,
 } from '../data/chiffres.js';
 import {
-  esc, eur, daysSince, periodRange, inRange, isoDay, userName, PERIODS,
+  esc, eur, daysSince, periodRange, inRange, isoDay, userName,
   openModal, closeModal, renderForm, readForm, toast,
 } from '../ui.js';
 import { activeInMonth, rowOf, dueOf, receivedOf, balanceOf } from './locatif.js';
@@ -27,6 +28,20 @@ const BASE_PROSPECTS = {
   btp: '#/btp/base',
   courtage: '#/courtage/base',
   propulsion: '#/pipeline/propulsion',
+};
+// Les périodes du tableau de bord (04/11/2026, demandé par Élodie : « le mois
+// dernier », et « la possibilité de voir sur l'année ou le trimestre, c'est
+// tout »), puis « pouvoir sélectionner une période mensuelle aussi ».
+// « Mois » ouvre sur le mois DERNIER : c'est un mois CLOS, ses chiffres ne
+// bougent plus — le mois en cours se lit dans « Objectifs & performance » —,
+// et la liste à côté permet d'en choisir un autre.
+const PERIODES_TB = [['mois', 'Mois'], ['quarter', 'Trimestre'], ['year', 'Année']];
+const moisDernier = () => { const d = new Date(); return moisCle(new Date(d.getFullYear(), d.getMonth() - 1, 1)); };
+// La période affichée. Un mois choisi se lit comme n'importe quelle période.
+const plageDe = (state) => {
+  if (state.periode !== 'mois') return periodRange(state.periode);
+  const [a, m] = state.mois.split('-').map(Number);
+  return { start: new Date(a, m - 1, 1), end: new Date(a, m, 1) };
 };
 const pct = (v) => Math.round((v || 0) * 100);
 const eur2 = (n) => eur(n, { maximumFractionDigits: 2 });
@@ -61,7 +76,8 @@ export const homePage = {
   render(root) {
     let chart = null;
     const state = {
-      periode: 'month',
+      periode: 'mois',
+      mois: moisDernier(),
       filtre: (() => { try { return localStorage.getItem(LS_FILTRE) || 'groupe'; } catch { return 'groupe'; } })(),
     };
 
@@ -69,13 +85,13 @@ export const homePage = {
       const visibles = CLES_VISIBLES();
       if (state.filtre !== 'groupe' && !visibles.includes(state.filtre)) state.filtre = 'groupe';
       const cles = state.filtre === 'groupe' ? visibles : [state.filtre];
-      const r = periodRange(state.periode);
+      const r = plageDe(state);
       const deals = scope.deals();
       const t = total(cles, r, deals);
 
       // Comparaison : la même période, un cran plus tôt. Seul le mois est comparé
       // mois à mois ; sur « Tout » la comparaison n'a pas de sens.
-      const avant = comparaison(cles, state.periode, deals);
+      const avant = total(cles, periodePrecedente(r), deals);
       const moisSerie = derniersMois(12);
       const serieDe = (f) => moisSerie.map(m => f(m.cle));
       const caDu = (cle) => cles.reduce((s, k) => s + caMois(k, cle, deals), 0);
@@ -88,16 +104,10 @@ export const homePage = {
       const recus = jalon('leads'), avecRdv = jalon('rdv'), conclus = jalon('signed');
       const tauxRdv = recus && avecRdv !== null ? avecRdv / recus : null;
       const tauxVente = avecRdv && conclus !== null ? conclus / avecRdv : null;
-      const entAvant = comparaisonEntonnoir(cles, state.periode, deals);
+      const entAvant = comparaisonEntonnoir(cles, r, deals);
       const horsEntonnoir = structuresHorsEntonnoir(cles);
       const parCohorte = entonnoirParCohorte(cles);
-      const part = ecoule(r);
       const obj = cles.reduce((s, k) => s + objectif(k, r), 0);
-      // L'objectif se fixe à l'année : on rappelle toujours où en est l'année,
-      // même quand l'écran est filtré sur le mois ou le trimestre.
-      const an = anneeEnCours();
-      const objAn = cles.reduce((s, k) => s + objectifAnnuel(k), 0);
-      const caAn = cles.reduce((s, k) => s + chiffres(k, an, deals).ca, 0);
       const sources = cles.map(k => chiffres(k, r, deals)).filter(x => x.source);
 
       root.innerHTML = `
@@ -111,11 +121,17 @@ export const homePage = {
             ${visibles.map(k => `<button class="tb-chip" data-f="${k}" aria-pressed="${state.filtre === k}" style="--marque:${ACTIVITIES[k].color}">
               <img class="tb-logo" src="assets/logos/${k}.png" alt="" data-cle="${k}"><span>${esc(ACTIVITIES[k].label)}</span></button>`).join('')}
           </div>
-          <div class="seg tb-periode">${PERIODS.map(([k, l]) => `<button data-p="${k}" class="${state.periode === k ? 'active' : ''}">${l}</button>`).join('')}</div>
+          <div class="tb-periodes">
+            <div class="seg tb-periode">${PERIODES_TB.map(([k, l]) => `<button data-p="${k}" class="${state.periode === k ? 'active' : ''}">${l}</button>`).join('')}</div>
+            ${state.periode === 'mois' ? `<select class="tb-mois" id="tb-mois" aria-label="Choisir le mois">${derniersMois(24, new Date()).reverse().map(m => {
+              const nom = new Date(m.cle + '-01T00:00:00').toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+              return `<option value="${m.cle}"${m.cle === state.mois ? ' selected' : ''}>${esc(nom)}${m.cle === moisCle() ? ' (en cours)' : m.cle === moisDernier() ? ' (mois dernier)' : ''}</option>`;
+            }).join('')}</select>` : ''}
+          </div>
         </div>
 
         <section class="tb-kpis">
-          ${kpi('Leads', t.leads,
+          ${kpi('Leads', t.leadsNonDates ? t.leads : t.leadsPeriode,
             // Sans date d'arrivée, aucune évolution n'est calculable : mieux vaut
             // ne rien afficher qu'un pourcentage qui ne compare pas ce qu'il dit.
             t.leadsNonDates ? null : evolution(avant?.leadsPeriode, t.leadsPeriode),
@@ -124,15 +140,15 @@ export const homePage = {
             false,
             t.leadsNonDates ? 'Total en base : ces outils ne datent pas l\'arrivée des prospects.' : '',
             cles.length === 1 ? BASE_PROSPECTS[cles[0]] : '')}
-          ${kpi('RDV', t.rdv, evolution(avant?.rdv, t.rdv), serieDe(cle => nbRdvMois(cles, cle, deals)),
-            'rendez-vous tenus sur la période')}
-          ${kpi('Affaires signées', t.signees ?? '—', evolution(avant?.signees, t.signees), serieDe(cle => nbSigneesMois(cles, cle, deals)), t.panier ? `panier ${eur(t.panier)}` : 'panier moyen indisponible')}
+          ${kpi('RDV', t.rdv, evolution(avant?.rdv, t.rdv), serieDe(cle => cles.reduce((s, k) => s + rdvMois(k, cle, deals), 0)),
+            cles.length === 1 && cles[0] === 'rgd' ? 'visites techniques réalisées' : 'rendez-vous tenus sur la période')}
+          ${kpi('Affaires signées', t.signees ?? '—', evolution(avant?.signees, t.signees), serieDe(cle => cles.reduce((s, k) => s + signeesMois(k, cle, deals), 0)), t.panier ? `panier ${eur(t.panier)}` : 'panier moyen indisponible')}
           ${kpi('CA HT', eur(t.ca), evolution(avant?.ca, t.ca), serieDe(caDu),
             obj ? `objectif ${eur(obj)}` : scope.canPilotage ? 'aucun objectif fixé' : 'sur vos affaires')}
           ${kpi('Lead → RDV', tauxRdv === null ? '—' : pct(tauxRdv) + ' %', ecart(entAvant?.tauxRdv, tauxRdv), [],
-            tauxRdv === null ? 'étape non comptée' : `${avecRdv} RDV sur ${recus} lead${recus > 1 ? 's' : ''} reçu${recus > 1 ? 's' : ''}`, true)}
-          ${kpi('RDV → vente', tauxVente === null ? '—' : pct(tauxVente) + ' %', ecart(entAvant?.tauxVente, tauxVente), [],
-            tauxVente === null ? 'étape non comptée' : `${conclus} signé${conclus > 1 ? 's' : ''} sur ${avecRdv} RDV`, true)}
+            tauxRdv === null ? (recus === 0 ? 'aucun lead sur la période' : 'étape non comptée') : `${avecRdv} RDV sur ${recus} lead${recus > 1 ? 's' : ''} reçu${recus > 1 ? 's' : ''}`, true)}
+          ${kpi('RDV → devis signé', tauxVente === null ? '—' : pct(tauxVente) + ' %', ecart(entAvant?.tauxVente, tauxVente), [],
+            tauxVente === null ? (avecRdv === 0 ? 'aucun RDV sur la période' : 'étape non comptée') : `${conclus} signé${conclus > 1 ? 's' : ''} sur ${avecRdv} RDV`, true)}
         </section>
 
         <div class="tb-grid">
@@ -140,7 +156,9 @@ export const homePage = {
 
             <section class="card">
               <div class="card-head"><h2>Pipeline &amp; conversion</h2>
-                <span class="muted small">${parCohorte ? 'prospects arrivés sur la période, suivis jusqu\'à aujourd\'hui' : 'affaires créées sur la période'} · taux de passage</span></div>
+                <span class="muted small">${parCohorte ? 'prospects arrivés sur la période, suivis jusqu\'à aujourd\'hui'
+                  : cles.every(k => externe(k)?.direct) ? 'leads, visites, devis envoyés et signatures de la période'
+                  : 'affaires créées sur la période'} · taux de passage</span></div>
               ${!parCohorte && ent.some((s, i) => i && s.n > ent[i - 1].n) ? `<p class="muted small tb-hors">
                 <span class="ag-abs">Une étape dépasse la précédente : ces affaires sont arrivées avant la période. Un entonnoir ne se lit bien que sur une période assez longue.</span></p>` : ''}
               ${horsEntonnoir.length ? `<p class="muted small tb-hors">${horsEntonnoir.map(k =>
@@ -170,21 +188,7 @@ export const homePage = {
               </div>
             </section>
 
-            ${scope.canPilotage ? `
-            <section class="card">
-              <div class="card-head"><h2>Objectifs &amp; performance</h2>
-                ${objAn ? `<span class="muted small tb-an">Année ${an.annee} : <b>${eur(caAn)}</b> sur ${eur(objAn)} · ${pct(caAn / objAn)} %
-                  <span class="tb-track" style="width:70px"><span class="tb-fill" style="width:${Math.min(100, pct(caAn / objAn))}%;background:var(--accent)"></span><span class="tb-today" style="left:${Math.min(100, pct(ecoule(an)))}%"></span></span></span>` : ''}
-                ${scope.isDirection ? '<button class="btn ghost sm" id="tb-obj">Fixer les objectifs</button>' : ''}</div>
-              ${obj ? `<div class="table-wrap"><table class="tb-goals">
-                <thead><tr><th>Structure</th><th class="num">Objectif ${esc(libellePeriode(state.periode))}</th><th class="num">Réalisé</th><th class="num">Reste</th><th class="num">Avancement</th></tr></thead>
-                <tbody>
-                  ${cles.map(k => ligneObjectif(k, r, deals, part)).join('')}
-                  ${cles.length > 1 ? ligneTotal(t.ca, obj, part) : ''}
-                </tbody></table></div>
-                <p class="muted small tb-legend"><i></i> Objectif annuel ramené ${esc(libellePeriode(state.periode))} ; le repère marque ${pct(part)} % de la période écoulée. À droite du repère, la structure est en avance.</p>`
-              : `<p class="empty" style="padding:22px">${objAn ? 'Pas d\'objectif calculable sur cette période.' : 'Aucun objectif fixé.'}${scope.isDirection && !objAn ? ' Utilisez « Fixer les objectifs » pour définir un objectif de CA annuel par structure.' : ''}</p>`}
-            </section>` : ''}
+            ${scope.canPilotage ? carteObjectifs(cles, deals) : ''}
 
             <section class="card">
               <div class="card-head"><h2>Évolution du chiffre d'affaires</h2>
@@ -208,8 +212,9 @@ export const homePage = {
           </div>
         </div>
 
-        ${sources.length ? `<p class="muted small tb-source">${sources.map(x =>
-          `${esc(ACTIVITIES[x.cle].label)} : chiffres déposés par ${esc(x.source)}, mis à jour le ${new Date(x.maj).toLocaleDateString('fr-FR')}`).join(' · ')}
+        ${sources.length ? `<p class="muted small tb-source">${sources.map(x => externe(x.cle)?.direct
+          ? `${esc(ACTIVITIES[x.cle].label)} : chiffres lus en direct dans ${esc(x.source)} (CA facturé, visites techniques, devis signés)`
+          : `${esc(ACTIVITIES[x.cle].label)} : chiffres déposés par ${esc(x.source)}, mis à jour le ${new Date(x.maj).toLocaleDateString('fr-FR')}`).join(' · ')}
           — chaque outil applique ses propres définitions : un CA peut être facturé chez l'un et signé chez l'autre.</p>` : ''}`;
 
       // ---- interactions
@@ -219,6 +224,7 @@ export const homePage = {
         draw();
       });
       root.querySelectorAll('[data-p]').forEach(b => b.onclick = () => { state.periode = b.dataset.p; draw(); });
+      root.querySelector('#tb-mois')?.addEventListener('change', (e) => { state.mois = e.target.value; draw(); });
       root.querySelectorAll('[data-go]').forEach(el => el.onclick = (e) => {
         e.stopPropagation();          // une pastille est posée dans une tuile cliquable
         location.hash = el.dataset.go;
@@ -321,11 +327,14 @@ export const homePage = {
 // Qui apporte les leads : en vue Groupe, un nombre seul ne dit pas de quelle
 // structure il vient. Une pastille par structure qui en a, dans sa couleur.
 function repartitionLeads(t, cles) {
-  const avec = t.lignes.filter(x => x.leads > 0);
+  // Le nombre de la pastille est celui de la tuile : les leads DE LA PÉRIODE,
+  // sauf pour un outil qui ne sait pas les dater (son total, signalé).
+  const n = (x) => (x.leadsNonDates ? x.leads : x.leadsPeriode);
+  const avec = t.lignes.filter(x => n(x) > 0);
   if (!avec.length) return 'aucun prospect en base';
   if (cles.length === 1) {
     return t.leadsNonDates ? 'prospects en base · arrivée non datée'
-      : `${t.leadsPeriode} nouveau${t.leadsPeriode > 1 ? 'x' : ''} sur la période`;
+      : 'nouveaux contacts sur la période';
   }
   // Le nom court plutôt qu'une pastille seule : à cette taille, une couleur ne
   // suffit pas à reconnaître une structure.
@@ -333,31 +342,21 @@ function repartitionLeads(t, cles) {
   // moyen de passer d'un nombre à la liste qui est derrière.
   return `<span class="tb-part">${avec.map(x =>
     `<button type="button" class="tb-pp" style="--c:${ACTIVITIES[x.cle].color}" data-go="${BASE_PROSPECTS[x.cle]}"
-       title="Ouvrir les prospects — ${esc(ACTIVITIES[x.cle].label)} (${x.leads})">
-       <i></i>${esc(ACTIVITIES[x.cle].short)} <b>${x.leads}</b></button>`).join('')}</span>`;
+       title="Ouvrir les prospects — ${esc(ACTIVITIES[x.cle].label)} (${n(x)})">
+       <i></i>${esc(ACTIVITIES[x.cle].short)} <b>${n(x)}</b></button>`).join('')}</span>`;
 }
 
 // ---------- comparaison avec la période précédente ----------
-function comparaison(cles, periode, deals) {
-  if (periode === 'all' || periode === 'today') return null;
-  const r = periodRange(periode);
-  const duree = r.end - r.start;
-  const precedent = { start: new Date(r.start.getTime() - duree), end: new Date(r.start.getTime()) };
-  return total(cles, precedent, deals);
-}
 const comparaisonLabel = (p) => ({
-  today: '', week: 'vs semaine dernière', month: 'vs mois dernier',
+  today: '', week: 'vs semaine dernière', month: 'vs mois dernier', mois: 'vs mois précédent',
   quarter: 'vs trimestre dernier', year: 'vs an dernier', all: '',
 }[p] || '');
 // Les taux se comparent en points de pourcentage, pas en pourcentage de pourcentage
 const ecart = (avant, apres) => (avant == null || apres == null) ? null : Math.round((apres - avant) * 100);
 
 // L'entonnoir de la période précédente, pour comparer les taux à population comparable
-function comparaisonEntonnoir(cles, periode, deals) {
-  if (periode === 'all' || periode === 'today') return null;
-  const r = periodRange(periode);
-  const duree = r.end - r.start;
-  const e = entonnoir(cles, { start: new Date(r.start.getTime() - duree), end: new Date(r.start.getTime()) }, deals);
+function comparaisonEntonnoir(cles, r, deals) {
+  const e = entonnoir(cles, periodePrecedente(r), deals);
   const j = (champ) => e.find(x => x.champ === champ)?.n ?? null;
   const recus = j('leads'), rdv = j('rdv'), signes = j('signed');
   return {
@@ -370,40 +369,116 @@ const montantCohorte = (cles, r, deals) => deals
   .filter(d => cles.includes(d.activity) && d.status === 'won' && inRange(d.created_at, r))
   .reduce((s, d) => s + (Number(d.amount) || 0), 0);
 
-// ---------- séries mensuelles ----------
-const enMois = (d, cle) => (d || '').slice(0, 7) === cle;
-const nbSigneesMois = (cles, cle, deals) => deals.filter(d => cles.includes(d.activity) && d.status === 'won' && enMois(d.won_at, cle)).length;
-const nbRdvMois = (cles, cle, deals) => deals.filter(d => {
-  if (!cles.includes(d.activity)) return false;
-  const at = (d.stage_history || []).find(h => h.stage === ACTIVITIES[d.activity]?.rdvStage)?.at || d.won_at;
-  return enMois(at, cle);
-}).length;
-
 // ---------- objectifs ----------
-function ligneObjectif(k, r, deals, part) {
-  const c = chiffres(k, r, deals);
-  const o = objectif(k, r);
-  const avance = o ? c.ca / o : 0;
-  const reste = Math.max(0, o - c.ca);
-  return `<tr class="click" data-go="${k === 'rgd' ? '#/rgd' : k === 'btp' ? '#/btp' : k === 'courtage' ? '#/courtage' : '#/pipeline/' + k}">
-    <td><span class="tb-struct"><img src="assets/logos/${k}-complet.png" alt="${esc(ACTIVITIES[k].label)}" data-cle="${k}" data-nom="${esc(ACTIVITIES[k].label)}"></span></td>
-    <td class="num">${o ? eur(o) : '—'}</td>
-    <td class="num"><b>${eur(c.ca)}</b></td>
-    <td class="num">${o ? (reste ? eur(reste) : 'atteint') : '—'}</td>
-    <td class="num">${jauge(avance, part, ACTIVITIES[k].color, o)}</td>
-  </tr>`;
+/**
+ * « Objectifs & performance » — refait le 04/11/2026 (Élodie : « plus intuitif
+ * visuellement, et que l'on voie l'avancée sur l'année et le mois en cours »).
+ *
+ * ⚠ CETTE CARTE NE SUIT PAS LE SÉLECTEUR DE PÉRIODE, et c'est voulu : elle
+ * répond toujours aux deux mêmes questions — où en est le MOIS EN COURS, où en
+ * est l'ANNÉE — alors que les tuiles du haut lisent le mois dernier, clos.
+ *
+ * ⚠ LE VERDICT SE LIT CONTRE LE RYTHME, PAS CONTRE L'OBJECTIF ENTIER : le 4 du
+ * mois, 12 % de l'objectif n'est pas un retard. Le repère vertical marque où il
+ * faudrait être aujourd'hui ; l'écart en euros dit de combien on s'en écarte.
+ */
+function carteObjectifs(cles, deals) {
+  const an = anneeEnCours(), mois = moisEnCours();
+  const avecObjectif = cles.filter(k => objectifAnnuel(k) > 0);
+  const nomMois = mois.start.toLocaleDateString('fr-FR', { month: 'long' });
+  const entete = `<div class="card-head"><h2>Objectifs &amp; performance</h2>
+    <span class="muted small">${esc(nomMois)} et année ${an.annee} · CA HT</span>
+    ${scope.isDirection ? '<button class="btn ghost sm" id="tb-obj">Fixer les objectifs</button>' : ''}</div>`;
+  if (!avecObjectif.length) {
+    return `<section class="card">${entete}<p class="empty" style="padding:22px">Aucun objectif fixé.${scope.isDirection
+      ? ' Utilisez « Fixer les objectifs » pour définir un objectif de CA annuel par structure.' : ''}</p></section>`;
+  }
+  const blocs = avecObjectif.map(k => blocObjectif([k], ACTIVITIES[k].color, deals,
+    `<img src="assets/logos/${k}-complet.png" alt="${esc(ACTIVITIES[k].label)}" data-cle="${k}" data-nom="${esc(ACTIVITIES[k].label)}">`,
+    `data-go="${lienStructure(k)}"`));
+  if (avecObjectif.length > 1) {
+    blocs.push(blocObjectif(avecObjectif, 'var(--accent)', deals, '<span class="ob-groupe">Groupe</span>', ''));
+  }
+  return `<section class="card">${entete}<div class="ob-liste">${blocs.join('')}</div>
+    <p class="muted small tb-legend"><i></i> Le trait marque où il faudrait être aujourd'hui pour tenir l'objectif.</p></section>`;
 }
-const ligneTotal = (ca, obj, part) => `<tr class="total">
-  <td>Groupe</td><td class="num">${eur(obj)}</td><td class="num">${eur(ca)}</td>
-  <td class="num">${Math.max(0, obj - ca) ? eur(obj - ca) : 'atteint'}</td>
-  <td class="num">${jauge(obj ? ca / obj : 0, part, 'var(--accent)', obj)}</td></tr>`;
-function jauge(avance, part, couleur, objectifFixe) {
-  if (!objectifFixe) return '—';
-  const p = pct(avance);
-  return `<span class="tb-jauge" title="${p} % de l'objectif, ${pct(part)} % de la période écoulée">
-    <span class="tb-track"><span class="tb-fill" style="width:${Math.min(100, p)}%;background:${couleur}"></span>
-    <span class="tb-today" style="left:${Math.min(100, pct(part))}%"></span></span>
-    <b class="${avance >= part ? 'status-won' : ''}">${p} %</b></span>`;
+const lienStructure = (k) => (k === 'rgd' ? '#/rgd' : k === 'btp' ? '#/btp' : k === 'courtage' ? '#/courtage' : '#/pipeline/' + k);
+
+function blocObjectif(cles, couleur, deals, titre, attrs) {
+  const an = anneeEnCours(), mois = moisEnCours();
+  const somme = (f) => cles.reduce((s, k) => s + f(k), 0);
+  const caDe = (r) => somme(k => chiffres(k, r, deals).ca);
+  const objAn = somme(k => objectifAnnuel(k));
+  const objMois = somme(k => objectif(k, mois));
+
+  // Les douze mois de l'année, chacun contre son propre objectif mensuel.
+  const cleMoisCourant = moisCle();
+  const colonnes = Array.from({ length: 12 }, (_, i) => {
+    const r = { start: new Date(an.annee, i, 1), end: new Date(an.annee, i + 1, 1) };
+    const cle = moisCle(r.start);
+    return {
+      cle, o: somme(k => objectif(k, r)), v: cle > cleMoisCourant ? null : caDe(r),
+      label: r.start.toLocaleDateString('fr-FR', { month: 'short' }).replace('.', ''),
+    };
+  });
+  const haut = Math.max(1, ...colonnes.map(c => Math.max(c.o, c.v || 0)));
+  const frise = `<div class="ob-frise" aria-label="CA mois par mois">${colonnes.map(c => {
+    const futur = c.v === null, courant = c.cle === cleMoisCourant;
+    const atteint = !futur && c.o > 0 && c.v >= c.o;
+    return `<div class="ob-col${futur ? ' futur' : ''}${courant ? ' courant' : ''}"
+        title="${esc(c.label)} : ${futur ? 'à venir' : eur(c.v)} · objectif ${eur(c.o)}">
+      <div class="ob-col-zone">
+        ${futur ? '' : `<span class="ob-col-val${atteint ? ' ok' : ''}" style="height:${Math.max(c.v > 0 ? 3 : 0, c.v / haut * 100).toFixed(1)}%"></span>`}
+        <span class="ob-col-obj" style="bottom:${(c.o / haut * 100).toFixed(1)}%"></span>
+      </div>
+      <span class="ob-col-nom">${esc(c.label)}</span></div>`;
+  }).join('')}</div>`;
+
+  return `<article class="ob-bloc${attrs ? ' click' : ''}" style="--c:${couleur}" ${attrs}>
+    <header class="ob-tete"><span class="tb-struct">${titre}</span>
+      <span class="muted small">objectif annuel <b>${eur(objAn)}</b></span></header>
+    <div class="ob-jauges">
+      ${jaugeObjectif(`${mois.start.toLocaleDateString('fr-FR', { month: 'long' })} · en cours`, caDe(mois), objMois, mois, 'jour')}
+      ${jaugeObjectif(`Année ${an.annee}`, caDe(an), objAn, an, 'mois')}
+    </div>
+    ${frise}
+    <p class="ob-legende muted small"><span class="ob-l-ok"></span>objectif du mois atteint
+      <span class="ob-l-val"></span>réalisé <span class="ob-l-obj"></span>objectif du mois</p>
+  </article>`;
+}
+
+function jaugeObjectif(libelle, realise, vise, r, unite) {
+  if (!vise) {
+    return `<div class="ob-jauge"><span class="ob-lbl">${esc(libelle)}</span>
+      <p class="muted small">Pas d'objectif sur cette période.</p></div>`;
+  }
+  const part = ecoule(r);
+  const ecart = realise - vise * part;
+  const p = realise / vise;
+  const reste = Math.max(0, vise - realise);
+  // Ce qu'il reste à faire, ramené au temps qu'il reste.
+  let rythme = '';
+  if (reste && part < 1) {
+    if (unite === 'mois') {
+      const moisRestants = 12 - new Date().getMonth();
+      rythme = moisRestants > 1 ? `, soit ${eur(reste / moisRestants)} par mois sur ${moisRestants} mois` : ' ce mois-ci';
+    } else {
+      const jours = Math.max(1, Math.ceil((r.end - Date.now()) / 86400000));
+      rythme = ` en ${jours} jour${jours > 1 ? 's' : ''}`;
+    }
+  }
+  const etat = p >= 1 || ecart >= 0 ? 'ok' : 'ko';
+  const verdict = p >= 1 ? `Objectif atteint${realise > vise ? `, dépassé de ${eur(realise - vise)}` : ''}`
+    : ecart >= 0 ? `En avance de ${eur(ecart)} sur le rythme`
+    : `En retard de ${eur(-ecart)} sur le rythme`;
+  return `<div class="ob-jauge">
+    <div class="ob-ligne"><span class="ob-lbl">${esc(libelle)}</span><span class="ob-pct ${etat}">${pct(p)} %</span></div>
+    <div class="ob-montants"><b>${eur(realise)}</b><span class="muted"> sur ${eur(vise)}</span></div>
+    <div class="ob-barre"><span class="ob-rempli" style="width:${Math.min(100, p * 100).toFixed(1)}%"></span>
+      ${part > 0 && part < 1 ? `<span class="ob-repere" style="left:${(part * 100).toFixed(1)}%" title="Où il faudrait être aujourd'hui"></span>` : ''}</div>
+    <p class="ob-verdict ${etat}">${verdict}</p>
+    <p class="muted small">${reste ? `Reste ${eur(reste)}${rythme}` : 'Plus rien à faire sur cette période.'}</p>
+  </div>`;
 }
 function formObjectifs(onSaved) {
   const valeurs = Object.fromEntries(ACTIVITY_KEYS.map(k => [k, objectifAnnuel(k) || '']));
@@ -426,7 +501,7 @@ function formObjectifs(onSaved) {
 }
 
 const libellePeriode = (p) => ({
-  today: 'à la journée', week: 'à la semaine', month: 'au mois',
+  today: 'à la journée', week: 'à la semaine', month: 'au mois', lastmonth: 'au mois',
   quarter: 'au trimestre', year: "sur l'année", all: '',
 }[p] || '');
 
