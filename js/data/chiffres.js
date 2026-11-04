@@ -435,6 +435,16 @@ export const anneeEnCours = () => {
   const a = new Date().getFullYear();
   return { start: new Date(a, 0, 1), end: new Date(a + 1, 0, 1), annee: a };
 };
+// L'année d'objectif d'une structure. ⚠ RGD RENOVA COMPTE DU 1er OCTOBRE AU
+// 30 SEPTEMBRE (son exercice, aligné sur Costructor) : son objectif annuel se
+// lit sur cet exercice, pas sur l'année civile (rappelé par Élodie le 04/11/2026).
+export const DEBUT_EXERCICE = { rgd: 10 };
+export function exerciceDe(k, d = new Date()) {
+  const m0 = (DEBUT_EXERCICE[k] || 1) - 1;
+  const a = d.getMonth() >= m0 ? d.getFullYear() : d.getFullYear() - 1;
+  const start = new Date(a, m0, 1), end = new Date(a + 1, m0, 1);
+  return { start, end, annee: a, label: m0 ? `${a}–${a + 1}` : String(a) };
+}
 export async function enregistrerObjectifs(valeurs) {
   const { mois } = objectifs();
   const o = { ...valeurs, periode: 'annuel', mois };

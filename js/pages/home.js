@@ -8,7 +8,7 @@ import { propertyMetrics, loanStatus } from '../data/finance.js';
 import {
   chiffres, total, entonnoir, entonnoirParCohorte, structuresHorsEntonnoir, caMois, leadsMois, derniersMois, moisCle, moisPrecedent,
   objectifs, objectif, objectifAnnuel, enregistrerObjectifs, ecoule, anneeEnCours, CLES_VISIBLES,
-  rdvMois, signeesMois, periodePrecedente, moisEnCours, externe,
+  rdvMois, signeesMois, periodePrecedente, moisEnCours, externe, exerciceDe,
 } from '../data/chiffres.js';
 import {
   esc, eur, daysSince, periodRange, inRange, isoDay, userName,
@@ -21,6 +21,7 @@ import {
 } from '../agenda.js';
 import { evenementsEnregistres, derniereSync, agendasDe } from '../agenda-sync.js';
 import { creerAgendaPersonnel } from '../comptes.js';
+import { pipelineRgdHtml } from './rgd-pilotage.js';
 
 const LS_FILTRE = 'crm_home_filtre';
 const BASE_PROSPECTS = {
@@ -38,7 +39,12 @@ const BASE_PROSPECTS = {
 const PERIODES_TB = [['mois', 'Mois'], ['quarter', 'Trimestre'], ['year', 'Année']];
 const moisDernier = () => { const d = new Date(); return moisCle(new Date(d.getFullYear(), d.getMonth() - 1, 1)); };
 // La période affichée. Un mois choisi se lit comme n'importe quelle période.
-const plageDe = (state) => {
+// ⚠ « Année » sur RGD Renova seule = son exercice (1er octobre → 30 septembre).
+const plageDe = (state, cles = []) => {
+  if (state.periode === 'year' && cles.length === 1 && exerciceDe(cles[0]).label.includes('–')) {
+    const ex = exerciceDe(cles[0]);
+    return { start: ex.start, end: ex.end };
+  }
   if (state.periode !== 'mois') return periodRange(state.periode);
   const [a, m] = state.mois.split('-').map(Number);
   return { start: new Date(a, m - 1, 1), end: new Date(a, m, 1) };
@@ -85,7 +91,7 @@ export const homePage = {
       const visibles = CLES_VISIBLES();
       if (state.filtre !== 'groupe' && !visibles.includes(state.filtre)) state.filtre = 'groupe';
       const cles = state.filtre === 'groupe' ? visibles : [state.filtre];
-      const r = plageDe(state);
+      const r = plageDe(state, cles);
       const deals = scope.deals();
       const t = total(cles, r, deals);
 
@@ -122,7 +128,7 @@ export const homePage = {
               <img class="tb-logo" src="assets/logos/${k}.png" alt="" data-cle="${k}"><span>${esc(ACTIVITIES[k].label)}</span></button>`).join('')}
           </div>
           <div class="tb-periodes">
-            <div class="seg tb-periode">${PERIODES_TB.map(([k, l]) => `<button data-p="${k}" class="${state.periode === k ? 'active' : ''}">${l}</button>`).join('')}</div>
+            <div class="seg tb-periode">${PERIODES_TB.map(([k, l]) => `<button data-p="${k}" class="${state.periode === k ? 'active' : ''}"${k === 'year' && cles.length === 1 && exerciceDe(cles[0]).label.includes('–') ? ` title="Exercice ${exerciceDe(cles[0]).label} : du 1er octobre au 30 septembre"` : ''}>${k === 'year' && cles.length === 1 && exerciceDe(cles[0]).label.includes('–') ? 'Exercice ' + exerciceDe(cles[0]).label : l}</button>`).join('')}</div>
             ${state.periode === 'mois' ? `<select class="tb-mois" id="tb-mois" aria-label="Choisir le mois">${derniersMois(24, new Date()).reverse().map(m => {
               const nom = new Date(m.cle + '-01T00:00:00').toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
               return `<option value="${m.cle}"${m.cle === state.mois ? ' selected' : ''}>${esc(nom)}${m.cle === moisCle() ? ' (en cours)' : m.cle === moisDernier() ? ' (mois dernier)' : ''}</option>`;
@@ -154,6 +160,12 @@ export const homePage = {
         <div class="tb-grid">
           <div class="tb-col">
 
+            ${cles.length === 1 && cles[0] === 'rgd' ? `
+            <section class="card rgd-pipe">
+              <div class="card-head"><h2>Pipeline</h2>
+                <span class="muted small">les étapes de Clients &amp; prospects, aujourd'hui</span></div>
+              ${pipelineRgdHtml()}
+            </section>` : `
             <section class="card">
               <div class="card-head"><h2>Pipeline &amp; conversion</h2>
                 <span class="muted small">${parCohorte ? 'prospects arrivés sur la période, suivis jusqu\'à aujourd\'hui'
@@ -186,7 +198,7 @@ export const homePage = {
                   ? `des leads reçus sur la période sont déjà signés${conclus ? ` · ${conclus} affaire${conclus > 1 ? 's' : ''}` : ''}`
                   : 'taux de transformation indisponible sur cette période'}</span>
               </div>
-            </section>
+            </section>`}
 
             ${scope.canPilotage ? carteObjectifs(cles, deals) : ''}
 
@@ -383,11 +395,11 @@ const montantCohorte = (cles, r, deals) => deals
  * faudrait être aujourd'hui ; l'écart en euros dit de combien on s'en écarte.
  */
 function carteObjectifs(cles, deals) {
-  const an = anneeEnCours(), mois = moisEnCours();
+  const mois = moisEnCours();
   const avecObjectif = cles.filter(k => objectifAnnuel(k) > 0);
   const nomMois = mois.start.toLocaleDateString('fr-FR', { month: 'long' });
   const entete = `<div class="card-head"><h2>Objectifs &amp; performance</h2>
-    <span class="muted small">${esc(nomMois)} et année ${an.annee} · CA HT</span>
+    <span class="muted small">${esc(nomMois)} et année d'objectif de chaque structure · CA HT</span>
     ${scope.isDirection ? '<button class="btn ghost sm" id="tb-obj">Fixer les objectifs</button>' : ''}</div>`;
   if (!avecObjectif.length) {
     return `<section class="card">${entete}<p class="empty" style="padding:22px">Aucun objectif fixé.${scope.isDirection
@@ -405,16 +417,25 @@ function carteObjectifs(cles, deals) {
 const lienStructure = (k) => (k === 'rgd' ? '#/rgd' : k === 'btp' ? '#/btp' : k === 'courtage' ? '#/courtage' : '#/pipeline/' + k);
 
 function blocObjectif(cles, couleur, deals, titre, attrs) {
-  const an = anneeEnCours(), mois = moisEnCours();
+  const mois = moisEnCours();
   const somme = (f) => cles.reduce((s, k) => s + f(k), 0);
   const caDe = (r) => somme(k => chiffres(k, r, deals).ca);
   const objAn = somme(k => objectifAnnuel(k));
   const objMois = somme(k => objectif(k, mois));
+  // L'année d'objectif : l'exercice de la structure (RGD : octobre → septembre).
+  // ⚠ Le bloc Groupe additionne chaque structure SUR SON PROPRE EXERCICE ; ses
+  // années ne coïncidant pas, il n'a pas de frise mois par mois.
+  const exercices = cles.map(k => exerciceDe(k));
+  const memeAnnee = exercices.every(e => +e.start === +exercices[0].start);
+  const an = exercices[0];
+  const caAnnee = somme(k => chiffres(k, exerciceDe(k), deals).ca);
+  const nomAnnee = memeAnnee ? (an.label.includes('–') ? `Exercice ${an.label}` : `Année ${an.label}`) : 'Année d\'objectif';
+  const partAnnee = memeAnnee ? an : null;
 
-  // Les douze mois de l'année, chacun contre son propre objectif mensuel.
+  // Les douze mois de l'exercice, chacun contre son propre objectif mensuel.
   const cleMoisCourant = moisCle();
-  const colonnes = Array.from({ length: 12 }, (_, i) => {
-    const r = { start: new Date(an.annee, i, 1), end: new Date(an.annee, i + 1, 1) };
+  const colonnes = !memeAnnee ? [] : Array.from({ length: 12 }, (_, i) => {
+    const r = { start: new Date(an.start.getFullYear(), an.start.getMonth() + i, 1), end: new Date(an.start.getFullYear(), an.start.getMonth() + i + 1, 1) };
     const cle = moisCle(r.start);
     return {
       cle, o: somme(k => objectif(k, r)), v: cle > cleMoisCourant ? null : caDe(r),
@@ -422,7 +443,7 @@ function blocObjectif(cles, couleur, deals, titre, attrs) {
     };
   });
   const haut = Math.max(1, ...colonnes.map(c => Math.max(c.o, c.v || 0)));
-  const frise = `<div class="ob-frise" aria-label="CA mois par mois">${colonnes.map(c => {
+  const frise = !colonnes.length ? '' : `<div class="ob-frise" aria-label="CA mois par mois">${colonnes.map(c => {
     const futur = c.v === null, courant = c.cle === cleMoisCourant;
     const atteint = !futur && c.o > 0 && c.v >= c.o;
     return `<div class="ob-col${futur ? ' futur' : ''}${courant ? ' courant' : ''}"
@@ -439,20 +460,23 @@ function blocObjectif(cles, couleur, deals, titre, attrs) {
       <span class="muted small">objectif annuel <b>${eur(objAn)}</b></span></header>
     <div class="ob-jauges">
       ${jaugeObjectif(`${mois.start.toLocaleDateString('fr-FR', { month: 'long' })} · en cours`, caDe(mois), objMois, mois, 'jour')}
-      ${jaugeObjectif(`Année ${an.annee}`, caDe(an), objAn, an, 'mois')}
+      ${jaugeObjectif(nomAnnee, caAnnee, objAn, partAnnee || exercices[0], partAnnee ? 'mois' : '',
+        // Années décalées (Groupe) : le rythme attendu est la somme de celui de
+        // chaque structure sur son propre exercice.
+        partAnnee ? null : (objAn ? cles.reduce((s, k) => s + objectifAnnuel(k) * ecoule(exerciceDe(k)), 0) / objAn : 0))}
     </div>
     ${frise}
-    <p class="ob-legende muted small"><span class="ob-l-ok"></span>objectif du mois atteint
-      <span class="ob-l-val"></span>réalisé <span class="ob-l-obj"></span>objectif du mois</p>
+    ${colonnes.length ? `<p class="ob-legende muted small"><span class="ob-l-ok"></span>objectif du mois atteint
+      <span class="ob-l-val"></span>réalisé <span class="ob-l-obj"></span>objectif du mois</p>` : ''}
   </article>`;
 }
 
-function jaugeObjectif(libelle, realise, vise, r, unite) {
+function jaugeObjectif(libelle, realise, vise, r, unite, partForcee = null) {
   if (!vise) {
     return `<div class="ob-jauge"><span class="ob-lbl">${esc(libelle)}</span>
       <p class="muted small">Pas d'objectif sur cette période.</p></div>`;
   }
-  const part = ecoule(r);
+  const part = partForcee ?? ecoule(r);
   const ecart = realise - vise * part;
   const p = realise / vise;
   const reste = Math.max(0, vise - realise);
@@ -460,9 +484,10 @@ function jaugeObjectif(libelle, realise, vise, r, unite) {
   let rythme = '';
   if (reste && part < 1) {
     if (unite === 'mois') {
-      const moisRestants = 12 - new Date().getMonth();
+      const n = new Date();
+      const moisRestants = (r.end.getFullYear() - n.getFullYear()) * 12 + r.end.getMonth() - n.getMonth();
       rythme = moisRestants > 1 ? `, soit ${eur(reste / moisRestants)} par mois sur ${moisRestants} mois` : ' ce mois-ci';
-    } else {
+    } else if (unite === 'jour') {
       const jours = Math.max(1, Math.ceil((r.end - Date.now()) / 86400000));
       rythme = ` en ${jours} jour${jours > 1 ? 's' : ''}`;
     }
