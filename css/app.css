@@ -4054,6 +4054,97 @@ button.tb-pp:hover { color: var(--text); text-decoration: underline; text-underl
   font-size: 15px; min-width: 44px; }
 .rgd-pipe-pied { margin: 12px 0 0; border-top: 1px solid var(--line); padding-top: 10px; }
 
+/* ------------------------------------------------ Objectifs du mois (04/11/2026)
+   Troisième dessin. Les deux premiers empilaient des rectangles — quatre
+   frises, puis douze groupes de quatre barres — et Élodie les a écartés :
+   « trop chargé », puis « pas du tout moderne ni dynamique ».
+
+   ⚠ CE QUI CHANGE ICI N'EST PAS LA COULEUR, C'EST LA FORME : des anneaux qui
+   se remplissent, une seule aire dégradée, et des pastilles pour passer d'un
+   indicateur à l'autre sans quitter la page. Ne pas y remettre de grilles de
+   barres côte à côte. */
+.rgd-ob-tuiles { display: flex; align-items: center; gap: 2px; flex-wrap: wrap; margin: 6px 0 14px; }
+.rgd-ob-tuile { flex: 1 1 150px; min-width: 136px; display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: 16px; background: var(--card-2);
+  border: 1px solid transparent; transition: transform .18s ease, border-color .18s ease; }
+.rgd-ob-tuile:hover { transform: translateY(-2px); border-color: var(--line-strong); }
+.rgd-ob-anneau { width: 56px; height: 56px; flex: 0 0 56px; transform: rotate(-90deg); }
+.rgd-ob-piste-ring { fill: none; stroke: var(--line); stroke-width: 8; }
+/* ⚠ L'ANIMATION PART DU TOUR COMPLET ET SE REFERME : `--tour` porte la
+   circonférence, seule façon de passer une longueur calculée en JS à une
+   animation déclarée ici. */
+.rgd-ob-trait { fill: none; stroke-width: 8; stroke-linecap: round;
+  animation: rgd-ob-anneau .75s cubic-bezier(.22,.9,.3,1) both; }
+@keyframes rgd-ob-anneau { from { stroke-dashoffset: var(--tour); } to { stroke-dashoffset: 0; } }
+@media (prefers-reduced-motion: reduce) { .rgd-ob-trait { animation: none; } }
+.rgd-ob-chiffres { display: flex; flex-direction: column; line-height: 1.15; min-width: 0; }
+.rgd-ob-chiffres b { font-family: var(--font-display); font-size: 21px; font-weight: 700;
+  color: var(--accent-ink); }
+.rgd-ob-sur { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.rgd-ob-sur i { font-style: normal; opacity: .75; }
+.rgd-ob-nom { font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+  color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Le maillon entre deux tuiles : ce qui se perd de l'une à l'autre. */
+.rgd-ob-lien { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center;
+  min-width: 46px; font-size: 12px; font-weight: 700; color: var(--muted); }
+.rgd-ob-lien::before { content: "›"; font-size: 20px; line-height: .8; opacity: .4; }
+
+/* L'avancement du mois, dans l'en-tête : on lit tout de suite si « 40 % » est
+   un retard ou le quatrième jour. */
+.rgd-ob-avance { width: 72px; height: 5px; border-radius: 3px; background: var(--line);
+  overflow: hidden; }
+.rgd-ob-avance i { display: block; height: 100%; background: var(--accent); opacity: .5; }
+
+.rgd-ob-barre { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 2px; }
+.rgd-ob-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.rgd-ob-chip { border: 1px solid var(--line-strong); background: transparent; color: var(--muted);
+  border-radius: 999px; padding: 5px 13px; font: inherit; font-size: 12px; font-weight: 600;
+  cursor: pointer; transition: background .16s, color .16s, border-color .16s; }
+.rgd-ob-chip:hover { border-color: var(--teinte); color: var(--teinte); }
+.rgd-ob-chip.on { background: var(--teinte); border-color: var(--teinte); color: #fff; }
+.rgd-ob-conv { display: flex; align-items: baseline; gap: 6px; font-size: 12px; color: var(--muted); }
+.rgd-ob-conv b { font-family: var(--font-display); font-size: 16px; white-space: nowrap; }
+.rgd-ob-conv b.vert { color: var(--green); }
+.rgd-ob-conv b.ambre { color: var(--amber); }
+.rgd-ob-conv b.rouge { color: var(--red); }
+.rgd-ob-conv small { font-size: 11px; opacity: .85; }
+
+.rgd-ob-cadre { margin-top: 2px; }
+.rgd-ob-aire { width: 100%; height: 260px; display: block; }
+/* La courbe se trace à l'ouverture : 1 400 de longueur couvre le chemin le
+   plus long du cadre, un reste n'a aucun effet visible. */
+.rgd-ob-courbe { stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round;
+  stroke-dasharray: 1400; animation: rgd-ob-trace 1s ease-out both; }
+@keyframes rgd-ob-trace { from { stroke-dashoffset: 1400; } to { stroke-dashoffset: 0; } }
+.rgd-ob-remplissage { animation: rgd-ob-fondu .9s ease-out both; }
+@keyframes rgd-ob-fondu { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .rgd-ob-courbe, .rgd-ob-remplissage { animation: none; stroke-dasharray: none; }
+}
+.rgd-ob-grille { stroke: var(--line); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.rgd-ob-objectif { stroke: var(--accent-ink); stroke-width: 1.5; stroke-dasharray: 6 5;
+  opacity: .55; vector-effect: non-scaling-stroke; }
+.rgd-ob-objectif-txt { fill: var(--accent-ink); font-size: 10px; font-weight: 700; opacity: .7; }
+.rgd-ob-axe, .rgd-ob-mois { fill: var(--muted); font-size: 10px; }
+.rgd-ob-point { stroke: var(--card); stroke-width: 2; transition: r .15s; }
+.rgd-ob-zone { fill: transparent; }
+.rgd-ob-col:hover .rgd-ob-zone { fill: var(--card-2); opacity: .6; }
+.rgd-ob-col:hover .rgd-ob-point { r: 6.5; }
+.rgd-ob-pied { margin: 6px 0 0; }
+
+@media (max-width: 760px) {
+  .rgd-ob-tuiles { gap: 0; }
+  .rgd-ob-tuile { flex: 1 1 calc(50% - 4px); min-width: 0; margin: 2px; }
+  .rgd-ob-tuile { flex-wrap: wrap; }
+  .rgd-ob-lien { display: none; }
+  /* Le cadre défile : réduit à 390 px, le graphique tomberait à une centaine
+     de pixels de haut, mois illisibles et points collés. */
+  .rgd-ob-cadre { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .rgd-ob-aire { min-width: 620px; height: 240px; }
+  .rgd-ob-mois, .rgd-ob-axe { font-size: 12px; }
+}
+
 /* Les deux bandeaux de l'écran Sous-traitants, repris du tableau de bord :
    vert pour les partenaires signés, orange pour ceux qu'on prospecte. Le
    liseré et la pastille disent la même chose deux fois, et c'est voulu — la

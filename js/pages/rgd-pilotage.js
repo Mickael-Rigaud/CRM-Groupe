@@ -40,6 +40,7 @@ import { esc, eur, isoDay, fmtDate, daysSince } from '../ui.js';
 import { poserEspace } from './espace.js';
 import { cadre, guard, KEY } from './rgd-espace.js';
 import { etapesRgd, ETAPES_HORS_CYCLE } from '../data/rgd-etapes.js';
+import { objectifsMensuels, moisObjectifs, tauxPeriode, taux } from '../data/rgd-objectifs.js';
 import { encadreCaOuvrier } from './rgd-ca-ouvrier.js';
 
 // L'exercice comptable de RGD Renova : 1er octobre → 30 septembre, aligné sur
@@ -77,74 +78,79 @@ const COULEURS = {
 };
 
 /**
- * Ce qui PÈSE à chaque étape : l'argent, et ce qui ne bouge plus.
+ * Ce qui DORT à chaque étape.
  *
- * ⚠ SANS ÇA, LA FRISE NE SERT À RIEN. Sept compteurs répètent exactement les
- * onglets de « Clients & prospects » — on les a déjà. Un pipeline répond à
- * deux questions qu'un compteur ne pose pas : OÙ EST L'ARGENT, et QU'EST-CE
- * QUI NE BOUGE PLUS. Mesuré le 23/09/2026 : 41 devis signés pour 721 365 €,
- * dont 39 datent de plus d'un mois, et UN SEUL chantier en cours. Un écran
- * qui affichait « 6 » au lieu de ça taisait l'essentiel.
+ * ⚠ CE BLOC NE CALCULE PLUS L'ARGENT (04/11/2026). Il additionnait des devis
+ * par statut, sur une population qui n'était pas celle de la colonne — d'où
+ * quatre écarts avec « Clients & prospects », tous mesurés et racontés dans
+ * `etapesRgd`. Le montant vient désormais du module commun, qui le calcule sur
+ * les personnes qu'il compte. Il ne reste ici que l'âge, qui est une question
+ * d'affichage : à partir de combien de jours un dossier mérite qu'on le voie.
  *
- * ⚠ LE MONTANT NE COMPTE PAS LES MÊMES OBJETS QUE LA COLONNE, et c'est dit à
- * l'écran. La colonne compte des PERSONNES — la même population que la base ;
- * le montant compte des DEVIS ou des CHANTIERS, dont une personne peut avoir
- * plusieurs. Écrire « 721 365 € » sous un « 6 » sans le préciser laisserait
- * croire que six dossiers pèsent cette somme.
+ * ⚠ ET IL LIT LES DEVIS QUE LE MODULE A SÉLECTIONNÉS, il ne les resélectionne
+ * pas : une seconde sélection aurait désigné d'autres devis que le montant
+ * affiché juste à côté.
+ *
+ * Sans ça, la frise ne servirait à rien : sept compteurs répètent les onglets
+ * de « Clients & prospects ». Un pipeline répond à deux questions qu'un
+ * compteur ne pose pas — OÙ EST L'ARGENT, et QU'EST-CE QUI NE BOUGE PLUS.
  */
-const VIEUX_JOURS = { devis_encours: 30, devis_accepte: 30, chantier_encours: 90 };
+const VIEUX_JOURS = { devis_encours: 30, devis_envoye: 30, devis_accepte: 30, chantier_encours: 90 };
 
-function poidsDesEtapes(devis, chantiers, aujourdhui) {
-  const jours = (d) => d ? Math.floor((new Date(aujourdhui) - new Date(String(d).slice(0, 10))) / 86400000) : null;
-  const bilan = (liste, dateDe, nom, seuil) => {
-    if (!liste.length) return null;
-    const ages = liste.map(x => jours(dateDe(x))).filter(n => n !== null);
-    return {
-      n: liste.length, nom,
-      montant: liste.reduce((t, x) => t + (Number(x.montant_ht) || 0), 0),
-      vieux: seuil ? ages.filter(a => a > seuil).length : 0,
-      seuil,
-      plusVieux: ages.length ? Math.max(...ages) : null,
-    };
-  };
-  const ouvert = (d) => ['envoye', 'en_cours', 'brouillon'].includes(d.statut);
-  const signe = (d) => ['signe', 'accepte'].includes(d.statut);
-  return {
-    devis_encours: bilan(devis.filter(ouvert), d => d.date_envoi || d.date_creation,
-      'devis', VIEUX_JOURS.devis_encours),
-    devis_accepte: bilan(devis.filter(signe), d => d.date_signature || d.date_creation,
-      'devis', VIEUX_JOURS.devis_accepte),
-    chantier_encours: bilan(chantiers.filter(c => c.etat === 'en_cours'),
-      c => c.work_start_at || c.date_debut_reelle || c.created_at, 'chantier',
-      VIEUX_JOURS.chantier_encours),
-    chantier_termine: bilan(chantiers.filter(c => c.etat === 'termine'),
-      c => c.date_fin_reelle || c.updated_at, 'chantier', null),
-  };
+// La date qui fait foi pour l'âge, étape par étape : ce qu'on attend, c'est le
+// geste suivant — un devis envoyé se compte depuis son envoi, un devis signé
+// depuis sa signature. `date_creation` n'est que le dernier recours.
+const DATE_DE_L_ETAPE = {
+  devis_encours: (v) => v.date_creation,
+  devis_envoye: (v) => v.date_envoi || v.date_creation,
+  devis_accepte: (v) => v.date_signature || v.date_creation,
+  chantier_encours: (v) => v.date_signature || v.date_creation,
+  chantier_termine: (v) => v.date_signature || v.date_creation,
+};
+
+function dormants(etape, aujourdhui) {
+  const seuil = VIEUX_JOURS[etape.key];
+  if (!seuil || !etape.devis?.length) return null;
+  const quand = DATE_DE_L_ETAPE[etape.key] || ((v) => v.date_creation);
+  const ages = etape.devis
+    .map(v => quand(v))
+    .filter(Boolean)
+    .map(d => Math.floor((new Date(aujourdhui) - new Date(String(d).slice(0, 10))) / 86400000));
+  const vieux = ages.filter(a => a > seuil).length;
+  return vieux ? { vieux, seuil } : null;
 }
 
 /**
  * La frise du pipeline : une colonne par étape, cliquable vers son onglet.
  * ⚠ MÊME LARGEUR POUR TOUTES — voir plus haut : ce n'est pas un entonnoir.
  */
-function frisePipeline(etapes, poids) {
+function frisePipeline(etapes, aujourdhui) {
   const max = Math.max(1, ...etapes.map(e => e.n));
   const total = etapes.filter(e => !e.hors).reduce((t, e) => t + e.n, 0);
   // ⚠ Le pluriel ne s’ajoute pas aveuglément : « devis » est invariable, on
   // avait « 3 deviss ». Seuls les mots qui ne finissent pas par s le prennent.
   // ⚠ « 3 devis » est écrit en toutes lettres à côté du montant : sans ce mot,
   // on lirait le montant comme celui des personnes comptées au-dessus.
-  const poidsCarte = (p) => !p ? '<span class="rgd-et-poids"></span>' : `<span class="rgd-et-poids">
-    <b>${esc(eur(p.montant))}</b>
-    <em>${p.n} ${esc(p.nom)}${p.n > 1 && !p.nom.endsWith('s') ? 's' : ''}</em>
-    ${p.vieux ? `<u title="Rien n'a bougé depuis plus de ${p.seuil} jours">${p.vieux} dormant${p.vieux > 1 ? 's' : ''}</u>` : ''}
-  </span>`;
+  const poidsCarte = (e) => {
+    if (!e.avecMontant) return '<span class="rgd-et-poids"></span>';
+    const d = dormants(e, aujourdhui);
+    // ⚠ « 3 dossiers chiffrés » EST ÉCRIT EN TOUTES LETTRES à côté du montant :
+    // à « Devis en cours », une partie des dossiers n'a pas encore de devis, et
+    // un montant seul laisserait croire à une somme sur l'étape entière. C'est
+    // le mot que « Clients & prospects » emploie sous son total.
+    return `<span class="rgd-et-poids">
+      <b>${esc(eur(e.montant))}</b>
+      <em>${e.chiffres} chiffré${e.chiffres > 1 ? 's' : ''}</em>
+      ${d ? `<u title="Rien n'a bougé depuis plus de ${d.seuil} jours">${d.vieux} dormant${d.vieux > 1 ? 's' : ''}</u>` : ''}
+    </span>`;
+  };
   const carte = (e) => `<a class="rgd-et${e.hors ? ' hors' : ''}"
       href="#/rgd/clients?vue=${esc(e.cle)}" style="--c:${esc(e.couleur)}"
       title="${esc(e.titre || e.label)} — ouvrir dans Clients &amp; prospects">
     <span class="rgd-et-n">${e.n}</span>
     <span class="rgd-et-label">${esc(e.label)}</span>
     <span class="rgd-et-piste"><i style="height:${Math.round((e.n / max) * 100)}%"></i></span>
-    ${poidsCarte(poids?.[e.cle])}
+    ${poidsCarte(e)}
     <span class="rgd-et-part">${total && !e.hors ? Math.round((e.n / total) * 100) + ' %' : ''}</span>
   </a>`;
   return `<div class="rgd-frise">
@@ -181,6 +187,230 @@ function caParMois(paiements, ex, d = new Date()) {
     });
   }
   return mois;
+}
+
+// ------------------------------------------------ LES OBJECTIFS DU MOIS
+// Élodie, le 04/11/2026 : « un graphique qui synthétise toutes les demandes
+// mensuelles ainsi que leurs objectifs et performances ».
+//
+// ⚠ IL EST POSÉ ENTRE LE PIPELINE ET LE CHIFFRE D'AFFAIRES, à sa demande, et
+// l'ordre a du sens : le pipeline dit où en sont les affaires AUJOURD'HUI,
+// celui-ci dit à quel RYTHME elles entrent, et le chiffre d'affaires ce que ce
+// rythme a produit. Les trois se lisent de haut en bas comme une même phrase.
+//
+// ⚠ CE QUI SÉPARE CE TABLEAU DU PIPELINE, et qu'il ne faut pas confondre : le
+// pipeline compte des affaires PRÉSENTES dans une étape, celui-ci compte des
+// événements DATÉS d'un mois. Un même dossier n'apparaît qu'une fois dans le
+// pipeline, et autant de fois ici qu'il a franchi d'étapes.
+
+// La couleur d'une performance. Trois paliers seulement : atteint, en chemin,
+// loin. Un dégradé continu se lit moins vite qu'un feu à trois couleurs.
+const tonObjectif = (part) => (part >= 1 ? 'vert' : part >= 0.5 ? 'ambre' : 'rouge');
+
+// ------------------------------------------------ LES QUATRE INDICATEURS
+// ⚠ L'ORDRE EST CELUI DU PARCOURS, pas l'alphabet : une demande donne un
+// rendez-vous, qui donne un devis, qui donne du chiffre d'affaires. Les
+// anneaux se lisent de gauche à droite comme une phrase, et les taux posés
+// entre eux disent ce qui se perd d'un maillon au suivant.
+const SERIES = [
+  { champ: 'demandes', cible: 'demandes', label: 'Demandes', court: 'Demandes', couleur: 'var(--blue)' },
+  { champ: 'rdv', cible: 'rdv', label: 'Rendez-vous', court: 'RDV', couleur: 'var(--violet)' },
+  { champ: 'devisSignes', cible: 'devis', label: 'Devis signés', court: 'Devis', couleur: 'var(--amber)' },
+  { champ: 'ca', cible: 'ca', label: 'Chiffre d’affaires', court: 'CA', couleur: 'var(--green)' },
+];
+
+/**
+ * Un anneau de progression.
+ *
+ * ⚠ IL SE REMPLIT À L'OUVERTURE, et ce n'est pas de la décoration : l'œil suit
+ * un trait qui bouge et lit la proportion avant même d'avoir lu le chiffre.
+ * L'animation vit en CSS (`@keyframes rgd-ob-anneau`) sur `stroke-dashoffset`,
+ * et la valeur de départ est posée en variable — un `style` inline est le seul
+ * moyen de passer une longueur calculée à une animation déclarée en feuille.
+ *
+ * ⚠ ET IL NE DÉPASSE JAMAIS LE TOUR COMPLET. Un mois à 160 % ferait repartir
+ * le trait par-dessus lui-même et l'anneau se lirait « 60 % ». On s'arrête au
+ * tour, le chiffre au centre dit le reste.
+ */
+function anneau(part, couleur, connu) {
+  const R = 34, C = 2 * Math.PI * R;
+  const pleine = Math.max(0, Math.min(part, 1)) * C;
+  return `<svg viewBox="0 0 80 80" class="rgd-ob-anneau" aria-hidden="true">
+    <circle cx="40" cy="40" r="${R}" class="rgd-ob-piste-ring"></circle>
+    ${connu ? `<circle cx="40" cy="40" r="${R}" class="rgd-ob-trait"
+      style="stroke:${couleur};stroke-dasharray:${pleine.toFixed(1)} ${(C - pleine).toFixed(1)};--tour:${C.toFixed(1)}"></circle>` : ''}
+  </svg>`;
+}
+
+// Une courbe lissée qui ne déborde pas : chaque segment passe par le milieu de
+// deux points et s'y courbe. ⚠ PAS DE SPLINE CLASSIQUE — elle fabrique des
+// bosses sous zéro entre deux mois très différents, et un mois à -3 demandes
+// n'existe pas.
+function cheminLisse(points) {
+  if (points.length < 2) return points.length ? `M${points[0].x},${points[0].y}` : '';
+  let d = `M${points[0].x.toFixed(1)},${points[0].y.toFixed(1)}`;
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1], b = points[i];
+    const mx = (a.x + b.x) / 2;
+    d += ` C${mx.toFixed(1)},${a.y.toFixed(1)} ${mx.toFixed(1)},${b.y.toFixed(1)} ${b.x.toFixed(1)},${b.y.toFixed(1)}`;
+  }
+  return d;
+}
+
+/**
+ * La courbe d'un indicateur sur douze mois, en aire dégradée.
+ *
+ * ⚠ UN SEUL INDICATEUR À LA FOIS, ET C'EST LE POINT DU DESSIN. Les quatre
+ * ensemble donnaient quarante-huit barres sur une largeur d'écran — lisible
+ * nulle part, surtout sur un téléphone. On en montre un en grand, et les
+ * pastilles au-dessus changent de série sans quitter la page.
+ *
+ * ⚠ L'ÉCHELLE PART DE ZÉRO ET MONTE AU MOINS JUSQU'À L'OBJECTIF : calée sur le
+ * plus haut mois, une série toujours sous son objectif remplirait le cadre et
+ * aurait l'air d'une réussite.
+ */
+function aireObjectif(mois, serie, cible, formate) {
+  const L = 960, H = 260, bas = H - 34, haut = 22, gauche = 52, droite = 16;
+  const large = L - gauche - droite;
+  const pas = large / Math.max(1, mois.length);
+  const connus = mois.filter(m => m[serie.champ] !== null && m[serie.champ] !== undefined);
+  if (!connus.length) return '<div class="empty">Aucune donnée pour cet indicateur.</div>';
+  const max = Math.max(cible * 1.25, ...connus.map(m => m[serie.champ]), 1);
+  const y = (v) => bas - (v / max) * (bas - haut);
+  const x = (i) => gauche + pas * i + pas / 2;
+
+  const points = mois.map((m, i) => ({ i, m, x: x(i), y: y(m[serie.champ] || 0),
+    connu: m[serie.champ] !== null && m[serie.champ] !== undefined }))
+    .filter(p => p.connu);
+
+  const trait = cheminLisse(points);
+  const aire = points.length
+    ? `${trait} L${points[points.length - 1].x.toFixed(1)},${bas} L${points[0].x.toFixed(1)},${bas} Z`
+    : '';
+
+  const graduations = [0, 0.5, 1].map(f => {
+    const v = max * f;
+    return `<g><line x1="${gauche}" y1="${y(v).toFixed(1)}" x2="${L - droite}" y2="${y(v).toFixed(1)}"
+      class="rgd-ob-grille"></line>
+      <text x="${gauche - 8}" y="${(y(v) + 4).toFixed(1)}" class="rgd-ob-axe" text-anchor="end">${esc(formate(Math.round(v)))}</text></g>`;
+  }).join('');
+
+  const marques = mois.map((m, i) => {
+    const v = m[serie.champ];
+    const connu = v !== null && v !== undefined;
+    return `<g class="rgd-ob-col">
+      <rect x="${(gauche + pas * i).toFixed(1)}" y="${haut - 12}" width="${pas.toFixed(1)}"
+        height="${(bas - haut + 12).toFixed(1)}" class="rgd-ob-zone"></rect>
+      ${connu ? `<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="4.5"
+        class="rgd-ob-point" style="fill:${serie.couleur}"></circle>` : ''}
+      <title>${esc(m.label)} — ${connu ? esc(formate(v)) + ' sur ' + esc(formate(cible))
+        + ', soit ' + Math.round(cible > 0 ? (v / cible) * 100 : 0) + ' %' : 'pas de donnée'}</title>
+      <text x="${x(i).toFixed(1)}" y="${H - 10}" class="rgd-ob-mois" text-anchor="middle">${esc(m.label)}</text>
+    </g>`;
+  }).join('');
+
+  return `<svg viewBox="0 0 ${L} ${H}" class="rgd-ob-aire" role="img"
+    aria-label="${esc(serie.label)} mois par mois, face à l’objectif">
+    <defs><linearGradient id="rgd-ob-deg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="${serie.couleur}" stop-opacity=".40"></stop>
+      <stop offset="100%" stop-color="${serie.couleur}" stop-opacity="0"></stop>
+    </linearGradient></defs>
+    ${graduations}
+    <path d="${aire}" fill="url(#rgd-ob-deg)" class="rgd-ob-remplissage"></path>
+    <path d="${trait}" fill="none" class="rgd-ob-courbe" style="stroke:${serie.couleur}"></path>
+    <line x1="${gauche}" y1="${y(cible).toFixed(1)}" x2="${L - droite}" y2="${y(cible).toFixed(1)}"
+      class="rgd-ob-objectif"></line>
+    <text x="${L - droite}" y="${(y(cible) - 7).toFixed(1)}" class="rgd-ob-objectif-txt"
+      text-anchor="end">objectif ${esc(formate(cible))}</text>
+    ${marques}
+  </svg>`;
+}
+
+/**
+ * La carte entière.
+ *
+ * ⚠ LE MOIS EN COURS EST INCOMPLET PAR CONSTRUCTION : le 4 novembre, « 2 sur
+ * 20 » n'est pas un échec, c'est le quatrième jour. L'écran écrit donc où l'on
+ * en est dans le mois, et c'est ce qui rend les anneaux lisibles sans induire
+ * en erreur.
+ */
+function carteObjectifs(mois, obj, choisie) {
+  if (!mois.length) return '';
+  const courant = mois[mois.length - 1];
+  const t = tauxPeriode(mois);
+  const maintenant = new Date();
+  const jour = maintenant.getDate();
+  const joursDuMois = new Date(maintenant.getFullYear(), maintenant.getMonth() + 1, 0).getDate();
+  const avance = Math.round((jour / joursDuMois) * 100);
+
+  const euros = (v) => eur(Math.round(v));
+  const nombre = (v) => String(v);
+  const formats = { demandes: nombre, rdv: nombre, devisSignes: nombre, ca: euros };
+  const serie = SERIES.find(s => s.champ === choisie) || SERIES[0];
+
+  const tuile = (se) => {
+    const v = courant[se.champ];
+    const cible = obj[se.cible];
+    const connu = v !== null && v !== undefined;
+    const part = connu && cible > 0 ? v / cible : 0;
+    const formate = formats[se.champ];
+    // ⚠ LE NOM EST SOUS LE CHIFFRE, À L'HORIZONTALE. Posé en vertical sur le
+    // côté, « Rendez-vous » se coupait en deux colonnes et « Chiffre
+    // d'affaires » en trois : illisible, et la tuile penchait. Un libellé se
+    // lit à plat.
+    return `<div class="rgd-ob-tuile ${tonObjectif(part)}">
+      ${anneau(part, se.couleur, connu)}
+      <div class="rgd-ob-chiffres">
+        <span class="rgd-ob-nom">${esc(se.label)}</span>
+        <b>${connu ? Math.round(part * 100) + ' %' : '—'}</b>
+        <span class="rgd-ob-sur">${connu ? esc(formate(v)) : '—'} <i>sur ${esc(formate(cible))}</i></span>
+      </div>
+    </div>`;
+  };
+
+  const pc = (v) => (v === null ? '—' : v + ' %');
+  const lien = (texte) => `<div class="rgd-ob-lien"><span>${texte}</span></div>`;
+  const panier = courant.devisSignes ? Math.round(courant.ca / courant.devisSignes) : null;
+
+  return `
+        <section class="card rgd-ob">
+          <div class="card-head"><h2>Objectifs du mois</h2>
+            <span class="grow"></span>
+            <span class="rgd-ob-avance"><i style="width:${avance}%"></i></span>
+            <span class="muted small">${esc(courant.label)} · jour ${jour} sur ${joursDuMois}</span></div>
+
+          <div class="rgd-ob-tuiles">
+            ${tuile(SERIES[0])}
+            ${lien(pc(taux(courant.rdv, courant.demandes)))}
+            ${tuile(SERIES[1])}
+            ${lien(pc(courant.rdv ? taux(courant.devisSignes, courant.rdv) : null))}
+            ${tuile(SERIES[2])}
+            ${lien(panier === null ? '—' : eur(panier))}
+            ${tuile(SERIES[3])}
+          </div>
+
+          <div class="rgd-ob-barre">
+            <div class="rgd-ob-chips">
+              ${SERIES.map(se => `<button type="button" class="rgd-ob-chip${se.champ === serie.champ ? ' on' : ''}"
+                data-serie="${se.champ}" style="--teinte:${se.couleur}">${esc(se.court)}</button>`).join('')}
+            </div>
+            <span class="grow"></span>
+            <span class="rgd-ob-conv">Devis envoyés → signés
+              <b class="${t.envoyesVersSignes === null ? '' : tonObjectif(t.envoyesVersSignes / 100)}">${pc(t.envoyesVersSignes)}</b>
+              <small>${t.envoyes} envoyés · ${t.signes} signés · 12 mois</small></span>
+          </div>
+
+          <div class="rgd-ob-cadre">${aireObjectif(mois, serie, obj[serie.cible], formats[serie.champ])}</div>
+
+          <p class="small muted rgd-ob-pied">Les anneaux montrent le mois en cours, la courbe les douze
+          derniers — touchez une pastille pour changer d’indicateur, un point pour voir le chiffre.
+          Un <b>rendez-vous</b> est une visite technique, la même que la colonne « RDV » du pipeline.
+          <b>Deux devis pour un même client comptent pour un</b> : Costructor en produit une seconde
+          version plutôt que de corriger la première.
+          Un trou dans la courbe veut dire que le CRM n’a pas la donnée ce mois-là, pas qu’elle vaut zéro.
+          Objectifs modifiables dans les <a href="#/rgd/reglages">réglages</a>.</p>
+        </section>
+`;
 }
 
 /**
@@ -332,6 +562,12 @@ export const rgdPilotagePage = {
     if (guard(root)) return {};
     const coquille = poserEspace(root);
 
+    // ⚠ LA PASTILLE CHOISIE SURVIT AU REDESSIN. `draw` refait la page
+    // entière à chaque rafraîchissement des données ; garder le choix
+    // dans le DOM le perdrait à la première synchronisation, et la courbe
+    // reviendrait aux demandes sous les doigts de celui qui la regarde.
+    let serieChoisie = 'demandes';
+
     const draw = () => {
       const aujourdhui = isoDay();
       const ex = exercice();
@@ -451,6 +687,12 @@ export const rgdPilotagePage = {
 
       const clients = scope.rgd('rgd_clients');
       const mois = caParMois(paiements, exVu);
+      // ⚠ LES OBJECTIFS SE LISENT SUR DOUZE MOIS GLISSANTS, PAS SUR L'EXERCICE
+      // de la courbe juste en dessous — voir l'en-tête de `data/rgd-objectifs.js`.
+      // Mesuré le 04/11/2026 : calés sur l'exercice, ils n'auraient eu que deux
+      // colonnes, et une seule chaque 1er octobre.
+      const objectifs = objectifsMensuels();
+      const moisObj = moisObjectifs();
       const moyenne = mois.length ? Math.round(caHt / mois.length) : 0;
       // Les sept étapes viennent du module commun : le pipeline et la liste
       // comptent forcément les mêmes personnes, y compris les gardes.
@@ -489,7 +731,7 @@ export const rgdPilotagePage = {
           <div class="card-head"><h2>Pipeline</h2>
             <span class="grow"></span>
             <a class="btn ghost sm" href="#/rgd/clients">Ouvrir la base →</a></div>
-          ${frisePipeline(etapes, poidsDesEtapes(devis, chantiers, aujourdhui))}
+          ${frisePipeline(etapes, aujourdhui)}
           <p class="small muted rgd-pipe-pied">${totalEtapes
             ? `${totalEtapes} affaire${totalEtapes > 1 ? 's' : ''} suivie${totalEtapes > 1 ? 's' : ''}, toutes étapes confondues.`
             : 'Aucune affaire à suivre pour le moment.'}
@@ -497,13 +739,14 @@ export const rgdPilotagePage = {
             cohorte, les nombres ne décroissent donc pas forcément et il n’y a pas de
             taux de passage à en tirer.
             Chaque colonne mène à son onglet dans <a href="#/rgd/clients">Clients &amp; prospects</a>,
-            où l’on retrouve exactement les mêmes personnes.
-            Le montant sous chaque étape compte les <b>devis</b> ou les <b>chantiers</b>
-            qui s’y trouvent — pas les personnes, dont une seule peut en avoir plusieurs.
-            <b class="rgd-dormant">Dormant</b> veut dire que rien n’a bougé depuis plus de
-            30 jours sur un devis, 90 sur un chantier.</p>
+            où l’on retrouve exactement les mêmes personnes — <b>et le même montant</b> :
+            c’est le total des devis de ces personnes à cette étape, le même calcul des
+            deux côtés. <b>Chiffré</b> compte les dossiers qui portent déjà un devis ;
+            à « Devis en cours », tous n’en ont pas encore.
+            <b class="rgd-dormant">Dormant</b> veut dire que le devis n’a pas bougé depuis
+            plus de 30 jours — 90 une fois le chantier commencé.</p>
         </section>
-
+${carteObjectifs(moisObj, objectifs, serieChoisie)}
         <div class="rgd-duo">
 
         <section class="card rgd-ca">
@@ -589,6 +832,10 @@ export const rgdPilotagePage = {
         a rien à faire, alors que le CRM n’en sait rien.</p>`;
 
       root.innerHTML = cadre('#/rgd', 'Vue d’ensemble', corps);
+
+      root.querySelectorAll('[data-serie]').forEach(b => {
+        b.onclick = () => { serieChoisie = b.dataset.serie; draw(); };
+      });
     };
 
     draw();

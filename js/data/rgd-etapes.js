@@ -275,11 +275,23 @@ export const etapeAvecMontant = (etape) => !!DEVIS_DE_L_ETAPE[etape];
  * « zéro » de « rien à montrer » avec `etapeAvecMontant`.
  */
 export function montantDevisDe(f, devis, etape) {
-  const compte = DEVIS_DE_L_ETAPE[etape];
-  if (!compte) return 0;
-  return (devis || [])
-    .filter(v => memeQue(v, f) && compte(v))
+  return devisDeLEtape(f, devis, etape)
     .reduce((t, v) => t + (Number(v.montant_ht) || 0), 0);
+}
+
+/**
+ * Les devis de cette personne à cette étape — la sélection, pas la somme.
+ *
+ * ⚠ SORTIE DE `montantDevisDe` LE 04/11/2026, pour que le pipeline puisse
+ * compter ce qui dort sans refaire la sélection de son côté. Deux sélections
+ * auraient fini par ne plus désigner les mêmes devis, et l'écart se serait lu
+ * comme une erreur de l'un des deux écrans — c'est exactement ce qui venait
+ * d'arriver aux MONTANTS.
+ */
+export function devisDeLEtape(f, devis, etape) {
+  const compte = DEVIS_DE_L_ETAPE[etape];
+  if (!compte) return [];
+  return (devis || []).filter(v => memeQue(v, f) && compte(v));
 }
 
 
@@ -549,13 +561,54 @@ export function etapesRgd() {
   const joursVisite = joursDeVisite(scope.rgd('agenda_events'));
 
   const comptes = Object.fromEntries(ETAPES_CLES.map(k => [k, 0]));
-  for (const d of demandes) comptes[etapeDeDemande(d)] += 1;
+  // ⚠ L'ARGENT SE COMPTE DANS LA MÊME BOUCLE QUE LES PERSONNES (04/11/2026,
+  // Élodie : « je veux que cette pipeline soit connectée en permanence avec le
+  // tableau de bord Clients & prospects […] les données ne coordonnent pas du
+  // tout »). Le pipeline avait son propre calcul, sur une population
+  // différente : il additionnait des devis par STATUT, sans regarder où en
+  // était la personne. Mesuré ce jour-là, les quatre écarts :
+  //   · « Devis en cours » valait 139 627,40 € pour 6 devis — les ENVOYÉS
+  //     compris —, quand la liste en montre 47 492,70 € pour 3 ;
+  //   · « Devis envoyé » n'affichait AUCUN montant : 92 134,70 € invisibles ;
+  //   · « Devis accepté » portait les 833 655,31 € de TOUS les devis signés, y
+  //     compris ceux de gens dont le chantier est en cours ou terminé — que la
+  //     liste, elle, range à leur étape ;
+  //   · « Chantier en cours » affichait 0 €, parce qu'il additionnait les
+  //     chantiers à l'état `en_cours` et qu'aucun ne porte cet état.
+  // Désormais le montant d'une étape est la somme des devis DES PERSONNES
+  // qu'elle compte, par `devisDeLEtape` — la fonction que la liste utilise
+  // déjà. Les deux écrans ne peuvent plus diverger : c'est le même calcul sur
+  // la même population, pas deux calculs qu'on espère d'accord.
+  const montants = Object.fromEntries(ETAPES_CLES.map(k => [k, 0]));
+  // Combien de dossiers de l'étape portent un devis : à « Devis en cours »,
+  // une partie n'en a pas encore, et un montant seul laisserait croire à une
+  // somme sur l'onglet entier. « Clients & prospects » le dit déjà ainsi.
+  const chiffres = Object.fromEntries(ETAPES_CLES.map(k => [k, 0]));
+  const leursDevis = Object.fromEntries(ETAPES_CLES.map(k => [k, []]));
+
+  const ranger = (x, e) => {
+    comptes[e] += 1;
+    const siens = devisDeLEtape(x, devis, e);
+    if (!siens.length) return;
+    chiffres[e] += 1;
+    leursDevis[e].push(...siens);
+    montants[e] += siens.reduce((t, v) => t + (Number(v.montant_ht) || 0), 0);
+  };
+
+  for (const d of demandes) ranger(d, etapeDeDemande(d));
   for (const f of fiches) {
     const e = etapeDeFiche(f, chantiers, devis, joursVisite);
     if (e === 'demande' && !estProspectParSource(f)) continue;
-    comptes[e] += 1;
+    ranger(f, e);
   }
-  return ETAPES_RGD.map(e => ({ ...e, n: comptes[e.key] }));
+  return ETAPES_RGD.map(e => ({
+    ...e,
+    n: comptes[e.key],
+    montant: montants[e.key],
+    chiffres: chiffres[e.key],
+    devis: leursDevis[e.key],
+    avecMontant: etapeAvecMontant(e.key),
+  }));
 }
 
 // ---------------------------------------------------------------- écriture

@@ -48,6 +48,7 @@ import { poserEspace } from './espace.js';
 import { cadre, guard } from './rgd-espace.js';
 import { db } from '../data/db.js';
 import { lienAvis, lienAvisValide, enregistrerLienAvis } from '../data/rgd-avis.js';
+import { objectifsMensuels, OBJECTIFS_DEFAUT } from '../data/rgd-objectifs.js';
 import { signatureRgd, enregistrerSignatureRgd, retirerSignatureRgd } from '../data/rgd-devis-crm.js';
 import { posePadSignature } from '../pad-signature.js';
 
@@ -72,6 +73,7 @@ export const rgdReglagesPage = {
       const clients = lire('manual_clients_actifs');
       const avis = lienAvis();
       const sig = signatureRgd();
+      const obj = objectifsMensuels();
 
       const champ = (id, label, valeur) => `
         <label class="reg-champ">
@@ -112,6 +114,32 @@ export const rgdReglagesPage = {
           ${state.ecriture ? `<div class="toolbar">
             <button type="button" class="btn primary" id="reg-ok">Enregistrer</button>
             <span class="muted small" id="reg-etat"></span>
+          </div>` : ''}
+        </section>
+
+        <!-- Les objectifs mensuels de la vue d'ensemble (04/11/2026, Elodie).
+             Une seule cle, « objectifs_mensuels », qui porte un objet JSON :
+             les quatre nombres bougent ensemble et n'ont aucun sens separement.
+             Quatre cles auraient fait quatre ecritures et quatre occasions d'en
+             oublier une. -->
+        <section class="card">
+          <div class="card-head"><h2>Objectifs mensuels</h2>
+            <span class="muted small">la carte « Objectifs du mois »</span></div>
+          <div class="reg-grille">
+            ${champ('reg-ob-dem', 'Nouvelles demandes', obj.demandes)}
+            ${champ('reg-ob-rdv', 'Rendez-vous', obj.rdv)}
+            ${champ('reg-ob-dev', 'Devis signés', obj.devis)}
+            ${champ('reg-ob-ca', 'Chiffre d’affaires HT (€)', obj.ca)}
+          </div>
+          <p class="small muted">Ils servent de repère sur la vue d’ensemble : la part
+          atteinte, la couleur de chaque mois et le trait en pointillés des frises.
+          <b>Saisir 0 remet la valeur d’origine</b> (${OBJECTIFS_DEFAUT.demandes} demandes,
+          ${OBJECTIFS_DEFAUT.rdv} rendez-vous, ${OBJECTIFS_DEFAUT.devis} devis,
+          ${OBJECTIFS_DEFAUT.ca.toLocaleString('fr-FR')} €).
+          Changer un objectif ne change aucun chiffre réel — seulement la barre à côté.</p>
+          ${state.ecriture ? `<div class="toolbar">
+            <button type="button" class="btn primary" id="reg-ob-ok">Enregistrer</button>
+            <span class="muted small" id="reg-ob-etat"></span>
           </div>` : ''}
         </section>
 
@@ -264,6 +292,49 @@ export const rgdReglagesPage = {
         } catch (e) {
           bSignOff.disabled = false;
           toast(`Non retirée — ${String(e.message).slice(0, 120)}`, 'err');
+        }
+      };
+
+      // ⚠ LES QUATRE OBJECTIFS PARTENT ENSEMBLE, DANS UNE SEULE VALEUR JSON.
+      // Un champ laissé vide garde ce qui y était ; 0 rend la valeur d'origine.
+      // On relit donc les quatre à chaque enregistrement — écrire l'objet avec
+      // un seul champ effacerait les trois autres sans un mot.
+      const boutonObj = root.querySelector('#reg-ob-ok');
+      if (boutonObj) boutonObj.onclick = async () => {
+        const etat = root.querySelector('#reg-ob-etat');
+        const lu = (id, actuel, defaut) => {
+          const v = root.querySelector(id).value.trim();
+          if (v === '') return actuel;
+          const num = nombreDe(v);
+          if (num === null) return NaN;
+          return num === 0 ? defaut : num;
+        };
+        const neuf = {
+          demandes: lu('#reg-ob-dem', obj.demandes, OBJECTIFS_DEFAUT.demandes),
+          rdv: lu('#reg-ob-rdv', obj.rdv, OBJECTIFS_DEFAUT.rdv),
+          devis: lu('#reg-ob-dev', obj.devis, OBJECTIFS_DEFAUT.devis),
+          ca: lu('#reg-ob-ca', obj.ca, OBJECTIFS_DEFAUT.ca),
+        };
+        if (Object.values(neuf).some(v => !Number.isFinite(v) || v <= 0)) {
+          toast('Un objectif n’est pas un nombre positif', 'err'); return;
+        }
+        boutonObj.disabled = true;
+        etat.textContent = 'Enregistrement…';
+        try {
+          const valeur = JSON.stringify(neuf);
+          const ligne = scope.rgd('rgd_reglages').find(x => x.cle === 'objectifs_mensuels');
+          if (ligne) {
+            const maj = await db.update('rgd_reglages', 'objectifs_mensuels', { valeur });
+            ligne.valeur = maj?.valeur ?? valeur;
+          } else {
+            scope.rgd('rgd_reglages').push(await db.insert('rgd_reglages', { cle: 'objectifs_mensuels', valeur }));
+          }
+          toast('Objectifs enregistrés');
+          draw();
+        } catch (e) {
+          boutonObj.disabled = false;
+          etat.textContent = '';
+          toast(`Non enregistré — ${String(e.message).slice(0, 120)}`, 'err');
         }
       };
 
