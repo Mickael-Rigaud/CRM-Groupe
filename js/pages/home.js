@@ -21,7 +21,6 @@ import {
 } from '../agenda.js';
 import { evenementsEnregistres, derniereSync, agendasDe } from '../agenda-sync.js';
 import { creerAgendaPersonnel } from '../comptes.js';
-import { pipelineRgdHtml } from './rgd-pilotage.js';
 
 const LS_FILTRE = 'crm_home_filtre';
 const BASE_PROSPECTS = {
@@ -147,7 +146,7 @@ export const homePage = {
             t.leadsNonDates ? 'Total en base : ces outils ne datent pas l\'arrivée des prospects.' : '',
             cles.length === 1 ? BASE_PROSPECTS[cles[0]] : '')}
           ${kpi('RDV', t.rdv, evolution(avant?.rdv, t.rdv), serieDe(cle => cles.reduce((s, k) => s + rdvMois(k, cle, deals), 0)),
-            cles.length === 1 && cles[0] === 'rgd' ? 'visites techniques réalisées' : 'rendez-vous tenus sur la période')}
+            'rendez-vous tenus sur la période')}
           ${kpi('Affaires signées', t.signees ?? '—', evolution(avant?.signees, t.signees), serieDe(cle => cles.reduce((s, k) => s + signeesMois(k, cle, deals), 0)), t.panier ? `panier ${eur(t.panier)}` : 'panier moyen indisponible')}
           ${kpi('CA HT', eur(t.ca), evolution(avant?.ca, t.ca), serieDe(caDu),
             obj ? `objectif ${eur(obj)}` : scope.canPilotage ? 'aucun objectif fixé' : 'sur vos affaires')}
@@ -160,16 +159,10 @@ export const homePage = {
         <div class="tb-grid">
           <div class="tb-col">
 
-            ${cles.length === 1 && cles[0] === 'rgd' ? `
-            <section class="card rgd-pipe">
-              <div class="card-head"><h2>Pipeline</h2>
-                <span class="muted small">les étapes de Clients &amp; prospects, aujourd'hui</span></div>
-              ${pipelineRgdHtml()}
-            </section>` : `
             <section class="card">
               <div class="card-head"><h2>Pipeline &amp; conversion</h2>
                 <span class="muted small">${parCohorte ? 'prospects arrivés sur la période, suivis jusqu\'à aujourd\'hui'
-                  : cles.every(k => externe(k)?.direct) ? 'leads, visites, devis envoyés et signatures de la période'
+                  : cles.every(k => externe(k)?.direct) ? 'demandes, rendez-vous, devis envoyés et signés de la période'
                   : 'affaires créées sur la période'} · taux de passage</span></div>
               ${!parCohorte && ent.some((s, i) => i && s.n > ent[i - 1].n) ? `<p class="muted small tb-hors">
                 <span class="ag-abs">Une étape dépasse la précédente : ces affaires sont arrivées avant la période. Un entonnoir ne se lit bien que sur une période assez longue.</span></p>` : ''}
@@ -198,7 +191,7 @@ export const homePage = {
                   ? `des leads reçus sur la période sont déjà signés${conclus ? ` · ${conclus} affaire${conclus > 1 ? 's' : ''}` : ''}`
                   : 'taux de transformation indisponible sur cette période'}</span>
               </div>
-            </section>`}
+            </section>
 
             ${scope.canPilotage ? carteObjectifs(cles, deals) : ''}
 
@@ -225,7 +218,7 @@ export const homePage = {
         </div>
 
         ${sources.length ? `<p class="muted small tb-source">${sources.map(x => externe(x.cle)?.direct
-          ? `${esc(ACTIVITIES[x.cle].label)} : chiffres lus en direct dans ${esc(x.source)} (CA facturé, visites techniques, devis signés)`
+          ? `${esc(ACTIVITIES[x.cle].label)} : chiffres lus en direct dans ${esc(x.source)} (demandes reçues, rendez-vous, devis envoyés et signés, CA facturé)`
           : `${esc(ACTIVITIES[x.cle].label)} : chiffres déposés par ${esc(x.source)}, mis à jour le ${new Date(x.maj).toLocaleDateString('fr-FR')}`).join(' · ')}
           — chaque outil applique ses propres définitions : un CA peut être facturé chez l'un et signé chez l'autre.</p>` : ''}`;
 

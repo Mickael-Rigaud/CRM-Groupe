@@ -9,7 +9,7 @@
 import { db } from './db.js';
 import { scope } from './scope.js';
 import { ACTIVITIES, ACTIVITY_KEYS, aAtteint, missionDe, reachedRdv, stageIndex, stageOf } from './schema.js';
-import { estProspectParSource } from './rgd-etapes.js';
+import { moisObjectifs } from './rgd-objectifs.js';
 import { inRange, isoDay } from '../ui.js';
 
 // ---------- Mois ----------
@@ -44,83 +44,60 @@ export const externe = (k) => {
 };
 
 /**
- * Les chiffres de RGD Renova, mois par mois, lus dans les tables de l'espace RGD.
+ * Les chiffres de RGD Renova, mois par mois — CEUX DU TABLEAU DE BORD RGD.
+ *
+ * ⚠ AUCUNE DÉFINITION ICI : tout vient de `moisObjectifs` (data/rgd-objectifs.js),
+ * qui nourrit le graphique « objectifs et performances » de la vue d'ensemble
+ * RGD. Le 04/11/2026 ce fichier avait ses propres règles (visites techniques,
+ * fiches saisies à la main…) et les nombres ne se retrouvaient pas sur l'écran
+ * RGD — Élodie : « ce ne sont pas les chiffres que l'on retrouve sur le tableau
+ * de bord de RGD ». Deux écrans, un seul calcul.
+ *
+ * `moisObjectifs` rend les douze mois qui finissent à la date donnée : on
+ * l'appelle deux fois pour avoir deux ans, de quoi couvrir un exercice entier
+ * et la comparaison avec la période précédente. Un mois sans historique
+ * (`null` : avant la première trace dans le CRM) reste `null` ici — l'écran
+ * ne doit pas y lire un zéro.
+ *
  * Même forme que `structure_stats` (`revenue` = un objet par mois), pour que
  * tout le reste de ce fichier les lise sans exception.
- *
- *  - leads   : chaque NOUVELLE PERSONNE — demande du formulaire du site
- *              (`date_demande`), fiche Meta (`meta_received_at`), fiche saisie
- *              à la main ou née d'un rendez-vous (date de création du contact).
- *              Le garde `estProspectParSource` écarte l'annuaire Costructor
- *              repris en bloc le 21/09/2026 : ce ne sont pas des leads. Une
- *              personne arrivée par une demande PUIS devenue fiche ne compte
- *              qu'une fois, à sa première date.
- *  - rdv     : les visites techniques (`rgd_chantiers.statut_d1`), à leur date
- *              de visite. ⚠ PAS `agenda_events` : le relevé de l'agenda efface
- *              les jours de plus d'une semaine, on n'y compterait jamais un mois
- *              entier. Une visite à venir n'est pas encore un RDV réalisé.
- *  - quotes  : les devis envoyés, à leur date d'envoi.
- *  - deals   : les devis signés, à leur date de signature (`signedAmount` = leur HT).
- *  - amount  : le CA HT FACTURÉ (`rgd_paiements`), la définition de la vue
- *              d'ensemble RGD et de Costructor — pas le montant signé.
  */
 let cacheRgd = null;
 function statsRgd() {
-  const tables = ['rgd_paiements', 'rgd_devis', 'rgd_chantiers', 'rgd_clients', 'rgd_demandes', 'contacts'];
+  const tables = ['rgd_paiements', 'rgd_devis', 'rgd_devis_crm', 'rgd_clients', 'rgd_demandes', 'agenda_events', 'rgd_reglages'];
   const sources = tables.map(t => db.t(t));
   if (cacheRgd && cacheRgd.sources.every((s, i) => s === sources[i])
       && cacheRgd.jour === isoDay()) return cacheRgd.valeur;
-  const [paiements, devis, chantiers, fiches, demandes, contacts] = sources;
-  const aujourdhui = isoDay();
-  const mois = new Map();
-  const ligne = (cle) => {
-    if (!mois.has(cle)) mois.set(cle, { month: cle, amount: 0, deals: 0, signedAmount: 0, leads: 0, rdv: 0, quotes: 0 });
-    return mois.get(cle);
-  };
-  const cleDe = (d) => (d ? String(d).slice(0, 7) : null);
-
-  for (const p of paiements) {
-    if (p.statut === 'annule' || !p.date_facturation) continue;
-    ligne(cleDe(p.date_facturation)).amount += Number(p.montant_ht) || 0;
-  }
-  for (const d of devis) {
-    if (['signe', 'accepte'].includes(d.statut) && d.date_signature) {
-      const l = ligne(cleDe(d.date_signature));
-      l.deals += 1; l.signedAmount += Number(d.montant_ht) || 0;
-    }
-    if (d.date_envoi && d.statut !== 'brouillon') ligne(cleDe(d.date_envoi)).quotes += 1;
-  }
-  for (const c of chantiers) {
-    if (c.statut_d1 !== 'visite_technique') continue;
-    const jour = String(c.date_debut_prevue || c.created_at || '').slice(0, 10);
-    if (jour && jour <= aujourdhui) ligne(cleDe(jour)).rdv += 1;
-  }
-  // Les leads : une date par personne, la plus ancienne.
-  const creeLe = new Map(contacts.map(c => [c.id, c.created_at]));
-  const personnes = new Map();
-  const noter = (cle, date) => {
-    if (!date) return;
-    const d = String(date).slice(0, 10);
-    if (!personnes.has(cle) || d < personnes.get(cle)) personnes.set(cle, d);
-  };
-  for (const d of demandes) noter(d.contact_id ? 'c:' + d.contact_id : 'd:' + d.id, d.date_demande || d.created_at);
-  for (const f of fiches) {
-    if (!estProspectParSource(f)) continue;
-    noter(f.contact_id ? 'c:' + f.contact_id : 'f:' + f.id, f.meta_received_at || creeLe.get(f.contact_id));
-  }
-  for (const d of personnes.values()) ligne(cleDe(d)).leads += 1;
-
-  const revenue = [...mois.values()].filter(m => m.month).sort((a, b) => a.month.localeCompare(b.month));
+  const d = new Date();
+  const mois = [...moisObjectifs(new Date(d.getFullYear(), d.getMonth() - 12, 1)), ...moisObjectifs(d)];
+  const revenue = mois.map(m => ({
+    month: m.cle, amount: m.ca, deals: m.devisSignes, quotes: m.devisEnvoyes,
+    leads: m.demandes, rdv: m.rdv,
+    // Les clients derrière ces nombres, quand le module les donne : de quoi
+    // compter UNE FOIS sur un trimestre le client qui signe en octobre puis
+    // en novembre (voir `compte`).
+    dealsCles: m.clientsSignes, quotesCles: m.clientsEnvoyes,
+  }));
   const valeur = {
     // `prospects` garde la définition de `rgd_pousser_structure_stats` (fiches
     // venues de la publicité ou du site) : la vue d'ensemble de Pilotage
     // l'affiche comme « prospects de la base », elle ne doit pas changer de sens.
     activity: 'rgd', revenue,
-    prospects: fiches.filter(f => ['meta_ads', 'Formulaire site'].includes(f.source)).length,
-    source: 'l\'espace RGD Renova', direct: true, updated_at: new Date().toISOString(),
+    prospects: db.t('rgd_clients').filter(f => ['meta_ads', 'Formulaire site'].includes(f.source)).length,
+    source: 'le tableau de bord RGD Renova', direct: true, updated_at: new Date().toISOString(),
   };
-  cacheRgd = { sources, jour: aujourdhui, valeur };
+  cacheRgd = { sources, jour: isoDay(), valeur };
   return valeur;
+}
+// Le total d'un compteur sur plusieurs mois. ⚠ QUAND LES MOIS PORTENT LES CLÉS
+// DES CLIENTS (`<champ>Cles`), ON COMPTE DES CLIENTS DISTINCTS, PAS UNE SOMME
+// (04/11/2026, Élodie : « deux devis pour un client doivent compter pour un,
+// sinon les données ne seront pas du tout réelles »). Sans clés, la somme.
+function compte(mois, champ) {
+  if (mois.length && mois.every(m => Array.isArray(m[champ + 'Cles']))) {
+    return new Set(mois.flatMap(m => m[champ + 'Cles'])).size;
+  }
+  return mois.reduce((s, m) => s + (Number(m[champ]) || 0), 0);
 }
 const aDesMoisExternes = (k) => { const e = externe(k); return !!(e && (e.revenue || []).length); };
 
@@ -249,7 +226,7 @@ export function ca(k, r, deals) {
   const e = externe(k);
   if (aDesMoisExternes(k)) {
     const mois = (e.revenue || []).filter(m => inRange(m.month + '-01', r));
-    const nb = mois.some(m => m.deals != null) ? mois.reduce((s, m) => s + (Number(m.deals) || 0), 0) : null;
+    const nb = mois.some(m => m.deals != null) ? compte(mois, 'deals') : null;
     return { montant: mois.reduce((s, m) => s + (Number(m.amount) || 0), 0), nb, source: e.source || 'son outil', maj: e.updated_at };
   }
   const won = signees(k, r, deals);
@@ -343,7 +320,7 @@ function entonnoirDe(k, r, deals) {
     const mois = (externe(k).revenue || []).filter(m => inRange(m.month + '-01', r));
     const cohorte = aUneCohorte(k);
     return JALONS.map(j => fournit(k, j)
-      ? mois.reduce((s, m) => s + (Number(cohorte ? m.funnel?.[j.champ] : m[j.flux]) || 0), 0)
+      ? (cohorte ? mois.reduce((s, m) => s + (Number(m.funnel?.[j.champ]) || 0), 0) : compte(mois, j.flux))
       : null);
   }
   const lot = deals.filter(d => d.activity === k && inRange(d.created_at, r));

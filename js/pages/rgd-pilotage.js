@@ -326,26 +326,6 @@ function vueOuvrier({ etapes, rdv, aujourdhui, vide }) {
     ${encadreCaOuvrier(null)}`;
 }
 
-/**
- * Le pipeline de la vue d'ensemble RGD, prêt à poser ailleurs — le tableau de
- * bord du groupe l'affiche quand on le filtre sur RGD Renova (04/11/2026,
- * Élodie : « ce ne sont pas les chiffres que l'on retrouve sur le tableau de
- * bord de RGD »). ⚠ LE MÊME CALCUL, PAS UNE COPIE : deux écrans qui montrent
- * deux pipelines différents pour la même structure, personne ne sait lequel
- * croire.
- */
-export function pipelineRgdHtml() {
-  const etapes = etapesRgd().map(e => ({
-    ...e, cle: e.key, couleur: COULEURS[e.key] || 'var(--accent)',
-    hors: ETAPES_HORS_CYCLE.includes(e.key),
-  }));
-  const total = etapes.filter(e => !e.hors).reduce((t, e) => t + e.n, 0);
-  return frisePipeline(etapes, poidsDesEtapes(scope.rgd('rgd_devis'), scope.rgd('rgd_chantiers'), isoDay()))
-    + `<p class="small muted rgd-pipe-pied">${total
-      ? `${total} affaire${total > 1 ? 's' : ''} suivie${total > 1 ? 's' : ''}, toutes étapes confondues.` : 'Aucune affaire à suivre pour le moment.'}
-      Chaque étape compte ce qui s’y trouve <b>aujourd’hui</b>, comme le pipeline de l’espace RGD : il ne dépend pas de la période choisie.</p>`;
-}
-
 export const rgdPilotagePage = {
   title: () => 'RGD Renova — Vue d’ensemble',
   render(root) {
