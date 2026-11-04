@@ -110,7 +110,7 @@ export const TABLES = ['profiles', 'organisations', 'contacts', 'deals', 'activi
   'rgd_reglages', 'rgd_clients', 'rgd_costructor_etat',
   'rgd_costructor_journal', 'rgd_costructor_ignores',
   // messagerie interne (canaux par structure + conversations privées)
-  'conversations', 'conversation_members', 'messages', 'message_reads',
+  'conversations', 'conversation_members', 'conversation_sujets', 'messages', 'message_reads',
   // agenda du groupe : le reflet des rendez-vous Google, recopié par la direction
   'agenda_events',
   // ⚠ QUEL AGENDA GOOGLE APPARTIENT À QUI. Lecture seule pour tout le monde

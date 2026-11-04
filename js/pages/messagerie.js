@@ -24,6 +24,19 @@
 // bulle posée en bas à droite de toutes les pages. `vueConversation()` rend le
 // fil et la zone de saisie ; la page y ajoute sa colonne, la bulle son panneau.
 //
+// LES CANAUX D'UNE DISCUSSION (04/11/2026, Élodie : « ajouter des canaux de
+// discussion dans chaque discussion […] le but est de pouvoir compartimenter
+// les échanges »). Toute discussion — canal de structure ou message direct —
+// peut porter des canaux à elle (`conversation_sujets`) : « Chantier Dupont »,
+// « Factures »… Un message en désigne un par `sujet_id`, ou aucun : il est
+// alors dans « Général », là où vivent tous les messages d'avant.
+// ⚠ LA LECTURE SE SUIT PAR CANAL : `message_reads.sujet_id` (null = Général).
+// Sans cela, ouvrir un canal marquerait lus ceux d'à côté, et compartimenter
+// ferait perdre de vue ce qui arrive ailleurs. La pastille d'une discussion
+// est la somme de ses canaux.
+// ⚠ SUPPRIMER UN CANAL NE SUPPRIME AUCUN MESSAGE : ils repassent dans Général
+// (`on delete set null`). Un message ne se perd que par sa propre croix.
+//
 // Les pièces jointes passent par la table `documents` et le bucket du même nom,
 // avec entity_type = 'messages' — rien de nouveau à installer côté stockage.
 import { db } from '../data/db.js';
@@ -35,11 +48,13 @@ import { poserEspace } from './espace.js';
 const MAX_MO = 25;
 const RAFRAICHIR_MS = 8000;          // le CRM n'a pas de temps réel : on va voir de temps en temps
 const RAFRAICHIR_FERME_MS = 60000;   // bulle fermée : juste de quoi tenir la pastille à jour
-const TABLES = ['conversations', 'conversation_members', 'messages', 'message_reads', 'documents'];
+const TABLES = ['conversations', 'conversation_members', 'conversation_sujets', 'messages', 'message_reads', 'documents'];
 const DERNIERE = 'crm_msg_derniere';  // ce qui était ouvert dans la bulle, d'une visite à l'autre
 
 // Les brouillons survivent au changement de conversation et au redessin.
 const brouillons = new Map();
+// Le canal ouvert dans chaque discussion, le temps de la visite.
+const sujetOuvert = new Map();
 // Les liens de téléchargement Supabase sont signés une heure : on les garde le temps de la visite.
 const liens = new Map();
 
@@ -49,19 +64,32 @@ const heure = (iso) => new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digi
 const jourCourt = (iso) => new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
 
 // ---------- Lecture des données ----------
-const messagesDe = (cid) => cid ? db.t('messages').filter(m => m.conversation_id === cid)
+// `sid` absent : toute la discussion. `null` : Général. Un id : ce canal.
+const messagesDe = (cid, sid) => cid ? db.t('messages')
+  .filter(m => m.conversation_id === cid && (sid === undefined || (m.sujet_id || null) === sid))
+  .sort((a, b) => (a.created_at || '').localeCompare(b.created_at || '')) : [];
+const sujetsDe = (cid) => cid ? db.t('conversation_sujets').filter(x => x.conversation_id === cid)
   .sort((a, b) => (a.created_at || '').localeCompare(b.created_at || '')) : [];
 const piecesDe = (mid) => db.t('documents').filter(d => d.entity_type === 'messages' && d.entity_id === mid);
 const membresDe = (cid) => db.t('conversation_members').filter(m => m.conversation_id === cid).map(m => m.user_id);
-const dernier = (cid) => { const l = messagesDe(cid); return l[l.length - 1] || null; };
+const dernier = (cid, sid) => { const l = messagesDe(cid, sid); return l[l.length - 1] || null; };
 
-const luJusqua = (cid) => db.t('message_reads')
-  .find(r => r.conversation_id === cid && r.user_id === scope.user?.id)?.last_read_at || '';
+const ligneLue = (cid, sid) => db.t('message_reads').find(r => r.conversation_id === cid
+  && r.user_id === scope.user?.id && (r.sujet_id || null) === sid);
+// ⚠ UN CANAL JAMAIS OUVERT N'EMPRUNTE PAS LA LECTURE DE GÉNÉRAL. Essayé en
+// démo : ouvrir Général effaçait la pastille d'un canal où un message attendait
+// encore. Tout ce qui s'y dit est postérieur à sa création, donc réellement
+// neuf pour qui ne l'a jamais ouvert.
+const luJusqua = (cid, sid = null) => ligneLue(cid, sid)?.last_read_at || '';
 
+const nonLusDans = (cid, sid) => {
+  const depuis = luJusqua(cid, sid);
+  return messagesDe(cid, sid).filter(m => m.author_id !== scope.user?.id && (m.created_at || '') > depuis).length;
+};
+// Toute la discussion : Général et chacun de ses canaux.
 const nonLus = (cid) => {
   if (!cid) return 0;
-  const depuis = luJusqua(cid);
-  return messagesDe(cid).filter(m => m.author_id !== scope.user?.id && (m.created_at || '') > depuis).length;
+  return nonLusDans(cid, null) + sujetsDe(cid).reduce((n, x) => n + nonLusDans(cid, x.id), 0);
 };
 
 // Les personnes d'un canal : celles dont le profil porte la structure. Le canal
@@ -118,17 +146,29 @@ export function messagesNonLus() {
 }
 
 // ---------- Écriture ----------
-async function marquerLu(cid) {
+async function marquerLu(cid, sid = null) {
   if (!scope.user || !cid) return;
-  const d = dernier(cid);
+  const d = dernier(cid, sid);
   if (!d) return;
-  const ligne = db.t('message_reads').find(r => r.conversation_id === cid && r.user_id === scope.user.id);
+  const ligne = ligneLue(cid, sid);
   if (ligne && (ligne.last_read_at || '') >= d.created_at) return;
   const quand = new Date().toISOString();
   try {
     if (ligne) await db.update('message_reads', ligne.id, { last_read_at: quand });
-    else await db.insert('message_reads', { conversation_id: cid, user_id: scope.user.id, last_read_at: quand });
+    else await db.insert('message_reads', { conversation_id: cid, user_id: scope.user.id, sujet_id: sid, last_read_at: quand });
   } catch { /* la pastille se recalera au prochain passage */ }
+}
+
+// Le canal à ouvrir dans une discussion : celui qui a du neuf, sinon le
+// dernier ouvert, sinon Général.
+function sujetAOuvrir(fil) {
+  const cid = fil.conv?.id;
+  if (!cid) return null;
+  const ids = [null, ...sujetsDe(cid).map(x => x.id)];
+  const neuf = ids.find(sid => nonLusDans(cid, sid));
+  if (neuf !== undefined) return neuf;
+  const garde = sujetOuvert.get(fil.cle);
+  return ids.includes(garde) ? garde : null;
 }
 
 // La conversation d'un message direct n'existe qu'au moment où l'on parle.
@@ -141,7 +181,7 @@ async function assurerConversation(fil) {
   return c;
 }
 
-async function envoyer(fil, texte, fichiers, contexte) {
+async function envoyer(fil, texte, fichiers, contexte, sid = null) {
   let corps = (texte || '').trim();
   // Le renvoi vers l'écran d'où part le message s'écrit dans le corps, en clair.
   // Pas de colonne pour ça : un lien reste lisible même si un jour plus personne
@@ -149,7 +189,7 @@ async function envoyer(fil, texte, fichiers, contexte) {
   if (contexte) corps = (corps ? corps + '\n' : '') + `↗ [${contexte.label}](${contexte.hash})`;
   if (!corps && !fichiers.length) return;
   const conv = await assurerConversation(fil);
-  const msg = await db.insert('messages', { conversation_id: conv.id, author_id: scope.user.id, body: corps || null });
+  const msg = await db.insert('messages', { conversation_id: conv.id, author_id: scope.user.id, body: corps || null, sujet_id: sid });
   for (const f of fichiers) {
     if (f.size > MAX_MO * 1048576) { toast(`${f.name} : trop lourd (${MAX_MO} Mo maximum)`, 'warn'); continue; }
     try {
@@ -215,9 +255,11 @@ function vueConversation(hote, fil, { contexte = null, apresEnvoi = null, surRen
   let enAttente = [];        // fichiers choisis, pas encore envoyés
   let contexteActif = contexte;
   let bas = true;            // le fil est-il collé en bas ?
-  const cleBrouillon = fil.cle;
+  let sid = sujetAOuvrir(fil);   // le canal ouvert ; null = Général
+  const cleBrouillon = () => fil.cle + '|' + (sid || '');
 
   hote.innerHTML = `
+    <div class="msg-sujets" role="tablist" aria-label="Canaux de la discussion"></div>
     <div class="msg-fil"></div>
     <form class="msg-ecrire">
       <div class="msg-contexte" hidden></div>
@@ -240,12 +282,105 @@ function vueConversation(hote, fil, { contexte = null, apresEnvoi = null, surRen
   const bacContexte = hote.querySelector('.msg-contexte');
   const bacJointes = hote.querySelector('.msg-jointes');
   const bouton = hote.querySelector('.msg-envoi');
+  const barre = hote.querySelector('.msg-sujets');
+
+  // ----- Les canaux de la discussion -----
+  // Créer, renommer, supprimer : celui qui a créé le canal, ou la direction.
+  const peutGerer = (x) => x && (x.created_by === scope.user?.id || scope.isDirection);
+  const nomSujet = () => sid ? (db.byId('conversation_sujets', sid)?.titre || 'Canal') : 'Général';
+
+  const dessinerSujets = () => {
+    const cid = fil.conv?.id;
+    const liste = sujetsDe(cid);
+    if (sid && !liste.some(x => x.id === sid)) sid = null;   // supprimé entre-temps
+    const onglet = (id, titre) => {
+      const n = cid ? nonLusDans(cid, id) : 0;
+      const on = (id || null) === sid;
+      return `<button type="button" role="tab" class="msg-sujet ${on ? 'on' : ''}" data-sujet="${id || ''}"
+        aria-selected="${on}"><span>#</span>${esc(titre)}${n && !on ? `<i class="msg-cnt">${n}</i>` : ''}</button>`;
+    };
+    const courant = sid ? liste.find(x => x.id === sid) : null;
+    barre.innerHTML = onglet(null, 'Général')
+      + liste.map(x => onglet(x.id, x.titre)).join('')
+      + '<button type="button" class="msg-sujet-ajout" data-sujet-ajout title="Créer un canal dans cette discussion">+ Canal</button>'
+      + (peutGerer(courant) ? `<span class="msg-sujet-gestes">
+          <button type="button" class="icon-btn" data-sujet-renommer title="Renommer ce canal">✎</button>
+          <button type="button" class="icon-btn" data-sujet-suppr title="Supprimer ce canal">🗑</button></span>` : '');
+
+    barre.querySelectorAll('[data-sujet]').forEach(b => b.onclick = () => changerSujet(b.dataset.sujet || null));
+    barre.querySelector('[data-sujet-ajout]').onclick = () => saisirNom('', async (titre) => {
+      const conv = await assurerConversation(fil);
+      const x = await db.insert('conversation_sujets', { conversation_id: conv.id, titre, created_by: scope.user.id });
+      changerSujet(x.id);
+    });
+    const ren = barre.querySelector('[data-sujet-renommer]');
+    if (ren) ren.onclick = () => saisirNom(courant.titre, async (titre) => {
+      await db.update('conversation_sujets', courant.id, { titre });
+      dessinerSujets();
+    });
+    const sup = barre.querySelector('[data-sujet-suppr]');
+    if (sup) sup.onclick = async () => {
+      const n = messagesDe(cid, courant.id).length;
+      if (!await confirm(`Supprimer le canal « ${courant.titre} » ?${!n ? ''
+        : n === 1 ? ' Son message n’est pas supprimé : il repasse dans Général.'
+        : ` Ses ${n} messages ne sont pas supprimés : ils repassent dans Général.`}`)) return;
+      try {
+        // La base remet les messages dans Général (on delete set null) ; le
+        // cache local, lui, doit le faire à la main pour ne pas les cacher.
+        for (const m of messagesDe(cid, courant.id)) m.sujet_id = null;
+        await db.remove('conversation_sujets', courant.id);
+        changerSujet(null);
+        toast('Canal supprimé');
+      } catch (err) { toast(err.message, 'err'); }
+    };
+  };
+
+  // Le nom d'un canal se tape dans la barre même : pas de fenêtre par-dessus
+  // la discussion. Entrée valide, Échap renonce.
+  function saisirNom(valeur, valider) {
+    barre.innerHTML = `<form class="msg-sujet-form">
+      <input maxlength="40" placeholder="Nom du canal (ex. Chantier Dupont)" value="${esc(valeur)}">
+      <button type="submit" class="btn sm primary">${valeur ? 'Renommer' : 'Créer'}</button>
+      <button type="button" class="btn sm ghost" data-annuler>Annuler</button></form>`;
+    const f = barre.querySelector('form');
+    const champ = f.querySelector('input');
+    champ.focus(); champ.select();
+    f.querySelector('[data-annuler]').onclick = () => dessinerSujets();
+    champ.onkeydown = (e) => { if (e.key === 'Escape') { e.preventDefault(); dessinerSujets(); } };
+    f.onsubmit = async (e) => {
+      e.preventDefault();
+      const titre = champ.value.trim().replace(/^#\s*/, '');
+      if (!titre) return champ.focus();
+      if (titre.toLowerCase() === 'général' || sujetsDe(fil.conv?.id).some(x => x.id !== sid
+        && x.titre.toLowerCase() === titre.toLowerCase())) return toast('Ce canal existe déjà', 'warn');
+      try { await valider(titre); } catch (err) { toast(err.message, 'err'); dessinerSujets(); }
+    };
+  }
+
+  function changerSujet(nouveau) {
+    brouillons.set(cleBrouillon(), texte.value);
+    sid = nouveau;
+    sujetOuvert.set(fil.cle, sid);
+    texte.value = brouillons.get(cleBrouillon()) || '';
+    texte.placeholder = sid ? `Écrire dans # ${nomSujet()}…` : `Écrire à ${nomDe(fil.conv, fil.user)}…`;
+    hauteurAuto();
+    bas = true;
+    dessinerFil();
+    marquerLu(fil.conv?.id, sid);
+    if (!matchMedia('screen and (max-width: 820px)').matches) texte.focus();
+  }
 
   // ----- Le fil -----
   const dessinerFil = () => {
-    const msgs = messagesDe(fil.conv?.id);
+    dessinerSujets();
+    const msgs = messagesDe(fil.conv?.id, sid);
     if (!msgs.length) {
-      zoneFil.innerHTML = `<div class="msg-vide">
+      zoneFil.innerHTML = sid ? `<div class="msg-vide">
+        <span class="msg-ecu xl groupe"><b>#</b></span>
+        <b>${esc(nomSujet())}</b>
+        <span class="muted small">Rien d’écrit dans ce canal pour l’instant.
+          Seuls les messages postés ici s’y trouvent.</span>
+      </div>` : `<div class="msg-vide">
         ${vignette(fil, 'xl')}
         <b>${esc(nomDe(fil.conv, fil.user))}</b>
         <span class="muted small">${fil.genre === 'canal'
@@ -358,9 +493,10 @@ function vueConversation(hote, fil, { contexte = null, apresEnvoi = null, surRen
   // la lecture de quelqu'un en train de remonter l'historique.
   zoneFil.onscroll = () => { bas = zoneFil.scrollHeight - zoneFil.scrollTop - zoneFil.clientHeight < 60; };
 
-  texte.value = brouillons.get(cleBrouillon) || '';
-  const hauteurAuto = () => { texte.style.height = 'auto'; texte.style.height = Math.min(160, texte.scrollHeight) + 'px'; };
-  texte.oninput = () => { brouillons.set(cleBrouillon, texte.value); hauteurAuto(); };
+  texte.value = brouillons.get(cleBrouillon()) || '';
+  if (sid) texte.placeholder = `Écrire dans # ${nomSujet()}…`;
+  function hauteurAuto() { texte.style.height = 'auto'; texte.style.height = Math.min(160, texte.scrollHeight) + 'px'; }
+  texte.oninput = () => { brouillons.set(cleBrouillon(), texte.value); hauteurAuto(); };
   texte.onkeydown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); form.requestSubmit(); }
   };
@@ -386,11 +522,11 @@ function vueConversation(hote, fil, { contexte = null, apresEnvoi = null, surRen
     if (!corps.trim() && !fichiers.length && !ctx) return;
     bouton.disabled = true;
     try {
-      texte.value = ''; enAttente = []; contexteActif = null; brouillons.delete(cleBrouillon);
+      texte.value = ''; enAttente = []; contexteActif = null; brouillons.delete(cleBrouillon());
       dessinerJointes(); dessinerContexte(); hauteurAuto();
       bas = true;
-      await envoyer(fil, corps, fichiers, ctx);
-      await marquerLu(fil.conv?.id);
+      await envoyer(fil, corps, fichiers, ctx, sid);
+      await marquerLu(fil.conv?.id, sid);
       apresEnvoi?.();
     } catch (err) {
       toast(err.message, 'err');
@@ -400,10 +536,15 @@ function vueConversation(hote, fil, { contexte = null, apresEnvoi = null, surRen
   };
 
   dessinerFil(); dessinerContexte(); dessinerJointes(); hauteurAuto();
+  // ⚠ ET UNE SECONDE MESURE APRÈS LA MISE EN PAGE : la barre des canaux posée
+  // au-dessus du fil faisait mesurer la zone de saisie avant qu'elle ait sa
+  // largeur, et elle s'ouvrait haute de 160 px, vide (vu en démo le 04/11).
+  requestAnimationFrame(hauteurAuto);
 
   return {
     redessiner: dessinerFil,
     focus() { texte.focus(); },
+    marquerLu: () => marquerLu(fil.conv?.id, sid),
   };
 }
 
@@ -526,11 +667,11 @@ export const messageriePage = {
     // Sur téléphone, pas de curseur posé d'office : le clavier couvrirait le
     // fil qu'on vient ouvrir pour le lire.
     if (!matchMedia('screen and (max-width: 820px)').matches) vue.focus();
-    if (!listeSeule) marquerLu(ouvert.conv?.id);
+    if (!listeSeule) vue.marquerLu();
 
     const minuteur = setInterval(async () => {
       if (document.hidden) return;
-      try { if (await db.refresh(TABLES) && !listeSeule) marquerLu(ouvert.conv?.id); } catch { /* réseau : on réessaiera */ }
+      try { if (await db.refresh(TABLES) && !listeSeule) vue.marquerLu(); } catch { /* réseau : on réessaiera */ }
     }, RAFRAICHIR_MS);
 
     return {
@@ -644,7 +785,7 @@ export function monterBulle(parent) {
       apresEnvoi: () => majPastille(),
       surRenvoi: () => fermer(),   // laisser voir l'écran vers lequel on renvoie
     });
-    marquerLu(f.conv?.id);
+    vue.marquerLu();
     majPastille();
     if (!surTelephone()) vue.focus();
   };
@@ -685,7 +826,7 @@ export function monterBulle(parent) {
     dernierTour = Date.now();
     try {
       const change = await db.refresh(TABLES);
-      if (change && ouvert && courant) marquerLu(filPar(courant)?.conv?.id);
+      if (change && ouvert && courant) vue?.marquerLu();
     } catch { /* réseau : on réessaiera */ }
   }, RAFRAICHIR_MS);
 

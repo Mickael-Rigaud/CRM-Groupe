@@ -286,11 +286,17 @@ export const SEED = {
     { id: 'm2', conversation_id: 'cv-groupe', author_id: 'u-stephanie', body: 'Noté. Je prépare les chiffres Propulsion.', created_at: d(-5, 9) },
     { id: 'm3', conversation_id: 'cv-rgd', author_id: 'u-charge', body: 'Visite faite chez Mme Bernard. Appartement en bon état général, la salle de bain est à reprendre entièrement. Je monte le devis cette semaine.', created_at: d(-3, 17) },
     { id: 'm4', conversation_id: 'cv-rgd', author_id: 'u-mickael', body: 'Parfait. Pense à chiffrer le remplacement de la VMC, elle datait de l’origine.', created_at: d(-3, 18) },
+    // Dans le canal « Chantier Bernard » du canal RGD : un échange rangé à part.
+    { id: 'm4b', conversation_id: 'cv-rgd', sujet_id: 'sj-bernard', author_id: 'u-charge', body: 'Devis Bernard envoyé, VMC comprise.', created_at: d(-1, 10) },
     { id: 'm5', conversation_id: 'cv-btp', author_id: 'u-mickael', body: 'Rapport Marchand envoyé ce matin. Dossier clos, on peut facturer.', created_at: d(-2, 11) },
     { id: 'm6', conversation_id: 'cv-p1', author_id: 'u-mickael', body: 'Tu peux relancer le notaire pour le dossier Haddad ?', created_at: d(-1, 15) },
     { id: 'm7', conversation_id: 'cv-p1', author_id: 'u-elodie', body: 'C’est fait, il rappelle demain matin.', created_at: d(-1, 16) },
   ],
   message_reads: [],
+  // Les canaux d'une discussion (04/11/2026) : ici, un chantier dans le canal RGD.
+  conversation_sujets: [
+    { id: 'sj-bernard', conversation_id: 'cv-rgd', titre: 'Chantier Bernard', created_by: 'u-charge', created_at: d(-2, 9) },
+  ],
   broker_profiles: SEED_BROKERS,
   btp_vivier: SEED_VIVIER_BTP,
   btp_vivier_evenements: SEED_VIVIER_BTP_EVENEMENTS,
