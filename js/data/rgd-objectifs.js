@@ -189,7 +189,25 @@ export function moisObjectifs(aujourdhui = new Date()) {
       clientsEnvoyes: envoyes,
       devisSignes: signes.length,
       devisEnvoyes: envoyes.length,
-      ca: paiements.filter(p => p.statut !== 'annule' && mois7(p.date_facturation) === cle)
+      // ⚠ LE CA NE DÉDUIT PAS LES AVOIRS, et c'est ce qui le réconcilie avec
+      // le bilan comptable d'Élodie (05/11/2026). Il les déduisait : sur
+      // l'exercice 2024/2025, 16 remboursements à −144 653 € ramenaient
+      // 613 569 € de factures émises à 468 916 €. On en avait conclu — et
+      // écrit dans `rgd-bilan.js` — que « la reprise Costructor ne remonte pas
+      // à tout l'historique ». C'était FAUX : pas un euro ne manquait, ils
+      // étaient soustraits. Son bilan dit 613 568 € pour cet exercice et
+      // 393 893 € pour le suivant, soit 1 007 461 € depuis la création ; le
+      // brut en donne 613 569 € et 389 760 €, soit 1 007 463 €. L'écart
+      // restant, 4 133 €, est celui de DEUX factures que nous datons en
+      // 2026/2027 — une coupure d'exercice, pas une donnée absente.
+      //
+      // ⚠ UN AVOIR RESTE UNE LIGNE DE `rgd_paiements`, visible sur la
+      // facturation : il n'est pas effacé, il ne compte simplement pas dans le
+      // chiffre d'affaires émis. Le jour où il faudra un CA net, c'est une
+      // SECONDE mesure à côté, pas celle-ci qu'il faut changer — sinon l'écran
+      // recommence à s'écarter du bilan sans que personne ne sache pourquoi.
+      ca: paiements.filter(p => p.statut !== 'annule' && p.type !== 'remboursement'
+          && mois7(p.date_facturation) === cle)
         .reduce((t, p) => t + (Number(p.montant_ht) || 0), 0),
     });
   }

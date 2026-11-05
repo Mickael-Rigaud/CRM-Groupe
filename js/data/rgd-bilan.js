@@ -5,9 +5,19 @@
 // 30 septembre », puis, le même jour, son document « Bilan commercial
 // comparatif et objectifs 2026/2027 » avec : « voici les chiffres ».
 //
-// ⚠ LES EXERCICES CLOS SONT CEUX DU BILAN, PAS CEUX DU CRM. Recoupé le
-// 05/11/2026 : le CRM ne porte que 31 des 43 devis de 2024/2025 et 468 916 € des
-// 613 568 € facturés — la reprise Costructor ne remonte pas à tout l'historique.
+// ⚠ LES EXERCICES CLOS SONT CEUX DU BILAN, PAS CEUX DU CRM, mais PAS pour la
+// raison qui était écrite ici. Ce paragraphe affirmait : « le CRM ne porte que
+// 31 des 43 devis de 2024/2025 et 468 916 € des 613 568 € facturés — la reprise
+// Costructor ne remonte pas à tout l'historique ». La seconde moitié était
+// FAUSSE. Le CRM porte 613 569 € de factures émises sur cet exercice, le
+// chiffre du bilan à l'euro : les 144 653 € « manquants » étaient les AVOIRS,
+// que le calcul du CA déduisait (corrigé le 05/11/2026, voir `rgd-objectifs.js`).
+// Il ne manquait pas une donnée, on en soustrayait une.
+//
+// ⚠ CE QUI RESTE VRAI : le compte des DEVIS, lui, est bien incomplet — 31 sur
+// 43 pour 2024/2025 — et c'est ce qui justifie encore de préférer la saisie
+// d'Élodie sur un exercice clos. Ne pas reprendre l'ancienne conclusion sur le
+// CA pour autant : les deux ne se comportent pas pareil.
 // Élodie a tranché : pour un exercice clos, ce sont ses chiffres qui font foi.
 // Ils vivent dans `rgd_reglages`, clé `bilan_exercices` (JSON indexé par
 // l'année de début : { "2024": { devis_envoyes, devis_signes, montant_devis,

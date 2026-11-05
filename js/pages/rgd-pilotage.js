@@ -590,8 +590,41 @@ export const rgdPilotagePage = {
 
       // CA DE L'EXERCICE — calculé, puis la correction manuelle par-dessus.
       // Les deux sont montrés : l'écart dit à quel point Costructor est en retard.
-      const surExercice = (e) => paiements.filter(p => p.statut !== 'annule'
+      // ⚠ LES AVOIRS NE SONT PAS DÉDUITS, et c'est ce qui réconcilie l'écran
+      // avec le bilan comptable (05/11/2026). Ils l'étaient : sur 2024/2025,
+      // 16 remboursements à −144 653 € ramenaient 613 569 € de factures émises à
+      // 468 916 €, et on en avait conclu — à tort, c'était écrit dans
+      // `rgd-bilan.js` — que la reprise Costructor était incomplète. Le bilan
+      // d'Élodie dit 613 568 € pour cet exercice et 393 893 € pour le suivant,
+      // soit 1 007 461 € depuis la création ; le brut donne 613 569 € et
+      // 389 760 €, soit 1 007 462 €. Le reste, 4 133 €, tient à DEUX factures
+      // que nous datons en 2026/2027.
+      //
+      // ⚠ UN AVOIR RESTE UNE LIGNE DE `rgd_paiements`, visible sur la
+      // facturation : il n'est pas effacé, il ne compte simplement pas dans le
+      // chiffre d'affaires ÉMIS. Le jour où il faudra un CA net, c'est une
+      // seconde mesure à côté — pas celle-ci qu'il faut rechanger, sinon
+      // l'écran se remet à s'écarter du bilan sans que personne ne sache pourquoi.
+      const emise = (p) => p.statut !== 'annule' && p.type !== 'remboursement';
+      const surExercice = (e) => paiements.filter(p => emise(p)
         && p.date_facturation && p.date_facturation >= e.du && p.date_facturation <= e.au);
+
+      // LE CA DEPUIS LE DÉBUT DE L'ACTIVITÉ (05/11/2026, Élodie : « je veux
+      // retrouver le chiffre 1 007 462 € de CA depuis le début de l'activité et
+      // on met à jour le nombre de chantiers tout simplement »).
+      //
+      // ⚠ IL NE PASSE PAS PAR LE CHANTIER, ET C'EST POURQUOI IL EST JUSTE.
+      // 50 factures (310 470 € au 05/11/2026) n'ont aucune affaire : elles
+      // viennent de Costructor avec un numéro de devis que notre copie des
+      // devis ne contient pas. Un total calculé par chantier en perdrait un
+      // tiers. Compter les factures elles-mêmes les garde toutes.
+      const caTotal = paiements.filter(emise)
+        .reduce((t, p) => t + (Number(p.montant_ht) || 0), 0);
+      // ⚠ UNE VISITE TECHNIQUE N'EST PAS UN CHANTIER : même règle que la frise
+      // (`estVisiteTechnique`), sinon on en annoncerait 41 au lieu de 30.
+      const vraisChantiers = chantiers.filter(c => c.statut_d1 !== 'visite_technique'
+        && (!!c.etat || !!c.date_debut_prevue || !!c.work_start_at));
+      const nTermines = vraisChantiers.filter(c => c.etat === 'termine').length;
 
       // ⚠ TANT QUE LE NOUVEL EXERCICE NE PORTE AUCUNE FACTURE, ON AFFICHE LE
       // PRÉCÉDENT (02/10/2026, demandé par Mickael : « tant qu'il n'y a pas de
@@ -746,6 +779,13 @@ ${carteObjectifs(moisObj, objectifs)}
           ${facturesEx.length ? `<p class="small muted rgd-ca-sous">Moyenne mensuelle ${eur(moyenne)} HT sur
             ${mois.length} mois${surLePrecedent ? '' : ` écoulé${mois.length > 1 ? 's' : ''}`}.${!surLePrecedent && precedentHt
               ? ` Exercice ${esc(exPrecedent.label)} : ${eur(precedentHt)} HT.` : ''}</p>` : ''}
+          ${'' /* ⚠ CE TOTAL N'EST PAS CELUI DE L'EXERCICE AFFICHÉ AU-DESSUS, et le
+             libellé doit le dire en toutes lettres : deux montants l'un sous l'autre
+             se lisent comme la même mesure. Celui-ci couvre TOUTE l'activité. */}
+          <p class="rgd-ca-total">Depuis le début de l’activité :
+            <b>${eur(caTotal)} HT</b> facturés,
+            <b>${vraisChantiers.length} chantier${vraisChantiers.length > 1 ? 's' : ''}</b>
+            dont ${nTermines} terminé${nTermines > 1 ? 's' : ''}.</p>
           ${courbeCa(mois)}
           ${corrige ? `<p class="small">
             <b>Ce chiffre est saisi à la main</b> et masque le calcul, qui donne
@@ -761,7 +801,7 @@ ${carteObjectifs(moisObj, objectifs)}
             <b>La courbe, elle, montre le calculé</b> — mois par mois, il n’existe pas
             de saisie manuelle, et lisser la correction sur douze mois inventerait
             une répartition que personne n’a constatée.</p>`
-            : '<p class="small muted">Calculé sur les factures de l’exercice, avoirs déduits, annulées exclues.</p>'}
+            : '<p class="small muted">Calculé sur les factures émises de l’exercice — avoirs et annulées exclus, comme le bilan comptable.</p>'}
           ${reglage('manual_clients_actifs') !== null ? `<p class="small muted">
             Clients actifs déclarés : <b>${esc(reglage('manual_clients_actifs'))}</b>,
             également saisi à la main côté RGD.</p>` : ''}
