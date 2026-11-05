@@ -170,22 +170,50 @@ export const homePage = {
               ${horsEntonnoir.length ? `<p class="muted small tb-hors">${horsEntonnoir.map(k =>
                 `<span class="ag-src"><span class="dot" style="background:${ACTIVITIES[k].color}"></span>${esc(ACTIVITIES[k].label)}</span>`).join('')}
                 ${horsEntonnoir.length > 1 ? "n'apparaissent pas ici : leurs outils envoient" : "n'apparaît pas ici : son outil envoie"} des totaux, pas le détail des étapes.</p>` : ''}
-              <div class="tb-funnel">
+              ${/* ⚠ DES RANGÉES DE TABLEAU, PAS DES BARRES PLEINES (05/11/2026,
+                    Élodie : « mettre le même tableau que l'on retrouve dans vue
+                    d'ensemble du tableau de bord RGD Renova »). C'est la forme de
+                    « Objectifs du mois » : le nom de l'étape, une piste grise, le
+                    nombre HORS de la barre, la part à droite. Les barres pleines
+                    d'avant portaient leur nombre À L'INTÉRIEUR : il disparaît sur
+                    les étapes basses, qui sont justement celles qu'on regarde —
+                    « Signés : 0 » n'avait plus de barre où l'écrire.
+
+                    ⚠ LE VOCABULAIRE EST EMPRUNTÉ, PAS INVENTÉ : `rgd-pipe-table`
+                    et `rgd-ob-table` sont déjà dans la feuille de style, et le
+                    repli sur téléphone — la barre passe sous sa ligne — vient
+                    avec. Aucune ligne de style n'est ajoutée.
+
+                    ⚠ LA BARRE SE MESURE SUR L'ÉTAPE LA PLUS HAUTE, pas sur la
+                    précédente : c'est elle qui donne la forme de l'entonnoir. Le
+                    taux de passage garde donc sa flèche dans sa colonne, sans
+                    quoi on le lirait comme le remplissage de la barre. */ ''}
+              <table class="rgd-pipe-table rgd-ob-table"><tbody>
                 ${ent.map((s, i) => {
                   const prev = i ? ent[i - 1].n : null;
                   const haut = Math.max(...ent.map(x => x.n)) || 1;
                   const large = Math.min(100, s.n / haut * 100);
                   const fin = i === ent.length - 1;
+                  const couleur = fin ? 'var(--green)' : 'var(--accent)';
                   const taux = prev ? Math.round(s.n / prev * 100) : null;
-                  return `<div class="tb-step">
-                    <span class="tb-nm">${s.nom}</span>
-                    <div class="tb-bar" style="width:${Math.max(large, s.n ? 4 : 0)}%;${fin ? 'background:var(--green)' : `opacity:${(1 - i * 0.13).toFixed(2)}`}"><span>${s.n}</span></div>
-                    <span class="tb-rate">${s.partiel ? '<span title="Toutes les structures ne comptent pas cette étape.">partiel</span>' : ''}${taux === null ? (prev === null ? '' : '—') : taux > 100
+                  return `<tr>
+                    <th scope="row">${s.nom}</th>
+                    <td class="rgd-pipe-barre"><div class="rgd-pipe-piste"><i
+                      style="width:${Math.max(large, s.n ? 4 : 0)}%;background:${couleur}${fin ? '' : `;opacity:${(1 - i * 0.13).toFixed(2)}`}"></i></div></td>
+                    ${/* ⚠ PAS DE BASE QUAND L'ÉTAPE DU DESSUS EST À ZÉRO, et c'est le
+                          rendu qui l'a montré : RGD seule, en octobre, affichait
+                          « Devis / propositions · 1 sur 0 ». Vrai au mot près, illisible
+                          à l'œil — on dirait une panne. Zéro n'est pas une base : on
+                          n'en annonce pas, le taux garde son tiret, et le bandeau
+                          au-dessus dit déjà d'où viennent ces affaires. */ ''}
+                    <td class="rgd-pipe-n"><b style="color:${couleur}">${s.n}</b>${prev
+                      ? `<span class="rgd-ob-sur">sur ${prev}</span>` : ''}</td>
+                    <td class="rgd-ob-pct">${s.partiel ? '<span class="rgd-ob-sur" title="Toutes les structures ne comptent pas cette étape.">partiel</span> ' : ''}${taux === null ? (prev === null ? '' : '—') : taux > 100
                       ? `<span title="Plus d'affaires à cette étape qu'à la précédente : elles viennent de mois antérieurs.">↑ ${taux} %</span>`
-                      : '↓ ' + taux + ' %'}</span>
-                  </div>`;
+                      : '↓ ' + taux + ' %'}</td>
+                  </tr>`;
                 }).join('')}
-              </div>
+              </tbody></table>
               <div class="tb-funnel-out">
                 <b>${recus && conclus !== null ? pct(conclus / recus) + ' %' : '—'}</b>
                 <span class="muted small">${recus && conclus !== null

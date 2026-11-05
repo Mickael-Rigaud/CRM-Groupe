@@ -3315,14 +3315,13 @@ body.impression #print-root { display: block; }
 .tb-col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 .tb-source { margin: 14px 0 0; }
 
-/* ---- entonnoir ---- */
-.tb-funnel { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; }
-.tb-step { display: grid; grid-template-columns: 148px minmax(0, 1fr) 72px; align-items: center; gap: 14px; padding: 6px 0; }
-.tb-nm { font-size: 13px; font-weight: 600; color: var(--muted); }
-.tb-bar { height: 26px; border-radius: 7px; background: var(--accent); min-width: 3px; display: flex;
-  align-items: center; justify-content: flex-end; padding-right: 9px; }
-.tb-bar span { font-family: var(--font-display); font-size: 13.5px; font-weight: 700; color: #fff; font-variant-numeric: tabular-nums; }
-.tb-rate { font-size: 12px; color: var(--muted-2); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+/* ---- entonnoir ----
+   ⚠ LES ÉTAPES SE DESSINENT AVEC `rgd-pipe-table` / `rgd-ob-table`, posées
+   plus bas dans ce fichier (05/11/2026 : la carte a pris la forme du tableau
+   de « Objectifs du mois »). Les huit règles `.tb-funnel` / `.tb-step` /
+   `.tb-nm` / `.tb-bar` / `.tb-rate` sont parties avec les barres pleines :
+   plus un fichier du dépôt ne les écrit, vérifié par recherche.
+   Le pied, lui, reste — le taux de transformation n'a pas bougé. */
 .tb-funnel-out { display: flex; align-items: baseline; gap: 10px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
 .tb-funnel-out b { font-family: var(--font-display); font-size: 23px; letter-spacing: -.025em; font-variant-numeric: tabular-nums; }
 
@@ -3445,8 +3444,6 @@ body.impression #print-root { display: block; }
 @media (max-width: 720px) {
   .tb-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .tb-periode, .tb-periodes { margin-left: 0; }
-  .tb-step { grid-template-columns: 104px minmax(0, 1fr); }
-  .tb-rate { grid-column: 2; text-align: left; }
   .tb-totals { flex: 1 1 100%; }
   .tb-pat { grid-template-columns: minmax(0, 1fr); }
 }
