@@ -251,7 +251,9 @@ export function bilanDetails() {
 
 const nomDe = (r) => {
   const c = r.contact_id && db.byId('contacts', r.contact_id);
-  if (c) return [c.prenom, c.nom].filter(Boolean).join(' ') || c.raison_sociale || '—';
+  // ⚠ Un contact porte first_name / last_name (pas prenom / nom, qui sont les
+  // champs du FORMULAIRE de fiche) : avec les mauvais, toute la colonne valait « — ».
+  if (c) return [c.first_name, c.last_name].filter(Boolean).join(' ') || '—';
   const o = r.organisation_id && db.byId('organisations', r.organisation_id);
   return o?.name || o?.raison_sociale || '—';
 };
