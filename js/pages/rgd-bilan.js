@@ -63,6 +63,7 @@ const surObjectif = (val, cible, format) => (vide(cible) ? ''
 const LIGNES_PASSE = [
   ['Devis envoyés', 'envoyes', (e) => nombre(e.envoyes)],
   ['Devis signés', 'signes', (e) => (vide(e.signes) ? '—' : `${e.signes} <span class="muted">(${pourcent(e.tauxSignature)})</span>`)],
+  ['Montant des devis signés HT', 'montantSigne', (e) => euros(e.montantSigne)],
   ['Chantiers', 'chantiers', (e) => `${nombre(e.chantiers)}${e.chantiersSelonCrm && !vide(e.chantiers) ? '<sup>*</sup>' : ''}`],
   ['Panier moyen par chantier HT', 'panier', (e) => `${euros(e.panier)}${e.chantiersSelonCrm && !vide(e.panier) ? '<sup>*</sup>' : ''}`],
   ['CA facturé HT', 'ca', (e) => `<b>${euros(e.ca)}</b>`],

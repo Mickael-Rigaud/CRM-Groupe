@@ -415,7 +415,7 @@ export function justifier(a, mesure, aujourdhui = new Date()) {
   }
 
   const total = lignes.reduce((t, l) => t + l.montant, 0);
-  const titres = { envoyes: 'Devis envoyés', signes: 'Devis signés', chantiers: 'Chantiers', panier: 'Panier moyen par chantier', ca: 'CA facturé HT' };
+  const titres = { envoyes: 'Devis envoyés', signes: 'Devis signés', montantSigne: 'Montant des devis signés HT', chantiers: 'Chantiers', panier: 'Panier moyen par chantier', ca: 'CA facturé HT' };
   const res = { titre: titres[mesure], periode: a === 'total' ? 'Depuis la création' : colonne.label,
     source: sourceListe, total, nb: lignes.length, valeur: colonne[mesure === 'ca' ? 'ca' : mesure] };
 
@@ -441,7 +441,13 @@ export function justifier(a, mesure, aujourdhui = new Date()) {
     res.lignes = parDate(lignes);
     const attendu = mesure === 'ca' ? colonne.ca : colonne[mesure];
     const dejaDit = mesure === 'envoyes' && annees.some(an => saisi[an] && !details[an]?.envoyes);
-    if (mesure !== 'ca' && !dejaDit && attendu != null && attendu !== res.nb) {
+    // Pour un MONTANT, on compare le total de la liste au montant affiché (en
+    // 2024/2025, Élodie a retenu 613 568 € quand ses captures font 593 244 €).
+    if (mesure === 'montantSigne') {
+      if (attendu != null && Math.round(attendu) !== Math.round(total)) {
+        notes.push(`Le montant affiché est ${eurTexte(attendu)} ; les devis listés ci-dessous totalisent ${eurTexte(total)}.`);
+      }
+    } else if (mesure !== 'ca' && !dejaDit && attendu != null && attendu !== res.nb) {
       notes.push(`La liste compte ${res.nb} devis, le chiffre affiché ${attendu}`
         + (mesure === 'envoyes' ? ' (celui du bilan comptable).' : '.'));
     }
