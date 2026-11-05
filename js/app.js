@@ -4,7 +4,7 @@ import { db } from './data/db.js';
 import { scope } from './data/scope.js';
 import { ACTIVITIES, ROLES } from './data/schema.js';
 import { esc, toast, isoDay, daysSince, closeModal, openModal , etiqueterColonnes } from './ui.js';
-import { pages } from './pages/index.js';
+import { pages, prechargerLesEcrans } from './pages/index.js';
 import { messagesNonLus, monterBulle } from './pages/messagerie.js';
 import { icon } from './icons.js';
 import { actualiser, poserGesteActualiser } from './actualiser.js';
@@ -749,8 +749,30 @@ function renderNav() {
   univ.querySelectorAll('[data-univ]').forEach(a => a.onclick = () => { navState.open = null; });
 }
 
+// Un trait d'attente en haut de la fenêtre, posé seulement si le chargement
+// de l'écran dépasse 300 ms. En deçà il clignoterait pour rien ; au-delà,
+// sans lui, rien ne bouge et le clic a l'air perdu. Stylé ici et pas dans la
+// feuille : trois lignes qui n'ont pas de raison d'aller vivre ailleurs.
+function montrerAttente() {
+  if (document.getElementById('attente-ecran')) return;
+  const d = document.createElement('div');
+  d.id = 'attente-ecran';
+  d.style.cssText = 'position:fixed;top:0;left:0;right:0;height:3px;z-index:9999;'
+    + 'background:var(--accent);opacity:.85;pointer-events:none';
+  document.body.appendChild(d);
+}
+function cacherAttente() { document.getElementById('attente-ecran')?.remove(); }
+
 // ---------- Routeur ----------
-function route() {
+
+// ⚠ LE NUMÉRO DE LA NAVIGATION EN COURS. Depuis que `route()` ATTEND le
+// module de l'écran, deux adresses enchaînées vite peuvent revenir dans le
+// désordre : la seconde charge un petit fichier déjà en cache et rend avant la
+// première, qui écrase ensuite la bonne page. Chaque passage prend un numéro
+// et abandonne si un autre est parti depuis.
+let navigation = 0;
+
+async function route() {
   if (!scope.user) return;
   const hash = location.hash || '#/home';
   // ⚠ LA CHAINE DE REQUETE NE FAIT PAS PARTIE DU NOM DE LA PAGE.
@@ -773,13 +795,44 @@ function route() {
   // Un écran fermé à l'ouvrier — y compris l'accueil `#/home` par défaut — le
   // renvoie à l'espace RGD, ou à sa to do list s'il n'a pas RGD.
   if (scope.isOuvrier && !scope.ouvrierPeut(hash)) { location.hash = scope.accueilOuvrier; return; }
-  let page = pages[name] || pages.home;
-  if (name === 'patrimoine') page = pages['patrimoine_' + (param || 'home')] || pages.patrimoine_home;
-  if (name === 'locatif') page = pages['locatif_' + (param || 'home')] || pages.locatif_home;
-  if (name === 'btp') page = pages['btp_' + (param || 'home')] || pages.btp_home;
-  if (name === 'courtage') page = pages['courtage_' + (param || 'home')] || pages.courtage_home;
-  if (name === 'rgd') page = pages['rgd_' + (param || 'home')] || pages.rgd_home;
-  if (page.directionOnly && !scope.isDirection) page = pages.today;
+  // ⚠ `pages[...]` REND UNE FONCTION QUI CHARGE L'ÉCRAN, PAS L'ÉCRAN. Les
+  // modules d'écran ne sont plus importés en bloc au démarrage (voir l'en-tête
+  // de `pages/index.js`) : il faut donc ATTENDRE avant de lire `directionOnly`,
+  // `fullBleed` ou `title`, qui n'existent pas encore.
+  let charger = pages[name] || pages.home;
+  if (name === 'patrimoine') charger = pages['patrimoine_' + (param || 'home')] || pages.patrimoine_home;
+  if (name === 'locatif') charger = pages['locatif_' + (param || 'home')] || pages.locatif_home;
+  if (name === 'btp') charger = pages['btp_' + (param || 'home')] || pages.btp_home;
+  if (name === 'courtage') charger = pages['courtage_' + (param || 'home')] || pages.courtage_home;
+  if (name === 'rgd') charger = pages['rgd_' + (param || 'home')] || pages.rgd_home;
+
+  const mien = ++navigation;
+  // ⚠ ON NE VIDE RIEN AVANT D'AVOIR L'ÉCRAN. L'écran précédent reste affiché
+  // pendant le chargement : vider d'abord donnerait une page blanche le temps
+  // d'un aller-retour réseau, et une page blanche se lit comme une panne.
+  const temoin = setTimeout(montrerAttente, 300);
+  let page;
+  try {
+    page = await charger();
+    if (page.directionOnly && !scope.isDirection) page = await pages.today();
+  } catch (e) {
+    clearTimeout(temoin); cacherAttente();
+    if (mien !== navigation) return;
+    console.error('Écran introuvable —', e);
+    document.getElementById('content').innerHTML = `<section class="card">
+      <div class="card-head"><h2>Cet écran n’a pas pu être chargé</h2></div>
+      <p>Il se télécharge au moment où vous l’ouvrez, et la connexion a manqué.
+      Réessayez : s’il est déjà venu une fois, il s’ouvrira même hors ligne.</p>
+      <div class="toolbar"><button type="button" class="btn" id="ecran-reessayer">Réessayer</button></div>
+      <p class="small muted">${esc(String(e && e.message || e))}</p>
+    </section>`;
+    const r = document.getElementById('ecran-reessayer');
+    if (r) r.onclick = () => route();
+    return;
+  }
+  clearTimeout(temoin); cacherAttente();
+  // Une autre adresse est partie pendant le chargement : elle a la main.
+  if (mien !== navigation) return;
   if (name === 'pipeline' && !scope.activityKeys.includes(param)) { location.hash = `#/pipeline/${scope.activityKeys[0] || 'rgd'}`; return; }
   closeModal(true);
   releverMenuDeLEspace();   // le menu de l'espace qu'on quitte, pour le tiroir des écrans communs
@@ -888,6 +941,9 @@ async function start(user) {
   const ouverture = appliStructure();
   if (ouverture && !location.hash) history.replaceState(null, '', location.pathname + location.search + ACCUEIL_STRUCTURE[ouverture]);
   route();
+  // Les écrans non ouverts arrivent ensuite, un par un, pour que la copie
+  // hors ligne reste complète. Voir `pages/index.js`.
+  prechargerLesEcrans();
   db.ecouterLesChangements();
   if (retourDeLien()) setTimeout(() => passwordForm(true), 300);
 }

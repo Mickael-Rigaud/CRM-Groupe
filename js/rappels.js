@@ -36,7 +36,7 @@ import { db } from './data/db.js';
 import { scope } from './data/scope.js';
 import { esc, toast, daysSince } from './ui.js';
 import { activityForm, actType } from './pages/activity.js';
-import { estMaTache } from './pages/today.js';
+import { estMaTache } from './data/taches.js';
 
 const CLE_REDUIT = 'crm_rappels_reduit';
 const HEURE_DEFAUT = '08:00';

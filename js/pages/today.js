@@ -118,8 +118,10 @@ function carte(a, pour = false) {
 // confiée nommément, ce n'est pas la direction qui lit la to-do d'un autre.
 // Exportée pour le pop-up des échéances (`js/rappels.js`) : il doit montrer
 // exactement les tâches de « Ma to do list », pas une seconde définition.
-export const estMaTache = (a, moi) => a.assignee_id === moi || a.shared_with === moi
-  || (!a.assignee_id && a.created_by === moi);
+import { estMaTache } from '../data/taches.js';
+// La définition vit dans `data/taches.js` — voir l'en-tête de ce fichier-là.
+// Réexportée ici parce que c'est l'adresse que tout le monde connaît.
+export { estMaTache } from '../data/taches.js';
 
 const ONGLETS = [
   { key: 'mienne', label: 'Ma to do list', garde: estMaTache },

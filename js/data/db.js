@@ -2,7 +2,11 @@
 // soit par Supabase (production). Les pages lisent le cache ; les écritures
 // passent par l'adaptateur puis mettent le cache à jour.
 import { CONFIG } from '../config.js';
-import { SEED, SEED_USERS } from './seed.js';
+// ⚠ LE JEU DE DÉMONSTRATION N'EST PLUS IMPORTÉ EN TÊTE (05/11/2026). Il pese
+// 108 Ko et ne sert QU'EN MODE DÉMONSTRATION, c'est-à-dire jamais chez
+// Élodie, Mickael ni les chefs de chantier : il partait pourtant dans chaque
+// chargement. Il arrive maintenant au moment où l'adaptateur local s'en sert,
+// et lui seul s'en sert.
 import { estUnRendezVousRgd } from './schema.js';
 import { SEED_SITE, deplierSite } from './seed-site.js';
 
@@ -188,7 +192,8 @@ const PORTEURS_AUTRES = [
 const localAdapter = {
   name: 'local',
   data: null,
-  load() {
+  async load() {
+    const { SEED, SEED_USERS } = await import('./seed.js');
     try { this.data = JSON.parse(localStorage.getItem(LS_KEY)); } catch { this.data = null; }
     if (!this.data) {
       this.data = { profiles: structuredClone(SEED_USERS), ...structuredClone(SEED) };
@@ -844,7 +849,7 @@ export const db = {
   async init() {
     this.adapter = CONFIG.DEMO ? localAdapter : supabaseAdapter;
     if (!CONFIG.DEMO) await this.adapter.connect();
-    else this.adapter.load();
+    else await this.adapter.load();
   },
   async loadAll(user = null) {
     this.cache = await this.adapter.load();
