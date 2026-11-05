@@ -123,10 +123,14 @@ export function prechargerLesEcrans(delai = 4000) {
   if (rattrapageLance) return;
   rattrapageLance = true;
   const fichiers = [...new Set(Object.values(pages).map(f => f.fichier))];
+  fichiers.push('../../assets/chart.umd.js');
   const suivant = () => {
     const f = fichiers.shift();
     if (!f) return;
-    import(f).catch(() => {}).then(() => setTimeout(suivant, 120));
+    const venir = f.endsWith('.umd.js')
+      ? fetch(new URL(f, import.meta.url))   // on le copie, on ne l'exécute pas
+      : import(f);
+    venir.catch(() => {}).then(() => setTimeout(suivant, 120));
   };
   setTimeout(suivant, delai);
 }

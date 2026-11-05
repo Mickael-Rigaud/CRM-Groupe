@@ -1,5 +1,6 @@
 // Module Patrimoine immobilier : vue d'ensemble, biens, prêts, loyers, charges.
 import { db } from '../data/db.js';
+import { chargerChart } from '../chart.js';
 import { scope } from '../data/scope.js';
 import { INVEST_TYPES, STRUCTURES, PROPERTY_STATUS, EXPENSE_CATEGORIES, RECURRENCES, schedule, loanStatus, monthlyPayment, monthlyEquivalent, propertyMetrics, totalMonths } from '../data/finance.js';
 import { documentsSection, bindDocuments } from '../documents.js';
@@ -212,7 +213,7 @@ export const patrimoinePage = {
   render(root) {
     if (!scope.canPatrimony) return denied(root);
     let charts = [];
-    const draw = () => {
+    const draw = async () => {
       const year = new Date().getFullYear(); const monthKey = isoDay().slice(0, 7);
       const rows = allMetrics(year);
       const tot = rows.reduce((t, { m }) => ({ cost: t.cost + m.cost, value: t.value + m.value, debt: t.debt + m.debt, rent: t.rent + m.rentMonthly, charges: t.charges + m.chargesMonthly, loan: t.loan + m.loanMonthly, cashflow: t.cashflow + m.cashflow }), { cost: 0, value: 0, debt: 0, rent: 0, charges: 0, loan: 0, cashflow: 0 });
@@ -253,7 +254,9 @@ export const patrimoinePage = {
       root.querySelector('#pt-export').onclick = () => csvDownload('patrimoine.csv', rows.map(({ p, m }) => ({ bien: p.name, type: p.invest_type, structure: p.structure, statut: p.status, cout_total: m.cost, valeur: m.value, crd: m.debt, loyer_mensuel: m.rentMonthly, charges_mensuelles: m.chargesMonthly, credit_mensuel: m.loanMonthly, cashflow_mensuel: m.cashflow, rendement_brut: m.grossYield.toFixed(2), rendement_net: m.netYield.toFixed(2) })));
       root.querySelectorAll('[data-prop]').forEach(tr => tr.onclick = () => openProperty(tr.dataset.prop, draw));
       charts.forEach(c => c.destroy()); charts = [];
-      if (window.Chart) {
+      // Voir `js/chart.js` : la bibliothèque arrive à la demande.
+      await chargerChart().catch(() => {});
+      if (root.isConnected && window.Chart) {
         const palette = ['#f26522', '#2563eb', '#0f9d58', '#7c3aed', '#d97706', '#0891b2', '#be123c', '#4b5563'];
         charts.push(new Chart(root.querySelector('#ch-debt'), { type: 'line', data: { labels: years.map(x => x.y), datasets: [{ label: 'CRD', data: years.map(x => x.debt), borderColor: '#f26522', backgroundColor: 'rgba(242,101,34,.12)', fill: true, tension: .3, pointRadius: 2 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => eur(c.raw) } } }, scales: { y: { ticks: { callback: v => (v / 1000) + ' k€' }, grid: { color: '#eef0f3' } }, x: { grid: { display: false } } } } }));
         const donut = (el, obj) => new Chart(el, { type: 'doughnut', data: { labels: Object.keys(obj), datasets: [{ data: Object.values(obj), backgroundColor: palette, borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '62%', plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8 } }, tooltip: { callbacks: { label: c => `${c.label} : ${eur(c.raw)}` } } } } });

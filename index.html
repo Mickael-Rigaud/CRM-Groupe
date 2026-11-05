@@ -26,7 +26,12 @@
   <!-- Le téléphone : barre de navigation du bas (27/10/2026). Fichier à part
        plutôt qu'un ajout à app.css, que d'autres écrans retouchent souvent. -->
   <link rel="stylesheet" href="css/mobile.css">
-  <script src="assets/chart.umd.js"></script>
+  <!-- ⚠ CHART.JS N'EST PLUS ICI (05/11/2026). Il était chargé en script
+       bloquant à chaque ouverture — 201 Ko, 68 Ko compressés, avant le premier
+       pixel — pour TROIS écrans : le tableau de bord du groupe, l'accueil et le
+       Patrimoine. Les graphiques de RGD et de BTP sont dessinés à la main en SVG
+       et n'en ont jamais eu besoin. Il est désormais demandé par `js/chart.js`,
+       au moment où l'un de ces trois écrans s'ouvre. -->
   <!-- ⚠ SUPABASE EST LOGÉ ICI DEPUIS LE 07/10/2026, ET C'EST UNE PANNE DE
        PRODUCTION QUI L'A IMPOSÉ. Il était chargé depuis esm.sh au démarrage :
        le jour où ce CDN a publié une version cassée, le CRM entier a cessé de
@@ -37,10 +42,14 @@
        dist/umd, MIT, md5 40a0691b0f7596f780e708b869004391). Ne pas le
        retoucher : son empreinte est ce qui prouve d'où il vient. Pour monter
        de version, on redépose le fichier, on ne l'édite pas.
-       ⚠ PAS DE `defer` : `js/app.js` est un module, donc différé d'office,
-       et ce script s'exécute forcément avant lui. C'est ce qui permet à
-       `db.js` de compter sur `window.supabase` sans rien attendre. -->
-  <script src="assets/supabase.umd.js"></script>
+       ⚠ `defer` DEPUIS LE 05/11/2026, ET L'ORDRE TIENT TOUJOURS. Sans lui, ce
+       script bloquait l'analyse du document le temps de ses 213 Ko. Un script
+       `defer` et un module attendent la MÊME file, exécutée dans l'ordre du
+       document : ce fichier passe donc encore avant `js/app.js`, et `db.js`
+       continue de compter sur `window.supabase` sans rien attendre.
+       ⚠ NE PAS LUI METTRE `async` À LA PLACE : `async` ne garde aucun ordre,
+       et le CRM s'ouvrirait une fois sur deux sans sa base. -->
+  <script defer src="assets/supabase.umd.js"></script>
 </head>
 <body>
   <div id="app"><div class="login"><div class="card"><p class="muted">Chargement…</p></div></div></div>

@@ -2,6 +2,7 @@
 // structure, puis ce qu'il y a à faire aujourd'hui. Tous les chiffres viennent de
 // js/data/chiffres.js — la vue d'ensemble de Pilotage lit la même source.
 import { db } from '../data/db.js';
+import { chargerChart } from '../chart.js';
 import { scope } from '../data/scope.js';
 import { ACTIVITIES, ACTIVITY_KEYS } from '../data/schema.js';
 import { propertyMetrics, loanStatus } from '../data/finance.js';
@@ -286,9 +287,13 @@ export const homePage = {
       </article>`;
 
     // ---------- courbe ----------
-    const dessineCourbe = (cles, mois, deals) => {
+    // Voir `js/chart.js` : la bibliothèque arrive à la demande, et la garde
+    // reste pour le cas où elle n'arrive pas.
+    const dessineCourbe = async (cles, mois, deals) => {
       const canvas = root.querySelector('#tb-canvas');
-      if (!canvas || !window.Chart) return;
+      if (!canvas) return;
+      await chargerChart().catch(() => {});
+      if (!root.isConnected || !window.Chart) return;
       const datasets = cles.map(k => {
         const data = mois.map(m => caMois(k, m.cle, deals));
         const c = ACTIVITIES[k].color;

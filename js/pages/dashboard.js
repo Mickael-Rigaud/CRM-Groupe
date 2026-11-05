@@ -1,5 +1,6 @@
 // Vue d'ensemble dirigeant : les quatre structures sur la période, puis l'évolution du CA signé.
 import { db } from '../data/db.js';
+import { chargerChart } from '../chart.js';
 import { scope } from '../data/scope.js';
 import { ACTIVITIES, ACTIVITY_KEYS } from '../data/schema.js';
 import { chiffres, caMois, derniersMois, externe } from '../data/chiffres.js';
@@ -78,8 +79,14 @@ export const dashboardPage = {
       drawChart(all);
     };
 
-    const drawChart = (deals) => {
-      const canvas = root.querySelector('#db-chart'); if (!canvas || !window.Chart) return;
+    // ⚠ `async` ET `await chargerChart()` : la bibliothèque n'est plus dans
+    // l'en-tête, elle arrive à la demande (voir `js/chart.js`). La garde
+    // `!window.Chart` RESTE : hors ligne la toute première fois, l'écran
+    // s'affiche sans son graphique plutôt que de tomber en panne.
+    const drawChart = async (deals) => {
+      const canvas = root.querySelector('#db-chart'); if (!canvas) return;
+      await chargerChart().catch(() => {});
+      if (!root.isConnected || !window.Chart) return;
       const months = derniersMois(12).map(m => ({ key: m.cle, label: m.label }));
       const caOf = (k, m) => caMois(k, m, deals);
       // Une courbe par structure, à sa couleur, pour les comparer sur le même axe.
