@@ -65,8 +65,13 @@ function calculCrm(a, ceMois) {
   const estDans = dansEx(a);
   const devis = scope.rgd('rgd_devis');
   const crm = scope.rgd('rgd_devis_crm').filter(d => d.genre === 'devis');
+  // ⚠ UN BROUILLON N'EST JAMAIS ENVOYÉ, MÊME DATÉ (05/11/2026) : Costructor a
+  // laissé D202600196, brouillon identique à D202600192 (même client, même
+  // montant), avec une date d'envoi. Compté, il faisait 5 devis envoyés au lieu
+  // de 4 et Élodie ne retrouvait pas le cinquième.
   const envoyes = [
-    ...devis.filter(d => estDans(d.date_envoi) || (!d.date_envoi && estDans(d.date_signature))),
+    ...devis.filter(d => d.statut !== 'brouillon'
+      && (estDans(d.date_envoi) || (!d.date_envoi && estDans(d.date_signature)))),
     ...crm.filter(d => d.numero && estDans(d.date_devis)),
   ];
   const signes = [
