@@ -57,7 +57,37 @@ function completer(c) {
     ...c,
     tauxSignature: c.envoyes != null && c.signes != null ? taux1(c.signes, c.envoyes) : null,
     moyenDevis: c.envoyes > 0 && c.montantDevis != null ? Math.round(c.montantDevis / c.envoyes) : null,
+    panier: c.chantiers > 0 && c.montantSigne != null ? Math.round(c.montantSigne / c.chantiers) : null,
   };
+}
+
+// ⚠ UN CHANTIER N'EST PAS UN DEVIS (05/11/2026, Élodie : « il faut qu'on
+// arrive à distinguer la différence entre un devis et un chantier, parce qu'un
+// chantier peut avoir plusieurs devis », puis « généralement un client
+// représente un chantier »). On compte donc les CLIENTS distincts qui ont signé
+// dans l'exercice, avec la clé de `moisObjectifs` (contact, sinon organisation,
+// sinon le devis lui-même — deux devis anonymes ne fusionnent jamais).
+const cleClient = (d) => d.contact_id || d.organisation_id || d.id;
+
+/**
+ * Les chantiers signés d'un exercice et leur montant, selon le CRM.
+ *
+ * ⚠ POUR LES EXERCICES CLOS, C'EST UNE APPROXIMATION ASSUMÉE ET AFFICHÉE.
+ * Le bilan d'Élodie ne donne ni chantiers ni montant signé ; elle n'a pas ces
+ * chiffres et a choisi le 05/11/2026 « les chiffres du CRM, signalés ». Or le
+ * CRM ne voit qu'une partie de l'historique : 24 devis signés en 2024/2025 contre
+ * 42 au bilan, et 21 en 2025/2026 contre 17 (le bilan date sans doute autrement).
+ * L'écran écrit donc « selon le CRM » sous ces deux chiffres. Un exercice saisi
+ * qui porte `chantiers_signes` et `montant_signe` l'emporte sur ce calcul.
+ */
+function chantiersCrm(a) {
+  const estDans = dansEx(a);
+  const signes = [
+    ...scope.rgd('rgd_devis').filter(d => estDans(d.date_signature)),
+    ...scope.rgd('rgd_devis_crm').filter(d => d.genre === 'devis' && d.statut === 'signe'
+      && estDans(d.date_signature || d.date_devis)),
+  ];
+  return { chantiers: new Set(signes.map(cleClient)).size, montantSigne: sommeHt(signes) };
 }
 
 /** Ce que le CRM sait d'un exercice, compté par devis. */
@@ -119,8 +149,13 @@ export function bilanCommercial(aujourdhui = new Date()) {
         envoyes: num(s.devis_envoyes), signes: num(s.devis_signes),
         montantDevis: num(s.montant_devis), ca: num(s.ca),
       };
+      const crm = chantiersCrm(a);
+      const saisiChantiers = num(s.chantiers_signes) != null && num(s.montant_signe) != null;
+      Object.assign(col, saisiChantiers
+        ? { chantiers: num(s.chantiers_signes), montantSigne: num(s.montant_signe) }
+        : { ...crm, chantiersSelonCrm: true });
     } else {
-      col = { source: 'crm', ...calculCrm(a, ceMois) };
+      col = { source: 'crm', ...calculCrm(a, ceMois), ...chantiersCrm(a) };
     }
     exercices.push(completer({ annee: a, label: `${a}/${a + 1}`, enCours, ...col }));
   }
@@ -132,7 +167,9 @@ export function bilanCommercial(aujourdhui = new Date()) {
     ? exercices.reduce((t, e) => t + e[champ], 0) : null);
   const total = completer({
     envoyes: cumul('envoyes'), signes: cumul('signes'), montantDevis: cumul('montantDevis'), ca: cumul('ca'),
+    chantiers: cumul('chantiers'), montantSigne: cumul('montantSigne'),
   });
+  total.chantiersSelonCrm = exercices.some(e => e.chantiersSelonCrm);
 
   return { exercices, total, objectifs: objectifsExercice(), saisi: Object.keys(saisi).length > 0 };
 }
@@ -155,11 +192,20 @@ export function bilanCommercial(aujourdhui = new Date()) {
 function objectifsExercice() {
   const o = objectifsMensuels();
   const envoyes = Number(o.envoyes) > 0 ? Number(o.envoyes) : 10;
+  // ⚠ « Chantiers / devis signés : 5 par mois », dit le document : l'objectif
+  // porte sur les CHANTIERS, la ligne qui compte des affaires. Le panier visé
+  // (20 000 € par chantier signé) n'est pas mensuel, il se lit tel quel.
+  //
+  // ⚠ LE MENSUEL EST RENDU AVEC L'ANNUEL (05/11/2026, Élodie : « pour 2026/2027
+  // je veux que tu mettes les objectifs mensuels et annuels »). Taux et panier
+  // n'ont qu'une valeur : ils sont les mêmes au mois et à l'année.
   return {
     envoyes: envoyes * 12,
-    signes: o.devis * 12,
+    chantiers: o.devis * 12,
     tauxSignature: taux1(o.devis, envoyes),
+    panier: Number(o.panier) > 0 ? Number(o.panier) : 20000,
     ca: o.ca * 12,
+    mensuel: { envoyes, chantiers: o.devis, ca: o.ca },
   };
 }
 
