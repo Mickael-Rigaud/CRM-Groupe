@@ -393,20 +393,37 @@ export function justifier(a, mesure, aujourdhui = new Date()) {
   if (mesure === 'envoyes') {
     for (const an of annees) {
       if (saisi[an] && !details[an]?.envoyes) {
-        notes.push(`${an}/${an + 1} : ${saisi[an].devis_envoyes ?? '—'} devis envoyés selon le bilan comptable, `
-          + 'dont la liste n’a pas été relevée. Ceux que le CRM connaît sont listés ici.');
+        // 2023/2024 n'a pas de nombre de devis envoyés (Élodie n'a que les devis
+        // signés et facturés de cette année-là) : le dire, sans « — devis ».
+        notes.push(saisi[an].devis_envoyes == null
+          ? `${an}/${an + 1} : nombre de devis envoyés inconnu (seuls les devis signés et facturés ont été relevés).`
+          : `${an}/${an + 1} : ${saisi[an].devis_envoyes} devis envoyés selon le bilan comptable, `
+            + 'dont la liste n’a pas été relevée. Ceux que le CRM connaît sont listés ici.');
       }
       lignes.push(...listesCrm(an).envoyes);
     }
   } else if (mesure === 'ca') {
     for (const an of annees) {
+      // Une liste de factures saisie (2023/2024 : le récapitulatif Excel d'Élodie,
+      // que le CRM n'a pas) l'emporte sur les factures du CRM.
+      const saisies = details[an]?.factures;
+      if (saisies?.length) {
+        lignes.push(...saisies.map(f => ({ numero: f.numero, client: f.client, chantier: f.devis || '',
+          date: f.date, montant: Number(f.montant_ht) || 0 })));
+        if (saisi[an]?.ca != null && Math.round(saisi[an].ca) !== Math.round(saisies.reduce((t, f) => t + (Number(f.montant_ht) || 0), 0))) {
+          notes.push(`${an}/${an + 1} : ${eurTexte(saisi[an].ca)} retenus ; les factures listées totalisent un autre montant.`);
+        }
+        continue;
+      }
       if (saisi[an]?.ca != null) {
         notes.push(`${an}/${an + 1} : ${eurTexte(saisi[an].ca)} selon le bilan comptable ; `
           + 'les factures ci-dessous sont celles du CRM (avoirs et annulées exclus).');
       }
       lignes.push(...facturesCrm(an));
     }
-    sourceListe = 'les factures du CRM';
+    const avecListe = annees.filter(an => details[an]?.factures?.length);
+    sourceListe = avecListe.length === annees.length ? (details[avecListe[0]].source_factures || 'ta saisie')
+      : avecListe.length ? 'ta saisie et les factures du CRM' : 'les factures du CRM';
   } else {
     for (const an of annees) {
       lignes.push(...signesDe(an));
