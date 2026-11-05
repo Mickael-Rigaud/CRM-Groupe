@@ -18,13 +18,12 @@
 // n'aimait pas ; elle a choisi de revenir à « chantiers ». Le mot « signés » lève
 // l'ambiguïté. Un client qui signe plusieurs devis = un chantier.
 //
-// ⚠ LA TUILE « DEVIS ENVOYÉS » PORTE LE MOIS EN COURS, PAS L'EXERCICE (05/11/2026,
-// Élodie : « les devis envoyés le mois en cours seulement », avec combien sont
-// déjà signés). ⚠ LA TUILE « DEVIS SIGNÉS » AUSSI : seulement les devis signés
-// PARMI ceux envoyés ce mois-ci (« je répète : pour les devis signés je veux
-// seulement les devis signés parmi les devis envoyés ce mois-ci »). Ce n'est
-// PAS le nombre de signatures du mois ni celui de l'exercice. Chantiers et CA
-// restent sur l'exercice.
+// ⚠ LES TUILES PORTENT L'EXERCICE ENTIER, DEPUIS LE 1ER OCTOBRE (05/11/2026).
+// On a basculé un moment « Devis envoyés » et « Devis signés » sur le mois en
+// cours ; Élodie s'était trompée et a demandé le retour : « remets les infos de
+// l'année en cours : devis envoyés, devis signés, chantiers signés depuis le
+// 1er octobre ». Ne pas remettre le mois en cours ici : c'est le rôle de la
+// carte « Objectifs du mois », juste au-dessus.
 import { esc, eur } from '../ui.js';
 import { bilanCommercial } from '../data/rgd-bilan.js';
 
@@ -83,23 +82,18 @@ function tableauPasse(clos, total) {
 export function carteBilan(aujourdhui = new Date()) {
   const b = bilanCommercial(aujourdhui);
   if (!b) return '';
-  const { exercices, total, mois, objectifs: o = {} } = b;
-  const nomMois = mois ? new Date(`${mois.cle}-01T12:00:00`).toLocaleDateString('fr-FR', { month: 'long' }) : '';
-  const objMois = o.mensuel?.envoyes;
-  // Le taux du mois : signés parmi les envoyés DU MOIS, à une décimale.
-  const tauxMois = mois?.envoyes > 0 ? Math.round((mois.dontSignes / mois.envoyes) * 1000) / 10 : null;
+  const { exercices, total, objectifs: o = {} } = b;
   const ec = exercices.find(e => e.enCours);
   const clos = exercices.filter(e => !e.enCours);
   const selonCrm = clos.some(e => e.chantiersSelonCrm) || total.chantiersSelonCrm;
 
   const tuiles = ec ? `
-          <div class="rgd-bil-annee"><b>${esc(ec.label)}</b> · en cours depuis ${ec.nbMois} mois</div>
+          <div class="rgd-bil-annee"><b>${esc(ec.label)}</b> · depuis le 1<sup>er</sup> octobre (${ec.nbMois} mois)</div>
           <div class="rgd-bil-tuiles">
-            ${tuile(`Devis envoyés en ${esc(nomMois)}`, nombre(mois?.envoyes),
-              vide(objMois) ? '' : `<div class="rgd-bil-sur">sur ${nombre(objMois)} ce mois-ci</div>${jauge(mois?.envoyes, objMois)}`,
-              `${vide(mois?.montant) || !mois.envoyes ? '' : `${euros(mois.montant)} HT · `}${nombre(ec.envoyes)} depuis le 1<sup>er</sup> octobre`)}
-            ${tuile(`Devis signés en ${esc(nomMois)}`, nombre(mois?.dontSignes),
-              `<div class="rgd-bil-sur">${tauxMois === null ? '' : `<span class="rgd-bil-point ${tonTaux(tauxMois)}"></span>`}${mois?.envoyes > 0 ? `parmi ${mois.envoyes > 1 ? `les ${mois.envoyes} devis envoyés` : 'le devis envoyé'} ce mois-ci · ${pourcent(tauxMois)}` : 'aucun devis envoyé ce mois-ci'}</div>`,
+            ${tuile('Devis envoyés', nombre(ec.envoyes), surObjectif(ec.envoyes, o.envoyes, nombre),
+              vide(ec.montantDevis) ? '' : `${euros(ec.montantDevis)} HT`)}
+            ${tuile('Devis signés', nombre(ec.signes),
+              vide(ec.tauxSignature) ? '' : `<div class="rgd-bil-sur"><span class="rgd-bil-point ${tonTaux(ec.tauxSignature)}"></span>${pourcent(ec.tauxSignature)} des devis envoyés</div>`,
               vide(o.tauxSignature) ? '' : `objectif ${pourcent(o.tauxSignature)}`)}
             ${tuile('Chantiers signés', nombre(ec.chantiers), surObjectif(ec.chantiers, o.chantiers, nombre),
               vide(ec.panier) ? '' : `panier moyen ${euros(ec.panier)} HT${vide(o.panier) ? '' : ` · objectif ${euros(o.panier)}`}`)}
