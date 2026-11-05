@@ -233,18 +233,60 @@ function vignetteObjectif(mois, se, cible, formate) {
     <line x1="${gauche}" x2="${L - droite}" y1="${y(cible).toFixed(1)}" y2="${y(cible).toFixed(1)}" class="rgd-objectif"></line>
     <text x="${gauche - 8}" y="${(y(cible) + 4).toFixed(1)}" class="rgd-axe" text-anchor="end">${esc(formate(cible))}</text>`;
 
+  // ⚠ LES COLONNES D'ABORD, LES BULLES ENSUITE, ET C'EST LE POINT DE CE
+  // DÉCOUPAGE EN DEUX PASSES. Une bulle enfermée dans le groupe de SON mois se
+  // dessine avant les colonnes des mois SUIVANTS : en SVG, ce qui vient après
+  // passe par-dessus, et une bulle de 124 px à cheval sur trois colonnes
+  // serait mangée par celles de droite. Les zones de survol sont donc posées
+  // toutes ensemble APRÈS les colonnes, chacune avec sa bulle.
   const colonnes = mois.map((m, i) => {
     const v = m[se.champ];
+    if (v === null || v === undefined) return '';
+    return `<rect x="${(gauche + pas * i + pas * 0.2).toFixed(1)}" y="${y(v).toFixed(1)}"
+      width="${(pas * 0.6).toFixed(1)}" height="${Math.max(0, bas - y(v)).toFixed(1)}" rx="4"
+      class="rgd-ob-colonne" style="fill:${se.couleur}"></rect>`;
+  }).join('');
+
+  // ⚠ LA BULLE EST CELLE DU GRAPHIQUE DU CHIFFRE D'AFFAIRES (05/11/2026,
+  // Élodie : « quand on survole les graphiques je voudrais avoir les chiffres
+  // par mois »). `rgd-info`, `rgd-bulle`, `rgd-bulle-mois` et `rgd-bulle-ca`
+  // existent depuis cet écran-là : aucune classe neuve, et le jour où l'une
+  // d'elles change, les deux graphiques suivent ensemble.
+  //
+  // ⚠ LE `<title>` RESTE SOUS LA BULLE, et ce n'est pas un doublon : la bulle
+  // se dessine au survol, que le doigt n'a pas. Sur téléphone, un appui long
+  // reste le seul moyen de lire le chiffre d'un mois.
+  const LARGE_BULLE = 124, HAUT_BULLE = 38;
+  const survols = mois.map((m, i) => {
+    const v = m[se.champ];
     const connu = v !== null && v !== undefined;
-    const dit = connu
-      ? `${formate(v)} sur ${formate(cible)}${cible > 0 ? ' · ' + Math.round((v / cible) * 100) + ' %' : ''}`
-      : 'pas de donnée';
+    const part = connu && cible > 0 ? Math.round((v / cible) * 100) : null;
+    const dit = connu ? `${formate(v)}${part === null ? '' : ' · ' + part + ' %'}` : 'pas de donnée';
+    const cy = connu ? y(v) : bas;
+    // ⚠ LA BULLE SE RABAT SOUS LE SOMMET DE LA COLONNE quand elle sortirait
+    // par le haut, et se recadre sur les bords : aux mois extrêmes elle
+    // débordait du cadre.
+    const bx = Math.min(Math.max(gauche + pas * i + pas / 2 - LARGE_BULLE / 2, 2), L - LARGE_BULLE - 2);
+    const haut = cy - HAUT_BULLE - 8;
+    const by = haut < 2 ? Math.min(cy + 10, bas - HAUT_BULLE) : haut;
     return `<g class="rgd-mois">
       <rect class="rgd-zone" x="${(gauche + pas * i).toFixed(1)}" y="0" width="${pas.toFixed(1)}" height="${bas}"></rect>
-      ${connu ? `<rect x="${(gauche + pas * i + pas * 0.2).toFixed(1)}" y="${y(v).toFixed(1)}"
-        width="${(pas * 0.6).toFixed(1)}" height="${Math.max(0, bas - y(v)).toFixed(1)}" rx="4"
-        class="rgd-ob-colonne" style="fill:${se.couleur}"></rect>` : ''}
-      <title>${esc(m.label)} · ${esc(dit)}</title>
+      ${/* ⚠ LA COLONNE EST REDESSINÉE PAR-DESSUS LA BANDE DE SURVOL. La bande
+            se peint après les colonnes — il le faut, puisque les bulles doivent
+            passer au-dessus de tout — et elle délavait la colonne du mois
+            pointé, le seul qu'on regarde. Ce doublon la remet au premier plan,
+            à sa couleur pleine. */ ''}
+      <g class="rgd-info">
+        ${connu ? `<rect x="${(gauche + pas * i + pas * 0.2).toFixed(1)}" y="${y(v).toFixed(1)}"
+          width="${(pas * 0.6).toFixed(1)}" height="${Math.max(0, bas - y(v)).toFixed(1)}" rx="4"
+          style="fill:${se.couleur}"></rect>` : ''}
+        <g transform="translate(${bx.toFixed(1)},${by.toFixed(1)})">
+          <rect width="${LARGE_BULLE}" height="${HAUT_BULLE}" rx="8" class="rgd-bulle"></rect>
+          <text x="${LARGE_BULLE / 2}" y="15" text-anchor="middle" class="rgd-bulle-mois">${esc(m.label)}</text>
+          <text x="${LARGE_BULLE / 2}" y="31" text-anchor="middle" class="rgd-bulle-ca">${esc(dit)}</text>
+        </g>
+      </g>
+      <title>${esc(m.label)} · ${esc(dit)}${connu ? ' sur ' + esc(formate(cible)) : ''}</title>
     </g>`;
   }).join('');
 
@@ -261,7 +303,7 @@ function vignetteObjectif(mois, se, cible, formate) {
       <span>${dernier === null || dernier === undefined ? '—' : esc(formate(dernier))} sur ${esc(formate(cible))}${part === null ? '' : ' · ' + part + ' %'}</span></div>
     <svg viewBox="0 0 ${L} ${H}" role="img"
       aria-label="${esc(se.label)} mois par mois, face à l’objectif de ${esc(formate(cible))}">
-      ${axe}${colonnes}${legendes}
+      ${axe}${colonnes}${legendes}${survols}
     </svg>
   </div>`;
 }

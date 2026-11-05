@@ -4084,7 +4084,7 @@ button.tb-pp:hover { color: var(--text); text-decoration: underline; text-underl
 .rgd-ob-vt b { font-family: var(--font-display); font-size: 13.5px; font-weight: 700; }
 .rgd-ob-vt span { font-size: 12px; color: var(--muted); }
 .rgd-ob-colonne { transition: opacity .12s; }
-.rgd-mois:hover .rgd-ob-colonne { opacity: .72; }
+.rgd-ob-vignette .rgd-mois:hover .rgd-zone { fill: var(--card-2); opacity: .6; }
 
 /* ⚠ UNE SEULE COLONNE SUR TELEPHONE, et c'est ce qui rend les vignettes
    tenables la ou les quatre courbes ne l'etaient pas : a 350 px de large une
