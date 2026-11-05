@@ -127,6 +127,28 @@ function calculCrm(a, ceMois) {
   };
 }
 
+/**
+ * Les devis envoyés dans le mois en cours, et combien d'entre eux sont déjà
+ * signés (05/11/2026, Élodie : « mettre les devis signés parmi les devis
+ * envoyés sur le mois en cours », puis « les devis envoyés le mois en cours
+ * seulement »). ⚠ « dont signés » compte les devis ENVOYÉS CE MOIS-CI qui sont
+ * signés, pas les signatures du mois : un devis d'octobre signé en novembre
+ * n'y entre pas. Mêmes filtres que `calculCrm` (brouillons exclus).
+ */
+function moisCourant(ceMois) {
+  const estCeMois = (v) => mois7(v) === ceMois;
+  const devis = scope.rgd('rgd_devis').filter(d => d.statut !== 'brouillon'
+    && (estCeMois(d.date_envoi) || (!d.date_envoi && estCeMois(d.date_signature))));
+  const crm = scope.rgd('rgd_devis_crm').filter(d => d.genre === 'devis' && d.numero && estCeMois(d.date_devis));
+  const envoyes = [...devis, ...crm];
+  return {
+    cle: ceMois,
+    envoyes: envoyes.length,
+    dontSignes: devis.filter(d => d.date_signature).length + crm.filter(d => d.statut === 'signe').length,
+    montant: sommeHt(envoyes),
+  };
+}
+
 /** Le premier mois où le CRM a une trace commerciale. */
 function premiereTrace() {
   return [
@@ -181,7 +203,7 @@ export function bilanCommercial(aujourdhui = new Date()) {
   });
   total.chantiersSelonCrm = exercices.some(e => e.chantiersSelonCrm);
 
-  return { exercices, total, objectifs: objectifsExercice(), saisi: Object.keys(saisi).length > 0 };
+  return { exercices, total, mois: moisCourant(ceMois), objectifs: objectifsExercice(), saisi: Object.keys(saisi).length > 0 };
 }
 
 /**

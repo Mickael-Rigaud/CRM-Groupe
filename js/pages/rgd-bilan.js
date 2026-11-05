@@ -13,9 +13,14 @@
 // tableau à part, sans objectif ni barre (« en 2024/2025 et 2025/2026 il n'y
 // avait pas d'objectif »). NE PAS remettre l'année en cours dans ce tableau.
 //
-// ⚠ « CLIENTS SIGNATAIRES », PAS « CHANTIERS » : « chantiers » se lisait comme
-// des chantiers EN COURS. Un client qui signe plusieurs devis compte une fois.
-// Elle a demandé de GARDER clients signataires et panier moyen par client.
+// ⚠ « CHANTIERS SIGNÉS » (05/11/2026). On est passé par « Nombre de chantiers »
+// (lu comme des chantiers EN COURS), puis par « Clients signataires », qu'Élodie
+// n'aimait pas ; elle a choisi de revenir à « chantiers ». Le mot « signés » lève
+// l'ambiguïté. Un client qui signe plusieurs devis = un chantier.
+//
+// ⚠ LA TUILE « DEVIS ENVOYÉS » PORTE LE MOIS EN COURS, PAS L'EXERCICE (05/11/2026,
+// Élodie : « les devis envoyés le mois en cours seulement », avec combien sont
+// déjà signés). Les trois autres tuiles restent sur l'exercice.
 import { esc, eur } from '../ui.js';
 import { bilanCommercial } from '../data/rgd-bilan.js';
 
@@ -29,7 +34,7 @@ const tonTaux = (v) => (vide(v) ? '' : v >= 80 ? 'vert' : v >= 50 ? 'ambre' : 'r
 
 function jauge(val, cible) {
   const part = val > 0 && cible > 0 ? (val / cible) * 100 : 0;
-  return `<span class="rgd-bil-piste" title="${Math.round(part)} % de l’objectif de l’année"><i style="width:${Math.min(100, Math.max(part > 0 ? 2 : 0, part)).toFixed(1)}%"></i></span>`;
+  return `<span class="rgd-bil-piste" title="${Math.round(part)} % de l’objectif"><i style="width:${Math.min(100, Math.max(part > 0 ? 2 : 0, part)).toFixed(1)}%"></i></span>`;
 }
 
 function tuile(titre, gros, sur, bas) {
@@ -51,23 +56,32 @@ const surObjectif = (val, cible, format) => (vide(cible) ? ''
 const LIGNES_PASSE = [
   ['Devis envoyés', (e) => nombre(e.envoyes)],
   ['Devis signés', (e) => (vide(e.signes) ? '—' : `${e.signes} <span class="muted">(${pourcent(e.tauxSignature)})</span>`)],
-  ['Clients signataires', (e) => `${nombre(e.chantiers)}${e.chantiersSelonCrm && !vide(e.chantiers) ? '<sup>*</sup>' : ''}`],
-  ['Panier moyen par client HT', (e) => `${euros(e.panier)}${e.chantiersSelonCrm && !vide(e.panier) ? '<sup>*</sup>' : ''}`],
+  ['Chantiers signés', (e) => `${nombre(e.chantiers)}${e.chantiersSelonCrm && !vide(e.chantiers) ? '<sup>*</sup>' : ''}`],
+  ['Panier moyen par chantier HT', (e) => `${euros(e.panier)}${e.chantiersSelonCrm && !vide(e.panier) ? '<sup>*</sup>' : ''}`],
   ['CA facturé HT', (e) => `<b>${euros(e.ca)}</b>`],
 ];
 
+// ⚠ EN COULEUR (05/11/2026, « rajoute un peu de couleurs ») : chaque année
+// porte la sienne (bleu, vert, en alternance) en tête et en fond de colonne ;
+// le cumul prend la couleur de l'espace. Les couleurs passent par --ex.
 function tableauPasse(clos, total) {
-  const cols = [...clos.map(e => [e.label, e]), ['Depuis la création', total]];
+  const cols = [
+    ...clos.map((e, i) => [e.label, e, ['var(--blue)', 'var(--green)'][i % 2]]),
+    ['Depuis la création', total, 'var(--accent)'],
+  ];
+  const td = (c, contenu) => `<td class="num rgd-bil-col" style="--ex:${c}">${contenu}</td>`;
   return `<div class="table-wrap"><table class="rgd-bil-table">
-      <thead><tr><th></th>${cols.map(([nom], i) => `<th class="num${i === cols.length - 1 ? ' rgd-bil-total' : ''}">${esc(nom)}</th>`).join('')}</tr></thead>
-      <tbody>${LIGNES_PASSE.map(([titre, f]) => `<tr><td class="rgd-bil-titre">${titre}</td>${cols.map(([, e], i) => `<td class="num${i === cols.length - 1 ? ' rgd-bil-total' : ''}">${f(e)}</td>`).join('')}</tr>`).join('')}</tbody>
+      <thead><tr><th></th>${cols.map(([nom, , c]) => `<th class="num rgd-bil-ex" style="--ex:${c}">${esc(nom)}</th>`).join('')}</tr></thead>
+      <tbody>${LIGNES_PASSE.map(([titre, f]) => `<tr><td class="rgd-bil-titre">${titre}</td>${cols.map(([, e, c]) => td(c, f(e))).join('')}</tr>`).join('')}</tbody>
     </table></div>`;
 }
 
 export function carteBilan(aujourdhui = new Date()) {
   const b = bilanCommercial(aujourdhui);
   if (!b) return '';
-  const { exercices, total, objectifs: o = {} } = b;
+  const { exercices, total, mois, objectifs: o = {} } = b;
+  const nomMois = mois ? new Date(`${mois.cle}-01T12:00:00`).toLocaleDateString('fr-FR', { month: 'long' }) : '';
+  const objMois = o.mensuel?.envoyes;
   const ec = exercices.find(e => e.enCours);
   const clos = exercices.filter(e => !e.enCours);
   const selonCrm = clos.some(e => e.chantiersSelonCrm) || total.chantiersSelonCrm;
@@ -75,12 +89,14 @@ export function carteBilan(aujourdhui = new Date()) {
   const tuiles = ec ? `
           <div class="rgd-bil-annee"><b>${esc(ec.label)}</b> · en cours depuis ${ec.nbMois} mois</div>
           <div class="rgd-bil-tuiles">
-            ${tuile('Devis envoyés', nombre(ec.envoyes), surObjectif(ec.envoyes, o.envoyes, nombre),
-              vide(ec.montantDevis) ? '' : `${euros(ec.montantDevis)} HT`)}
+            ${tuile(`Devis envoyés en ${esc(nomMois)}`, nombre(mois?.envoyes),
+              `<div class="rgd-bil-sur">dont ${nombre(mois?.dontSignes)} signé${mois?.dontSignes > 1 ? 's' : ''}</div>`
+                + (vide(objMois) ? '' : `<div class="rgd-bil-sur">sur ${nombre(objMois)} ce mois-ci</div>${jauge(mois?.envoyes, objMois)}`),
+              `${vide(mois?.montant) || !mois.envoyes ? '' : `${euros(mois.montant)} HT · `}${nombre(ec.envoyes)} depuis le 1<sup>er</sup> octobre`)}
             ${tuile('Devis signés', nombre(ec.signes),
               vide(ec.tauxSignature) ? '' : `<div class="rgd-bil-sur"><span class="rgd-bil-point ${tonTaux(ec.tauxSignature)}"></span>${pourcent(ec.tauxSignature)} des devis envoyés</div>`,
               vide(o.tauxSignature) ? '' : `objectif ${pourcent(o.tauxSignature)}`)}
-            ${tuile('Clients signataires', nombre(ec.chantiers), surObjectif(ec.chantiers, o.chantiers, nombre),
+            ${tuile('Chantiers signés', nombre(ec.chantiers), surObjectif(ec.chantiers, o.chantiers, nombre),
               vide(ec.panier) ? '' : `panier moyen ${euros(ec.panier)} HT${vide(o.panier) ? '' : ` · objectif ${euros(o.panier)}`}`)}
             ${tuile('CA facturé HT', euros(ec.ca), surObjectif(ec.ca, o.ca, euros), '')}
           </div>` : '';
@@ -96,6 +112,6 @@ export function carteBilan(aujourdhui = new Date()) {
             ${tableauPasse(clos, total)}
           </div>
           ${selonCrm ? `<p class="small muted rgd-bil-pied"><sup>*</sup> Selon le CRM, qui n’a pas tout l’historique Costructor.
-            Un client signataire compte une fois, quel que soit son nombre de devis.</p>` : ''}
+            Un client qui signe plusieurs devis compte pour un chantier.</p>` : ''}
         </section>`;
 }
