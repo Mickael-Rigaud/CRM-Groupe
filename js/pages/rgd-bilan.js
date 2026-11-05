@@ -114,7 +114,7 @@ export function carteBilan(aujourdhui = new Date()) {
             ${tuile('Chantiers', nombre(ec.chantiers), surObjectif(ec.chantiers, o.chantiers, nombre),
               // Le panier réalisé est retiré de la tuile (Élodie : « retire le panier
               // moyen, garde juste objectif 20 000 € ») : il est dans le tableau.
-              vide(o.panier) ? '' : `objectif ${euros(o.panier)}`, ec.annee, 'chantiers')}
+              vide(o.panier) ? '' : `objectif ${euros(o.panier)} par chantier`, ec.annee, 'chantiers')}
             ${tuile('CA facturé HT', euros(ec.ca), surObjectif(ec.ca, o.ca, euros), '', ec.annee, 'ca')}
           </div>` : '';
 
