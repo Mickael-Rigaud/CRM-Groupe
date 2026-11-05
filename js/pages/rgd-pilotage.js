@@ -36,11 +36,11 @@
 // `competences`, vides dans D1 au 21/09/2026). Il le dit au lieu d'afficher
 // zéro, qui se lirait comme un résultat.
 import { scope } from '../data/scope.js';
-import { esc, eur, isoDay, fmtDate, daysSince } from '../ui.js';
+import { esc, eur, isoDay, fmtDate, daysSince, openModal } from '../ui.js';
 import { poserEspace } from './espace.js';
 import { cadre, guard, KEY } from './rgd-espace.js';
 import { etapesRgd, ETAPES_HORS_CYCLE } from '../data/rgd-etapes.js';
-import { objectifsMensuels, moisObjectifs, tauxPeriode, taux } from '../data/rgd-objectifs.js';
+import { objectifsMensuels, moisObjectifs, tauxPeriode, taux, detailMoisObjectif } from '../data/rgd-objectifs.js';
 import { encadreCaOuvrier } from './rgd-ca-ouvrier.js';
 import { carteBilan } from './rgd-bilan.js';
 
@@ -358,7 +358,16 @@ function carteObjectifs(mois, obj) {
     const connu = v !== null && v !== undefined;
     const part = connu && cible > 0 ? Math.round((v / cible) * 100) : null;
     const formate = formats[se.champ];
-    return `<tr>
+    // ⚠ LA RANGÉE SE SURVOLE ET SE CLIQUE (05/11/2026, Élodie : « des infos
+    // pour détailler les résultats quand on survole ou qu'on clique »). Au
+    // survol, les premiers noms ; au clic, la liste complète (`detailMoisObjectif`).
+    const d = detailMoisObjectif(courant.cle, se.champ);
+    const noms = [...new Set(d.lignes.map(l => l.client))];
+    const bulle = d.lignes.length
+      ? `${noms.slice(0, 6).join(', ')}${noms.length > 6 ? ` et ${noms.length - 6} autre${noms.length > 7 ? 's' : ''}` : ''} — cliquer pour le détail`
+      : 'Rien ce mois-ci';
+    return `<tr class="rgd-ob-clic" data-ob-detail="${se.champ}" data-ob-cle="${esc(courant.cle)}"
+      role="button" tabindex="0" title="${esc(bulle)}">
       <th scope="row">${esc(se.label)}</th>
       <td class="rgd-pipe-barre">
         <div class="rgd-pipe-piste"><i style="width:${Math.min(100, part || 0)}%;background:${se.couleur}"></i></div>
@@ -876,7 +885,32 @@ ${carteBilan()}
     draw();
     // Le choix du mois des objectifs : un seul écouteur sur la racine, qui
     // survit aux redessins (la carte est réécrite à chaque `draw`).
+    // Le détail d'une rangée des objectifs : la liste de ce qui fait le chiffre.
+    const ouvrirDetail = (tr) => {
+      const se = SERIES.find(x => x.champ === tr.dataset.obDetail);
+      const m = moisObjectifs().find(x => x.cle === tr.dataset.obCle);
+      if (!se || !m) return;
+      const d = detailMoisObjectif(m.cle, se.champ);
+      const avecMontant = d.lignes.some(l => l.montant != null);
+      const total = d.lignes.reduce((t, l) => t + (l.montant || 0), 0);
+      const corps = d.lignes.length ? `<div class="table-wrap"><table class="rgd-bil-detail">
+        <thead><tr><th>Date</th><th>Client</th><th>${se.champ === 'ca' ? 'Facture' : se.champ === 'devisSignes' ? 'Devis' : 'Détail'}</th>${avecMontant ? '<th class="num">Montant HT</th>' : ''}</tr></thead>
+        <tbody>${d.lignes.map(l => `<tr><td>${fmtDate(String(l.date).slice(0, 10))}</td><td>${esc(l.client)}</td><td>${esc(l.detail || '—')}</td>
+          ${avecMontant ? `<td class="num">${eur(l.montant, { maximumFractionDigits: 2 })}</td>` : ''}</tr>`).join('')}</tbody>
+        <tfoot><tr><td colspan="${avecMontant ? 3 : 3}"><b>${d.lignes.length} ligne${d.lignes.length > 1 ? 's' : ''}</b></td>
+          ${avecMontant ? `<td class="num"><b>${eur(total, { maximumFractionDigits: 2 })}</b></td>` : ''}</tr></tfoot>
+      </table></div>` : '<div class="empty">Rien ce mois-ci.</div>';
+      openModal(`${se.label} · ${m.label}`,
+        `${d.note ? `<p class="rgd-bil-note">${esc(d.note)}</p>` : ''}${corps}`, { wide: true });
+    };
+    root.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      const tr = e.target.closest?.('[data-ob-detail]');
+      if (tr) { e.preventDefault(); ouvrirDetail(tr); }
+    });
     root.addEventListener('click', (e) => {
+      const tr = e.target.closest?.('[data-ob-detail]');
+      if (tr) { ouvrirDetail(tr); return; }
       const b = e.target.closest?.('[data-ob-pas]');
       if (!b || b.disabled) return;
       const mois = moisObjectifs();

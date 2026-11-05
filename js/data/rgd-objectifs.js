@@ -256,3 +256,69 @@ export function tauxPeriode(mois) {
     panier: signes > 0 ? Math.round(ca / signes) : null,
   };
 }
+
+// ---------------------------------------------------------------- Le détail d'un mois
+// ⚠ CE QUI FAIT CHAQUE CHIFFRE D'UN MOIS, LIGNE À LIGNE (05/11/2026, Élodie :
+// « dans les objectifs du mois je voudrais des infos pour détailler les
+// résultats quand on survole ou qu'on clique dessus »). Les filtres sont ceux
+// de `moisObjectifs`, recopiés à l'identique : si l'un change là-haut, il change
+// ici aussi, sinon la fenêtre ne retombe plus sur le chiffre de la rangée.
+
+const nomPersonne = (r) => {
+  const c = r?.contact_id && db.byId('contacts', r.contact_id);
+  if (c) return [c.first_name, c.last_name].filter(Boolean).join(' ').trim() || '—';
+  const o = r?.organisation_id && db.byId('organisations', r.organisation_id);
+  return o?.name || '—';
+};
+const lieu = (...v) => v.filter(Boolean).join(' ').trim();
+
+/**
+ * Les lignes d'un mois pour une mesure : `{ lignes: [{ date, client, detail,
+ * montant? }], nb, note? }`. `mesure` vaut demandes, rdv, devisSignes ou ca.
+ */
+export function detailMoisObjectif(cle, mesure) {
+  const L = [];
+  if (mesure === 'demandes') {
+    for (const d of scope.rgd('rgd_demandes').filter(d => mois7(d.date_demande || d.created_at) === cle)) {
+      L.push({ date: d.date_demande || d.created_at,
+        client: [d.prenom, d.nom].filter(Boolean).join(' ').trim() || nomPersonne(d),
+        detail: lieu('Site', '·', d.type_projet || d.types_travaux || '', d.ville_chantier || d.ville || '') });
+    }
+    for (const c of scope.rgd('rgd_clients').filter(c => mois7(c.meta_received_at) === cle)) {
+      L.push({ date: c.meta_received_at, client: nomPersonne(c),
+        detail: lieu('Meta Ads', '·', c.meta_type_projet || c.nature_travaux || '', c.ville_chantier || '') });
+    }
+    return { lignes: L.sort((a, b) => String(b.date).localeCompare(String(a.date))), nb: L.length };
+  }
+  if (mesure === 'rdv') {
+    for (const v of scope.rgd('rgd_chantiers').filter(estVisiteTechnique)
+      .filter(v => mois7(v.date_debut_prevue) === cle)) {
+      L.push({ date: v.date_debut_prevue, client: nomPersonne(v), detail: lieu(v.adresse, v.ville) });
+    }
+    return { lignes: L.sort((a, b) => String(b.date).localeCompare(String(a.date))), nb: L.length };
+  }
+  if (mesure === 'devisSignes') {
+    const devis = [
+      ...scope.rgd('rgd_devis').filter(d => mois7(d.date_signature) === cle)
+        .map(d => ({ d, date: d.date_signature })),
+      ...scope.rgd('rgd_devis_crm').filter(d => d.genre === 'devis' && d.statut === 'signe'
+        && mois7(d.date_signature || d.date_devis) === cle).map(d => ({ d, date: d.date_signature || d.date_devis })),
+    ];
+    for (const { d, date } of devis) {
+      L.push({ date, client: nomPersonne(d), detail: d.numero || '—', montant: Number(d.montant_ht) || 0, cle: cleClient(d) });
+    }
+    const clients = new Set(L.map(l => l.cle)).size;
+    return { lignes: L.sort((a, b) => String(b.date).localeCompare(String(a.date))), nb: clients,
+      note: L.length !== clients ? `${L.length} devis signés pour ${clients} client${clients > 1 ? 's' : ''} : deux devis d’un même client comptent pour un.` : null };
+  }
+  if (mesure === 'ca') {
+    for (const p of scope.rgd('rgd_paiements').filter(p => p.statut !== 'annule' && p.type !== 'remboursement'
+      && mois7(p.date_facturation) === cle)) {
+      const deal = p.deal_id && db.byId('deals', p.deal_id);
+      L.push({ date: p.date_facturation, client: nomPersonne(deal), detail: p.reference_facture || p.libelle || '—',
+        montant: Number(p.montant_ht) || 0 });
+    }
+    return { lignes: L.sort((a, b) => String(b.date).localeCompare(String(a.date))), nb: L.length };
+  }
+  return { lignes: [], nb: 0 };
+}
