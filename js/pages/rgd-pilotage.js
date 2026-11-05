@@ -42,6 +42,7 @@ import { cadre, guard, KEY } from './rgd-espace.js';
 import { etapesRgd, ETAPES_HORS_CYCLE } from '../data/rgd-etapes.js';
 import { objectifsMensuels, moisObjectifs, tauxPeriode, taux } from '../data/rgd-objectifs.js';
 import { encadreCaOuvrier } from './rgd-ca-ouvrier.js';
+import { carteBilan } from './rgd-bilan.js';
 
 // L'exercice comptable de RGD Renova : 1er octobre → 30 septembre, aligné sur
 // Costructor. Ce n'est pas l'année civile, et s'y tromper décale tout le CA.
@@ -793,6 +794,8 @@ ${carteObjectifs(moisObj, objectifs)}
         </section>
 
         </div>
+
+${carteBilan()}
 
         ${docsSt.length || leads.length ? `<div class="pil-alertes">
           ${leads.length ? `<a class="pil-alerte" href="#/rgd/clients">
