@@ -156,8 +156,20 @@ export function moisObjectifs(aujourdhui = new Date()) {
     // ⚠ « ENVOYÉ » SE LIT SUR LA DATE, PAS SUR LE STATUT : un devis signé est
     // forcément parti, et son statut ne dit plus « envoyé ». Côté CRM, un devis
     // est parti dès qu'il porte un numéro — c'est ce que l'émission lui donne.
+    // ⚠ UN DEVIS SIGNÉ A FORCÉMENT ÉTÉ ENVOYÉ, MÊME SANS DATE D'ENVOI, et sans
+    // cette ligne le taux de transformation dépassait 100 % — constaté à
+    // l'écran (« 143 % des devis envoyés sont signés »). Mesuré en base le
+    // 05/11/2026 : sur 25 devis des douze derniers mois, 16 portent une date
+    // d'envoi et 21 sont signés, dont HUIT sans aucune date d'envoi. Costructor
+    // ne la remplit pas toujours. Compter les seuls `date_envoi` revenait donc
+    // à diviser par un dénominateur amputé d'un tiers.
+    //
+    // ⚠ ET ON LE DATE DE SA SIGNATURE FAUTE DE MIEUX : le ranger au mois de la
+    // signature est le seul choix défendable quand la date d'envoi n'existe
+    // pas — l'inventer en reculant d'un mois serait pire.
     const envoyes = uniques([
-      ...devis.filter(d => mois7(d.date_envoi) === cle),
+      ...devis.filter(d => mois7(d.date_envoi) === cle
+        || (!d.date_envoi && mois7(d.date_signature) === cle)),
       ...devisCrm.filter(d => d.genre === 'devis' && d.numero && mois7(d.date_devis) === cle),
     ]);
 

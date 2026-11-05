@@ -208,10 +208,19 @@ function caParMois(paiements, ex, d = new Date()) {
 const tonObjectif = (part) => (part >= 1 ? 'vert' : part >= 0.5 ? 'ambre' : 'rouge');
 
 // ------------------------------------------------ LES QUATRE INDICATEURS
-// ⚠ L'ORDRE EST CELUI DU PARCOURS, pas l'alphabet : une demande donne un
-// rendez-vous, qui donne un devis, qui donne du chiffre d'affaires. Les
-// anneaux se lisent de gauche à droite comme une phrase, et les taux posés
-// entre eux disent ce qui se perd d'un maillon au suivant.
+// ⚠ AUCUNE FORME NOUVELLE ICI, ET C'EST LA CONSIGNE (05/11/2026, Élodie :
+// « reprends le style du reste du CRM »). Trois dessins ont été écartés avant
+// celui-ci — quatre frises de barres, puis un graphique groupé, puis des
+// anneaux animés —, le dernier parce qu'il parlait une langue à lui au milieu
+// d'un écran qui en parle déjà une : « trop de blocs différents ».
+//
+// Cette carte n'emploie donc QUE ce qui existe au-dessus et en dessous d'elle :
+// les cartes `rgd-et` du pipeline, les onglets `pill-tabs` du reste du CRM, et
+// le graphique du chiffre d'affaires, classes comprises. Si l'un de ces trois
+// change de style un jour, celle-ci suit toute seule — c'était tout l'intérêt.
+//
+// ⚠ NE PAS Y RAJOUTER D'ANNEAUX, DE DÉGRADÉS NI DE PASTILLES COLORÉES. Ce qui
+// a été reproché n'est pas la couleur, c'est le nombre de langages.
 const SERIES = [
   { champ: 'demandes', cible: 'demandes', label: 'Demandes', court: 'Demandes', couleur: 'var(--blue)' },
   { champ: 'rdv', cible: 'rdv', label: 'Rendez-vous', court: 'RDV', couleur: 'var(--violet)' },
@@ -220,119 +229,103 @@ const SERIES = [
 ];
 
 /**
- * Un anneau de progression.
+ * Les douze mois d'un indicateur, dessinés comme la courbe du chiffre
+ * d'affaires juste en dessous : mêmes barres, même ligne, même bulle au survol,
+ * mêmes classes.
  *
- * ⚠ IL SE REMPLIT À L'OUVERTURE, et ce n'est pas de la décoration : l'œil suit
- * un trait qui bouge et lit la proportion avant même d'avoir lu le chiffre.
- * L'animation vit en CSS (`@keyframes rgd-ob-anneau`) sur `stroke-dashoffset`,
- * et la valeur de départ est posée en variable — un `style` inline est le seul
- * moyen de passer une longueur calculée à une animation déclarée en feuille.
- *
- * ⚠ ET IL NE DÉPASSE JAMAIS LE TOUR COMPLET. Un mois à 160 % ferait repartir
- * le trait par-dessus lui-même et l'anneau se lirait « 60 % ». On s'arrête au
- * tour, le chiffre au centre dit le reste.
+ * ⚠ L'ÉCHELLE S'ARRÊTE AU PLUS GRAND DES DEUX — la plus forte valeur ou
+ * l'objectif — SANS MARGE AU-DESSUS. La version d'avant ajoutait 25 % de
+ * hauteur libre « pour respirer » : avec des demandes qui plafonnent à 11 pour
+ * un objectif de 20, les trois quarts du cadre étaient blancs et la courbe
+ * rampait en bas. C'est le reproche « trop vide, trop plate ».
  */
-function anneau(part, couleur, connu) {
-  const R = 34, C = 2 * Math.PI * R;
-  const pleine = Math.max(0, Math.min(part, 1)) * C;
-  return `<svg viewBox="0 0 80 80" class="rgd-ob-anneau" aria-hidden="true">
-    <circle cx="40" cy="40" r="${R}" class="rgd-ob-piste-ring"></circle>
-    ${connu ? `<circle cx="40" cy="40" r="${R}" class="rgd-ob-trait"
-      style="stroke:${couleur};stroke-dasharray:${pleine.toFixed(1)} ${(C - pleine).toFixed(1)};--tour:${C.toFixed(1)}"></circle>` : ''}
-  </svg>`;
-}
-
-// Une courbe lissée qui ne déborde pas : chaque segment passe par le milieu de
-// deux points et s'y courbe. ⚠ PAS DE SPLINE CLASSIQUE — elle fabrique des
-// bosses sous zéro entre deux mois très différents, et un mois à -3 demandes
-// n'existe pas.
-function cheminLisse(points) {
-  if (points.length < 2) return points.length ? `M${points[0].x},${points[0].y}` : '';
-  let d = `M${points[0].x.toFixed(1)},${points[0].y.toFixed(1)}`;
-  for (let i = 1; i < points.length; i++) {
-    const a = points[i - 1], b = points[i];
-    const mx = (a.x + b.x) / 2;
-    d += ` C${mx.toFixed(1)},${a.y.toFixed(1)} ${mx.toFixed(1)},${b.y.toFixed(1)} ${b.x.toFixed(1)},${b.y.toFixed(1)}`;
-  }
-  return d;
-}
-
-/**
- * La courbe d'un indicateur sur douze mois, en aire dégradée.
- *
- * ⚠ UN SEUL INDICATEUR À LA FOIS, ET C'EST LE POINT DU DESSIN. Les quatre
- * ensemble donnaient quarante-huit barres sur une largeur d'écran — lisible
- * nulle part, surtout sur un téléphone. On en montre un en grand, et les
- * pastilles au-dessus changent de série sans quitter la page.
- *
- * ⚠ L'ÉCHELLE PART DE ZÉRO ET MONTE AU MOINS JUSQU'À L'OBJECTIF : calée sur le
- * plus haut mois, une série toujours sous son objectif remplirait le cadre et
- * aurait l'air d'une réussite.
- */
-function aireObjectif(mois, serie, cible, formate) {
-  const L = 960, H = 260, bas = H - 34, haut = 22, gauche = 52, droite = 16;
-  const large = L - gauche - droite;
-  const pas = large / Math.max(1, mois.length);
+function courbeIndicateur(mois, serie, cible, formate) {
   const connus = mois.filter(m => m[serie.champ] !== null && m[serie.champ] !== undefined);
-  if (!connus.length) return '<div class="empty">Aucune donnée pour cet indicateur.</div>';
-  const max = Math.max(cible * 1.25, ...connus.map(m => m[serie.champ]), 1);
-  const y = (v) => bas - (v / max) * (bas - haut);
+  if (!connus.length) return '<div class="empty">Le CRM n’a pas encore cette donnée.</div>';
+
+  // ⚠ PLUS BAS QUE LA COURBE DU CHIFFRE D'AFFAIRES (200 contre 260), et pour
+  // une raison qui lui est propre : son échelle monte jusqu'à l'OBJECTIF, pas
+  // jusqu'au plus haut mois. Des demandes qui plafonnent à 11 pour un objectif
+  // de 20 laissent donc un cadre à moitié vide — c'est le reproche « trop vide,
+  // trop plate ». Baisser le cadre resserre le dessin sans toucher à l'échelle,
+  // ce qui mentirait sur la distance à l'objectif.
+  const L = 960, H = 200, bas = H - 30, gauche = 56, droite = 14;
+  const large = L - gauche - droite, pas = large / mois.length;
+  const max = Math.max(1, cible, ...connus.map(m => m[serie.champ]));
+  const y = (v) => bas - (v / max) * (bas - 22);
   const x = (i) => gauche + pas * i + pas / 2;
 
-  const points = mois.map((m, i) => ({ i, m, x: x(i), y: y(m[serie.champ] || 0),
-    connu: m[serie.champ] !== null && m[serie.champ] !== undefined }))
-    .filter(p => p.connu);
+  const graduations = [0, 0.5, 1].map(f => `<g>
+    <line x1="${gauche}" x2="${L - droite}" y1="${y(max * f)}" y2="${y(max * f)}" class="rgd-grille"></line>
+    <text x="${gauche - 10}" y="${y(max * f) + 4}" class="rgd-axe" text-anchor="end">${esc(formate(Math.round(max * f)))}</text></g>`).join('');
 
-  const trait = cheminLisse(points);
-  const aire = points.length
-    ? `${trait} L${points[points.length - 1].x.toFixed(1)},${bas} L${points[0].x.toFixed(1)},${bas} Z`
+  // ⚠ LA COURBE NE RELIE QUE LES MOIS CONNUS. Un mois sans donnée vaut `null` :
+  // le traiter comme un zéro ferait plonger la ligne jusqu'au plancher et
+  // dessinerait une chute qui n'a pas eu lieu.
+  const pts = mois.map((m, i) => ({ i, v: m[serie.champ] }))
+    .filter(q => q.v !== null && q.v !== undefined);
+  const trait = pts.map((q, k) => `${k ? 'L' : 'M'}${x(q.i).toFixed(1)},${y(q.v).toFixed(1)}`).join(' ');
+  const aire = pts.length
+    ? `M${x(pts[0].i).toFixed(1)},${bas} ${pts.map(q => `L${x(q.i).toFixed(1)},${y(q.v).toFixed(1)}`).join(' ')} L${x(pts[pts.length - 1].i).toFixed(1)},${bas} Z`
     : '';
 
-  const graduations = [0, 0.5, 1].map(f => {
-    const v = max * f;
-    return `<g><line x1="${gauche}" y1="${y(v).toFixed(1)}" x2="${L - droite}" y2="${y(v).toFixed(1)}"
-      class="rgd-ob-grille"></line>
-      <text x="${gauche - 8}" y="${(y(v) + 4).toFixed(1)}" class="rgd-ob-axe" text-anchor="end">${esc(formate(Math.round(v)))}</text></g>`;
-  }).join('');
-
-  const marques = mois.map((m, i) => {
+  const LARGE_BULLE = 118, HAUT_BULLE = 40;
+  const colonnes = mois.map((m, i) => {
     const v = m[serie.champ];
     const connu = v !== null && v !== undefined;
-    return `<g class="rgd-ob-col">
-      <rect x="${(gauche + pas * i).toFixed(1)}" y="${haut - 12}" width="${pas.toFixed(1)}"
-        height="${(bas - haut + 12).toFixed(1)}" class="rgd-ob-zone"></rect>
-      ${connu ? `<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="4.5"
-        class="rgd-ob-point" style="fill:${serie.couleur}"></circle>` : ''}
-      <title>${esc(m.label)} — ${connu ? esc(formate(v)) + ' sur ' + esc(formate(cible))
-        + ', soit ' + Math.round(cible > 0 ? (v / cible) * 100 : 0) + ' %' : 'pas de donnée'}</title>
-      <text x="${x(i).toFixed(1)}" y="${H - 10}" class="rgd-ob-mois" text-anchor="middle">${esc(m.label)}</text>
+    const cy = connu ? y(v) : bas;
+    const bx = Math.min(Math.max(x(i) - LARGE_BULLE / 2, 2), L - LARGE_BULLE - 2);
+    const haut = cy - HAUT_BULLE - 10;
+    const by = haut < 2 ? cy + 12 : haut;
+    const dit = connu
+      ? `${formate(v)} · ${cible > 0 ? Math.round((v / cible) * 100) + ' % de l’objectif' : ''}`
+      : 'pas de donnée';
+    return `<g class="rgd-mois">
+      <rect class="rgd-zone" x="${(gauche + pas * i).toFixed(1)}" y="0" width="${pas.toFixed(1)}" height="${bas}"></rect>
+      ${/* La barre prend la couleur de la série, comme la ligne : laissée à
+            l'accent du gabarit, elle sortait orange sous une courbe bleue. */ ''}
+      ${connu ? `<rect class="rgd-barre" x="${(gauche + pas * i + pas * 0.24).toFixed(1)}" y="${cy.toFixed(1)}"
+        width="${(pas * 0.52).toFixed(1)}" height="${Math.max(0, bas - cy).toFixed(1)}" rx="4"
+        style="fill:${serie.couleur};opacity:.16"></rect>
+      <circle class="rgd-point" cx="${x(i).toFixed(1)}" cy="${cy.toFixed(1)}" r="4.5" style="stroke:${serie.couleur}"></circle>` : ''}
+      <g class="rgd-info" transform="translate(${bx.toFixed(1)},${by.toFixed(1)})">
+        <rect width="${LARGE_BULLE}" height="${HAUT_BULLE}" rx="8" class="rgd-bulle"></rect>
+        <text x="${LARGE_BULLE / 2}" y="16" text-anchor="middle" class="rgd-bulle-mois">${esc(m.label)}</text>
+        <text x="${LARGE_BULLE / 2}" y="32" text-anchor="middle" class="rgd-bulle-ca">${esc(dit)}</text>
+      </g>
+      <title>${esc(m.label)} · ${esc(dit)}</title>
     </g>`;
   }).join('');
 
-  return `<svg viewBox="0 0 ${L} ${H}" class="rgd-ob-aire" role="img"
+  const legendes = mois.map((m, i) => `<text x="${x(i).toFixed(1)}" y="${H - 8}" class="rgd-axe" text-anchor="middle">${esc(m.label)}</text>`).join('');
+
+  return `<svg class="rgd-courbe" viewBox="0 0 ${L} ${H}" role="img"
     aria-label="${esc(serie.label)} mois par mois, face à l’objectif">
-    <defs><linearGradient id="rgd-ob-deg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="${serie.couleur}" stop-opacity=".40"></stop>
+    <defs><linearGradient id="rgd-aire-ob" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="${serie.couleur}" stop-opacity=".26"></stop>
       <stop offset="100%" stop-color="${serie.couleur}" stop-opacity="0"></stop>
     </linearGradient></defs>
     ${graduations}
-    <path d="${aire}" fill="url(#rgd-ob-deg)" class="rgd-ob-remplissage"></path>
-    <path d="${trait}" fill="none" class="rgd-ob-courbe" style="stroke:${serie.couleur}"></path>
-    <line x1="${gauche}" y1="${y(cible).toFixed(1)}" x2="${L - droite}" y2="${y(cible).toFixed(1)}"
-      class="rgd-ob-objectif"></line>
-    <text x="${L - droite}" y="${(y(cible) - 7).toFixed(1)}" class="rgd-ob-objectif-txt"
-      text-anchor="end">objectif ${esc(formate(cible))}</text>
-    ${marques}
+    <path d="${aire}" fill="url(#rgd-aire-ob)"></path>
+    <path d="${trait}" fill="none" class="rgd-trait" style="stroke:${serie.couleur}"></path>
+    <line x1="${gauche}" x2="${L - droite}" y1="${y(cible).toFixed(1)}" y2="${y(cible).toFixed(1)}"
+      class="rgd-objectif"></line>
+    <text x="${L - droite}" y="${(y(cible) - 6).toFixed(1)}" class="rgd-axe" text-anchor="end">objectif ${esc(formate(cible))}</text>
+    ${colonnes}${legendes}
   </svg>`;
 }
 
 /**
- * La carte entière.
+ * La carte entière, dans la langue de l'écran.
  *
- * ⚠ LE MOIS EN COURS EST INCOMPLET PAR CONSTRUCTION : le 4 novembre, « 2 sur
- * 20 » n'est pas un échec, c'est le quatrième jour. L'écran écrit donc où l'on
- * en est dans le mois, et c'est ce qui rend les anneaux lisibles sans induire
- * en erreur.
+ * ⚠ LES QUATRE CARTES SONT CELLES DU PIPELINE, AU MÊME BALISAGE : `rgd-et`,
+ * son grand nombre, son libellé, sa jauge verticale et son pourcentage. Elles
+ * ne sont pas des liens, faute d'un écran où mener — c'est la seule différence,
+ * et elle ne se voit pas.
+ *
+ * ⚠ LE MOIS EN COURS EST INCOMPLET PAR CONSTRUCTION : le 5 novembre, « 5 % »
+ * n'est pas un échec, c'est le cinquième jour. L'en-tête le dit, parce que sans
+ * cela la carte annonce une catastrophe tous les débuts de mois.
  */
 function carteObjectifs(mois, obj, choisie) {
   if (!mois.length) return '';
@@ -341,73 +334,64 @@ function carteObjectifs(mois, obj, choisie) {
   const maintenant = new Date();
   const jour = maintenant.getDate();
   const joursDuMois = new Date(maintenant.getFullYear(), maintenant.getMonth() + 1, 0).getDate();
-  const avance = Math.round((jour / joursDuMois) * 100);
 
   const euros = (v) => eur(Math.round(v));
   const nombre = (v) => String(v);
   const formats = { demandes: nombre, rdv: nombre, devisSignes: nombre, ca: euros };
-  const serie = SERIES.find(s => s.champ === choisie) || SERIES[0];
+  const serie = SERIES.find(x => x.champ === choisie) || SERIES[0];
 
-  const tuile = (se) => {
+  const carte = (se) => {
     const v = courant[se.champ];
     const cible = obj[se.cible];
     const connu = v !== null && v !== undefined;
-    const part = connu && cible > 0 ? v / cible : 0;
+    const part = connu && cible > 0 ? Math.round((v / cible) * 100) : null;
     const formate = formats[se.champ];
-    // ⚠ LE NOM EST SOUS LE CHIFFRE, À L'HORIZONTALE. Posé en vertical sur le
-    // côté, « Rendez-vous » se coupait en deux colonnes et « Chiffre
-    // d'affaires » en trois : illisible, et la tuile penchait. Un libellé se
-    // lit à plat.
-    return `<div class="rgd-ob-tuile ${tonObjectif(part)}">
-      ${anneau(part, se.couleur, connu)}
-      <div class="rgd-ob-chiffres">
-        <span class="rgd-ob-nom">${esc(se.label)}</span>
-        <b>${connu ? Math.round(part * 100) + ' %' : '—'}</b>
-        <span class="rgd-ob-sur">${connu ? esc(formate(v)) : '—'} <i>sur ${esc(formate(cible))}</i></span>
-      </div>
+    return `<div class="rgd-et" style="--c:${se.couleur}"
+        title="${esc(se.label)} — ${connu ? esc(formate(v)) : 'pas de donnée'} sur ${esc(formate(cible))}">
+      <span class="rgd-et-n">${connu ? esc(formate(v)) : '—'}</span>
+      <span class="rgd-et-label">${esc(se.label)}</span>
+      <span class="rgd-et-piste"><i style="height:${Math.min(100, part || 0)}%"></i></span>
+      <span class="rgd-et-poids"><em>objectif ${esc(formate(cible))}</em></span>
+      <span class="rgd-et-part">${part === null ? '' : part + ' %'}</span>
     </div>`;
   };
 
   const pc = (v) => (v === null ? '—' : v + ' %');
-  const lien = (texte) => `<div class="rgd-ob-lien"><span>${texte}</span></div>`;
-  const panier = courant.devisSignes ? Math.round(courant.ca / courant.devisSignes) : null;
 
   return `
         <section class="card rgd-ob">
           <div class="card-head"><h2>Objectifs du mois</h2>
             <span class="grow"></span>
-            <span class="rgd-ob-avance"><i style="width:${avance}%"></i></span>
-            <span class="muted small">${esc(courant.label)} · jour ${jour} sur ${joursDuMois}</span></div>
+            <span class="muted small">${esc(courant.label)} — jour ${jour} sur ${joursDuMois}</span></div>
 
-          <div class="rgd-ob-tuiles">
-            ${tuile(SERIES[0])}
-            ${lien(pc(taux(courant.rdv, courant.demandes)))}
-            ${tuile(SERIES[1])}
-            ${lien(pc(courant.rdv ? taux(courant.devisSignes, courant.rdv) : null))}
-            ${tuile(SERIES[2])}
-            ${lien(panier === null ? '—' : eur(panier))}
-            ${tuile(SERIES[3])}
+          <div class="rgd-frise">${SERIES.map(carte).join('')}</div>
+
+          ${/* ⚠ LES TAUX SE LISENT SUR DOUZE MOIS, PAS SUR LE MOIS EN COURS, et
+                c'est ce que les vrais chiffres ont imposé : au 5 novembre, une
+                demande et un rendez-vous donnaient « 600 % des demandes ont
+                donné un rendez-vous ». À ces volumes — une poignée de dossiers
+                par mois — un taux mensuel est du bruit, pas une mesure. Sur
+                douze mois il redevient lisible, et c'est la même base pour les
+                trois, au lieu d'en mélanger deux dans une phrase. */ ''}
+          <p class="small muted rgd-ob-taux">Sur douze mois :
+            <b>${pc(t.demandesVersRdv)}</b> des demandes ont donné un rendez-vous,
+            <b>${pc(t.rdvVersSignes)}</b> des rendez-vous un devis signé,
+            <b>${pc(t.envoyesVersSignes)}</b> des devis envoyés sont signés
+            (${t.envoyes} envoyés, ${t.signes} signés)${t.panier === null ? ''
+              : `. Un devis signé rapporte <b>${esc(eur(t.panier))}</b> en moyenne`}.</p>
+
+          <div class="pill-tabs">
+            ${SERIES.map(se => `<button type="button" data-serie="${se.champ}"
+              class="${se.champ === serie.champ ? 'on' : ''}">${esc(se.court)}</button>`).join('')}
           </div>
 
-          <div class="rgd-ob-barre">
-            <div class="rgd-ob-chips">
-              ${SERIES.map(se => `<button type="button" class="rgd-ob-chip${se.champ === serie.champ ? ' on' : ''}"
-                data-serie="${se.champ}" style="--teinte:${se.couleur}">${esc(se.court)}</button>`).join('')}
-            </div>
-            <span class="grow"></span>
-            <span class="rgd-ob-conv">Devis envoyés → signés
-              <b class="${t.envoyesVersSignes === null ? '' : tonObjectif(t.envoyesVersSignes / 100)}">${pc(t.envoyesVersSignes)}</b>
-              <small>${t.envoyes} envoyés · ${t.signes} signés · 12 mois</small></span>
-          </div>
+          ${courbeIndicateur(mois, serie, obj[serie.cible], formats[serie.champ])}
 
-          <div class="rgd-ob-cadre">${aireObjectif(mois, serie, obj[serie.cible], formats[serie.champ])}</div>
-
-          <p class="small muted rgd-ob-pied">Les anneaux montrent le mois en cours, la courbe les douze
-          derniers — touchez une pastille pour changer d’indicateur, un point pour voir le chiffre.
-          Un <b>rendez-vous</b> est une visite technique, la même que la colonne « RDV » du pipeline.
-          <b>Deux devis pour un même client comptent pour un</b> : Costructor en produit une seconde
-          version plutôt que de corriger la première.
-          Un trou dans la courbe veut dire que le CRM n’a pas la donnée ce mois-là, pas qu’elle vaut zéro.
+          <p class="small muted rgd-ob-pied">Chaque mois compte ce qui s’y est <b>passé</b> :
+          demandes reçues, rendez-vous tenus, devis signés, factures émises. Un <b>rendez-vous</b> est
+          une visite technique, la même que la colonne « RDV » ci-dessus.
+          <b>Deux devis pour un même client comptent pour un.</b>
+          Un mois sans point veut dire que le CRM n’a pas la donnée, pas qu’elle vaut zéro.
           Objectifs modifiables dans les <a href="#/rgd/reglages">réglages</a>.</p>
         </section>
 `;
