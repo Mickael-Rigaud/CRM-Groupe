@@ -20,7 +20,25 @@ export const STATUTS_SAV = [
   { key: 'diagnostic',   label: 'Diagnostic',             ton: 'accent' },
   { key: 'intervention', label: 'Intervention planifiée', ton: 'accent' },
   { key: 'resolu',       label: 'Résolu',                 ton: 'green' },
+  // ⚠ « ANNULÉ » N'EST PAS « RÉSOLU » (05/11/2026, Élodie : « je voudrais
+  // d'ailleurs pouvoir annuler un sav »). Un dossier ouvert par erreur, ou que
+  // le client retire, n'avait que deux issues : le supprimer — l'historique
+  // disparaît — ou le dire résolu, ce qui affirme une réparation qui n'a pas eu
+  // lieu et le fait compter parmi les après-ventes traités.
+  { key: 'annule',       label: 'Annulé',                 ton: 'muted' },
 ];
+
+/**
+ * Un dossier CLOS : résolu, ou annulé. Il ne retient plus le client en SAV.
+ *
+ * ⚠ UNE SEULE DÉFINITION, ET C'EST TOUT L'ENJEU DU STATUT NEUF. Cinq endroits
+ * testaient `statut !== 'resolu'` pour dire « encore ouvert » : le compteur du
+ * menu, les deux onglets de l'écran SAV, le dossier ouvert d'une fiche et la
+ * bascule d'étape. Ajouter « annulé » sans les reprendre aurait laissé le
+ * client en SAV et la pastille allumée — un dossier annulé qui continue de
+ * réclamer, sans que rien n'explique pourquoi.
+ */
+export const savClos = (s) => s.statut === 'resolu' || s.statut === 'annule';
 export const statutSav = (k) => STATUTS_SAV.find(s => s.key === k) || STATUTS_SAV[0];
 export const PRISE_EN_CHARGE = { rgd: 'RGD Renova', sous_traitant: 'Le sous-traitant', client: 'Le client' };
 
@@ -42,7 +60,7 @@ export function dossiersDe(f) {
         || (f.organisation_id && s.organisation_id === f.organisation_id))))
     .sort((a, b) => String(b.ouvert_le || '').localeCompare(String(a.ouvert_le || '')));
 }
-export const dossierOuvert = (f) => dossiersDe(f).find(s => s.statut !== 'resolu') || null;
+export const dossierOuvert = (f) => dossiersDe(f).find(s => !savClos(s)) || null;
 
 // La fin des travaux d'un chantier : même ordre que `finDeChantierDe` —
 // `date_passage_termine` en dernier, c'est le jour du marquage, pas de la fin.
@@ -103,8 +121,11 @@ export async function majSav(sav, champs, commentaire = '') {
     const suivi = [...(sav.suivi || [])];
     if (patch.statut && patch.statut !== sav.statut) {
       suivi.push(entree(`Statut : ${statutSav(sav.statut).label} → ${statutSav(patch.statut).label}`));
-      if (patch.statut === 'resolu' && !patch.resolu_le) patch.resolu_le = jourLocal();
-      if (patch.statut !== 'resolu') patch.resolu_le = null;
+      // ⚠ `resolu_le` EST LA DATE DE CLÔTURE, résolu comme annulé — la colonne
+      // porte un ancien nom, son commentaire en base le dit. L'écran trie les
+      // dossiers clos dessus : sans elle, un annulé remonterait en tête.
+      if (savClos(patch) && !patch.resolu_le) patch.resolu_le = jourLocal();
+      if (!savClos(patch)) patch.resolu_le = null;
     }
     if (String(commentaire || '').trim()) suivi.push(entree(String(commentaire).trim()));
     patch.suivi = suivi;
@@ -114,7 +135,7 @@ export async function majSav(sav, champs, commentaire = '') {
     // dossiers en cours, et en résoudre un ne doit pas la renvoyer ailleurs.
     const fiche = sav.fiche_id ? db.byId('rgd_clients', sav.fiche_id) : null;
     if (fiche) {
-      const encore = dossiersDe(fiche).some(s => s.statut !== 'resolu');
+      const encore = dossiersDe(fiche).some(s => !savClos(s));
       if (!encore && fiche.statut_suivi === 'sav') {
         await ecrireStatut({ uuid: fiche.id, cible: 'client', statut: 'chantier_termine' });
       } else if (encore && fiche.statut_suivi !== 'sav') {
@@ -138,7 +159,7 @@ export async function majSav(sav, champs, commentaire = '') {
  */
 export async function retirerDuSav(fiche, statut, libelle = statut) {
   try {
-    for (const s of dossiersDe(fiche).filter(s => s.statut !== 'resolu')) {
+    for (const s of dossiersDe(fiche).filter(s => !savClos(s))) {
       await db.update('rgd_sav', s.id, {
         statut: 'resolu', resolu_le: jourLocal(),
         suivi: [...(s.suivi || []), entree(`Fiche sortie du SAV, remise en « ${libelle} » — dossier clos`)],
@@ -158,7 +179,7 @@ export async function supprimerSav(sav) {
     }
     await db.remove('rgd_sav', sav.id);
     const fiche = sav.fiche_id ? db.byId('rgd_clients', sav.fiche_id) : null;
-    if (fiche && fiche.statut_suivi === 'sav' && !dossiersDe(fiche).some(s => s.statut !== 'resolu')) {
+    if (fiche && fiche.statut_suivi === 'sav' && !dossiersDe(fiche).some(s => !savClos(s))) {
       await ecrireStatut({ uuid: fiche.id, cible: 'client', statut: 'chantier_termine' });
     }
     return { ok: true };

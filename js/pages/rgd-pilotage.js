@@ -141,7 +141,11 @@ function frisePipeline(etapes, aujourdhui) {
     return `<span class="rgd-et-poids">
       <b>${esc(eur(e.montant))}</b>
       <em>${e.chiffres} chiffré${e.chiffres > 1 ? 's' : ''}</em>
-      ${d ? `<u title="Rien n'a bougé depuis plus de ${d.seuil} jours">${d.vieux} dormant${d.vieux > 1 ? 's' : ''}</u>` : ''}
+      ${'' /* ⚠ « DORMANT » NE SE COMPRENAIT PAS (05/11/2026, Élodie : « je ne
+         comprends pas le 1 dormant »), et son explication vivait dans une infobulle
+         — c'est-à-dire nulle part sur un téléphone. Le libellé dit maintenant la
+         règle lui-même ; l'infobulle reste pour qui la survole. */}
+      ${d ? `<u title="Rien n'a bougé depuis plus de ${d.seuil} jours">${d.vieux} sans nouvelle depuis ${d.seuil} j</u>` : ''}
     </span>`;
   };
   const carte = (e) => `<a class="rgd-et${e.hors ? ' hors' : ''}"
@@ -737,8 +741,8 @@ export const rgdPilotagePage = {
             c’est le total des devis de ces personnes à cette étape, le même calcul des
             deux côtés. <b>Chiffré</b> compte les dossiers qui portent déjà un devis ;
             à « Devis en cours », tous n’en ont pas encore.
-            <b class="rgd-dormant">Dormant</b> veut dire que le devis n’a pas bougé depuis
-            plus de 30 jours — 90 une fois le chantier commencé.</p>
+            <b class="rgd-dormant">Sans nouvelle</b> compte les devis qui n’ont pas bougé
+            depuis plus de 30 jours — 90 une fois le chantier commencé.</p>
         </section>
 ${carteObjectifs(moisObj, objectifs, serieChoisie)}
         <div class="rgd-duo">

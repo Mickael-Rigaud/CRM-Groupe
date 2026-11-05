@@ -12,7 +12,7 @@ import { scope } from '../data/scope.js';
 import { esc, eur, fmtDate, fmtDateTime, openModal, closeModal, toast, armerCroix, userName } from '../ui.js';
 import {
   STATUTS_SAV, statutSav, PRISE_EN_CHARGE, garantie, finDuChantier,
-  ouvrirSav, majSav, supprimerSav, deposerPiecesSav, piecesSav, dossiersDe,
+  ouvrirSav, majSav, supprimerSav, deposerPiecesSav, piecesSav, dossiersDe, savClos,
 } from '../data/rgd-sav.js';
 
 const jourLocal = (d = new Date()) =>
@@ -180,7 +180,9 @@ export function fenetreSav(fiche, sav, retour) {
         catch (e) { toast(`Dossier enregistré, mais un fichier n’est pas passé — ${String(e.message || e).slice(0, 80)}`, 'warn'); }
       }
       toast(creation ? 'Dossier SAV ouvert — la fiche passe en « SAV »'
-        : champs.statut === 'resolu' && sav.statut !== 'resolu' ? 'SAV résolu' : 'Dossier enregistré');
+        : champs.statut === 'resolu' && sav.statut !== 'resolu' ? 'SAV résolu'
+        : champs.statut === 'annule' && sav.statut !== 'annule' ? 'SAV annulé'
+        : 'Dossier enregistré');
       fermer();
     };
   } });
@@ -202,7 +204,7 @@ export function celluleSav({ x, s }) {
     intervention: !s ? '' : `${esc(s.intervenant === 'rgd' ? 'RGD Renova' : st ? (st.raison_sociale || st.contact_nom || 'Sous-traitant') : s.intervenant ? 'Sous-traitant' : '—')}${
       s.intervention_le ? `<div class="s muted">${esc(fmtDate(s.intervention_le))}${s.intervention_heure ? ' · ' + esc(s.intervention_heure) : ''}</div>` : ''}`,
     statut: s ? `<span class="chip ${statutSav(s.statut).ton}">${esc(statutSav(s.statut).label)}</span>${
-      s.statut === 'resolu' && s.resolu_le ? `<div class="s muted">le ${esc(fmtDate(s.resolu_le))}</div>` : ''}` : '',
+      savClos(s) && s.resolu_le ? `<div class="s muted">le ${esc(fmtDate(s.resolu_le))}</div>` : ''}` : '',
     suivi: dernier ? `<span class="small">${esc(dernier.texte)}</span>` : '',
     cout: s?.cout != null ? esc(eur(s.cout)) : '',
   };

@@ -17,7 +17,7 @@ import { scope } from '../data/scope.js';
 import { esc, terms, hit, searchInput, bindSearch, restoreFocus, openModal, closeModal, toast } from '../ui.js';
 import { poserEspace } from './espace.js';
 import { cadre, guard } from './rgd-espace.js';
-import { dossiersDe, retirerDuSav } from '../data/rgd-sav.js';
+import { dossiersDe, retirerDuSav, savClos } from '../data/rgd-sav.js';
 import { fenetreSav, celluleSav } from './rgd-sav.js';
 import { ouvrirFicheDuClient, STATUTS_SUIVI } from './rgd-clients.js';
 import { etapeDeFiche, joursDeVisite } from '../data/rgd-etapes.js';
@@ -45,11 +45,11 @@ export const rgdSavPage = {
       // Les lignes : chaque dossier, plus les fiches rangées en « SAV » sans
       // dossier encore ouvert — sinon elles ne seraient nulle part.
       let lignes = dossiers
-        .filter(s => (state.filtre === 'resolus') === (s.statut === 'resolu'))
+        .filter(s => (state.filtre === 'resolus') === savClos(s))
         .map(s => ({ x: s.fiche_id && parFiche.get(s.fiche_id) ? quiEst(parFiche.get(s.fiche_id)) : null, s }));
       if (state.filtre === 'encours') {
         for (const f of fiches.filter(f => f.statut_suivi === 'sav')) {
-          if (!dossiersDe(f).some(s => s.statut !== 'resolu')) lignes.push({ x: quiEst(f), s: null });
+          if (!dossiersDe(f).some(s => !savClos(s))) lignes.push({ x: quiEst(f), s: null });
         }
       }
       const intervenants = [...new Set(dossiers.map(s => s.intervenant === 'sous_traitant' ? s.sous_traitant_id : s.intervenant).filter(Boolean))];
@@ -65,8 +65,9 @@ export const rgdSavPage = {
         lignes.sort((a, b) => (b.s?.urgence === 'urgente') - (a.s?.urgence === 'urgente')
           || String(a.s?.ouvert_le || '').localeCompare(String(b.s?.ouvert_le || '')));
       }
-      const nEnCours = dossiers.filter(s => s.statut !== 'resolu').length;
-      const nResolus = dossiers.length - nEnCours;
+      const nEnCours = dossiers.filter(s => !savClos(s)).length;
+      const nClos = dossiers.length - nEnCours;
+      const nResolus = dossiers.filter(s => s.statut === 'resolu').length;
       // ⚠ LES CHIFFRES DU SAV (13/10/2026, Élodie : « le nombre de projets SAV
       // sur le nombre de projets total »). Le total, ce sont les projets LIVRÉS
       // — étape « Chantier terminé » ou « SAV » —, pas toutes les fiches : un
@@ -81,7 +82,11 @@ export const rgdSavPage = {
         || ['chantier_termine', 'sav'].includes(etapeDeFiche(f, chantiers, devis, jours)));
       const nSav = livres.filter(f => avecSav.has(f.id) || f.statut_suivi === 'sav').length;
       const taux = livres.length ? Math.round(nSav / livres.length * 100) : 0;
-      const nUrgents = dossiers.filter(s => s.statut !== 'resolu' && s.urgence === 'urgente').length;
+      const nUrgents = dossiers.filter(s => !savClos(s) && s.urgence === 'urgente').length;
+      // ⚠ LE DÉLAI MOYEN NE COMPTE QUE LES RÉSOLUS, pas les annulés, et c'est
+      // la seule comparaison qui reste volontairement sur `resolu` : un dossier
+      // annulé n'a pas été réparé, son « délai de résolution » n'existe pas.
+      // L'y inclure ferait baisser une moyenne qui sert à juger la réactivité.
       const delais = dossiers.filter(s => s.statut === 'resolu' && s.ouvert_le && s.resolu_le)
         .map(s => (new Date(s.resolu_le) - new Date(s.ouvert_le)) / 864e5).filter(d => d >= 0);
       const delai = delais.length ? Math.round(delais.reduce((a, b) => a + b, 0) / delais.length) : null;
@@ -96,15 +101,26 @@ export const rgdSavPage = {
           <div class="card kpi"><div class="lbl">Dossiers en cours</div>
             <div class="val">${nEnCours}</div>
             <div class="sub">${nUrgents ? `dont ${nUrgents} urgent${nUrgents > 1 ? 's' : ''}` : 'aucun urgent'}</div></div>
-          <div class="card kpi"><div class="lbl">Dossiers résolus</div>
-            <div class="val">${nResolus}</div>
-            <div class="sub">${delai === null ? 'pas encore de délai moyen' : `résolus en ${delai} jour${delai > 1 ? 's' : ''} en moyenne`}</div></div>
+          ${'' /* ⚠ « CLOS », ET LE DÉTAIL EN DESSOUS (05/11/2026). La tuile disait
+             « Dossiers résolus » en comptant les dossiers FERMÉS : depuis qu'un dossier
+             peut être ANNULÉ, ce nombre affirmait des réparations qui n'ont pas eu lieu.
+             Le délai moyen, lui, ne porte que sur les résolus — d'où la phrase qui dit
+             les deux plutôt qu'un nombre qu'on croirait homogène. */}
+          <div class="card kpi"><div class="lbl">Dossiers clos</div>
+            <div class="val">${nClos}</div>
+            <div class="sub">${nClos && nResolus < nClos
+              ? `${nResolus} résolu${nResolus > 1 ? 's' : ''}, ${nClos - nResolus} annulé${nClos - nResolus > 1 ? 's' : ''}`
+              : delai === null ? 'pas encore de délai moyen'
+              : `résolus en ${delai} jour${delai > 1 ? 's' : ''} en moyenne`}</div></div>
         </div>
         <div class="toolbar">
           ${searchInput('sav-q', state, 'Rechercher un client, un objet…')}
           <div class="sav-filtre">
             <button type="button" data-filtre="encours" class="${state.filtre === 'encours' ? 'on' : ''}">En cours <span>${nEnCours}</span></button>
-            <button type="button" data-filtre="resolus" class="${state.filtre === 'resolus' ? 'on' : ''}">Résolus <span>${nResolus}</span></button>
+            ${'' /* ⚠ « CLOS », PLUS « RÉSOLUS » : l'onglet contient aussi les dossiers
+               ANNULÉS depuis le 05/11/2026, et les appeler résolus dirait qu'ils ont
+               été réparés. Chaque ligne porte sa pastille, qui distingue les deux. */}
+            <button type="button" data-filtre="resolus" class="${state.filtre === 'resolus' ? 'on' : ''}">Clos <span>${nClos}</span></button>
             <button type="button" id="sav-urgents" class="${state.urgents ? 'on' : ''}">Urgents seulement</button>
           </div>
           ${intervenants.length ? `<select id="sav-inter" aria-label="Intervenant" class="${state.intervenant ? 'actif' : ''}">
@@ -156,7 +172,7 @@ export const rgdSavPage = {
         const l = lignes[Number(sel.dataset.retirer)];
         const st = STATUTS_SUIVI.find(x => x.key === sel.value);
         if (!l?.x || !st) return;
-        const n = dossiersDe(l.x.ligne).filter(s => s.statut !== 'resolu').length;
+        const n = dossiersDe(l.x.ligne).filter(s => !savClos(s)).length;
         if (!window.confirm(`Retirer ${l.x.nom} du SAV et le remettre en « ${st.label} » ?`
           + (n ? `\n\n${n > 1 ? `Ses ${n} dossiers ouverts seront clos` : 'Son dossier ouvert sera clos'} (l’historique est gardé).` : ''))) {
           sel.value = ''; return;

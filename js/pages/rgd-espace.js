@@ -4,6 +4,7 @@
 // qu'il n'y avait qu'un fichier d'écrans. Le rang 2 de la migration en ajoute
 // un second : ils passent ici plutôt que d'être recopiés, sinon les deux
 // listes d'onglets divergeraient au premier ajout.
+import { savClos } from '../data/rgd-sav.js';
 import { scope } from '../data/scope.js';
 import { ACTIVITIES } from '../data/schema.js';
 import { coquilleEspace } from './espace.js';
@@ -28,7 +29,7 @@ export const ONGLETS = [
     // sous Clients & prospects, avec le nombre de dossiers en cours. Le libellé
     // est un ACCESSEUR : le menu est relu à chaque rendu, le compte suit.
     { hash: '#/rgd/sav', get label() {
-      const n = scope.rgd('rgd_sav').filter(s => s.statut !== 'resolu').length;
+      const n = scope.rgd('rgd_sav').filter(s => !savClos(s)).length;
       return n ? `SAV (${n})` : 'SAV';
     } },
     { hash: '#/rgd/partenaires', label: 'Partenaires' },
