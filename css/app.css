@@ -7582,37 +7582,36 @@ tr.est-modifie td { background: var(--accent-soft); }
 }
 
 /* ------------------------------------------------ Bilan commercial RGD (05/11/2026)
-   Le tableau générique du CRM, mis en couleur à la demande d'Élodie (« le
-   visuel est très fade »). Chaque exercice porte sa couleur en tête de
-   colonne (variable --ex posée par l'écran) ; les montants ont une barre
-   proportionnelle au plus grand exercice ; le taux a une pastille à trois
-   paliers. ⚠ RIEN D'AUTRE : elle a refusé une version plus chargée. */
-.rgd-bil-table th.rgd-bil-ex { border-top: 4px solid var(--ex); padding-top: 10px;
-  background: color-mix(in srgb, var(--ex) 7%, transparent); vertical-align: bottom; }
-.rgd-bil-nom { display: block; font-family: var(--font-display); font-size: 14px;
-  font-weight: 700; color: var(--ex); text-transform: none; letter-spacing: 0; }
-.rgd-bil-etat { display: block; font-size: 11px; font-weight: 500; color: var(--muted);
-  text-transform: none; letter-spacing: 0; margin-top: 2px; }
-.rgd-bil-titre { font-weight: 600; }
-.rgd-bil-table th, .rgd-bil-table td { padding-left: 10px; padding-right: 10px; }
-.rgd-bil-ca td { background: color-mix(in srgb, var(--accent) 4%, transparent); }
-.rgd-bil-fort { font-family: var(--font-display); font-size: 16px; font-weight: 700; color: var(--accent-ink); }
-.rgd-bil-table .rgd-bil-total { background: var(--card-2); font-weight: 700; }
-.rgd-bil-piste { display: block; height: 7px; margin-top: 6px; border-radius: 4px;
-  background: var(--card-2); overflow: hidden; }
-.rgd-bil-piste i { display: block; height: 100%; border-radius: inherit; }
+   Quatre compteurs pour l'exercice en cours (réalisé, objectif de l'année,
+   jauge), puis les années passées dans un petit tableau. Élodie a choisi cette
+   forme après trois refus (tableau, tableau en couleur, entonnoir) : la carte
+   répond à « où j'en suis cette année ». L'historique reste discret. */
+.rgd-bil-annee { font-size: 13px; color: var(--muted); margin: 2px 0 10px; }
+.rgd-bil-annee b { font-family: var(--font-display); font-size: 15px; color: var(--accent-ink); }
+.rgd-bil-tuiles { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 12px; }
+.rgd-bil-tuile { border: 1px solid var(--line); border-top: 4px solid var(--accent); border-radius: 12px;
+  padding: 14px 16px; background: color-mix(in srgb, var(--accent) 5%, var(--card)); }
+.rgd-bil-lib { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
+.rgd-bil-gros { font-family: var(--font-display); font-size: 30px; font-weight: 700; line-height: 1.15;
+  color: var(--accent-ink); margin-top: 6px; }
+.rgd-bil-sur { font-size: 13px; color: var(--text); margin-top: 2px; }
+.rgd-bil-bas { font-size: 12.5px; color: var(--muted); margin-top: 8px; }
+.rgd-bil-piste { display: block; height: 8px; margin-top: 7px; border-radius: 4px;
+  background: color-mix(in srgb, var(--accent) 14%, var(--card)); overflow: hidden; }
+.rgd-bil-piste i { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
 .rgd-bil-point { display: inline-block; width: 9px; height: 9px; border-radius: 50%;
-  margin-right: 7px; vertical-align: 1px; background: var(--muted); }
+  margin-right: 6px; vertical-align: 0; background: var(--muted); }
 .rgd-bil-point.vert { background: var(--green); }
 .rgd-bil-point.ambre { background: var(--amber); }
 .rgd-bil-point.rouge { background: var(--red); }
-.rgd-bil-pied { margin: 10px 0 0; border-top: 1px solid var(--line); padding-top: 10px; }
-/* L'objectif sous la valeur de l'exercice en cours : discret, la valeur reste ce qu'on lit d'abord. */
-.rgd-bil-obj { font-size: 11.5px; font-weight: 500; color: var(--muted); margin-top: 3px; white-space: nowrap; }
-/* Les intertitres « Devis envoyés » / « Devis signés » / « Chiffre d'affaires » :
-   ils portent le sens des lignes du dessous (« Nombre de devis », « Montant total »). */
-.rgd-bil-table tr.rgd-bil-bloc td { padding: 16px 10px 6px; font-size: 11px; font-weight: 700;
-  text-transform: uppercase; letter-spacing: .07em; color: var(--accent-ink);
-  border-bottom: 2px solid var(--line-strong); background: transparent; }
-.rgd-bil-sous .rgd-bil-titre, .rgd-bil-ca .rgd-bil-titre { padding-left: 24px; }
-.rgd-bil-sous .rgd-bil-titre { font-weight: 500; color: var(--text); }
+.rgd-bil-passe { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); }
+.rgd-bil-passe .table-wrap { margin-top: 6px; }
+.rgd-bil-table th, .rgd-bil-table td { padding-left: 12px; padding-right: 12px; }
+.rgd-bil-titre { font-weight: 600; }
+.rgd-bil-table .rgd-bil-total { background: var(--card-2); }
+.rgd-bil-pied { margin: 8px 0 0; }
+@media screen and (max-width: 760px) {
+  .rgd-bil-tuiles { grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 10px; }
+  .rgd-bil-gros { font-size: 24px; }
+}
+
