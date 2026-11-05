@@ -42,6 +42,7 @@ import { cadre, guard, KEY } from './rgd-espace.js';
 import { etapesRgd, ETAPES_HORS_CYCLE } from '../data/rgd-etapes.js';
 import { objectifsMensuels, moisObjectifs, tauxPeriode, taux } from '../data/rgd-objectifs.js';
 import { encadreCaOuvrier } from './rgd-ca-ouvrier.js';
+import { carteBilan } from './rgd-bilan.js';
 
 // L'exercice comptable de RGD Renova : 1er octobre → 30 septembre, aligné sur
 // Costructor. Ce n'est pas l'année civile, et s'y tromper décale tout le CA.
@@ -193,77 +194,77 @@ const SERIES = [
 ];
 
 /**
- * Les douze mois des QUATRE indicateurs, sur un seul cadre.
+ * Les douze mois d'un indicateur, dans sa propre vignette.
  *
- * ⚠ L'AXE EST EN POURCENTAGE DE L'OBJECTIF, ET IL N'Y A PAS D'AUTRE CHOIX
- * (05/11/2026, Élodie : « est-ce qu'on pourrait n'avoir qu'un seul tableau avec
- * 4 courbes de couleurs différentes ? »). Les quatre grandeurs n'ont aucune
- * unité commune — 20 demandes, 10 rendez-vous, 5 devis, 35 000 € — et les poser
- * sur un axe en valeurs brutes écraserait les trois premières sur le plancher,
- * sous la seule courbe du chiffre d'affaires. Le seul axe que les quatre
- * partagent est la distance à leur objectif. Une ligne pointillée à 100 %, la
- * même pour tout le monde, et une courbe au-dessus veut dire objectif dépassé.
- * NE PAS repasser en valeurs brutes « pour lire les vrais nombres » : ils sont
- * dans les rangées du dessus et dans l'infobulle de chaque mois.
+ * ⚠ QUATRE VIGNETTES, PAS UN CADRE À QUATRE COURBES (05/11/2026, Élodie :
+ * « mouais non je ne trouve pas cela ouf finalement »). Le cadre unique avait
+ * deux défauts que seul le rendu a montrés : son axe en POURCENTAGE de
+ * l'objectif était juste mais abstrait — « 60 % » ne dit pas si ce sont six
+ * rendez-vous ou trois devis — et quatre lignes qui se croisent sur douze
+ * mois, aux volumes de RGD, s'enchevêtrent au lieu de se lire.
  *
- * ⚠ LE CADRE MONTE AU MOINS À 110 %, jamais pile au plus haut : à 100 % tout
- * juste, la ligne d'objectif se collerait au bord haut du cadre et ne se
- * lirait plus comme une ligne.
+ * ⚠ CHAQUE VIGNETTE GARDE SON UNITÉ ET SA PROPRE ÉCHELLE, et c'est tout
+ * l'intérêt : des demandes d'un côté, des euros de l'autre, sans rien
+ * convertir. NE PAS chercher à leur donner une échelle commune « pour pouvoir
+ * comparer » : 20 demandes et 35 000 € ne se comparent pas, c'est précisément
+ * ce qui a fait échouer le cadre unique.
+ *
+ * ⚠ LA MARGE DE GAUCHE SE CALCULE SUR LE PLUS LONG LIBELLÉ D'AXE : « 35 000 € »
+ * mesure trois fois « 20 ». Une marge fixe tronquait l'un ou gaspillait
+ * l'autre.
  */
-function courbesObjectifs(mois, obj, formats) {
-  const part = (m, se) => {
-    const v = m[se.champ];
-    const cible = obj[se.cible];
-    return (v === null || v === undefined || !(cible > 0)) ? null : (v / cible) * 100;
-  };
-  const toutes = mois.flatMap(m => SERIES.map(se => part(m, se))).filter(q => q !== null);
-  if (!toutes.length) return '<div class="empty">Le CRM n’a pas encore ces données.</div>';
+function vignetteObjectif(mois, se, cible, formate) {
+  const valeurs = mois.map(m => m[se.champ]);
+  const connues = valeurs.filter(v => v !== null && v !== undefined);
+  const dernier = valeurs[valeurs.length - 1];
+  const part = (dernier !== null && dernier !== undefined && cible > 0)
+    ? Math.round((dernier / cible) * 100) : null;
 
-  const L = 960, H = 210, bas = H - 26, gauche = 44, droite = 14;
+  const etiquettes = ['0', formate(cible)];
+  const gauche = 18 + Math.max(...etiquettes.map(t => t.length)) * 6.2;
+  const L = 560, H = 168, bas = H - 22, droite = 10;
   const large = L - gauche - droite, pas = large / mois.length;
-  const max = Math.max(110, ...toutes);
-  const y = (q) => bas - (q / max) * (bas - 16);
-  const x = (i) => gauche + pas * i + pas / 2;
+  const max = Math.max(cible, ...connues, 1);
+  const y = (v) => bas - (v / max) * (bas - 18);
 
-  const graduations = [0, 50].map(q => `<g>
-    <line x1="${gauche}" x2="${L - droite}" y1="${y(q)}" y2="${y(q)}" class="rgd-grille"></line>
-    <text x="${gauche - 9}" y="${y(q) + 4}" class="rgd-axe" text-anchor="end">${q} %</text></g>`).join('');
+  // ⚠ L'AXE NE PORTE QUE LE ZÉRO ET L'OBJECTIF. Une troisième graduation sur
+  // une vignette de cette taille vient se coucher sur l'une des deux autres.
+  const axe = `<line x1="${gauche}" x2="${L - droite}" y1="${y(0)}" y2="${y(0)}" class="rgd-grille"></line>
+    <text x="${gauche - 8}" y="${y(0) + 4}" class="rgd-axe" text-anchor="end">0</text>
+    <line x1="${gauche}" x2="${L - droite}" y1="${y(cible).toFixed(1)}" y2="${y(cible).toFixed(1)}" class="rgd-objectif"></line>
+    <text x="${gauche - 8}" y="${(y(cible) + 4).toFixed(1)}" class="rgd-axe" text-anchor="end">${esc(formate(cible))}</text>`;
 
-  // ⚠ LA COURBE NE RELIE QUE LES MOIS CONNUS. Un mois sans donnée vaut `null` :
-  // le traiter comme un zéro dessinerait une chute qui n'a pas eu lieu.
-  const courbes = SERIES.map(se => {
-    const pts = mois.map((m, i) => ({ i, q: part(m, se) })).filter(o => o.q !== null);
-    if (!pts.length) return '';
-    const trait = pts.map((o, k) => `${k ? 'L' : 'M'}${x(o.i).toFixed(1)},${y(o.q).toFixed(1)}`).join(' ');
-    const points = pts.map(o => `<circle cx="${x(o.i).toFixed(1)}" cy="${y(o.q).toFixed(1)}" r="3.8"
-      class="rgd-point" style="stroke:${se.couleur}"></circle>`).join('');
-    return `<path d="${trait}" fill="none" class="rgd-trait" style="stroke:${se.couleur}"></path>${points}`;
-  }).join('');
-
-  // Le survol d'un mois donne les quatre chiffres d'un coup : l'axe est en
-  // pourcentage, les valeurs réelles doivent rester atteignables quelque part.
   const colonnes = mois.map((m, i) => {
-    const dit = SERIES.map(se => {
-      const v = m[se.champ];
-      const connu = v !== null && v !== undefined;
-      return `${se.label} : ${connu ? formats[se.champ](v) : 'pas de donnée'}`
-        + (connu && obj[se.cible] > 0 ? ` sur ${formats[se.champ](obj[se.cible])}` : '');
-    }).join('&#10;');
+    const v = m[se.champ];
+    const connu = v !== null && v !== undefined;
+    const dit = connu
+      ? `${formate(v)} sur ${formate(cible)}${cible > 0 ? ' · ' + Math.round((v / cible) * 100) + ' %' : ''}`
+      : 'pas de donnée';
     return `<g class="rgd-mois">
       <rect class="rgd-zone" x="${(gauche + pas * i).toFixed(1)}" y="0" width="${pas.toFixed(1)}" height="${bas}"></rect>
-      <title>${esc(m.label)}&#10;${esc(dit)}</title>
+      ${connu ? `<rect x="${(gauche + pas * i + pas * 0.2).toFixed(1)}" y="${y(v).toFixed(1)}"
+        width="${(pas * 0.6).toFixed(1)}" height="${Math.max(0, bas - y(v)).toFixed(1)}" rx="4"
+        class="rgd-ob-colonne" style="fill:${se.couleur}"></rect>` : ''}
+      <title>${esc(m.label)} · ${esc(dit)}</title>
     </g>`;
   }).join('');
 
-  const legendes = mois.map((m, i) => `<text x="${x(i).toFixed(1)}" y="${H - 6}" class="rgd-axe" text-anchor="middle">${esc(m.label)}</text>`).join('');
+  // ⚠ LE MOIS SANS SON ANNEE SOUS LES VIGNETTES : a douze colonnes sur une
+  // demi-largeur de carte, « déc. 25 » et « janv. 26 » se marchaient dessus et
+  // la ligne des mois devenait un pâté. La fenêtre glisse sur douze mois :
+  // l'année n'y lève aucune ambiguïté, et l'en-tête de la carte la porte déjà.
+  const court = (m) => String(m.label).replace(/\s*\d{2}$/, '');
+  const legendes = mois.map((m, i) => `<text x="${(gauche + pas * i + pas / 2).toFixed(1)}" y="${H - 5}"
+    class="rgd-axe" text-anchor="middle">${esc(court(m))}</text>`).join('');
 
-  return `<div class="rgd-ob-cadre"><svg class="rgd-courbe rgd-ob-courbes" viewBox="0 0 ${L} ${H}" role="img"
-    aria-label="Les quatre indicateurs mois par mois, en pourcentage de leur objectif">
-    ${graduations}
-    <line x1="${gauche}" x2="${L - droite}" y1="${y(100)}" y2="${y(100)}" class="rgd-objectif"></line>
-    <text x="${gauche - 9}" y="${(y(100) + 4).toFixed(1)}" class="rgd-axe" text-anchor="end">100 %</text>
-    ${colonnes}${courbes}${legendes}
-  </svg></div>`;
+  return `<div class="rgd-ob-vignette">
+    <div class="rgd-ob-vt"><b style="color:${se.couleur}">${esc(se.label)}</b>
+      <span>${dernier === null || dernier === undefined ? '—' : esc(formate(dernier))} sur ${esc(formate(cible))}${part === null ? '' : ' · ' + part + ' %'}</span></div>
+    <svg viewBox="0 0 ${L} ${H}" role="img"
+      aria-label="${esc(se.label)} mois par mois, face à l’objectif de ${esc(formate(cible))}">
+      ${axe}${colonnes}${legendes}
+    </svg>
+  </div>`;
 }
 
 /**
@@ -339,21 +340,18 @@ function carteObjectifs(mois, obj) {
             (${t.envoyes} envoyés, ${t.signes} signés)${t.panier === null ? ''
               : `. Un devis signé rapporte <b>${esc(eur(t.panier))}</b> en moyenne`}.</p>
 
-          ${/* ⚠ PLUS D'ONGLETS : les quatre courbes tiennent sur le même cadre, en
-                pourcentage de leur objectif. La légende n'est pas cliquable — il
-                n'y a plus rien à choisir. */ ''}
-          <div class="rgd-ob-legende">
-            ${SERIES.map(se => `<span><i style="background:${se.couleur}"></i>${esc(se.label)}</span>`).join('')}
-            <span class="objectif"><i></i>objectif</span>
+          ${/* ⚠ NI ONGLETS NI LÉGENDE : chaque vignette porte son nom et sa
+                couleur. Une légende commune supposerait une échelle commune,
+                que ces quatre grandeurs n'ont pas. */ ''}
+          <div class="rgd-ob-vignettes">
+            ${SERIES.map(se => vignetteObjectif(mois, se, obj[se.cible], formats[se.champ])).join('')}
           </div>
-
-          ${courbesObjectifs(mois, obj, formats)}
 
           <p class="small muted rgd-ob-pied">Chaque mois compte ce qui s’y est <b>passé</b> :
           demandes reçues, rendez-vous tenus, devis signés, factures émises. Un <b>rendez-vous</b> est
           une visite technique, la même que la colonne « RDV » ci-dessus.
           <b>Deux devis pour un même client comptent pour un.</b>
-          Une courbe au-dessus de la ligne pointillée veut dire objectif dépassé ; un mois sans point veut dire que le CRM n’a pas la donnée, pas qu’elle vaut zéro. Le survol d’un mois donne les quatre chiffres réels.
+          La ligne pointillée est l’objectif ; une colonne qui la dépasse est un mois tenu. Un mois sans colonne veut dire que le CRM n’a pas la donnée, pas qu’elle vaut zéro. Chaque vignette garde son unité : elles ne se comparent pas entre elles.
           Objectifs modifiables dans les <a href="#/rgd/reglages">réglages</a>.</p>
         </section>
 `;
@@ -755,8 +753,7 @@ ${carteObjectifs(moisObj, objectifs)}
 
         </div>
 
-
-
+${carteBilan()}
 
         ${docsSt.length || leads.length ? `<div class="pil-alertes">
           ${leads.length ? `<a class="pil-alerte" href="#/rgd/clients">

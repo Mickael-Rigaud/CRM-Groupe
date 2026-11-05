@@ -4072,25 +4072,28 @@ button.tb-pp:hover { color: var(--text); text-decoration: underline; text-underl
 .rgd-ob-taux { margin: 2px 0 10px; }
 .rgd-ob-taux b { color: var(--text); }
 .rgd-ob-pied { margin: 8px 0 0; border-top: 1px solid var(--line); padding-top: 10px; }
-/* La legende des quatre courbes. ⚠ ELLE N'EST PAS CLIQUABLE : les quatre
-   sont toujours dessinees, il n'y a plus rien a choisir. Lui donner l'allure
-   d'un bouton promettrait un filtre qui n'existe pas. */
-.rgd-ob-legende { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 10px 0 2px; }
-.rgd-ob-legende span { display: inline-flex; align-items: center; gap: 7px;
-  font-size: 12.5px; font-weight: 600; color: var(--muted); }
-.rgd-ob-legende i { width: 11px; height: 3px; border-radius: 2px; flex: 0 0 auto; }
-.rgd-ob-legende .objectif i { height: 0; border-top: 2px dashed var(--accent-ink);
-  border-radius: 0; opacity: .6; width: 14px; }
+/* Les quatre vignettes : une par indicateur, chacune avec son unite et sa
+   propre echelle. ⚠ PAS DE LEGENDE COMMUNE : elle supposerait une echelle
+   commune, que 20 demandes et 35 000 € n'ont pas. Chaque vignette porte son
+   nom et sa couleur. */
+.rgd-ob-vignettes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 28px; margin: 12px 0 2px; }
+.rgd-ob-vignette svg { width: 100%; height: auto; display: block; overflow: visible; }
+.rgd-ob-vt { display: flex; align-items: baseline; gap: 8px; margin-bottom: 2px;
+  flex-wrap: wrap; }
+.rgd-ob-vt b { font-family: var(--font-display); font-size: 13.5px; font-weight: 700; }
+.rgd-ob-vt span { font-size: 12px; color: var(--muted); }
+.rgd-ob-colonne { transition: opacity .12s; }
+.rgd-mois:hover .rgd-ob-colonne { opacity: .72; }
 
-/* ⚠ LE GRAPHIQUE DEFILE SUR TELEPHONE. Un dessin a proportions fixes tombe a
-   76 px de haut sur un ecran de 350 px : les quatre courbes s'y confondent en
-   un seul pate. Lui donner une largeur minimale et faire glisser garde le
-   dessin lisible sans toucher aux proportions. */
+/* ⚠ UNE SEULE COLONNE SUR TELEPHONE, et c'est ce qui rend les vignettes
+   tenables la ou les quatre courbes ne l'etaient pas : a 350 px de large une
+   vignette fait encore 105 px de haut, et douze colonnes s'y lisent. Deux de
+   front donneraient six colonnes de 14 px avec leurs mois par-dessous. */
 @media (max-width: 760px) {
-  .rgd-ob-cadre { overflow-x: auto; -webkit-overflow-scrolling: touch;
-    margin: 0 -2px; padding-bottom: 2px; }
-  .rgd-ob-courbes { min-width: 660px; }
+  .rgd-ob-vignettes { grid-template-columns: minmax(0, 1fr); gap: 12px; }
 }
+
 /* La colonne de droite : la valeur, son objectif, puis la part atteinte. Le
    reste du tableau est `rgd-pipe-table`, déjà stylé plus haut.
    ⚠ LA VALEUR ET SON OBJECTIF TIENNENT DANS UNE SEULE CELLULE : séparés, ils
