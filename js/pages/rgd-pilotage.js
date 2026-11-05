@@ -374,9 +374,17 @@ function carteObjectifs(mois, obj) {
         <section class="card rgd-ob">
           <div class="card-head"><h2>Objectifs du mois</h2>
             <span class="grow"></span>
-            <select class="rgd-ob-choix" data-ob-mois aria-label="Mois affiché">
-              ${[...mois].reverse().map(m => `<option value="${esc(m.cle)}"${m === courant ? ' selected' : ''}>${esc(m.label)}${m === dernier ? ' (en cours)' : ''}</option>`).join('')}
-            </select>
+            ${/* ⚠ DES FLÈCHES, PAS UNE LISTE (05/11/2026, Élodie : « je voyais
+                  plutôt une flèche pour passer d'un mois à un autre plutôt
+                  qu'une liste déroulante »). ‹ recule d'un mois, › avance ;
+                  chacune se grise au bout de la fenêtre de douze mois. */ ''}
+            <span class="rgd-ob-nav">
+              <button type="button" class="rgd-ob-fleche" data-ob-pas="-1" aria-label="Mois précédent"
+                ${mois.indexOf(courant) === 0 ? 'disabled' : ''}>‹</button>
+              <b class="rgd-ob-mois">${esc(courant.label)}</b>
+              <button type="button" class="rgd-ob-fleche" data-ob-pas="1" aria-label="Mois suivant"
+                ${enCours ? 'disabled' : ''}>›</button>
+            </span>
             <span class="muted small">${enCours ? `jour ${jour} sur ${joursDuMois}` : 'mois terminé'}</span></div>
 
           <table class="rgd-pipe-table rgd-ob-table"><tbody>${SERIES.map(rangee).join('')}</tbody></table>
@@ -868,10 +876,14 @@ ${carteBilan()}
     draw();
     // Le choix du mois des objectifs : un seul écouteur sur la racine, qui
     // survit aux redessins (la carte est réécrite à chaque `draw`).
-    root.addEventListener('change', (e) => {
-      const sel = e.target.closest?.('[data-ob-mois]');
-      if (!sel) return;
-      moisObjectifChoisi = sel.value;
+    root.addEventListener('click', (e) => {
+      const b = e.target.closest?.('[data-ob-pas]');
+      if (!b || b.disabled) return;
+      const mois = moisObjectifs();
+      const i = Math.max(0, mois.findIndex(m => m.cle === moisObjectifChoisi));
+      const ici = moisObjectifChoisi && mois.some(m => m.cle === moisObjectifChoisi) ? i : mois.length - 1;
+      const j = Math.min(mois.length - 1, Math.max(0, ici + Number(b.dataset.obPas)));
+      moisObjectifChoisi = j === mois.length - 1 ? null : mois[j].cle;
       draw();
     });
     return { refresh: draw, destroy() { coquille.retirer(); } };

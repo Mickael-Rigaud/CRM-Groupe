@@ -4147,9 +4147,13 @@ button.tb-pp:hover { color: var(--text); text-decoration: underline; text-underl
    se repliaient l'un sans l'autre sur téléphone et « sur 35 000 € » passait à
    la ligne au milieu du nombre. */
 .rgd-ob-table .rgd-pipe-n { white-space: nowrap; }
-/* Le sélecteur du mois dans l'en-tête de « Objectifs du mois ». */
-.rgd-ob-choix { font: inherit; font-size: 13px; padding: 4px 8px; margin-right: 8px; border-radius: 8px;
-  border: 1px solid var(--line-strong); background: var(--card); color: var(--text); }
+/* Les flèches du mois dans l'en-tête de « Objectifs du mois ». */
+.rgd-ob-nav { display: inline-flex; align-items: center; gap: 6px; margin-right: 10px; }
+.rgd-ob-mois { font-family: var(--font-display); font-size: 14px; min-width: 64px; text-align: center; }
+.rgd-ob-fleche { width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--line-strong);
+  background: var(--card); color: var(--accent-ink); font-size: 18px; line-height: 1; cursor: pointer; }
+.rgd-ob-fleche:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 12%, var(--card)); border-color: var(--accent); }
+.rgd-ob-fleche:disabled { opacity: .35; cursor: default; }
 .rgd-ob-table .rgd-pipe-n b { font-family: var(--font-display); font-weight: 700; font-size: 15px; }
 .rgd-ob-sur { color: var(--muted); font-size: 12.5px; font-weight: 500; margin-left: 5px; }
 .rgd-ob-pct { text-align: right; font-size: 12.5px; font-weight: 700; color: var(--muted);
