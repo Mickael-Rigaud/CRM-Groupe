@@ -29,7 +29,7 @@
 // sur l'exercice (celle qui finit en septembre).
 import { db } from './db.js';
 import { scope } from './scope.js';
-import { moisObjectifs } from './rgd-objectifs.js';
+import { moisObjectifs, objectifsMensuels } from './rgd-objectifs.js';
 
 const mois7 = (v) => String(v || '').slice(0, 7);
 const cleDuMois = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -134,7 +134,33 @@ export function bilanCommercial(aujourdhui = new Date()) {
     envoyes: cumul('envoyes'), signes: cumul('signes'), montantDevis: cumul('montantDevis'), ca: cumul('ca'),
   });
 
-  return { exercices, total, saisi: Object.keys(saisi).length > 0 };
+  return { exercices, total, objectifs: objectifsExercice(), saisi: Object.keys(saisi).length > 0 };
+}
+
+/**
+ * Les objectifs de l'exercice en cours, posés dans SA colonne (05/11/2026,
+ * Élodie : « dans ce tableau je veux que tu mettes les objectifs de l'exercice
+ * 2026-2027 dans la colonne 2026/2027 »).
+ *
+ * ⚠ ILS NE SONT PAS SAISIS ICI : ce sont les objectifs MENSUELS de la carte du
+ * dessus (`objectifsMensuels`, réglage `objectifs_mensuels`) fois douze. Son
+ * document dit la même chose : 10 devis envoyés par mois = 120 sur l'année,
+ * 35 000 € = 420 000 €. Changer un objectif mensuel change donc ce chiffre.
+ * ⚠ LE TAUX SE DÉDUIT (5 signés sur 10 envoyés = 50 %), il ne se saisit pas.
+ * ⚠ `envoyes` n'existe pas encore dans `objectifsMensuels` au 05/11/2026 (la
+ * session des objectifs l'ajoute) : d'ici là, le 10 du document d'Élodie.
+ * Montant des devis et montant moyen par devis n'ont pas d'objectif dans son
+ * document : ils n'en ont pas ici non plus.
+ */
+function objectifsExercice() {
+  const o = objectifsMensuels();
+  const envoyes = Number(o.envoyes) > 0 ? Number(o.envoyes) : 10;
+  return {
+    envoyes: envoyes * 12,
+    signes: o.devis * 12,
+    tauxSignature: taux1(o.devis, envoyes),
+    ca: o.ca * 12,
+  };
 }
 
 function num(v) {
