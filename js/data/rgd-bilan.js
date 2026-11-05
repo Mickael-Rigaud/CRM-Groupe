@@ -282,7 +282,12 @@ const cleCrm = (d) => {
 /** Les clés de chantier signées d'un exercice : liste saisie si elle existe, sinon le CRM. */
 function clesChantier(an) {
   const d = bilanDetails()[an]?.signes;
-  if (d?.length && bilanSaisi()[an]) return d.map(x => normCle(x.cle_chantier || x.client));
+  const saisi = bilanSaisi()[an];
+  if (d?.length && saisi) return d.map(x => normCle(x.cle_chantier || x.client));
+  // Un nombre de chantiers saisi SANS la liste : on le compte tel quel, avec des
+  // clés propres à l'année (aucun rapprochement possible avec les autres).
+  const n = num(saisi?.chantiers_signes);
+  if (n != null) return Array.from({ length: n }, (_, i) => `${an}#${i}`);
   return devisSignesCrm(an).map(cleCrm);
 }
 

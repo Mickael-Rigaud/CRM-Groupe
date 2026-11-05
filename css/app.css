@@ -7629,6 +7629,7 @@ tr.est-modifie td { background: var(--accent-soft); }
 .rgd-bil-piste { display: block; height: 8px; margin-top: 7px; border-radius: 4px;
   background: color-mix(in srgb, var(--accent) 14%, var(--card)); overflow: hidden; }
 .rgd-bil-piste i { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
+.rgd-bil-avance { font-size: 12px; font-weight: 700; color: var(--accent-ink); margin-top: 3px; }
 .rgd-bil-point { display: inline-block; width: 9px; height: 9px; border-radius: 50%;
   margin-right: 6px; vertical-align: 0; background: var(--muted); }
 .rgd-bil-point.vert { background: var(--green); }

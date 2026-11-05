@@ -35,9 +35,15 @@ const euros = (v) => (vide(v) ? '—' : eur(v));
 // Trois paliers : on lit une couleur plus vite qu'un nombre.
 const tonTaux = (v) => (vide(v) ? '' : v >= 80 ? 'vert' : v >= 50 ? 'ambre' : 'rouge');
 
+// ⚠ LE POURCENTAGE EST ÉCRIT SOUS LA BARRE (05/11/2026, Élodie : « en dessous
+// de chaque curseur je veux le pourcentage d'avancement de l'objectif ») : une
+// barre de 3 % ne se lit pas à l'œil. À l'entier, sauf sous 1 % (« 0,4 % »),
+// pour qu'un début d'année ne s'affiche pas « 0 % » alors que tout n'est pas nul.
 function jauge(val, cible) {
   const part = val > 0 && cible > 0 ? (val / cible) * 100 : 0;
-  return `<span class="rgd-bil-piste" title="${Math.round(part)} % de l’objectif"><i style="width:${Math.min(100, Math.max(part > 0 ? 2 : 0, part)).toFixed(1)}%"></i></span>`;
+  const lu = part > 0 && part < 1 ? part.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) : String(Math.round(part));
+  return `<span class="rgd-bil-piste"><i style="width:${Math.min(100, Math.max(part > 0 ? 2 : 0, part)).toFixed(1)}%"></i></span>
+    <div class="rgd-bil-avance">${lu} % de l’objectif</div>`;
 }
 
 // ⚠ CHAQUE CHIFFRE SE CLIQUE et ouvre la liste qui le compose (`justifier`).
@@ -72,11 +78,15 @@ const LIGNES_PASSE = [
 
 // ⚠ EN COULEUR (05/11/2026, « rajoute un peu de couleurs ») : chaque année
 // porte la sienne (bleu, vert, en alternance) en tête et en fond de colonne ;
-// le cumul prend la couleur de l'espace. Les couleurs passent par --ex.
-function tableauPasse(clos, total) {
+// l'exercice en cours prend la couleur de l'espace, le cumul une teinte foncée.
+// ⚠ L'EXERCICE EN COURS EST AUSSI DANS LE TABLEAU (05/11/2026, « dans le
+// tableau rajoute juste l'année en cours ») : ses chiffres, SANS objectif —
+// les objectifs restent dans les tuiles du dessus.
+function tableauPasse(clos, total, ec) {
   const cols = [
     ...clos.map((e, i) => [e.label, e, ['var(--blue)', 'var(--green)'][i % 2], e.annee]),
-    ['Depuis la création', total, 'var(--accent)', 'total'],
+    ...(ec ? [[`${ec.label} (en cours)`, ec, 'var(--accent)', ec.annee]] : []),
+    ['Depuis la création', total, 'var(--accent-ink)', 'total'],
   ];
   const td = (c, contenu, an, m) => `<td class="num rgd-bil-col rgd-bil-clic" style="--ex:${c}" ${cliquable(an, m)}>${contenu}</td>`;
   return `<div class="table-wrap"><table class="rgd-bil-table">
@@ -102,7 +112,9 @@ export function carteBilan(aujourdhui = new Date()) {
               vide(ec.tauxSignature) ? '' : `<div class="rgd-bil-sur"><span class="rgd-bil-point ${tonTaux(ec.tauxSignature)}"></span>${pourcent(ec.tauxSignature)} des devis envoyés</div>`,
               vide(o.tauxSignature) ? '' : `objectif ${pourcent(o.tauxSignature)}`, ec.annee, 'signes')}
             ${tuile('Chantiers', nombre(ec.chantiers), surObjectif(ec.chantiers, o.chantiers, nombre),
-              vide(ec.panier) ? '' : `panier moyen ${euros(ec.panier)} HT${vide(o.panier) ? '' : ` · objectif ${euros(o.panier)}`}`, ec.annee, 'chantiers')}
+              // Le panier réalisé est retiré de la tuile (Élodie : « retire le panier
+              // moyen, garde juste objectif 20 000 € ») : il est dans le tableau.
+              vide(o.panier) ? '' : `objectif ${euros(o.panier)}`, ec.annee, 'chantiers')}
             ${tuile('CA facturé HT', euros(ec.ca), surObjectif(ec.ca, o.ca, euros), '', ec.annee, 'ca')}
           </div>` : '';
 
@@ -113,8 +125,8 @@ export function carteBilan(aujourdhui = new Date()) {
             <span class="muted small">exercices du 1<sup>er</sup> octobre au 30 septembre</span></div>
           ${tuiles}
           <div class="rgd-bil-passe">
-            <div class="rgd-bil-lib">Années passées</div>
-            ${tableauPasse(clos, total)}
+            <div class="rgd-bil-lib">Tous les exercices</div>
+            ${tableauPasse(clos, total, ec)}
           </div>
           ${selonCrm ? `<p class="small muted rgd-bil-pied"><sup>*</sup> Selon le CRM, qui n’a pas tout l’historique Costructor.
             Un client qui signe plusieurs devis compte pour un chantier.</p>` : ''}
