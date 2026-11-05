@@ -321,9 +321,19 @@ function vignetteObjectif(mois, se, cible, formate) {
  * n'est pas un échec, c'est le cinquième jour. L'en-tête le dit, parce que sans
  * cela la carte annonce une catastrophe tous les débuts de mois.
  */
+// ⚠ LE MOIS AFFICHÉ SE CHOISIT (05/11/2026, Élodie : « pour la section
+// objectifs du mois je voudrais pouvoir sélectionner les mois précédents »).
+// Le choix vit ici, hors de `draw`, pour survivre aux rafraîchissements de
+// l'écran ; `null` = le mois en cours. Il ne porte que sur les quatre rangées
+// du haut : les vignettes montrent déjà les douze mois, et les taux se lisent
+// sur douze mois quel que soit le mois choisi.
+let moisObjectifChoisi = null;
+
 function carteObjectifs(mois, obj) {
   if (!mois.length) return '';
-  const courant = mois[mois.length - 1];
+  const dernier = mois[mois.length - 1];
+  const courant = mois.find(m => m.cle === moisObjectifChoisi) || dernier;
+  const enCours = courant === dernier;
   const t = tauxPeriode(mois);
   const maintenant = new Date();
   const jour = maintenant.getDate();
@@ -364,7 +374,10 @@ function carteObjectifs(mois, obj) {
         <section class="card rgd-ob">
           <div class="card-head"><h2>Objectifs du mois</h2>
             <span class="grow"></span>
-            <span class="muted small">${esc(courant.label)} — jour ${jour} sur ${joursDuMois}</span></div>
+            <select class="rgd-ob-choix" data-ob-mois aria-label="Mois affiché">
+              ${[...mois].reverse().map(m => `<option value="${esc(m.cle)}"${m === courant ? ' selected' : ''}>${esc(m.label)}${m === dernier ? ' (en cours)' : ''}</option>`).join('')}
+            </select>
+            <span class="muted small">${enCours ? `jour ${jour} sur ${joursDuMois}` : 'mois terminé'}</span></div>
 
           <table class="rgd-pipe-table rgd-ob-table"><tbody>${SERIES.map(rangee).join('')}</tbody></table>
 
@@ -853,6 +866,14 @@ ${carteBilan()}
     };
 
     draw();
+    // Le choix du mois des objectifs : un seul écouteur sur la racine, qui
+    // survit aux redessins (la carte est réécrite à chaque `draw`).
+    root.addEventListener('change', (e) => {
+      const sel = e.target.closest?.('[data-ob-mois]');
+      if (!sel) return;
+      moisObjectifChoisi = sel.value;
+      draw();
+    });
     return { refresh: draw, destroy() { coquille.retirer(); } };
   },
 };
