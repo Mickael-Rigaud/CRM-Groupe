@@ -224,3 +224,180 @@ function num(v) {
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 }
+
+// ---------------------------------------------------------------- Justification
+// ⚠ CHAQUE CHIFFRE DU BILAN S'OUVRE SUR SA LISTE (05/11/2026, Élodie : « est-ce
+// que tu peux justifier toutes les données en cliquant dessus et avoir les
+// données et les informations pour que l'on comprenne bien »). `justifier`
+// rend les lignes qui font le chiffre, et le chiffre se recalcule depuis elles :
+// si le total de la liste diffère du chiffre affiché, la fenêtre le DIT
+// (voir `note`) au lieu de le cacher.
+//
+// ⚠ POUR UN EXERCICE CLOS, LES DEVIS SIGNÉS VIENNENT DE `bilan_details`
+// (rgd_reglages), PAS DU CRM : le CRM n'a pas tout l'historique Costructor.
+// Pour 2024/2025, Élodie a fourni le 05/11/2026 ses captures Costructor des
+// 41 devis acceptés ; elles sont recopiées dans ce réglage, avec une clé de
+// chantier posée selon SA règle : « un client = un chantier, sauf si un client
+// a deux chantiers avec deux adresses différentes » (SCI Bardock : Avesnes et
+// Wignehies = deux chantiers). Ces données sont en base et NON dans ce fichier :
+// le dépôt est public.
+
+/** Les listes de devis saisies à la main, par année de début d'exercice. */
+export function bilanDetails() {
+  const brut = db.t('rgd_reglages').find(r => r.cle === 'bilan_details')?.valeur;
+  if (!brut) return {};
+  try { return typeof brut === 'string' ? JSON.parse(brut) : brut; } catch { return {}; }
+}
+
+const nomDe = (r) => {
+  const c = r.contact_id && db.byId('contacts', r.contact_id);
+  if (c) return [c.prenom, c.nom].filter(Boolean).join(' ') || c.raison_sociale || '—';
+  const o = r.organisation_id && db.byId('organisations', r.organisation_id);
+  return o?.name || o?.raison_sociale || '—';
+};
+const chantierDe = (r) => {
+  const c = r.deal_id && db.t('rgd_chantiers').find(x => x.deal_id === r.deal_id);
+  if (c) return [c.adresse, c.ville].filter(Boolean).join(', ');
+  return (r.deal_id && db.byId('deals', r.deal_id)?.title) || r.objet || '';
+};
+const ligneDevis = (d, date) => ({
+  numero: d.numero || '—', client: nomDe(d), chantier: chantierDe(d), date,
+  montant: Number(d.montant_ht) || 0, cle: cleClient(d),
+});
+
+/** Les devis envoyés et signés d'un exercice, tels que le CRM les voit. */
+function listesCrm(a) {
+  const estDans = dansEx(a);
+  const devis = scope.rgd('rgd_devis');
+  const crm = scope.rgd('rgd_devis_crm').filter(d => d.genre === 'devis');
+  return {
+    envoyes: [
+      ...devis.filter(d => d.statut !== 'brouillon'
+        && (estDans(d.date_envoi) || (!d.date_envoi && estDans(d.date_signature))))
+        .map(d => ligneDevis(d, d.date_envoi || d.date_signature)),
+      ...crm.filter(d => d.numero && estDans(d.date_devis)).map(d => ligneDevis(d, d.date_devis)),
+    ],
+    signes: [
+      ...devis.filter(d => estDans(d.date_signature)).map(d => ligneDevis(d, d.date_signature)),
+      ...crm.filter(d => d.statut === 'signe' && estDans(d.date_signature || d.date_devis))
+        .map(d => ligneDevis(d, d.date_signature || d.date_devis)),
+    ],
+  };
+}
+
+/** Les factures d'un exercice : celles que compte le CA (ni annulées, ni avoirs). */
+function facturesCrm(a) {
+  const estDans = dansEx(a);
+  return scope.rgd('rgd_paiements')
+    .filter(p => p.statut !== 'annule' && p.type !== 'remboursement' && estDans(p.date_facturation))
+    .map(p => {
+      const deal = p.deal_id && db.byId('deals', p.deal_id);
+      return {
+        numero: p.reference_facture || p.libelle || '—',
+        client: deal ? nomDe(deal) : '—', chantier: chantierDe(p),
+        date: p.date_facturation, montant: Number(p.montant_ht) || 0,
+      };
+    });
+}
+
+// Les devis regroupés par chantier, pour les lignes « Chantiers » et « Panier ».
+function parChantier(lignes) {
+  const g = new Map();
+  for (const l of lignes) {
+    const x = g.get(l.cle) || { client: l.client, chantier: l.chantier, devis: [], montant: 0 };
+    x.devis.push(l.numero); x.montant += l.montant;
+    if (!x.chantier && l.chantier) x.chantier = l.chantier;
+    g.set(l.cle, x);
+  }
+  return [...g.values()].sort((p, q) => q.montant - p.montant);
+}
+
+const parDate = (l) => [...l].sort((p, q) => String(q.date).localeCompare(String(p.date)));
+
+/**
+ * Ce qui fait un chiffre du bilan : `{ titre, source, lignes | groupes, total,
+ * note }`. `mesure` vaut envoyes, signes, chantiers, panier ou ca ; `a` est
+ * l'année de début d'exercice, ou 'total' pour « Depuis la création ».
+ */
+export function justifier(a, mesure, aujourdhui = new Date()) {
+  const b = bilanCommercial(aujourdhui);
+  if (!b) return null;
+  const annees = a === 'total' ? b.exercices.map(e => e.annee) : [Number(a)];
+  const colonne = a === 'total' ? b.total : b.exercices.find(e => e.annee === Number(a));
+  if (!colonne) return null;
+  const details = bilanDetails();
+  const saisi = bilanSaisi();
+  const notes = [];
+  let lignes = [];
+  let sourceListe = 'le CRM';
+
+  const signesDe = (an) => {
+    const d = details[an]?.signes;
+    if (d?.length && saisi[an]) {
+      return d.map(x => ({ numero: x.numero, client: x.client, chantier: x.chantier, date: x.date,
+        montant: Number(x.montant_ht) || 0, cle: `${an}:${x.cle_chantier || x.client}` }));
+    }
+    return listesCrm(an).signes.map(l => ({ ...l, cle: `${an}:${l.cle}` }));
+  };
+
+  if (mesure === 'envoyes') {
+    for (const an of annees) {
+      if (saisi[an] && !details[an]?.envoyes) {
+        notes.push(`${an}/${an + 1} : ${saisi[an].devis_envoyes ?? '—'} devis envoyés selon le bilan comptable, `
+          + 'dont la liste n’a pas été relevée. Ceux que le CRM connaît sont listés ici.');
+      }
+      lignes.push(...listesCrm(an).envoyes);
+    }
+  } else if (mesure === 'ca') {
+    for (const an of annees) {
+      if (saisi[an]?.ca != null) {
+        notes.push(`${an}/${an + 1} : ${eurTexte(saisi[an].ca)} selon le bilan comptable ; `
+          + 'les factures ci-dessous sont celles du CRM (avoirs et annulées exclus).');
+      }
+      lignes.push(...facturesCrm(an));
+    }
+    sourceListe = 'les factures du CRM';
+  } else {
+    for (const an of annees) {
+      lignes.push(...signesDe(an));
+      if (details[an]?.signes?.length && saisi[an]) sourceListe = details[an].source || 'ta saisie';
+    }
+  }
+
+  const total = lignes.reduce((t, l) => t + l.montant, 0);
+  const titres = { envoyes: 'Devis envoyés', signes: 'Devis signés', chantiers: 'Chantiers', panier: 'Panier moyen par chantier', ca: 'CA facturé HT' };
+  const res = { titre: titres[mesure], periode: a === 'total' ? 'Depuis la création' : colonne.label,
+    source: sourceListe, total, nb: lignes.length, valeur: colonne[mesure === 'ca' ? 'ca' : mesure] };
+
+  if (mesure === 'chantiers' || mesure === 'panier') {
+    res.groupes = parChantier(lignes);
+    res.nb = res.groupes.length;
+    // ⚠ LE PANIER SE CALCULE SUR LE MONTANT SIGNÉ DE LA COLONNE, pas sur le
+    // total de la liste : pour 2024/2025, Élodie a fixé ce montant à 613 568 €
+    // (« change 593 244 € par 613 568 € »), alors que les 41 devis de ses
+    // captures font 593 244,08 €. La fenêtre donne les deux, sans les confondre.
+    if (mesure === 'panier' && res.nb) {
+      const montant = colonne.montantSigne ?? total;
+      const n = colonne.chantiers ?? res.nb;
+      res.calcul = `${eurTexte(montant)} ÷ ${n} chantier${n > 1 ? 's' : ''} = ${eurTexte(montant / n)}`;
+      if (Math.round(montant) !== Math.round(total)) {
+        notes.push(`Le montant retenu pour le panier est ${eurTexte(montant)} ; les devis listés ci-dessous totalisent ${eurTexte(total)}.`);
+      }
+    }
+    if (mesure === 'chantiers' && colonne.chantiers != null && colonne.chantiers !== res.nb) {
+      notes.push(`La liste compte ${res.nb} chantier${res.nb > 1 ? 's' : ''}, le chiffre affiché ${colonne.chantiers}.`);
+    }
+  } else {
+    res.lignes = parDate(lignes);
+    const attendu = mesure === 'ca' ? colonne.ca : colonne[mesure];
+    const dejaDit = mesure === 'envoyes' && annees.some(an => saisi[an] && !details[an]?.envoyes);
+    if (mesure !== 'ca' && !dejaDit && attendu != null && attendu !== res.nb) {
+      notes.push(`La liste compte ${res.nb} devis, le chiffre affiché ${attendu}`
+        + (mesure === 'envoyes' ? ' (celui du bilan comptable).' : '.'));
+    }
+  }
+  res.note = notes;
+  return res;
+}
+
+const eurTexte = (v) => `${Math.round(Number(v) || 0).toLocaleString('fr-FR')} €`;

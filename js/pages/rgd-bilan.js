@@ -24,8 +24,8 @@
 // l'année en cours : devis envoyés, devis signés, chantiers signés depuis le
 // 1er octobre ». Ne pas remettre le mois en cours ici : c'est le rôle de la
 // carte « Objectifs du mois », juste au-dessus.
-import { esc, eur } from '../ui.js';
-import { bilanCommercial } from '../data/rgd-bilan.js';
+import { esc, eur, fmtDate, openModal } from '../ui.js';
+import { bilanCommercial, justifier } from '../data/rgd-bilan.js';
 
 const vide = (v) => v === null || v === undefined;
 const nombre = (v) => (vide(v) ? '—' : String(v));
@@ -40,8 +40,12 @@ function jauge(val, cible) {
   return `<span class="rgd-bil-piste" title="${Math.round(part)} % de l’objectif"><i style="width:${Math.min(100, Math.max(part > 0 ? 2 : 0, part)).toFixed(1)}%"></i></span>`;
 }
 
-function tuile(titre, gros, sur, bas) {
-  return `<div class="rgd-bil-tuile">
+// ⚠ CHAQUE CHIFFRE SE CLIQUE et ouvre la liste qui le compose (`justifier`).
+// `data-bil-an` = année de début d'exercice (ou « total »), `data-bil-m` = la mesure.
+const cliquable = (an, m) => `data-bil-an="${an}" data-bil-m="${m}" role="button" tabindex="0" title="Voir le détail"`;
+
+function tuile(titre, gros, sur, bas, an, m) {
+  return `<div class="rgd-bil-tuile rgd-bil-clic" ${cliquable(an, m)}>
       <div class="rgd-bil-lib">${titre}</div>
       <div class="rgd-bil-gros">${gros}</div>
       ${sur}
@@ -57,11 +61,11 @@ const surObjectif = (val, cible, format) => (vide(cible) ? ''
 // par année, tableau simple, barres côte à côte). Années en colonnes, cumul en
 // dernier, AUCUNE barre ni objectif : les objectifs n'existaient pas alors.
 const LIGNES_PASSE = [
-  ['Devis envoyés', (e) => nombre(e.envoyes)],
-  ['Devis signés', (e) => (vide(e.signes) ? '—' : `${e.signes} <span class="muted">(${pourcent(e.tauxSignature)})</span>`)],
-  ['Chantiers signés', (e) => `${nombre(e.chantiers)}${e.chantiersSelonCrm && !vide(e.chantiers) ? '<sup>*</sup>' : ''}`],
-  ['Panier moyen par chantier HT', (e) => `${euros(e.panier)}${e.chantiersSelonCrm && !vide(e.panier) ? '<sup>*</sup>' : ''}`],
-  ['CA facturé HT', (e) => `<b>${euros(e.ca)}</b>`],
+  ['Devis envoyés', 'envoyes', (e) => nombre(e.envoyes)],
+  ['Devis signés', 'signes', (e) => (vide(e.signes) ? '—' : `${e.signes} <span class="muted">(${pourcent(e.tauxSignature)})</span>`)],
+  ['Chantiers', 'chantiers', (e) => `${nombre(e.chantiers)}${e.chantiersSelonCrm && !vide(e.chantiers) ? '<sup>*</sup>' : ''}`],
+  ['Panier moyen par chantier HT', 'panier', (e) => `${euros(e.panier)}${e.chantiersSelonCrm && !vide(e.panier) ? '<sup>*</sup>' : ''}`],
+  ['CA facturé HT', 'ca', (e) => `<b>${euros(e.ca)}</b>`],
 ];
 
 // ⚠ EN COULEUR (05/11/2026, « rajoute un peu de couleurs ») : chaque année
@@ -69,13 +73,13 @@ const LIGNES_PASSE = [
 // le cumul prend la couleur de l'espace. Les couleurs passent par --ex.
 function tableauPasse(clos, total) {
   const cols = [
-    ...clos.map((e, i) => [e.label, e, ['var(--blue)', 'var(--green)'][i % 2]]),
-    ['Depuis la création', total, 'var(--accent)'],
+    ...clos.map((e, i) => [e.label, e, ['var(--blue)', 'var(--green)'][i % 2], e.annee]),
+    ['Depuis la création', total, 'var(--accent)', 'total'],
   ];
-  const td = (c, contenu) => `<td class="num rgd-bil-col" style="--ex:${c}">${contenu}</td>`;
+  const td = (c, contenu, an, m) => `<td class="num rgd-bil-col rgd-bil-clic" style="--ex:${c}" ${cliquable(an, m)}>${contenu}</td>`;
   return `<div class="table-wrap"><table class="rgd-bil-table">
       <thead><tr><th></th>${cols.map(([nom, , c]) => `<th class="num rgd-bil-ex" style="--ex:${c}">${esc(nom)}</th>`).join('')}</tr></thead>
-      <tbody>${LIGNES_PASSE.map(([titre, f]) => `<tr><td class="rgd-bil-titre">${titre}</td>${cols.map(([, e, c]) => td(c, f(e))).join('')}</tr>`).join('')}</tbody>
+      <tbody>${LIGNES_PASSE.map(([titre, m, f]) => `<tr><td class="rgd-bil-titre">${titre}</td>${cols.map(([, e, c, an]) => td(c, f(e), an, m)).join('')}</tr>`).join('')}</tbody>
     </table></div>`;
 }
 
@@ -91,13 +95,13 @@ export function carteBilan(aujourdhui = new Date()) {
           <div class="rgd-bil-annee"><b>${esc(ec.label)}</b> · depuis le 1<sup>er</sup> octobre (${ec.nbMois} mois)</div>
           <div class="rgd-bil-tuiles">
             ${tuile('Devis envoyés', nombre(ec.envoyes), surObjectif(ec.envoyes, o.envoyes, nombre),
-              vide(ec.montantDevis) ? '' : `${euros(ec.montantDevis)} HT`)}
+              vide(ec.montantDevis) ? '' : `${euros(ec.montantDevis)} HT`, ec.annee, 'envoyes')}
             ${tuile('Devis signés', nombre(ec.signes),
               vide(ec.tauxSignature) ? '' : `<div class="rgd-bil-sur"><span class="rgd-bil-point ${tonTaux(ec.tauxSignature)}"></span>${pourcent(ec.tauxSignature)} des devis envoyés</div>`,
-              vide(o.tauxSignature) ? '' : `objectif ${pourcent(o.tauxSignature)}`)}
-            ${tuile('Chantiers signés', nombre(ec.chantiers), surObjectif(ec.chantiers, o.chantiers, nombre),
-              vide(ec.panier) ? '' : `panier moyen ${euros(ec.panier)} HT${vide(o.panier) ? '' : ` · objectif ${euros(o.panier)}`}`)}
-            ${tuile('CA facturé HT', euros(ec.ca), surObjectif(ec.ca, o.ca, euros), '')}
+              vide(o.tauxSignature) ? '' : `objectif ${pourcent(o.tauxSignature)}`, ec.annee, 'signes')}
+            ${tuile('Chantiers', nombre(ec.chantiers), surObjectif(ec.chantiers, o.chantiers, nombre),
+              vide(ec.panier) ? '' : `panier moyen ${euros(ec.panier)} HT${vide(o.panier) ? '' : ` · objectif ${euros(o.panier)}`}`, ec.annee, 'chantiers')}
+            ${tuile('CA facturé HT', euros(ec.ca), surObjectif(ec.ca, o.ca, euros), '', ec.annee, 'ca')}
           </div>` : '';
 
   return `
@@ -112,5 +116,55 @@ export function carteBilan(aujourdhui = new Date()) {
           </div>
           ${selonCrm ? `<p class="small muted rgd-bil-pied"><sup>*</sup> Selon le CRM, qui n’a pas tout l’historique Costructor.
             Un client qui signe plusieurs devis compte pour un chantier.</p>` : ''}
+          <p class="small muted rgd-bil-pied">Clique sur un chiffre pour voir les devis ou les factures qui le composent.</p>
         </section>`;
+}
+
+// ---------------------------------------------------------------- La fenêtre de détail
+function fenetre(j) {
+  const notes = j.note.map(n => `<p class="rgd-bil-note">${esc(n)}</p>`).join('');
+  let corps;
+  if (j.groupes) {
+    corps = `<div class="table-wrap"><table class="rgd-bil-detail">
+      <thead><tr><th>Client</th><th>Chantier</th><th>Devis signés</th><th class="num">Montant HT</th></tr></thead>
+      <tbody>${j.groupes.map(g => `<tr><td>${esc(g.client)}</td><td>${esc(g.chantier || '—')}</td>
+        <td>${g.devis.map(esc).join(', ')}</td><td class="num">${eur(g.montant, { maximumFractionDigits: 2 })}</td></tr>`).join('')}</tbody>
+      <tfoot><tr><td colspan="3"><b>${j.groupes.length} chantier${j.groupes.length > 1 ? 's' : ''}</b>
+        · ${j.groupes.reduce((t, g) => t + g.devis.length, 0)} devis</td>
+        <td class="num"><b>${eur(j.total, { maximumFractionDigits: 2 })}</b></td></tr></tfoot>
+    </table></div>`;
+  } else if (j.lignes.length) {
+    corps = `<div class="table-wrap"><table class="rgd-bil-detail">
+      <thead><tr><th>N°</th><th>Client</th><th>Chantier</th><th>Date</th><th class="num">Montant HT</th></tr></thead>
+      <tbody>${j.lignes.map(l => `<tr><td>${esc(l.numero)}</td><td>${esc(l.client)}</td><td>${esc(l.chantier || '—')}</td>
+        <td>${fmtDate(l.date)}</td><td class="num">${eur(l.montant, { maximumFractionDigits: 2 })}</td></tr>`).join('')}</tbody>
+      <tfoot><tr><td colspan="4"><b>${j.lignes.length} ligne${j.lignes.length > 1 ? 's' : ''}</b></td>
+        <td class="num"><b>${eur(j.total, { maximumFractionDigits: 2 })}</b></td></tr></tfoot>
+    </table></div>`;
+  } else {
+    corps = '<div class="empty">Aucune ligne dans le CRM pour cette période.</div>';
+  }
+  return `<p class="muted small">Source de la liste : ${esc(j.source)}.</p>
+    ${j.calcul ? `<p class="rgd-bil-calcul">${esc(j.calcul)}</p>` : ''}${notes}${corps}`;
+}
+
+function ouvrir(el) {
+  const j = justifier(el.dataset.bilAn, el.dataset.bilM);
+  if (!j) return;
+  openModal(`${j.titre} · ${j.periode}`, fenetre(j), { wide: true });
+}
+
+// Un seul écouteur pour toute la page : la carte est redessinée à chaque
+// rafraîchissement, l'écouteur, lui, ne bouge pas.
+if (typeof document !== 'undefined' && !window.__rgdBilanClic) {
+  window.__rgdBilanClic = true;
+  document.addEventListener('click', (e) => {
+    const el = e.target.closest?.('[data-bil-m]');
+    if (el) ouvrir(el);
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const el = e.target.closest?.('[data-bil-m]');
+    if (el) { e.preventDefault(); ouvrir(el); }
+  });
 }
