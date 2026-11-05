@@ -4365,11 +4365,6 @@ button.tb-pp:hover { color: var(--text); text-decoration: underline; text-underl
   font-variant-numeric: tabular-nums; }
 .rgd-et-poids b { font-size: 13px; font-weight: 700; color: var(--text); }
 .rgd-et-poids em { font-style: normal; font-size: 10.5px; color: var(--muted); }
-/* « Dormant » : rien n'a bougé depuis le seuil de l'étape. C'est la seule
-   chose de cette frise sur laquelle on peut agir aujourd'hui, elle est donc
-   la seule en rouge. */
-.rgd-et-poids u { text-decoration: none; font-size: 10.5px; font-weight: 700;
-  color: var(--red, #B91C1C); }
 /* « Archivés » est hors du cycle : on n'y avance pas, on en sort. Le trait le
    sépare, et la carte reste en retrait tant qu'on ne la survole pas. */
 .rgd-frise-sep { width: 1px; background: var(--line); margin: 6px 4px; flex: 0 0 1px; }
@@ -4381,7 +4376,6 @@ button.tb-pp:hover { color: var(--text); text-decoration: underline; text-underl
   .rgd-frise-sep { display: none; }
 }
 
-.rgd-dormant { color: var(--red, #B91C1C); }
 
 /* ===== Réalisations — l'atelier deux colonnes du tableau de bord ==========
    La liste rangée par catégorie à gauche, le projet ouvert à droite. Une

@@ -77,77 +77,37 @@ const COULEURS = {
   chantier_termine: '#059669', sav: '#D97706', archives: '#B91C1C', indesirable: '#7F1D1D',
 };
 
-/**
- * Ce qui DORT à chaque étape.
- *
- * ⚠ CE BLOC NE CALCULE PLUS L'ARGENT (04/11/2026). Il additionnait des devis
- * par statut, sur une population qui n'était pas celle de la colonne — d'où
- * quatre écarts avec « Clients & prospects », tous mesurés et racontés dans
- * `etapesRgd`. Le montant vient désormais du module commun, qui le calcule sur
- * les personnes qu'il compte. Il ne reste ici que l'âge, qui est une question
- * d'affichage : à partir de combien de jours un dossier mérite qu'on le voie.
- *
- * ⚠ ET IL LIT LES DEVIS QUE LE MODULE A SÉLECTIONNÉS, il ne les resélectionne
- * pas : une seconde sélection aurait désigné d'autres devis que le montant
- * affiché juste à côté.
- *
- * Sans ça, la frise ne servirait à rien : sept compteurs répètent les onglets
- * de « Clients & prospects ». Un pipeline répond à deux questions qu'un
- * compteur ne pose pas — OÙ EST L'ARGENT, et QU'EST-CE QUI NE BOUGE PLUS.
- */
-const VIEUX_JOURS = { devis_encours: 30, devis_envoye: 30, devis_accepte: 30, chantier_encours: 90 };
-
-// La date qui fait foi pour l'âge, étape par étape : ce qu'on attend, c'est le
-// geste suivant — un devis envoyé se compte depuis son envoi, un devis signé
-// depuis sa signature. `date_creation` n'est que le dernier recours.
-const DATE_DE_L_ETAPE = {
-  devis_encours: (v) => v.date_creation,
-  devis_envoye: (v) => v.date_envoi || v.date_creation,
-  devis_accepte: (v) => v.date_signature || v.date_creation,
-  chantier_encours: (v) => v.date_signature || v.date_creation,
-  chantier_termine: (v) => v.date_signature || v.date_creation,
-};
-
-function dormants(etape, aujourdhui) {
-  const seuil = VIEUX_JOURS[etape.key];
-  if (!seuil || !etape.devis?.length) return null;
-  const quand = DATE_DE_L_ETAPE[etape.key] || ((v) => v.date_creation);
-  const ages = etape.devis
-    .map(v => quand(v))
-    .filter(Boolean)
-    .map(d => Math.floor((new Date(aujourdhui) - new Date(String(d).slice(0, 10))) / 86400000));
-  const vieux = ages.filter(a => a > seuil).length;
-  return vieux ? { vieux, seuil } : null;
-}
+// ⚠ IL N'Y A PLUS DE MENTION « DORMANT » SUR LES CARTES, et son calcul est
+// parti avec elle (05/11/2026, Élodie : « enlève la mention 1 sans nouvelles
+// depuis 30 jours »). Elle était née le 02/11 avec le montant, pour répondre à
+// « qu'est-ce qui ne bouge plus » ; renommée le 05/11 parce qu'elle ne se
+// comprenait pas, puis retirée le même jour. Ce qui a été supprimé avec :
+// `VIEUX_JOURS`, `DATE_DE_L_ETAPE` et `dormants()`. Les garder « au cas où »
+// aurait laissé une cinquantaine de lignes que plus rien ne lit — c'est
+// précisément ce que cet écran a déjà nettoyé une fois, et la raison tient :
+// du code mort se relit comme du code vivant, et on finit par le réparer.
+//
+// ⚠ `etapesRgd()` REND TOUJOURS `devis` PAR ÉTAPE. C'était la seule chose qui
+// le lisait ici, mais il porte aussi le montant et le compte des dossiers
+// chiffrés : la liste des devis vient de la même boucle et ne coûte rien. Si
+// elle devait partir, c'est là-bas qu'il faudrait la retirer, pas ici.
 
 /**
  * La frise du pipeline : une colonne par étape, cliquable vers son onglet.
  * ⚠ MÊME LARGEUR POUR TOUTES — voir plus haut : ce n'est pas un entonnoir.
  */
-function frisePipeline(etapes, aujourdhui) {
+function frisePipeline(etapes) {
   const max = Math.max(1, ...etapes.map(e => e.n));
   const total = etapes.filter(e => !e.hors).reduce((t, e) => t + e.n, 0);
-  // ⚠ Le pluriel ne s’ajoute pas aveuglément : « devis » est invariable, on
-  // avait « 3 deviss ». Seuls les mots qui ne finissent pas par s le prennent.
-  // ⚠ « 3 devis » est écrit en toutes lettres à côté du montant : sans ce mot,
-  // on lirait le montant comme celui des personnes comptées au-dessus.
-  const poidsCarte = (e) => {
-    if (!e.avecMontant) return '<span class="rgd-et-poids"></span>';
-    const d = dormants(e, aujourdhui);
-    // ⚠ « 3 dossiers chiffrés » EST ÉCRIT EN TOUTES LETTRES à côté du montant :
-    // à « Devis en cours », une partie des dossiers n'a pas encore de devis, et
-    // un montant seul laisserait croire à une somme sur l'étape entière. C'est
-    // le mot que « Clients & prospects » emploie sous son total.
-    return `<span class="rgd-et-poids">
+  // ⚠ « 3 dossiers chiffrés » EST ÉCRIT EN TOUTES LETTRES à côté du montant :
+  // à « Devis en cours », une partie des dossiers n'a pas encore de devis, et
+  // un montant seul laisserait croire à une somme sur l'étape entière. C'est
+  // le mot que « Clients & prospects » emploie sous son total.
+  const poidsCarte = (e) => !e.avecMontant ? '<span class="rgd-et-poids"></span>'
+    : `<span class="rgd-et-poids">
       <b>${esc(eur(e.montant))}</b>
       <em>${e.chiffres} chiffré${e.chiffres > 1 ? 's' : ''}</em>
-      ${'' /* ⚠ « DORMANT » NE SE COMPRENAIT PAS (05/11/2026, Élodie : « je ne
-         comprends pas le 1 dormant »), et son explication vivait dans une infobulle
-         — c'est-à-dire nulle part sur un téléphone. Le libellé dit maintenant la
-         règle lui-même ; l'infobulle reste pour qui la survole. */}
-      ${d ? `<u title="Rien n'a bougé depuis plus de ${d.seuil} jours">${d.vieux} sans nouvelle depuis ${d.seuil} j</u>` : ''}
     </span>`;
-  };
   const carte = (e) => `<a class="rgd-et${e.hors ? ' hors' : ''}"
       href="#/rgd/clients?vue=${esc(e.cle)}" style="--c:${esc(e.couleur)}"
       title="${esc(e.titre || e.label)} — ouvrir dans Clients &amp; prospects">
@@ -711,7 +671,7 @@ export const rgdPilotagePage = {
           <div class="card-head"><h2>Pipeline</h2>
             <span class="grow"></span>
             <a class="btn ghost sm" href="#/rgd/clients">Ouvrir la base →</a></div>
-          ${frisePipeline(etapes, aujourdhui)}
+          ${frisePipeline(etapes)}
           <p class="small muted rgd-pipe-pied">${totalEtapes
             ? `${totalEtapes} affaire${totalEtapes > 1 ? 's' : ''} suivie${totalEtapes > 1 ? 's' : ''}, toutes étapes confondues.`
             : 'Aucune affaire à suivre pour le moment.'}
@@ -723,8 +683,7 @@ export const rgdPilotagePage = {
             c’est le total des devis de ces personnes à cette étape, le même calcul des
             deux côtés. <b>Chiffré</b> compte les dossiers qui portent déjà un devis ;
             à « Devis en cours », tous n’en ont pas encore.
-            <b class="rgd-dormant">Sans nouvelle</b> compte les devis qui n’ont pas bougé
-            depuis plus de 30 jours — 90 une fois le chantier commencé.</p>
+</p>
         </section>
 ${carteObjectifs(moisObj, objectifs)}
         <div class="rgd-duo">
