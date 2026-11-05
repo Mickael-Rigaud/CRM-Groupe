@@ -98,6 +98,15 @@ const cleClient = (d) => d.contact_id || d.organisation_id || d.id;
  * L'écran écrit donc « selon le CRM » sous ces deux chiffres. Un exercice saisi
  * qui porte `chantiers_signes` et `montant_signe` l'emporte sur ce calcul.
  */
+function devisSignesCrm(a) {
+  const estDans = dansEx(a);
+  return [
+    ...scope.rgd('rgd_devis').filter(d => estDans(d.date_signature)),
+    ...scope.rgd('rgd_devis_crm').filter(d => d.genre === 'devis' && d.statut === 'signe'
+      && estDans(d.date_signature || d.date_devis)),
+  ];
+}
+
 function chantiersCrm(a) {
   const estDans = dansEx(a);
   const signes = [
@@ -185,7 +194,7 @@ export function bilanCommercial(aujourdhui = new Date()) {
     ? exercices.reduce((t, e) => t + e[champ], 0) : null);
   const total = completer({
     envoyes: cumul('envoyes'), signes: cumul('signes'), montantDevis: cumul('montantDevis'), ca: cumul('ca'),
-    chantiers: cumul('chantiers'), montantSigne: cumul('montantSigne'),
+    chantiers: chantiersDistincts(exercices.map(e => e.annee)), montantSigne: cumul('montantSigne'),
   });
   total.chantiersSelonCrm = exercices.some(e => e.chantiersSelonCrm);
 
@@ -250,6 +259,37 @@ function num(v) {
 // Wignehies = deux chantiers). Ces données sont en base et NON dans ce fichier :
 // le dépôt est public.
 
+// ⚠ DANS LE CUMUL, UN CHANTIER NE COMPTE QU'UNE FOIS (05/11/2026, Élodie :
+// « un chantier ne compte qu'une fois dans le cumul »). Additionner les
+// exercices comptait deux fois Delong, Phanor, Betrancourt ou SCI Bardock
+// (Avesnes, Wignehies), présents sur deux années. Il faut donc UNE clé de
+// chantier commune à toutes les années : celle des listes saisies
+// (`cle_chantier`, en majuscules, ex. « DELONG », « BARDOCK-AVESNES ») et,
+// pour un devis lu dans le CRM, le NOM DE FAMILLE du contact (ou le nom de
+// l'organisation), normalisé de la même façon. ⚠ Limite connue : deux
+// chantiers d'un même client à deux adresses ne se distinguent que dans les
+// listes saisies ; côté CRM, ils fusionnent sous le nom du client.
+const normCle = (v) => String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  .toUpperCase().replace(/^SCI\s+/, '').replace(/[^A-Z0-9-]+/g, ' ').trim();
+const cleCrm = (d) => {
+  const c = d.contact_id && db.byId('contacts', d.contact_id);
+  if (c?.last_name) return normCle(c.last_name);
+  const o = d.organisation_id && db.byId('organisations', d.organisation_id);
+  if (o?.name) return normCle(o.name);
+  return `ID:${d.id}`;
+};
+
+/** Les clés de chantier signées d'un exercice : liste saisie si elle existe, sinon le CRM. */
+function clesChantier(an) {
+  const d = bilanDetails()[an]?.signes;
+  if (d?.length && bilanSaisi()[an]) return d.map(x => normCle(x.cle_chantier || x.client));
+  return devisSignesCrm(an).map(cleCrm);
+}
+
+function chantiersDistincts(annees) {
+  return new Set(annees.flatMap(clesChantier)).size;
+}
+
 /** Les listes de devis saisies à la main, par année de début d'exercice. */
 export function bilanDetails() {
   const brut = db.t('rgd_reglages').find(r => r.cle === 'bilan_details')?.valeur;
@@ -272,7 +312,7 @@ const chantierDe = (r) => {
 };
 const ligneDevis = (d, date) => ({
   numero: d.numero || '—', client: nomDe(d), chantier: chantierDe(d), date,
-  montant: Number(d.montant_ht) || 0, cle: cleClient(d),
+  montant: Number(d.montant_ht) || 0, cle: cleClient(d), cleCumul: cleCrm(d),
 });
 
 /** Les devis envoyés et signés d'un exercice, tels que le CRM les voit. */
@@ -345,9 +385,9 @@ export function justifier(a, mesure, aujourdhui = new Date()) {
     const d = details[an]?.signes;
     if (d?.length && saisi[an]) {
       return d.map(x => ({ numero: x.numero, client: x.client, chantier: x.chantier, date: x.date,
-        montant: Number(x.montant_ht) || 0, cle: `${an}:${x.cle_chantier || x.client}` }));
+        montant: Number(x.montant_ht) || 0, cle: normCle(x.cle_chantier || x.client) }));
     }
-    return listesCrm(an).signes.map(l => ({ ...l, cle: `${an}:${l.cle}` }));
+    return listesCrm(an).signes.map(l => ({ ...l, cle: l.cleCumul }));
   };
 
   if (mesure === 'envoyes') {
