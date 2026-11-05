@@ -305,8 +305,20 @@ const nomDe = (r) => {
   const o = r.organisation_id && db.byId('organisations', r.organisation_id);
   return o?.name || o?.raison_sociale || '—';
 };
+// ⚠ LE CHANTIER SE CHERCHE PAR LE CLIENT DU DEVIS, PUIS PAR L'AFFAIRE
+// (05/11/2026). Par l'affaire seule, D202600193 (Herlin, Monchy) affichait
+// l'adresse de Prié à Gouvieux : la synchronisation l'a rattaché à l'affaire de
+// Prié, alors que la fiche chantier d'Herlin existe, à son nom. Et D202600195
+// (Mace, Pontarmé) n'a aucune affaire. On prend donc le chantier du même client
+// — celui de la même affaire s'il y en a plusieurs — et l'affaire seulement
+// quand le devis n'a pas de client (une facture, par exemple).
 const chantierDe = (r) => {
-  const c = r.deal_id && db.t('rgd_chantiers').find(x => x.deal_id === r.deal_id);
+  const tous = db.t('rgd_chantiers');
+  const duClient = r.contact_id ? tous.filter(x => x.contact_id === r.contact_id)
+    : r.organisation_id ? tous.filter(x => x.organisation_id === r.organisation_id) : [];
+  const c = duClient.find(x => x.deal_id === r.deal_id) || duClient[0]
+    || (r.deal_id && tous.find(x => x.deal_id === r.deal_id
+      && (!r.contact_id || !x.contact_id || x.contact_id === r.contact_id)));
   if (c) return [c.adresse, c.ville].filter(Boolean).join(', ');
   return (r.deal_id && db.byId('deals', r.deal_id)?.title) || r.objet || '';
 };
