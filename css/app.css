@@ -1058,32 +1058,70 @@ button.esp-side-titre { background: none; border: 0; font-family: inherit; color
 .pat-vide td { padding: 0; }
 .pat-pied { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
 
-/* ---- le formulaire d'un partenaire, refait le 25/09/2026 ----
-   C'etait une grille de douze champs a plat : le role entre le metier et le
-   telephone, la convention entre la ville et les apports. Trois blocs
-   maintenant, dans l'ordre ou l'on remplit une fiche.
-   ⚠ `.paf-bloc h4` NEUTRALISE LE h3/h4 DU CRM, qui est un intertitre de
-   tableau (petites capitales grises) : sans ca le titre d'un bloc de
-   formulaire se lit comme un en-tete de colonne. */
+/* ---- les trois formulaires de l'ecran Partenaires ----
+   ⚠ LEUR APPARENCE N'EST PLUS ECRITE ICI : c'est celle de la fiche d'un
+   client (05/11/2026, Elodie : « moderniser les formulaires de l'ecran
+   partenaires un peu comme les fiches clients »). `.mail-champ`, `.mf-grille`,
+   `.mf-seg`, `.rgp-second` et `.rgp-pied` les portent desormais tous les
+   trois. Les huit regles `.paf-bloc` / `.paf-grille` / `.paf-champ` /
+   `.paf-pied` qui vivaient ici ont ete retirees le meme jour : plus un fichier
+   du depot ne les ecrit — verifie par recherche, pas suppose.
+   ⚠ `gap: 0` SUR `.paf.rgp`, ET C'EST MESURE : `.paf` posait 16 px entre
+   chaque enfant, et `.rgp` compte sur ses propres marges — `.rgp .mf-grille`
+   est a 2 px, et `.rgp-second` prend 14 px au-dessus de son titre. Les deux
+   cumules espacaient les sections de 30 px, et le formulaire d'un fournisseur
+   tenait sur deux hauteurs d'ecran. */
 .paf { display: flex; flex-direction: column; gap: 16px; }
-.paf-bloc { border: 1px solid var(--line); border-radius: 12px; padding: 13px 15px 15px;
-  background: var(--card-2); }
-.paf-bloc h4 { margin: 0 0 11px; font-family: var(--font-display); font-size: 14px;
-  font-weight: 650; letter-spacing: 0; text-transform: none; color: var(--text); }
-.paf-grille { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 11px 13px; }
-.paf-champ { min-width: 0; display: flex; flex-direction: column; gap: 5px; }
-.paf-champ.est-large { grid-column: 1 / -1; }
-.paf-champ > span { font-size: 12px; font-weight: 600; color: var(--muted); }
-.paf-champ input, .paf-champ select, .paf-champ textarea {
-  border: 1px solid var(--line-strong); border-radius: 9px; padding: 8px 11px;
-  background: #fff; width: 100%; font: inherit; font-size: 14px; }
-.paf-champ textarea { resize: vertical; line-height: 1.45; }
-.paf-champ input:focus, .paf-champ select:focus, .paf-champ textarea:focus {
-  outline: none; border-color: var(--accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
-.paf-pied { display: flex; align-items: center; gap: 10px; }
-@media (max-width: 560px) { .paf-grille { grid-template-columns: 1fr; } }
+.paf.rgp { gap: 0; }
+/* ⚠ `[hidden]` EST UN `display: none` DE SPECIFICITE NULLE, et `.mail-champ`
+   pose `display: flex` (0,1,0) : il l'ecrase. Sans cette ligne, le champ
+   « Son nom » du formulaire d'une affaire apportee resterait affiche en
+   permanence, y compris quand un partenaire fiche est choisi — et son contenu
+   partirait en base. SIXIEME occurrence du meme piege dans ce depot : voir
+   `.ndf [hidden]`, `.rgdf-corps[hidden]`, `.pill-tabs[hidden]`, et la regle
+   `.paf-champ[hidden]` qui tenait ce role jusqu'au 05/11/2026.
+   ⚠ UNE VERIFICATION QUI LIT `element.hidden` NE LE VOIT PAS : la propriete
+   change, le rendu non. Il faut regarder la hauteur rendue. */
+.mail-champ[hidden] { display: none; }
+/* Les deux onglets du haut : apporteur d'affaires ou fournisseur. C'est
+   `.mf-seg-large` qui fait la barre pleine largeur ; il ne restait qu'a la
+   decoller de la phrase qui explique le choix. */
+.paf-types { margin-bottom: 10px; }
+/* ⚠ UN SEGMENT S'ENROULE DANS UNE COLONNE DE GRILLE : « Non renseigne / Oui /
+   Non » fait plus large que les 210 px d'une colonne de `.mf-grille`, et
+   `inline-flex` seul le laissait deborder sur le champ voisin. */
+.paf.rgp .mail-champ > .mf-seg { flex-wrap: wrap; max-width: 100%; }
+/* L'equipe n'est pas une grille de champs : ses lignes ont leurs propres
+   colonnes (`.paf-membre`). Elle garde donc un bloc a elle sous son trait. */
+.paf-equipe-bloc { padding-top: 12px; margin-bottom: 4px; }
+/* ⚠ UN INTERTITRE DE SECTION ET UNE ETIQUETTE DE CHAMP NE PEUVENT PAS SE
+   RESSEMBLER, ET C'EST VU A L'ECRAN, PAS DEDUIT : `.rgp-second > span` et
+   `.mail-champ > span` sont tous deux en petites capitales grises de 10,5 px.
+   Empiles — « LE FOURNISSEUR » puis « SOCIETE », « L'AFFAIRE APPORTEE » puis
+   « PARTENAIRE » — on ne savait plus lequel etait le titre et lequel
+   l'etiquette. Dans la fiche d'un client le probleme n'existe pas : le trait
+   n'y sert qu'une fois, pour separer, pas pour titrer chaque section.
+   L'intertitre prend donc la teinte du formulaire, un cran de taille, et de
+   l'air en dessous. */
+.paf.rgp .rgp-second { margin: 10px 0 5px; }
+/* Le tout premier trait d'un formulaire sans onglets - celui d'une affaire
+   apportee - tombait juste sous le titre de la fenetre et se lisait comme une
+   barre orpheline : il n'y a rien au-dessus de lui a separer. */
+.paf.rgp > .rgp-second:first-child { border-top: 0; padding-top: 0; margin-top: 0; }
+.paf.rgp .rgp-second > span { font-size: 12px; letter-spacing: .05em; color: var(--m-encre); }
+/* La phrase qui explique le choix touche le trait de la premiere section :
+   `.mf-aide` porte 16 px de marge basse, et `.rgp-second` en ajoute 24. */
+.paf.rgp .mf-aide { margin-bottom: 0; }
+/* ⚠ LES DEUX ONGLETS DU HAUT PRENNENT LA COULEUR DU TYPE RETENU : orange
+   pour l'apporteur, bleu pour le fournisseur — les couleurs de leurs sections
+   dans le tableau. Sans elle l'onglet actif etait blanc sur gris, et rien ne
+   disait d'un coup d'oeil ce qu'on etait en train de remplir.
+   ⚠ SELECTEUR A TROIS CLASSES, ET CE N'EST PAS UN EXCES DE ZELE :
+   `.mf-seg button.on` pese pareil (0,2,0) et arrive PLUS BAS dans la feuille,
+   donc a specificite egale c'est lui qui gagnerait. Meme piege que
+   `.mf-seg.mf-seg-large`, note trente lignes plus haut. */
+.mf-seg.paf-types button.on { background: var(--m); color: #fff;
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--m) 45%, transparent); }
 
 /* ---- le total d'une etape, en tete du tableau ----
    Il etait d'abord en pied, aligne sous la colonne : joli, et invisible sans
@@ -6384,14 +6422,6 @@ textarea.ev-nu { resize: vertical; min-height: 40px; }
 /* Une date ne se coupe pas en deux lignes : la table a la place, elle la
    distribuait seulement au plus large. Constate a l'ecran, pas devine. */
 .pa-sect td.pa-serre { white-space: nowrap; }
-
-/* ⚠ `[hidden]` EST UN `display: none` DE SPECIFICITE NULLE, et `.paf-champ`
-   pose `display: flex` (0,1,0) : il l'ecrase. Le champ « Son nom » du
-   formulaire d'apport restait donc affiche, cache ou pas. Cinquieme occurrence
-   du meme piege dans ce depot — voir `.ndf [hidden]`, `.rgdf-corps[hidden]`,
-   `.pill-tabs[hidden]`. Une verification qui lit `element.hidden` ne le voit
-   PAS : la propriete change, le rendu non. */
-.paf-champ[hidden] { display: none; }
 
 /* Un mot d'explication dans le formulaire, au-dessus du pied. */
 .paf-mot { margin: 2px 0 0; font-size: 12px; color: var(--muted); }

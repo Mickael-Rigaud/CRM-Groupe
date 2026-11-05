@@ -275,16 +275,34 @@ const pastilleSuivi = (a) => {
 
 // ------------------------------------------------------- le formulaire fiche
 
+// ⚠ LE VOCABULAIRE EST CELUI DE LA FICHE PROJET D'UN CLIENT (05/11/2026,
+// Élodie : « moderniser les formulaires de l'écran partenaires un peu comme
+// les fiches clients »). `mail-champ`, `mf-grille`, `mf-seg`, `rgp-second` et
+// `rgp-pied` ne sont pas inventés ici : ils portent déjà la fiche projet de
+// RGD, celle de BTP Expertise et les réglages. Un formulaire de plus ne fait
+// donc pas un vocabulaire de plus à apprendre — ni une famille de styles de
+// plus à tenir à jour.
+//
+// ⚠ LES CARTES GRISES (`paf-bloc`) ONT DISPARU, PAS LES SECTIONS : un trait et
+// un intertitre séparent aussi bien, sans enfermer chaque groupe dans un cadre
+// qui rétrécit la grille. C'est ce que fait la fiche client depuis le 01/10.
 const champ = (cle, libelle, valeur, opts = {}) => `
-  <label class="paf-champ ${opts.large ? 'est-large' : ''}">
+  <label class="mail-champ ${opts.large ? 'plein' : ''}">
     <span>${esc(libelle)}</span>
     <input name="${cle}" type="${opts.type || 'text'}"
       ${opts.placeholder ? `placeholder="${esc(opts.placeholder)}"` : ''}
       ${opts.required ? 'required' : ''} value="${esc(valeur ?? '')}">
   </label>`;
 
-const liste = (cle, libelle, options, valeur) => `
-  <label class="paf-champ">
+const zone = (cle, libelle, valeur, lignes, placeholder = '') => `
+  <label class="mail-champ plein">
+    <span>${esc(libelle)}</span>
+    <textarea name="${cle}" rows="${lignes}"
+      ${placeholder ? `placeholder="${esc(placeholder)}"` : ''}>${esc(valeur || '')}</textarea>
+  </label>`;
+
+const liste = (cle, libelle, options, valeur, opts = {}) => `
+  <label class="mail-champ ${opts.large ? 'plein' : ''}">
     <span>${esc(libelle)}</span>
     <select name="${cle}">
       ${options.map(([k, l]) =>
@@ -292,11 +310,90 @@ const liste = (cle, libelle, options, valeur) => `
     </select>
   </label>`;
 
+// Un choix court, en boutons côte à côte plutôt qu'en liste déroulante : on
+// VOIT les options, et le compte pro ou les conditions de paiement se lisent
+// sans ouvrir quoi que ce soit.
+//
+// ⚠ UN SEGMENT N'EST PAS UN CHAMP : ce sont des `<button>`, et c'est l'`input`
+// caché posé à côté d'eux qui porte la valeur. C'est ce qui permet de ne RIEN
+// changer à `valeursSaisies`, dont tout l'enregistrement dépend. Des `radio`
+// auraient cassé cette lecture, qui prend `.value` de chaque `[name]` sans
+// regarder `checked` — le dernier bouton du groupe aurait gagné à tous les
+// coups, et « Inactif » se serait enregistré sur chaque fiche.
+const segment = (cle, libelle, options, valeur, opts = {}) => `
+  <div class="mail-champ ${opts.large ? 'plein' : ''}">
+    <span>${esc(libelle)}</span>
+    <div class="mf-seg" data-seg="${esc(cle)}">
+      ${options.map(([k, l]) => `<button type="button" data-val="${esc(k)}"
+        class="${String(valeur ?? '') === String(k) ? 'on' : ''}">${esc(l)}</button>`).join('')}
+    </div>
+    <input type="hidden" name="${esc(cle)}" value="${esc(valeur ?? '')}">
+  </div>`;
+
+// ⚠ UN SEGMENT EST FAIT DE BOUTONS, ET C'EST L'`input` CACHÉ POSÉ À CÔTÉ
+// D'EUX QUI PORTE LA VALEUR (voir `segment`). Un clic l'écrit, puis rallume le
+// bon bouton. C'est ce qui permet à `valeursSaisies` — donc à tout
+// l'enregistrement — de ne rien connaître de cette présentation.
+//
+// ⚠ À BRANCHER DANS LES DEUX FORMULAIRES : le partenaire ET l'affaire
+// apportée. Recopiée de part et d'autre, cette boucle aurait fini par ne
+// fonctionner que d'un côté — et un segment non branché ne prévient de rien :
+// on clique, le bouton ne s'allume pas, et l'ancienne valeur part en base.
+//
+// `special` sert au type de fiche, qui ne se contente pas de changer une
+// valeur : il redessine le formulaire entier.
+const brancherSegments = (form, special = null) => {
+  form.querySelectorAll('.mf-seg[data-seg]').forEach(g => {
+    const cle = g.dataset.seg;
+    const cache = form.querySelector(`input[type="hidden"][name="${cle}"]`);
+    if (!cache) return;
+    const boutons = [...g.querySelectorAll('button')];
+    boutons.forEach(b => b.onclick = () => {
+      cache.value = b.dataset.val;
+      if (special && cle === special.cle) return special.fait();
+      boutons.forEach(x => {
+        x.classList.toggle('on', x === b);
+        if (x.hasAttribute('aria-selected')) x.setAttribute('aria-selected', String(x === b));
+      });
+    });
+  });
+};
+
 const bloc = (titre, dedans) => `
-  <section class="paf-bloc">
-    <h4>${esc(titre)}</h4>
-    <div class="paf-grille">${dedans}</div>
-  </section>`;
+  <div class="rgp-second"><span>${esc(titre)}</span></div>
+  <div class="mf-grille">${dedans}</div>`;
+
+// ⚠ LA TEINTE SUIT LE TYPE DE FICHE, et elle n'est pas décorative : c'est
+// elle qui colore les deux onglets du haut, et donc qui dit d'un coup d'œil
+// lequel est retenu. Orange de la marque pour l'apporteur — la couleur de sa
+// section dans le tableau —, bleu pour le fournisseur. Les trois variables
+// sont celles que `mf-seg` et `mf-pas` lisent déjà.
+const TEINTES = {
+  apporteur: '--m:var(--accent);--m-clair:var(--accent-soft);--m-encre:var(--accent-ink)',
+  fournisseur: '--m:var(--blue);--m-clair:var(--blue-soft);--m-encre:var(--sea-ink)',
+};
+
+// Les deux onglets du haut : le type de fiche, choisi avant tout le reste.
+//
+// ⚠ IL ÉTAIT EN BAS DE LA PREMIÈRE SECTION, EN LISTE DÉROULANTE, et il
+// commande pourtant la moitié des champs affichés — on remplissait un
+// formulaire avant de savoir qu'on aurait dû en remplir un autre. Élodie, le
+// 05/11/2026 : « choisissant en haut comme sous forme d'onglet si c'est un
+// apporteur d'affaires ou un fournisseur ».
+//
+// ⚠ ET IL RESTE ACCESSIBLE SUR UNE FICHE EXISTANTE, pas seulement à la
+// création : c'est la seule porte entre les deux présentations. Une fiche
+// créée du mauvais côté serait sinon enfermée dans la mauvaise.
+const onglets = (type) => `
+  <div class="mf-seg mf-seg-large paf-types" data-seg="type_partenaire" role="tablist">
+    ${Object.entries(ROLES).map(([k, r]) => `
+      <button type="button" role="tab" data-val="${esc(k)}"
+        aria-selected="${k === type}" class="${k === type ? 'on' : ''}">${esc(r.label)}</button>`).join('')}
+  </div>
+  <input type="hidden" name="type_partenaire" value="${esc(type)}">
+  <p class="mf-aide">${type === 'fournisseur'
+    ? 'On lui achète : matériaux, matériel, prestations. Il n’a ni apport ni commission.'
+    : 'Il nous amène des clients. Ses apports et sa commission se suivent dans sa fiche.'}</p>`;
 
 // Ce que porte le formulaire À CET INSTANT, champ par champ. Sert deux fois :
 // à l'enregistrement, et au redessin quand on change le type de fiche — c'est
@@ -341,36 +438,41 @@ function corpsFormulaire(v, creation) {
   if (String(v.type_partenaire || 'apporteur') !== 'apporteur') {
     return corpsFournisseur(v, creation);
   }
-  return `<form id="paf" class="paf">
+  return `<form id="paf" class="paf rgp" style="${TEINTES.apporteur}">
+    ${onglets('apporteur')}
+
     ${bloc('Le partenaire', `
       ${'' /* ⚠ LE NOM N'EST PLUS EXIGÉ PAR LE NAVIGATEUR (12/10/2026, Élodie) : une
          société seule suffit — un fournisseur se connaît souvent sans interlocuteur.
          « Un nom ou une société, au moins » reste vérifié à l'enregistrement. */}
       ${champ('nom', 'Nom', v.nom)}
       ${champ('prenom', 'Prénom', v.prenom)}
-      ${champ('societe', 'Société', v.societe || v.raison_sociale)}
+      ${champ('societe', 'Société', v.societe || v.raison_sociale, { large: true })}
       ${champ('profession', 'Métier', v.profession, { placeholder: 'Courtier, architecte…' })}
-      ${liste('type_partenaire', 'Rôle',
-        Object.entries(ROLES).map(([k, r]) => [k, r.label]), v.type_partenaire || 'apporteur')}
-      ${liste('actif', 'Suivi',
-        [['1', 'Actif'], ['0', 'Inactif']], v.actif === false ? '0' : '1')}
-      ${liste('secteur', 'Secteur', OPTIONS_SECTEUR, v.secteur || '')}`)}
+      ${liste('secteur', 'Secteur', OPTIONS_SECTEUR, v.secteur || '')}
+      ${'' /* ⚠ LE RÔLE N'EST PLUS ICI : il est passé en onglets, tout en haut. */}
+      ${segment('actif', 'Suivi',
+        [['1', 'Actif'], ['0', 'Inactif']], v.actif === false ? '0' : '1')}`)}
 
     ${blocEquipe(v)}
 
     ${bloc('Comment le joindre', `
       ${champ('telephone', 'Téléphone', v.telephone, { type: 'tel' })}
       ${champ('email', 'E-mail', v.email, { type: 'email' })}
-      ${champ('adresse', 'Adresse', v.adresse, { large: true, placeholder: 'Numéro et rue' })}
-      ${champ('code_postal', 'Code postal', v.code_postal)}
-      ${champ('ville', 'Ville', v.ville)}`)}
+      ${'' /* L'adresse sur une seule ligne, comme dans la fiche d'un client :
+         la rue est toujours plus longue que le code postal, et la grille
+         « auto-fit » les posait où la place menait. */}
+      <div class="rgp-adresse plein">
+        ${champ('adresse', 'Adresse', v.adresse, { placeholder: 'Numéro et rue' })}
+        ${champ('code_postal', 'Code postal', v.code_postal)}
+        ${champ('ville', 'Ville', v.ville)}
+      </div>`)}
 
     ${bloc('Ce qui nous lie', `
-      ${liste('partenariat_signe', 'Convention de partenariat',
+      ${segment('partenariat_signe', 'Convention de partenariat',
         [['0', 'Non signée'], ['1', 'Signée']], v.partenariat_signe ? '1' : '0')}
       ${champ('date_signature', 'Date de signature', v.date_signature, { type: 'date' })}
-      <label class="paf-champ est-large"><span>Notes</span>
-        <textarea name="notes" rows="3">${esc(v.notes || '')}</textarea></label>`)}
+      ${zone('notes', 'Notes', v.notes, 3)}`)}
 
     ${pied(creation)}
   </form>`;
@@ -394,13 +496,13 @@ const ligneMembre = (x = {}) => `
 const blocEquipe = (v) => {
   const membres = Array.isArray(v.equipe) ? v.equipe : [];
   return `
-  <section class="paf-bloc">
-    <h4>L’équipe</h4>
+  <div class="rgp-second"><span>L’équipe</span></div>
+  <div class="paf-equipe-bloc">
     <p class="paf-aide">Les personnes du cabinet qui peuvent vous apporter une affaire.
       On les choisit ensuite dans « Ses apports ».</p>
     <div class="paf-equipe" id="paf-equipe">${membres.map(ligneMembre).join('')}</div>
     <button type="button" class="btn ghost sm" id="paf-eq-ajout">+ Ajouter un membre</button>
-  </section>`;
+  </div>`;
 };
 
 // L'équipe telle qu'elle est À L'ÉCRAN. Une ligne sans nom ne compte pas :
@@ -418,7 +520,7 @@ const lireEquipe = (form) => [...form.querySelectorAll('[data-membre]')].map(el 
 // se suppriment par le même code, et `brancherFormulaire` cherche ces trois
 // identifiants. Le recopier aurait suffi à ce qu'un bouton manque d'un côté.
 const pied = (creation) => `
-    <div class="paf-pied">
+    <div class="rgp-pied">
       ${creation ? '' : '<button type="button" class="btn ghost danger" id="paf-suppr">Supprimer</button>'}
       <span class="grow"></span>
       <button type="button" class="btn ghost" id="paf-annuler">Annuler</button>
@@ -444,32 +546,39 @@ const pied = (creation) => `
  */
 function corpsFournisseur(v, creation) {
   const lie = v.partenariat_signe || v.date_signature || v.notes;
-  return `<form id="paf" class="paf">
+  return `<form id="paf" class="paf rgp" style="${TEINTES.fournisseur}">
+    ${onglets('fournisseur')}
+
     ${bloc('Le fournisseur', `
       ${champ('societe', 'Société', v.societe || v.raison_sociale, { large: true })}
       ${'' /* Même colonne `profession` que chez l'apporteur : chez un fournisseur,
          ce n'est pas un métier exercé mais ce qu'il vend. */}
       ${champ('profession', 'Domaine d’activité', v.profession,
         { placeholder: 'Menuiserie, isolation, carrelage…' })}
-      ${champ('email', 'E-mail', v.email, { type: 'email', placeholder: 'Contact de la société' })}
-      ${champ('telephone', 'Téléphone', v.telephone, { type: 'tel', placeholder: 'Standard' })}
-      ${'' /* Pas `large` : la grille a deux colonnes, et un champ pleine
-         largeur ici laissait le telephone seul sur sa ligne, avec un vide a
-         sa droite. Le standard et le site vont de pair. */}
-      ${champ('site_internet', 'Site internet', v.site_internet, { placeholder: 'exemple.fr' })}
-      ${champ('adresse', 'Adresse', v.adresse, { large: true, placeholder: 'Numéro et rue' })}
-      ${champ('code_postal', 'Code postal', v.code_postal)}
-      ${champ('ville', 'Ville', v.ville)}
-      ${liste('actif', 'Suivi', [['1', 'Actif'], ['0', 'Inactif']], v.actif === false ? '0' : '1')}
-      ${liste('compte_pro_ouvert', 'Compte pro ouvert', OUI_NON, ouiNonValeur(v.compte_pro_ouvert))}
-      ${liste('paiement', 'Paiement', OPTIONS_PAIEMENT, v.paiement || '')}
       ${liste('secteur', 'Secteur', OPTIONS_SECTEUR_FOURNISSEUR, v.secteur || '')}
-      ${'' /* ⚠ DISCRET MAIS PRÉSENT (choix d'Élodie du 22/10) : c'est la seule
-         porte entre les deux formulaires. Une fiche créée par erreur du côté
-         fournisseur n'aurait aucun moyen de rejoindre les apporteurs. */}
-      ${liste('type_partenaire', 'Type de fiche',
-        Object.entries(ROLES).map(([k, r]) => [k, r.label]), v.type_partenaire || 'fournisseur')}`)}
+      ${'' /* ⚠ LE TYPE DE FICHE N'EST PLUS ICI : il est passé en onglets, tout en
+         haut. C'était la seule porte vers les apporteurs, et elle était en bas
+         d'une liste de douze champs. */}
+      ${segment('actif', 'Suivi', [['1', 'Actif'], ['0', 'Inactif']], v.actif === false ? '0' : '1')}
+      ${segment('compte_pro_ouvert', 'Compte pro ouvert', OUI_NON,
+        ouiNonValeur(v.compte_pro_ouvert))}
+      ${segment('paiement', 'Paiement', OPTIONS_PAIEMENT, v.paiement || '', { large: true })}`)}
 
+    ${bloc('Comment joindre la société', `
+      ${champ('telephone', 'Téléphone', v.telephone, { type: 'tel', placeholder: 'Standard' })}
+      ${champ('email', 'E-mail', v.email, { type: 'email', placeholder: 'Contact de la société' })}
+      ${champ('site_internet', 'Site internet', v.site_internet,
+        { large: true, placeholder: 'exemple.fr' })}
+      <div class="rgp-adresse plein">
+        ${champ('adresse', 'Adresse', v.adresse, { placeholder: 'Numéro et rue' })}
+        ${champ('code_postal', 'Code postal', v.code_postal)}
+        ${champ('ville', 'Ville', v.ville)}
+      </div>`)}
+
+    ${'' /* ⚠ DEUX NIVEAUX DE COORDONNÉES, ET LE DÉCOUPAGE EST TOUT LE POINT :
+       au-dessus le standard de la SOCIÉTÉ, ici la ligne directe de la
+       PERSONNE. Les empiler ferait rappeler l'accueil quand on cherche son
+       commercial. */}
     ${bloc('Interlocuteur', `
       ${champ('nom', 'Nom', v.nom)}
       ${champ('prenom', 'Prénom', v.prenom)}
@@ -481,11 +590,10 @@ function corpsFournisseur(v, creation) {
     ${blocEquipe(v)}
 
     ${lie ? bloc('Ce qui nous lie', `
-      ${liste('partenariat_signe', 'Convention de partenariat',
+      ${segment('partenariat_signe', 'Convention de partenariat',
         [['0', 'Non signée'], ['1', 'Signée']], v.partenariat_signe ? '1' : '0')}
       ${champ('date_signature', 'Date de signature', v.date_signature, { type: 'date' })}
-      <label class="paf-champ est-large"><span>Notes</span>
-        <textarea name="notes" rows="3">${esc(v.notes || '')}</textarea></label>`) : ''}
+      ${zone('notes', 'Notes', v.notes, 3)}`) : ''}
 
     ${pied(creation)}
   </form>`;
@@ -525,13 +633,39 @@ function brancherFormulaire(hote, a, apres, annuler) {
         zoneEq.lastElementChild.querySelector('[data-eq="nom"]').focus();
       };
 
-      const typeSel = form.querySelector('[name="type_partenaire"]');
-      if (typeSel) typeSel.onchange = () => {
-        const v = { ...(a || {}), ...valeursSaisies(form), equipe: lireEquipe(form) };
+      // ⚠ CHANGER LE TYPE DE FICHE REDESSINE LE FORMULAIRE SUR PLACE : les deux
+      // présentations ne portent pas les mêmes champs depuis le 22/10/2026, et
+      // basculer « fournisseur » vers « apporteur » sans redessiner laisserait
+      // les onglets du haut en désaccord avec les blocs du dessous — on
+      // enregistrerait un apporteur dans un formulaire qui dit « Le fournisseur ».
+      // La saisie en cours est reprise, y compris ce qui n'a pas de case en face
+      // dans l'autre présentation : elle repart en base si le champ reparaît, et
+      // rien n'est effacé en attendant.
+      const basculer = () => {
+        const lu = valeursSaisies(form);
+        // ⚠ CE QUI REVIENT DU FORMULAIRE EST DU TEXTE, ET LES CORPS ATTENDENT
+        // DES BOOLÉENS. `'0' === false` vaut faux : sans ces trois lignes, une
+        // bascule d'un type à l'autre reposait « Actif » sur un inactif,
+        // « Signée » sur une convention qui ne l'est pas, et rendait à
+        // « non renseigné » un compte pro qu'on venait de dire fermé — en
+        // silence, et juste avant l'enregistrement. Le défaut existait déjà
+        // quand le type était une liste déroulante ; il se déclenchait moins,
+        // le champ étant enfoui en bas de la première section.
+        const v = { ...(a || {}), ...lu, equipe: lireEquipe(form) };
+        if ('actif' in lu) v.actif = lu.actif === '1';
+        if ('partenariat_signe' in lu) v.partenariat_signe = lu.partenariat_signe === '1';
+        if ('compte_pro_ouvert' in lu) {
+          v.compte_pro_ouvert = lu.compte_pro_ouvert === ''
+            ? null : lu.compte_pro_ouvert === '1';
+        }
         form.parentElement.innerHTML = corpsFormulaire(v, creation);
         brancherFormulaire(m, a, apres, annuler);
-        m.querySelector('[name="type_partenaire"]')?.focus();
+        // Le focus revient sur l'onglet retenu : sans lui, il repart en haut de
+        // la fenêtre et la touche de tabulation recommence tout le formulaire.
+        m.querySelector('.paf-types button.on')?.focus();
       };
+
+      brancherSegments(form, { cle: 'type_partenaire', fait: basculer });
 
       form.onsubmit = async (ev) => {
         ev.preventDefault();
@@ -1034,10 +1168,14 @@ function formulaireSortant(ligne, apres, secteurDefaut = null) {
     (p.societe || p.raison_sociale) && (p.nom || p.prenom) ? ` — ${esc(p.societe || p.raison_sociale)}` : ''}${
     estActif(p) ? '' : ' (inactif)'}</option>`).join('');
 
+  // ⚠ VERT, COMME SA SECTION DANS LE TABLEAU : ce formulaire n'est pas celui
+  // d'un partenaire mais d'une affaire que RGD lui a apportée, et c'est la
+  // couleur qui le dit avant le titre. Les deux autres sont orange et bleu.
   const html = `
-    <form id="pa-sform" class="paf">
+    <form id="pa-sform" class="paf rgp"
+      style="--m:var(--green);--m-clair:var(--green-soft);--m-encre:var(--green)">
       ${bloc('L’affaire apportée', `
-        <label class="paf-champ">
+        <label class="mail-champ plein">
           <span>Partenaire</span>
           <select name="apporteur_id" id="pa-squi" required>
             <option value=""${choisi ? '' : ' selected'}>Choisir…</option>
@@ -1046,33 +1184,38 @@ function formulaireSortant(ligne, apres, secteurDefaut = null) {
               >Un autre, pas dans la liste…</option>
           </select>
         </label>
-        <label class="paf-champ" id="pa-slibre" ${choisi === VALEUR_LIBRE ? '' : 'hidden'}>
+        <label class="mail-champ plein" id="pa-slibre" ${choisi === VALEUR_LIBRE ? '' : 'hidden'}>
           <span>Son nom</span>
           <input name="partenaire" value="${esc(v.partenaire || '')}"
             placeholder="Un confrère, un artisan, une agence…">
         </label>
+        ${champ('client', 'Client', v.client, { placeholder: 'Nom du client' })}
         ${champ('date_apport', 'Date de l’apport', v.date_apport || aujourdhui(), { type: 'date' })}
         ${liste('secteur', 'Secteur', OPTIONS_SECTEUR, modif ? (v.secteur || '') : (secteurDefaut || ''))}
-        ${champ('client', 'Client', v.client, { placeholder: 'Nom du client' })}
-        <label class="paf-champ est-large"><span>Ce que RGD lui a apporté</span>
-          <textarea name="objet" rows="3"
-            placeholder="Le financement du projet, des plans, la fourniture de la cuisine… écrivez librement.">${esc(v.objet || '')}</textarea></label>`)}
+        ${zone('objet', 'Ce que RGD lui a apporté', v.objet, 3,
+          'Le financement du projet, des plans, la fourniture de la cuisine… écrivez librement.')}`)}
 
       ${bloc('Où ça en est', `
-        ${liste('issue', 'Issue',
+        ${'' /* ⚠ « Pas tranché » EST UNE RÉPONSE, PAS UNE CASE OUBLIÉE : on
+           saisit l'apport le jour où on le fait, avant de savoir. Le segment
+           le MONTRE au lieu de le cacher au fond d'une liste déroulante. */}
+        ${segment('issue', 'Issue',
           [['', 'Pas tranché']].concat(Object.entries(ISSUES).map(([k, e]) => [k, e.label])),
-          v.issue || '')}
-        ${champ('montant_estime', 'Montant estimé pour lui (€)',
-          v.montant_estime != null ? String(v.montant_estime) : '', { type: 'number' })}
-        ${champ('commission', 'Commission attendue (€)',
-          v.commission != null ? String(v.commission) : '', { type: 'number' })}
-        <label class="paf-champ est-large"><span>Commentaire</span>
-          <textarea name="notes" rows="2"
-            placeholder="Ce qu’il faut se rappeler sur cette affaire.">${esc(v.notes || '')}</textarea></label>`)}
+          v.issue || '', { large: true })}
+        ${'' /* Les deux montants côte à côte : l'un se lit par rapport à
+           l'autre, et la commission se calcule en regardant le montant. */}
+        <div class="rgp-duo plein">
+          ${champ('montant_estime', 'Montant estimé pour lui (€)',
+            v.montant_estime != null ? String(v.montant_estime) : '', { type: 'number' })}
+          ${champ('commission', 'Commission attendue (€)',
+            v.commission != null ? String(v.commission) : '', { type: 'number' })}
+        </div>
+        ${zone('notes', 'Commentaire', v.notes, 2,
+          'Ce qu’il faut se rappeler sur cette affaire.')}`)}
 
       <p class="paf-mot">Seul le <b>partenaire</b> est obligatoire. Tout le reste
         peut rester vide et se compléter plus tard.</p>
-      <div class="paf-pied">
+      <div class="rgp-pied">
         ${modif ? '<button type="button" class="btn ghost danger" id="pa-ssuppr">Supprimer</button>' : ''}
         <span class="grow"></span>
         <button type="button" class="btn ghost" id="pa-sannuler">Annuler</button>
@@ -1104,6 +1247,10 @@ function formulaireSortant(ligne, apres, secteurDefaut = null) {
         if (p?.secteur && !secteurSel.value) secteurSel.value = p.secteur;
       };
       qui.onchange = montrer;
+
+      // L'issue est un segment : sans ce branchement, cliquer « Gagné »
+      // n'allumerait rien et l'ancienne valeur repartirait en base.
+      brancherSegments(m.querySelector('#pa-sform'));
 
       m.querySelector('#pa-sannuler').onclick = () => closeModal();
 
