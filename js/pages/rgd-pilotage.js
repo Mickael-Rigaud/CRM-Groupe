@@ -340,20 +340,30 @@ function carteObjectifs(mois, obj, choisie) {
   const formats = { demandes: nombre, rdv: nombre, devisSignes: nombre, ca: euros };
   const serie = SERIES.find(x => x.champ === choisie) || SERIES[0];
 
-  const carte = (se) => {
+  // ⚠ DES RANGÉES, PAS DES CARTES, ET C'EST LE POINT DE CETTE VERSION
+  // (05/11/2026, Élodie : « c'est la même présentation qu'en haut, on ne
+  // distingue pas les deux éléments »). La version d'avant reprenait les
+  // cartes `rgd-et` du pipeline au balisage près : même langue, certes, mais
+  // deux blocs devenus indiscernables l'un de l'autre à trente centimètres.
+  //
+  // ⚠ ON NE SORT PAS DE LA LANGUE DU CRM POUR AUTANT : `rgd-pipe-table` et sa
+  // piste horizontale sont déjà dans la feuille de style — elles y dormaient,
+  // plus aucun écran ne les appelait. La forme change, le vocabulaire non, et
+  // aucune ligne de style n'est ajoutée.
+  const rangee = (se) => {
     const v = courant[se.champ];
     const cible = obj[se.cible];
     const connu = v !== null && v !== undefined;
     const part = connu && cible > 0 ? Math.round((v / cible) * 100) : null;
     const formate = formats[se.champ];
-    return `<div class="rgd-et" style="--c:${se.couleur}"
-        title="${esc(se.label)} — ${connu ? esc(formate(v)) : 'pas de donnée'} sur ${esc(formate(cible))}">
-      <span class="rgd-et-n">${connu ? esc(formate(v)) : '—'}</span>
-      <span class="rgd-et-label">${esc(se.label)}</span>
-      <span class="rgd-et-piste"><i style="height:${Math.min(100, part || 0)}%"></i></span>
-      <span class="rgd-et-poids"><em>objectif ${esc(formate(cible))}</em></span>
-      <span class="rgd-et-part">${part === null ? '' : part + ' %'}</span>
-    </div>`;
+    return `<tr>
+      <th scope="row">${esc(se.label)}</th>
+      <td class="rgd-pipe-barre">
+        <div class="rgd-pipe-piste"><i style="width:${Math.min(100, part || 0)}%;background:${se.couleur}"></i></div>
+      </td>
+      <td class="rgd-pipe-n"><b style="color:${se.couleur}">${connu ? esc(formate(v)) : '—'}</b><span class="rgd-ob-sur">sur ${esc(formate(cible))}</span></td>
+      <td class="rgd-ob-pct${part !== null && part >= 100 ? ' atteint' : ''}">${part === null ? '' : part + ' %'}</td>
+    </tr>`;
   };
 
   const pc = (v) => (v === null ? '—' : v + ' %');
@@ -364,7 +374,7 @@ function carteObjectifs(mois, obj, choisie) {
             <span class="grow"></span>
             <span class="muted small">${esc(courant.label)} — jour ${jour} sur ${joursDuMois}</span></div>
 
-          <div class="rgd-frise">${SERIES.map(carte).join('')}</div>
+          <table class="rgd-pipe-table rgd-ob-table"><tbody>${SERIES.map(rangee).join('')}</tbody></table>
 
           ${/* ⚠ LES TAUX SE LISENT SUR DOUZE MOIS, PAS SUR LE MOIS EN COURS, et
                 c'est ce que les vrais chiffres ont imposé : au 5 novembre, une

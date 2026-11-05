@@ -4073,17 +4073,37 @@ button.tb-pp:hover { color: var(--text); text-decoration: underline; text-underl
 .rgd-ob-taux b { color: var(--text); }
 .rgd-ob-pied { margin: 8px 0 0; border-top: 1px solid var(--line); padding-top: 10px; }
 .rgd-ob .pill-tabs { margin-bottom: 4px; }
-/* ⚠ DEUX PAR DEUX SUR TÉLÉPHONE, ET SEULEMENT DANS CETTE CARTE : à quatre
-   indicateurs, le retour à la ligne du pipeline en posait trois puis un seul,
-   qui s'étirait sur toute la largeur et n'avait l'air de rien. Le pipeline,
-   lui, a dix étapes et s'en accommode — on ne touche donc pas à `.rgd-frise`. */
+/* La colonne de droite : la valeur, son objectif, puis la part atteinte. Le
+   reste du tableau est `rgd-pipe-table`, déjà stylé plus haut.
+   ⚠ LA VALEUR ET SON OBJECTIF TIENNENT DANS UNE SEULE CELLULE : séparés, ils
+   se repliaient l'un sans l'autre sur téléphone et « sur 35 000 € » passait à
+   la ligne au milieu du nombre. */
+.rgd-ob-table .rgd-pipe-n { white-space: nowrap; }
+.rgd-ob-table .rgd-pipe-n b { font-family: var(--font-display); font-weight: 700; font-size: 15px; }
+.rgd-ob-sur { color: var(--muted); font-size: 12.5px; font-weight: 500; margin-left: 5px; }
+.rgd-ob-pct { text-align: right; font-size: 12.5px; font-weight: 700; color: var(--muted);
+  font-variant-numeric: tabular-nums; min-width: 54px; white-space: nowrap;
+  padding-left: 10px !important; }
+.rgd-ob-pct.atteint { color: var(--green); }
+
+/* ⚠ SUR TÉLÉPHONE LA BARRE PASSE SOUS SA LIGNE, et chaque cellule est posée à
+   une place EXPLICITE : laissée au placement automatique, la barre à cheval
+   sur toute la largeur repoussait la valeur et la part sur une troisième
+   rangée, et la carte débordait de l'écran. */
 @media (max-width: 760px) {
-  .rgd-ob .rgd-frise { flex-wrap: wrap; }
-  .rgd-ob .rgd-et { flex: 1 1 calc(50% - 8px); }
+  .rgd-ob-table, .rgd-ob-table tbody, .rgd-ob-table tr { display: block; }
+  .rgd-ob-table tr { display: grid; grid-template-columns: 1fr auto auto;
+    align-items: baseline; gap: 0 10px; padding: 10px 0; }
+  .rgd-ob-table tr + tr { border-top: 1px solid var(--line); }
+  .rgd-ob-table tr + tr th, .rgd-ob-table tr + tr td { border-top: 0; }
+  .rgd-ob-table th, .rgd-ob-table td { padding: 0 !important; }
+  .rgd-ob-table th { grid-area: 1 / 1; }
+  .rgd-ob-table .rgd-pipe-n { grid-area: 1 / 2; }
+  .rgd-ob-table .rgd-ob-pct { grid-area: 1 / 3; }
+  .rgd-ob-table .rgd-pipe-barre { grid-area: 2 / 1 / 3 / -1; padding-top: 8px !important; }
+  .rgd-ob-table .rgd-pipe-piste { height: 14px; }
 }
-
-
-/* Les deux bandeaux de l'écran Sous-traitants, repris du tableau de bord :
+ repris du tableau de bord :
    vert pour les partenaires signés, orange pour ceux qu'on prospecte. Le
    liseré et la pastille disent la même chose deux fois, et c'est voulu — la
    couleur se voit de loin, le mot se lit. */
