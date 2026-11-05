@@ -37,6 +37,14 @@
 // est parti. Le chiffre d'affaires vient de
 // `moisObjectifs` lui-même, appelé sur la fenêtre de douze mois qui tombe pile
 // sur l'exercice (celle qui finit en septembre).
+//
+// ⚠ UN DEVIS SIGNÉ COMPTE DANS L'EXERCICE DE SA SIGNATURE (05/11/2026). Élodie
+// a d'abord choisi « date du devis », puis, devant D202600187 (créé le
+// 10/07/2026, signé le 02/11/2026), l'a laissé en 2026/2027 : ce n'est donc PAS
+// la date de création qui range un devis signé. Les exercices clos ne sont pas
+// concernés — leurs devis signés viennent de ses captures Costructor
+// (`bilan_details`), qui ne reprennent pas un devis signé après la clôture.
+// Seul l'exercice en cours est calculé ici, et sans double compte.
 import { db } from './db.js';
 import { scope } from './scope.js';
 import { moisObjectifs, objectifsMensuels } from './rgd-objectifs.js';
