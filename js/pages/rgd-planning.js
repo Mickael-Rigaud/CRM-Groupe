@@ -57,32 +57,42 @@ const nomDemande = (d) => `${d.prenom || ''} ${d.nom || ''}`.trim() || '(demande
 const adresseDemande = (d) => [d.adresse, [d.code_postal, d.ville].filter(Boolean).join(' ')]
   .filter(Boolean).join(', ');
 
-// ⚠ SEULEMENT LES DOSSIERS À L'ÉTAPE « DEVIS EN COURS » (10/11/2026,
-// Élodie : « je ne veux pas toute la base de données client », mais « les
-// devis en cours de la base de données clients & prospects »). L'étape est
+// ⚠ LES DOSSIERS DES TROIS ÉTAPES DU DEVIS (10/11/2026, Élodie : « je veux
+// que l'on puisse rattacher un dossier devis en cours, devis envoyé, devis
+// accepté », et pas toute la base). Une première version ne proposait que
+// « Devis en cours » : c'était un malentendu, ne pas y revenir. L'étape est
 // calculée par les MÊMES fonctions que l'écran Clients & prospects, pour que
-// les deux listes ne divergent pas.
+// les deux ne divergent pas, et les dossiers sont rangés par étape puis par nom.
 //
 // ⚠ LE DOSSIER DÉJÀ RATTACHÉ RESTE PROPOSÉ même s'il a changé d'étape depuis
-// (devis signé, chantier commencé) : sinon le chantier se rouvrirait sur
-// « Aucune » et l'enregistrer effacerait le lien.
+// (chantier commencé, terminé) : sinon l'enregistrer effacerait le lien. Il
+// est rangé sous « Déjà rattaché ».
 //
 // ⚠ `db.t` ET NON `scope.rgd` : la page est réservée à la direction, et le
 // sélecteur « Vue » mémorisé ailleurs aurait retiré de la liste les dossiers
 // d'un chargé d'affaires.
-const ETAPE_PROPOSEE = 'devis_encours';
+const ETAPES_PROPOSEES = [
+  ['devis_encours', 'Devis en cours'],
+  ['devis_envoye', 'Devis envoyé'],
+  ['devis_accepte', 'Devis accepté'],
+];
+const projetFiche = (f) => f.meta_type_projet || f.nature_travaux || f.types_travaux || f.projet_description || '';
+const projetDemande = (d) => d.type_projet || d.projet_description || '';
 function rattachements(actuel = '') {
   const chantiers = db.t('rgd_chantiers');
   const devis = db.t('rgd_devis');
   const jours = joursDeVisite(db.t('agenda_events'));
-  return [
-    ...db.t('rgd_clients')
-      .filter(f => `fiche:${f.id}` === actuel || etapeDeFiche(f, chantiers, devis, jours) === ETAPE_PROPOSEE)
-      .map(f => ({ cle: `fiche:${f.id}`, nom: nomFiche(f), adresse: adresseFiche(f), quoi: 'Client' })),
-    ...db.t('rgd_demandes')
-      .filter(d => `demande:${d.id}` === actuel || etapeDeDemande(d, devis) === ETAPE_PROPOSEE)
-      .map(d => ({ cle: `demande:${d.id}`, nom: nomDemande(d), adresse: adresseDemande(d), quoi: 'Demande' })),
-  ].sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
+  const tous = [
+    ...db.t('rgd_clients').map(f => ({ cle: `fiche:${f.id}`, nom: nomFiche(f), adresse: adresseFiche(f),
+      projet: projetFiche(f), etape: etapeDeFiche(f, chantiers, devis, jours) })),
+    ...db.t('rgd_demandes').map(d => ({ cle: `demande:${d.id}`, nom: nomDemande(d), adresse: adresseDemande(d),
+      projet: projetDemande(d), etape: etapeDeDemande(d, devis) })),
+  ];
+  const parNom = (a, b) => a.nom.localeCompare(b.nom, 'fr');
+  const groupes = ETAPES_PROPOSEES.map(([k, label]) => ({ label, dossiers: tous.filter(x => x.etape === k).sort(parNom) }));
+  const lie = tous.find(x => x.cle === actuel && !ETAPES_PROPOSEES.some(([k]) => k === x.etape));
+  if (lie) groupes.unshift({ label: 'Déjà rattaché', dossiers: [lie] });
+  return groupes.filter(g => g.dossiers.length);
 }
 const cleDe = (c) => (c.fiche_id ? `fiche:${c.fiche_id}` : c.demande_id ? `demande:${c.demande_id}` : '');
 function rattachementDe(c) {
@@ -169,12 +179,27 @@ function formulaire(c, defaut = {}) {
     <form class="pl-form" id="pl-form">
       <label class="pl-champ pl-large"><span>Chantier</span>
         <input name="titre" required value="${esc(c?.titre || '')}" placeholder="Ex. Rénovation salle de bain — Dupont"></label>
-      <label class="pl-champ pl-large"><span>Dossier « Devis en cours »</span>
-        <select name="rattachement">
-          <option value="">${choix.length ? '— Aucun pour l’instant —' : '— Aucun dossier en « Devis en cours » —'}</option>
-          ${choix.map(x => `<option value="${esc(x.cle)}"${x.cle === actuel ? ' selected' : ''}
-            data-adresse="${esc(x.adresse)}">${esc(x.nom)} · ${esc(x.quoi)}${x.adresse ? ` · ${esc(x.adresse)}` : ''}</option>`).join('')}
-        </select></label>
+      <div class="pl-champ pl-large"><span>Dossier client</span>
+        <input type="hidden" name="rattachement" value="${esc(actuel)}">
+        <div class="pl-choix">
+          <div class="pl-choix-tete">
+            <input type="search" class="pl-cherche" placeholder="Rechercher un client ou un projet…" aria-label="Rechercher un dossier">
+            <button type="button" class="btn ghost sm" data-aucun${actuel ? '' : ' hidden'}>Retirer le lien</button>
+          </div>
+          <div class="pl-choix-liste">
+            ${choix.length ? choix.map(g => `
+            <div class="pl-groupe">
+              <div class="pl-groupe-titre">${esc(g.label)} <span>${g.dossiers.length}</span></div>
+              ${g.dossiers.map(x => `<button type="button" class="pl-dossier${x.cle === actuel ? ' choisi' : ''}"
+                  data-cle="${esc(x.cle)}" data-adresse="${esc(x.adresse)}"
+                  data-texte="${esc(`${x.nom} ${x.projet} ${x.adresse}`.toLowerCase())}">
+                <b>${esc(x.nom)}</b>${x.projet ? `<span>${esc(x.projet)}</span>` : ''}${x.adresse ? `<em>${esc(x.adresse)}</em>` : ''}
+              </button>`).join('')}
+            </div>`).join('')
+            : '<p class="muted small">Aucun dossier en « Devis en cours », « Devis envoyé » ou « Devis accepté ».</p>'}
+            <p class="muted small pl-rien" hidden>Aucun dossier ne correspond à cette recherche.</p>
+          </div>
+        </div></div>
       <label class="pl-champ"><span>Début</span>
         <input type="date" name="date_debut" required value="${esc(c?.date_debut || defaut.date_debut || '')}"></label>
       <div class="pl-champ"><span>Durée</span>
@@ -253,11 +278,35 @@ function brancher(m, c, apres) {
     fin.textContent = d ? `Fin : ${dateLongue(ajouterJours(d, Math.max(1, n) - 1))} · ${n} jour${n > 1 ? 's' : ''} calendaire${n > 1 ? 's' : ''}` : '';
   };
   form.date_debut.oninput = majFin; form.duree_nombre.oninput = majFin; form.duree_unite.onchange = majFin; majFin();
-  // L'adresse se reprend de la fiche choisie, si on n'en a pas tapé une.
-  form.rattachement.onchange = () => {
-    const opt = form.rattachement.selectedOptions[0];
-    if (!form.adresse.value && opt?.dataset.adresse) form.adresse.value = opt.dataset.adresse;
+  // Le choix du dossier : un clic le retient (et le surligne), un second clic
+  // sur le même le retire. L'adresse se reprend du dossier si on n'en a pas
+  // tapé une. La recherche porte sur le nom, le projet et l'adresse.
+  const choisir = (bouton) => {
+    const cle = bouton && !bouton.classList.contains('choisi') ? bouton.dataset.cle : '';
+    form.rattachement.value = cle;
+    m.querySelectorAll('.pl-dossier').forEach(b => b.classList.toggle('choisi', b.dataset.cle === cle));
+    m.querySelector('[data-aucun]').hidden = !cle;
+    if (cle && !form.adresse.value && bouton.dataset.adresse) form.adresse.value = bouton.dataset.adresse;
   };
+  m.querySelectorAll('.pl-dossier').forEach(b => b.onclick = () => choisir(b));
+  m.querySelector('[data-aucun]').onclick = () => choisir(null);
+  const cherche = m.querySelector('.pl-cherche');
+  cherche.oninput = () => {
+    const mots = cherche.value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(/\s+/).filter(Boolean);
+    let vus = 0;
+    m.querySelectorAll('.pl-groupe').forEach(g => {
+      let n = 0;
+      g.querySelectorAll('.pl-dossier').forEach(b => {
+        const t = b.dataset.texte.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const ok = mots.every(w => t.includes(w));
+        b.hidden = !ok; if (ok) n++;
+      });
+      g.hidden = !n; vus += n;
+    });
+    const rien = m.querySelector('.pl-rien'); if (rien) rien.hidden = !!vus || !mots.length;
+  };
+  // Entrée dans la recherche ne doit pas enregistrer le chantier.
+  cherche.onkeydown = (e) => { if (e.key === 'Enter') e.preventDefault(); };
   form.onsubmit = async (e) => {
     e.preventDefault();
     const [genre, id] = (form.rattachement.value || ':').split(':');
