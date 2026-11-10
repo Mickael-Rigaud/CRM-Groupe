@@ -50,6 +50,8 @@ export const pages = {
   // ⚠ LE PIPELINE A ÉTÉ RETIRÉ LE 10/11/2026 (Élodie : « elle ne sert à rien »).
   // Sans entrée ici, `#/rgd/chantiers` retombe sur la vue d'ensemble ; le fichier
   // `rgd-chantiers.js` reste dans le dépôt, il suffit de remettre cette ligne.
+  // Le planning des chantiers (10/11/2026), direction seule.
+  rgd_planning: ecran('./rgd-planning.js', 'rgdPlanningPage'),
   rgd_clients: ecran('./rgd-clients.js', 'rgdClientsPage'),
   rgd_agenda: ecran('./rgd-agenda.js', 'rgdAgendaPage'),
   rgd_devis: ecran('./rgd-facturation.js', 'rgdDevisPage'),

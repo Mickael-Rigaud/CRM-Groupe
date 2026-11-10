@@ -95,6 +95,9 @@ export const TABLES = ['profiles', 'organisations', 'contacts', 'deals', 'activi
   // La grille des tarifs (lecture RGD, écriture direction) et les devis faits
   // dans le CRM (29/10/2026). Nés ici, jamais relevés : rien ne les réécrit.
   'rgd_tarifs', 'rgd_devis_crm',
+  // Le planning des chantiers et ses listes matériaux / outils (10/11/2026).
+  // Direction seule, nés dans le CRM, jamais relevés.
+  'rgd_planning', 'rgd_planning_lignes',
   // Les bons d'attachement (02/11/2026). ⚠ TABLE À PART, ET PAS QUATRE
   // COLONNES DE LA FACTURE : un bon peut exister SANS facture, et il ne
   // porte aucun montant — dans la table des factures, il aurait fini un

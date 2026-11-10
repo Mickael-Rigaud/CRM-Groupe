@@ -23,6 +23,9 @@ export const act = () => ACTIVITIES[KEY];
 // non repris — To-do, Équipe, Paramètres — accessibles par « Application RGD ».
 export const ONGLETS = [
   { hash: '#/rgd', label: 'Vue d’ensemble' },
+  // Le planning des chantiers (10/11/2026), juste sous la vue d'ensemble
+  // comme demandé. Direction seule (`RESERVES_DIRECTION`).
+  { hash: '#/rgd/planning', label: 'Planning chantier' },
   // ⚠ LE MENU A ÉTÉ REDESSINÉ PAR ÉLODIE LE 10/11/2026, dans cet ordre :
   // Base de données, Partenaires, Cotation dépannage électrique, Agenda,
   // Formations, Inspirations, Communication, Costructor, Autres. Les intitulés
@@ -174,7 +177,7 @@ const SANS_BANDEAU = ['#/rgd/clients', '#/rgd/factures'];
 // ⚠ LE GROUPE « COMMUNICATION » ENTIER est réservé depuis le 08/10/2026,
 // Réalisations comprises (Élodie : « tu ne dois donner les accès qu'à la
 // direction et pas aux chargés d'affaires »). Le groupe vidé sort du menu.
-const RESERVES_DIRECTION = ['#/rgd/tarifs', '#/rgd/factures', '#/rgd/prospection', '#/rgd/realisations', '#/rgd/inspirations', '#/rgd/communication', '#/rgd/analyse'];
+const RESERVES_DIRECTION = ['#/rgd/planning', '#/rgd/tarifs', '#/rgd/factures', '#/rgd/prospection', '#/rgd/realisations', '#/rgd/inspirations', '#/rgd/communication', '#/rgd/analyse'];
 const sansDirection = (liste) => liste
   .filter(o => !RESERVES_DIRECTION.includes(o.hash))
   .map(o => (o.sous ? { ...o, sous: sansDirection(o.sous) } : o))
@@ -199,7 +202,7 @@ const sansDirection = (liste) => liste
 // factures de Mickael — celles de Franck invisibles et les totaux à zéro, sous
 // un titre qui promet toutes les factures. L'écran a son propre filtre par
 // responsable, qui s'ouvre sur tout le monde.
-const SANS_VUE = ['#/rgd/tarifs', '#/rgd/factures', '#/rgd/realisations', '#/rgd/inspirations', '#/rgd/communication', '#/rgd/analyse', '#/rgd/agenda'];
+const SANS_VUE = ['#/rgd/planning', '#/rgd/tarifs', '#/rgd/factures', '#/rgd/realisations', '#/rgd/inspirations', '#/rgd/communication', '#/rgd/analyse', '#/rgd/agenda'];
 
 export const cadre = (actif, titre, corps) => coquilleEspace({
   actif, titre,

@@ -7913,3 +7913,107 @@ tr.est-modifie td { background: var(--accent-soft); }
   .rgd-bil-ligne { align-items: flex-start; }
 }
 
+
+/* ------------------------------------------------ Planning chantier RGD (10/11/2026)
+   Un calendrier mensuel : chaque semaine est une grille de 7 colonnes, la
+   première ligne porte les numéros des jours, les suivantes les couloirs des
+   chantiers. Deux chantiers qui se chevauchent prennent deux couloirs. Les
+   cases de jour couvrent toute la hauteur de la semaine : un clic n'importe
+   où dans une journée vide y planifie un chantier. */
+.pl-barre-outils { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.pl-barre-outils .grow { flex: 1; }
+.pl-nav { display: flex; align-items: center; gap: 8px; }
+.pl-nav h2 { margin: 0 6px; min-width: 170px; text-align: center; font-family: var(--font-display);
+  font-size: 22px; font-weight: 700; text-transform: capitalize; }
+.pl-carte { padding: 16px 18px; }
+.pl-cal { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.pl-cal-tete { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr));
+  background: var(--card-2); border-bottom: 1px solid var(--line); }
+.pl-cal-tete div { padding: 8px 10px; font-size: 11.5px; font-weight: 800; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--muted); }
+.pl-sem { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); row-gap: 3px;
+  min-height: 92px; border-bottom: 1px solid var(--line); }
+.pl-sem:last-child { border-bottom: 0; }
+.pl-jour { grid-row: 1 / -1; border: 0; border-right: 1px solid var(--line); background: var(--card);
+  text-align: left; padding: 6px 8px; cursor: pointer; display: flex; align-items: flex-start;
+  font: inherit; color: var(--text); }
+.pl-jour:nth-child(7) { border-right: 0; }
+.pl-jour span { font-size: 13px; font-weight: 700; width: 24px; height: 24px; display: grid;
+  place-items: center; border-radius: 999px; }
+.pl-jour.we { background: color-mix(in srgb, var(--card-2) 60%, var(--card)); }
+.pl-jour.hors span { color: var(--muted); opacity: .55; font-weight: 500; }
+.pl-jour.auj span { background: #fd7a2d; color: #fff; }
+.pl-jour:hover { background: color-mix(in srgb, #fd7a2d 7%, var(--card)); }
+.pl-barre { position: relative; z-index: 1; margin: 0 4px; border: 0; border-radius: 7px;
+  background: var(--pl-c); color: #fff; font: inherit; font-size: 12.5px; font-weight: 700;
+  text-align: left; padding: 0 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  cursor: pointer; box-shadow: 0 1px 2px rgba(0, 0, 0, .15); }
+.pl-barre:hover { filter: brightness(1.08); }
+.pl-barre i { font-weight: 500; opacity: .8; }
+.pl-barre.suite { margin-left: 0; border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.pl-barre.continue { margin-right: 0; border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.pl-aide { margin: 10px 2px 0; }
+.pl-titre { margin: 0 0 12px; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+.pl-titre span { font-size: 12px; font-weight: 800; padding: 1px 9px; border-radius: 999px;
+  background: #fd7a2d; color: #fff; }
+.pl-carte tbody tr[data-chantier] { cursor: pointer; }
+.pl-carte tbody tr[data-chantier]:hover { background: var(--card-2); }
+.pl-point { display: inline-block; width: 10px; height: 10px; border-radius: 999px; margin-right: 8px; vertical-align: 0; }
+
+/* La fiche chantier */
+.pl-form { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 14px; }
+.pl-large { grid-column: 1 / -1; }
+.pl-champ { display: flex; flex-direction: column; gap: 5px; }
+.pl-champ > span { font-size: 12px; font-weight: 700; color: var(--muted); }
+.pl-champ input, .pl-champ select, .pl-champ textarea { border: 1px solid var(--line); border-radius: 9px;
+  padding: 9px 11px; font: inherit; background: var(--card); color: var(--text); min-width: 0; }
+.pl-fin { grid-column: 1 / -1; margin: -4px 0 0; font-size: 13px; font-weight: 700; color: #c2410c; }
+.pl-fin:empty { display: none; }
+.pl-couleurs { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.pl-pastille { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-size: 13px; }
+.pl-pastille input { position: absolute; opacity: 0; pointer-events: none; }
+.pl-pastille i { width: 24px; height: 24px; border-radius: 999px; border: 3px solid transparent;
+  box-shadow: 0 0 0 1px var(--line); }
+.pl-pastille.auto i { background: conic-gradient(#fd7a2d, #0284c7, #16a34a, #7c3aed, #fd7a2d); }
+.pl-pastille input:checked + i { border-color: var(--card); box-shadow: 0 0 0 2px var(--text); }
+.pl-form .form-actions { display: flex; gap: 8px; align-items: center; }
+.pl-form .form-actions .grow { flex: 1; }
+.pl-lien { margin: 0 0 12px; font-size: 13.5px; }
+.pl-apres { margin-top: 14px; }
+.pl-listes { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 18px;
+  padding-top: 16px; border-top: 1px solid var(--line); }
+.pl-liste { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; background: var(--card-2); }
+.pl-liste-tete { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.pl-liste-tete h3 { margin: 0; font-size: 14px; text-transform: uppercase; letter-spacing: .05em; }
+.pl-liste-tete .grow { flex: 1; }
+.pl-liste-compte { font-size: 12px; font-weight: 700; color: var(--muted); }
+.pl-lignes { display: flex; flex-direction: column; gap: 3px; }
+.pl-ligne { display: grid; grid-template-columns: 52px 52px minmax(0, 1fr) 76px 30px; gap: 6px;
+  align-items: center; padding: 3px 4px; border-radius: 8px; background: var(--card); }
+.pl-ligne-tete { background: none; font-size: 10.5px; font-weight: 800; text-transform: uppercase;
+  letter-spacing: .05em; color: var(--muted); }
+.pl-ligne-tete span:nth-child(-n+2) { text-align: center; }
+.pl-ligne.fait { background: var(--green-soft); }
+.pl-ligne.fait .pl-libelle { color: var(--muted); }
+.pl-case { display: grid; place-items: center; cursor: pointer; }
+.pl-case input { width: 18px; height: 18px; accent-color: #16a34a; cursor: pointer; }
+.pl-libelle, .pl-qte { border: 1px solid transparent; border-radius: 6px; padding: 5px 7px; font: inherit;
+  font-size: 13.5px; background: transparent; color: var(--text); min-width: 0; }
+.pl-libelle:hover, .pl-qte:hover, .pl-libelle:focus, .pl-qte:focus { border-color: var(--line); background: var(--card); outline: none; }
+.pl-ajout { display: flex; gap: 6px; margin-top: 8px; }
+.pl-ajout input { flex: 1; min-width: 0; border: 1px dashed var(--line); border-radius: 8px;
+  padding: 7px 10px; font: inherit; font-size: 13.5px; background: var(--card); color: var(--text); }
+.pl-std { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 10px 0; }
+
+@media screen and (max-width: 900px) {
+  .pl-listes, .pl-std { grid-template-columns: 1fr; }
+}
+@media screen and (max-width: 760px) {
+  .pl-nav h2 { min-width: 0; font-size: 18px; }
+  .pl-sem { min-height: 70px; }
+  .pl-jour { padding: 4px; }
+  .pl-jour span { font-size: 12px; width: 20px; height: 20px; }
+  .pl-barre { margin: 0 1px; padding: 0 4px; font-size: 10.5px; }
+  .pl-form { grid-template-columns: 1fr; }
+  .pl-ligne { grid-template-columns: 40px 40px minmax(0, 1fr) 56px 30px; }
+}
