@@ -4031,38 +4031,30 @@ button.tb-pp:hover { color: var(--text); text-decoration: underline; text-underl
    RGD sur cet écran. Rien n'est écrit en dur ici. */
 .rgd-ca-ligne { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin: 2px 0; }
 .rgd-ca-montant { font-family: var(--font-display); font-size: 32px; font-weight: 700; color: var(--accent-ink); }
-/* Le total de toute l'activité, sous le montant de l'exercice. Il est encadré
-   d'un filet parce qu'il change d'échelle : sans séparation, on le lit comme
-   une précision du chiffre du dessus au lieu d'une autre mesure. */
-.rgd-ca-total {
-  margin: 10px 0 0; padding-top: 10px;
-  border-top: 1px solid var(--border, #e5e7eb);
-  font-size: .95rem;
-}
-/* La provenance des chiffres, sous le total : elle doit se lire, pas se
-   deviner — mais sans concurrencer le montant. */
-.rgd-ca-total span.muted { display: block; font-size: 12px; margin-top: 2px; }
+/* ⚠ LA CARTE « CHIFFRE D'AFFAIRES » A ÉTÉ RETIRÉE DE LA VUE D'ENSEMBLE LE
+   10/11/2026 : son exercice se lit dans « Objectifs », vue Exercice, et le
+   détail par exercice dans « Bilan commercial ». `.rgd-ca-total` (et sa
+   `span.muted`), `.rgd-ca-sous` et `.rgd-ca-neuf` sont parties avec elle —
+   plus un fichier du dépôt ne les écrit, vérifié par recherche.
+   ⚠ `.rgd-ca-ligne` ET `.rgd-ca-montant` RESTENT : l'encadré du CA d'un
+   ouvrier les emploie (`js/pages/rgd-ca-ouvrier.js`). */
 
-.rgd-ca-sous { margin: 2px 0 10px; }
-/* Le changement d'exercice, le 1er octobre. Un grand « 0 € » sans un mot se
-   lit comme une panne : ce bandeau est la phrase qui dit que le compteur a
-   ete remis a l'heure, avec le total de l'exercice qui vient de se clore. */
-.rgd-ca-neuf { margin: 4px 0 12px; padding: 10px 12px; border-radius: 10px;
-  border: 1px solid var(--amber); background: var(--amber-soft, #fdf1dc);
-  font-size: 12.5px; line-height: 1.5; color: var(--text); }
 /* La ligne de fraîcheur du CA. Elle porte un fond quand le relevé est en
    retard : un simple texte gris se lit comme une note de bas de page, or ce
-   qu'elle annonce, c'est que le grand chiffre juste au-dessus est périmé. */
+   qu'elle annonce, c'est que le grand chiffre juste au-dessus est périmé.
+   ⚠ ELLE VIT AU PIED DE « BILAN COMMERCIAL » DEPUIS LE 10/11/2026 : la carte
+   qui la portait a été retirée, et c'est le seul endroit de l'écran qui dise
+   DE QUAND date le chiffre. Son nom en `rgd-ca-` est celui de son ancienne
+   carte : le renommer pour si peu aurait touché trois fichiers à la fois dans
+   un dépôt où trois sessions écrivent. */
 .rgd-ca-frais { display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
   margin: 10px 0 0; padding: 8px 10px; border-radius: 10px;
   border: 1px solid var(--line); color: var(--muted); }
 .rgd-ca-frais.ko { border-color: var(--red); background: var(--red-soft); color: var(--text); }
 .rgd-ca-frais a { margin-left: auto; }
 .rgd-courbe { width: 100%; height: auto; display: block; overflow: visible; margin-bottom: 4px; }
-.rgd-barre { fill: var(--accent); opacity: .16; transition: opacity .12s; }
 .rgd-trait { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-linejoin: round;
   stroke-linecap: round; }
-.rgd-point { fill: var(--card); stroke: var(--accent); stroke-width: 2.5; transition: r .12s; }
 .rgd-grille { stroke: var(--line); stroke-width: 1; }
 .rgd-axe { fill: var(--muted); font-size: 11px; }
 
@@ -4073,8 +4065,8 @@ button.tb-pp:hover { color: var(--text); text-decoration: underline; text-underl
 .rgd-zone { fill: transparent; }
 .rgd-info { opacity: 0; transition: opacity .12s; pointer-events: none; }
 .rgd-mois:hover .rgd-info { opacity: 1; }
-.rgd-mois:hover .rgd-barre { opacity: .42; }
-.rgd-mois:hover .rgd-point { r: 6; }
+/* `.rgd-barre` et `.rgd-point` sont parties avec la courbe en barres du CA
+   (10/11/2026) ; le reste de ce bloc sert au graphique des objectifs. */
 .rgd-bulle { fill: var(--text); }
 .rgd-bulle-mois { fill: #fff; opacity: .7; font-size: 11px; }
 .rgd-bulle-ca { fill: #fff; font-size: 14px; font-weight: 700; }
@@ -4084,7 +4076,11 @@ button.tb-pp:hover { color: var(--text); text-decoration: underline; text-underl
    une courbe de douze mois écrasée à 300 px ne se lit plus. */
 .rgd-duo { display: grid; grid-template-columns: minmax(0, 2.1fr) minmax(0, 1fr);
   gap: 16px; align-items: start; margin-bottom: 16px; }
-.rgd-jour { align-self: stretch; }
+/* ⚠ LA JOURNÉE NE S'ÉTIRE PLUS (10/11/2026) : elle faisait la hauteur de la
+   carte « Chiffre d'affaires » qu'elle côtoyait. À côté des objectifs, qui
+   font 550 px, deux rendez-vous laissaient 300 px de blanc DANS la carte — on
+   lisait un contenu manquant, pas une colonne courte. */
+.rgd-jour { align-self: start; }
 @media (max-width: 1100px) { .rgd-duo { grid-template-columns: minmax(0, 1fr); } }
 
 .rgd-pipe-table { width: 100%; border-collapse: collapse; }
@@ -4140,10 +4136,14 @@ button.tb-pp:hover { color: var(--text); text-decoration: underline; text-underl
 .rgd-ob-gros { font-family: var(--font-display); font-size: 26px; font-weight: 700;
   letter-spacing: -.03em; line-height: 1.15; color: var(--c); margin-top: 5px;
   font-variant-numeric: lining-nums tabular-nums; }
-/* « sur 20 » reste sur la même ligne que le nombre : une ligne à lui seul
-   rallongeait la tuile de 20 px pour deux mots. */
-.rgd-ob-gros i { font-style: normal; font-family: inherit; font-size: 12.5px;
-  font-weight: 600; color: var(--muted); margin-left: 5px; letter-spacing: 0; }
+/* ⚠ « sur 35 000 € » PASSE À LA LIGNE, ET DANS TOUTES LES TUILES À LA FOIS.
+   Il tenait à côté du nombre tant que la carte prenait toute la largeur ; elle
+   partage désormais sa rangée avec « Aujourd'hui » (10/11/2026) et chaque tuile
+   tombe à 145 px — « 9 093 € sur 35 000 € » n'y entre pas. Replié au cas par
+   cas, SEULE la tuile du chiffre d'affaires passait sur deux lignes et sa jauge
+   descendait d'un cran : quatre tuiles côte à côte avec une jauge décalée. */
+.rgd-ob-gros i { display: block; font-style: normal; font-family: inherit; font-size: 12.5px;
+  font-weight: 600; color: var(--muted); margin-top: 1px; letter-spacing: 0; }
 .rgd-ob-piste { display: block; height: 6px; margin-top: 8px; border-radius: 4px;
   background: color-mix(in srgb, var(--c) 15%, var(--card-2)); overflow: hidden; }
 .rgd-ob-piste i { display: block; height: 100%; border-radius: inherit; background: var(--c); }

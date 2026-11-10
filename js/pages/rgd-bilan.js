@@ -118,7 +118,11 @@ function tableauPasse(clos, total, ec) {
     </table></div>`;
 }
 
-export function carteBilan(aujourdhui = new Date()) {
+// ⚠ `pied` EST POSÉ PAR L'APPELANT, ET IL SERT DÉJÀ (10/11/2026) : la carte
+// « Chiffre d'affaires » de la vue d'ensemble a été retirée, et l'alerte de
+// synchronisation Costructor qu'elle était SEULE à porter descend ici, au pied
+// du bilan — c'est le choix d'Élodie. Une chaîne vide ne change rien.
+export function carteBilan(aujourdhui = new Date(), pied = '') {
   const b = bilanCommercial(aujourdhui);
   if (!b) return '';
   const { exercices, total, objectifs: o = {} } = b;
@@ -158,6 +162,7 @@ export function carteBilan(aujourdhui = new Date()) {
           ${selonCrm ? `<p class="small muted rgd-bil-pied"><sup>*</sup> Selon le CRM, qui n’a pas tout l’historique Costructor.
             Un client qui signe plusieurs devis compte pour un chantier.</p>` : ''}
           <p class="small muted rgd-bil-pied">Clique sur un chiffre pour voir les devis ou les factures qui le composent.</p>
+          ${pied}
         </section>`;
 }
 

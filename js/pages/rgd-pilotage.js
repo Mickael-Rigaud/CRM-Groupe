@@ -127,33 +127,6 @@ function frisePipeline(etapes) {
 }
 
 
-/**
- * Le CA facturé mois par mois sur UN exercice donné.
- *
- * ⚠ LES MOIS À VENIR NE SONT PAS RENDUS : une barre à zéro pour un mois qui
- * n'a pas eu lieu se lit comme un mois sans activité. Sur un exercice CLOS la
- * condition ne retire rien — ses douze mois sont tous derrière nous — et c'est
- * ce qui permet de passer l'un ou l'autre à la même fonction.
- *
- * ⚠ L'EXERCICE EST UN PARAMÈTRE DEPUIS LE 02/10/2026 : il se déduisait de la
- * date du jour, donc la courbe ne savait montrer QUE l'exercice en cours — et
- * elle ne pouvait pas suivre la tuile le jour où celle-ci affiche le précédent.
- */
-function caParMois(paiements, ex, d = new Date()) {
-  const debut = Number(ex.du.slice(0, 4));
-  const mois = [];
-  for (let i = 0; i < 12; i++) {
-    const m = new Date(debut, 9 + i, 1);
-    if (m > d) break;
-    const cle = `${m.getFullYear()}-${String(m.getMonth() + 1).padStart(2, '0')}`;
-    mois.push({
-      cle, label: m.toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' }),
-      ht: paiements.filter(p => p.statut !== 'annule' && String(p.date_facturation || '').slice(0, 7) === cle)
-        .reduce((t, p) => t + (Number(p.montant_ht) || 0), 0),
-    });
-  }
-  return mois;
-}
 
 // ------------------------------------------------ LES OBJECTIFS DU MOIS
 // Élodie, le 04/11/2026 : « un graphique qui synthétise toutes les demandes
@@ -225,7 +198,7 @@ const SERIES = [
  * `rgd-axe`, `rgd-trait`, `rgd-mois`, `rgd-zone`, `rgd-info`, `rgd-bulle` sont
  * ceux du graphique du chiffre d'affaires, vingt lignes plus bas.
  */
-function grapheObjectifs(mois, obj, formats, courant) {
+function grapheObjectifs(mois, formats, marques) {
   const L = 940, H = 206, gauche = 44, droite = 74, cime = 16, bas = H - 30;
   const pas = (L - gauche - droite) / (mois.length - 1);
   const x = (i) => gauche + pas * i;
@@ -263,15 +236,18 @@ function grapheObjectifs(mois, obj, formats, courant) {
   const legendes = mois.map((m, i) => `<text class="rgd-axe" x="${x(i).toFixed(1)}" y="${H - 8}"
     text-anchor="middle">${esc(court(m))}</text>`).join('');
 
-  // Le mois choisi dans l'en-tête, marqué sur le graphique : sans cela les
-  // tuiles parlent d'un mois que rien ne désigne dans les douze.
+  // La période montrée par les tuiles, marquée sur le graphique : sans cela
+  // les tuiles parlent d'un mois — ou d'un exercice — que rien ne désigne
+  // parmi les douze. Un seul mois en vue « Mois », toute la tranche de
+  // l'exercice en vue « Exercice ».
   // ⚠ LA BANDE SE RABOTE AUX BORDS DU CADRE : centrée sur le premier ou le
   // dernier mois, la moitié débordait dans la marge et venait se poser sur les
   // graduations en euros — vu à l'écran, le mois en cours étant le dernier.
-  const iCourant = mois.indexOf(courant);
-  const bx0 = Math.max(gauche - 6, x(iCourant) - pas / 2);
-  const bx1 = Math.min(L - droite + 6, x(iCourant) + pas / 2);
-  const bande = iCourant >= 0 ? `<rect class="rgd-ob-choisi" x="${bx0.toFixed(1)}"
+  const dedans = mois.map(m => marques.includes(m.cle));
+  const iDeb = dedans.indexOf(true), iFin = dedans.lastIndexOf(true);
+  const bx0 = Math.max(gauche - 6, x(iDeb) - pas / 2);
+  const bx1 = Math.min(L - droite + 6, x(iFin) + pas / 2);
+  const bande = iDeb >= 0 ? `<rect class="rgd-ob-choisi" x="${bx0.toFixed(1)}"
     y="${cime - 6}" width="${(bx1 - bx0).toFixed(1)}" height="${(bas - cime + 6).toFixed(1)}" rx="5"></rect>` : '';
 
   // ⚠ UNE COURBE SE COUPE SUR LES MOIS INCONNUS, elle ne les enjambe pas :
@@ -379,6 +355,13 @@ function grapheObjectifs(mois, obj, formats, courant) {
 // du haut : les vignettes montrent déjà les douze mois, et les taux se lisent
 // sur douze mois quel que soit le mois choisi.
 let moisObjectifChoisi = null;
+// ⚠ MOIS OU EXERCICE (10/11/2026, Élodie : « je voudrais avoir une option dans
+// la section des objectifs du mois pour avoir le cumul de chiffre d'affaires de
+// l'année comptable »). La carte « Chiffre d'affaires » qui vivait en dessous a
+// été retirée dans le même mouvement : son exercice se lit ici, et le détail
+// par exercice dans « Bilan commercial ». Le choix vit hors de `draw`, comme le
+// mois, pour survivre aux rafraîchissements.
+let vueObjectif = 'mois';
 
 function carteObjectifs(mois, obj) {
   if (!mois.length) return '';
@@ -393,6 +376,41 @@ function carteObjectifs(mois, obj) {
   const euros = (v) => eur(Math.round(v));
   const nombre = (v) => String(v);
   const formats = { demandes: nombre, rdv: nombre, devisSignes: nombre, ca: euros };
+
+  // ⚠ L'EXERCICE COMPTABLE, PAS L'ANNÉE CIVILE : 1er octobre → 30 septembre.
+  // Les douze mois glissants couvrent toujours l'exercice en cours, qui en
+  // compte douze au plus — il n'y a donc rien d'autre à relever en base.
+  const ex = exercice();
+  const dansEx = mois.filter(m => m.cle >= ex.du.slice(0, 7) && m.cle <= ex.au.slice(0, 7));
+  const vue = dansEx.length ? vueObjectif : 'mois';
+
+  // ⚠ LE CUMUL D'UN EXERCICE N'EST PAS UNE SOMME POUR LES DEVIS SIGNÉS : un
+  // client qui signe en octobre puis en novembre est UN client sur l'exercice.
+  // C'est déjà la règle de `tauxPeriode`, et additionner les mois gonflerait
+  // le cumul — on fait donc l'union des clés, comme là-bas.
+  //
+  // ⚠ ET UN MOIS INCONNU N'EST PAS UN ZÉRO : si aucun mois de l'exercice ne
+  // porte la donnée, le cumul vaut `null` et la tuile affiche « — ». Les
+  // demandes ne sont suivies que depuis mars 2026, les visites depuis août.
+  const cumul = (se) => {
+    if (se.champ === 'devisSignes') return new Set(dansEx.flatMap(m => m.clientsSignes || [])).size;
+    const connus = dansEx.map(m => m[se.champ]).filter(v => v !== null && v !== undefined);
+    return connus.length ? connus.reduce((a, b) => a + b, 0) : null;
+  };
+
+  // ⚠ L'OBJECTIF D'UN EXERCICE EST CELUI DE L'ANNÉE ENTIÈRE, pas au prorata
+  // des mois écoulés : c'est ce que dit déjà la carte « Bilan commercial » en
+  // dessous (« 1 sur 120 cette année »), et deux cartes du même écran qui
+  // divisent le même objectif autrement ne se réconcilient jamais à l'œil.
+  // Le « mois N sur 12 » de l'en-tête dit où l'on en est dans l'année.
+  const periode = vue === 'exercice'
+    ? { valeur: cumul, cible: (se) => obj[se.cible] * 12, cles: dansEx.map(m => m.cle),
+        titre: 'Objectifs de l’exercice', note: `mois ${dansEx.length} sur 12`,
+        quand: `Exercice ${ex.label}` }
+    : { valeur: (se) => courant[se.champ], cible: (se) => obj[se.cible], cles: [courant.cle],
+        titre: 'Objectifs du mois',
+        note: enCours ? `jour ${jour} sur ${joursDuMois}` : 'mois terminé',
+        quand: courant.label };
   // ⚠ DES TUILES, PAS DES RANGÉES (10/11/2026, Élodie : « je voudrais qu'on
   // revoie le visuel de la section »). Chacune porte la couleur de sa courbe :
   // la tuile est la légende du graphique, ce qui évite d'en poser une séparée.
@@ -402,19 +420,21 @@ function carteObjectifs(mois, obj) {
   // classe. Déplacer l'attribut d'un `<tr>` vers un `<article>` suffit, et la
   // liste du mois s'ouvre comme avant.
   const tuile = (se) => {
-    const v = courant[se.champ];
-    const cible = obj[se.cible];
+    const v = periode.valeur(se);
+    const cible = periode.cible(se);
     const connu = v !== null && v !== undefined;
     const part = connu && cible > 0 ? Math.round((v / cible) * 100) : null;
     const formate = formats[se.champ];
-    // Au survol, les premiers noms ; au clic, la liste complète.
-    const d = detailMoisObjectif(courant.cle, se.champ);
-    const noms = [...new Set(d.lignes.map(l => l.client))];
-    const bulle = d.lignes.length
+    // Au survol, les premiers noms ; au clic, la liste complète. Sur un
+    // exercice, les listes de ses mois mises bout à bout.
+    const lignes = periode.cles.flatMap(c => detailMoisObjectif(c, se.champ).lignes);
+    const noms = [...new Set(lignes.map(l => l.client))];
+    const bulle = lignes.length
       ? `${noms.slice(0, 6).join(', ')}${noms.length > 6 ? ` et ${noms.length - 6} autre${noms.length > 7 ? 's' : ''}` : ''} — cliquer pour le détail`
-      : 'Rien ce mois-ci';
+      : (vue === 'exercice' ? 'Rien sur cet exercice' : 'Rien ce mois-ci');
     return `<article class="rgd-ob-tuile" style="--c:${se.couleur}"
-      data-ob-detail="${se.champ}" data-ob-cle="${esc(courant.cle)}"
+      data-ob-detail="${se.champ}" data-ob-cles="${esc(periode.cles.join(','))}"
+      data-ob-quand="${esc(periode.quand)}"
       role="button" tabindex="0" title="${esc(bulle)}">
       <div class="rgd-ob-lib">${esc(se.label)}</div>
       <div class="rgd-ob-gros">${connu ? esc(formate(v)) : '—'}<i>sur ${esc(formate(cible))}</i></div>
@@ -427,20 +447,34 @@ function carteObjectifs(mois, obj) {
 
   return `
         <section class="card rgd-ob">
-          <div class="card-head"><h2>Objectifs du mois</h2>
+          ${/* ⚠ LE TITRE SUIT LA PÉRIODE : « Objectifs du mois » au-dessus d'un
+                cumul d'exercice serait un contresens, et c'est le genre de
+                détail qu'on ne voit plus après l'avoir lu dix fois. */ ''}
+          <div class="card-head"><h2>${esc(periode.titre)}</h2>
             <span class="grow"></span>
+            ${/* ⚠ MOIS OU EXERCICE, en segment : les deux choix se VOIENT, là où
+                  une liste déroulante les cache. C'est `mf-seg`, le segment des
+                  formulaires du CRM — aucune forme neuve. */ ''}
+            <div class="mf-seg rgd-ob-vue">
+              <button type="button" data-ob-vue="mois" class="${vue === 'mois' ? 'on' : ''}"
+                aria-pressed="${vue === 'mois'}">Mois</button>
+              <button type="button" data-ob-vue="exercice" class="${vue === 'exercice' ? 'on' : ''}"
+                aria-pressed="${vue === 'exercice'}"${dansEx.length ? '' : ' disabled'}>Exercice</button>
+            </div>
             ${/* ⚠ DES FLÈCHES, PAS UNE LISTE (05/11/2026, Élodie : « je voyais
                   plutôt une flèche pour passer d'un mois à un autre plutôt
                   qu'une liste déroulante »). ‹ recule d'un mois, › avance ;
-                  chacune se grise au bout de la fenêtre de douze mois. */ ''}
-            <span class="rgd-ob-nav">
+                  chacune se grise au bout de la fenêtre de douze mois.
+                  Sur l'exercice il n'y a rien à parcourir : l'année comptable
+                  en cours est la seule que ces douze mois peuvent porter. */ ''}
+            ${vue === 'mois' ? `<span class="rgd-ob-nav">
               <button type="button" class="rgd-ob-fleche" data-ob-pas="-1" aria-label="Mois précédent"
                 ${mois.indexOf(courant) === 0 ? 'disabled' : ''}>‹</button>
               <b class="rgd-ob-mois">${esc(courant.label)}</b>
               <button type="button" class="rgd-ob-fleche" data-ob-pas="1" aria-label="Mois suivant"
                 ${enCours ? 'disabled' : ''}>›</button>
-            </span>
-            <span class="muted small">${enCours ? `jour ${jour} sur ${joursDuMois}` : 'mois terminé'}</span></div>
+            </span>` : `<b class="rgd-ob-mois rgd-ob-ex">${esc(ex.label)}</b>`}
+            <span class="muted small">${esc(periode.note)}</span></div>
 
           <div class="rgd-ob-tuiles">${SERIES.map(tuile).join('')}</div>
 
@@ -461,7 +495,7 @@ function carteObjectifs(mois, obj) {
           ${/* ⚠ PAS DE LÉGENDE SOUS LE GRAPHIQUE : les quatre tuiles au-dessus
                 en tiennent lieu, chacune à la couleur de sa courbe. Une
                 légende de plus répéterait quatre noms déjà écrits. */ ''}
-          ${grapheObjectifs(mois, obj, formats, courant)}
+          ${grapheObjectifs(mois, formats, periode.cles)}
 
           ${/* ⚠ LE PIED SUIT LE DESSIN : il parlait de colonnes, de ligne
                 pointillée d'objectif et de vignettes qui gardent leur unité —
@@ -481,81 +515,6 @@ function carteObjectifs(mois, obj) {
 `;
 }
 
-/**
- * La courbe du CA : une barre par mois, une ligne pour la suivre, et le montant
- * du mois au survol.
- *
- * ⚠ PAS DE BIBLIOTHÈQUE. Chart.js est vendu dans le CRM, mais douze valeurs ne
- * justifient pas de le charger sur l'écran qu'on ouvre le matin.
- *
- * ⚠ LE SURVOL EST EN CSS, PAS EN JAVASCRIPT. Chaque mois est un `<g>` qui
- * porte une zone de capture invisible sur TOUTE la hauteur : on n'a pas à
- * viser la barre, qui est minuscule les mois creux — août fait 4 518 € contre
- * 67 000 € en mai. Sans cette zone, le mois le plus intéressant à survoler
- * serait le plus difficile à atteindre.
- *
- * ⚠ LA BULLE EST RECADRÉE AUX BORDS. Centrée sur le premier ou le dernier
- * mois, elle sortirait du cadre et serait coupée — un SVG ne déborde pas.
- */
-function courbeCa(mois) {
-  // ⚠ UNE COURBE DE ZÉROS N'EST PAS UNE COURBE, et le cas est arrivé le
-  // 02/10/2026 : au lendemain du changement d'exercice il reste UN mois,
-  // à zéro, donc `mois.length` valait 1 et l'écran traçait une ligne plate
-  // avec une échelle inventée (`max` retombe à 1). On teste donc s'il y a
-  // quelque chose à tracer, pas s'il y a des mois.
-  if (!mois.some(m => m.ht)) return '<div class="empty">Aucune facture sur cet exercice.</div>';
-  const L = 960, H = 260, bas = H - 34, gauche = 56, droite = 14;
-  const large = L - gauche - droite, pas = large / mois.length;
-  const max = Math.max(1, ...mois.map(m => m.ht));
-  const y = (v) => bas - (v / max) * (bas - 30);
-  const x = (i) => gauche + pas * i + pas / 2;
-
-  const graduations = [0, 0.25, 0.5, 0.75, 1].map(f => `<g>
-    <line x1="${gauche}" x2="${L - droite}" y1="${y(max * f)}" y2="${y(max * f)}" class="rgd-grille"></line>
-    <text x="${gauche - 10}" y="${y(max * f) + 4}" class="rgd-axe" text-anchor="end">${Math.round(max * f / 1000)}k€</text></g>`).join('');
-
-  // L'aire sous la courbe, en dégradé : elle donne le volume que douze barres
-  // seules ne montrent pas, et se referme sur la ligne du zéro.
-  const aire = `M${x(0).toFixed(1)},${bas} `
-    + mois.map((m, i) => `L${x(i).toFixed(1)},${y(m.ht).toFixed(1)}`).join(' ')
-    + ` L${x(mois.length - 1).toFixed(1)},${bas} Z`;
-  const trait = mois.map((m, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(m.ht).toFixed(1)}`).join(' ');
-
-  const LARGE_BULLE = 108, HAUT_BULLE = 40;
-  const colonnes = mois.map((m, i) => {
-    const cx = x(i);
-    // Recadrage : la bulle reste entière dans le cadre.
-    const bx = Math.min(Math.max(cx - LARGE_BULLE / 2, 2), L - LARGE_BULLE - 2);
-    // Au-dessus du point, sauf quand le point est trop haut : elle passe dessous.
-    const haut = y(m.ht) - HAUT_BULLE - 10;
-    const by = haut < 2 ? y(m.ht) + 12 : haut;
-    return `<g class="rgd-mois">
-      <rect class="rgd-zone" x="${(gauche + pas * i).toFixed(1)}" y="0" width="${pas.toFixed(1)}" height="${bas}"></rect>
-      <rect class="rgd-barre" x="${(gauche + pas * i + pas * 0.24).toFixed(1)}" y="${y(m.ht).toFixed(1)}"
-        width="${(pas * 0.52).toFixed(1)}" height="${Math.max(0, bas - y(m.ht)).toFixed(1)}" rx="4"></rect>
-      <circle class="rgd-point" cx="${cx.toFixed(1)}" cy="${y(m.ht).toFixed(1)}" r="4.5"></circle>
-      <g class="rgd-info" transform="translate(${bx.toFixed(1)},${by.toFixed(1)})">
-        <rect width="${LARGE_BULLE}" height="${HAUT_BULLE}" rx="8" class="rgd-bulle"></rect>
-        <text x="${LARGE_BULLE / 2}" y="16" text-anchor="middle" class="rgd-bulle-mois">${esc(m.label)}</text>
-        <text x="${LARGE_BULLE / 2}" y="32" text-anchor="middle" class="rgd-bulle-ca">${esc(eur(m.ht))}</text>
-      </g>
-      <title>${esc(m.label)} · ${esc(eur(m.ht))} HT</title>
-    </g>`;
-  }).join('');
-
-  const legendes = mois.map((m, i) => `<text x="${x(i).toFixed(1)}" y="${H - 8}" class="rgd-axe" text-anchor="middle">${esc(m.label)}</text>`).join('');
-
-  return `<svg class="rgd-courbe" viewBox="0 0 ${L} ${H}" role="img"
-    aria-label="Chiffre d'affaires HT facturé mois par mois sur l'exercice">
-    <defs><linearGradient id="rgd-aire" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="var(--accent)" stop-opacity=".28"></stop>
-      <stop offset="100%" stop-color="var(--accent)" stop-opacity="0"></stop>
-    </linearGradient></defs>
-    ${graduations}
-    <path d="${aire}" fill="url(#rgd-aire)"></path>
-    <path d="${trait}" class="rgd-trait"></path>
-    ${colonnes}${legendes}</svg>`;
-}
 
 // LA VUE D'ENSEMBLE DE L'OUVRIER (28/10/2026, Élodie : « pour la pipeline de
 // la vue d'ensemble de Franck, je voudrais l'alléger. Il ne va faire que du
@@ -632,7 +591,6 @@ export const rgdPilotagePage = {
 
     const draw = () => {
       const aujourdhui = isoDay();
-      const ex = exercice();
 
       const chantiers = scope.rgd('rgd_chantiers');
       const devis = scope.rgd('rgd_devis');
@@ -670,95 +628,20 @@ export const rgdPilotagePage = {
       }
       const reglage =(cle) => scope.rgd('rgd_reglages').find(r => r.cle === cle)?.valeur ?? null;
 
-      // CA DE L'EXERCICE — calculé, puis la correction manuelle par-dessus.
-      // Les deux sont montrés : l'écart dit à quel point Costructor est en retard.
-      // ⚠ LES AVOIRS NE SONT PAS DÉDUITS, et c'est ce qui réconcilie l'écran
-      // avec le bilan comptable (05/11/2026). Ils l'étaient : sur 2024/2025,
-      // 16 remboursements à −144 653 € ramenaient 613 569 € de factures émises à
-      // 468 916 €, et on en avait conclu — à tort, c'était écrit dans
-      // `rgd-bilan.js` — que la reprise Costructor était incomplète. Le bilan
-      // d'Élodie dit 613 568 € pour cet exercice et 393 893 € pour le suivant,
-      // soit 1 007 461 € depuis la création ; le brut donne 613 569 € et
-      // 389 760 €, soit 1 007 462 €. Le reste, 4 133 €, tient à DEUX factures
-      // que nous datons en 2026/2027.
-      //
-      // ⚠ UN AVOIR RESTE UNE LIGNE DE `rgd_paiements`, visible sur la
-      // facturation : il n'est pas effacé, il ne compte simplement pas dans le
-      // chiffre d'affaires ÉMIS. Le jour où il faudra un CA net, c'est une
-      // seconde mesure à côté — pas celle-ci qu'il faut rechanger, sinon
-      // l'écran se remet à s'écarter du bilan sans que personne ne sache pourquoi.
-      const emise = (p) => p.statut !== 'annule' && p.type !== 'remboursement';
-      const surExercice = (e) => paiements.filter(p => emise(p)
-        && p.date_facturation && p.date_facturation >= e.du && p.date_facturation <= e.au);
-
-      // LE CA DEPUIS LA CRÉATION — lu dans le BILAN, pas recompté ici.
-      //
-      // ⚠ « DEPUIS LE DÉBUT DE L'ACTIVITÉ » ÉTAIT FAUX, et je l'ai publié le
-      // 05/11/2026. La ligne additionnait nos factures et annonçait 1 007 462 €
-      // « depuis le début de l'activité ». ⚠ LA PREMIÈRE FACTURE DE LA BASE
-      // DATE DU 05/11/2024 : il n'y a RIEN avant, l'exercice 2023/2024 et ses
-      // 413 506 € sont entièrement absents de `rgd_paiements`. Le chiffre
-      // d'Élodie, 1 007 461 €, était la somme de ses exercices 2024/2025 et
-      // 2025/2026 — pas de toute son activité. Les deux coïncidaient à l'euro
-      // et j'ai pris la coïncidence pour une confirmation, sans vérifier ce que
-      // chacun recouvrait. Écart réel au 10/11/2026 : 417 638 €.
-      //
-      // ⚠ UNE SEULE SOURCE, CELLE DE LA CARTE « BILAN COMMERCIAL ». Elle prend
-      // la SAISIE d'Élodie sur un exercice clos — le CRM n'a pas cet historique
-      // — et le calcul du CRM sur l'exercice en cours. Recompter ici donnerait
-      // un second total sur le même écran, plus petit, et c'est précisément ce
-      // qu'elle a signalé : « ne collent pas avec la réalité ».
-      // ⚠ SANS ARGUMENT, COMME `carteBilan()` JUSTE EN DESSOUS. `aujourdhui` est
-      // une CHAÎNE sur cet écran (`isoDay()`), pas une Date : la lui passer fait
-      // `d.getFullYear is not a function` et la vue d'ensemble ENTIÈRE tombe en
-      // « Écran en échec ». Vu au rendu le 10/11/2026 avant publication.
-      //
-      // ⚠ ET IL PEUT RENDRE `null` : `bilanCommercial` abandonne quand aucune
-      // trace commerciale n'existe (base neuve, ou espace sans aucun devis ni
-      // facture). `.total` sur null emporterait l'écran de la même façon.
-      const bilanTotal = bilanCommercial()?.total || {};
-
-      // ⚠ TANT QUE LE NOUVEL EXERCICE NE PORTE AUCUNE FACTURE, ON AFFICHE LE
-      // PRÉCÉDENT (02/10/2026, demandé par Mickael : « tant qu'il n'y a pas de
-      // CA sur le nouvel exercice tu peux conserver l'ancien »). Le 1er octobre
-      // l'exercice bascule : le 30 au soir la tuile affichait 382 620 €, le 1er
-      // au matin 0 €, et un grand zéro sur l'écran qu'on ouvre le matin se lit
-      // comme une panne — « pourquoi je n'ai plus le CA de Costructor ? ».
-      //
-      // ⚠ LE BASCULEMENT SE FAIT TOUT SEUL, SUR UN FAIT ET NON SUR UNE DATE :
-      // dès la PREMIÈRE facture du nouvel exercice, c'est lui qui s'affiche.
-      // Un délai en jours (« les trois premières semaines d'octobre ») aurait
-      // été un réglage à retenir, et il aurait caché un vrai début d'activité.
-      //
-      // ⚠ ET L'ÉCRAN DIT QUEL EXERCICE IL MONTRE, à trois endroits — le titre,
-      // une pastille « clos », et la phrase sous le montant. Montrer l'ancien
-      // chiffre sans le nommer serait pire que le zéro : on lirait 382 620 €
-      // comme le chiffre de l'année en cours.
-      const exCourant = ex;
-      const exPrecedent = {
-        du: `${Number(ex.du.slice(0, 4)) - 1}-10-01`, au: `${Number(ex.au.slice(0, 4)) - 1}-09-30`,
-        label: `${Number(ex.du.slice(0, 4)) - 1}–${Number(ex.au.slice(0, 4)) - 1}`,
-      };
-      const facturesCourant = surExercice(exCourant);
-      const facturesPrecedent = surExercice(exPrecedent);
-      const surLePrecedent = facturesCourant.length === 0 && facturesPrecedent.length > 0;
-
-      const exVu = surLePrecedent ? exPrecedent : exCourant;
-      const facturesEx = surLePrecedent ? facturesPrecedent : facturesCourant;
-      const calculeHt = facturesEx.reduce((t, p) => t + (Number(p.montant_ht) || 0), 0);
-      const precedentHt = facturesPrecedent.reduce((t, p) => t + (Number(p.montant_ht) || 0), 0);
-
-      // ⚠ LA CORRECTION MANUELLE NE PORTE AUCUNE ANNÉE, et c'est un piège à
-      // retardement : `manual_ca_ht_exercice` est une clé unique, donc une
-      // valeur saisie pour 2025–2026 s'afficherait telle quelle comme le CA de
-      // 2026–2027 dès le 1er octobre. Les deux clés sont vides aujourd'hui
-      // (vérifié en production), le trou n'a donc rien cassé — mais il faut le
-      // dire à l'écran plutôt que d'attendre la prochaine bascule. Tant qu'on
-      // montre l'exercice précédent, elle s'applique à LUI, ce qui est aussi
-      // l'exercice pour lequel elle a été saisie.
-      const corrigeHt = reglage('manual_ca_ht_exercice');
-      const caHt = corrigeHt !== null ? Number(corrigeHt) : calculeHt;
-      const corrige = corrigeHt !== null && Math.round(Number(corrigeHt)) !== Math.round(calculeHt);
+      // ⚠ LE CALCUL DU CA D'EXERCICE A QUITTÉ CET ÉCRAN LE 10/11/2026, avec la
+      // carte qui le portait. Ce qu'il faut savoir si on le ramène un jour :
+      //   • les AVOIRS NE SE DÉDUISENT PAS — c'est ce qui réconcilie l'écran
+      //     avec le bilan comptable d'Élodie ; les déduire retirait 144 653 €
+      //     de 2024/2025 et faisait croire à une reprise Costructor incomplète.
+      //     La règle vit désormais dans `data/rgd-objectifs.js` et
+      //     `data/rgd-bilan.js`, qui calculent tous deux le CA.
+      //   • la correction manuelle `manual_ca_ht_exercice` NE PORTAIT AUCUNE
+      //     ANNÉE : une valeur saisie pour un exercice s'affichait telle quelle
+      //     pour le suivant dès le 1er octobre.
+      // ⚠ ET DEUX RÉGLAGES DEVIENNENT INERTES : `manual_ca_ht_exercice` et
+      // `manual_clients_actifs` se saisissent toujours dans les réglages, mais
+      // plus aucun écran ne les lit. Les deux étaient les SEULS affichages de
+      // cette carte ; Élodie a choisi de ne garder que l'alerte Costructor.
 
       // DE QUAND DATE CE CA. Le CA calculé ne vaut que ce que vaut le dernier
       // relevé des encaissements Costructor, et ça, l'écran ne le disait pas :
@@ -791,14 +674,34 @@ export const rgdPilotagePage = {
       const leads = demandes.filter(d => !d.statut || d.statut === 'nouvelle' || d.statut === 'en_attente');
 
       const clients = scope.rgd('rgd_clients');
-      const mois = caParMois(paiements, exVu);
-      // ⚠ LES OBJECTIFS SE LISENT SUR DOUZE MOIS GLISSANTS, PAS SUR L'EXERCICE
-      // de la courbe juste en dessous — voir l'en-tête de `data/rgd-objectifs.js`.
-      // Mesuré le 04/11/2026 : calés sur l'exercice, ils n'auraient eu que deux
-      // colonnes, et une seule chaque 1er octobre.
+      // ⚠ LE GRAPHIQUE SE LIT SUR DOUZE MOIS GLISSANTS, PAS SUR L'EXERCICE,
+      // même quand les tuiles montrent le cumul de l'exercice — voir l'en-tête
+      // de `data/rgd-objectifs.js`. Mesuré le 04/11/2026 : calé sur l'exercice
+      // il n'aurait eu que deux points, et un seul chaque 1er octobre.
       const objectifs = objectifsMensuels();
       const moisObj = moisObjectifs();
-      const moyenne = mois.length ? Math.round(caHt / mois.length) : 0;
+
+      // ⚠ L'ALERTE DE SYNCHRONISATION SURVIT À LA CARTE QUI LA PORTAIT
+      // (10/11/2026) : la carte « Chiffre d'affaires » a été retirée de cet
+      // écran — son exercice se lit dans « Objectifs », vue Exercice, et le
+      // détail par exercice dans « Bilan commercial ». Élodie a choisi de
+      // garder CELLE-CI et de jeter le reste (moyenne mensuelle, clients
+      // actifs déclarés, avertissement de correction manuelle).
+      //
+      // ⚠ ET IL FALLAIT LA GARDER : c'est le seul endroit de l'écran qui dise
+      // DE QUAND date le chiffre. La synchronisation s'est arrêtée le
+      // 24/07/2026 sans que rien ne le signale, et deux mois plus tard le CA
+      // affiché était toujours celui de juillet, avec l'air d'être à jour. Une
+      // donnée vieille est plus dangereuse qu'une donnée absente.
+      const alerteSync = `<p class="rgd-ca-frais small ${syncKo ? 'ko' : 'ok'}">
+        <span class="chip ${syncKo ? 'red' : 'green'}">${syncKo ? 'Factures en retard' : 'Factures à jour'}</span>
+        <span class="grow">${syncFactures?.dernier_succes
+          ? `Dernier relevé Costructor des factures ${esc(fmtDate(syncFactures.dernier_succes))}${ageSync > 2
+            ? `, il y a ${ageSync} jours : <b>le CA calculé est celui de cette date</b>, pas celui d’aujourd’hui.` : '.'}`
+          : 'Aucun relevé Costructor des factures n’est enregistré : rien ne dit de quand date ce CA.'}
+        ${dernierEncaissement ? ` Dernière facture connue : ${esc(fmtDate(dernierEncaissement))}.` : ''}</span>
+        <a href="#/rgd/costructor">Voir la synchronisation</a>
+      </p>`;
       // Les sept étapes viennent du module commun : le pipeline et la liste
       // comptent forcément les mêmes personnes, y compris les gardes.
       const etapes = etapesRgd().map(e => ({
@@ -850,68 +753,16 @@ export const rgdPilotagePage = {
             à « Devis en cours », tous n’en ont pas encore.
 </p>
         </section>
-${carteObjectifs(moisObj, objectifs)}
+        ${/* ⚠ LES OBJECTIFS À GAUCHE, LA JOURNÉE À DROITE (10/11/2026, Élodie :
+              « on supprime le graphique chiffre d'affaires 2026-2027 et on met
+              le récap des rendez-vous du jour à droite des objectifs du mois »).
+              La carte « Chiffre d'affaires » occupait cette place : son exercice
+              se lit maintenant dans « Objectifs », vue Exercice, et le détail
+              par exercice dans « Bilan commercial » juste en dessous — trois
+              endroits pour le même chiffre, il n'en reste que deux. */ ''}
         <div class="rgd-duo">
 
-        <section class="card rgd-ca">
-          <div class="card-head"><h2>Chiffre d’affaires ${esc(exVu.label)}</h2>
-            <span class="grow"></span>
-            <span class="muted small">exercice du 1<sup>er</sup> octobre au 30 septembre</span></div>
-          <div class="rgd-ca-ligne">
-            <b class="rgd-ca-montant">${eur(caHt)}</b>
-            <span class="muted">HT</span>
-            ${surLePrecedent ? '<span class="chip muted">exercice clos</span>' : ''}
-            ${corrige ? '<span class="chip amber">corrigé à la main</span>' : ''}
-          </div>
-          ${!facturesCourant.length ? `<p class="rgd-ca-neuf">L’exercice
-              <b>${esc(exCourant.label)}</b> a commencé le 1<sup>er</sup> octobre et
-              <b>ne porte encore aucune facture</b>.${surLePrecedent
-                ? ` L’écran montre donc le dernier exercice clos, et basculera tout
-                  seul sur ${esc(exCourant.label)} dès la première facture.` : ''}</p>` : ''}
-          ${facturesEx.length ? `<p class="small muted rgd-ca-sous">Moyenne mensuelle ${eur(moyenne)} HT sur
-            ${mois.length} mois${surLePrecedent ? '' : ` écoulé${mois.length > 1 ? 's' : ''}`}.${!surLePrecedent && precedentHt
-              ? ` Exercice ${esc(exPrecedent.label)} : ${eur(precedentHt)} HT.` : ''}</p>` : ''}
-          ${'' /* ⚠ CE TOTAL N'EST PAS CELUI DE L'EXERCICE AFFICHÉ AU-DESSUS, et le
-             libellé doit le dire en toutes lettres : deux montants l'un sous l'autre
-             se lisent comme la même mesure. Celui-ci couvre TOUTE l'activité. */}
-          ${bilanTotal.ca == null ? '' : `<p class="rgd-ca-total">Depuis la création :
-            <b>${eur(bilanTotal.ca)} HT</b> facturés${bilanTotal.chantiers
-              ? `, <b>${bilanTotal.chantiers} chantier${bilanTotal.chantiers > 1 ? 's' : ''} signé${bilanTotal.chantiers > 1 ? 's' : ''}</b>` : ''}.
-            ${'' /* ⚠ LE CHIFFRE DES EXERCICES CLOS EST CELUI DU BILAN D'ÉLODIE, pas le
-               nôtre, et il faut que l'écran le dise : le CRM ne porte aucune facture
-               avant le 05/11/2024. Sans cette phrase, on croirait que la base remonte
-               à la création — c'est l'erreur du 05/11/2026. */}
-            <span class="muted">Exercices clos : tes chiffres de bilan. Le CRM, lui, ne
-              porte rien avant le 5 novembre 2024.</span></p>`}
-          ${courbeCa(mois)}
-          ${corrige ? `<p class="small">
-            <b>Ce chiffre est saisi à la main</b> et masque le calcul, qui donne
-            ${eur(calculeHt)}. Tant qu’une correction existe, l’écran ne peut plus
-            signaler que la synchronisation Costructor est en retard : c’est
-            exactement ce qui a caché deux mois de factures absentes jusqu’au
-            23/09/2026. Si les deux valeurs se ressemblent, vérifiez la date du
-            dernier relevé avant de conclure que tout va bien.
-            Pour rendre la main au calcul : saisir <b>0</b> dans les
-            <a href="#/rgd/reglages">réglages</a>.
-            <b>Elle ne porte aucune année</b> : elle a été saisie pour un exercice
-            et s’applique à celui-ci, à revérifier après chaque 1<sup>er</sup> octobre.
-            <b>La courbe, elle, montre le calculé</b> — mois par mois, il n’existe pas
-            de saisie manuelle, et lisser la correction sur douze mois inventerait
-            une répartition que personne n’a constatée.</p>`
-            : '<p class="small muted">Calculé sur les factures émises de l’exercice — avoirs et annulées exclus, comme le bilan comptable.</p>'}
-          ${reglage('manual_clients_actifs') !== null ? `<p class="small muted">
-            Clients actifs déclarés : <b>${esc(reglage('manual_clients_actifs'))}</b>,
-            également saisi à la main côté RGD.</p>` : ''}
-          <p class="rgd-ca-frais small ${syncKo ? 'ko' : 'ok'}">
-            <span class="chip ${syncKo ? 'red' : 'green'}">${syncKo ? 'Factures en retard' : 'Factures à jour'}</span>
-            <span class="grow">${syncFactures?.dernier_succes
-              ? `Dernier relevé Costructor des factures ${esc(fmtDate(syncFactures.dernier_succes))}${ageSync > 2
-                ? `, il y a ${ageSync} jours : <b>le CA calculé est celui de cette date</b>, pas celui d’aujourd’hui.` : '.'}`
-              : 'Aucun relevé Costructor des factures n’est enregistré : rien ne dit de quand date ce CA.'}
-            ${dernierEncaissement ? ` Dernière facture connue : ${esc(fmtDate(dernierEncaissement))}.` : ''}</span>
-            <a href="#/rgd/costructor">Voir la synchronisation</a>
-          </p>
-        </section>
+${carteObjectifs(moisObj, objectifs)}
 
         <section class="card rgd-jour">
           <div class="card-head"><h2>Aujourd’hui</h2>
@@ -932,7 +783,11 @@ ${carteObjectifs(moisObj, objectifs)}
 
         </div>
 
-${carteBilan()}
+${/* ⚠ `new Date()` EXPLICITE, PAS `aujourdhui` : sur cet écran `aujourdhui`
+      est une CHAÎNE (`isoDay()`), et la passer à une fonction qui attend une
+      Date fait tomber la vue d'ensemble entière en « Écran en échec ». Piège
+      signalé par la session qui travaille sur le bilan, le 10/11/2026. */ ''}
+${carteBilan(new Date(), alerteSync)}
 
         ${docsSt.length || leads.length ? `<div class="pil-alertes">
           ${leads.length ? `<a class="pil-alerte" href="#/rgd/clients">
@@ -953,11 +808,25 @@ ${carteBilan()}
     // Le choix du mois des objectifs : un seul écouteur sur la racine, qui
     // survit aux redessins (la carte est réécrite à chaque `draw`).
     // Le détail d'une rangée des objectifs : la liste de ce qui fait le chiffre.
+    // ⚠ UNE TUILE PORTE MAINTENANT PLUSIEURS MOIS : en vue « Exercice » elle
+    // en couvre jusqu'à douze, et la fenêtre met leurs listes bout à bout,
+    // triées par date. En vue « Mois » il n'y en a qu'un, et rien ne change.
+    //
+    // ⚠ LES LIGNES NE SE DÉDOUBLONNENT PAS COMME LE COMPTE : sur un exercice,
+    // un client qui signe deux fois compte pour UN dans la tuile (union des
+    // clés) mais pour DEUX lignes ici — ce sont deux devis, et les cacher
+    // ferait un total de montants faux. Le pied de la fenêtre compte donc des
+    // lignes, jamais des clients.
     const ouvrirDetail = (tr) => {
       const se = SERIES.find(x => x.champ === tr.dataset.obDetail);
-      const m = moisObjectifs().find(x => x.cle === tr.dataset.obCle);
-      if (!se || !m) return;
-      const d = detailMoisObjectif(m.cle, se.champ);
+      const cles = String(tr.dataset.obCles || '').split(',').filter(Boolean);
+      if (!se || !cles.length) return;
+      const parts = cles.map(c => detailMoisObjectif(c, se.champ));
+      const d = {
+        lignes: parts.flatMap(p => p.lignes)
+          .sort((a, b) => String(a.date).localeCompare(String(b.date))),
+        note: parts.map(p => p.note).filter(Boolean)[0] || '',
+      };
       const avecMontant = d.lignes.some(l => l.montant != null);
       const total = d.lignes.reduce((t, l) => t + (l.montant || 0), 0);
       const corps = d.lignes.length ? `<div class="table-wrap"><table class="rgd-bil-detail">
@@ -966,8 +835,8 @@ ${carteBilan()}
           ${avecMontant ? `<td class="num">${eur(l.montant, { maximumFractionDigits: 2 })}</td>` : ''}</tr>`).join('')}</tbody>
         <tfoot><tr><td colspan="${avecMontant ? 3 : 3}"><b>${d.lignes.length} ligne${d.lignes.length > 1 ? 's' : ''}</b></td>
           ${avecMontant ? `<td class="num"><b>${eur(total, { maximumFractionDigits: 2 })}</b></td>` : ''}</tr></tfoot>
-      </table></div>` : '<div class="empty">Rien ce mois-ci.</div>';
-      openModal(`${se.label} · ${m.label}`,
+      </table></div>` : `<div class="empty">Rien sur ${esc(tr.dataset.obQuand || 'cette période')}.</div>`;
+      openModal(`${se.label} · ${tr.dataset.obQuand || ''}`.trim(),
         `${d.note ? `<p class="rgd-bil-note">${esc(d.note)}</p>` : ''}${corps}`, { wide: true });
     };
     root.addEventListener('keydown', (e) => {
@@ -978,6 +847,8 @@ ${carteBilan()}
     root.addEventListener('click', (e) => {
       const tr = e.target.closest?.('[data-ob-detail]');
       if (tr) { ouvrirDetail(tr); return; }
+      const v = e.target.closest?.('[data-ob-vue]');
+      if (v && !v.disabled) { vueObjectif = v.dataset.obVue; draw(); return; }
       const b = e.target.closest?.('[data-ob-pas]');
       if (!b || b.disabled) return;
       const mois = moisObjectifs();
