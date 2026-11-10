@@ -10,10 +10,11 @@
 // qui affichent deux vérités différentes sur le même chiffre, c'est pire que
 // pas d'écran du tout : personne ne sait plus lequel croire.
 //
-// LE CA AFFICHÉ EST CELUI QUE LE CRM CALCULE — depuis le 23/09/2026
-// `manual_ca_ht_exercice` et `manual_ca_ttc_exercice` (table `rgd_reglages`)
-// l'emportent TOUJOURS sur le calcul quand elles portent une valeur, mais
-// elles sont désormais VIDES, et c'est délibéré.
+// LE CA AFFICHÉ EST CELUI QUE LE CRM CALCULE, ET IL N'Y A PLUS DE CORRECTION
+// POSSIBLE — depuis le 10/11/2026, `manual_ca_ht_exercice`,
+// `manual_ca_ttc_exercice` et `manual_clients_actifs` ne se saisissent plus
+// nulle part : leurs champs ont quitté les réglages. Les lignes restent en
+// base, aucun écran ne les lit.
 //
 // ⚠ POURQUOI ON A COUPÉ CETTE CORRECTION, ET CE QU'ELLE A COÛTÉ.
 // Elle existait parce que le calcul sous-estimait : la reprise Costructor
@@ -830,10 +831,12 @@ export const rgdPilotagePage = {
       //   • la correction manuelle `manual_ca_ht_exercice` NE PORTAIT AUCUNE
       //     ANNÉE : une valeur saisie pour un exercice s'affichait telle quelle
       //     pour le suivant dès le 1er octobre.
-      // ⚠ ET DEUX RÉGLAGES DEVIENNENT INERTES : `manual_ca_ht_exercice` et
-      // `manual_clients_actifs` se saisissent toujours dans les réglages, mais
-      // plus aucun écran ne les lit. Les deux étaient les SEULS affichages de
-      // cette carte ; Élodie a choisi de ne garder que l'alerte Costructor.
+      // ⚠ ET LES DEUX RÉGLAGES DEVENUS INERTES ONT ÉTÉ RETIRÉS LE MÊME JOUR
+      // (Élodie : « corrige les deux réglages inertes ») : `manual_ca_ht_exercice`
+      // et `manual_clients_actifs` ne se saisissent plus. Ils étaient les SEULS
+      // affichages de cette carte, et un champ qui s'enregistre sans que rien ne
+      // change se lit comme une panne. Le tableau « Ce qui n'est pas réglable
+      // ici », dans les réglages, dit où ils sont passés.
 
       // DE QUAND DATE CE CA. Le CA calculé ne vaut que ce que vaut le dernier
       // relevé des encaissements Costructor, et ça, l'écran ne le disait pas :

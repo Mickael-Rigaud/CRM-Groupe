@@ -915,9 +915,6 @@ export const SEED = {
   //
   // Les clés sont celles de la production, valeurs d'exemple.
   rgd_reglages: [
-    { cle: 'manual_ca_ht_exercice', valeur: null },
-    { cle: 'manual_ca_ttc_exercice', valeur: null },
-    { cle: 'manual_clients_actifs', valeur: '34' },
     { cle: 'costructor_clients_uniques', valeur: '34' },
   ],
   rgd_sav: [

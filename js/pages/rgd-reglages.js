@@ -67,10 +67,6 @@ export const rgdReglagesPage = {
     const state = { ecriture: scope.canRgd };
 
     const draw = () => {
-      const lire = (cle) => scope.rgd('rgd_reglages').find(r => r.cle === cle)?.valeur ?? null;
-      const ht = lire('manual_ca_ht_exercice');
-      const ttc = lire('manual_ca_ttc_exercice');
-      const clients = lire('manual_clients_actifs');
       const avis = lienAvis();
       const sig = signatureRgd();
       const obj = objectifsMensuels();
@@ -83,40 +79,27 @@ export const rgdReglagesPage = {
                  ${state.ecriture ? '' : 'disabled'}>
         </label>`;
 
+      // ⚠ LA CARTE « CHIFFRE D'AFFAIRES DE L'EXERCICE » A ÉTÉ RETIRÉE LE
+      // 10/11/2026 (Élodie : « corrige les deux réglages inertes »). Elle portait
+      // trois champs — CA HT saisi, CA TTC saisi, clients actifs déclarés — que
+      // PLUS AUCUN ÉCRAN NE LISAIT depuis que la carte « Chiffre d'affaires » de
+      // la vue d'ensemble a disparu, le matin même. Un champ qui s'enregistre
+      // sans que rien ne change est pire qu'un champ absent : on saisit une
+      // correction, l'écran dit « Enregistré », et le chiffre reste le même —
+      // on en conclut que le CRM est cassé.
+      //
+      // ⚠ ET SON BANDEAU AFFIRMAIT UNE CHOSE FAUSSE : « elles l'emportent sur le
+      // calcul automatique, parce que la reprise Costructor est incomplète et que
+      // le calcul sous-estime ». Ce n'est plus vrai depuis le 23/09/2026, date où
+      // la synchronisation a été réparée : le calcul donne exactement le chiffre
+      // de Costructor. C'est même la raison pour laquelle la correction a été
+      // vidée — elle masquait le SIGNAL qu'un écart apparaîtrait.
+      //
+      // ⚠ LES LIGNES RESTENT EN BASE, elles ne sont pas effacées : `manual_ca_*`
+      // sont vides et `manual_clients_actifs` porte encore le 34 déclaré. Rien ne
+      // les lit, elles ne gênent personne, et les supprimer ferait perdre une
+      // trace sans rien gagner. Le tableau du bas le dit à qui les chercherait.
       const corps = `
-        <div class="alert rgd-source">
-          <b>i</b>
-          <div>Ces corrections sont <b>enregistrées ici</b>, et c&rsquo;est le CRM qui en
-          est la source depuis le 22/09/2026 — elles ne sont plus recopiées depuis le
-          tableau de bord. Elles l&rsquo;emportent sur le calcul automatique du chiffre
-          d&rsquo;affaires, parce que la reprise Costructor est incomplète et que le
-          calcul sous-estime.</div>
-        </div>
-
-        <section class="card">
-          <div class="card-head"><h2>Chiffre d’affaires de l’exercice</h2>
-            <span class="muted small">1<sup>er</sup> octobre → 30 septembre</span></div>
-
-          ${state.ecriture ? '' : `<p class="small muted">
-            Lecture seule : aucun compte RGD Renova n’est associé à votre adresse,
-            ou vous êtes en mode démonstration.</p>`}
-
-          <div class="reg-grille">
-            ${champ('reg-ht', 'CA HT saisi (€)', ht)}
-            ${champ('reg-ttc', 'CA TTC saisi (€)', ttc)}
-            ${champ('reg-clients', 'Clients actifs déclarés', clients)}
-          </div>
-
-          <p class="small muted"><b>Saisir 0 n’écrit pas « zéro euro »</b> : la correction
-          est effacée et le CRM réaffiche le calcul à partir des factures. C’est ce
-          qu’il faudra faire le jour où la reprise Costructor sera complète.</p>
-
-          ${state.ecriture ? `<div class="toolbar">
-            <button type="button" class="btn primary" id="reg-ok">Enregistrer</button>
-            <span class="muted small" id="reg-etat"></span>
-          </div>` : ''}
-        </section>
-
         <!-- Les objectifs mensuels de la vue d'ensemble (04/11/2026, Elodie).
              Une seule cle, « objectifs_mensuels », qui porte un objet JSON :
              les cinq nombres bougent ensemble et n'ont aucun sens separement.
@@ -125,6 +108,12 @@ export const rgdReglagesPage = {
         <section class="card">
           <div class="card-head"><h2>Objectifs mensuels</h2>
             <span class="muted small">la carte « Objectifs du mois »</span></div>
+          ${/* ⚠ CE MOT SUIVAIT LA CARTE RETIRÉE, il ne devait pas partir avec
+                elle : sans lui, un écran dont tous les champs sont grisés ne dit
+                pas POURQUOI, et on cherche la panne. */ ''}
+          ${state.ecriture ? '' : `<p class="small muted">
+            Lecture seule : aucun compte RGD Renova n’est associé à votre adresse,
+            ou vous êtes en mode démonstration.</p>`}
           <div class="reg-grille">
             ${champ('reg-ob-dem', 'Nouvelles demandes', obj.demandes)}
             ${champ('reg-ob-rdv', 'Rendez-vous', obj.rdv)}
@@ -213,6 +202,28 @@ export const rgdReglagesPage = {
                 <td class="muted">masquée</td>
                 <td class="muted">C’est un <b>secret</b>. Il est rangé dans les secrets de la
                     plateforme, pas dans un écran ni dans une table que toute requête peut lire.</td>
+              </tr>
+              ${/* ⚠ LA TRACE DES DEUX RÉGLAGES RETIRÉS EST ICI, et c'est le seul
+                    endroit où les chercher a un sens : c'est la page où l'on vient
+                    quand on se demande « mais où je change ça ? ». Sans ces deux
+                    lignes, un champ disparaît sans un mot et on le croit perdu. */ ''}
+              <tr>
+                <td><b>Correction manuelle du chiffre d’affaires</b></td>
+                <td class="muted">retirée le 10/11/2026</td>
+                <td class="muted">Elle existait parce que le calcul sous-estimait : la reprise
+                    Costructor était incomplète. <b>Ce n’est plus vrai depuis le 23/09/2026</b> —
+                    la synchronisation a été réparée et le calcul donne le chiffre de Costructor
+                    à l’euro. Une correction à la main ne masque pas seulement un écart, elle
+                    masque le <b>signal</b> qu’un écart apparaîtrait. Le CA de l’exercice se lit
+                    dans <a href="#/rgd">les objectifs</a>, vue Exercice.</td>
+              </tr>
+              <tr>
+                <td><b>Clients actifs déclarés</b></td>
+                <td class="muted">retiré le 10/11/2026</td>
+                <td class="muted">Ce nombre ne s’affichait que sur la carte « Chiffre
+                    d’affaires » de la vue d’ensemble, retirée le 10/11/2026. Les clients se
+                    comptent désormais là où ils vivent, dans
+                    <a href="#/rgd/clients">Clients &amp; prospects</a>.</td>
               </tr>
               <tr>
                 <td><b>Connexion Google Agenda</b></td>
@@ -346,59 +357,6 @@ export const rgdReglagesPage = {
         }
       };
 
-      const bouton = root.querySelector('#reg-ok');
-      if (bouton) bouton.onclick = async () => {
-        const vHt = root.querySelector('#reg-ht').value.trim();
-        const vTtc = root.querySelector('#reg-ttc').value.trim();
-        const vClients = root.querySelector('#reg-clients').value.trim();
-        // Un champ laissé vide n'est pas envoyé : vide veut dire « je n'y
-        // touche pas », alors que 0 veut dire « efface ». Les confondre
-        // effacerait une valeur qu'on n'a pas voulu toucher.
-        const corpsMaj = {};
-        if (vHt !== '') corpsMaj.ht = nombreDe(vHt);
-        if (vTtc !== '') corpsMaj.ttc = nombreDe(vTtc);
-        if (vClients !== '') corpsMaj.clients = nombreDe(vClients);
-        if (!Object.keys(corpsMaj).length) { toast('Rien à enregistrer', 'err'); return; }
-        if (Object.values(corpsMaj).some(v => v === null)) {
-          toast('Une des valeurs n’est pas un nombre', 'err'); return;
-        }
-
-        bouton.disabled = true;
-        root.querySelector('#reg-etat').textContent = 'Enregistrement…';
-
-        // 0 EFFACE la correction : on écrit `null`, pas « 0 ». Écrire la chaîne
-        // « 0 » ferait afficher un chiffre d'affaires de zéro euro au lieu de
-        // rendre la main au calcul — l'écran promet l'inverse trois lignes
-        // plus haut.
-        const poser = async (cle, val) => {
-          const valeur = val === 0 ? null : String(val);
-          const ligne = scope.rgd('rgd_reglages').find(x => x.cle === cle);
-          // La ligne peut ne pas exister : une correction jamais saisie n'a
-          // jamais été relevée. On la crée alors, au lieu d'échouer sur une
-          // mise à jour sans cible.
-          if (ligne) {
-            const maj = await db.update('rgd_reglages', cle, { valeur });
-            ligne.valeur = maj?.valeur ?? valeur;
-          } else {
-            scope.rgd('rgd_reglages').push(await db.insert('rgd_reglages', { cle, valeur }));
-          }
-        };
-
-        try {
-          if (corpsMaj.ht !== undefined) await poser('manual_ca_ht_exercice', corpsMaj.ht);
-          if (corpsMaj.ttc !== undefined) await poser('manual_ca_ttc_exercice', corpsMaj.ttc);
-          if (corpsMaj.clients !== undefined) await poser('manual_clients_actifs', corpsMaj.clients);
-        } catch (e) {
-          bouton.disabled = false;
-          root.querySelector('#reg-etat').textContent = '';
-          toast(`Non enregistré — ${String(e.message).slice(0, 120)}`, 'err');
-          return;
-        }
-        bouton.disabled = false;
-        root.querySelector('#reg-etat').textContent = '';
-        toast('Enregistré');
-        draw();
-      };
     };
 
     draw();
