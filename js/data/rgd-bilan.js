@@ -141,6 +141,7 @@ function calculCrm(a, ceMois) {
     envoyes: envoyes.length, signes: signes.length,
     montantDevis: sommeHt(envoyes),
     ca: mois.reduce((t, m) => t + (Number(m.ca) || 0), 0),
+    encaisse: encaisseCrm(a),
   };
 }
 
@@ -176,6 +177,25 @@ export function bilanCommercial(aujourdhui = new Date()) {
         envoyes: num(s.devis_envoyes), signes: num(s.devis_signes),
         montantDevis: num(s.montant_devis), ca: num(s.ca),
       };
+      // ⚠ L'ENCAISSÉ EST LA SEULE LIGNE QUI SORT DE LA RÈGLE « un exercice
+      // saisi ne montre que le bilan comptable », et il faut savoir pourquoi
+      // avant de l'y faire rentrer : le bilan d'Élodie NE DONNE PAS
+      // l'encaissé. S'en tenir à la règle laissait vides 2024/2025 et
+      // 2025/2026 — les deux exercices pour lesquels la ligne a été demandée.
+      //
+      // Ce qui rend la reprise honnête : sur ces années-là le CRM a bien les
+      // factures. 2024/2025, il en totalise 613 569 € quand le bilan retient
+      // 613 568 € ; 2025/2026, 389 760 € contre 393 893 € (1 %). Ce n'est pas
+      // le cas de 2023/2024, où il n'a aucun paiement : `encaisseCrm` y rend
+      // `null` et la case reste à « — ».
+      //
+      // ⚠ ET LA COLONNE DIT QUE CETTE LIGNE-LÀ VIENT D'AILLEURS, par
+      // l'astérisque déjà employé pour les chantiers. Une case mélangée sans
+      // marque, c'est exactement ce que la règle interdit.
+      // Le champ `ca_encaisse` existe pour être saisi le jour où on l'aura, et
+      // il l'emporte alors sur le CRM.
+      if (num(s.ca_encaisse) != null) col.encaisse = num(s.ca_encaisse);
+      else { col.encaisse = encaisseCrm(a); col.encaisseSelonCrm = col.encaisse != null; }
       const crm = chantiersCrm(a);
       const saisiChantiers = num(s.chantiers_signes) != null && num(s.montant_signe) != null;
       Object.assign(col, saisiChantiers
@@ -194,9 +214,15 @@ export function bilanCommercial(aujourdhui = new Date()) {
     ? exercices.reduce((t, e) => t + e[champ], 0) : null);
   const total = completer({
     envoyes: cumul('envoyes'), signes: cumul('signes'), montantDevis: cumul('montantDevis'), ca: cumul('ca'),
+    // ⚠ `cumul` REND `null` DÈS QU'UN EXERCICE NE CONNAÎT PAS LA LIGNE : tant
+    // que l'encaissé de 2023/2024 n'est pas saisi, « Depuis la création »
+    // affiche « — » plutôt que la somme de trois exercices sur quatre
+    // présentée comme celle de tous. C'est la règle de toutes les autres lignes.
+    encaisse: cumul('encaisse'),
     chantiers: chantiersDistincts(exercices.map(e => e.annee)), montantSigne: cumul('montantSigne'),
   });
   total.chantiersSelonCrm = exercices.some(e => e.chantiersSelonCrm);
+  total.encaisseSelonCrm = exercices.some(e => e.encaisseSelonCrm);
 
   return { exercices, total, objectifs: objectifsExercice(), saisi: Object.keys(saisi).length > 0 };
 }
@@ -385,30 +411,103 @@ function clientsSaisisParDevis() {
   return m;
 }
 
+/** Une facture, telle que la fenêtre de détail la montre. */
+function ligneFacture(p, saisis, date) {
+  const deal = p.deal_id && db.byId('deals', p.deal_id);
+  // ⚠ LA SAISIE NE SERT QUE QUAND LE CRM NE SAIT RIEN, jamais à la place de
+  // ce qu'il sait : les 88 factures rattachées à une affaire portent toutes
+  // un client et une fiche chantier (vérifié en base), le manque était
+  // ENTIER du côté des orphelines. Les deux sources ne peuvent donc pas se
+  // contredire ici, et aucun MONTANT ne bouge — on remplit deux colonnes de
+  // texte, le total du CA est le même avant et après.
+  // `date` est passée par l'appelant : la facturation pour le CA facturé, la
+  // réception pour le CA encaissé.
+  const repris = !deal ? saisis.get(p.costructor_quote_number) : null;
+  return {
+    numero: p.reference_facture || p.libelle || '—',
+    client: (deal ? nomDe(deal) : repris?.client) || '—',
+    chantier: (!deal && repris?.chantier) || chantierDe(p),
+    date, montant: Number(p.montant_ht) || 0,
+    // Pour la note de la fenêtre : d'où vient cette ligne.
+    venue: deal ? 'affaire' : repris ? 'saisie' : 'inconnue',
+  };
+}
+
 /** Les factures d'un exercice : celles que compte le CA (ni annulées, ni avoirs). */
 function facturesCrm(a) {
   const estDans = dansEx(a);
   const saisis = clientsSaisisParDevis();
   return scope.rgd('rgd_paiements')
     .filter(p => p.statut !== 'annule' && p.type !== 'remboursement' && estDans(p.date_facturation))
-    .map(p => {
-      const deal = p.deal_id && db.byId('deals', p.deal_id);
-      // ⚠ LA SAISIE NE SERT QUE QUAND LE CRM NE SAIT RIEN, jamais à la place de
-      // ce qu'il sait : les 88 factures rattachées à une affaire portent toutes
-      // un client et une fiche chantier (vérifié en base), le manque était
-      // ENTIER du côté des orphelines. Les deux sources ne peuvent donc pas se
-      // contredire ici, et aucun MONTANT ne bouge — on remplit deux colonnes de
-      // texte, le total du CA est le même avant et après.
-      const repris = !deal ? saisis.get(p.costructor_quote_number) : null;
-      return {
-        numero: p.reference_facture || p.libelle || '—',
-        client: (deal ? nomDe(deal) : repris?.client) || '—',
-        chantier: (!deal && repris?.chantier) || chantierDe(p),
-        date: p.date_facturation, montant: Number(p.montant_ht) || 0,
-        // Pour la note de la fenêtre : d'où vient cette ligne.
-        venue: deal ? 'affaire' : repris ? 'saisie' : 'inconnue',
-      };
-    });
+    .map(p => ligneFacture(p, saisis, p.date_facturation));
+}
+
+/**
+ * Les factures ENCAISSÉES d'un exercice, datées de leur réception.
+ *
+ * ⚠ L'EXERCICE EST CELUI DE L'ENCAISSEMENT, PAS DE LA FACTURE : une facture de
+ * septembre payée en octobre bascule sur l'exercice suivant. C'est le sens
+ * même de la ligne — l'argent REÇU pendant l'exercice — et la raison pour
+ * laquelle encaissé et facturé d'une même année ne se répondent pas à l'euro.
+ *
+ * ⚠ MÊME DÉFINITION QUE « CA encaissé » DES OBJECTIFS DU MOIS
+ * (`js/data/rgd-objectifs.js`) : `statut === 'recu'`, remboursements exclus.
+ * Les deux écrans doivent bouger ensemble.
+ */
+function encaisseesCrm(a) {
+  const estDans = dansEx(a);
+  const saisis = clientsSaisisParDevis();
+  return scope.rgd('rgd_paiements')
+    .filter(p => p.statut === 'recu' && p.type !== 'remboursement' && estDans(p.date_reception))
+    .map(p => ligneFacture(p, saisis, p.date_reception));
+}
+
+/** Le premier encaissement que le CRM connaisse (date ISO), ou `null`. */
+function premierEncaissement() {
+  return scope.rgd('rgd_paiements')
+    .filter(p => p.statut === 'recu' && p.date_reception)
+    .map(p => p.date_reception).sort()[0] || null;
+}
+
+/**
+ * Ce que le CRM a encaissé sur un exercice.
+ *
+ * ⚠ ZÉRO ET « INCONNU » NE SONT PAS LA MÊME CHOSE, et c'est toute la raison
+ * d'être de cette fonction. La reprise des paiements du CRM commence au
+ * premier encaissement qu'il porte : avant, il ne sait rien, et afficher 0 €
+ * se lirait « rien n'a été encaissé cette année-là ». Après, un zéro est un
+ * vrai zéro — un exercice en cours sans aucun paiement reçu, par exemple.
+ */
+function encaisseCrm(a) {
+  const premier = premierEncaissement();
+  if (!premier || anneeExercice(mois7(premier)) > a) return null;
+  return encaisseesCrm(a).reduce((t, l) => t + l.montant, 0);
+}
+
+/** La première date d'encaissement, écrite pour être lue. */
+function premierEncaissementFr() {
+  const d = premierEncaissement();
+  return d ? `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}` : null;
+}
+
+/**
+ * Les notes qui disent d'où viennent les colonnes Client et Chantier.
+ * Partagées par « CA facturé » et « CA encaissé » : ce sont les mêmes
+ * factures, comptées à deux dates, donc les mêmes trous.
+ */
+function notesDeProvenance(lignes, notes) {
+  const reprises = lignes.filter(l => l.venue === 'saisie').length;
+  const muettes = lignes.filter(l => l.venue === 'inconnue');
+  if (reprises) {
+    notes.push(`${reprises} facture${reprises > 1 ? 's ne sont' : ' n’est'} rattachée${reprises > 1 ? 's' : ''} `
+      + `à aucune affaire du CRM : ${reprises > 1 ? 'leur client et leur chantier viennent' : 'son client et son chantier viennent'} `
+      + 'de ta liste de devis signés, retrouvés par le numéro de devis de la facture.');
+  }
+  if (muettes.length) {
+    notes.push(`${muettes.length} facture${muettes.length > 1 ? 's restent' : ' reste'} sans client : `
+      + `${muettes.map(l => l.numero).join(', ')}. ${muettes.length > 1 ? 'Elles n’ont' : 'Elle n’a'} pas de numéro `
+      + `de devis, ou ce devis n’existe ni dans le CRM ni dans ta liste.`);
+  }
 }
 
 // Les devis regroupés par chantier, pour les lignes « Chantiers » et « Panier ».
@@ -487,22 +586,33 @@ export function justifier(a, mesure, aujourdhui = new Date()) {
     // client. Sans ça, un tiret se lit comme un bug d'affichage — c'est
     // exactement ce qu'Élodie a signalé le 10/11/2026 — alors que c'est une
     // facture que rien ne relie à un dossier.
-    const reprises = lignes.filter(l => l.venue === 'saisie').length;
-    const muettes = lignes.filter(l => l.venue === 'inconnue');
-    if (reprises) {
-      notes.push(`${reprises} facture${reprises > 1 ? 's ne sont' : ' n’est'} rattachée${reprises > 1 ? 's' : ''} `
-        + `à aucune affaire du CRM : ${reprises > 1 ? 'leur client et leur chantier viennent' : 'son client et son chantier viennent'} `
-        + 'de ta liste de devis signés, retrouvés par le numéro de devis de la facture.');
-    }
-    if (muettes.length) {
-      notes.push(`${muettes.length} facture${muettes.length > 1 ? 's restent' : ' reste'} sans client : `
-        + `${muettes.map(l => l.numero).join(', ')}. ${muettes.length > 1 ? 'Elles n’ont' : 'Elle n’a'} pas de numéro `
-        + `de devis, ou ce devis n’existe ni dans le CRM ni dans ta liste.`);
-    }
+    notesDeProvenance(lignes, notes);
 
     const avecListe = annees.filter(an => details[an]?.factures?.length);
     sourceListe = avecListe.length === annees.length ? (details[avecListe[0]].source_factures || 'ta saisie')
       : avecListe.length ? 'ta saisie et les factures du CRM' : 'les factures du CRM';
+  } else if (mesure === 'encaisse') {
+    // ⚠ CETTE LISTE EST DATÉE DE LA RÉCEPTION, pas de la facturation : elle ne
+    // peut donc pas être le même ensemble que celle du CA facturé du même
+    // exercice, et ce n'est pas une anomalie.
+    for (const an of annees) {
+      const l = encaisseesCrm(an);
+      // ⚠ UN EXERCICE SANS AUCUN ENCAISSEMENT N'EST PAS UN EXERCICE À ZÉRO :
+      // la reprise des paiements du CRM ne remonte pas jusque-là. Le dire,
+      // sinon la fenêtre vide se lit comme « rien n'a été encaissé ».
+      if (!l.length && colonne.encaisse == null) {
+        const premier = premierEncaissementFr();
+        notes.push(`${an}/${an + 1} : le CRM ne connaît aucun encaissement de cet exercice`
+          + `${premier ? ` — sa reprise des paiements commence le ${premier}` : ''}.`);
+      }
+      lignes.push(...l);
+    }
+    if (colonne.encaisseSelonCrm) {
+      notes.push('Le bilan comptable ne donne pas l’encaissé : ce chiffre est celui des '
+        + 'factures reçues dans le CRM, quand le reste de la colonne vient du bilan.');
+    }
+    notesDeProvenance(lignes, notes);
+    sourceListe = 'les factures encaissées du CRM';
   } else {
     for (const an of annees) {
       lignes.push(...signesDe(an));
@@ -511,7 +621,7 @@ export function justifier(a, mesure, aujourdhui = new Date()) {
   }
 
   const total = lignes.reduce((t, l) => t + l.montant, 0);
-  const titres = { envoyes: 'Devis envoyés', signes: 'Devis signés', montantSigne: 'Montant des devis signés HT', chantiers: 'Chantiers', panier: 'Panier moyen par chantier', ca: 'CA facturé HT' };
+  const titres = { envoyes: 'Devis envoyés', signes: 'Devis signés', montantSigne: 'Montant des devis signés HT', chantiers: 'Chantiers', panier: 'Panier moyen par chantier', ca: 'CA facturé HT', encaisse: 'CA encaissé HT' };
   const res = { titre: titres[mesure], periode: a === 'total' ? 'Depuis la création' : colonne.label,
     source: sourceListe, total, nb: lignes.length, valeur: colonne[mesure === 'ca' ? 'ca' : mesure] };
 
@@ -543,7 +653,12 @@ export function justifier(a, mesure, aujourdhui = new Date()) {
       if (attendu != null && Math.round(attendu) !== Math.round(total)) {
         notes.push(`Le montant affiché est ${eurTexte(attendu)} ; les devis listés ci-dessous totalisent ${eurTexte(total)}.`);
       }
-    } else if (mesure !== 'ca' && !dejaDit && attendu != null && attendu !== res.nb) {
+    // ⚠ « CA facturé » ET « CA encaissé » SONT HORS DE CETTE COMPARAISON : elle
+    // oppose un NOMBRE DE LIGNES à la valeur de la colonne, qui pour eux est un
+    // MONTANT. Sans cette garde, la fenêtre annonçait « la liste compte 2 devis,
+    // le chiffre affiché 1300 » — deux grandeurs sans rapport, et le mot
+    // « devis » pour des factures.
+    } else if (mesure !== 'ca' && mesure !== 'encaisse' && !dejaDit && attendu != null && attendu !== res.nb) {
       notes.push(`La liste compte ${res.nb} devis, le chiffre affiché ${attendu}`
         + (mesure === 'envoyes' ? ' (celui du bilan comptable).' : '.'));
     }

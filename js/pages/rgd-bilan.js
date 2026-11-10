@@ -76,6 +76,23 @@ const LIGNES_PASSE = [
   // Juste au-dessus du CA (Élodie, 05/11/2026) : signé, puis facturé.
   ['Montant des devis signés HT', 'montantSigne', (e) => euros(e.montantSigne)],
   ['CA facturé HT', 'ca', (e) => euros(e.ca), true],
+  // ⚠ UNE LIGNE, ET PAS UN SURVOL (10/11/2026, Élodie : « je ne sais pas s'il
+  // faut le rajouter en survol sur le CA facturé ou une nouvelle ligne »). Un
+  // survol n'existe pas sur un téléphone, et c'est là que ce tableau se lit le
+  // plus souvent — le chiffre serait invisible précisément où il est attendu.
+  // Une ligne se compare d'un exercice à l'autre d'un coup d'œil, et elle se
+  // clique comme les autres pour voir les factures encaissées.
+  //
+  // ⚠ ENCAISSÉ ET FACTURÉ D'UNE MÊME ANNÉE NE SE RÉPONDENT PAS À L'EURO, et ce
+  // n'est pas un écart à corriger : le facturé se date de l'émission,
+  // l'encaissé de la réception du paiement. Une facture de septembre payée en
+  // octobre change d'exercice.
+  //
+  // ⚠ L'ASTÉRISQUE N'EST PAS DÉCORATIF : sur un exercice saisi, c'est la seule
+  // ligne qui vienne du CRM quand tout le reste de la colonne vient du bilan
+  // comptable — lequel ne donne pas l'encaissé. Le pied de carte l'explique.
+  ['CA encaissé HT', 'encaisse',
+    (e) => `${euros(e.encaisse)}${e.encaisseSelonCrm && !vide(e.encaisse) ? '<sup>*</sup>' : ''}`, true],
 ];
 
 // Une couleur par exercice clos, puis celle de l'espace pour l'exercice en
@@ -137,6 +154,7 @@ export function carteBilan(aujourdhui = new Date(), pied = '') {
   const ec = exercices.find(e => e.enCours);
   const clos = exercices.filter(e => !e.enCours);
   const selonCrm = clos.some(e => e.chantiersSelonCrm) || total.chantiersSelonCrm;
+  const encSelonCrm = clos.some(e => e.encaisseSelonCrm) || total.encaisseSelonCrm;
 
   // ⚠ L'EXERCICE EN COURS RESTE ANNONCÉ EN UNE LIGNE, même sans ses tuiles :
   // le tableau le porte dans sa colonne « en cours », et le nombre de mois
@@ -155,9 +173,12 @@ export function carteBilan(aujourdhui = new Date(), pied = '') {
             ${tableauPasse(clos, total, ec)}
           </div>
           ${tableauxParExercice(clos, total, ec)}
-          ${selonCrm ? `<p class="small muted rgd-bil-pied"><sup>*</sup> Selon le CRM, qui n’a pas tout l’historique Costructor.
-            Un client qui signe plusieurs devis compte pour un chantier.</p>` : ''}
-          <p class="small muted rgd-bil-pied">Clique sur un chiffre pour voir les devis ou les factures qui le composent.</p>
+          ${selonCrm || encSelonCrm ? `<p class="small muted rgd-bil-pied"><sup>*</sup> Selon le CRM, qui n’a pas tout l’historique Costructor.${selonCrm ? `
+            Un client qui signe plusieurs devis compte pour un chantier.` : ''}${encSelonCrm ? `
+            Le <b>CA encaissé</b> en vient toujours : le bilan comptable ne le donne pas.` : ''}</p>` : ''}
+          <p class="small muted rgd-bil-pied">Clique sur un chiffre pour voir les devis ou les factures qui le composent.
+            Le <b>CA encaissé</b> compte l’argent reçu pendant l’exercice, le <b>CA facturé</b> les factures
+            émises : une facture de septembre payée en octobre n’est pas dans le même exercice des deux côtés.</p>
           ${pied}
         </section>`;
 }
