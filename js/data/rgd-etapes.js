@@ -474,6 +474,52 @@ export function confirmationSmsDe(visite, envois) {
 // L'étape d'une fiche `rgd_clients`. Les deux tables sont passées en argument
 // pour que l'appelant qui en tient déjà une copie ne la relise pas à chaque
 // ligne — `etapesRgd()` ci-dessous les lit une fois pour toutes.
+// ⚠ DE NOUVEAUX TRAVAUX CHEZ UN CLIENT DONT LE CHANTIER EST FINI (10/11/2026,
+// Élodie : « son chantier est terminé mais il y a eu un nouveau devis entre temps
+// pour faire d'autres travaux sur ce même chantier. Je voudrais que lorsque l'on
+// détecte un nouveau devis en cours, envoyé ou accepté ça le prenne en compte dans
+// le statut d'avancement du projet quand le chantier est terminé »).
+//
+// ⚠ « NOUVEAU » NE SE LIT PAS SUR UNE DATE, ET TROIS ESSAIS L'ONT MONTRÉ —
+// mesurés en base le 10/11/2026, pas supposés. Comparer la date du devis au
+// DÉBUT du chantier remontait DIX dossiers finis depuis des mois ; à sa FIN
+// PRÉVUE, huit. Ce sont pour la plupart des tranches d'un même chantier, qu'un
+// client signe au fil des travaux — la synchronisation les réunit exprès sous
+// un seul chantier. Et comparer à la fin RÉELLE ne marche pas davantage :
+// `work_end_at` suit le dernier devis signé, donc elle a déjà sauté jusqu'aux
+// travaux neufs — chez Thibaud Prié elle vaut déjà le 02/12/2026.
+//
+// Ce qui distingue un devis à venir d'une tranche ancienne, ce n'est pas QUAND
+// il a été écrit, c'est QU'IL RESTE QUELQUE CHOSE À FAIRE :
+//   • il n'est pas encore facturé (`facture`, que Costructor pose au départ de
+//     la facture) ;
+//   • ses travaux ne sont pas finis : aucune date de fin, ou une fin à venir.
+// Sur toute la base, un seul client coche les deux cases — celui qu'Élodie a
+// signalé. Les huit autres sortis par les essais précédents ont tous leurs devis
+// facturés et leurs travaux terminés : ils restent à « Chantier terminé ».
+//
+// ⚠ ET LE CHANTIER QUI TOURNE L'EMPORTE TOUJOURS, c'est sa seconde phrase :
+// « si le chantier est en cours et qu'il y a un nouveau devis », le dossier ne
+// bouge pas. Un devis neuf ne fait donc JAMAIS reculer un chantier en cours.
+const travauxPasFinis = (v) => {
+  const fin = String(v.work_end_at || '').slice(0, 10);
+  return !fin || fin >= new Date().toISOString().slice(0, 10);
+};
+
+export function etapeDesTravauxNeufs(f, chantiers, devis) {
+  const miens = (chantiers || []).filter(c => memeQue(c, f) && estUnChantier(c));
+  // Aucun chantier fini : il n'y a rien à relancer. Un chantier en cours :
+  // il garde la main, quoi qu'il arrive côté devis.
+  if (!miens.some(c => c.etat === 'termine')) return null;
+  if (miens.some(c => c.etat === 'en_cours')) return null;
+  const neufs = (devis || []).filter(v => memeQue(v, f)
+    && !v.facture && !['refuse', 'expire'].includes(v.statut) && travauxPasFinis(v));
+  if (!neufs.length) return null;
+  if (neufs.some(v => v.statut === 'signe')) return 'devis_accepte';
+  if (neufs.some(devisEnvoye)) return 'devis_envoye';
+  return 'devis_encours';
+}
+
 export function etapeDeFiche(f, chantiers, devis, joursVisite) {
   // Indésirable passe AVANT tout, perdu compris : c'est un jugement sur la
   // personne, et aucun chantier ni devis ne doit le faire oublier.
@@ -500,6 +546,23 @@ export function etapeDeFiche(f, chantiers, devis, joursVisite) {
   // dossier en tête de liste pour toujours, ce qui est précisément ce que la
   // règle vient corriger.
   if (e === 'devis_accepte' && devisDormant(f, devis)) return 'archives';
+  // ⚠ LA SECONDE RÈGLE OÙ UN FAIT DÉFAIT UNE SAISIE, et la seule qui fasse
+  // RECULER un dossier dans le cycle. Elle ne se déclenche qu'à une étape, la
+  // dernière : un client dont tout est fini et qui rachète des travaux. Partout
+  // ailleurs la règle de l'en-tête tient — les faits font avancer, jamais reculer.
+  //
+  // ⚠ ELLE EST POSÉE APRÈS L'ARCHIVAGE DES DEVIS DORMANTS, EXPRÈS : un dossier
+  // qui revient ici a un chantier TERMINÉ derrière lui, ce n'est pas une affaire
+  // qui traîne. L'archiver le ferait disparaître de la liste de travail au
+  // moment précis où il y a quelque chose à y faire.
+  //
+  // ⚠ ELLE NE TOUCHE NI AU SAV, NI AUX ARCHIVES, NI AUX INDÉSIRABLES : ces trois
+  // étapes sont hors cycle et sortent plus haut, ou ne valent pas
+  // `chantier_termine`.
+  if (e === 'chantier_termine') {
+    const neuf = etapeDesTravauxNeufs(f, chantiers, devis);
+    if (neuf) return neuf;
+  }
   return e;
 }
 
