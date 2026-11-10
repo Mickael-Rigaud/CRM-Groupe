@@ -195,128 +195,178 @@ const SERIES = [
 ];
 
 /**
- * Les douze mois d'un indicateur, dans sa propre vignette.
+ * Les douze derniers mois des quatre indicateurs, sur UN SEUL graphique.
  *
- * ⚠ QUATRE VIGNETTES, PAS UN CADRE À QUATRE COURBES (05/11/2026, Élodie :
- * « mouais non je ne trouve pas cela ouf finalement »). Le cadre unique avait
- * deux défauts que seul le rendu a montrés : son axe en POURCENTAGE de
- * l'objectif était juste mais abstrait — « 60 % » ne dit pas si ce sont six
- * rendez-vous ou trois devis — et quatre lignes qui se croisent sur douze
- * mois, aux volumes de RGD, s'enchevêtrent au lieu de se lire.
+ * ⚠ UN CADRE À QUATRE COURBES, ET C'EST UN RETOUR EN ARRIÈRE ASSUMÉ
+ * (10/11/2026, Élodie : « je n'aime pas du tout comment c'est présenté et les
+ * 4 graphiques en dessous prennent trop de place. Je voudrais que tu fasses un
+ * seul graphique avec 4 courbes différentes »). La même forme avait été
+ * écartée le 05/11 ; elle lui a été remontrée à côté de deux autres, sur ses
+ * VRAIS chiffres, et c'est celle-là qu'elle a retenue. Les quatre vignettes
+ * mesuraient 331 px à elles seules (mesuré dans le navigateur) ; ce cadre en
+ * fait 200.
  *
- * ⚠ CHAQUE VIGNETTE GARDE SON UNITÉ ET SA PROPRE ÉCHELLE, et c'est tout
- * l'intérêt : des demandes d'un côté, des euros de l'autre, sans rien
- * convertir. NE PAS chercher à leur donner une échelle commune « pour pouvoir
- * comparer » : 20 demandes et 35 000 € ne se comparent pas, c'est précisément
- * ce qui a fait échouer le cadre unique.
+ * ⚠ LES DEUX DÉFAUTS DE LA PREMIÈRE TENTATIVE SONT TRAITÉS, PAS OUBLIÉS :
+ *   1. son axe était en POURCENTAGE DE L'OBJECTIF — juste, mais abstrait :
+ *      « 60 % » ne dit pas si ce sont six rendez-vous ou trois devis. Il y a
+ *      donc DEUX échelles, les comptages à gauche et les euros à droite. Rien
+ *      n'est converti. ⚠ ET L'AXE DE DROITE EST ÉCRIT EN VERT, la couleur de
+ *      la seule courbe qui s'y lit : sans cela rien ne dirait laquelle.
+ *   2. les quatre lignes s'enchevêtraient. Le survol donne maintenant les
+ *      QUATRE valeurs du mois pointé dans une seule bulle, avec une ligne
+ *      guide : on n'a plus à suivre une courbe de l'œil.
  *
- * ⚠ LA MARGE DE GAUCHE SE CALCULE SUR LE PLUS LONG LIBELLÉ D'AXE : « 35 000 € »
- * mesure trois fois « 20 ». Une marge fixe tronquait l'un ou gaspillait
- * l'autre.
+ * ⚠ L'ÉCHELLE DE GAUCHE SE MESURE SUR LES DONNÉES, PAS SUR LES OBJECTIFS :
+ * tirer l'axe jusqu'à 20 (l'objectif de demandes) sur une année qui plafonne à
+ * 11 écraserait les trois courbes dans le quart bas du cadre. Les objectifs
+ * sont dans les tuiles, où ils se lisent en chiffres.
+ *
+ * ⚠ ET LE VOCABULAIRE RESTE CELUI DE L'ÉCRAN : `rgd-courbe`, `rgd-grille`,
+ * `rgd-axe`, `rgd-trait`, `rgd-mois`, `rgd-zone`, `rgd-info`, `rgd-bulle` sont
+ * ceux du graphique du chiffre d'affaires, vingt lignes plus bas.
  */
-function vignetteObjectif(mois, se, cible, formate) {
-  const valeurs = mois.map(m => m[se.champ]);
-  const connues = valeurs.filter(v => v !== null && v !== undefined);
-  const dernier = valeurs[valeurs.length - 1];
-  const part = (dernier !== null && dernier !== undefined && cible > 0)
-    ? Math.round((dernier / cible) * 100) : null;
+function grapheObjectifs(mois, obj, formats, courant) {
+  const L = 940, H = 206, gauche = 44, droite = 74, cime = 16, bas = H - 30;
+  const pas = (L - gauche - droite) / (mois.length - 1);
+  const x = (i) => gauche + pas * i;
+  const y = (f) => bas - f * (bas - cime);
+  const connu = (v) => v !== null && v !== undefined;
 
-  const etiquettes = ['0', formate(cible)];
-  const gauche = 18 + Math.max(...etiquettes.map(t => t.length)) * 6.2;
-  const L = 560, H = 168, bas = H - 22, droite = 10;
-  const large = L - gauche - droite, pas = large / mois.length;
-  const max = Math.max(cible, ...connues, 1);
-  const y = (v) => bas - (v / max) * (bas - 18);
+  // Une graduation ronde au-dessus du maximum. Les paliers courts d'abord :
+  // sans eux une année à 11 demandes serait tracée sur un axe gradué à 20.
+  const rond = (v) => {
+    const p = [5, 10, 12, 15, 20, 25, 30, 40, 50, 60, 80, 100].find(k => v <= k);
+    if (p) return p;
+    const e = Math.pow(10, String(Math.round(v)).length - 1);
+    return Math.ceil(v / e) * e;
+  };
+  const valeurs = (champ) => mois.map(m => m[champ]).filter(connu);
+  const comptes = SERIES.filter(s => s.champ !== 'ca');
+  const hautN = rond(Math.max(1, ...comptes.flatMap(s => valeurs(s.champ))));
+  const hautCa = rond(Math.max(1, ...valeurs('ca')));
+  const fraction = (se, v) => (se.champ === 'ca' ? v / hautCa : v / hautN);
+  // Sous dix mille euros, « 0 k€ » sur les trois graduations ne dirait rien.
+  const etiqCa = (v) => (hautCa >= 10000 ? Math.round(v / 1000) + ' k€' : formats.ca(v));
 
-  // ⚠ L'AXE NE PORTE QUE LE ZÉRO ET L'OBJECTIF. Une troisième graduation sur
-  // une vignette de cette taille vient se coucher sur l'une des deux autres.
-  const axe = `<line x1="${gauche}" x2="${L - droite}" y1="${y(0)}" y2="${y(0)}" class="rgd-grille"></line>
-    <text x="${gauche - 8}" y="${y(0) + 4}" class="rgd-axe" text-anchor="end">0</text>
-    <line x1="${gauche}" x2="${L - droite}" y1="${y(cible).toFixed(1)}" y2="${y(cible).toFixed(1)}" class="rgd-objectif"></line>
-    <text x="${gauche - 8}" y="${(y(cible) + 4).toFixed(1)}" class="rgd-axe" text-anchor="end">${esc(formate(cible))}</text>`;
+  const crans = [0, 0.5, 1];
+  const grille = crans.map(f => `<line class="rgd-grille" x1="${gauche}" x2="${L - droite}"
+    y1="${y(f).toFixed(1)}" y2="${y(f).toFixed(1)}"></line>`).join('');
+  const axeG = crans.map(f => `<text class="rgd-axe" x="${gauche - 9}" y="${(y(f) + 4).toFixed(1)}"
+    text-anchor="end">${Math.round(f * hautN)}</text>`).join('');
+  const axeD = crans.map(f => `<text class="rgd-axe" style="fill:var(--green)" x="${L - droite + 9}"
+    y="${(y(f) + 4).toFixed(1)}">${esc(etiqCa(f * hautCa))}</text>`).join('');
 
-  // ⚠ LES COLONNES D'ABORD, LES BULLES ENSUITE, ET C'EST LE POINT DE CE
-  // DÉCOUPAGE EN DEUX PASSES. Une bulle enfermée dans le groupe de SON mois se
-  // dessine avant les colonnes des mois SUIVANTS : en SVG, ce qui vient après
-  // passe par-dessus, et une bulle de 124 px à cheval sur trois colonnes
-  // serait mangée par celles de droite. Les zones de survol sont donc posées
-  // toutes ensemble APRÈS les colonnes, chacune avec sa bulle.
-  const colonnes = mois.map((m, i) => {
-    const v = m[se.champ];
-    if (v === null || v === undefined) return '';
-    return `<rect x="${(gauche + pas * i + pas * 0.2).toFixed(1)}" y="${y(v).toFixed(1)}"
-      width="${(pas * 0.6).toFixed(1)}" height="${Math.max(0, bas - y(v)).toFixed(1)}" rx="4"
-      class="rgd-ob-colonne" style="fill:${se.couleur}"></rect>`;
+  // ⚠ LE MOIS SANS SON ANNÉE : à douze colonnes, « déc. 25 » et « janv. 26 »
+  // se marchaient dessus. La fenêtre glisse sur douze mois, l'année n'y lève
+  // aucune ambiguïté et l'en-tête de la carte la porte déjà.
+  const court = (m) => String(m.label).replace(/\s*\d{2}$/, '');
+  const legendes = mois.map((m, i) => `<text class="rgd-axe" x="${x(i).toFixed(1)}" y="${H - 8}"
+    text-anchor="middle">${esc(court(m))}</text>`).join('');
+
+  // Le mois choisi dans l'en-tête, marqué sur le graphique : sans cela les
+  // tuiles parlent d'un mois que rien ne désigne dans les douze.
+  // ⚠ LA BANDE SE RABOTE AUX BORDS DU CADRE : centrée sur le premier ou le
+  // dernier mois, la moitié débordait dans la marge et venait se poser sur les
+  // graduations en euros — vu à l'écran, le mois en cours étant le dernier.
+  const iCourant = mois.indexOf(courant);
+  const bx0 = Math.max(gauche - 6, x(iCourant) - pas / 2);
+  const bx1 = Math.min(L - droite + 6, x(iCourant) + pas / 2);
+  const bande = iCourant >= 0 ? `<rect class="rgd-ob-choisi" x="${bx0.toFixed(1)}"
+    y="${cime - 6}" width="${(bx1 - bx0).toFixed(1)}" height="${(bas - cime + 6).toFixed(1)}" rx="5"></rect>` : '';
+
+  // ⚠ UNE COURBE SE COUPE SUR LES MOIS INCONNUS, elle ne les enjambe pas :
+  // relier mars à décembre en ligne droite ferait croire à trois mois suivis
+  // alors que le CRM ne les connaît pas (les demandes ne sont suivies que
+  // depuis mars 2026, les visites techniques depuis août).
+  //
+  // ⚠ LE DERNIER MOIS EST EN COURS, DONC INCOMPLET : son segment est en
+  // pointillé et son point reste creux. Sans cela, chaque début de mois
+  // dessine quatre effondrements.
+  const courbes = SERIES.map(se => {
+    const groupes = [];
+    mois.forEach((m, i) => {
+      const v = m[se.champ];
+      if (!connu(v)) { groupes.push(null); return; }
+      const pt = [x(i), y(fraction(se, v)), i];
+      const dernier = groupes[groupes.length - 1];
+      if (Array.isArray(dernier)) dernier.push(pt); else groupes.push([pt]);
+    });
+    const suites = groupes.filter(Array.isArray);
+    if (!suites.length) return '';
+    const vers = (pts) => pts.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ');
+    const traits = suites.map(pts => {
+      const finEnCours = pts[pts.length - 1][2] === mois.length - 1 && pts.length > 1;
+      const plein = finEnCours ? pts.slice(0, -1) : pts;
+      const bout = finEnCours ? pts.slice(-2) : null;
+      return (plein.length > 1 ? `<path class="rgd-trait" style="stroke:${se.couleur}" fill="none" d="${vers(plein)}"></path>` : '')
+        + (bout ? `<path class="rgd-trait" style="stroke:${se.couleur}" fill="none"
+             stroke-dasharray="4 4" d="${vers(bout)}"></path>` : '');
+    }).join('');
+    const ronds = suites.flat().map(p => {
+      const enCours = p[2] === mois.length - 1;
+      return `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="${enCours ? 4.2 : 3}"
+        style="fill:${enCours ? 'var(--card)' : se.couleur};stroke:${se.couleur}"
+        stroke-width="${enCours ? 2.2 : 0}"></circle>`;
+    }).join('');
+    return `<g>${traits}${ronds}</g>`;
   }).join('');
 
-  // ⚠ LA BULLE EST CELLE DU GRAPHIQUE DU CHIFFRE D'AFFAIRES (05/11/2026,
-  // Élodie : « quand on survole les graphiques je voudrais avoir les chiffres
-  // par mois »). `rgd-info`, `rgd-bulle`, `rgd-bulle-mois` et `rgd-bulle-ca`
-  // existent depuis cet écran-là : aucune classe neuve, et le jour où l'une
-  // d'elles change, les deux graphiques suivent ensemble.
+  // ⚠ UNE SEULE BULLE POUR LES QUATRE, et c'est elle qui répond à
+  // l'enchevêtrement : au lieu de suivre une courbe de l'œil jusqu'à son mois,
+  // on pointe le mois et on lit les quatre lignes. Elle se pose du côté OPPOSÉ
+  // au curseur, sans quoi elle cacherait justement ce qu'on désigne.
   //
-  // ⚠ LE `<title>` RESTE SOUS LA BULLE, et ce n'est pas un doublon : la bulle
-  // se dessine au survol, que le doigt n'a pas. Sur téléphone, un appui long
-  // reste le seul moyen de lire le chiffre d'un mois.
-  const LARGE_BULLE = 124, HAUT_BULLE = 38;
+  // ⚠ LE `<title>` RESTE SOUS LA BULLE : la bulle naît du survol, que le
+  // doigt n'a pas. Sur téléphone, l'appui long reste le seul moyen de lire.
+  const LB = 182, HB = 24 + SERIES.length * 16;
   const survols = mois.map((m, i) => {
-    const v = m[se.champ];
-    const connu = v !== null && v !== undefined;
-    const part = connu && cible > 0 ? Math.round((v / cible) * 100) : null;
-    const dit = connu ? `${formate(v)}${part === null ? '' : ' · ' + part + ' %'}` : 'pas de donnée';
-    const cy = connu ? y(v) : bas;
-    // ⚠ LA BULLE SE RABAT SOUS LE SOMMET DE LA COLONNE quand elle sortirait
-    // par le haut, et se recadre sur les bords : aux mois extrêmes elle
-    // débordait du cadre.
-    const bx = Math.min(Math.max(gauche + pas * i + pas / 2 - LARGE_BULLE / 2, 2), L - LARGE_BULLE - 2);
-    const haut = cy - HAUT_BULLE - 8;
-    const by = haut < 2 ? Math.min(cy + 10, bas - HAUT_BULLE) : haut;
+    const cx = x(i);
+    const bx = cx < L / 2 ? Math.min(cx + 14, L - LB - 2) : Math.max(cx - LB - 14, 2);
+    const lignes = SERIES.map((se, k) => {
+      const v = m[se.champ];
+      return `<text class="rgd-bulle-mois" style="font-size:11.5px;opacity:.72" x="11" y="${36 + k * 16}">${esc(se.label)}</text>
+        <text class="rgd-bulle-ca" style="font-size:12px" x="${LB - 11}" y="${36 + k * 16}"
+          text-anchor="end">${connu(v) ? esc(formats[se.champ](v)) : '—'}</text>`;
+    }).join('');
+    const dit = SERIES.map(se => `${se.court} ${connu(m[se.champ]) ? formats[se.champ](m[se.champ]) : '—'}`).join(' · ');
     return `<g class="rgd-mois">
-      <rect class="rgd-zone" x="${(gauche + pas * i).toFixed(1)}" y="0" width="${pas.toFixed(1)}" height="${bas}"></rect>
-      ${/* ⚠ LA COLONNE EST REDESSINÉE PAR-DESSUS LA BANDE DE SURVOL. La bande
-            se peint après les colonnes — il le faut, puisque les bulles doivent
-            passer au-dessus de tout — et elle délavait la colonne du mois
-            pointé, le seul qu'on regarde. Ce doublon la remet au premier plan,
-            à sa couleur pleine. */ ''}
+      <rect class="rgd-zone" x="${(cx - pas / 2).toFixed(1)}" y="0" width="${pas.toFixed(1)}" height="${bas}"></rect>
       <g class="rgd-info">
-        ${connu ? `<rect x="${(gauche + pas * i + pas * 0.2).toFixed(1)}" y="${y(v).toFixed(1)}"
-          width="${(pas * 0.6).toFixed(1)}" height="${Math.max(0, bas - y(v)).toFixed(1)}" rx="4"
-          style="fill:${se.couleur}"></rect>` : ''}
-        <g transform="translate(${bx.toFixed(1)},${by.toFixed(1)})">
-          <rect width="${LARGE_BULLE}" height="${HAUT_BULLE}" rx="8" class="rgd-bulle"></rect>
-          <text x="${LARGE_BULLE / 2}" y="15" text-anchor="middle" class="rgd-bulle-mois">${esc(m.label)}</text>
-          <text x="${LARGE_BULLE / 2}" y="31" text-anchor="middle" class="rgd-bulle-ca">${esc(dit)}</text>
+        <line class="rgd-ob-guide" x1="${cx.toFixed(1)}" x2="${cx.toFixed(1)}" y1="${cime - 6}" y2="${bas}"></line>
+        <g transform="translate(${bx.toFixed(1)},6)">
+          <rect width="${LB}" height="${HB}" rx="9" class="rgd-bulle"></rect>
+          <text class="rgd-bulle-mois" x="11" y="18">${esc(m.label)}</text>
+          ${lignes}
         </g>
       </g>
-      <title>${esc(m.label)} · ${esc(dit)}${connu ? ' sur ' + esc(formate(cible)) : ''}</title>
+      <title>${esc(m.label)} · ${esc(dit)}</title>
     </g>`;
   }).join('');
 
-  // ⚠ LE MOIS SANS SON ANNEE SOUS LES VIGNETTES : a douze colonnes sur une
-  // demi-largeur de carte, « déc. 25 » et « janv. 26 » se marchaient dessus et
-  // la ligne des mois devenait un pâté. La fenêtre glisse sur douze mois :
-  // l'année n'y lève aucune ambiguïté, et l'en-tête de la carte la porte déjà.
-  const court = (m) => String(m.label).replace(/\s*\d{2}$/, '');
-  const legendes = mois.map((m, i) => `<text x="${(gauche + pas * i + pas / 2).toFixed(1)}" y="${H - 5}"
-    class="rgd-axe" text-anchor="middle">${esc(court(m))}</text>`).join('');
-
-  return `<div class="rgd-ob-vignette">
-    <div class="rgd-ob-vt"><b style="color:${se.couleur}">${esc(se.label)}</b>
-      <span>${dernier === null || dernier === undefined ? '—' : esc(formate(dernier))} sur ${esc(formate(cible))}${part === null ? '' : ' · ' + part + ' %'}</span></div>
-    <svg viewBox="0 0 ${L} ${H}" role="img"
-      aria-label="${esc(se.label)} mois par mois, face à l’objectif de ${esc(formate(cible))}">
-      ${axe}${colonnes}${legendes}${survols}
-    </svg>
-  </div>`;
+  return `<div class="rgd-ob-graphe"><svg class="rgd-courbe" viewBox="0 0 ${L} ${H}" role="img"
+    aria-label="Les quatre indicateurs mois par mois, sur les douze derniers mois">
+    ${grille}${bande}${axeG}${axeD}${legendes}${courbes}${survols}
+  </svg></div>`;
 }
 
 /**
  * La carte entière, dans la langue de l'écran.
  *
- * ⚠ LES QUATRE CARTES SONT CELLES DU PIPELINE, AU MÊME BALISAGE : `rgd-et`,
- * son grand nombre, son libellé, sa jauge verticale et son pourcentage. Elles
- * ne sont pas des liens, faute d'un écran où mener — c'est la seule différence,
- * et elle ne se voit pas.
+ * ⚠ LES QUATRE TUILES ONT LEURS PROPRES CLASSES, ET C'EST UN CHOIX, PAS UN
+ * OUBLI. Elles ont d'abord emprunté `rgd-bil-tuile` au Bilan commercial — la
+ * carte juste en dessous — pour ne pas inventer une forme de plus. Le rendu a
+ * montré quatre tuiles à moitié invisibles : une autre session était en train
+ * de redessiner cette carte-là (dégradés, texte blanc, anneaux) et mes tuiles
+ * en héritaient. Emprunter n'est bon que si l'on emprunte à quelque chose de
+ * stable ; ici le voisin bougeait sous nos pieds.
+ *
+ * ⚠ ELLES NE REPRENNENT PAS NON PLUS `rgd-et` DU PIPELINE, et c'est la
+ * correction du 05/11 qu'il ne faut pas défaire : avec les cartes du pipeline,
+ * les deux blocs devenaient indiscernables l'un de l'autre à trente
+ * centimètres (« c'est la même présentation qu'en haut »).
+ *
+ * ⚠ CHAQUE TUILE PORTE LA COULEUR DE SA COURBE : c'est ce qui lui permet de
+ * tenir lieu de légende au graphique, et pourquoi il n'y en a pas d'autre.
  *
  * ⚠ LE MOIS EN COURS EST INCOMPLET PAR CONSTRUCTION : le 5 novembre, « 5 % »
  * n'est pas un échec, c'est le cinquième jour. L'en-tête le dit, parce que sans
@@ -343,41 +393,36 @@ function carteObjectifs(mois, obj) {
   const euros = (v) => eur(Math.round(v));
   const nombre = (v) => String(v);
   const formats = { demandes: nombre, rdv: nombre, devisSignes: nombre, ca: euros };
-  // ⚠ DES RANGÉES, PAS DES CARTES, ET C'EST LE POINT DE CETTE VERSION
-  // (05/11/2026, Élodie : « c'est la même présentation qu'en haut, on ne
-  // distingue pas les deux éléments »). La version d'avant reprenait les
-  // cartes `rgd-et` du pipeline au balisage près : même langue, certes, mais
-  // deux blocs devenus indiscernables l'un de l'autre à trente centimètres.
+  // ⚠ DES TUILES, PAS DES RANGÉES (10/11/2026, Élodie : « je voudrais qu'on
+  // revoie le visuel de la section »). Chacune porte la couleur de sa courbe :
+  // la tuile est la légende du graphique, ce qui évite d'en poser une séparée.
   //
-  // ⚠ ON NE SORT PAS DE LA LANGUE DU CRM POUR AUTANT : `rgd-pipe-table` et sa
-  // piste horizontale sont déjà dans la feuille de style — elles y dormaient,
-  // plus aucun écran ne les appelait. La forme change, le vocabulaire non, et
-  // aucune ligne de style n'est ajoutée.
-  const rangee = (se) => {
+  // ⚠ LE CLIC NE CHANGE PAS DE PORTE : `data-ob-detail` et `data-ob-cle` sont
+  // lus par le gestionnaire posé sur `root`, qui ne regarde ni la balise ni la
+  // classe. Déplacer l'attribut d'un `<tr>` vers un `<article>` suffit, et la
+  // liste du mois s'ouvre comme avant.
+  const tuile = (se) => {
     const v = courant[se.champ];
     const cible = obj[se.cible];
     const connu = v !== null && v !== undefined;
     const part = connu && cible > 0 ? Math.round((v / cible) * 100) : null;
     const formate = formats[se.champ];
-    // ⚠ LA RANGÉE SE SURVOLE ET SE CLIQUE (05/11/2026, Élodie : « des infos
-    // pour détailler les résultats quand on survole ou qu'on clique »). Au
-    // survol, les premiers noms ; au clic, la liste complète (`detailMoisObjectif`).
+    // Au survol, les premiers noms ; au clic, la liste complète.
     const d = detailMoisObjectif(courant.cle, se.champ);
     const noms = [...new Set(d.lignes.map(l => l.client))];
     const bulle = d.lignes.length
       ? `${noms.slice(0, 6).join(', ')}${noms.length > 6 ? ` et ${noms.length - 6} autre${noms.length > 7 ? 's' : ''}` : ''} — cliquer pour le détail`
       : 'Rien ce mois-ci';
-    return `<tr class="rgd-ob-clic" data-ob-detail="${se.champ}" data-ob-cle="${esc(courant.cle)}"
+    return `<article class="rgd-ob-tuile" style="--c:${se.couleur}"
+      data-ob-detail="${se.champ}" data-ob-cle="${esc(courant.cle)}"
       role="button" tabindex="0" title="${esc(bulle)}">
-      <th scope="row">${esc(se.label)}</th>
-      <td class="rgd-pipe-barre">
-        <div class="rgd-pipe-piste"><i style="width:${Math.min(100, part || 0)}%;background:${se.couleur}"></i></div>
-      </td>
-      <td class="rgd-pipe-n"><b style="color:${se.couleur}">${connu ? esc(formate(v)) : '—'}</b><span class="rgd-ob-sur">sur ${esc(formate(cible))}</span></td>
-      <td class="rgd-ob-pct${part !== null && part >= 100 ? ' atteint' : ''}">${part === null ? '' : part + ' %'}</td>
-    </tr>`;
+      <div class="rgd-ob-lib">${esc(se.label)}</div>
+      <div class="rgd-ob-gros">${connu ? esc(formate(v)) : '—'}<i>sur ${esc(formate(cible))}</i></div>
+      <span class="rgd-ob-piste"><i style="width:${Math.min(100, part || 0)}%"></i></span>
+      <div class="rgd-ob-part${part !== null && part >= 100 ? ' atteint' : ''}">${
+        part === null ? '—' : part + ' % de l’objectif'}</div>
+    </article>`;
   };
-
   const pc = (v) => (v === null ? '—' : v + ' %');
 
   return `
@@ -397,7 +442,7 @@ function carteObjectifs(mois, obj) {
             </span>
             <span class="muted small">${enCours ? `jour ${jour} sur ${joursDuMois}` : 'mois terminé'}</span></div>
 
-          <table class="rgd-pipe-table rgd-ob-table"><tbody>${SERIES.map(rangee).join('')}</tbody></table>
+          <div class="rgd-ob-tuiles">${SERIES.map(tuile).join('')}</div>
 
           ${/* ⚠ LES TAUX SE LISENT SUR DOUZE MOIS, PAS SUR LE MOIS EN COURS, et
                 c'est ce que les vrais chiffres ont imposé : au 5 novembre, une
@@ -413,18 +458,24 @@ function carteObjectifs(mois, obj) {
             (${t.envoyes} envoyés, ${t.signes} signés)${t.panier === null ? ''
               : `. Un devis signé rapporte <b>${esc(eur(t.panier))}</b> en moyenne`}.</p>
 
-          ${/* ⚠ NI ONGLETS NI LÉGENDE : chaque vignette porte son nom et sa
-                couleur. Une légende commune supposerait une échelle commune,
-                que ces quatre grandeurs n'ont pas. */ ''}
-          <div class="rgd-ob-vignettes">
-            ${SERIES.map(se => vignetteObjectif(mois, se, obj[se.cible], formats[se.champ])).join('')}
-          </div>
+          ${/* ⚠ PAS DE LÉGENDE SOUS LE GRAPHIQUE : les quatre tuiles au-dessus
+                en tiennent lieu, chacune à la couleur de sa courbe. Une
+                légende de plus répéterait quatre noms déjà écrits. */ ''}
+          ${grapheObjectifs(mois, obj, formats, courant)}
 
+          ${/* ⚠ LE PIED SUIT LE DESSIN : il parlait de colonnes, de ligne
+                pointillée d'objectif et de vignettes qui gardent leur unité —
+                il n'y en a plus. Ce qu'il doit dire maintenant, c'est QUEL AXE
+                lit quelle courbe, parce que c'est la seule chose que le
+                graphique ne peut pas dire tout seul. */ ''}
           <p class="small muted rgd-ob-pied">Chaque mois compte ce qui s’y est <b>passé</b> :
           demandes reçues, rendez-vous tenus, devis signés, factures émises. Un <b>rendez-vous</b> est
-          une visite technique, la même que la colonne « RDV » ci-dessus.
+          une visite technique, la même que la colonne « RDV » du pipeline.
           <b>Deux devis pour un même client comptent pour un.</b>
-          La ligne pointillée est l’objectif ; une colonne qui la dépasse est un mois tenu. Un mois sans colonne veut dire que le CRM n’a pas la donnée, pas qu’elle vaut zéro. Chaque vignette garde son unité : elles ne se comparent pas entre elles.
+          Sur le graphique, les <b>comptages se lisent à gauche</b> et le <b>chiffre d’affaires à droite</b>,
+          en euros — l’axe est écrit dans sa couleur. Survolez un mois pour avoir les quatre chiffres.
+          Un mois sans point veut dire que le CRM n’a pas la donnée, pas qu’elle vaut zéro ; le dernier
+          mois est en cours, d’où son pointillé.
           Objectifs modifiables dans les <a href="#/rgd/reglages">réglages</a>.</p>
         </section>
 `;

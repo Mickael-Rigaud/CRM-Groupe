@@ -4101,44 +4101,82 @@ button.tb-pp:hover { color: var(--text); text-decoration: underline; text-underl
   font-size: 15px; min-width: 44px; }
 .rgd-pipe-pied { margin: 12px 0 0; border-top: 1px solid var(--line); padding-top: 10px; }
 
-/* ------------------------------------------------ Objectifs du mois (05/11/2026)
-   ⚠ PRESQUE RIEN ICI, ET C'EST VOULU. Trois dessins ont été écartés, le
-   dernier parce qu'il apportait sa propre langue — anneaux, dégradés,
-   pastilles — au milieu d'un écran qui en a déjà une (« trop de blocs
-   différents », « reprends le style du reste du CRM »). La carte réemploie
-   donc `rgd-et` du pipeline, `pill-tabs`, et `rgd-courbe` du chiffre
-   d'affaires : tout est déjà stylé plus haut dans ce fichier.
+/* ------------------------------------------------ Objectifs du mois (05/11/2026,
+   redessiné le 10/11/2026)
+   ⚠ PRESQUE RIEN ICI, ET C'EST VOULU. Cinq dessins ont été écartés avant
+   celui-ci, le troisième parce qu'il apportait sa propre langue — anneaux,
+   dégradés, pastilles — au milieu d'un écran qui en a déjà une (« trop de
+   blocs différents », « reprends le style du reste du CRM »). La carte
+   réemploie donc `rgd-bil-tuile` du Bilan commercial, plus bas sur le même
+   écran, et `rgd-courbe` du chiffre d'affaires : tout est déjà stylé dans ce
+   fichier. Ce qui suit ne fait que RECOLORER ou marquer, jamais redessiner.
 
    Ne rajouter ici que ce qui n'existe NULLE PART ailleurs. */
-
-/* Le trait de l'objectif sur la courbe : la seule chose que le graphique du
-   chiffre d'affaires n'a pas, puisqu'il n'a pas d'objectif. */
-.rgd-objectif { stroke: var(--accent-ink); stroke-width: 1.5; stroke-dasharray: 6 5;
-  opacity: .5; vector-effect: non-scaling-stroke; }
 .rgd-trait { stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+
+/* Les quatre tuiles. `--c` est posée par le module : c'est la couleur de la
+   courbe de cet indicateur, et c'est ce qui fait de la tuile la LÉGENDE du
+   graphique d'en dessous — d'où l'absence de légende séparée.
+
+   ⚠ DES CLASSES À ELLES, APRÈS UN EMPRUNT RATÉ : elles reprenaient
+   `rgd-bil-tuile` du Bilan commercial pour ne pas inventer une forme de plus.
+   Le rendu a montré quatre tuiles à moitié invisibles — une autre session
+   refondait cette carte au même moment (dégradés, texte blanc, anneaux) et les
+   tuiles en héritaient. On n'emprunte qu'à ce qui ne bouge pas.
+
+   ⚠ RIEN DE NEUF DANS LE DESSIN POUR AUTANT : bordure 1 px `--line`, filet
+   coloré en haut, libellé en petites capitales `--muted`, grand nombre en
+   `--font-display`, jauge plate. C'est le vocabulaire du reste du CRM, pas une
+   langue de plus — ce qui avait été reproché à la version du 05/11. */
+.rgd-ob-tuiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.rgd-ob-tuile { border: 1px solid var(--line); border-top: 3px solid var(--c); border-radius: 12px;
+  padding: 12px 14px 11px; background: color-mix(in srgb, var(--c) 4%, var(--card));
+  cursor: pointer; transition: border-color .12s, box-shadow .12s; }
+.rgd-ob-tuile:hover { border-color: var(--c);
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--c) 18%, transparent); }
+.rgd-ob-tuile:focus-visible { outline: 2px solid var(--c); outline-offset: 2px; }
+.rgd-ob-lib { font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .07em; color: var(--muted); }
+.rgd-ob-gros { font-family: var(--font-display); font-size: 26px; font-weight: 700;
+  letter-spacing: -.03em; line-height: 1.15; color: var(--c); margin-top: 5px;
+  font-variant-numeric: lining-nums tabular-nums; }
+/* « sur 20 » reste sur la même ligne que le nombre : une ligne à lui seul
+   rallongeait la tuile de 20 px pour deux mots. */
+.rgd-ob-gros i { font-style: normal; font-family: inherit; font-size: 12.5px;
+  font-weight: 600; color: var(--muted); margin-left: 5px; letter-spacing: 0; }
+.rgd-ob-piste { display: block; height: 6px; margin-top: 8px; border-radius: 4px;
+  background: color-mix(in srgb, var(--c) 15%, var(--card-2)); overflow: hidden; }
+.rgd-ob-piste i { display: block; height: 100%; border-radius: inherit; background: var(--c); }
+.rgd-ob-part { font-size: 11.5px; font-weight: 700; color: var(--muted); margin-top: 6px; }
+.rgd-ob-part.atteint { color: var(--green); }
+
+/* Le graphique unique : deux marques que celui du chiffre d'affaires n'a pas,
+   parce qu'il n'a ni mois choisi ni quatre courbes à repérer. */
+.rgd-ob-graphe { margin: 14px 0 2px; }
+/* Le mois montré par les tuiles, désigné parmi les douze : sans lui lesdites
+   tuiles parlent d'un mois que rien ne pointe sur le graphique. */
+.rgd-ob-choisi { fill: color-mix(in srgb, var(--accent) 12%, transparent); }
+/* La ligne guide du survol : elle ne se voit qu'avec la bulle (`rgd-info`).
+   ⚠ C'EST ELLE QUI MARQUE LE MOIS POINTÉ, ET PAS UNE BANDE DE FOND. Les
+   vignettes d'avant en peignaient une (`.rgd-mois:hover .rgd-zone`) ; ici elle
+   se peint APRÈS les courbes — il le faut, sinon la bulle passerait dessous —
+   et elle délavait les quatre lignes du mois qu'on regarde. Vu à l'écran, en
+   forçant une bulle : le vert de mars virait au vert pâle. */
+.rgd-ob-guide { stroke: var(--line-strong); stroke-width: 1; stroke-dasharray: 3 3; }
 .rgd-ob-taux { margin: 2px 0 10px; }
 .rgd-ob-taux b { color: var(--text); }
 .rgd-ob-pied { margin: 8px 0 0; border-top: 1px solid var(--line); padding-top: 10px; }
-/* Les quatre vignettes : une par indicateur, chacune avec son unite et sa
-   propre echelle. ⚠ PAS DE LEGENDE COMMUNE : elle supposerait une echelle
-   commune, que 20 demandes et 35 000 € n'ont pas. Chaque vignette porte son
-   nom et sa couleur. */
-.rgd-ob-vignettes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px 28px; margin: 12px 0 2px; }
-.rgd-ob-vignette svg { width: 100%; height: auto; display: block; overflow: visible; }
-.rgd-ob-vt { display: flex; align-items: baseline; gap: 8px; margin-bottom: 2px;
-  flex-wrap: wrap; }
-.rgd-ob-vt b { font-family: var(--font-display); font-size: 13.5px; font-weight: 700; }
-.rgd-ob-vt span { font-size: 12px; color: var(--muted); }
-.rgd-ob-colonne { transition: opacity .12s; }
-.rgd-ob-vignette .rgd-mois:hover .rgd-zone { fill: var(--card-2); opacity: .6; }
+/* Les quatre vignettes ont disparu le 10/11/2026 : un seul graphique à quatre
+   courbes les remplace. Les huit règles `.rgd-ob-vignettes` / `.rgd-ob-vignette`
+   / `.rgd-ob-vt` / `.rgd-ob-colonne` et leur repli sont parties avec elles —
+   plus un fichier du dépôt ne les écrit, vérifié par recherche. Le trait
+   d'objectif `.rgd-objectif` aussi : seules les vignettes le tiraient. */
 
-/* ⚠ UNE SEULE COLONNE SUR TELEPHONE, et c'est ce qui rend les vignettes
-   tenables la ou les quatre courbes ne l'etaient pas : a 350 px de large une
-   vignette fait encore 105 px de haut, et douze colonnes s'y lisent. Deux de
-   front donneraient six colonnes de 14 px avec leurs mois par-dessous. */
-@media (max-width: 760px) {
-  .rgd-ob-vignettes { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+/* ⚠ DEUX TUILES DE FRONT SUR TÉLÉPHONE, comme celles du bilan : quatre
+   colonnes de 80 px couperaient « Chiffre d'affaires » en trois lignes. */
+@media screen and (max-width: 760px) {
+  .rgd-ob-tuiles { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+  .rgd-ob-gros { font-size: 21px; }
 }
 
 /* La colonne de droite : la valeur, son objectif, puis la part atteinte. Le
@@ -4155,8 +4193,6 @@ button.tb-pp:hover { color: var(--text); text-decoration: underline; text-underl
 .rgd-ob-fleche:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 12%, var(--card)); border-color: var(--accent); }
 .rgd-ob-fleche:disabled { opacity: .35; cursor: default; }
 /* Une rangée des objectifs s'ouvre sur sa liste : on le montre au survol. */
-.rgd-ob-table tr.rgd-ob-clic { cursor: pointer; }
-.rgd-ob-table tr.rgd-ob-clic:hover th, .rgd-ob-table tr.rgd-ob-clic:hover td { background: color-mix(in srgb, var(--accent) 7%, transparent); }
 .rgd-ob-table .rgd-pipe-n b { font-family: var(--font-display); font-weight: 700; font-size: 15px; }
 .rgd-ob-sur { color: var(--muted); font-size: 12.5px; font-weight: 500; margin-left: 5px; }
 .rgd-ob-pct { text-align: right; font-size: 12.5px; font-weight: 700; color: var(--muted);
