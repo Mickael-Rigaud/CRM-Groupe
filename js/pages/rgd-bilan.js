@@ -103,6 +103,29 @@ function tableauPasse(clos, total, ec) {
     </table></div>`;
 }
 
+// ⚠ SUR TÉLÉPHONE, UN TABLEAU PAR EXERCICE (10/11/2026, Élodie : « pour le
+// bilan commercial, ce n'est pas du tout lisible comme ça et je voudrais
+// plutôt que tu fasses un tableau avec tous les éléments par exercice »).
+// Le grand tableau, années en colonnes, devenait sous 820 px une suite de
+// fiches où « Tous les exercices » se répétait à chaque ligne. Ici chaque
+// exercice a son bloc, de sa couleur, avec ses six lignes. Mêmes lignes
+// (`LIGNES_PASSE`), mêmes chiffres, mêmes clics : seule la disposition change.
+// ⚠ PAS DE `.table-wrap` NI DE `th` : `etiqueterColonnes` transformerait
+// encore ces tableaux en fiches.
+function tableauxParExercice(clos, total, ec) {
+  const blocs = [
+    ...(ec ? [[ec.label, ec, COULEUR_EN_COURS, ec.annee, 'en cours']] : []),
+    ...clos.slice().reverse().map((e) => [e.label, e, COULEURS_ANNEES[clos.indexOf(e) % COULEURS_ANNEES.length], e.annee, '']),
+    ['Depuis la création', total, '#1f2937', 'total', ''],
+  ];
+  return `<div class="rgd-bil-mobile">${blocs.map(([nom, e, c, an, suite]) => `
+    <div class="rgd-bil-ex" style="--ex:${c}">
+      <div class="rgd-bil-ex-tete">${esc(nom)}${suite ? ` <small>${esc(suite)}</small>` : ''}</div>
+      <table class="rgd-bil-ex-t"><tbody>${LIGNES_PASSE.map(([titre, m, f, fort]) => `<tr${fort ? ' class="rgd-bil-ca"' : ''}>
+        <td>${titre}</td><td class="num rgd-bil-clic${fort ? ' rgd-bil-fort' : ''}" ${cliquable(an, m)}>${f(e)}</td></tr>`).join('')}</tbody></table>
+    </div>`).join('')}</div>`;
+}
+
 // ⚠ `pied` EST POSÉ PAR L'APPELANT, ET IL SERT DÉJÀ (10/11/2026) : la carte
 // « Chiffre d'affaires » de la vue d'ensemble a été retirée, et l'alerte de
 // synchronisation Costructor qu'elle était SEULE à porter descend ici, au pied
@@ -131,6 +154,7 @@ export function carteBilan(aujourdhui = new Date(), pied = '') {
           <div class="rgd-bil-passe">
             ${tableauPasse(clos, total, ec)}
           </div>
+          ${tableauxParExercice(clos, total, ec)}
           ${selonCrm ? `<p class="small muted rgd-bil-pied"><sup>*</sup> Selon le CRM, qui n’a pas tout l’historique Costructor.
             Un client qui signe plusieurs devis compte pour un chantier.</p>` : ''}
           <p class="small muted rgd-bil-pied">Clique sur un chiffre pour voir les devis ou les factures qui le composent.</p>
