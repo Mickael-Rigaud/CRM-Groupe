@@ -25,7 +25,11 @@ import { estVisiteTechnique } from './rgd-etapes.js';
 // un objet JSON aux mêmes quatre clés. Cette table se LIT avec l'activité RGD
 // et ne s'ÉCRIT que par la direction — c'est déjà là que vit le cachet des
 // factures. Une valeur absente ou illisible retombe sur celles-ci.
-export const OBJECTIFS_DEFAUT = { demandes: 20, rdv: 10, devis: 5, ca: 35000 };
+// ⚠ `envoyes` EST ARRIVÉ LE 10/11/2026, et `data/rgd-bilan.js` l'ATTENDAIT :
+// il écrivait « `envoyes` n'existe pas encore dans `objectifsMensuels` : d'ici
+// là, le 10 du document d'Élodie ». Le repli vaut donc 10, exactement ce qu'il
+// prenait tout seul — « sur 120 cette année » ne bouge pas d'un chiffre.
+export const OBJECTIFS_DEFAUT = { demandes: 20, rdv: 10, envoyes: 10, devis: 5, ca: 35000 };
 
 export function objectifsMensuels() {
   const brut = db.t('rgd_reglages').find(r => r.cle === 'objectifs_mensuels')?.valeur;
@@ -36,6 +40,7 @@ export function objectifsMensuels() {
     return {
       demandes: nombre(v.demandes, OBJECTIFS_DEFAUT.demandes),
       rdv: nombre(v.rdv, OBJECTIFS_DEFAUT.rdv),
+      envoyes: nombre(v.envoyes, OBJECTIFS_DEFAUT.envoyes),
       devis: nombre(v.devis, OBJECTIFS_DEFAUT.devis),
       ca: nombre(v.ca, OBJECTIFS_DEFAUT.ca),
     };
@@ -147,11 +152,12 @@ export function moisObjectifs(aujourdhui = new Date()) {
     // les 30 minutes) et ceux faits dans le CRM depuis la grille des tarifs
     // (`rgd_devis_crm`, genre `devis` — les factures n'en sont pas). Ne lire
     // que Costructor ferait disparaître le travail de Franck du tableau.
-    const signes = uniques([
+    const listeSignes = [
       ...devis.filter(d => mois7(d.date_signature) === cle),
       ...devisCrm.filter(d => d.genre === 'devis' && d.statut === 'signe'
         && mois7(d.date_signature || d.date_devis) === cle),
-    ]);
+    ];
+    const signes = uniques(listeSignes);
 
     // ⚠ « ENVOYÉ » SE LIT SUR LA DATE, PAS SUR LE STATUT : un devis signé est
     // forcément parti, et son statut ne dit plus « envoyé ». Côté CRM, un devis
@@ -167,11 +173,20 @@ export function moisObjectifs(aujourdhui = new Date()) {
     // ⚠ ET ON LE DATE DE SA SIGNATURE FAUTE DE MIEUX : le ranger au mois de la
     // signature est le seul choix défendable quand la date d'envoi n'existe
     // pas — l'inventer en reculant d'un mois serait pire.
-    const envoyes = uniques([
-      ...devis.filter(d => mois7(d.date_envoi) === cle
-        || (!d.date_envoi && mois7(d.date_signature) === cle)),
+    //
+    // ⚠ UN BROUILLON N'EST JAMAIS ENVOYÉ, MÊME DATÉ, et cette ligne manquait ici
+    // (ajoutée le 10/11/2026). Le bilan l'écarte depuis le 05/11 : Costructor a
+    // laissé D202600196, brouillon identique à D202600192 — même client, même
+    // montant — avec une date d'envoi. Compté, il faisait 5 devis envoyés au lieu
+    // de 4 et Élodie ne retrouvait pas le cinquième. Les deux cartes se lisent
+    // maintenant sur le même écran : elles ne peuvent pas compter autrement.
+    const listeEnvoyes = [
+      ...devis.filter(d => d.statut !== 'brouillon'
+        && (mois7(d.date_envoi) === cle
+          || (!d.date_envoi && mois7(d.date_signature) === cle))),
       ...devisCrm.filter(d => d.genre === 'devis' && d.numero && mois7(d.date_devis) === cle),
-    ]);
+    ];
+    const envoyes = uniques(listeEnvoyes);
 
     liste.push({
       cle,
@@ -189,6 +204,18 @@ export function moisObjectifs(aujourdhui = new Date()) {
       clientsEnvoyes: envoyes,
       devisSignes: signes.length,
       devisEnvoyes: envoyes.length,
+      // ⚠ DEUX COMPTES POUR LES DEVIS, ET C'EST VOULU (10/11/2026) : la vue
+      // d'ensemble montre désormais « Devis signés » ET « Chantiers » côte à
+      // côte, au-dessus du bilan commercial qui compte, lui, PAR DEVIS. Les
+      // deux mots désignaient le même nombre tant qu'une seule tuile existait ;
+      // ils ne le peuvent plus. `nbDevis*` compte les devis, `chantiers` les
+      // clients distincts — c'est la règle d'Élodie (« généralement un client
+      // représente un chantier »), la même que `chantiersCrm` dans rgd-bilan.js.
+      // Les anciens champs ne bougent pas : le tableau de bord du groupe
+      // (data/chiffres.js) les lit.
+      nbDevisSignes: listeSignes.length,
+      nbDevisEnvoyes: listeEnvoyes.length,
+      chantiers: signes.length,
       // ⚠ LE CA NE DÉDUIT PAS LES AVOIRS, et c'est ce qui le réconcilie avec
       // le bilan comptable d'Élodie (05/11/2026). Il les déduisait : sur
       // l'exercice 2024/2025, 16 remboursements à −144 653 € ramenaient
@@ -208,6 +235,21 @@ export function moisObjectifs(aujourdhui = new Date()) {
       // recommence à s'écarter du bilan sans que personne ne sache pourquoi.
       ca: paiements.filter(p => p.statut !== 'annule' && p.type !== 'remboursement'
           && mois7(p.date_facturation) === cle)
+        .reduce((t, p) => t + (Number(p.montant_ht) || 0), 0),
+      // ⚠ FACTURÉ ET ENCAISSÉ NE SE DATENT PAS PAREIL (10/11/2026, Élodie :
+      // « CA encaissé HT »). Le facturé se range à `date_facturation`, l'encaissé
+      // à `date_reception` : une facture de juillet encaissée en septembre compte
+      // en juillet d'un côté et en septembre de l'autre. Les deux courbes ne se
+      // suivent donc pas, et c'est précisément ce qu'on veut voir.
+      //
+      // ⚠ MÊME EXCLUSION QUE LE CA FACTURÉ — ni annulées, ni remboursements —
+      // sans quoi le rapport encaissé / facturé comparerait deux populations.
+      // `statut = 'recu'` est ce qui dit qu'une facture est payée ; relevé en
+      // base le 10/11/2026, les 128 lignes reçues portent TOUTES une date de
+      // réception, et la première (06/11/2024) est contemporaine de la première
+      // facture : aucun mois de la fenêtre n'est un trou d'historique.
+      encaisse: paiements.filter(p => p.statut === 'recu' && p.type !== 'remboursement'
+          && mois7(p.date_reception) === cle)
         .reduce((t, p) => t + (Number(p.montant_ht) || 0), 0),
     });
   }
@@ -297,7 +339,34 @@ export function detailMoisObjectif(cle, mesure) {
     }
     return { lignes: L.sort((a, b) => String(b.date).localeCompare(String(a.date))), nb: L.length };
   }
-  if (mesure === 'devisSignes') {
+  // ⚠ « Devis envoyés » OUVRE SA PROPRE LISTE (10/11/2026) : les mêmes filtres
+  // que `moisObjectifs` ci-dessus, brouillons écartés compris.
+  if (mesure === 'nbDevisEnvoyes') {
+    const devis = [
+      ...scope.rgd('rgd_devis').filter(d => d.statut !== 'brouillon'
+        && (mois7(d.date_envoi) === cle || (!d.date_envoi && mois7(d.date_signature) === cle)))
+        .map(d => ({ d, date: d.date_envoi || d.date_signature })),
+      ...scope.rgd('rgd_devis_crm').filter(d => d.genre === 'devis' && d.numero
+        && mois7(d.date_devis) === cle).map(d => ({ d, date: d.date_devis })),
+    ];
+    for (const { d, date } of devis) {
+      L.push({ date, client: nomPersonne(d), detail: d.numero || '—', montant: Number(d.montant_ht) || 0 });
+    }
+    return { lignes: L.sort((a, b) => String(b.date).localeCompare(String(a.date))), nb: L.length };
+  }
+  if (mesure === 'encaisse') {
+    for (const p of scope.rgd('rgd_paiements').filter(p => p.statut === 'recu'
+      && p.type !== 'remboursement' && mois7(p.date_reception) === cle)) {
+      const deal = p.deal_id && db.byId('deals', p.deal_id);
+      L.push({ date: p.date_reception, client: nomPersonne(deal),
+        detail: p.reference_facture || p.libelle || '—', montant: Number(p.montant_ht) || 0 });
+    }
+    return { lignes: L.sort((a, b) => String(b.date).localeCompare(String(a.date))), nb: L.length };
+  }
+  // ⚠ « Devis signés » ET « Chantiers » PARTAGENT LEUR LISTE : ce sont les
+  // mêmes devis, comptés autrement. Seule la note du bas change — elle dit
+  // combien de clients ces devis représentent.
+  if (mesure === 'devisSignes' || mesure === 'nbDevisSignes' || mesure === 'chantiers') {
     const devis = [
       ...scope.rgd('rgd_devis').filter(d => mois7(d.date_signature) === cle)
         .map(d => ({ d, date: d.date_signature })),
@@ -308,8 +377,9 @@ export function detailMoisObjectif(cle, mesure) {
       L.push({ date, client: nomPersonne(d), detail: d.numero || '—', montant: Number(d.montant_ht) || 0, cle: cleClient(d) });
     }
     const clients = new Set(L.map(l => l.cle)).size;
-    return { lignes: L.sort((a, b) => String(b.date).localeCompare(String(a.date))), nb: clients,
-      note: L.length !== clients ? `${L.length} devis signés pour ${clients} client${clients > 1 ? 's' : ''} : deux devis d’un même client comptent pour un.` : null };
+    return { lignes: L.sort((a, b) => String(b.date).localeCompare(String(a.date))),
+      nb: mesure === 'nbDevisSignes' ? L.length : clients,
+      note: L.length !== clients ? `${L.length} devis signés pour ${clients} client${clients > 1 ? 's' : ''} : un client qui signe deux devis fait UN chantier.` : null };
   }
   if (mesure === 'ca') {
     for (const p of scope.rgd('rgd_paiements').filter(p => p.statut !== 'annule' && p.type !== 'remboursement'

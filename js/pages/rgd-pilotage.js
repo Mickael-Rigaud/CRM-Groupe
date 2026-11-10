@@ -219,57 +219,104 @@ function frisePipeline(etapes) {
 // loin. Un dégradé continu se lit moins vite qu'un feu à trois couleurs.
 const tonObjectif = (part) => (part >= 1 ? 'vert' : part >= 0.5 ? 'ambre' : 'rouge');
 
-// ------------------------------------------------ LES QUATRE INDICATEURS
-// ⚠ AUCUNE FORME NOUVELLE ICI, ET C'EST LA CONSIGNE (05/11/2026, Élodie :
-// « reprends le style du reste du CRM »). Trois dessins ont été écartés avant
-// celui-ci — quatre frises de barres, puis un graphique groupé, puis des
-// anneaux animés —, le dernier parce qu'il parlait une langue à lui au milieu
-// d'un écran qui en parle déjà une : « trop de blocs différents ».
+// ------------------------------------------------ LES SEPT INDICATEURS
+// ⚠ LA CONSIGNE DU 05/11 A ÉTÉ LEVÉE PAR ÉLODIE ELLE-MÊME, ET IL FAUT SAVOIR
+// POURQUOI AVANT DE LA REMETTRE. Il était écrit ici : « aucune forme nouvelle,
+// ne pas y rajouter d'anneaux, de dégradés ni de pastilles colorées ». Trois
+// dessins avaient été refusés avant — frises de barres, graphique groupé,
+// anneaux animés — le dernier parce qu'il parlait une langue à lui au milieu
+// d'un écran qui en parlait déjà une : « trop de blocs différents ».
 //
-// Cette carte n'emploie donc QUE ce qui existe au-dessus et en dessous d'elle :
-// les rangees `rgd-pipe-table` du CRM, ses pistes horizontales, et
-// le graphique du chiffre d'affaires, classes comprises. Si l'un de ces trois
-// change de style un jour, celle-ci suit toute seule — c'était tout l'intérêt.
+// Ce qui a changé le 10/11 : le bilan commercial, JUSTE EN DESSOUS, a pris ce
+// dessin-là — tuiles en dégradé, anneau d'avancement — et elle l'a choisi
+// entre trois maquettes. Le même jour : « j'adore cette présentation et je
+// voudrais que ces encadrés soient en dessus de la pipeline ». Reprendre ce
+// dessin ne rajoute donc PAS une langue de plus, il en retire une : c'est
+// l'ancienne carte à rangées qui faisait le troisième bloc.
 //
-// ⚠ NE PAS Y RAJOUTER D'ANNEAUX, DE DÉGRADÉS NI DE PASTILLES COLORÉES. Ce qui
-// a été reproché n'est pas la couleur, c'est le nombre de langages.
+// ⚠ LA RÈGLE DE FOND, ELLE, N'A PAS BOUGÉ : ne pas inventer de forme ici. Si
+// une quatrième langue devait apparaître sur cet écran, ce serait à refuser.
 const SERIES = [
-  { champ: 'demandes', cible: 'demandes', label: 'Demandes', court: 'Demandes', couleur: 'var(--blue)' },
-  { champ: 'rdv', cible: 'rdv', label: 'Rendez-vous', court: 'RDV', couleur: 'var(--violet)' },
-  { champ: 'devisSignes', cible: 'devis', label: 'Devis signés', court: 'Devis', couleur: 'var(--amber)' },
-  { champ: 'ca', cible: 'ca', label: 'Chiffre d’affaires', court: 'CA', couleur: 'var(--green)' },
+  { champ: 'demandes', cible: 'demandes', label: 'Demandes', court: 'Demandes',
+    c1: '#93a5c4', c2: '#5c7093' },
+  { champ: 'rdv', cible: 'rdv', label: 'Rendez-vous', court: 'RDV',
+    c1: '#5b8cff', c2: '#3657d6' },
+  { champ: 'nbDevisEnvoyes', cible: 'envoyes', label: 'Devis envoyés', court: 'Envoyés',
+    c1: '#ff9a4d', c2: '#e8622a' },
+  // ⚠ CETTE TUILE N'A PAS D'OBJECTIF À ELLE, ELLE PORTE UN TAUX : « 3 devis
+  // signés, 75 % des devis envoyés », exactement la tuile bleue du bilan
+  // commercial. Mettre « sur 5 » ici ET sur « Chantiers » afficherait deux fois
+  // le même objectif sur deux nombres différents — le document d'Élodie n'en
+  // fixe qu'un, « chantiers / devis signés : 5 par mois ».
+  // ⚠ `taux` EST UN CHAMP DU MOIS, PAS UNE CLÉ D'OBJECTIF : il portait
+  // 'envoyes' (le nom de l'objectif) et la tuile restait sans anneau — vu à
+  // l'écran en vue Exercice, « 3 » sans son « 75 % des devis envoyés ».
+  { champ: 'nbDevisSignes', taux: 'nbDevisEnvoyes', label: 'Devis signés', court: 'Signés',
+    c1: '#f6b93b', c2: '#bd7b00' },
+  { champ: 'chantiers', cible: 'devis', label: 'Chantiers', court: 'Chantiers',
+    c1: '#34c48b', c2: '#16855a' },
+  { champ: 'ca', cible: 'ca', label: 'CA facturé HT', court: 'Facturé',
+    c1: '#a77bff', c2: '#6a3fd0', euro: true },
+  // Pas d'objectif non plus : son repère naturel est ce qui a été facturé.
+  { champ: 'encaisse', taux: 'ca', label: 'CA encaissé HT', court: 'Encaissé',
+    c1: '#2ed3c6', c2: '#0d8f8a', euro: true },
 ];
 
+// ⚠ SEPT INDICATEURS DEPUIS LE 10/11/2026, ET LEUR ORDRE EST CELUI D'ÉLODIE :
+// demandes, rendez-vous, devis envoyés, devis signés, chantiers, CA facturé,
+// CA encaissé. C'est le parcours d'une affaire, de la demande à l'argent reçu.
+//
+// ⚠ « DEVIS SIGNÉS » ET « CHANTIERS » NE COMPTENT PAS LA MÊME CHOSE, et les
+// voir côte à côte est tout l'intérêt : la première compte des DEVIS, la
+// seconde des CLIENTS distincts (« généralement un client représente un
+// chantier », Élodie le 05/11). Jusqu'ici une seule tuile existait et elle
+// comptait des clients ; le nombre affiché sous « Devis signés » peut donc
+// AUGMENTER par rapport à hier, sans qu'aucune donnée n'ait changé. C'est le
+// vocabulaire du bilan commercial, juste en dessous sur le même écran : les
+// deux cartes ne pouvaient pas appeler « devis signés » deux nombres différents.
+//
+// ⚠ « CA ENCAISSÉ » NE SUIT PAS « CA FACTURÉ » À UN MOIS PRÈS, c'est normal :
+// le facturé se date de l'émission, l'encaissé de la réception du paiement
+// (`date_reception`). Une facture de juillet payée en septembre est dans les
+// deux mois à la fois, chacun dans sa courbe.
+//
+// ⚠ LES COULEURS SONT CELLES DES COURBES, ET RÉCIPROQUEMENT : chaque tuile est
+// la légende de sa courbe, ce qui évite d'en poser une septième ligne sous le
+// graphique. Changer une couleur ici change les deux.
+
 /**
- * Les douze derniers mois des quatre indicateurs, sur UN SEUL graphique.
+ * Les sept indicateurs mois par mois, sur UN SEUL graphique.
  *
- * ⚠ UN CADRE À QUATRE COURBES, ET C'EST UN RETOUR EN ARRIÈRE ASSUMÉ
+ * ⚠ UN CADRE À PLUSIEURS COURBES, ET C'EST UN RETOUR EN ARRIÈRE ASSUMÉ
  * (10/11/2026, Élodie : « je n'aime pas du tout comment c'est présenté et les
  * 4 graphiques en dessous prennent trop de place. Je voudrais que tu fasses un
  * seul graphique avec 4 courbes différentes »). La même forme avait été
  * écartée le 05/11 ; elle lui a été remontrée à côté de deux autres, sur ses
- * VRAIS chiffres, et c'est celle-là qu'elle a retenue. Les quatre vignettes
- * mesuraient 331 px à elles seules (mesuré dans le navigateur) ; ce cadre en
- * fait 200.
+ * VRAIS chiffres, et c'est celle-là qu'elle a retenue.
  *
  * ⚠ LES DEUX DÉFAUTS DE LA PREMIÈRE TENTATIVE SONT TRAITÉS, PAS OUBLIÉS :
  *   1. son axe était en POURCENTAGE DE L'OBJECTIF — juste, mais abstrait :
  *      « 60 % » ne dit pas si ce sont six rendez-vous ou trois devis. Il y a
  *      donc DEUX échelles, les comptages à gauche et les euros à droite. Rien
- *      n'est converti. ⚠ ET L'AXE DE DROITE EST ÉCRIT EN VERT, la couleur de
- *      la seule courbe qui s'y lit : sans cela rien ne dirait laquelle.
- *   2. les quatre lignes s'enchevêtraient. Le survol donne maintenant les
- *      QUATRE valeurs du mois pointé dans une seule bulle, avec une ligne
- *      guide : on n'a plus à suivre une courbe de l'œil.
+ *      n'est converti.
+ *   2. les lignes s'enchevêtraient. Le survol donne maintenant TOUTES les
+ *      valeurs du mois pointé dans une seule bulle, avec une ligne guide : on
+ *      n'a plus à suivre une courbe de l'œil. Et depuis qu'elles sont sept,
+ *      survoler une TUILE éteint les autres courbes (voir `.rgd-ob-serie`).
+ *
+ * ⚠ L'AXE DE DROITE N'EST PLUS ÉCRIT EN VERT (10/11/2026) : il l'était quand
+ * une seule courbe s'y lisait, pour dire laquelle. Ils sont deux maintenant —
+ * CA facturé et CA encaissé —, aucune couleur ne peut les désigner tous les
+ * deux, et les euros se reconnaissent à leur unité. Le pied le dit aussi.
  *
  * ⚠ L'ÉCHELLE DE GAUCHE SE MESURE SUR LES DONNÉES, PAS SUR LES OBJECTIFS :
  * tirer l'axe jusqu'à 20 (l'objectif de demandes) sur une année qui plafonne à
- * 11 écraserait les trois courbes dans le quart bas du cadre. Les objectifs
- * sont dans les tuiles, où ils se lisent en chiffres.
+ * 11 écraserait les courbes dans le quart bas du cadre. Les objectifs sont dans
+ * les tuiles, où ils se lisent en chiffres.
  *
  * ⚠ ET LE VOCABULAIRE RESTE CELUI DE L'ÉCRAN : `rgd-courbe`, `rgd-grille`,
  * `rgd-axe`, `rgd-trait`, `rgd-mois`, `rgd-zone`, `rgd-info`, `rgd-bulle` sont
- * ceux du graphique du chiffre d'affaires, vingt lignes plus bas.
+ * ceux du graphique du chiffre d'affaires qui vivait sur cet écran.
  */
 function grapheObjectifs(mois, formats, marques, cleEnCours) {
   const L = 940, H = 206, gauche = 44, droite = 74, cime = 16, bas = H - 30;
@@ -287,10 +334,14 @@ function grapheObjectifs(mois, formats, marques, cleEnCours) {
     return Math.ceil(v / e) * e;
   };
   const valeurs = (champ) => mois.map(m => m[champ]).filter(connu);
-  const comptes = SERIES.filter(s => s.champ !== 'ca');
+  const comptes = SERIES.filter(s => !s.euro);
+  const sous = SERIES.filter(s => s.euro);
   const hautN = rond(Math.max(1, ...comptes.flatMap(s => valeurs(s.champ))));
-  const hautCa = rond(Math.max(1, ...valeurs('ca')));
-  const fraction = (se, v) => (se.champ === 'ca' ? v / hautCa : v / hautN);
+  // ⚠ LES DEUX COURBES EN EUROS PARTAGENT LEUR ÉCHELLE, sans quoi un mois à
+  // 4 000 € encaissés et un mois à 40 000 € facturés se dessineraient à la
+  // même hauteur et la comparaison — celle qu'on vient faire — serait fausse.
+  const hautCa = rond(Math.max(1, ...sous.flatMap(s => valeurs(s.champ))));
+  const fraction = (se, v) => (se.euro ? v / hautCa : v / hautN);
   // Sous dix mille euros, « 0 k€ » sur les trois graduations ne dirait rien.
   const etiqCa = (v) => (hautCa >= 10000 ? Math.round(v / 1000) + ' k€' : formats.ca(v));
 
@@ -299,20 +350,17 @@ function grapheObjectifs(mois, formats, marques, cleEnCours) {
     y1="${y(f).toFixed(1)}" y2="${y(f).toFixed(1)}"></line>`).join('');
   const axeG = crans.map(f => `<text class="rgd-axe" x="${gauche - 9}" y="${(y(f) + 4).toFixed(1)}"
     text-anchor="end">${Math.round(f * hautN)}</text>`).join('');
-  const axeD = crans.map(f => `<text class="rgd-axe" style="fill:var(--green)" x="${L - droite + 9}"
+  const axeD = crans.map(f => `<text class="rgd-axe" x="${L - droite + 9}"
     y="${(y(f) + 4).toFixed(1)}">${esc(etiqCa(f * hautCa))}</text>`).join('');
 
   // ⚠ LE MOIS SANS SON ANNÉE : à douze colonnes, « déc. 25 » et « janv. 26 »
-  // se marchaient dessus. La fenêtre glisse sur douze mois, l'année n'y lève
-  // aucune ambiguïté et l'en-tête de la carte la porte déjà.
+  // se marchaient dessus. L'en-tête de la carte porte déjà la période.
   const court = (m) => String(m.label).replace(/\s*\d{2}$/, '');
   const legendes = mois.map((m, i) => `<text class="rgd-axe" x="${x(i).toFixed(1)}" y="${H - 8}"
     text-anchor="middle">${esc(court(m))}</text>`).join('');
 
   // La période montrée par les tuiles, marquée sur le graphique : sans cela
-  // les tuiles parlent d'un mois — ou d'un exercice — que rien ne désigne
-  // parmi les douze. Un seul mois en vue « Mois », toute la tranche de
-  // l'exercice en vue « Exercice ».
+  // les tuiles parlent d'un mois que rien ne désigne parmi les douze.
   // ⚠ LA BANDE SE RABOTE AUX BORDS DU CADRE : centrée sur le premier ou le
   // dernier mois, la moitié débordait dans la marge et venait se poser sur les
   // graduations en euros — vu à l'écran, le mois en cours étant le dernier.
@@ -328,9 +376,11 @@ function grapheObjectifs(mois, formats, marques, cleEnCours) {
   // alors que le CRM ne les connaît pas (les demandes ne sont suivies que
   // depuis mars 2026, les visites techniques depuis août).
   //
-  // ⚠ LE DERNIER MOIS EST EN COURS, DONC INCOMPLET : son segment est en
-  // pointillé et son point reste creux. Sans cela, chaque début de mois
-  // dessine quatre effondrements.
+  // ⚠ LE MOIS EN COURS EST INCOMPLET : son segment est en pointillé et son
+  // point reste creux. Sans cela, chaque début de mois dessine sept
+  // effondrements. ⚠ ET IL SE RECONNAÎT À SA CLÉ, PAS À SON RANG : en vue
+  // Exercice la liste va jusqu'en septembre, huit mois après aujourd'hui ;
+  // keyé sur le dernier indice, plus rien n'aurait été marqué.
   const courbes = SERIES.map(se => {
     const groupes = [];
     mois.forEach((m, i) => {
@@ -347,27 +397,27 @@ function grapheObjectifs(mois, formats, marques, cleEnCours) {
       const finEnCours = mois[pts[pts.length - 1][2]].cle === cleEnCours && pts.length > 1;
       const plein = finEnCours ? pts.slice(0, -1) : pts;
       const bout = finEnCours ? pts.slice(-2) : null;
-      return (plein.length > 1 ? `<path class="rgd-trait" style="stroke:${se.couleur}" fill="none" d="${vers(plein)}"></path>` : '')
-        + (bout ? `<path class="rgd-trait" style="stroke:${se.couleur}" fill="none"
+      return (plein.length > 1 ? `<path class="rgd-trait" style="stroke:${se.c2}" fill="none" d="${vers(plein)}"></path>` : '')
+        + (bout ? `<path class="rgd-trait" style="stroke:${se.c2}" fill="none"
              stroke-dasharray="4 4" d="${vers(bout)}"></path>` : '');
     }).join('');
     const ronds = suites.flat().map(p => {
       const enCours = mois[p[2]].cle === cleEnCours;
       return `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="${enCours ? 4.2 : 3}"
-        style="fill:${enCours ? 'var(--card)' : se.couleur};stroke:${se.couleur}"
+        style="fill:${enCours ? 'var(--card)' : se.c2};stroke:${se.c2}"
         stroke-width="${enCours ? 2.2 : 0}"></circle>`;
     }).join('');
-    return `<g>${traits}${ronds}</g>`;
+    return `<g class="rgd-ob-serie" data-serie="${esc(se.champ)}">${traits}${ronds}</g>`;
   }).join('');
 
-  // ⚠ UNE SEULE BULLE POUR LES QUATRE, et c'est elle qui répond à
-  // l'enchevêtrement : au lieu de suivre une courbe de l'œil jusqu'à son mois,
-  // on pointe le mois et on lit les quatre lignes. Elle se pose du côté OPPOSÉ
-  // au curseur, sans quoi elle cacherait justement ce qu'on désigne.
+  // ⚠ UNE SEULE BULLE POUR TOUTES, et c'est elle qui répond à l'enchevêtrement :
+  // au lieu de suivre une courbe de l'œil jusqu'à son mois, on pointe le mois et
+  // on lit les sept lignes. Elle se pose du côté OPPOSÉ au curseur, sans quoi
+  // elle cacherait justement ce qu'on désigne.
   //
   // ⚠ LE `<title>` RESTE SOUS LA BULLE : la bulle naît du survol, que le
   // doigt n'a pas. Sur téléphone, l'appui long reste le seul moyen de lire.
-  const LB = 182, HB = 24 + SERIES.length * 16;
+  const LB = 196, HB = 24 + SERIES.length * 16;
   const survols = mois.map((m, i) => {
     if (!SERIES.some(se => connu(m[se.champ]))) return '';
     const cx = x(i);
@@ -394,47 +444,60 @@ function grapheObjectifs(mois, formats, marques, cleEnCours) {
   }).join('');
 
   return `<div class="rgd-ob-graphe"><svg class="rgd-courbe" viewBox="0 0 ${L} ${H}" role="img"
-    aria-label="Les quatre indicateurs mois par mois, sur les douze derniers mois">
+    aria-label="Les sept indicateurs mois par mois">
     ${grille}${bande}${axeG}${axeD}${legendes}${courbes}${survols}
   </svg></div>`;
 }
 
+// ---------------------------------------------------------------- Les tuiles
+// ⚠ C'EST LE VISUEL DU BILAN COMMERCIAL, REPRIS TEL QUEL À SA DEMANDE
+// (10/11/2026, Élodie : « j'adore cette présentation et je voudrais que ces
+// encadrés soient en dessus de la pipeline »). Les classes `rgd-bil-tuile`,
+// `rgd-bil-lib`, `rgd-bil-gros`, `rgd-bil-anneau` viennent de là.
+//
+// ⚠ ET CETTE FOIS L'EMPRUNT EST SÛR, alors qu'il avait échoué le 10/11 au
+// matin : ce jour-là une autre session était EN TRAIN de redessiner ces tuiles
+// (dégradés, texte blanc) et les miennes en héritaient à moitié — elles
+// s'affichaient blanc sur blanc. Le dessin est maintenant arrêté, c'est celui
+// qu'Élodie a choisi, et les tuiles du bilan ont été RETIRÉES de leur carte :
+// plus personne ne bouge sous nos pieds, et il n'y a plus qu'un seul endroit
+// où ce dessin vit.
+//
+// ⚠ LE DÉGRADÉ VIENT DE `SERIES`, PAS D'UNE CLASSE `t-*` : sept couleurs, et
+// chacune doit être la même que celle de sa courbe. Deux endroits où écrire la
+// couleur, c'est un endroit de trop.
+const lirePct = (part) => (part > 0 && part < 1
+  ? part.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) : String(Math.round(part)));
+
+function anneau(part, legende) {
+  const p = Math.max(0, part || 0);
+  const trace = Math.min(100, p > 0 ? Math.max(2, p) : 0);
+  return `<svg class="rgd-bil-anneau" viewBox="0 0 36 36" role="img" aria-label="${lirePct(p)} % ${esc(legende)}">
+      <circle cx="18" cy="18" r="15" class="fond"></circle>
+      ${trace > 0 ? `<circle cx="18" cy="18" r="15" class="plein" pathLength="100"
+        stroke-dasharray="${trace.toFixed(1)} ${(100 - trace).toFixed(1)}" transform="rotate(-90 18 18)"></circle>` : ''}
+      <text x="18" y="18.5" text-anchor="middle" class="pct">${lirePct(p)} %</text>
+      <text x="18" y="25" text-anchor="middle" class="leg">${esc(legende)}</text>
+    </svg>`;
+}
+
 /**
- * La carte entière, dans la langue de l'écran.
+ * La carte entière : sept tuiles, un graphique, les taux et le mode d'emploi.
  *
- * ⚠ LES QUATRE TUILES ONT LEURS PROPRES CLASSES, ET C'EST UN CHOIX, PAS UN
- * OUBLI. Elles ont d'abord emprunté `rgd-bil-tuile` au Bilan commercial — la
- * carte juste en dessous — pour ne pas inventer une forme de plus. Le rendu a
- * montré quatre tuiles à moitié invisibles : une autre session était en train
- * de redessiner cette carte-là (dégradés, texte blanc, anneaux) et mes tuiles
- * en héritaient. Emprunter n'est bon que si l'on emprunte à quelque chose de
- * stable ; ici le voisin bougeait sous nos pieds.
- *
- * ⚠ ELLES NE REPRENNENT PAS NON PLUS `rgd-et` DU PIPELINE, et c'est la
- * correction du 05/11 qu'il ne faut pas défaire : avec les cartes du pipeline,
- * les deux blocs devenaient indiscernables l'un de l'autre à trente
- * centimètres (« c'est la même présentation qu'en haut »).
- *
- * ⚠ CHAQUE TUILE PORTE LA COULEUR DE SA COURBE : c'est ce qui lui permet de
- * tenir lieu de légende au graphique, et pourquoi il n'y en a pas d'autre.
- *
- * ⚠ LE MOIS EN COURS EST INCOMPLET PAR CONSTRUCTION : le 5 novembre, « 5 % »
- * n'est pas un échec, c'est le cinquième jour. L'en-tête le dit, parce que sans
+ * ⚠ LE MOIS EN COURS EST INCOMPLET PAR CONSTRUCTION : le 10 novembre, « 5 % »
+ * n'est pas un échec, c'est le dixième jour. L'en-tête le dit, parce que sans
  * cela la carte annonce une catastrophe tous les débuts de mois.
  */
 // ⚠ LE MOIS AFFICHÉ SE CHOISIT (05/11/2026, Élodie : « pour la section
 // objectifs du mois je voudrais pouvoir sélectionner les mois précédents »).
 // Le choix vit ici, hors de `draw`, pour survivre aux rafraîchissements de
-// l'écran ; `null` = le mois en cours. Il ne porte que sur les quatre rangées
-// du haut : les vignettes montrent déjà les douze mois, et les taux se lisent
-// sur douze mois quel que soit le mois choisi.
+// l'écran ; `null` = le mois en cours.
 let moisObjectifChoisi = null;
 // ⚠ MOIS OU EXERCICE (10/11/2026, Élodie : « je voudrais avoir une option dans
 // la section des objectifs du mois pour avoir le cumul de chiffre d'affaires de
 // l'année comptable »). La carte « Chiffre d'affaires » qui vivait en dessous a
 // été retirée dans le même mouvement : son exercice se lit ici, et le détail
-// par exercice dans « Bilan commercial ». Le choix vit hors de `draw`, comme le
-// mois, pour survivre aux rafraîchissements.
+// par exercice dans « Bilan commercial ».
 let vueObjectif = 'mois';
 
 function carteObjectifs(mois, obj) {
@@ -449,7 +512,7 @@ function carteObjectifs(mois, obj) {
 
   const euros = (v) => eur(Math.round(v));
   const nombre = (v) => String(v);
-  const formats = { demandes: nombre, rdv: nombre, devisSignes: nombre, ca: euros };
+  const formats = Object.fromEntries(SERIES.map(se => [se.champ, se.euro ? euros : nombre]));
 
   // ⚠ L'EXERCICE COMPTABLE, PAS L'ANNÉE CIVILE : 1er octobre → 30 septembre.
   // Les douze mois glissants couvrent toujours l'exercice en cours, qui en
@@ -458,25 +521,28 @@ function carteObjectifs(mois, obj) {
   const dansEx = mois.filter(m => m.cle >= ex.du.slice(0, 7) && m.cle <= ex.au.slice(0, 7));
   const vue = dansEx.length ? vueObjectif : 'mois';
 
-  // ⚠ LE CUMUL D'UN EXERCICE N'EST PAS UNE SOMME POUR LES DEVIS SIGNÉS : un
-  // client qui signe en octobre puis en novembre est UN client sur l'exercice.
+  // ⚠ LE CUMUL D'UN EXERCICE N'EST PAS UNE SOMME POUR LES CHANTIERS : un
+  // client qui signe en octobre puis en novembre est UN chantier sur l'exercice.
   // C'est déjà la règle de `tauxPeriode`, et additionner les mois gonflerait
-  // le cumul — on fait donc l'union des clés, comme là-bas.
+  // le cumul — on fait donc l'union des clés, comme là-bas. Les DEVIS, eux,
+  // s'additionnent : deux devis restent deux devis.
   //
   // ⚠ ET UN MOIS INCONNU N'EST PAS UN ZÉRO : si aucun mois de l'exercice ne
   // porte la donnée, le cumul vaut `null` et la tuile affiche « — ». Les
   // demandes ne sont suivies que depuis mars 2026, les visites depuis août.
-  const cumul = (se) => {
-    if (se.champ === 'devisSignes') return new Set(dansEx.flatMap(m => m.clientsSignes || [])).size;
-    const connus = dansEx.map(m => m[se.champ]).filter(v => v !== null && v !== undefined);
+  const cumul = (champ) => {
+    if (champ === 'chantiers') return new Set(dansEx.flatMap(m => m.clientsSignes || [])).size;
+    const connus = dansEx.map(m => m[champ]).filter(v => v !== null && v !== undefined);
     return connus.length ? connus.reduce((a, b) => a + b, 0) : null;
   };
+  const valeur = (champ) => (vue === 'exercice' ? cumul(champ) : courant[champ]);
 
   // ⚠ L'OBJECTIF D'UN EXERCICE EST CELUI DE L'ANNÉE ENTIÈRE, pas au prorata
-  // des mois écoulés : c'est ce que dit déjà la carte « Bilan commercial » en
-  // dessous (« 1 sur 120 cette année »), et deux cartes du même écran qui
-  // divisent le même objectif autrement ne se réconcilient jamais à l'œil.
-  // Le « mois N sur 12 » de l'en-tête dit où l'on en est dans l'année.
+  // des mois écoulés : c'est ce que dit déjà le bilan commercial en dessous
+  // (« sur 120 cette année »), et deux cartes du même écran qui divisent le
+  // même objectif autrement ne se réconcilient jamais à l'œil. Le « mois N sur
+  // 12 » de l'en-tête dit où l'on en est dans l'année.
+  //
   // ⚠ EN VUE EXERCICE, LE GRAPHIQUE PREND LE CADRE DE L'ANNÉE COMPTABLE
   // (10/11/2026, Élodie : « juste pour l'exercice je voudrais que le graphique
   // s'adapte à la période du 1er octobre au 30 septembre »). Douze cases,
@@ -485,44 +551,45 @@ function carteObjectifs(mois, obj) {
   // ⚠ LES MOIS À VENIR RESTENT VIDES, ILS NE VALENT PAS ZÉRO. Une courbe qui
   // retombe à zéro sur les huit mois qui n'ont pas encore eu lieu se lirait
   // comme un effondrement ; elle s'arrête donc au mois en cours, et les cases
-  // suivantes restent en blanc. C'est la règle qu'appliquait déjà l'ancienne
-  // courbe du chiffre d'affaires.
+  // suivantes restent en blanc.
   //
   // ⚠ ET LA FENÊTRE GLISSANTE SUFFIT À LA REMPLIR : l'exercice en cours a au
   // plus douze mois, son premier est donc toujours dans les douze derniers.
   const moisExercice = () => {
     const a = Number(ex.du.slice(0, 4));
+    const vide = Object.fromEntries(SERIES.map(se => [se.champ, null]));
     return Array.from({ length: 12 }, (_, i) => {
       const d = new Date(a, 9 + i, 1);
       const cle = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
       return mois.find(m => m.cle === cle) || {
-        cle, label: d.toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' }),
-        demandes: null, rdv: null, devisSignes: null, ca: null,
+        cle, label: d.toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' }), ...vide,
       };
     });
   };
 
   const periode = vue === 'exercice'
-    ? { valeur: cumul, cible: (se) => obj[se.cible] * 12, cles: dansEx.map(m => m.cle),
+    ? { cible: (se) => obj[se.cible] * 12, cles: dansEx.map(m => m.cle),
         titre: 'Objectifs de l’exercice', note: `mois ${dansEx.length} sur 12`,
         quand: `Exercice ${ex.label}` }
-    : { valeur: (se) => courant[se.champ], cible: (se) => obj[se.cible], cles: [courant.cle],
+    : { cible: (se) => obj[se.cible], cles: [courant.cle],
         titre: 'Objectifs du mois',
         note: enCours ? `jour ${jour} sur ${joursDuMois}` : 'mois terminé',
         quand: courant.label };
-  // ⚠ DES TUILES, PAS DES RANGÉES (10/11/2026, Élodie : « je voudrais qu'on
-  // revoie le visuel de la section »). Chacune porte la couleur de sa courbe :
-  // la tuile est la légende du graphique, ce qui évite d'en poser une séparée.
+
+  // ⚠ TROIS FORMES DE TUILE, TOUTES PRISES AU BILAN COMMERCIAL, AUCUNE NEUVE :
+  //   • celles qui ont un objectif (demandes, rendez-vous, devis envoyés,
+  //     chantiers, CA facturé) : le nombre, « sur X », l'anneau d'avancement ;
+  //   • « Devis signés » : le nombre et le TAUX de signature dans l'anneau,
+  //     l'objectif de taux en bas — la tuile bleue du bilan, à l'identique ;
+  //   • « CA encaissé » : la part du CA facturé qui est rentrée.
   //
-  // ⚠ LE CLIC NE CHANGE PAS DE PORTE : `data-ob-detail` et `data-ob-cle` sont
+  // ⚠ LE CLIC NE CHANGE PAS DE PORTE : `data-ob-detail` et `data-ob-cles` sont
   // lus par le gestionnaire posé sur `root`, qui ne regarde ni la balise ni la
-  // classe. Déplacer l'attribut d'un `<tr>` vers un `<article>` suffit, et la
-  // liste du mois s'ouvre comme avant.
+  // classe.
+  const pct1 = (num, den) => (den > 0 ? Math.round((num / den) * 1000) / 10 : null);
   const tuile = (se) => {
-    const v = periode.valeur(se);
-    const cible = periode.cible(se);
+    const v = valeur(se.champ);
     const connu = v !== null && v !== undefined;
-    const part = connu && cible > 0 ? Math.round((v / cible) * 100) : null;
     const formate = formats[se.champ];
     // Au survol, les premiers noms ; au clic, la liste complète. Sur un
     // exercice, les listes de ses mois mises bout à bout.
@@ -531,15 +598,39 @@ function carteObjectifs(mois, obj) {
     const bulle = lignes.length
       ? `${noms.slice(0, 6).join(', ')}${noms.length > 6 ? ` et ${noms.length - 6} autre${noms.length > 7 ? 's' : ''}` : ''} — cliquer pour le détail`
       : (vue === 'exercice' ? 'Rien sur cet exercice' : 'Rien ce mois-ci');
-    return `<article class="rgd-ob-tuile" style="--c:${se.couleur}"
+
+    let sous = '', rond = '', bas = '';
+    if (se.cible) {
+      const cible = periode.cible(se);
+      sous = `sur ${esc(formate(cible))}`;
+      rond = anneau(connu && cible > 0 ? (v / cible) * 100 : 0, 'de l’objectif');
+    } else {
+      // Un taux : le repère n'est pas un objectif mais l'étape d'avant.
+      const base = valeur(se.taux);
+      const p = connu ? pct1(v, base) : null;
+      const quoi = se.champ === 'encaisse' ? 'du CA facturé' : 'des devis envoyés';
+      // ⚠ PAS D'ANNEAU QUAND LE TAUX N'EXISTE PAS, et surtout pas un anneau
+      // à zéro : en novembre 2026, deux devis signés et AUCUN parti dans le
+      // mois donnaient « 2 » surmonté de « 0 % signés ». Le taux n'est pas
+      // nul, il n'a pas de dénominateur — ces devis étaient partis avant.
+      sous = p === null ? '' : `${lirePct(p)} % ${quoi}`;
+      rond = p === null ? '' : anneau(p, se.champ === 'encaisse' ? 'encaissé' : 'signés');
+      if (se.champ === 'nbDevisSignes' && obj.envoyes > 0) {
+        bas = `objectif ${lirePct(pct1(obj.devis, obj.envoyes))} %`;
+      }
+    }
+    return `<article class="rgd-bil-tuile rgd-bil-clic rgd-ob-tuile"
+      style="--c1:${se.c1};--c2:${se.c2}"
       data-ob-detail="${se.champ}" data-ob-cles="${esc(periode.cles.join(','))}"
       data-ob-quand="${esc(periode.quand)}"
       role="button" tabindex="0" title="${esc(bulle)}">
-      <div class="rgd-ob-lib">${esc(se.label)}</div>
-      <div class="rgd-ob-gros">${connu ? esc(formate(v)) : '—'}<i>sur ${esc(formate(cible))}</i></div>
-      <span class="rgd-ob-piste"><i style="width:${Math.min(100, part || 0)}%"></i></span>
-      <div class="rgd-ob-part${part !== null && part >= 100 ? ' atteint' : ''}">${
-        part === null ? '—' : part + ' % de l’objectif'}</div>
+      <div class="rgd-bil-lib">${esc(se.label)}</div>
+      <div class="rgd-bil-ligne">
+        <div><div class="rgd-bil-gros">${connu ? esc(formate(v)) : '—'}</div>
+          ${sous ? `<div class="rgd-bil-sur">${sous}</div>` : ''}</div>
+        ${rond}
+      </div>
+      <div class="rgd-bil-bas">${bas || '&nbsp;'}</div>
     </article>`;
   };
   const pc = (v) => (v === null ? '—' : v + ' %');
@@ -581,9 +672,7 @@ function carteObjectifs(mois, obj) {
                 c'est ce que les vrais chiffres ont imposé : au 5 novembre, une
                 demande et un rendez-vous donnaient « 600 % des demandes ont
                 donné un rendez-vous ». À ces volumes — une poignée de dossiers
-                par mois — un taux mensuel est du bruit, pas une mesure. Sur
-                douze mois il redevient lisible, et c'est la même base pour les
-                trois, au lieu d'en mélanger deux dans une phrase. */ ''}
+                par mois — un taux mensuel est du bruit, pas une mesure. */ ''}
           <p class="small muted rgd-ob-taux">Sur douze mois :
             <b>${pc(t.demandesVersRdv)}</b> des demandes ont donné un rendez-vous,
             <b>${pc(t.rdvVersSignes)}</b> des rendez-vous un devis signé,
@@ -591,26 +680,23 @@ function carteObjectifs(mois, obj) {
             (${t.envoyes} envoyés, ${t.signes} signés)${t.panier === null ? ''
               : `. Un devis signé rapporte <b>${esc(eur(t.panier))}</b> en moyenne`}.</p>
 
-          ${/* ⚠ PAS DE LÉGENDE SOUS LE GRAPHIQUE : les quatre tuiles au-dessus
-                en tiennent lieu, chacune à la couleur de sa courbe. Une
-                légende de plus répéterait quatre noms déjà écrits. */ ''}
-          ${/* ⚠ PAS DE BANDE EN VUE EXERCICE : le cadre EST l'exercice, la
-                marquer en entier ne désignerait rien. En vue Mois elle montre
-                le mois dont parlent les tuiles. */ ''}
+          ${/* ⚠ PAS DE LÉGENDE SOUS LE GRAPHIQUE : les tuiles au-dessus en
+                tiennent lieu, chacune à la couleur de sa courbe.
+                ⚠ PAS DE BANDE EN VUE EXERCICE : le cadre EST l'exercice, la
+                marquer en entier ne désignerait rien. */ ''}
           ${grapheObjectifs(vue === 'exercice' ? moisExercice() : mois, formats,
             vue === 'exercice' ? [] : periode.cles, dernier.cle)}
 
-          ${/* ⚠ LE PIED SUIT LE DESSIN : il parlait de colonnes, de ligne
-                pointillée d'objectif et de vignettes qui gardent leur unité —
-                il n'y en a plus. Ce qu'il doit dire maintenant, c'est QUEL AXE
-                lit quelle courbe, parce que c'est la seule chose que le
-                graphique ne peut pas dire tout seul. */ ''}
           <p class="small muted rgd-ob-pied">Chaque mois compte ce qui s’y est <b>passé</b> :
-          demandes reçues, rendez-vous tenus, devis signés, factures émises. Un <b>rendez-vous</b> est
-          une visite technique, la même que la colonne « RDV » du pipeline.
-          <b>Deux devis pour un même client comptent pour un.</b>
-          Sur le graphique, les <b>comptages se lisent à gauche</b> et le <b>chiffre d’affaires à droite</b>,
-          en euros — l’axe est écrit dans sa couleur. Survolez un mois pour avoir les quatre chiffres.
+          demandes reçues, rendez-vous tenus, devis partis, devis signés, factures émises,
+          paiements reçus. Un <b>rendez-vous</b> est une visite technique, la même que la
+          colonne « RDV » du pipeline. <b>« Devis signés » compte des devis, « Chantiers »
+          des clients</b> : deux devis d’un même client font deux devis et un chantier.
+          Le <b>CA facturé</b> se date de l’émission de la facture, le <b>CA encaissé</b> du
+          jour où l’argent est arrivé : les deux courbes ne se suivent pas, et c’est normal.
+          Sur le graphique, les <b>comptages se lisent à gauche</b> et les <b>deux montants
+          à droite</b>, en euros. Survolez un mois pour avoir les sept chiffres, ou une
+          tuile pour isoler sa courbe.
           ${vue === 'exercice'
             ? 'Le graphique couvre l’exercice, du 1<sup>er</sup> octobre au 30 septembre : les mois à venir restent vides, ils ne valent pas zéro.'
             : 'Le graphique couvre les douze derniers mois.'}
@@ -878,6 +964,22 @@ export const rgdPilotagePage = {
       // cinq cents lignes mortes et quatre appels d'API que personne ne lit.
       // Elles restent dans l'historique Git, qui est fait pour ça.
       const corps = `
+        ${/* ⚠ L'ORDRE DE L'ÉCRAN, ARRÊTÉ PAR ÉLODIE LE 10/11/2026 : le pipeline
+              et la journée d'abord, les objectifs EN DESSOUS, le bilan en
+              dernier. Les tuiles sont montées tout en haut pendant une heure ce
+              jour-là, puis elle a tranché l'inverse : « les objectifs du mois
+              doivent être en dessous de la pipeline et des rendez-vous du
+              jour ». Ne pas les faire remonter.
+
+              Et cet ordre a sa logique : le pipeline dit où en sont les affaires
+              AUJOURD'HUI — c'est ce qu'on ouvre le matin —, les objectifs à
+              quel RYTHME elles entrent, le bilan ce que ce rythme a produit sur
+              l'année. Du jour à l'année, de haut en bas.
+
+              ⚠ LA JOURNÉE EST À DROITE DU PIPELINE, pas des objectifs : ceux-ci
+              prennent toute la largeur, leurs sept tuiles tiennent sur une
+              seule ligne. */ ''}
+        <div class="rgd-duo">
 
         <section class="card rgd-pipe">
           <div class="card-head"><h2>Pipeline</h2>
@@ -905,16 +1007,6 @@ export const rgdPilotagePage = {
             à « Devis en cours », tous n’en ont pas encore.
 </p>
         </section>
-        ${/* ⚠ LES OBJECTIFS À GAUCHE, LA JOURNÉE À DROITE (10/11/2026, Élodie :
-              « on supprime le graphique chiffre d'affaires 2026-2027 et on met
-              le récap des rendez-vous du jour à droite des objectifs du mois »).
-              La carte « Chiffre d'affaires » occupait cette place : son exercice
-              se lit maintenant dans « Objectifs », vue Exercice, et le détail
-              par exercice dans « Bilan commercial » juste en dessous — trois
-              endroits pour le même chiffre, il n'en reste que deux. */ ''}
-        <div class="rgd-duo">
-
-${carteObjectifs(moisObj, objectifs)}
 
         <section class="card rgd-jour">
           <div class="card-head"><h2>Aujourd’hui</h2>
@@ -934,6 +1026,8 @@ ${carteObjectifs(moisObj, objectifs)}
         </section>
 
         </div>
+
+${carteObjectifs(moisObj, objectifs)}
 
 ${/* ⚠ `new Date()` EXPLICITE, PAS `aujourdhui` : sur cet écran `aujourdhui`
       est une CHAÎNE (`isoDay()`), et la passer à une fonction qui attend une
@@ -982,7 +1076,8 @@ ${carteBilan(new Date(), alerteSync)}
       const avecMontant = d.lignes.some(l => l.montant != null);
       const total = d.lignes.reduce((t, l) => t + (l.montant || 0), 0);
       const corps = d.lignes.length ? `<div class="table-wrap"><table class="rgd-bil-detail">
-        <thead><tr><th>Date</th><th>Client</th><th>${se.champ === 'ca' ? 'Facture' : se.champ === 'devisSignes' ? 'Devis' : 'Détail'}</th>${avecMontant ? '<th class="num">Montant HT</th>' : ''}</tr></thead>
+        <thead><tr><th>Date</th><th>Client</th><th>${se.euro ? 'Facture'
+          : ['nbDevisEnvoyes', 'nbDevisSignes', 'chantiers'].includes(se.champ) ? 'Devis' : 'Détail'}</th>${avecMontant ? '<th class="num">Montant HT</th>' : ''}</tr></thead>
         <tbody>${d.lignes.map(l => `<tr><td>${fmtDate(String(l.date).slice(0, 10))}</td><td>${esc(l.client)}</td><td>${esc(l.detail || '—')}</td>
           ${avecMontant ? `<td class="num">${eur(l.montant, { maximumFractionDigits: 2 })}</td>` : ''}</tr>`).join('')}</tbody>
         <tfoot><tr><td colspan="${avecMontant ? 3 : 3}"><b>${d.lignes.length} ligne${d.lignes.length > 1 ? 's' : ''}</b></td>

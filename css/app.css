@@ -4123,45 +4123,69 @@ button.tb-pp:hover { color: var(--text); text-decoration: underline; text-underl
    Ne rajouter ici que ce qui n'existe NULLE PART ailleurs. */
 .rgd-trait { stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
 
-/* Les quatre tuiles. `--c` est posée par le module : c'est la couleur de la
-   courbe de cet indicateur, et c'est ce qui fait de la tuile la LÉGENDE du
-   graphique d'en dessous — d'où l'absence de légende séparée.
+/* LES SEPT TUILES EN DÉGRADÉ (10/11/2026, Élodie : « j'adore cette
+   présentation et je voudrais que ces encadrés soient en dessus de la
+   pipeline »).
 
-   ⚠ DES CLASSES À ELLES, APRÈS UN EMPRUNT RATÉ : elles reprenaient
-   `rgd-bil-tuile` du Bilan commercial pour ne pas inventer une forme de plus.
-   Le rendu a montré quatre tuiles à moitié invisibles — une autre session
-   refondait cette carte au même moment (dégradés, texte blanc, anneaux) et les
-   tuiles en héritaient. On n'emprunte qu'à ce qui ne bouge pas.
+   ⚠ TOUT LE DESSIN VIENT DU BILAN COMMERCIAL et n'est PAS redéfini ici :
+   `rgd-bil-tuile`, `rgd-bil-lib`, `rgd-bil-ligne`, `rgd-bil-gros`,
+   `rgd-bil-sur`, `rgd-bil-bas`, `rgd-bil-anneau` sont plus bas dans ce fichier.
+   Ce qui suit ne fait que poser le dégradé et resserrer les tailles, parce
+   qu'on en met sept là où le bilan en mettait quatre.
 
-   ⚠ RIEN DE NEUF DANS LE DESSIN POUR AUTANT : bordure 1 px `--line`, filet
-   coloré en haut, libellé en petites capitales `--muted`, grand nombre en
-   `--font-display`, jauge plate. C'est le vocabulaire du reste du CRM, pas une
-   langue de plus — ce qui avait été reproché à la version du 05/11. */
-.rgd-ob-tuiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
-.rgd-ob-tuile { border: 1px solid var(--line); border-top: 3px solid var(--c); border-radius: 12px;
-  padding: 12px 14px 11px; background: color-mix(in srgb, var(--c) 4%, var(--card));
-  cursor: pointer; transition: border-color .12s, box-shadow .12s; }
-.rgd-ob-tuile:hover { border-color: var(--c);
-  box-shadow: 0 2px 10px color-mix(in srgb, var(--c) 18%, transparent); }
-.rgd-ob-tuile:focus-visible { outline: 2px solid var(--c); outline-offset: 2px; }
-.rgd-ob-lib { font-size: 11px; font-weight: 700; text-transform: uppercase;
-  letter-spacing: .07em; color: var(--muted); }
-.rgd-ob-gros { font-family: var(--font-display); font-size: 26px; font-weight: 700;
-  letter-spacing: -.03em; line-height: 1.15; color: var(--c); margin-top: 5px;
-  font-variant-numeric: lining-nums tabular-nums; }
-/* ⚠ « sur 35 000 € » PASSE À LA LIGNE, ET DANS TOUTES LES TUILES À LA FOIS.
-   Il tenait à côté du nombre tant que la carte prenait toute la largeur ; elle
-   partage désormais sa rangée avec « Aujourd'hui » (10/11/2026) et chaque tuile
-   tombe à 145 px — « 9 093 € sur 35 000 € » n'y entre pas. Replié au cas par
-   cas, SEULE la tuile du chiffre d'affaires passait sur deux lignes et sa jauge
-   descendait d'un cran : quatre tuiles côte à côte avec une jauge décalée. */
-.rgd-ob-gros i { display: block; font-style: normal; font-family: inherit; font-size: 12.5px;
-  font-weight: 600; color: var(--muted); margin-top: 1px; letter-spacing: 0; }
-.rgd-ob-piste { display: block; height: 6px; margin-top: 8px; border-radius: 4px;
-  background: color-mix(in srgb, var(--c) 15%, var(--card-2)); overflow: hidden; }
-.rgd-ob-piste i { display: block; height: 100%; border-radius: inherit; background: var(--c); }
-.rgd-ob-part { font-size: 11.5px; font-weight: 700; color: var(--muted); margin-top: 6px; }
-.rgd-ob-part.atteint { color: var(--green); }
+   ⚠ LE DÉGRADÉ N'EST PLUS UNE CLASSE `t-*` : sept couleurs, et chacune doit
+   être celle de sa courbe. Le module pose `--c1` et `--c2` depuis `SERIES`
+   (js/pages/rgd-pilotage.js) — la couleur est écrite à UN seul endroit.
+
+   ⚠ ET LES TUILES DU BILAN ONT ÉTÉ RETIRÉES DE LEUR CARTE dans le même
+   mouvement : ce dessin n'a plus qu'un endroit où il s'affiche, donc plus
+   qu'un endroit où il peut diverger. C'est précisément ce qui manquait le
+   matin du 10/11, quand ces tuiles avaient emprunté des classes qu'une autre
+   session refondait au même moment : elles s'étaient affichées blanc sur blanc.
+
+   ⚠ SEPT NE TIENNENT PAS SUR UNE RANGÉE PARTOUT : la grille se remplit
+   d'elle-même et passe à 4 + 3, puis à 3, puis à 2. Sept colonnes de 120 px
+   auraient coupé « CA encaissé HT » en trois lignes. */
+/* ⚠ LES SEPT SUR UNE SEULE LIGNE (10/11/2026, Élodie : « les encadrés des
+   objectifs du mois/année doivent être sur une seule ligne »). Elles ont été
+   quatre puis trois pendant une heure ; c'est ce qu'elle a refusé. Ne pas y
+   revenir « pour que ça respire ».
+   ⚠ CE QUI A DÛ RÉTRÉCIR POUR QUE ÇA TIENNE, et qui ne doit pas regrossir :
+   le nombre (27 → 21 px) et l'anneau (62 → 44 px). Mesuré à l'écran : à 1500 px
+   de fenêtre une tuile fait 161 px, dont 30 de marges intérieures ; « 13 227 € »
+   à 27 px en fait 97 à lui seul, et l'anneau passait à la ligne.
+   ⚠ EN DESSOUS DE 1150 px, SEPT COLONNES NE TIENNENT PLUS : la ligne unique
+   est tenue tant qu'elle est lisible, pas au-delà — à 115 px par tuile le
+   libellé se coupe en trois lignes et le nombre déborde. */
+.rgd-ob-tuiles { display: grid; gap: 10px;
+  grid-template-columns: repeat(7, minmax(0, 1fr)); }
+@media screen and (max-width: 1150px) {
+  .rgd-ob-tuiles { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+.rgd-bil-tuile.rgd-ob-tuile { background: linear-gradient(135deg, var(--c1), var(--c2));
+  padding: 12px 13px; cursor: pointer; }
+.rgd-ob-tuile:focus-visible { outline: 2px solid var(--c2); outline-offset: 3px; }
+.rgd-ob-tuile .rgd-bil-lib { font-size: 10.5px; letter-spacing: .05em; }
+.rgd-ob-tuile .rgd-bil-gros { font-size: 21px; letter-spacing: -.02em; }
+.rgd-ob-tuile .rgd-bil-sur { font-size: 11.5px; margin-top: 3px; }
+.rgd-ob-tuile .rgd-bil-ligne { gap: 6px; margin-top: 6px; }
+.rgd-ob-tuile .rgd-bil-anneau { width: 44px; height: 44px; }
+.rgd-ob-tuile .rgd-bil-bas { font-size: 11.5px; margin-top: 9px; padding-top: 7px; }
+
+/* ⚠ SURVOLER UNE TUILE ÉTEINT LES AUTRES COURBES, et c'est la réponse à sept
+   courbes dans un seul cadre. La bulle du survol donne les sept valeurs d'un
+   mois ; ceci donne l'inverse — UNE courbe sur douze mois. Les deux ensemble
+   remplacent les quatre (puis sept) vignettes séparées, qui prenaient 331 px.
+   Aucun JavaScript : la tuile et le graphique sont dans la même carte, `:has`
+   suffit. Là où il manque, on perd l'effet, pas la lecture. */
+.rgd-ob-serie { transition: opacity .12s ease; }
+.rgd-ob:has([data-ob-detail="demandes"]:hover) .rgd-ob-serie:not([data-serie="demandes"]),
+.rgd-ob:has([data-ob-detail="rdv"]:hover) .rgd-ob-serie:not([data-serie="rdv"]),
+.rgd-ob:has([data-ob-detail="nbDevisEnvoyes"]:hover) .rgd-ob-serie:not([data-serie="nbDevisEnvoyes"]),
+.rgd-ob:has([data-ob-detail="nbDevisSignes"]:hover) .rgd-ob-serie:not([data-serie="nbDevisSignes"]),
+.rgd-ob:has([data-ob-detail="chantiers"]:hover) .rgd-ob-serie:not([data-serie="chantiers"]),
+.rgd-ob:has([data-ob-detail="ca"]:hover) .rgd-ob-serie:not([data-serie="ca"]),
+.rgd-ob:has([data-ob-detail="encaisse"]:hover) .rgd-ob-serie:not([data-serie="encaisse"]) { opacity: .1; }
 
 /* Le graphique unique : deux marques que celui du chiffre d'affaires n'a pas,
    parce qu'il n'a ni mois choisi ni quatre courbes à repérer. */
@@ -4185,11 +4209,15 @@ button.tb-pp:hover { color: var(--text); text-decoration: underline; text-underl
    plus un fichier du dépôt ne les écrit, vérifié par recherche. Le trait
    d'objectif `.rgd-objectif` aussi : seules les vignettes le tiraient. */
 
-/* ⚠ DEUX TUILES DE FRONT SUR TÉLÉPHONE, comme celles du bilan : quatre
-   colonnes de 80 px couperaient « Chiffre d'affaires » en trois lignes. */
+/* ⚠ DEUX TUILES DE FRONT SUR TÉLÉPHONE, comme celles du bilan : une seule
+   colonne ferait sept grands blocs à faire défiler avant d'atteindre le
+   graphique. À deux de front le nombre doit rapetisser, sinon l'anneau le
+   pousse hors de la tuile. */
 @media screen and (max-width: 760px) {
   .rgd-ob-tuiles { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
-  .rgd-ob-gros { font-size: 21px; }
+  .rgd-bil-tuile.rgd-ob-tuile { padding: 12px; }
+  .rgd-ob-tuile .rgd-bil-gros { font-size: 21px; }
+  .rgd-ob-tuile .rgd-bil-anneau { width: 50px; height: 50px; }
 }
 
 /* La colonne de droite : la valeur, son objectif, puis la part atteinte. Le

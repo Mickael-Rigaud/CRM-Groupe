@@ -119,8 +119,8 @@ export const rgdReglagesPage = {
 
         <!-- Les objectifs mensuels de la vue d'ensemble (04/11/2026, Elodie).
              Une seule cle, « objectifs_mensuels », qui porte un objet JSON :
-             les quatre nombres bougent ensemble et n'ont aucun sens separement.
-             Quatre cles auraient fait quatre ecritures et quatre occasions d'en
+             les cinq nombres bougent ensemble et n'ont aucun sens separement.
+             Cinq cles auraient fait cinq ecritures et cinq occasions d'en
              oublier une. -->
         <section class="card">
           <div class="card-head"><h2>Objectifs mensuels</h2>
@@ -128,13 +128,20 @@ export const rgdReglagesPage = {
           <div class="reg-grille">
             ${champ('reg-ob-dem', 'Nouvelles demandes', obj.demandes)}
             ${champ('reg-ob-rdv', 'Rendez-vous', obj.rdv)}
-            ${champ('reg-ob-dev', 'Devis signés', obj.devis)}
+            ${'' /* ⚠ « Devis envoyés » SE SAISIT DEPUIS LE 10/11/2026 : il était
+                 déjà LU par le bilan commercial (10 par mois, 120 par an), mais
+                 nulle part modifiable. La tuile « Devis envoyés » de la vue
+                 d'ensemble affiche cet objectif : sans ce champ, elle aurait
+                 montré un repère que personne ne pouvait bouger. */}
+            ${champ('reg-ob-env', 'Devis envoyés', obj.envoyes)}
+            ${champ('reg-ob-dev', 'Chantiers / devis signés', obj.devis)}
             ${champ('reg-ob-ca', 'Chiffre d’affaires HT (€)', obj.ca)}
           </div>
           <p class="small muted">Ils servent de repère sur la vue d’ensemble : la part
           atteinte, la couleur de chaque mois et le trait en pointillés des frises.
           <b>Saisir 0 remet la valeur d’origine</b> (${OBJECTIFS_DEFAUT.demandes} demandes,
-          ${OBJECTIFS_DEFAUT.rdv} rendez-vous, ${OBJECTIFS_DEFAUT.devis} devis,
+          ${OBJECTIFS_DEFAUT.rdv} rendez-vous, ${OBJECTIFS_DEFAUT.envoyes} devis envoyés,
+          ${OBJECTIFS_DEFAUT.devis} chantiers,
           ${OBJECTIFS_DEFAUT.ca.toLocaleString('fr-FR')} €).
           Changer un objectif ne change aucun chiffre réel — seulement la barre à côté.</p>
           ${state.ecriture ? `<div class="toolbar">
@@ -295,10 +302,10 @@ export const rgdReglagesPage = {
         }
       };
 
-      // ⚠ LES QUATRE OBJECTIFS PARTENT ENSEMBLE, DANS UNE SEULE VALEUR JSON.
+      // ⚠ LES CINQ OBJECTIFS PARTENT ENSEMBLE, DANS UNE SEULE VALEUR JSON.
       // Un champ laissé vide garde ce qui y était ; 0 rend la valeur d'origine.
-      // On relit donc les quatre à chaque enregistrement — écrire l'objet avec
-      // un seul champ effacerait les trois autres sans un mot.
+      // On relit donc les cinq à chaque enregistrement — écrire l'objet avec
+      // un seul champ effacerait les quatre autres sans un mot.
       const boutonObj = root.querySelector('#reg-ob-ok');
       if (boutonObj) boutonObj.onclick = async () => {
         const etat = root.querySelector('#reg-ob-etat');
@@ -312,6 +319,7 @@ export const rgdReglagesPage = {
         const neuf = {
           demandes: lu('#reg-ob-dem', obj.demandes, OBJECTIFS_DEFAUT.demandes),
           rdv: lu('#reg-ob-rdv', obj.rdv, OBJECTIFS_DEFAUT.rdv),
+          envoyes: lu('#reg-ob-env', obj.envoyes, OBJECTIFS_DEFAUT.envoyes),
           devis: lu('#reg-ob-dev', obj.devis, OBJECTIFS_DEFAUT.devis),
           ca: lu('#reg-ob-ca', obj.ca, OBJECTIFS_DEFAUT.ca),
         };

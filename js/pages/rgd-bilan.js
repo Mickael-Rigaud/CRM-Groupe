@@ -2,7 +2,24 @@
 //
 // Les calculs vivent dans `data/rgd-bilan.js` — rien n'est défini ici.
 //
-// ⚠ QUATRE COMPTEURS POUR L'EXERCICE EN COURS, L'HISTORIQUE EN PETIT DESSOUS
+// ⚠ LES QUATRE TUILES ONT QUITTÉ CETTE CARTE LE 10/11/2026, et c'est Élodie
+// qui l'a demandé : « j'adore cette présentation et je voudrais que ces
+// encadrés soient en dessus de la pipeline », avec trois de plus (demandes,
+// rendez-vous, CA encaissé) et le choix mois / exercice. Elles vivent donc
+// maintenant dans `pages/rgd-pilotage.js`, carte « Objectifs », où leur vue
+// Exercice donne exactement les chiffres qu'elles donnaient ici. Les laisser
+// AUSSI dans cette carte aurait mis les mêmes nombres à deux endroits du même
+// écran — elle a tranché : « non, juste le tableau ».
+//
+// ⚠ CE QUI EST PARTI AVEC ELLES : `anneau`, `lirePct`, `tuile` et `part`, qui
+// ne servaient qu'à ça. Les deux premières ont été RECOPIÉES dans
+// `rgd-pilotage.js`, pas effacées ; le CSS `rgd-bil-tuile` / `rgd-bil-anneau`
+// ne bouge pas, c'est là-bas qu'il sert désormais.
+//
+// ⚠ LE TABLEAU DE TOUS LES EXERCICES EST LE CŒUR DE CETTE CARTE, et l'ancien
+// paragraphe ci-dessous dit toujours pourquoi il est fait ainsi :
+//
+// ⚠ L'HISTORIQUE EN PETIT, SANS OBJECTIF NI BARRE
 // (05/11/2026). La carte répond à UNE question, celle qu'Élodie a choisie :
 // « où j'en suis cette année ». Avant d'arriver ici on est passé par un tableau
 // à onze lignes, un tableau en couleur avec intertitres, puis un parcours en
@@ -44,41 +61,9 @@ const tonTaux = (v) => (vide(v) ? '' : v >= 80 ? 'vert' : v >= 50 ? 'ambre' : 'r
 // ⚠ AUCUN ÉLÉMENT N'A CHANGÉ : mêmes tuiles, mêmes lignes, mêmes chiffres, mêmes
 // clics. Ne pas profiter d'une retouche de forme pour retirer ou ajouter une donnée.
 
-// ⚠ LE POURCENTAGE SE LIT DANS L'ANNEAU (05/11/2026, « en dessous de chaque
-// curseur je veux le pourcentage d'avancement de l'objectif », puis l'anneau
-// du 10/11). À l'entier, sauf sous 1 % (« 0,4 % »), pour qu'un début d'année
-// ne s'affiche pas « 0 % » alors que tout n'est pas nul.
-const lirePct = (part) => (part > 0 && part < 1
-  ? part.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) : String(Math.round(part)));
-
-function anneau(part, legende) {
-  const p = Math.max(0, part || 0);
-  const trace = Math.min(100, p > 0 ? Math.max(2, p) : 0);
-  return `<svg class="rgd-bil-anneau" viewBox="0 0 36 36" role="img" aria-label="${lirePct(p)} % ${esc(legende)}">
-      <circle cx="18" cy="18" r="15" class="fond"></circle>
-      ${trace > 0 ? `<circle cx="18" cy="18" r="15" class="plein" pathLength="100"
-        stroke-dasharray="${trace.toFixed(1)} ${(100 - trace).toFixed(1)}" transform="rotate(-90 18 18)"></circle>` : ''}
-      <text x="18" y="18.5" text-anchor="middle" class="pct">${lirePct(p)} %</text>
-      <text x="18" y="25" text-anchor="middle" class="leg">${esc(legende)}</text>
-    </svg>`;
-}
-
 // ⚠ CHAQUE CHIFFRE SE CLIQUE et ouvre la liste qui le compose (`justifier`).
 // `data-bil-an` = année de début d'exercice (ou « total »), `data-bil-m` = la mesure.
 const cliquable = (an, m) => `data-bil-an="${an}" data-bil-m="${m}" role="button" tabindex="0" title="Voir le détail"`;
-
-function tuile(teinte, titre, gros, sur, rond, bas, an, m) {
-  return `<div class="rgd-bil-tuile ${teinte} rgd-bil-clic" ${cliquable(an, m)}>
-      <div class="rgd-bil-lib">${titre}</div>
-      <div class="rgd-bil-ligne">
-        <div><div class="rgd-bil-gros">${gros}</div>${sur ? `<div class="rgd-bil-sur">${sur}</div>` : ''}</div>
-        ${rond}
-      </div>
-      <div class="rgd-bil-bas">${bas || '&nbsp;'}</div>
-    </div>`;
-}
-
-const part = (val, cible) => (val > 0 && cible > 0 ? (val / cible) * 100 : 0);
 
 // Le tableau de tous les exercices. Années en colonnes, cumul en dernier,
 // AUCUNE barre ni objectif : les objectifs n'existaient pas pour les années closes.
@@ -125,37 +110,24 @@ function tableauPasse(clos, total, ec) {
 export function carteBilan(aujourdhui = new Date(), pied = '') {
   const b = bilanCommercial(aujourdhui);
   if (!b) return '';
-  const { exercices, total, objectifs: o = {} } = b;
+  const { exercices, total } = b;
   const ec = exercices.find(e => e.enCours);
   const clos = exercices.filter(e => !e.enCours);
   const selonCrm = clos.some(e => e.chantiersSelonCrm) || total.chantiersSelonCrm;
 
-  const sur = (cible, format) => (vide(cible) ? '' : `sur ${format(cible)} cette année`);
-  const tuiles = ec ? `
-          <div class="rgd-bil-annee"><b>${esc(ec.label)}</b> · depuis le 1<sup>er</sup> octobre (${ec.nbMois} mois)</div>
-          <div class="rgd-bil-tuiles">
-            ${tuile('t-orange', 'Devis envoyés', nombre(ec.envoyes), sur(o.envoyes, nombre),
-              vide(o.envoyes) ? '' : anneau(part(ec.envoyes, o.envoyes), 'de l’objectif'),
-              vide(ec.montantDevis) ? '' : `${euros(ec.montantDevis)} HT`, ec.annee, 'envoyes')}
-            ${tuile('t-bleu', 'Devis signés', nombre(ec.signes),
-              vide(ec.tauxSignature) ? '' : `${pourcent(ec.tauxSignature)} des devis envoyés`,
-              vide(ec.tauxSignature) ? '' : anneau(ec.tauxSignature, 'signés'),
-              vide(o.tauxSignature) ? '' : `objectif ${pourcent(o.tauxSignature)}`, ec.annee, 'signes')}
-            ${tuile('t-vert', 'Chantiers', nombre(ec.chantiers), sur(o.chantiers, nombre),
-              vide(o.chantiers) ? '' : anneau(part(ec.chantiers, o.chantiers), 'de l’objectif'),
-              // Le panier réalisé est retiré de la tuile (Élodie : « retire le panier
-              // moyen, garde juste objectif 20 000 € ») : il est dans le tableau.
-              vide(o.panier) ? '' : `objectif ${euros(o.panier)} par chantier`, ec.annee, 'chantiers')}
-            ${tuile('t-violet', 'CA facturé HT', euros(ec.ca), sur(o.ca, euros),
-              vide(o.ca) ? '' : anneau(part(ec.ca, o.ca), 'de l’objectif'), '', ec.annee, 'ca')}
-          </div>` : '';
+  // ⚠ L'EXERCICE EN COURS RESTE ANNONCÉ EN UNE LIGNE, même sans ses tuiles :
+  // le tableau le porte dans sa colonne « en cours », et le nombre de mois
+  // écoulés est ce qui empêche de lire cette colonne comme une année pleine.
+  const enTete = ec ? `<div class="rgd-bil-annee">Exercice en cours <b>${esc(ec.label)}</b>
+          · depuis le 1<sup>er</sup> octobre (${ec.nbMois} mois) · le détail mois par mois
+          est dans <a href="#/rgd">les objectifs</a>, juste au-dessus</div>` : '';
 
   return `
         <section class="card rgd-bilan">
           <div class="card-head"><h2>Bilan commercial</h2>
             <span class="grow"></span>
             <span class="muted small">exercices du 1<sup>er</sup> octobre au 30 septembre</span></div>
-          ${tuiles}
+          ${enTete}
           <div class="rgd-bil-passe">
             ${tableauPasse(clos, total, ec)}
           </div>
