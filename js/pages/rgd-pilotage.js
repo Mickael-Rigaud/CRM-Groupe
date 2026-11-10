@@ -87,10 +87,41 @@ const exercice = (d = new Date()) => {
 // étapes hors cycle.
 const ETAPES_HORS_FRISE = ['archives', 'indesirable'];
 
+// LES COULEURS DE LA FRISE — DEUX TONS PAR ÉTAPE (10/11/2026, Élodie : « je
+// voudrais que les couleurs soient plus pétantes, c'est un peu trop triste »).
+//
+// ⚠ POURQUOI DEUX ET PAS UN : le premier (`c`) écrit le CHIFFRE, en grand, sur
+// du blanc — il doit rester lisible, donc assez foncé. Le second (`p`) ne
+// touche jamais au texte : il teinte le fond de la carte, la piste et le haut
+// du remplissage. C'est lui qui pétille. Avec une seule couleur il fallait
+// choisir entre un chiffre lisible et un fond vif, et c'est ce compromis qui
+// rendait la frise terne — du brun à « Devis en cours », du gris à « Nouvelle
+// demande ».
+//
+// ⚠ « DEVIS ENVOYÉ » N'AVAIT PAS DE COULEUR ET TOMBAIT SUR `var(--accent)`,
+// qui vaut l'orange RGD — exactement la couleur de « Devis accepté », juste à
+// côté. Deux étapes voisines de la même teinte : ça ne se voyait que lorsque
+// les deux portaient un chiffre. Chaque étape a désormais la sienne.
+//
+// L'ordre des teintes suit le parcours d'une affaire : violet à l'entrée, bleu
+// au rendez-vous, or puis orange pendant le devis, et trois verts qui montent
+// quand ça se signe et se construit. Le turquoise du SAV est à part, comme la
+// carte l'est derrière son trait.
+//
+// ⚠ « Archivés » et « Clients indésirables » GARDENT LEUR ENTRÉE bien qu'ils
+// ne soient plus dessinés (voir `ETAPES_HORS_FRISE`) : si on les remet un jour,
+// ils reviendront colorés et non pas en « accent » par défaut.
 const COULEURS = {
-  demande: '#9CA3AF', rdv: '#2A6FBF', devis_encours: '#B45C00',
-  devis_accepte: '#FD7A2C', chantier_encours: '#22C55E',
-  chantier_termine: '#059669', sav: '#D97706', archives: '#B91C1C', indesirable: '#7F1D1D',
+  demande:          { c: '#7C3AED', p: '#A78BFA' },
+  rdv:              { c: '#2563EB', p: '#60A5FA' },
+  devis_encours:    { c: '#CA8A04', p: '#FACC15' },
+  devis_envoye:     { c: '#EA580C', p: '#FB923C' },
+  devis_accepte:    { c: '#65A30D', p: '#A3E635' },
+  chantier_encours: { c: '#16A34A', p: '#4ADE80' },
+  chantier_termine: { c: '#047857', p: '#34D399' },
+  sav:              { c: '#0E7490', p: '#22D3EE' },
+  archives:         { c: '#B91C1C', p: '#F87171' },
+  indesirable:      { c: '#7F1D1D', p: '#FCA5A5' },
 };
 
 // ⚠ IL N'Y A PLUS DE MENTION « DORMANT » SUR LES CARTES, et son calcul est
@@ -143,7 +174,8 @@ function frisePipeline(etapes) {
   // place et à sa taille, elle pâlit seulement. « Personne à cette étape » est
   // une information de l'écran, pas un trou à boucher.
   const carte = (e, i) => `<a class="rgd-et${e.hors ? ' hors' : ''}${e.n ? '' : ' vide'}"
-      href="#/rgd/clients?vue=${esc(e.cle)}" style="--c:${esc(e.couleur)};--i:${i}"
+      href="#/rgd/clients?vue=${esc(e.cle)}"
+      style="--c:${esc(e.couleur)};--p:${esc(e.petant)};--i:${i}"
       title="${esc(e.titre || e.label)} — ouvrir dans Clients &amp; prospects">
     <span class="rgd-et-n">${e.n}</span>
     <span class="rgd-et-label">${esc(e.label)}</span>
@@ -807,7 +839,9 @@ export const rgdPilotagePage = {
       const etapes = etapesRgd()
         .filter(e => !ETAPES_HORS_FRISE.includes(e.key))
         .map(e => ({
-        ...e, cle: e.key, couleur: COULEURS[e.key] || 'var(--accent)',
+        ...e, cle: e.key,
+        couleur: (COULEURS[e.key] || {}).c || 'var(--accent)',
+        petant: (COULEURS[e.key] || {}).p || 'var(--accent)',
         hors: ETAPES_HORS_CYCLE.includes(e.key),
         ...(e.key === 'chantier_termine' && histo.chantiers
           ? { n: histo.chantiers, horsEchelle: true,

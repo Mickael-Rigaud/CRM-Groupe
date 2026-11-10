@@ -4460,14 +4460,22 @@ button.tb-pp:hover { color: var(--text); text-decoration: underline; text-underl
    AU-DESSUS de la carte au lieu d'en faire partie. L'ombre interne, elle, suit
    le `border-radius` au pixel. Ce qu'on y perd : le dégradé, qu'une ombre ne
    sait pas faire. Et `--cap` existe pour que le survol puisse rappeler le
-   liseré sans connaître sa couleur — une étape vide la change. */
+   liseré sans connaître sa couleur — une étape vide la change.
+
+   ⚠ DEUX TONS, ET ILS NE SONT PAS INTERCHANGEABLES : `--c` est le ton
+   LISIBLE, celui du chiffre sur fond blanc ; `--p` est le ton PÉTANT, qui ne
+   touche jamais au texte et sert le fond, la piste et le haut du remplissage
+   (10/11/2026, Élodie : « des couleurs plus pétantes, c'est un peu trop
+   triste »). Remettre `--c` partout « par cohérence » refabriquerait la frise
+   terne : c'est le compromis d'une couleur unique qui donnait du brun et du
+   gris. Les deux valeurs sont posées par `frisePipeline()`. */
 .rgd-et { --cap: var(--c);
   position: relative; flex: 1 1 0; min-width: 0; display: grid; gap: 6px;
   grid-template-rows: auto auto 1fr auto; justify-items: center;
   padding: 14px 6px 11px; border-radius: 14px; text-decoration: none;
-  border: 1px solid var(--line); box-shadow: inset 0 3px 0 0 var(--cap);
+  border: 1px solid var(--line); box-shadow: inset 0 4px 0 0 var(--cap);
   background: linear-gradient(180deg,
-    color-mix(in srgb, var(--c) 7%, var(--card)) 0%, var(--card) 48%);
+    color-mix(in srgb, var(--p, var(--c)) 22%, var(--card)) 0%, var(--card) 88%);
   transition: transform .16s cubic-bezier(.2, .75, .3, 1), border-color .16s, box-shadow .16s; }
 
 /* Le chevron entre deux cartes. ⚠ CE N'EST PAS UN ENTONNOIR : il dit le SENS de
@@ -4485,10 +4493,10 @@ button.tb-pp:hover { color: var(--text); text-decoration: underline; text-underl
 
 .rgd-et:hover { transform: translateY(-4px);
   border-color: color-mix(in srgb, var(--c) 50%, var(--line));
-  box-shadow: inset 0 3px 0 0 var(--cap),
-    0 12px 26px color-mix(in srgb, var(--c) 20%, transparent);
+  box-shadow: inset 0 4px 0 0 var(--cap),
+    0 12px 26px color-mix(in srgb, var(--c) 24%, transparent);
   background: linear-gradient(180deg,
-    color-mix(in srgb, var(--c) 14%, var(--card)) 0%, var(--card) 55%); }
+    color-mix(in srgb, var(--p, var(--c)) 34%, var(--card)) 0%, var(--card) 95%); }
 
 .rgd-et-n { font-family: var(--font-display); font-size: 29px; font-weight: 800;
   color: var(--c); line-height: 1; letter-spacing: -.03em;
@@ -4508,14 +4516,13 @@ button.tb-pp:hover { color: var(--text); text-decoration: underline; text-underl
    il garantit seulement qu'une étape habitée ne se confonde pas avec une étape
    déserte. Une carte à zéro, elle, n'a pas de remplissage du tout. */
 .rgd-et-piste { width: 10px; min-height: 46px; border-radius: 99px;
-  background: color-mix(in srgb, var(--c) 9%, var(--card-2));
+  background: color-mix(in srgb, var(--p, var(--c)) 20%, var(--card-2));
   align-self: stretch; justify-self: center; overflow: hidden;
   display: flex; flex-direction: column; justify-content: flex-end; }
 .rgd-et-piste i { display: block; width: 100%; min-height: 9px; border-radius: 99px;
   transform-origin: bottom; transition: height .2s;
-  background: linear-gradient(180deg,
-    color-mix(in srgb, var(--c) 68%, #FFFFFF), var(--c));
-  box-shadow: 0 0 12px color-mix(in srgb, var(--c) 40%, transparent); }
+  background: linear-gradient(180deg, var(--p, var(--c)), var(--c));
+  box-shadow: 0 0 12px color-mix(in srgb, var(--p, var(--c)) 55%, transparent); }
 .rgd-et-part { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
 
 /* Ce qui pèse à l'étape : le montant et ce qu'il compte.
