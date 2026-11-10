@@ -71,7 +71,7 @@ const retard = (iso) => {
 };
 
 export const rgdCostructorPage = {
-  title: () => 'RGD Renova — Synchronisation Costructor',
+  title: () => 'RGD Renova — Synchronisation',
   render(root) {
     if (guard(root)) return {};
     const coquille = poserEspace(root);
@@ -222,7 +222,7 @@ export const rgdCostructorPage = {
           viennent de l&rsquo;application RGD, les récents du CRM.</p>
         </section>`}`;
 
-      root.innerHTML = cadre('#/rgd/costructor', 'Synchronisation Costructor', corps);
+      root.innerHTML = cadre('#/rgd/costructor', 'Synchronisation', corps);
       if (state.vue === 'ignores') { bindSearch(root, 'rco-q', state, draw); restoreFocus(root, state); }
       root.querySelectorAll('[data-vue]').forEach(b => b.onclick = () => { state.vue = b.dataset.vue; state.q = ''; draw(); });
     };

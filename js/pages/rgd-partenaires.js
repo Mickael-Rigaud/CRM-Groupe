@@ -1598,17 +1598,37 @@ function brancherTableau(m, a, apres) {
 
 // ------------------------------------------------------------------- l'écran
 
-export const rgdPartenairesPage = {
-  title: () => 'RGD Renova — Partenaires',
+// ⚠ UN ÉCRAN, TROIS ENTRÉES DE MENU (10/11/2026, Élodie : un sous-menu
+// « Partenaires » avec Apporteur d'affaires, Fournisseur, Affaires). Chaque
+// entrée ouvre le même écran réduit à SA section ; les onglets de secteur, la
+// recherche et les fiches restent communs, pour que les trois se lisent pareil.
+// `vue` vaut 'apporteur', 'fournisseur' ou 'affaires'.
+const VUES = {
+  apporteur: { hash: '#/rgd/apporteurs', titre: 'Apporteurs d’affaires' },
+  fournisseur: { hash: '#/rgd/fournisseurs', titre: 'Fournisseurs' },
+  affaires: { hash: '#/rgd/affaires', titre: 'Affaires apportées par RGD Renova' },
+};
+
+const pagePartenaires = (vue) => ({
+  title: () => `RGD Renova — ${VUES[vue].titre}`,
   render(root) {
     if (guard(root)) return {};
     const coquille = poserEspace(root);
+    // « En ligne » n'existe que pour les fournisseurs.
+    const ONGLETS_VUE = vue === 'fournisseur'
+      ? ['cote_azur', 'oise', 'en_ligne', 'aclasser'] : ['cote_azur', 'oise', 'aclasser'];
+    // L'onglet ouvert se retient PAR ENTRÉE : « En ligne » choisi chez les
+    // fournisseurs n'a pas à suivre jusque chez les apporteurs.
+    const MEMO = `${ONGLET_MEMO}_${vue}`;
     // Une seule porte : la policy `rgd_apporteurs_acces`, dont `scope.canRgd`
     // est le miroir exact. Plus aucun compte de l'application RGD n'est exigé.
     let memo = '';
-    try { memo = localStorage.getItem(ONGLET_MEMO) || ''; } catch { /* navigation privée */ }
+    try { memo = localStorage.getItem(MEMO) || ''; } catch { /* navigation privée */ }
     const state = { q: '', focus: null, ecriture: scope.canRgd,
-      onglet: ['cote_azur', 'oise', 'en_ligne', 'aclasser'].includes(memo) ? memo : 'cote_azur' };
+      onglet: ONGLETS_VUE.includes(memo) ? memo : 'cote_azur' };
+    // Les fiches que cette entrée montre : aucune pour « Affaires ».
+    const SECTIONS_VUE = SECTIONS.filter(s => s.cle === vue);
+    const ficheDeLaVue = (a) => SECTIONS_VUE.some(s => s.prend(a));
 
     const draw = () => {
       const tous = scope.rgd('rgd_apporteurs');
@@ -1627,8 +1647,9 @@ export const rgdPartenairesPage = {
       });
       // ⚠ « À CLASSER » DISPARAÎT QUAND IL EST VIDE ; s'il était l'onglet ouvert,
       // on revient sur la Côte d'Azur plutôt que sur une page blanche.
-      const nAClasser = tous.filter(a => !SECTEURS[a.secteur]).length
-        + scope.rgd('rgd_apports_sortants').filter(x => !SECTEURS[x.secteur]).length;
+      const nAClasser = vue === 'affaires'
+        ? scope.rgd('rgd_apports_sortants').filter(x => !SECTEURS[x.secteur]).length
+        : tous.filter(a => ficheDeLaVue(a) && !SECTEURS[a.secteur]).length;
       if (state.onglet === 'aclasser' && !nAClasser) state.onglet = 'cote_azur';
       const vus = trouves.filter(a => ongletDe(a.secteur) === state.onglet);
       const enLigne = ONGLETS_FOURNISSEURS.includes(state.onglet);
@@ -1814,11 +1835,13 @@ export const rgdPartenairesPage = {
 
       // Le compte d'un onglet suit la recherche : il dit ce qu'on trouvera en
       // cliquant dessus.
-      const compte = (o) => trouves.filter(a => ongletDe(a.secteur) === o).length
-        + sortantsTrouves.filter(x => ongletDe(x.secteur) === o).length;
-      // « En ligne » s'affiche même vide : c'est un onglet demandé, il doit
-      // être là pour qu'on y range le premier fournisseur.
-      const onglets = [['cote_azur', 'Côte d’Azur'], ['oise', 'Oise'], ['en_ligne', 'En ligne']]
+      const compte = (o) => (vue === 'affaires'
+        ? sortantsTrouves.filter(x => ongletDe(x.secteur) === o).length
+        : trouves.filter(a => ficheDeLaVue(a) && ongletDe(a.secteur) === o).length);
+      // « En ligne » s'affiche même vide chez les fournisseurs : c'est un
+      // onglet demandé, il doit être là pour qu'on y range le premier.
+      const onglets = [['cote_azur', 'Côte d’Azur'], ['oise', 'Oise']]
+        .concat(vue === 'fournisseur' ? [['en_ligne', 'En ligne']] : [])
         .concat(nAClasser ? [['aclasser', 'À classer']] : []);
 
       const corps = `
@@ -1835,12 +1858,10 @@ export const rgdPartenairesPage = {
               ? 'Cliquez sur une ligne pour ouvrir la fiche'
               : 'Lecture seule'}</span>
           </div>
-          ${enLigne
-            ? SECTIONS.filter(s => s.cle === 'fournisseur').map(section).join('')
-            : SECTIONS.map(section).join('') + sectionSortants()}
+          ${vue === 'affaires' ? sectionSortants() : SECTIONS_VUE.map(section).join('')}
         </div>`;
 
-      root.innerHTML = cadre('#/rgd/partenaires', 'Partenaires', corps);
+      root.innerHTML = cadre(VUES[vue].hash, VUES[vue].titre, corps);
       bindSearch(root, 'rpa-q', state, draw);
       restoreFocus(root, state);
 
@@ -1878,7 +1899,7 @@ export const rgdPartenairesPage = {
 
       root.querySelectorAll('[data-onglet]').forEach(b => b.onclick = () => {
         state.onglet = b.dataset.onglet;
-        try { localStorage.setItem(ONGLET_MEMO, state.onglet); } catch { /* navigation privée */ }
+        try { localStorage.setItem(MEMO, state.onglet); } catch { /* navigation privée */ }
         draw();
       });
     };
@@ -1886,4 +1907,11 @@ export const rgdPartenairesPage = {
     draw();
     return { refresh: draw, destroy() { coquille.retirer(); } };
   },
-};
+});
+
+export const rgdApporteursPage = pagePartenaires('apporteur');
+export const rgdFournisseursPage = pagePartenaires('fournisseur');
+export const rgdAffairesPage = pagePartenaires('affaires');
+// L'ancienne adresse `#/rgd/partenaires` (liens partis, barre du téléphone)
+// ouvre les apporteurs.
+export const rgdPartenairesPage = rgdApporteursPage;

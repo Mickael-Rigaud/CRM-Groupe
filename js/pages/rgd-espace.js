@@ -23,110 +23,67 @@ export const act = () => ACTIVITIES[KEY];
 // non repris — To-do, Équipe, Paramètres — accessibles par « Application RGD ».
 export const ONGLETS = [
   { hash: '#/rgd', label: 'Vue d’ensemble' },
+  // ⚠ LE MENU A ÉTÉ REDESSINÉ PAR ÉLODIE LE 10/11/2026, dans cet ordre :
+  // Base de données, Partenaires, Cotation dépannage électrique, Agenda,
+  // Formations, Inspirations, Communication, Costructor, Autres. Les intitulés
+  // de groupe n'ont pas de page. Le Pipeline a été retiré (« elle ne sert à
+  // rien ») : `#/rgd/chantiers` retombe sur la vue d'ensemble.
+  //
+  // ⚠ LES ADRESSES NE CHANGENT PAS QUAND UN NOM CHANGE : « Tarifs » s'appelle
+  // « Cotation dépannage électrique » mais reste `#/rgd/tarifs`, la
+  // « Synchronisation » reste `#/rgd/costructor`. Un nom d'écran se renomme,
+  // une adresse se casse.
   { label: 'Base de données', sous: [
     { hash: '#/rgd/clients', label: 'Clients & prospects' },
     // ⚠ LE SAV A SA PAGE (13/10/2026, Élodie : « je le voyais plus à part »),
-    // sous Clients & prospects, avec le nombre de dossiers en cours. Le libellé
-    // est un ACCESSEUR : le menu est relu à chaque rendu, le compte suit.
+    // avec le nombre de dossiers en cours. Le libellé est un ACCESSEUR : le menu
+    // est relu à chaque rendu, le compte suit.
     { hash: '#/rgd/sav', get label() {
       const n = scope.rgd('rgd_sav').filter(s => !savClos(s)).length;
       return n ? `SAV (${n})` : 'SAV';
     } },
-    { hash: '#/rgd/partenaires', label: 'Partenaires' },
+  ] },
+  // ⚠ L'ANCIENNE PAGE « PARTENAIRES » EST COUPÉE EN TROIS (10/11/2026) :
+  // apporteurs, fournisseurs, affaires apportées par RGD. C'est le même écran
+  // (`rgd-partenaires.js`), qui ne montre qu'une section selon l'adresse ;
+  // `#/rgd/partenaires` continue de répondre et ouvre les apporteurs.
+  { label: 'Partenaires', sous: [
+    { hash: '#/rgd/apporteurs', label: 'Apporteurs d’affaires' },
+    { hash: '#/rgd/fournisseurs', label: 'Fournisseurs' },
+    { hash: '#/rgd/affaires', label: 'Affaires' },
     { hash: '#/rgd/soustraitants', label: 'Sous-traitants' },
     // La veille hebdomadaire des sous-traitants (07/10/2026). Direction seule :
     // `cadre` retire l'entrée pour les autres.
     { hash: '#/rgd/prospection', label: 'Vivier sous-traitants' },
   ] },
+  // La grille des devis du CRM (29/10/2026), direction seule.
+  { hash: '#/rgd/tarifs', label: 'Cotation dépannage électrique' },
   { hash: '#/rgd/agenda', label: 'Agenda' },
   { hash: '#/rgd/formations', label: 'Formations' },
-  // ⚠ « TRAVAUX » A DISPARU LE 08/10/2026, ET CE N'EST PAS UN RETOUR SUR LA
-  // DÉCISION DU 07/10 : Élodie a demandé de ranger « Réalisations » dans un
-  // groupe « Communication », avec le calendrier des réseaux sociaux et
-  // l'analyse. Le groupe ne portait plus rien. Les réalisations sont ce que
-  // RGD MONTRE — sur le site et sur les réseaux —, c'est ce qui les met ici.
-  // Placé SOUS « Formations », demandé le même jour.
-  // Le groupe ENTIER est réservé à la direction (`RESERVES_DIRECTION`), et il
-  // sort du menu d'un chargé d'affaires.
-  // ⚠ REPLIABLE DEPUIS LE 12/10/2026 (demandé par Élodie : « que l'onglet
-  // communication soit comme "autres" de rgd renova avec une sous-flèche »).
-  // C'est `pliable: true` et RIEN D'AUTRE : surtout pas `bas: true`, qui le
-  // pousserait au pied du menu — sa place sous « Formations » a été choisie le
-  // 08/10, seule la flèche était demandée.
-  // ⚠ CONSÉQUENCE À CONNAÎTRE : un groupe pliable est REPLIÉ PAR DÉFAUT, donc
-  // ces trois écrans passent derrière un clic. C'est le propre de ce réglage,
-  // et le groupe de la page ouverte se déplie toujours de lui-même.
+  // Les photos des réalisations rangées par catégorie du site, pour les montrer
+  // en rendez-vous (14/10/2026). Sortie du groupe Communication le 10/11/2026.
+  { hash: '#/rgd/inspirations', label: 'Inspirations' },
+  // Le groupe ENTIER est réservé à la direction (`RESERVES_DIRECTION`).
+  // ⚠ REPLIABLE (12/10/2026) : un groupe pliable est REPLIÉ PAR DÉFAUT, et il
+  // se déplie de lui-même quand on est sur l'un de ses écrans.
+  // ⚠ LE LIBELLÉ SERT DE CLÉ AU RÉGLAGE DE PLI (`crm_menu_pli_rgd_<libellé>`).
   { label: 'Communication', pliable: true, sous: [
     { hash: '#/rgd/realisations', label: 'Réalisations' },
-    // Les mêmes photos, rangées par catégorie du site, pour les montrer en rendez-vous
-    // (14/10/2026). Réservée à la direction comme tout le groupe.
-    { hash: '#/rgd/inspirations', label: 'Inspirations' },
     { hash: '#/rgd/communication', label: 'Calendrier réseaux sociaux' },
     { hash: '#/rgd/analyse', label: 'Analyse' },
   ] },
-  // LES CINQ ÉCRANS DE L'ARGENT ET DE SA PLOMBERIE, EN UN SEUL GROUPE
-  // (25/09/2026, demandé par Mickael : « regroupe devis, encaissement,
-  // costructor, réglages, application rgd »).
-  //
-  // Ils se suivent vraiment : un devis naît dans l'application RGD, Costructor
-  // le rapatrie, il devient une facture puis un encaissement, et Réglages porte
-  // les corrections manuelles du chiffre d'affaires. Quand un devis « n'arrive
-  // jamais », la réponse est dans Costructor — deux entrées de menu plus bas.
-  //
-  // ⚠ CE GROUPE A ABSORBÉ « ADMINISTRATION », qui tenait Costructor, Réglages et
-  // Application RGD à part depuis le 24/09. La raison écrite alors — « on ne les
-  // ouvre pas pour travailler » — tenait tant qu'ils étaient seuls ; elle ne
-  // tient plus maintenant que Devis et Encaissements les rejoignent, et ce n'est
-  // pas une régression : c'est la facturation qui descend avec eux, pas les
-  // coulisses qui remontent. Le trait de séparation (`bas: true`) reste, il dit
-  // que ce bloc n'est pas la conduite des chantiers.
-  //
-  // ⚠ « Application RGD » DISPARAÎTRA — c'est l'étape 5 — et cette ligne partira
-  // sans que le reste du menu bouge : c'est aussi pour ça qu'elle est ici, en
-  // dernier.
-  // ⚠ REPLIÉ PAR DÉFAUT (`pliable`), demandé par Mickael le 25/09/2026 : cinq
-  // entrées qu'on n'ouvre pas tous les jours prenaient un tiers du menu. Le
-  // groupe se rouvre d'un clic, l'état est gardé par navigateur, et il se déplie
-  // tout seul quand on est sur l'un de ses écrans — sinon plus rien ne dirait où
-  // l'on se trouve.
-  // ⚠ LE LIBELLÉ SERT DE CLÉ AU RÉGLAGE DE PLI (`crm_menu_pli_rgd_<libellé>`).
-  // Le renommer oublie donc le réglage mémorisé et le groupe revient à son état
-  // par défaut — replié, c'est-à-dire ce qu'on veut de toute façon. Sans cette
-  // coïncidence il faudrait une clé stable à part ; à retenir avant de renommer
-  // un groupe dont le défaut serait « ouvert ».
-  { label: 'Autres', bas: true, pliable: true, sous: [
-    // ⚠ « Chantiers » S'APPELLE « PIPELINE » DEPUIS LE 25/09/2026, demandé par
-    // Mickael. L'adresse `#/rgd/chantiers` ne change PAS : elle est écrite dans
-    // des liens déjà partis et dans les deux CLAUDE.md. Un nom d'écran se
-    // renomme, une adresse se casse.
-    //
-    // ⚠ IL EST DESCENDU ICI LE 07/10/2026, demandé par Élodie. Conséquence à
-    // connaître avant de s'étonner : ce groupe est REPLIÉ PAR DÉFAUT, donc le
-    // Pipeline est désormais derrière un clic. C'est le propre de ce bloc —
-    // « cinq entrées qu'on n'ouvre pas tous les jours » — et c'est bien ce qui
-    // a été demandé.
-    //
-    // ⚠ IL EST EN TÊTE ET NON À LA SUITE : les quatre autres se suivent dans
-    // l'ordre de l'argent (un devis devient une facture, puis un encaissement,
-    // et Réglages corrige le CA). Le Pipeline ne fait pas partie de cette
-    // chaîne ; l'y intercaler la casserait, le poser devant la laisse intacte.
-    { hash: '#/rgd/chantiers', label: 'Pipeline' },
+  // L'ORDRE DE L'ARGENT : un devis devient une facture, puis un encaissement.
+  // « Devis » est l'écran des devis rapatriés de Costructor, d'où le nom du
+  // groupe ; « Facturation » plutôt que « Factures & devis », pour ne pas lire
+  // deux fois le mot devis dans le même groupe.
+  { label: 'Costructor', pliable: true, sous: [
     { hash: '#/rgd/devis', label: 'Devis' },
-    // La grille des devis du CRM (29/10/2026) : à côté des devis, réservée à
-    // la direction comme la Prospection.
-    { hash: '#/rgd/tarifs', label: 'Tarifs' },
-    // ⚠ ENTRE TARIFS ET ENCAISSEMENTS, ET CE N'EST PAS ARBITRAIRE : ce groupe
-    // suit l'ordre de l'argent, dit plus haut — un devis devient une facture,
-    // puis un encaissement. La facture n'avait pas d'entrée parce qu'elle
-    // n'existait que dans la fiche d'un client (02/11/2026, Élodie : « oui
-    // fais la page factures »).
-    // ⚠ « Facturation » ET NON « Factures & devis » : l'entrée « Devis »
-    // trois lignes plus haut est celle de COSTRUCTOR, et deux entrées nommées
-    // « devis » dans le même menu se lisent comme un doublon. Le mot couvre
-    // les deux documents du CRM sans empiéter sur l'autre.
     { hash: '#/rgd/factures', label: 'Facturation' },
     { hash: '#/rgd/paiements', label: 'Encaissements' },
-    { hash: '#/rgd/costructor', label: 'Costructor' },
+  ] },
+  // Ce qu'on n'ouvre pas pour travailler : poussé en bas (`bas`), replié.
+  { label: 'Autres', bas: true, pliable: true, sous: [
+    { hash: '#/rgd/costructor', label: 'Synchronisation' },
     { hash: '#/rgd/reglages', label: 'Réglages' },
   ] },
 ];

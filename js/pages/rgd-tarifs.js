@@ -40,7 +40,7 @@ const codeDepuis = (libelle, pris) => {
 };
 
 export const rgdTarifsPage = {
-  title: () => 'RGD Renova — Tarifs',
+  title: () => 'RGD Renova — Cotation dépannage électrique',
   render(root) {
     if (guard(root)) return {};
     const coquille = poserEspace(root);
@@ -92,13 +92,13 @@ export const rgdTarifsPage = {
 
     const draw = () => {
       if (!scope.isDirection) {
-        root.innerHTML = cadre('#/rgd/tarifs', 'Tarifs',
+        root.innerHTML = cadre('#/rgd/tarifs', 'Cotation dépannage électrique',
           '<section class="card"><div class="empty">La grille des tarifs se modifie par la direction.</div></section>');
         return;
       }
       const liste = lignes();
       const metiers = [...new Set([...Object.keys(METIERS), ...db.t('rgd_tarifs').map(t => t.metier)])];
-      root.innerHTML = cadre('#/rgd/tarifs', 'Tarifs', `
+      root.innerHTML = cadre('#/rgd/tarifs', 'Cotation dépannage électrique', `
         <div class="alert rgd-source"><b>i</b><div>Ces prix servent aux <b>devis faits dans le CRM</b>
           (bouton « + Faire un devis » sur la fiche d’un client). Tous les prix sont <b>HT</b>.
           Changer un prix ne modifie <b>pas</b> les devis déjà faits : seuls les suivants le prennent.</div></div>

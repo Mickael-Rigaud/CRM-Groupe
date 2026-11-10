@@ -444,9 +444,10 @@ const BAS_STRUCTURE = {
   rgd: () => [
     { hash: '#/rgd', icon: 'home', label: 'Accueil', ici: (h) => h === '#/rgd' || h.startsWith('#/rgd/pilotage') },
     { hash: '#/rgd/clients', icon: 'users', label: 'Clients' },
-    scope.isDirection
-      ? { hash: '#/rgd/partenaires', icon: 'building', label: 'Partenaires' }
-      : { hash: '#/rgd/chantiers', icon: 'kanban', label: 'Pipeline' },
+    // ⚠ LE PIPELINE EST PARTI LE 10/11/2026 (retiré de l'espace) : tout le
+    // monde a désormais les Partenaires ici, qui ouvrent les apporteurs.
+    { hash: '#/rgd/apporteurs', icon: 'building', label: 'Partenaires',
+      ici: (h) => ['#/rgd/apporteurs', '#/rgd/fournisseurs', '#/rgd/affaires', '#/rgd/partenaires'].some(x => h.startsWith(x)) },
     { hash: '#/rgd/agenda', icon: 'calendar', label: 'Agenda' },
   ],
   // Les deux métiers du cabinet d'abord — c'est le travail du jour —, puis la

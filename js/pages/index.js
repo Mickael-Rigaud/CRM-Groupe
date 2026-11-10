@@ -47,7 +47,9 @@ export const pages = {
   // L'accueil est la vue d'ensemble, comme dans le tableau de bord d'origine.
   rgd_home: ecran('./rgd-pilotage.js', 'rgdPilotagePage'),
   rgd_pilotage: ecran('./rgd-pilotage.js', 'rgdPilotagePage'),
-  rgd_chantiers: ecran('./rgd-chantiers.js', 'rgdChantiersPage'),
+  // ⚠ LE PIPELINE A ÉTÉ RETIRÉ LE 10/11/2026 (Élodie : « elle ne sert à rien »).
+  // Sans entrée ici, `#/rgd/chantiers` retombe sur la vue d'ensemble ; le fichier
+  // `rgd-chantiers.js` reste dans le dépôt, il suffit de remettre cette ligne.
   rgd_clients: ecran('./rgd-clients.js', 'rgdClientsPage'),
   rgd_agenda: ecran('./rgd-agenda.js', 'rgdAgendaPage'),
   rgd_devis: ecran('./rgd-facturation.js', 'rgdDevisPage'),
@@ -59,6 +61,10 @@ export const pages = {
   rgd_communication: ecran('./communication.js', 'rgdCommunicationPage'),
   rgd_analyse: ecran('./communication.js', 'rgdAnalysePage'),
   rgd_partenaires: ecran('./rgd-partenaires.js', 'rgdPartenairesPage'),
+  // Les trois entrées du sous-menu Partenaires (10/11/2026), un même écran.
+  rgd_apporteurs: ecran('./rgd-partenaires.js', 'rgdApporteursPage'),
+  rgd_fournisseurs: ecran('./rgd-partenaires.js', 'rgdFournisseursPage'),
+  rgd_affaires: ecran('./rgd-partenaires.js', 'rgdAffairesPage'),
   rgd_realisations: ecran('./rgd-realisations.js', 'rgdRealisationsPage'),
   rgd_costructor: ecran('./rgd-costructor.js', 'rgdCostructorPage'),
   rgd_formations: ecran('./rgd-formations.js', 'rgdFormationsPage'),

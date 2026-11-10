@@ -1520,6 +1520,19 @@ button.esp-side-titre { background: none; border: 0; font-family: inherit; color
    `--accent` de RGD vaut deja #FD7A2D. */
 .esp-app[data-espace="rgd"] .esp-side { background: #212121; }
 .esp-app[data-espace="rgd"] .esp-side-nav a.on { background: #fd7a2d; }
+/* Les intitulés de groupe (Base de données, Partenaires, Communication…) n'ont
+   pas de page : ils prennent une autre couleur que les liens, un orange clair en
+   TEXTE — l'orange plein reste réservé à la page ouverte —, et un filet relie
+   chaque groupe à ses pages (10/11/2026, Élodie : « que ça ne se mélange pas
+   avec les pages »). */
+.esp-app[data-espace="rgd"] .esp-side-titre,
+.esp-app[data-espace="rgd"] .esp-side-pliable > .esp-side-titre { color: #ffb27d; }
+.esp-app[data-espace="rgd"] .esp-side-pliable > .esp-side-titre:hover { color: #ffd2b0; }
+.esp-app[data-espace="rgd"] .esp-side-groupe { margin-top: 10px; }
+.esp-app[data-espace="rgd"] .esp-side-groupe > a,
+.esp-app[data-espace="rgd"] .esp-side-plis { margin-left: 15px; border-left: 2px solid rgba(255, 178, 125, .35); }
+.esp-app[data-espace="rgd"] .esp-side-groupe > a { padding-left: 13px; border-radius: 0 9px 9px 0; }
+.esp-app[data-espace="rgd"] .esp-side-plis a { padding-left: 13px; border-radius: 0 9px 9px 0; }
 @media (max-width: 820px) {
   /* Le lisere de fin de bande doit suivre le meme fond, sinon il degrade vers
      un brun qui n'existe plus a l'ecran. */
