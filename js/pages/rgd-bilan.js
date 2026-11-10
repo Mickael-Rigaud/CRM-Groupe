@@ -35,63 +35,80 @@ const euros = (v) => (vide(v) ? '—' : eur(v));
 // Trois paliers : on lit une couleur plus vite qu'un nombre.
 const tonTaux = (v) => (vide(v) ? '' : v >= 80 ? 'vert' : v >= 50 ? 'ambre' : 'rouge');
 
-// ⚠ LE POURCENTAGE EST ÉCRIT SOUS LA BARRE (05/11/2026, Élodie : « en dessous
-// de chaque curseur je veux le pourcentage d'avancement de l'objectif ») : une
-// barre de 3 % ne se lit pas à l'œil. À l'entier, sauf sous 1 % (« 0,4 % »),
-// pour qu'un début d'année ne s'affiche pas « 0 % » alors que tout n'est pas nul.
-function jauge(val, cible) {
-  const part = val > 0 && cible > 0 ? (val / cible) * 100 : 0;
-  const lu = part > 0 && part < 1 ? part.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) : String(Math.round(part));
-  return `<span class="rgd-bil-piste"><i style="width:${Math.min(100, Math.max(part > 0 ? 2 : 0, part)).toFixed(1)}%"></i></span>
-    <div class="rgd-bil-avance">${lu} % de l’objectif</div>`;
+// ⚠ LE VISUEL « PISTE A » (10/11/2026, Élodie : « je voudrais surtout que
+// l'on revoie le visuel du bilan commercial, quelque chose de plus moderne et
+// dynamique — ne change surtout pas les éléments, tout est correct »). Entre
+// trois maquettes (couleurs vives et anneaux, barres comparatives, sombre),
+// elle a choisi les couleurs vives : chaque tuile a son dégradé, l'avancement
+// se lit dans un anneau, et le tableau s'aère avec des pastilles pour les taux.
+// ⚠ AUCUN ÉLÉMENT N'A CHANGÉ : mêmes tuiles, mêmes lignes, mêmes chiffres, mêmes
+// clics. Ne pas profiter d'une retouche de forme pour retirer ou ajouter une donnée.
+
+// ⚠ LE POURCENTAGE SE LIT DANS L'ANNEAU (05/11/2026, « en dessous de chaque
+// curseur je veux le pourcentage d'avancement de l'objectif », puis l'anneau
+// du 10/11). À l'entier, sauf sous 1 % (« 0,4 % »), pour qu'un début d'année
+// ne s'affiche pas « 0 % » alors que tout n'est pas nul.
+const lirePct = (part) => (part > 0 && part < 1
+  ? part.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) : String(Math.round(part)));
+
+function anneau(part, legende) {
+  const p = Math.max(0, part || 0);
+  const trace = Math.min(100, p > 0 ? Math.max(2, p) : 0);
+  return `<svg class="rgd-bil-anneau" viewBox="0 0 36 36" role="img" aria-label="${lirePct(p)} % ${esc(legende)}">
+      <circle cx="18" cy="18" r="15" class="fond"></circle>
+      ${trace > 0 ? `<circle cx="18" cy="18" r="15" class="plein" pathLength="100"
+        stroke-dasharray="${trace.toFixed(1)} ${(100 - trace).toFixed(1)}" transform="rotate(-90 18 18)"></circle>` : ''}
+      <text x="18" y="18.5" text-anchor="middle" class="pct">${lirePct(p)} %</text>
+      <text x="18" y="25" text-anchor="middle" class="leg">${esc(legende)}</text>
+    </svg>`;
 }
 
 // ⚠ CHAQUE CHIFFRE SE CLIQUE et ouvre la liste qui le compose (`justifier`).
 // `data-bil-an` = année de début d'exercice (ou « total »), `data-bil-m` = la mesure.
 const cliquable = (an, m) => `data-bil-an="${an}" data-bil-m="${m}" role="button" tabindex="0" title="Voir le détail"`;
 
-function tuile(titre, gros, sur, bas, an, m) {
-  return `<div class="rgd-bil-tuile rgd-bil-clic" ${cliquable(an, m)}>
+function tuile(teinte, titre, gros, sur, rond, bas, an, m) {
+  return `<div class="rgd-bil-tuile ${teinte} rgd-bil-clic" ${cliquable(an, m)}>
       <div class="rgd-bil-lib">${titre}</div>
-      <div class="rgd-bil-gros">${gros}</div>
-      ${sur}
-      ${bas ? `<div class="rgd-bil-bas">${bas}</div>` : ''}
+      <div class="rgd-bil-ligne">
+        <div><div class="rgd-bil-gros">${gros}</div>${sur ? `<div class="rgd-bil-sur">${sur}</div>` : ''}</div>
+        ${rond}
+      </div>
+      <div class="rgd-bil-bas">${bas || '&nbsp;'}</div>
     </div>`;
 }
 
-// « sur 120 cette année » et la jauge ; rien si l'objectif n'est pas réglé.
-const surObjectif = (val, cible, format) => (vide(cible) ? ''
-  : `<div class="rgd-bil-sur">sur ${format(cible)} cette année</div>${jauge(val, cible)}`);
+const part = (val, cible) => (val > 0 && cible > 0 ? (val / cible) * 100 : 0);
 
-// Le petit tableau des années passées (Élodie l'a choisi parmi trois : carte
-// par année, tableau simple, barres côte à côte). Années en colonnes, cumul en
-// dernier, AUCUNE barre ni objectif : les objectifs n'existaient pas alors.
+// Le tableau de tous les exercices. Années en colonnes, cumul en dernier,
+// AUCUNE barre ni objectif : les objectifs n'existaient pas pour les années closes.
+const pastille = (v) => (vide(v) ? '' : ` <span class="rgd-bil-pill ${tonTaux(v)}">${pourcent(v)}</span>`);
 const LIGNES_PASSE = [
   ['Devis envoyés', 'envoyes', (e) => nombre(e.envoyes)],
-  ['Devis signés', 'signes', (e) => (vide(e.signes) ? '—' : `${e.signes} <span class="muted">(${pourcent(e.tauxSignature)})</span>`)],
+  ['Devis signés', 'signes', (e) => (vide(e.signes) ? '—' : `${e.signes}${pastille(e.tauxSignature)}`)],
   ['Chantiers', 'chantiers', (e) => `${nombre(e.chantiers)}${e.chantiersSelonCrm && !vide(e.chantiers) ? '<sup>*</sup>' : ''}`],
   ['Panier moyen par chantier HT', 'panier', (e) => `${euros(e.panier)}${e.chantiersSelonCrm && !vide(e.panier) ? '<sup>*</sup>' : ''}`],
   // Juste au-dessus du CA (Élodie, 05/11/2026) : signé, puis facturé.
   ['Montant des devis signés HT', 'montantSigne', (e) => euros(e.montantSigne)],
-  ['CA facturé HT', 'ca', (e) => `<b>${euros(e.ca)}</b>`],
+  ['CA facturé HT', 'ca', (e) => euros(e.ca), true],
 ];
 
-// ⚠ EN COULEUR (05/11/2026, « rajoute un peu de couleurs ») : chaque année
-// porte la sienne (bleu, vert, en alternance) en tête et en fond de colonne ;
-// l'exercice en cours prend la couleur de l'espace, le cumul une teinte foncée.
-// ⚠ L'EXERCICE EN COURS EST AUSSI DANS LE TABLEAU (05/11/2026, « dans le
-// tableau rajoute juste l'année en cours ») : ses chiffres, SANS objectif —
-// les objectifs restent dans les tuiles du dessus.
+// Une couleur par exercice clos, puis celle de l'espace pour l'exercice en
+// cours. ⚠ L'EXERCICE EN COURS EST DANS LE TABLEAU (05/11/2026, « dans le
+// tableau rajoute juste l'année en cours ») : ses chiffres, sans objectif.
+const COULEURS_ANNEES = ['var(--blue)', 'var(--green)', '#7b4fd6', '#0f9fb5'];
 function tableauPasse(clos, total, ec) {
   const cols = [
-    ...clos.map((e, i) => [e.label, e, ['var(--blue)', 'var(--green)'][i % 2], e.annee]),
-    ...(ec ? [[`${ec.label} (en cours)`, ec, 'var(--accent)', ec.annee]] : []),
-    ['Depuis la création', total, 'var(--accent-ink)', 'total'],
+    ...clos.map((e, i) => [e.label, e, COULEURS_ANNEES[i % COULEURS_ANNEES.length], e.annee, '']),
+    ...(ec ? [[ec.label, ec, 'var(--accent)', ec.annee, ' (en cours)']] : []),
+    ['Depuis la création', total, '', 'total', ''],
   ];
-  const td = (c, contenu, an, m) => `<td class="num rgd-bil-col rgd-bil-clic" style="--ex:${c}" ${cliquable(an, m)}>${contenu}</td>`;
+  const td = (c, contenu, an, m, fort) => `<td class="num rgd-bil-clic${an === 'total' ? ' rgd-bil-total' : ''}${fort ? ' rgd-bil-fort' : ''}"
+      ${c ? `style="--ex:${c}"` : ''} ${cliquable(an, m)}>${contenu}</td>`;
   return `<div class="table-wrap"><table class="rgd-bil-table">
-      <thead><tr><th></th>${cols.map(([nom, , c]) => `<th class="num rgd-bil-ex" style="--ex:${c}">${esc(nom)}</th>`).join('')}</tr></thead>
-      <tbody>${LIGNES_PASSE.map(([titre, m, f]) => `<tr><td class="rgd-bil-titre">${titre}</td>${cols.map(([, e, c, an]) => td(c, f(e), an, m)).join('')}</tr>`).join('')}</tbody>
+      <thead><tr><th>Tous les exercices</th>${cols.map(([nom, , c, an, suite]) => `<th class="num${an === 'total' ? ' rgd-bil-total' : ''}">
+        ${c ? `<span class="rgd-bil-an"><i style="background:${c}"></i>${esc(nom)}${suite ? `<small>${esc(suite)}</small>` : ''}</span>` : esc(nom)}</th>`).join('')}</tr></thead>
+      <tbody>${LIGNES_PASSE.map(([titre, m, f, fort]) => `<tr${fort ? ' class="rgd-bil-ca"' : ''}><td class="rgd-bil-titre">${titre}</td>${cols.map(([, e, c, an]) => td(c, f(e), an, m, fort)).join('')}</tr>`).join('')}</tbody>
     </table></div>`;
 }
 
@@ -103,19 +120,24 @@ export function carteBilan(aujourdhui = new Date()) {
   const clos = exercices.filter(e => !e.enCours);
   const selonCrm = clos.some(e => e.chantiersSelonCrm) || total.chantiersSelonCrm;
 
+  const sur = (cible, format) => (vide(cible) ? '' : `sur ${format(cible)} cette année`);
   const tuiles = ec ? `
           <div class="rgd-bil-annee"><b>${esc(ec.label)}</b> · depuis le 1<sup>er</sup> octobre (${ec.nbMois} mois)</div>
           <div class="rgd-bil-tuiles">
-            ${tuile('Devis envoyés', nombre(ec.envoyes), surObjectif(ec.envoyes, o.envoyes, nombre),
+            ${tuile('t-orange', 'Devis envoyés', nombre(ec.envoyes), sur(o.envoyes, nombre),
+              vide(o.envoyes) ? '' : anneau(part(ec.envoyes, o.envoyes), 'de l’objectif'),
               vide(ec.montantDevis) ? '' : `${euros(ec.montantDevis)} HT`, ec.annee, 'envoyes')}
-            ${tuile('Devis signés', nombre(ec.signes),
-              vide(ec.tauxSignature) ? '' : `<div class="rgd-bil-sur"><span class="rgd-bil-point ${tonTaux(ec.tauxSignature)}"></span>${pourcent(ec.tauxSignature)} des devis envoyés</div>`,
+            ${tuile('t-bleu', 'Devis signés', nombre(ec.signes),
+              vide(ec.tauxSignature) ? '' : `${pourcent(ec.tauxSignature)} des devis envoyés`,
+              vide(ec.tauxSignature) ? '' : anneau(ec.tauxSignature, 'signés'),
               vide(o.tauxSignature) ? '' : `objectif ${pourcent(o.tauxSignature)}`, ec.annee, 'signes')}
-            ${tuile('Chantiers', nombre(ec.chantiers), surObjectif(ec.chantiers, o.chantiers, nombre),
+            ${tuile('t-vert', 'Chantiers', nombre(ec.chantiers), sur(o.chantiers, nombre),
+              vide(o.chantiers) ? '' : anneau(part(ec.chantiers, o.chantiers), 'de l’objectif'),
               // Le panier réalisé est retiré de la tuile (Élodie : « retire le panier
               // moyen, garde juste objectif 20 000 € ») : il est dans le tableau.
               vide(o.panier) ? '' : `objectif ${euros(o.panier)} par chantier`, ec.annee, 'chantiers')}
-            ${tuile('CA facturé HT', euros(ec.ca), surObjectif(ec.ca, o.ca, euros), '', ec.annee, 'ca')}
+            ${tuile('t-violet', 'CA facturé HT', euros(ec.ca), sur(o.ca, euros),
+              vide(o.ca) ? '' : anneau(part(ec.ca, o.ca), 'de l’objectif'), '', ec.annee, 'ca')}
           </div>` : '';
 
   return `
@@ -125,7 +147,6 @@ export function carteBilan(aujourdhui = new Date()) {
             <span class="muted small">exercices du 1<sup>er</sup> octobre au 30 septembre</span></div>
           ${tuiles}
           <div class="rgd-bil-passe">
-            <div class="rgd-bil-lib">Tous les exercices</div>
             ${tableauPasse(clos, total, ec)}
           </div>
           ${selonCrm ? `<p class="small muted rgd-bil-pied"><sup>*</sup> Selon le CRM, qui n’a pas tout l’historique Costructor.

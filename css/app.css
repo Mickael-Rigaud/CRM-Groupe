@@ -7618,45 +7618,62 @@ tr.est-modifie td { background: var(--accent-soft); }
   .rba .form-actions .btn { flex: 1 1 auto; }
 }
 
-/* ------------------------------------------------ Bilan commercial RGD (05/11/2026)
-   Quatre compteurs pour l'exercice en cours (réalisé, objectif de l'année,
-   jauge), puis les années passées dans un petit tableau. Élodie a choisi cette
-   forme après trois refus (tableau, tableau en couleur, entonnoir) : la carte
-   répond à « où j'en suis cette année ». L'historique reste discret. */
-.rgd-bil-annee { font-size: 13px; color: var(--muted); margin: 2px 0 10px; }
+/* ------------------------------------------------ Bilan commercial RGD
+   Visuel « piste A » choisi par Élodie le 10/11/2026 (« plus moderne et
+   dynamique ») : tuiles en dégradé avec un anneau d'avancement, tableau aéré
+   avec des pastilles de taux. Les éléments n'ont pas changé, seule la forme. */
+.rgd-bil-annee { font-size: 13px; color: var(--muted); margin: 2px 0 12px; }
 .rgd-bil-annee b { font-family: var(--font-display); font-size: 15px; color: var(--accent-ink); }
-.rgd-bil-tuiles { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 12px; }
-.rgd-bil-tuile { border: 1px solid var(--line); border-top: 4px solid var(--accent); border-radius: 12px;
-  padding: 14px 16px; background: color-mix(in srgb, var(--accent) 5%, var(--card)); }
-.rgd-bil-lib { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
-.rgd-bil-gros { font-family: var(--font-display); font-size: 30px; font-weight: 700; line-height: 1.15;
-  color: var(--accent-ink); margin-top: 6px; }
-.rgd-bil-sur { font-size: 13px; color: var(--text); margin-top: 2px; }
-.rgd-bil-bas { font-size: 12.5px; color: var(--muted); margin-top: 8px; }
-.rgd-bil-piste { display: block; height: 8px; margin-top: 7px; border-radius: 4px;
-  background: color-mix(in srgb, var(--accent) 14%, var(--card)); overflow: hidden; }
-.rgd-bil-piste i { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
-.rgd-bil-avance { font-size: 12px; font-weight: 700; color: var(--accent-ink); margin-top: 3px; }
+.rgd-bil-tuiles { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 14px; }
+.rgd-bil-tuile { border-radius: 16px; padding: 16px 18px; color: #fff; position: relative; overflow: hidden;
+  box-shadow: 0 6px 18px -8px rgba(20, 20, 40, .35); transition: transform .15s ease, box-shadow .15s ease; }
+.rgd-bil-tuile::after { content: ''; position: absolute; right: -30px; top: -30px; width: 110px; height: 110px;
+  border-radius: 50%; background: rgba(255, 255, 255, .10); pointer-events: none; }
+.rgd-bil-tuile.t-orange { background: linear-gradient(135deg, #ff9a4d, #e8622a); }
+.rgd-bil-tuile.t-bleu { background: linear-gradient(135deg, #5b8cff, #3657d6); }
+.rgd-bil-tuile.t-vert { background: linear-gradient(135deg, #34c48b, #16855a); }
+.rgd-bil-tuile.t-violet { background: linear-gradient(135deg, #a77bff, #6a3fd0); }
+.rgd-bil-tuile.rgd-bil-clic:hover { transform: translateY(-2px); box-shadow: 0 12px 24px -10px rgba(20, 20, 40, .45); }
+.rgd-bil-lib { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; opacity: .92; }
+.rgd-bil-ligne { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 8px; }
+.rgd-bil-gros { font-family: var(--font-display); font-size: 34px; font-weight: 800; line-height: 1.05; }
+.rgd-bil-sur { font-size: 12.5px; opacity: .92; margin-top: 4px; }
+.rgd-bil-bas { font-size: 12.5px; opacity: .92; margin-top: 12px; padding-top: 9px;
+  border-top: 1px solid rgba(255, 255, 255, .25); }
+.rgd-bil-anneau { width: 76px; height: 76px; flex: none; }
+.rgd-bil-anneau circle { fill: none; stroke-width: 4; }
+.rgd-bil-anneau .fond { stroke: rgba(255, 255, 255, .25); }
+.rgd-bil-anneau .plein { stroke: #fff; stroke-linecap: round; }
+.rgd-bil-anneau .pct { fill: #fff; font-size: 7.5px; font-weight: 800; }
+.rgd-bil-anneau .leg { fill: #fff; font-size: 3.6px; opacity: .85; }
 .rgd-bil-point { display: inline-block; width: 9px; height: 9px; border-radius: 50%;
   margin-right: 6px; vertical-align: 0; background: var(--muted); }
 .rgd-bil-point.vert { background: var(--green); }
 .rgd-bil-point.ambre { background: var(--amber); }
 .rgd-bil-point.rouge { background: var(--red); }
-.rgd-bil-passe { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); }
-.rgd-bil-passe .table-wrap { margin-top: 6px; }
-.rgd-bil-table th, .rgd-bil-table td { padding-left: 12px; padding-right: 12px; }
-.rgd-bil-titre { font-weight: 600; }
-/* Le tableau des années passées en couleur : chaque année porte la sienne
-   (--ex) en tête et en léger fond de colonne. */
-.rgd-bil-table th.rgd-bil-ex { color: var(--ex); font-family: var(--font-display); font-size: 13px;
-  letter-spacing: 0; text-transform: none; border-top: 4px solid var(--ex);
-  background: color-mix(in srgb, var(--ex) 12%, var(--card)); }
-.rgd-bil-table td.rgd-bil-col { background: color-mix(in srgb, var(--ex) 5%, var(--card)); }
-.rgd-bil-table td.rgd-bil-col b { color: var(--ex); }
+/* Le tableau de tous les exercices : aéré, une pastille de couleur par année,
+   le taux de signature en pastille, le CA dans la couleur de son année. */
+.rgd-bil-passe { margin-top: 20px; }
+.rgd-bil-table th, .rgd-bil-table td { padding: 11px 12px; }
+.rgd-bil-table thead th { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
+  background: transparent; border-bottom: 1px solid var(--line); }
+.rgd-bil-table tbody td { border-top: 1px solid var(--line); }
+.rgd-bil-table tbody tr:first-child td { border-top: 0; }
+.rgd-bil-an { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+.rgd-bil-an i { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.rgd-bil-an small { text-transform: none; letter-spacing: 0; font-weight: 500; }
+.rgd-bil-titre { font-weight: 500; }
+.rgd-bil-pill { display: inline-block; border-radius: 999px; padding: 2px 9px; font-size: 12px; font-weight: 700;
+  margin-left: 4px; vertical-align: 1px; }
+.rgd-bil-pill.vert { background: color-mix(in srgb, var(--green) 15%, var(--card)); color: var(--green); }
+.rgd-bil-pill.ambre { background: color-mix(in srgb, var(--amber) 16%, var(--card)); color: var(--amber); }
+.rgd-bil-pill.rouge { background: color-mix(in srgb, var(--red) 14%, var(--card)); color: var(--red); }
+.rgd-bil-table .rgd-bil-total { font-weight: 800; color: var(--text); }
+.rgd-bil-table tr.rgd-bil-ca .rgd-bil-titre { font-weight: 800; }
+.rgd-bil-table td.rgd-bil-fort { font-weight: 800; color: var(--ex, var(--text)); }
 /* Chaque chiffre s'ouvre sur sa liste : on le montre au survol. */
 .rgd-bil-clic { cursor: pointer; }
-.rgd-bil-tuile.rgd-bil-clic:hover { border-color: var(--accent); box-shadow: 0 2px 10px color-mix(in srgb, var(--accent) 18%, transparent); }
-.rgd-bil-table td.rgd-bil-clic:hover { background: color-mix(in srgb, var(--ex) 16%, var(--card)); text-decoration: underline; }
+.rgd-bil-table td.rgd-bil-clic:hover { background: color-mix(in srgb, var(--accent) 8%, transparent); }
 .rgd-bil-detail { width: 100%; }
 .rgd-bil-detail td, .rgd-bil-detail th { padding: 7px 10px; font-size: 13px; }
 .rgd-bil-detail tfoot td { border-top: 2px solid var(--line-strong); }
@@ -7664,8 +7681,14 @@ tr.est-modifie td { background: var(--accent-soft); }
   border-left: 3px solid var(--amber); padding: 6px 10px; border-radius: 6px; margin: 6px 0; }
 .rgd-bil-calcul { font-weight: 700; color: var(--accent-ink); margin: 4px 0 8px; }
 .rgd-bil-pied { margin: 8px 0 0; }
+@media screen and (max-width: 1100px) {
+  .rgd-bil-tuiles { grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
+}
 @media screen and (max-width: 760px) {
-  .rgd-bil-tuiles { grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 10px; }
-  .rgd-bil-gros { font-size: 24px; }
+  .rgd-bil-tuiles { gap: 10px; }
+  .rgd-bil-tuile { padding: 14px; }
+  .rgd-bil-gros { font-size: 26px; }
+  .rgd-bil-anneau { width: 58px; height: 58px; }
+  .rgd-bil-ligne { align-items: flex-start; }
 }
 
