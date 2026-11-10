@@ -215,7 +215,7 @@ export const scope = {
     const vue = this.vueRgd;
     if (!vue) return lignes;
     if (vue === 'direction') {
-      return lignes.filter(x => !x.fiche?.owner_id || this.estDeLaDirection(x.fiche.owner_id));
+      return lignes.filter(x => !x.fiche?.owner_id || this.dansLaVueDirectionRgd(x.fiche.owner_id));
     }
     return lignes.filter(x => x.fiche?.owner_id === vue);
   },
@@ -353,7 +353,17 @@ export const scope = {
   // vue les ferait disparaître de partout.
   rgdEstDeLaDirection(table, r) {
     const p = this.rgdProprietaire(table, r);
-    return p === null || this.estDeLaDirection(p);
+    return p === null || this.dansLaVueDirectionRgd(p);
+  },
+
+  // ⚠ LA VUE DE MICKAEL MONTRE AUSSI LES DOSSIERS DE L'OUVRIER (10/11/2026,
+  // Élodie : les leads électriques sont attribués directement à Franck « mais
+  // il faut qu'ils apparaissent dans la base de données de Mickaël »). C'est la
+  // MÊME fiche, pas une copie : ce que l'un modifie, l'autre le lit aussitôt,
+  // et la colonne « Responsable » continue de dire qu'elle est à Franck.
+  // Un chargé d'affaires, lui, garde sa vue à part.
+  dansLaVueDirectionRgd(id) {
+    return this.estDeLaDirection(id) || db.byId('profiles', id)?.role === 'ouvrier';
   },
 
   poserVueRgd(id) {
