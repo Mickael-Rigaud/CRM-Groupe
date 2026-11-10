@@ -96,18 +96,24 @@ const LIGNES_PASSE = [
 // Une couleur par exercice clos, puis celle de l'espace pour l'exercice en
 // cours. ⚠ L'EXERCICE EN COURS EST DANS LE TABLEAU (05/11/2026, « dans le
 // tableau rajoute juste l'année en cours ») : ses chiffres, sans objectif.
-const COULEURS_ANNEES = ['var(--blue)', 'var(--green)', '#7b4fd6', '#0f9fb5'];
+// ⚠ PAS LES COULEURS DES TUILES (10/11/2026, Élodie : « mets d'autres couleurs
+// que celles d'en haut, on a l'impression que les données correspondent entre
+// elles alors que ce ne sont pas les mêmes »). Les tuiles sont orange, bleu,
+// vert, violet ; les années prennent sarcelle, framboise, olive, et l'exercice
+// en cours l'ardoise. Ne pas rapprocher ces deux palettes.
+const COULEURS_ANNEES = ['#0e9aa7', '#d6457a', '#8a7a1c'];
+const COULEUR_EN_COURS = '#475569';
 function tableauPasse(clos, total, ec) {
   const cols = [
     ...clos.map((e, i) => [e.label, e, COULEURS_ANNEES[i % COULEURS_ANNEES.length], e.annee, '']),
-    ...(ec ? [[ec.label, ec, 'var(--accent)', ec.annee, ' (en cours)']] : []),
+    ...(ec ? [[ec.label, ec, COULEUR_EN_COURS, ec.annee, ' (en cours)']] : []),
     ['Depuis la création', total, '', 'total', ''],
   ];
   const td = (c, contenu, an, m, fort) => `<td class="num rgd-bil-clic${an === 'total' ? ' rgd-bil-total' : ''}${fort ? ' rgd-bil-fort' : ''}"
       ${c ? `style="--ex:${c}"` : ''} ${cliquable(an, m)}>${contenu}</td>`;
   return `<div class="table-wrap"><table class="rgd-bil-table">
       <thead><tr><th>Tous les exercices</th>${cols.map(([nom, , c, an, suite]) => `<th class="num${an === 'total' ? ' rgd-bil-total' : ''}">
-        ${c ? `<span class="rgd-bil-an"><i style="background:${c}"></i>${esc(nom)}${suite ? `<small>${esc(suite)}</small>` : ''}</span>` : esc(nom)}</th>`).join('')}</tr></thead>
+        ${c ? `<span class="rgd-bil-an" style="--ex-c:${c}"><i style="background:${c}"></i>${esc(nom)}${suite ? `<small>${esc(suite)}</small>` : ''}</span>` : esc(nom)}</th>`).join('')}</tr></thead>
       <tbody>${LIGNES_PASSE.map(([titre, m, f, fort]) => `<tr${fort ? ' class="rgd-bil-ca"' : ''}><td class="rgd-bil-titre">${titre}</td>${cols.map(([, e, c, an]) => td(c, f(e), an, m, fort)).join('')}</tr>`).join('')}</tbody>
     </table></div>`;
 }

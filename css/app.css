@@ -7708,6 +7708,21 @@ tr.est-modifie td { background: var(--accent-soft); }
 .rgd-bil-pill.ambre { background: color-mix(in srgb, var(--amber) 16%, var(--card)); color: var(--amber); }
 .rgd-bil-pill.rouge { background: color-mix(in srgb, var(--red) 14%, var(--card)); color: var(--red); }
 .rgd-bil-table .rgd-bil-total { font-weight: 800; color: var(--text); }
+/* ⚠ LES ANNÉES ET LES CHIFFRES EN AVANT (10/11/2026, Élodie : « je voudrais
+   que les années et les chiffres soient plus mis en avant »). L'en-tête de
+   chaque exercice passe en grand, dans sa couleur, sur une pastille teintée ;
+   les chiffres prennent la police des titres et du corps. */
+.rgd-bil-table thead th .rgd-bil-an { font-family: var(--font-display); font-size: 15px; font-weight: 800;
+  text-transform: none; letter-spacing: 0; color: var(--text); padding: 6px 11px; border-radius: 999px;
+  background: color-mix(in srgb, var(--ex-c, var(--accent)) 12%, var(--card)); }
+.rgd-bil-table thead th .rgd-bil-an i { width: 11px; height: 11px; }
+.rgd-bil-table thead th.rgd-bil-total { font-family: var(--font-display); font-size: 15px; font-weight: 800;
+  text-transform: none; letter-spacing: 0; color: var(--text); }
+.rgd-bil-table tbody td.num { font-family: var(--font-display); font-size: 16px; font-weight: 600;
+  font-variant-numeric: lining-nums tabular-nums; }
+.rgd-bil-table tbody td.rgd-bil-total { font-size: 17px; font-weight: 800; }
+.rgd-bil-table tr.rgd-bil-ca td.num { font-size: 17.5px; }
+.rgd-bil-table .rgd-bil-titre { font-size: 14px; }
 .rgd-bil-table tr.rgd-bil-ca .rgd-bil-titre { font-weight: 800; }
 .rgd-bil-table td.rgd-bil-fort { font-weight: 800; color: var(--ex, var(--text)); }
 /* Chaque chiffre s'ouvre sur sa liste : on le montre au survol. */
