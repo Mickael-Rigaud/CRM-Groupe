@@ -484,7 +484,7 @@
      doit être écrit plus petit que le facturé »). Sans ça les deux lignes
      d'argent sortent à la même taille ici alors qu'elles se distinguent
      la-bas, et c'est le téléphone qu'elle regarde le plus souvent. */
-  .rgd-bil-ex-t tr.rgd-bil-enc td { font-size: 13px; }
+  .rgd-bil-ex-t tr.rgd-bil-enc td { font-size: 12px; }
 }
 
 /* ---- Les petites notes en fin d'encadre, retirees sur telephone ----
