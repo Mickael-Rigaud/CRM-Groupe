@@ -75,7 +75,11 @@ const LIGNES_PASSE = [
   ['Panier moyen par chantier HT', 'panier', (e) => `${euros(e.panier)}${e.chantiersSelonCrm && !vide(e.panier) ? '<sup>*</sup>' : ''}`],
   // Juste au-dessus du CA (Élodie, 05/11/2026) : signé, puis facturé.
   ['Montant des devis signés HT', 'montantSigne', (e) => euros(e.montantSigne)],
-  ['CA facturé HT', 'ca', (e) => euros(e.ca), true],
+  // ⚠ LE 4e ÉLÉMENT EST UNE CLASSE, PAS UN BOOLÉEN : les deux lignes d'argent
+  // doivent pouvoir se distinguer l'une de l'autre, ce qu'un drapeau commun
+  // interdisait. Il reste « vrai » au sens de JavaScript, donc la cellule garde
+  // `rgd-bil-fort` comme avant.
+  ['CA facturé HT', 'ca', (e) => euros(e.ca), 'rgd-bil-ca'],
   // ⚠ UNE LIGNE, ET PAS UN SURVOL (10/11/2026, Élodie : « je ne sais pas s'il
   // faut le rajouter en survol sur le CA facturé ou une nouvelle ligne »). Un
   // survol n'existe pas sur un téléphone, et c'est là que ce tableau se lit le
@@ -91,8 +95,14 @@ const LIGNES_PASSE = [
   // ⚠ L'ASTÉRISQUE N'EST PAS DÉCORATIF : sur un exercice saisi, c'est la seule
   // ligne qui vienne du CRM quand tout le reste de la colonne vient du bilan
   // comptable — lequel ne donne pas l'encaissé. Le pied de carte l'explique.
+  //
+  // ⚠ « CA ENCAISSÉ » S'ÉCRIT PLUS PETIT QUE « CA FACTURÉ » (10/11/2026, Élodie :
+  // « le CA encaissé HT doit être écrit plus petit que le facturé »). Les deux
+  // restent la paire des chiffres d'argent — même couleur d'année, même place
+  // en bas du tableau — mais le facturé reste le chiffre de tête.
   ['CA encaissé HT', 'encaisse',
-    (e) => `${euros(e.encaisse)}${e.encaisseSelonCrm && !vide(e.encaisse) ? '<sup>*</sup>' : ''}`, true],
+    (e) => `${euros(e.encaisse)}${e.encaisseSelonCrm && !vide(e.encaisse) ? '<sup>*</sup>' : ''}`,
+    'rgd-bil-ca rgd-bil-enc'],
 ];
 
 // Une couleur par exercice clos, puis celle de l'espace pour l'exercice en
@@ -116,7 +126,7 @@ function tableauPasse(clos, total, ec) {
   return `<div class="table-wrap"><table class="rgd-bil-table">
       <thead><tr><th>Tous les exercices</th>${cols.map(([nom, , c, an, suite]) => `<th class="num${an === 'total' ? ' rgd-bil-total' : ''}">
         ${c ? `<span class="rgd-bil-an" style="--ex-c:${c}"><i style="background:${c}"></i>${esc(nom)}${suite ? `<small>${esc(suite)}</small>` : ''}</span>` : esc(nom)}</th>`).join('')}</tr></thead>
-      <tbody>${LIGNES_PASSE.map(([titre, m, f, fort]) => `<tr${fort ? ' class="rgd-bil-ca"' : ''}><td class="rgd-bil-titre">${titre}</td>${cols.map(([, e, c, an]) => td(c, f(e), an, m, fort)).join('')}</tr>`).join('')}</tbody>
+      <tbody>${LIGNES_PASSE.map(([titre, m, f, fort]) => `<tr${fort ? ` class="${fort}"` : ''}><td class="rgd-bil-titre">${titre}</td>${cols.map(([, e, c, an]) => td(c, f(e), an, m, fort)).join('')}</tr>`).join('')}</tbody>
     </table></div>`;
 }
 
@@ -138,7 +148,7 @@ function tableauxParExercice(clos, total, ec) {
   return `<div class="rgd-bil-mobile">${blocs.map(([nom, e, c, an, suite]) => `
     <div class="rgd-bil-ex" style="--ex:${c}">
       <div class="rgd-bil-ex-tete">${esc(nom)}${suite ? ` <small>${esc(suite)}</small>` : ''}</div>
-      <table class="rgd-bil-ex-t"><tbody>${LIGNES_PASSE.map(([titre, m, f, fort]) => `<tr${fort ? ' class="rgd-bil-ca"' : ''}>
+      <table class="rgd-bil-ex-t"><tbody>${LIGNES_PASSE.map(([titre, m, f, fort]) => `<tr${fort ? ` class="${fort}"` : ''}>
         <td>${titre}</td><td class="num rgd-bil-clic${fort ? ' rgd-bil-fort' : ''}" ${cliquable(an, m)}>${f(e)}</td></tr>`).join('')}</tbody></table>
     </div>`).join('')}</div>`;
 }
