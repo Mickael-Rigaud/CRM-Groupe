@@ -4039,6 +4039,9 @@ button.tb-pp:hover { color: var(--text); text-decoration: underline; text-underl
   border-top: 1px solid var(--border, #e5e7eb);
   font-size: .95rem;
 }
+/* La provenance des chiffres, sous le total : elle doit se lire, pas se
+   deviner — mais sans concurrencer le montant. */
+.rgd-ca-total span.muted { display: block; font-size: 12px; margin-top: 2px; }
 
 .rgd-ca-sous { margin: 2px 0 10px; }
 /* Le changement d'exercice, le 1er octobre. Un grand « 0 € » sans un mot se

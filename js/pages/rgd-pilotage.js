@@ -43,6 +43,7 @@ import { etapesRgd, ETAPES_HORS_CYCLE } from '../data/rgd-etapes.js';
 import { objectifsMensuels, moisObjectifs, tauxPeriode, taux, detailMoisObjectif } from '../data/rgd-objectifs.js';
 import { encadreCaOuvrier } from './rgd-ca-ouvrier.js';
 import { carteBilan } from './rgd-bilan.js';
+import { bilanCommercial } from '../data/rgd-bilan.js';
 
 // L'exercice comptable de RGD Renova : 1er octobre → 30 septembre, aligné sur
 // Costructor. Ce n'est pas l'année civile, et s'y tromper décale tout le CA.
@@ -639,22 +640,32 @@ export const rgdPilotagePage = {
       const surExercice = (e) => paiements.filter(p => emise(p)
         && p.date_facturation && p.date_facturation >= e.du && p.date_facturation <= e.au);
 
-      // LE CA DEPUIS LE DÉBUT DE L'ACTIVITÉ (05/11/2026, Élodie : « je veux
-      // retrouver le chiffre 1 007 462 € de CA depuis le début de l'activité et
-      // on met à jour le nombre de chantiers tout simplement »).
+      // LE CA DEPUIS LA CRÉATION — lu dans le BILAN, pas recompté ici.
       //
-      // ⚠ IL NE PASSE PAS PAR LE CHANTIER, ET C'EST POURQUOI IL EST JUSTE.
-      // 50 factures (310 470 € au 05/11/2026) n'ont aucune affaire : elles
-      // viennent de Costructor avec un numéro de devis que notre copie des
-      // devis ne contient pas. Un total calculé par chantier en perdrait un
-      // tiers. Compter les factures elles-mêmes les garde toutes.
-      const caTotal = paiements.filter(emise)
-        .reduce((t, p) => t + (Number(p.montant_ht) || 0), 0);
-      // ⚠ UNE VISITE TECHNIQUE N'EST PAS UN CHANTIER : même règle que la frise
-      // (`estVisiteTechnique`), sinon on en annoncerait 41 au lieu de 30.
-      const vraisChantiers = chantiers.filter(c => c.statut_d1 !== 'visite_technique'
-        && (!!c.etat || !!c.date_debut_prevue || !!c.work_start_at));
-      const nTermines = vraisChantiers.filter(c => c.etat === 'termine').length;
+      // ⚠ « DEPUIS LE DÉBUT DE L'ACTIVITÉ » ÉTAIT FAUX, et je l'ai publié le
+      // 05/11/2026. La ligne additionnait nos factures et annonçait 1 007 462 €
+      // « depuis le début de l'activité ». ⚠ LA PREMIÈRE FACTURE DE LA BASE
+      // DATE DU 05/11/2024 : il n'y a RIEN avant, l'exercice 2023/2024 et ses
+      // 413 506 € sont entièrement absents de `rgd_paiements`. Le chiffre
+      // d'Élodie, 1 007 461 €, était la somme de ses exercices 2024/2025 et
+      // 2025/2026 — pas de toute son activité. Les deux coïncidaient à l'euro
+      // et j'ai pris la coïncidence pour une confirmation, sans vérifier ce que
+      // chacun recouvrait. Écart réel au 10/11/2026 : 417 638 €.
+      //
+      // ⚠ UNE SEULE SOURCE, CELLE DE LA CARTE « BILAN COMMERCIAL ». Elle prend
+      // la SAISIE d'Élodie sur un exercice clos — le CRM n'a pas cet historique
+      // — et le calcul du CRM sur l'exercice en cours. Recompter ici donnerait
+      // un second total sur le même écran, plus petit, et c'est précisément ce
+      // qu'elle a signalé : « ne collent pas avec la réalité ».
+      // ⚠ SANS ARGUMENT, COMME `carteBilan()` JUSTE EN DESSOUS. `aujourdhui` est
+      // une CHAÎNE sur cet écran (`isoDay()`), pas une Date : la lui passer fait
+      // `d.getFullYear is not a function` et la vue d'ensemble ENTIÈRE tombe en
+      // « Écran en échec ». Vu au rendu le 10/11/2026 avant publication.
+      //
+      // ⚠ ET IL PEUT RENDRE `null` : `bilanCommercial` abandonne quand aucune
+      // trace commerciale n'existe (base neuve, ou espace sans aucun devis ni
+      // facture). `.total` sur null emporterait l'écran de la même façon.
+      const bilanTotal = bilanCommercial()?.total || {};
 
       // ⚠ TANT QUE LE NOUVEL EXERCICE NE PORTE AUCUNE FACTURE, ON AFFICHE LE
       // PRÉCÉDENT (02/10/2026, demandé par Mickael : « tant qu'il n'y a pas de
@@ -812,10 +823,15 @@ ${carteObjectifs(moisObj, objectifs)}
           ${'' /* ⚠ CE TOTAL N'EST PAS CELUI DE L'EXERCICE AFFICHÉ AU-DESSUS, et le
              libellé doit le dire en toutes lettres : deux montants l'un sous l'autre
              se lisent comme la même mesure. Celui-ci couvre TOUTE l'activité. */}
-          <p class="rgd-ca-total">Depuis le début de l’activité :
-            <b>${eur(caTotal)} HT</b> facturés,
-            <b>${vraisChantiers.length} chantier${vraisChantiers.length > 1 ? 's' : ''}</b>
-            dont ${nTermines} terminé${nTermines > 1 ? 's' : ''}.</p>
+          ${bilanTotal.ca == null ? '' : `<p class="rgd-ca-total">Depuis la création :
+            <b>${eur(bilanTotal.ca)} HT</b> facturés${bilanTotal.chantiers
+              ? `, <b>${bilanTotal.chantiers} chantier${bilanTotal.chantiers > 1 ? 's' : ''} signé${bilanTotal.chantiers > 1 ? 's' : ''}</b>` : ''}.
+            ${'' /* ⚠ LE CHIFFRE DES EXERCICES CLOS EST CELUI DU BILAN D'ÉLODIE, pas le
+               nôtre, et il faut que l'écran le dise : le CRM ne porte aucune facture
+               avant le 05/11/2024. Sans cette phrase, on croirait que la base remonte
+               à la création — c'est l'erreur du 05/11/2026. */}
+            <span class="muted">Exercices clos : tes chiffres de bilan. Le CRM, lui, ne
+              porte rien avant le 5 novembre 2024.</span></p>`}
           ${courbeCa(mois)}
           ${corrige ? `<p class="small">
             <b>Ce chiffre est saisi à la main</b> et masque le calcul, qui donne
