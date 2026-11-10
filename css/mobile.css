@@ -509,3 +509,11 @@
   .rgd-ob-graphe .rgd-trait { stroke-width: 3.6; }
   .rgd-ob-graphe circle { transform-box: fill-box; transform-origin: center; transform: scale(1.35); }
 }
+
+/* La phrase « Sur douze mois : … » des objectifs, retiree sur telephone aussi
+   (10/11/2026, Elodie : « enleve "sur douze mois : 42 % des demandes ont
+   donne…" »). Elle est au milieu de l'encadre, la regle des notes de fin ne la
+   touchait pas. L'ordinateur la garde. */
+@media screen and (max-width: 820px) {
+  .rgd-ob-taux { display: none; }
+}
