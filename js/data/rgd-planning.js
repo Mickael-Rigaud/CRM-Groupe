@@ -76,6 +76,41 @@ export const ajouterJours = (iso, n) => {
 // Le dernier jour du chantier : un chantier d'un jour finit le jour où il commence.
 export const finDe = (c) => ajouterJours(c.date_debut, Math.max(1, Number(c.duree_jours) || 1) - 1);
 
+// ⚠ LA DURÉE SE SAISIT EN JOURS, SEMAINES OU MOIS (10/11/2026, Élodie), et
+// on garde la saisie (`duree_nombre`, `duree_unite`) pour la réafficher telle
+// quelle. Le calendrier, lui, ne lit que `duree_jours`, calculé ici :
+//   · une semaine = 7 jours calendaires ;
+//   · un mois va jusqu'à la VEILLE du même quantième le mois suivant
+//     (2 mois à partir du 15 janvier : jusqu'au 14 mars). Un mois qui n'a pas
+//     ce quantième (31 → février) s'arrête au dernier jour du mois.
+export const UNITES = {
+  jours: { un: 'jour', plusieurs: 'jours', max: 366 },
+  semaines: { un: 'semaine', plusieurs: 'semaines', max: 52 },
+  mois: { un: 'mois', plusieurs: 'mois', max: 12 },
+};
+export function joursPour(debut, nombre, unite) {
+  const n = Math.max(1, parseInt(nombre, 10) || 1);
+  if (unite === 'semaines') return n * 7;
+  if (unite === 'mois') {
+    const d = versDate(debut);
+    const cible = new Date(d.getFullYear(), d.getMonth() + n, 1);
+    const dernierDuMois = new Date(cible.getFullYear(), cible.getMonth() + 1, 0).getDate();
+    // Pas de 31 en février : le chantier va jusqu'au dernier jour du mois,
+    // compris (d'où le +1 : sans lui il s'arrêterait l'avant-veille).
+    const rogne = d.getDate() > dernierDuMois;
+    cible.setDate(Math.min(d.getDate(), dernierDuMois));
+    return Math.round((cible - d) / 86400000) + (rogne ? 1 : 0);
+  }
+  return n;
+}
+// La durée telle qu'on l'a saisie ; les chantiers d'avant le 10/11 n'ont que
+// des jours.
+export const dureeLue = (c) => {
+  const unite = UNITES[c.duree_unite] ? c.duree_unite : 'jours';
+  const nombre = c.duree_nombre || (unite === 'jours' ? c.duree_jours : 1) || 1;
+  return { nombre, unite, texte: `${nombre} ${nombre > 1 ? UNITES[unite].plusieurs : UNITES[unite].un}` };
+};
+
 export const chantiersPlanifies = () => (scope.isDirection ? db.t('rgd_planning') : [])
   .slice().sort((a, b) => String(a.date_debut).localeCompare(String(b.date_debut))
     || String(a.created_at).localeCompare(String(b.created_at)));
@@ -88,16 +123,22 @@ export const lignesDe = (id, liste) => db.t('rgd_planning_lignes')
 export const resteA = (id) => lignesDe(id).filter(l => !l.deja_la && !l.achete).length;
 
 // ------------------------------------------------------------ écritures
-const propre = (champs) => ({
+const propre = (champs) => {
+  const unite = UNITES[champs.duree_unite] ? champs.duree_unite : 'jours';
+  const nombre = Math.max(1, Math.min(UNITES[unite].max, parseInt(champs.duree_nombre, 10) || 1));
+  return {
   titre: String(champs.titre || '').trim(),
   date_debut: champs.date_debut,
-  duree_jours: Math.max(1, Math.min(366, parseInt(champs.duree_jours, 10) || 1)),
+  duree_nombre: nombre,
+  duree_unite: unite,
+  duree_jours: champs.date_debut ? Math.min(366, joursPour(champs.date_debut, nombre, unite)) : nombre,
   fiche_id: champs.fiche_id || null,
   demande_id: champs.demande_id || null,
   adresse: String(champs.adresse || '').trim() || null,
   couleur: champs.couleur || null,
   notes: String(champs.notes || '').trim() || null,
-});
+  };
+};
 
 export async function creerChantier(champs) {
   const ligne = propre(champs);

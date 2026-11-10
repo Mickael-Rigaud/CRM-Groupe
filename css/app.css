@@ -8032,3 +8032,4 @@ tr.est-modifie td { background: var(--accent-soft); }
   .pl-form { grid-template-columns: 1fr; }
   .pl-ligne { grid-template-columns: 40px 40px minmax(0, 1fr) 56px 30px; }
 }
+.pl-duree { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 8px; }

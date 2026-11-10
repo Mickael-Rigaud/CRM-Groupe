@@ -20,7 +20,8 @@ import { db } from '../data/db.js';
 import { esc, toast, openModal, closeModal, confirm } from '../ui.js';
 import { poserEspace } from './espace.js';
 import { cadre, guard } from './rgd-espace.js';
-import { LISTES, listesStandard, enregistrerStandard, versDate, versIso, ajouterJours, finDe,
+import { etapeDeFiche, etapeDeDemande, joursDeVisite } from '../data/rgd-etapes.js';
+import { LISTES, UNITES, joursPour, dureeLue, listesStandard, enregistrerStandard, versDate, versIso, ajouterJours, finDe,
          chantiersPlanifies, lignesDe, resteA, creerChantier, majChantier, supprimerChantier,
          ajouterLigne, ajouterStandard, majLigne, retirerLigne } from '../data/rgd-planning.js';
 
@@ -56,16 +57,31 @@ const nomDemande = (d) => `${d.prenom || ''} ${d.nom || ''}`.trim() || '(demande
 const adresseDemande = (d) => [d.adresse, [d.code_postal, d.ville].filter(Boolean).join(' ')]
   .filter(Boolean).join(', ');
 
+// ⚠ SEULEMENT LES DOSSIERS À L'ÉTAPE « DEVIS EN COURS » (10/11/2026,
+// Élodie : « je ne veux pas toute la base de données client », mais « les
+// devis en cours de la base de données clients & prospects »). L'étape est
+// calculée par les MÊMES fonctions que l'écran Clients & prospects, pour que
+// les deux listes ne divergent pas.
+//
+// ⚠ LE DOSSIER DÉJÀ RATTACHÉ RESTE PROPOSÉ même s'il a changé d'étape depuis
+// (devis signé, chantier commencé) : sinon le chantier se rouvrirait sur
+// « Aucune » et l'enregistrer effacerait le lien.
+//
 // ⚠ `db.t` ET NON `scope.rgd` : la page est réservée à la direction, et le
-// sélecteur « Vue » mémorisé ailleurs aurait retiré de la liste les fiches d'un
-// chargé d'affaires — un chantier rattaché à l'une d'elles se serait rouvert
-// sur « Aucune ».
-function rattachements() {
+// sélecteur « Vue » mémorisé ailleurs aurait retiré de la liste les dossiers
+// d'un chargé d'affaires.
+const ETAPE_PROPOSEE = 'devis_encours';
+function rattachements(actuel = '') {
+  const chantiers = db.t('rgd_chantiers');
+  const devis = db.t('rgd_devis');
+  const jours = joursDeVisite(db.t('agenda_events'));
   return [
-    ...db.t('rgd_clients').map(f => ({ cle: `fiche:${f.id}`, nom: nomFiche(f),
-      adresse: adresseFiche(f), quoi: 'Client' })),
-    ...db.t('rgd_demandes').map(d => ({ cle: `demande:${d.id}`, nom: nomDemande(d),
-      adresse: adresseDemande(d), quoi: 'Demande' })),
+    ...db.t('rgd_clients')
+      .filter(f => `fiche:${f.id}` === actuel || etapeDeFiche(f, chantiers, devis, jours) === ETAPE_PROPOSEE)
+      .map(f => ({ cle: `fiche:${f.id}`, nom: nomFiche(f), adresse: adresseFiche(f), quoi: 'Client' })),
+    ...db.t('rgd_demandes')
+      .filter(d => `demande:${d.id}` === actuel || etapeDeDemande(d, devis) === ETAPE_PROPOSEE)
+      .map(d => ({ cle: `demande:${d.id}`, nom: nomDemande(d), adresse: adresseDemande(d), quoi: 'Demande' })),
   ].sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
 }
 const cleDe = (c) => (c.fiche_id ? `fiche:${c.fiche_id}` : c.demande_id ? `demande:${c.demande_id}` : '');
@@ -145,23 +161,29 @@ function calendrier(annee, mois, chantiers) {
 
 // ------------------------------------------------------------ la fiche chantier
 function formulaire(c, defaut = {}) {
-  const choix = rattachements();
   const actuel = c ? cleDe(c) : '';
+  const choix = rattachements(actuel);
+  const duree = c ? dureeLue(c) : { nombre: 1, unite: 'jours' };
   const couleur = c?.couleur || '';
   return `
     <form class="pl-form" id="pl-form">
       <label class="pl-champ pl-large"><span>Chantier</span>
         <input name="titre" required value="${esc(c?.titre || '')}" placeholder="Ex. Rénovation salle de bain — Dupont"></label>
-      <label class="pl-champ pl-large"><span>Fiche client ou demande</span>
+      <label class="pl-champ pl-large"><span>Dossier « Devis en cours »</span>
         <select name="rattachement">
-          <option value="">— Aucune pour l’instant —</option>
+          <option value="">${choix.length ? '— Aucun pour l’instant —' : '— Aucun dossier en « Devis en cours » —'}</option>
           ${choix.map(x => `<option value="${esc(x.cle)}"${x.cle === actuel ? ' selected' : ''}
             data-adresse="${esc(x.adresse)}">${esc(x.nom)} · ${esc(x.quoi)}${x.adresse ? ` · ${esc(x.adresse)}` : ''}</option>`).join('')}
         </select></label>
       <label class="pl-champ"><span>Début</span>
         <input type="date" name="date_debut" required value="${esc(c?.date_debut || defaut.date_debut || '')}"></label>
-      <label class="pl-champ"><span>Durée (jours calendaires)</span>
-        <input type="number" name="duree_jours" min="1" max="366" required value="${esc(String(c?.duree_jours || 1))}"></label>
+      <div class="pl-champ"><span>Durée</span>
+        <div class="pl-duree">
+          <input type="number" name="duree_nombre" min="1" max="366" required value="${esc(String(duree.nombre))}" aria-label="Nombre">
+          <select name="duree_unite" aria-label="Unité">
+            ${Object.entries(UNITES).map(([k, u]) => `<option value="${k}"${duree.unite === k ? ' selected' : ''}>${esc(u.plusieurs)}</option>`).join('')}
+          </select>
+        </div></div>
       <p class="pl-fin" id="pl-fin"></p>
       <label class="pl-champ pl-large"><span>Adresse du chantier</span>
         <input name="adresse" value="${esc(c?.adresse || '')}" placeholder="Reprise de la fiche si vide"></label>
@@ -227,10 +249,10 @@ function brancher(m, c, apres) {
   const fin = m.querySelector('#pl-fin');
   const majFin = () => {
     const d = form.date_debut.value;
-    const n = parseInt(form.duree_jours.value, 10) || 1;
-    fin.textContent = d ? `Fin : ${dateLongue(ajouterJours(d, Math.max(1, n) - 1))}` : '';
+    const n = joursPour(d || aujourdhui(), form.duree_nombre.value, form.duree_unite.value);
+    fin.textContent = d ? `Fin : ${dateLongue(ajouterJours(d, Math.max(1, n) - 1))} · ${n} jour${n > 1 ? 's' : ''} calendaire${n > 1 ? 's' : ''}` : '';
   };
-  form.date_debut.oninput = majFin; form.duree_jours.oninput = majFin; majFin();
+  form.date_debut.oninput = majFin; form.duree_nombre.oninput = majFin; form.duree_unite.onchange = majFin; majFin();
   // L'adresse se reprend de la fiche choisie, si on n'en a pas tapé une.
   form.rattachement.onchange = () => {
     const opt = form.rattachement.selectedOptions[0];
@@ -240,7 +262,8 @@ function brancher(m, c, apres) {
     e.preventDefault();
     const [genre, id] = (form.rattachement.value || ':').split(':');
     const champs = {
-      titre: form.titre.value, date_debut: form.date_debut.value, duree_jours: form.duree_jours.value,
+      titre: form.titre.value, date_debut: form.date_debut.value,
+      duree_nombre: form.duree_nombre.value, duree_unite: form.duree_unite.value,
       fiche_id: genre === 'fiche' ? id : null, demande_id: genre === 'demande' ? id : null,
       adresse: form.adresse.value, couleur: form.couleur.value, notes: form.notes.value,
     };
@@ -370,7 +393,7 @@ export const rgdPlanningPage = {
         <section class="card pl-carte">
           <h3 class="pl-titre">Chantiers de ${esc(MOIS[state.mois])} <span>${duMois.length}</span></h3>
           ${duMois.length ? `<div class="table-wrap"><table>
-            <thead><tr><th>Chantier</th><th>Fiche</th><th>Du</th><th>Au</th><th class="num">Jours</th><th>À trouver</th></tr></thead>
+            <thead><tr><th>Chantier</th><th>Fiche</th><th>Du</th><th>Au</th><th>Durée</th><th>À trouver</th></tr></thead>
             <tbody>${duMois.map(c => {
               const r = rattachementDe(c);
               const reste = resteA(c.id);
@@ -379,7 +402,7 @@ export const rgdPlanningPage = {
                 <td><span class="pl-point" style="background:${couleurDe(c, tous.indexOf(c))}"></span><b>${esc(c.titre)}</b></td>
                 <td>${r ? esc(r.nom) : '<span class="muted">—</span>'}</td>
                 <td>${esc(dateCourte(c.date_debut))}</td><td>${esc(dateCourte(finDe(c)))}</td>
-                <td class="num">${c.duree_jours}</td>
+                <td>${esc(dureeLue(c).texte)}</td>
                 <td>${!n ? '<span class="muted">Pas de liste</span>'
                   : reste ? `<span class="chip amber">${reste} à trouver</span>` : '<span class="chip green">Tout est prêt</span>'}</td>
               </tr>`;
