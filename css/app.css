@@ -4446,43 +4446,137 @@ button.tb-pp:hover { color: var(--text); text-decoration: underline; text-underl
    étape compte ce qui s'y trouve AUJOURD'HUI, les nombres ne décroissent donc
    pas forcément. Une forme en entonnoir raconterait ce que les chiffres
    démentent. */
-.rgd-frise { display: flex; align-items: stretch; gap: 8px; margin: 4px 0 12px; }
-.rgd-et { flex: 1 1 0; min-width: 0; display: grid; gap: 6px;
+.rgd-frise { display: flex; align-items: stretch; gap: 10px; margin: 6px 0 14px; }
+
+/* ⚠ LA COULEUR DE L'ÉTAPE TEINTE LA CARTE ENTIÈRE, pas seulement le chiffre.
+   Avec dix colonnes de même largeur, c'est la couleur qui sert de repère : sans
+   elle on relit dix libellés pour retrouver « Devis envoyé ». La teinte reste à
+   7 % et s'éteint à mi-hauteur — assez pour distinguer, pas assez pour qu'une
+   carte crie plus fort que sa voisine.
+
+   ⚠ LE LISERÉ DE TÊTE EST UNE OMBRE INTERNE, et pas une boîte rapportée en
+   `::after` : une boîte de trois pixels ne peut pas épouser un coin arrondi de
+   quatorze, ses bouts débordent sur la courbe et la barre a l'air POSÉE
+   AU-DESSUS de la carte au lieu d'en faire partie. L'ombre interne, elle, suit
+   le `border-radius` au pixel. Ce qu'on y perd : le dégradé, qu'une ombre ne
+   sait pas faire. Et `--cap` existe pour que le survol puisse rappeler le
+   liseré sans connaître sa couleur — une étape vide la change. */
+.rgd-et { --cap: var(--c);
+  position: relative; flex: 1 1 0; min-width: 0; display: grid; gap: 6px;
   grid-template-rows: auto auto 1fr auto; justify-items: center;
-  padding: 12px 6px 10px; border-radius: 12px; text-decoration: none;
-  border: 1px solid var(--line); background: var(--card);
-  transition: transform .12s, border-color .12s, box-shadow .12s; }
-.rgd-et:hover { transform: translateY(-3px); border-color: var(--c);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, .09); }
-.rgd-et-n { font-size: 26px; font-weight: 800; color: var(--c); line-height: 1; }
-.rgd-et-label { font-size: 11.5px; color: var(--muted); text-align: center;
-  line-height: 1.25; }
+  padding: 14px 6px 11px; border-radius: 14px; text-decoration: none;
+  border: 1px solid var(--line); box-shadow: inset 0 3px 0 0 var(--cap);
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--c) 7%, var(--card)) 0%, var(--card) 48%);
+  transition: transform .16s cubic-bezier(.2, .75, .3, 1), border-color .16s, box-shadow .16s; }
+
+/* Le chevron entre deux cartes. ⚠ CE N'EST PAS UN ENTONNOIR : il dit le SENS de
+   lecture — une affaire va de gauche à droite — et jamais une quantité qui
+   décroît. Les cartes gardent toutes la même largeur, c'est la règle écrite
+   juste au-dessus et elle tient toujours. Il ne relie que les étapes DU CYCLE :
+   « SAV », « Archivés » et « Clients indésirables » n'en portent pas, on ne
+   passe pas d'un archivé à un indésirable — ce sont trois SORTIES du cycle,
+   posées côte à côte et pas à la suite l'une de l'autre. */
+.rgd-et:not(.hors) + .rgd-et:not(.hors)::before { content: ''; position: absolute;
+  left: -9px; top: 50%; width: 6px; height: 6px; margin-top: -4px;
+  transform: rotate(45deg);
+  border-top: 1.6px solid color-mix(in srgb, var(--text) 26%, transparent);
+  border-right: 1.6px solid color-mix(in srgb, var(--text) 26%, transparent); }
+
+.rgd-et:hover { transform: translateY(-4px);
+  border-color: color-mix(in srgb, var(--c) 50%, var(--line));
+  box-shadow: inset 0 3px 0 0 var(--cap),
+    0 12px 26px color-mix(in srgb, var(--c) 20%, transparent);
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--c) 14%, var(--card)) 0%, var(--card) 55%); }
+
+.rgd-et-n { font-family: var(--font-display); font-size: 29px; font-weight: 800;
+  color: var(--c); line-height: 1; letter-spacing: -.03em;
+  font-variant-numeric: lining-nums tabular-nums; }
+/* Le libellé se lit en premier quand on cherche une étape précise : il est donc
+   écrit dans la couleur du texte, pas en gris. Le gris reste à ce qui se lit
+   APRÈS — le pourcentage, le mot sous le montant. */
+.rgd-et-label { font-size: 11.5px; font-weight: 600; text-align: center;
+  color: color-mix(in srgb, var(--text) 80%, transparent); line-height: 1.25; }
+
 /* La piste se remplit par le BAS : une colonne qui monte se lit comme une
-   quantité, là où une barre horizontale se lirait comme une progression. */
-.rgd-et-piste { width: 8px; min-height: 48px; border-radius: 99px;
-  background: var(--line); align-self: stretch; justify-self: center;
+   quantité, là où une barre horizontale se lirait comme une progression.
+   ⚠ UN REMPLISSAGE A TOUJOURS NEUF PIXELS AU MOINS dès qu'il y a quelqu'un à
+   l'étape : à 1 sur un maximum de 47, la hauteur calculée vaut deux pixels et
+   se lit comme une poussière, voire comme une colonne vide. Le plancher ne
+   ment pas sur la quantité — le chiffre est écrit en grand juste au-dessus —,
+   il garantit seulement qu'une étape habitée ne se confonde pas avec une étape
+   déserte. Une carte à zéro, elle, n'a pas de remplissage du tout. */
+.rgd-et-piste { width: 10px; min-height: 46px; border-radius: 99px;
+  background: color-mix(in srgb, var(--c) 9%, var(--card-2));
+  align-self: stretch; justify-self: center; overflow: hidden;
   display: flex; flex-direction: column; justify-content: flex-end; }
-.rgd-et-piste i { display: block; width: 100%; border-radius: 99px;
-  background: var(--c); transition: height .2s; }
+.rgd-et-piste i { display: block; width: 100%; min-height: 9px; border-radius: 99px;
+  transform-origin: bottom; transition: height .2s;
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--c) 68%, #FFFFFF), var(--c));
+  box-shadow: 0 0 12px color-mix(in srgb, var(--c) 40%, transparent); }
 .rgd-et-part { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
 
-/* Ce qui pèse à l'étape : le montant, ce qu'il compte, et ce qui dort.
+/* Ce qui pèse à l'étape : le montant et ce qu'il compte.
    ⚠ Le montant est GROS et ce qu'il compte est écrit dessous en toutes
    lettres — « 41 devis » —, parce que la colonne compte des PERSONNES et le
    montant des DEVIS. Sans ce mot on lirait la somme comme celle des personnes. */
 .rgd-et-poids { display: grid; gap: 1px; justify-items: center; min-height: 34px;
   font-variant-numeric: tabular-nums; }
-.rgd-et-poids b { font-size: 13px; font-weight: 700; color: var(--text); }
+.rgd-et-poids b { font-family: var(--font-display); font-size: 13.5px;
+  font-weight: 700; color: var(--text); }
 .rgd-et-poids em { font-style: normal; font-size: 10.5px; color: var(--muted); }
+
+/* Une étape à zéro ne doit pas peser autant qu'une étape pleine : le chiffre
+   passe en gris, le liseré et la teinte s'effacent, pour que le regard tombe
+   sur ce qui vit. ⚠ LA CARTE RESTE À SA PLACE ET À SA TAILLE : « personne à
+   cette étape » est une information, elle ne se cache pas et elle ne rétrécit
+   pas. Et c'est `--cap` qui change, pas l'ombre : le survol réutilise la
+   variable et garde donc le bon liseré, vide ou non. */
+.rgd-et.vide { --cap: color-mix(in srgb, var(--c) 35%, var(--card));
+  background: var(--card); }
+.rgd-et.vide .rgd-et-n { color: var(--muted-2); }
+.rgd-et.vide .rgd-et-label { color: var(--muted); font-weight: 500; }
+.rgd-et.vide .rgd-et-piste { background: var(--card-2); }
+.rgd-et.vide .rgd-et-piste i { display: none; }
+.rgd-et.vide .rgd-et-poids { opacity: .6; }
+
 /* « Archivés » est hors du cycle : on n'y avance pas, on en sort. Le trait le
    sépare, et la carte reste en retrait tant qu'on ne la survole pas. */
 .rgd-frise-sep { width: 1px; background: var(--line); margin: 6px 4px; flex: 0 0 1px; }
 .rgd-et.hors { opacity: .72; }
 .rgd-et.hors:hover { opacity: 1; }
+
+/* L'arrivée : les cartes montent en cascade, puis les colonnes se remplissent.
+   Le décalage vient de `--i`, posé sur chaque carte par `frisePipeline()`.
+   ⚠ C'EST `translate` ET PAS `transform` : le survol, lui, emploie `transform`,
+   et une animation `both` sur `transform` figerait la carte — le survol ne
+   lèverait plus rien, pour de bon. Les deux propriétés se composent.
+   ⚠ ET L'OPACITÉ N'EST PAS ANIMÉE, pour la même raison : « Archivés » et
+   « Clients indésirables » vivent à 72 %, et une animation qui finit à 1 les
+   rallumerait définitivement. */
+@keyframes rgd-et-entre { from { translate: 0 12px; } to { translate: 0 0; } }
+@keyframes rgd-et-pousse { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+.rgd-et { animation: rgd-et-entre .42s cubic-bezier(.2, .75, .3, 1) both;
+  animation-delay: calc(var(--i, 0) * 45ms); }
+.rgd-et-piste i { animation: rgd-et-pousse .5s cubic-bezier(.2, .8, .25, 1) both;
+  animation-delay: calc(260ms + var(--i, 0) * 45ms); }
+
+@media (prefers-reduced-motion: reduce) {
+  .rgd-et, .rgd-et-piste i { animation: none; }
+  .rgd-et { transition: none; }
+  .rgd-et:hover { transform: none; }
+}
+
 @media (max-width: 900px) {
-  .rgd-frise { flex-wrap: wrap; }
-  .rgd-et { flex: 1 1 28%; }
+  .rgd-frise { flex-wrap: wrap; gap: 8px; }
+  .rgd-et { flex: 1 1 28%; padding-top: 12px; }
   .rgd-frise-sep { display: none; }
+  /* ⚠ PAS DE CHEVRON QUAND LES CARTES PASSENT À LA LIGNE : en bout de rangée il
+     pointerait vers le bord de l'écran, alors que la carte suivante est en
+     dessous. Il indiquerait une direction fausse. */
+  .rgd-et:not(.hors) + .rgd-et:not(.hors)::before { display: none; }
 }
 
 

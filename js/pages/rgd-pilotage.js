@@ -73,6 +73,20 @@ const exercice = (d = new Date()) => {
 // passage à en tirer — d'où une frise à colonnes de MÊME largeur, et surtout
 // pas un entonnoir qui rétrécit : la forme raconterait ce que les chiffres
 // démentent.
+// ⚠ DEUX ÉTAPES NE SE DESSINENT PAS DANS LA FRISE (10/11/2026, Élodie :
+// « supprime juste les archivés et clients indésirables »). Elles existent
+// toujours — dans `etapesRgd()`, dans « Clients & prospects », dans la frise
+// d'une fiche, dans les flèches de passage : c'est l'AFFICHAGE DE CET ÉCRAN qui
+// les écarte, pas la donnée. Ne pas « simplifier » en les retirant de
+// `ETAPES_HORS_CYCLE` (js/data/rgd-etapes.js), que trois écrans partagent.
+//
+// ⚠ « SAV » RESTE, et ce n'est pas un oubli : c'est du travail en cours qu'on
+// veut voir au tableau de bord. Les deux autres sont des rangements — on n'y
+// avance pas, on y range —, et une vue d'ensemble n'a pas à compter ce qui
+// dort. Le total « affaires suivies » ne change pas : il excluait déjà les
+// étapes hors cycle.
+const ETAPES_HORS_FRISE = ['archives', 'indesirable'];
+
 const COULEURS = {
   demande: '#9CA3AF', rdv: '#2A6FBF', devis_encours: '#B45C00',
   devis_accepte: '#FD7A2C', chantier_encours: '#22C55E',
@@ -121,8 +135,15 @@ function frisePipeline(etapes) {
       ${e.horsEchelle ? '<em>signés</em>'
         : `<em>${e.chiffres} chiffré${e.chiffres > 1 ? 's' : ''}</em>`}
     </span>`;
-  const carte = (e) => `<a class="rgd-et${e.hors ? ' hors' : ''}"
-      href="#/rgd/clients?vue=${esc(e.cle)}" style="--c:${esc(e.couleur)}"
+  // ⚠ `i` EST LE RANG DE LA CARTE DANS LA RANGÉE, et il sert à une seule chose :
+  // décaler son arrivée pour que la frise se monte en cascade (`--i` dans
+  // `css/app.css`). Il ne veut rien dire de métier — surtout pas un ordre
+  // d'avancement, que le numéro d'étape porte déjà.
+  // ⚠ ET `vide` N'EST PAS « RIEN À AFFICHER » : la carte reste entière, à sa
+  // place et à sa taille, elle pâlit seulement. « Personne à cette étape » est
+  // une information de l'écran, pas un trou à boucher.
+  const carte = (e, i) => `<a class="rgd-et${e.hors ? ' hors' : ''}${e.n ? '' : ' vide'}"
+      href="#/rgd/clients?vue=${esc(e.cle)}" style="--c:${esc(e.couleur)};--i:${i}"
       title="${esc(e.titre || e.label)} — ouvrir dans Clients &amp; prospects">
     <span class="rgd-et-n">${e.n}</span>
     <span class="rgd-et-label">${esc(e.label)}</span>
@@ -134,10 +155,15 @@ function frisePipeline(etapes) {
     <span class="rgd-et-part">${e.horsEchelle ? 'depuis la création'
       : (total && !e.hors ? Math.round((e.n / total) * 100) + ' %' : '')}</span>
   </a>`;
+  // ⚠ LA CASCADE NE REPART PAS DE ZÉRO APRÈS LE TRAIT : les cartes hors cycle
+  // continuent la numérotation, sinon « Archivés » arriverait en même temps que
+  // « Nouvelle demande » et le mouvement se lirait comme deux frises séparées.
+  const cycle = etapes.filter(e => !e.hors);
+  const horsCycle = etapes.filter(e => e.hors);
   return `<div class="rgd-frise">
-    ${etapes.filter(e => !e.hors).map(carte).join('')}
+    ${cycle.map((e, i) => carte(e, i)).join('')}
     <span class="rgd-frise-sep" aria-hidden="true"></span>
-    ${etapes.filter(e => e.hors).map(carte).join('')}
+    ${horsCycle.map((e, i) => carte(e, cycle.length + i)).join('')}
   </div>`;
 }
 
@@ -778,7 +804,9 @@ export const rgdPilotagePage = {
       // ⚠ L'ÉCRAN « Clients & prospects » N'EST PAS TOUCHÉ : la substitution est
       // ici, pas dans `etapesRgd()` (js/data/rgd-etapes.js), que les deux écrans
       // partagent. La déplacer là-bas ferait mentir la liste elle-même.
-      const etapes = etapesRgd().map(e => ({
+      const etapes = etapesRgd()
+        .filter(e => !ETAPES_HORS_FRISE.includes(e.key))
+        .map(e => ({
         ...e, cle: e.key, couleur: COULEURS[e.key] || 'var(--accent)',
         hors: ETAPES_HORS_CYCLE.includes(e.key),
         ...(e.key === 'chantier_termine' && histo.chantiers
