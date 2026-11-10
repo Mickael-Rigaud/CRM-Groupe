@@ -47,7 +47,7 @@ export const ONGLETS = [
   // apporteurs, fournisseurs, affaires apportées par RGD. C'est le même écran
   // (`rgd-partenaires.js`), qui ne montre qu'une section selon l'adresse ;
   // `#/rgd/partenaires` continue de répondre et ouvre les apporteurs.
-  { label: 'Partenaires', sous: [
+  { label: 'Partenaires B to B', sous: [
     { hash: '#/rgd/apporteurs', label: 'Apporteurs d’affaires' },
     { hash: '#/rgd/fournisseurs', label: 'Fournisseurs' },
     { hash: '#/rgd/affaires', label: 'Affaires' },

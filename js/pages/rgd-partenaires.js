@@ -239,7 +239,6 @@ const lienSite = (a) => {
 
 // L'onglet d'une ligne : son secteur, ou « à classer » s'il n'en a pas.
 const ongletDe = (secteur) => (SECTEURS[secteur] ? secteur : 'aclasser');
-const ONGLET_MEMO = 'rgd_partenaires_onglet';
 
 const ISSUES = {
   gagne: { label: 'Gagné', ton: 'green' },
@@ -1614,18 +1613,9 @@ const pagePartenaires = (vue) => ({
   render(root) {
     if (guard(root)) return {};
     const coquille = poserEspace(root);
-    // « En ligne » n'existe que pour les fournisseurs.
-    const ONGLETS_VUE = vue === 'fournisseur'
-      ? ['cote_azur', 'oise', 'en_ligne', 'aclasser'] : ['cote_azur', 'oise', 'aclasser'];
-    // L'onglet ouvert se retient PAR ENTRÉE : « En ligne » choisi chez les
-    // fournisseurs n'a pas à suivre jusque chez les apporteurs.
-    const MEMO = `${ONGLET_MEMO}_${vue}`;
     // Une seule porte : la policy `rgd_apporteurs_acces`, dont `scope.canRgd`
     // est le miroir exact. Plus aucun compte de l'application RGD n'est exigé.
-    let memo = '';
-    try { memo = localStorage.getItem(MEMO) || ''; } catch { /* navigation privée */ }
-    const state = { q: '', focus: null, ecriture: scope.canRgd,
-      onglet: ONGLETS_VUE.includes(memo) ? memo : 'cote_azur' };
+    const state = { q: '', focus: null, ecriture: scope.canRgd };
     // Les fiches que cette entrée montre : aucune pour « Affaires ».
     const SECTIONS_VUE = SECTIONS.filter(s => s.cle === vue);
     const ficheDeLaVue = (a) => SECTIONS_VUE.some(s => s.prend(a));
@@ -1650,9 +1640,10 @@ const pagePartenaires = (vue) => ({
       const nAClasser = vue === 'affaires'
         ? scope.rgd('rgd_apports_sortants').filter(x => !SECTEURS[x.secteur]).length
         : tous.filter(a => ficheDeLaVue(a) && !SECTEURS[a.secteur]).length;
-      if (state.onglet === 'aclasser' && !nAClasser) state.onglet = 'cote_azur';
-      const vus = trouves.filter(a => ongletDe(a.secteur) === state.onglet);
-      const enLigne = ONGLETS_FOURNISSEURS.includes(state.onglet);
+      // ⚠ `enLigne` CHANGE D'UN BLOC À L'AUTRE : il est posé avant de rendre
+      // chaque secteur (voir `corps`), et l'en-tête des fournisseurs est un
+      // accesseur pour le relire au bon moment.
+      let enLigne = false;
 
       // Les deux tableaux ne portent plus les mêmes colonnes depuis le
       // 22/10/2026 : l'en-tête et les cellules sont donc décrits ensemble, ici,
@@ -1689,9 +1680,11 @@ const pagePartenaires = (vue) => ({
         // un marchand sur internet se trouve à son adresse web, et la ville de
         // son siège ne dit rien à qui cherche où commander.
         fournisseur: {
-          entete: `<th>Société</th><th>Nom</th><th>Prénom</th>
+          get entete() {
+            return `<th>Société</th><th>Nom</th><th>Prénom</th>
             <th>Secteur d’activité</th><th>${enLigne ? 'Site internet' : 'Ville'}</th>
-            <th>Paiement</th>`,
+            <th>Paiement</th>`;
+          },
           cellules: (a) => `
             <td>${esc(a.nom || '—')}</td>
             <td>${esc(a.prenom || '—')}</td>
@@ -1713,24 +1706,35 @@ const pagePartenaires = (vue) => ({
           ${COLONNES[sec.colonnes].cellules(a)}
         </tr>`;
 
-      const section = (sec) => {
+      // ⚠ DEUX TABLEAUX EMPILÉS, UN PAR SECTEUR (10/11/2026, Élodie : « une
+      // autre présentation pour distinguer les contacts de la Côte d'Azur et de
+      // l'Oise »). Elle a choisi, entre colonnes côte à côte, cartes et tableaux
+      // empilés, cette dernière : chaque secteur a un grand bandeau de sa
+      // couleur, puis son tableau, tous visibles sans cliquer. Les ONGLETS du
+      // 27/10 sont partis avec. Déjà refusés ce jour-là, à ne pas reproposer :
+      // pastille + filtre, sous-tableaux encadrés (« un peu trop lourd »),
+      // groupes teintés dans un seul tableau.
+      const bandeau = (o, n, bouton) => `
+          <div class="pa-bandeau">
+            <h3>${esc(SECTEURS[o]?.label || 'À classer')}</h3>
+            <span class="pa-bandeau-n">${n}</span>
+            <span class="grow"></span>
+            ${bouton}
+          </div>`;
+
+      const section = (sec, o) => {
         // ⚠ LES ACTIFS D'ABORD, DANS LEUR ORDRE D'ORIGINE : depuis que les deux
         // populations partagent un tableau (22/10/2026), rien ne les séparerait
         // plus à l'œil. `sort` est stable, donc l'ordre interne de chaque groupe
         // est celui qu'avait la liste — on ne retrie pas sur le nom ici.
         // Le tri vaut dans chaque sous-tableau de secteur (27/10/2026).
-        const lignes = vus.filter(sec.prend)
+        const lignes = trouves.filter(a => ongletDe(a.secteur) === o).filter(sec.prend)
           .sort((x, y) => (estActif(y) ? 1 : 0) - (estActif(x) ? 1 : 0));
         return `
-        <section class="card pa-sect" style="--pa-trait:${sec.couleur}">
-          <div class="pa-head">
-            <h3>${esc(sec.titre)}</h3>
-            <span class="pa-compte" style="background:${sec.couleur}">${lignes.length}</span>
-            <span class="grow"></span>
-            ${state.ecriture && sec.bouton
-              ? `<button type="button" class="btn primary" data-nouveau="${esc(sec.cle)}">${esc(sec.bouton)}</button>`
-              : ''}
-          </div>
+        <section class="card pa-sect pa-bloc est-${o}">
+          ${bandeau(o, lignes.length, state.ecriture && sec.bouton
+            ? `<button type="button" class="btn pa-bandeau-btn" data-nouveau="${esc(sec.cle)}"
+                data-secteur="${esc(o)}">${esc(sec.bouton)}</button>` : '')}
           ${tableau(lignes, COLONNES[sec.colonnes].entete, (a) => ligne(a, sec),
             state.q ? 'Aucun résultat dans ce secteur.' : 'Personne pour le moment.')}
         </section>`;
@@ -1752,11 +1756,11 @@ const pagePartenaires = (vue) => ({
       // « Chevalier » pour retrouver à qui on l'a passée. Une ligne peut donc
       // apparaître ici alors que son partenaire ne figure dans aucune des trois
       // sections du dessus — c'est voulu, la question posée n'est pas la même.
-      const sectionSortants = () => {
+      const sectionSortants = (o) => {
         // Le tri par la recherche est fait plus haut, dans `sortantsTrouves` ;
         // l'onglet se lit sur le secteur de l'AFFAIRE, pas sur celui du
         // partenaire : l'agence de l'Oise peut apporter à un fournisseur d'Antibes.
-        const lignes = sortantsTrouves.filter(x => ongletDe(x.secteur) === state.onglet);
+        const lignes = sortantsTrouves.filter(x => ongletDe(x.secteur) === o);
         // Rien à résumer, rien à écrire : le message du tableau vide dit déjà
         // à quoi sert ce bloc, et une phrase de bilan au-dessus de lui ferait
         // deux fois la même annonce.
@@ -1804,28 +1808,25 @@ const pagePartenaires = (vue) => ({
         // faute de ligne ferait chercher où il est passé. Son message dit à quoi
         // il sert, ce qu'un bloc absent ne dit pas.
         return `
-        <section class="card pa-sect" style="--pa-trait:var(--green)">
-          <div class="pa-head">
-            <h3>Affaires apportées par RGD Renova</h3>
-            <span class="pa-compte" style="background:var(--green)">${lignes.length}</span>
-            <span class="grow"></span>
-            ${state.ecriture
-              ? '<button type="button" class="btn primary" id="pa-reperer">+ Une affaire apportée</button>'
-              : ''}
-          </div>
+        <section class="card pa-sect pa-bloc est-${o}">
+          ${bandeau(o, lignes.length, state.ecriture
+            ? `<button type="button" class="btn pa-bandeau-btn" data-reperer="${esc(o)}">+ Une affaire apportée</button>`
+            : '')}
           ${resume ? `<p class="pa-note">${resume}</p>` : ''}
           ${tableau(lignes, `<th>Partenaire</th><th>Date</th><th>Client</th>
                 <th>Ce que RGD lui a apporté</th><th>Issue</th>
                 <th class="num">Montant estimé</th><th class="num">Commission attendue</th>`,
             ligneS, state.q ? 'Aucune affaire apportée ne correspond à cette recherche.'
               : 'Rien d’enregistré pour l’instant.')}
+        </section>`;
+      };
+      // Dite une fois, sous les blocs, et non sous chacun d'eux.
+      const noteSortants = `
           <p class="pa-note">La commission n’entre dans le total que sur une affaire
             <b>gagnée</b> par le partenaire. ${state.ecriture
               ? 'Un clic sur une ligne l’ouvre pour la modifier. Le partenaire n’est pas '
                 + 'forcément dans l’annuaire : son nom peut s’écrire librement.'
-              : 'Lecture seule.'}</p>
-        </section>`;
-      };
+              : 'Lecture seule.'}</p>`;
 
       // ⚠ LE TABLEAU DES APPORTS A QUITTÉ CET ÉCRAN le 25/09/2026 : « je le veux
       // dans la fiche partenaire ». Une liste commune obligeait à retrouver le nom
@@ -1833,24 +1834,14 @@ const pagePartenaires = (vue) => ({
       // sont en face l'un de l'autre. Les colonnes de ce tableau-ci portent déjà
       // les totaux, ce qui suffit à comparer les partenaires entre eux.
 
-      // Le compte d'un onglet suit la recherche : il dit ce qu'on trouvera en
-      // cliquant dessus.
-      const compte = (o) => (vue === 'affaires'
-        ? sortantsTrouves.filter(x => ongletDe(x.secteur) === o).length
-        : trouves.filter(a => ficheDeLaVue(a) && ongletDe(a.secteur) === o).length);
-      // « En ligne » s'affiche même vide chez les fournisseurs : c'est un
-      // onglet demandé, il doit être là pour qu'on y range le premier.
-      const onglets = [['cote_azur', 'Côte d’Azur'], ['oise', 'Oise']]
-        .concat(vue === 'fournisseur' ? [['en_ligne', 'En ligne']] : [])
-        .concat(nAClasser ? [['aclasser', 'À classer']] : []);
+      // Les blocs, dans l'ordre : Côte d'Azur, Oise, puis « En ligne » chez les
+      // fournisseurs (affiché même vide : on doit pouvoir y ranger le premier),
+      // et « À classer » seulement s'il reste des fiches sans secteur.
+      const blocs = ['cote_azur', 'oise']
+        .concat(vue === 'fournisseur' ? ['en_ligne'] : [])
+        .concat(nAClasser ? ['aclasser'] : []);
 
       const corps = `
-        <div class="pa-onglets" role="tablist">
-          ${onglets.map(([k, l]) => `<button type="button" role="tab" data-onglet="${k}"
-            class="pa-onglet est-${k}${state.onglet === k ? ' active' : ''}"
-            aria-selected="${state.onglet === k}">${esc(l)}<span>${compte(k)}</span></button>`).join('')}
-        </div>
-        <div class="pa-zone est-${state.onglet}">
           <div class="toolbar">
             ${searchInput('rpa-q', state, 'Rechercher un partenaire, un métier, une ville…')}
             <span class="grow"></span>
@@ -1858,8 +1849,11 @@ const pagePartenaires = (vue) => ({
               ? 'Cliquez sur une ligne pour ouvrir la fiche'
               : 'Lecture seule'}</span>
           </div>
-          ${vue === 'affaires' ? sectionSortants() : SECTIONS_VUE.map(section).join('')}
-        </div>`;
+          ${blocs.map(o => {
+            enLigne = ONGLETS_FOURNISSEURS.includes(o);
+            return vue === 'affaires' ? sectionSortants(o) : SECTIONS_VUE.map(sec => section(sec, o)).join('');
+          }).join('')}
+          ${vue === 'affaires' ? noteSortants : ''}`;
 
       root.innerHTML = cadre(VUES[vue].hash, VUES[vue].titre, corps);
       bindSearch(root, 'rpa-q', state, draw);
@@ -1870,8 +1864,8 @@ const pagePartenaires = (vue) => ({
         // `sec.cree` a disparu avec la section des inactifs (22/10/2026) : elle
         // seule creait sous un autre role que le sien. Les deux sections qui
         // restent portent le role qu'elles creent.
-        // Créé dans l'onglet Oise, il est de l'Oise ; le formulaire le change.
-        nouveauPartenaire(draw, sec?.cle || 'apporteur', SECTEURS[state.onglet] ? state.onglet : null);
+        // Créé depuis le bloc Oise, il est de l'Oise ; le formulaire le change.
+        nouveauPartenaire(draw, sec?.cle || 'apporteur', SECTEURS[b.dataset.secteur] ? b.dataset.secteur : null);
       });
       // Le clic ouvre la FICHE, pas le formulaire : on vient d'abord lire.
       // Un clic sur le lien du site ouvre le site, pas la fiche.
@@ -1893,15 +1887,8 @@ const pagePartenaires = (vue) => ({
         if (l) formulaireSortant(l, draw);
       });
 
-      const bRep = root.querySelector('#pa-reperer');
-      if (bRep) bRep.onclick = () => formulaireSortant(null, draw,
-        SECTEURS[state.onglet] ? state.onglet : null);
-
-      root.querySelectorAll('[data-onglet]').forEach(b => b.onclick = () => {
-        state.onglet = b.dataset.onglet;
-        try { localStorage.setItem(MEMO, state.onglet); } catch { /* navigation privée */ }
-        draw();
-      });
+      root.querySelectorAll('[data-reperer]').forEach(b => b.onclick = () => formulaireSortant(null, draw,
+        SECTEURS[b.dataset.reperer] ? b.dataset.reperer : null));
     };
 
     draw();
