@@ -492,3 +492,20 @@
 @media screen and (max-width: 820px) {
   #content p.small.muted:not(:has(~ :not(p.small.muted, .ko))) { display: none; }
 }
+
+/* ---- Graphique des objectifs : lisible sur telephone ----
+   (10/11/2026, Elodie : « le graphique et les courbes sont trop petits sur
+   telephone ».) Le dessin fait 940 x 206 : ecrase dans 340 px, il ne mesurait
+   plus que 75 px de haut, chiffres de 4 px. Il garde ici une largeur de
+   820 px et DEFILE de cote, au doigt ; texte et traits grossissent.
+   ⚠ `direction: rtl` SUR LE CADRE, ET C'EST VOULU : le defilement part ainsi
+   de la DROITE, la ou sont le mois en cours et les plus recents. Le dessin
+   lui-meme repasse en `ltr`. */
+@media screen and (max-width: 820px) {
+  .rgd-ob-graphe { overflow-x: auto; direction: rtl; margin-left: -4px; margin-right: -4px;
+                   padding-bottom: 6px; -webkit-overflow-scrolling: touch; }
+  .rgd-ob-graphe .rgd-courbe { direction: ltr; width: 820px; max-width: none; }
+  .rgd-ob-graphe .rgd-axe { font-size: 14px; }
+  .rgd-ob-graphe .rgd-trait { stroke-width: 3.6; }
+  .rgd-ob-graphe circle { transform-box: fill-box; transform-origin: center; transform: scale(1.35); }
+}
