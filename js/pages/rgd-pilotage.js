@@ -99,8 +99,15 @@ const COULEURS = {
  * ⚠ MÊME LARGEUR POUR TOUTES — voir plus haut : ce n'est pas un entonnoir.
  */
 function frisePipeline(etapes) {
-  const max = Math.max(1, ...etapes.map(e => e.n));
-  const total = etapes.filter(e => !e.hors).reduce((t, e) => t + e.n, 0);
+  // ⚠ UNE CARTE `horsEchelle` NE RENTRE NI DANS LE MAX NI DANS LE TOTAL.
+  // « Chantier terminé » porte des chantiers d'historique au milieu d'une
+  // douzaine de personnes du jour : comptée, elle écrasait toutes les autres
+  // barres à 6 % de hauteur et s'affichait elle-même « 362 % ». Les deux
+  // mesures ne sont pas du même ordre, on ne les met donc pas sur la même
+  // échelle — c'est la raison du drapeau, pas une coquetterie d'affichage.
+  const echelle = etapes.filter(e => !e.horsEchelle);
+  const max = Math.max(1, ...echelle.map(e => e.n));
+  const total = echelle.filter(e => !e.hors).reduce((t, e) => t + e.n, 0);
   // ⚠ « 3 dossiers chiffrés » EST ÉCRIT EN TOUTES LETTRES à côté du montant :
   // à « Devis en cours », une partie des dossiers n'a pas encore de devis, et
   // un montant seul laisserait croire à une somme sur l'étape entière. C'est
@@ -108,16 +115,24 @@ function frisePipeline(etapes) {
   const poidsCarte = (e) => !e.avecMontant ? '<span class="rgd-et-poids"></span>'
     : `<span class="rgd-et-poids">
       <b>${esc(eur(e.montant))}</b>
-      <em>${e.chiffres} chiffré${e.chiffres > 1 ? 's' : ''}</em>
+      ${'' /* ⚠ « N CHIFFRÉS » COMPTE LES DOSSIERS DU CRM QUI PORTENT DÉJÀ UN
+         DEVIS. Sur la carte d'historique, dont le montant vient du bilan, le mot
+         n'a pas d'objet — « 47 chiffrés » se lirait comme un second compte. */}
+      ${e.horsEchelle ? '<em>signés</em>'
+        : `<em>${e.chiffres} chiffré${e.chiffres > 1 ? 's' : ''}</em>`}
     </span>`;
   const carte = (e) => `<a class="rgd-et${e.hors ? ' hors' : ''}"
       href="#/rgd/clients?vue=${esc(e.cle)}" style="--c:${esc(e.couleur)}"
       title="${esc(e.titre || e.label)} — ouvrir dans Clients &amp; prospects">
     <span class="rgd-et-n">${e.n}</span>
     <span class="rgd-et-label">${esc(e.label)}</span>
-    <span class="rgd-et-piste"><i style="height:${Math.round((e.n / max) * 100)}%"></i></span>
+    <span class="rgd-et-piste"><i style="height:${e.horsEchelle ? 100 : Math.round((e.n / max) * 100)}%"></i></span>
     ${poidsCarte(e)}
-    <span class="rgd-et-part">${total && !e.hors ? Math.round((e.n / total) * 100) + ' %' : ''}</span>
+    ${'' /* ⚠ PAS DE POURCENTAGE SUR UNE CARTE HORS ÉCHELLE : « 47 sur 13 » ne
+       veut rien dire. À la place, la période que le chiffre couvre — sans quoi on
+       le lirait comme l'état du jour, comme ses voisines. */}
+    <span class="rgd-et-part">${e.horsEchelle ? 'depuis la création'
+      : (total && !e.hors ? Math.round((e.n / total) * 100) + ' %' : '')}</span>
   </a>`;
   return `<div class="rgd-frise">
     ${etapes.filter(e => !e.hors).map(carte).join('')}
@@ -704,11 +719,45 @@ export const rgdPilotagePage = {
       </p>`;
       // Les sept étapes viennent du module commun : le pipeline et la liste
       // comptent forcément les mêmes personnes, y compris les gardes.
+      // L'HISTORIQUE DU BILAN, pour la carte « Chantier terminé ».
+      // ⚠ SANS ARGUMENT : `aujourdhui` est une CHAÎNE sur cet écran (`isoDay()`),
+      // et `bilanCommercial(chaîne)` fait tomber l'écran entier avec
+      // « d.getFullYear is not a function ». Et la fonction peut rendre `null`
+      // quand aucune trace commerciale n'existe.
+      const histo = bilanCommercial()?.total || {};
+
+      // ⚠ « CHANTIER TERMINÉ » NE COMPTE PLUS CE QUE LE CRM SAIT, MAIS CE QUE LE
+      // BILAN DÉCLARE (10/11/2026, Élodie : « le nombre de chantiers terminés et le
+      // montant de ces chantiers terminés ne collent pas avec la réalité […] mets
+      // les chiffres directement dans la pipeline »). Le CRM n'a que 43 des 69
+      // devis signés de l'historique et aucune facture avant le 05/11/2024 : sa
+      // carte annonçait 25 chantiers et 510 912 € quand le bilan en porte 47 et
+      // 1 255 109 €.
+      //
+      // ⚠ TROIS CONSÉQUENCES ANNONCÉES À ÉLODIE ET ACCEPTÉES PAR ELLE, à ne pas
+      // « corriger » sans la consulter :
+      //   1. Ce sont les chantiers SIGNÉS, celui en cours compris — la carte
+      //      « Chantier en cours » le compte donc une seconde fois.
+      //   2. La carte compte des CHANTIERS, les autres comptent des PERSONNES.
+      //   3. Le clic mène à la liste des dossiers que le CRM connaît, pas à 47
+      //      lignes. C'est la limite de la donnée, pas un défaut d'écran.
+      //
+      // ⚠ L'ÉCRAN « Clients & prospects » N'EST PAS TOUCHÉ : la substitution est
+      // ici, pas dans `etapesRgd()` (js/data/rgd-etapes.js), que les deux écrans
+      // partagent. La déplacer là-bas ferait mentir la liste elle-même.
       const etapes = etapesRgd().map(e => ({
         ...e, cle: e.key, couleur: COULEURS[e.key] || 'var(--accent)',
         hors: ETAPES_HORS_CYCLE.includes(e.key),
+        ...(e.key === 'chantier_termine' && histo.chantiers
+          ? { n: histo.chantiers, horsEchelle: true,
+              ...(histo.montantSigne != null
+                ? { montant: histo.montantSigne, chiffres: histo.chantiers } : {}) }
+          : {}),
       }));
-      const totalEtapes = etapes.filter(e => !e.hors).reduce((t, e) => t + e.n, 0);
+      // ⚠ `horsEchelle` EXCLU : « 12 affaires suivies » compte des personnes du
+      // jour, et y ajouter 47 chantiers d'historique n'aurait aucun sens.
+      const totalEtapes = etapes.filter(e => !e.hors && !e.horsEchelle)
+        .reduce((t, e) => t + e.n, 0);
 
       // L'ORDRE DE LA PAGE, REVU PAR MICKAEL LE 25/09/2026 : le pipeline
       // d'abord, puis le chiffre d'affaires et la journée côte à côte, les
@@ -749,7 +798,15 @@ export const rgdPilotagePage = {
             Chaque colonne mène à son onglet dans <a href="#/rgd/clients">Clients &amp; prospects</a>,
             où l’on retrouve exactement les mêmes personnes — <b>et le même montant</b> :
             c’est le total des devis de ces personnes à cette étape, le même calcul des
-            deux côtés. <b>Chiffré</b> compte les dossiers qui portent déjà un devis ;
+            deux côtés — <b>sauf « Chantier terminé »</b>, qui porte les chiffres du
+            ${'' /* ⚠ PAS DE NOMBRE EN DUR DANS CETTE PHRASE : il dériverait du
+               chiffre de la carte sans que personne ne s'en aperçoive. Même
+               source que la carte, `histo`. */}
+            <b>bilan commercial</b> : ${histo.chantiers} chantiers signés depuis la
+            création, celui en cours compris, là où les autres colonnes comptent des
+            personnes à leur étape du jour. La liste, elle, ne montrera que les
+            dossiers que le CRM connaît. <b>Chiffré</b> compte les dossiers qui
+            portent déjà un devis ;
             à « Devis en cours », tous n’en ont pas encore.
 </p>
         </section>
