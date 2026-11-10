@@ -213,7 +213,7 @@ const SERIES = [
  * `rgd-axe`, `rgd-trait`, `rgd-mois`, `rgd-zone`, `rgd-info`, `rgd-bulle` sont
  * ceux du graphique du chiffre d'affaires, vingt lignes plus bas.
  */
-function grapheObjectifs(mois, formats, marques) {
+function grapheObjectifs(mois, formats, marques, cleEnCours) {
   const L = 940, H = 206, gauche = 44, droite = 74, cime = 16, bas = H - 30;
   const pas = (L - gauche - droite) / (mois.length - 1);
   const x = (i) => gauche + pas * i;
@@ -286,7 +286,7 @@ function grapheObjectifs(mois, formats, marques) {
     if (!suites.length) return '';
     const vers = (pts) => pts.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ');
     const traits = suites.map(pts => {
-      const finEnCours = pts[pts.length - 1][2] === mois.length - 1 && pts.length > 1;
+      const finEnCours = mois[pts[pts.length - 1][2]].cle === cleEnCours && pts.length > 1;
       const plein = finEnCours ? pts.slice(0, -1) : pts;
       const bout = finEnCours ? pts.slice(-2) : null;
       return (plein.length > 1 ? `<path class="rgd-trait" style="stroke:${se.couleur}" fill="none" d="${vers(plein)}"></path>` : '')
@@ -294,7 +294,7 @@ function grapheObjectifs(mois, formats, marques) {
              stroke-dasharray="4 4" d="${vers(bout)}"></path>` : '');
     }).join('');
     const ronds = suites.flat().map(p => {
-      const enCours = p[2] === mois.length - 1;
+      const enCours = mois[p[2]].cle === cleEnCours;
       return `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="${enCours ? 4.2 : 3}"
         style="fill:${enCours ? 'var(--card)' : se.couleur};stroke:${se.couleur}"
         stroke-width="${enCours ? 2.2 : 0}"></circle>`;
@@ -311,6 +311,7 @@ function grapheObjectifs(mois, formats, marques) {
   // doigt n'a pas. Sur téléphone, l'appui long reste le seul moyen de lire.
   const LB = 182, HB = 24 + SERIES.length * 16;
   const survols = mois.map((m, i) => {
+    if (!SERIES.some(se => connu(m[se.champ]))) return '';
     const cx = x(i);
     const bx = cx < L / 2 ? Math.min(cx + 14, L - LB - 2) : Math.max(cx - LB - 14, 2);
     const lignes = SERIES.map((se, k) => {
@@ -418,6 +419,31 @@ function carteObjectifs(mois, obj) {
   // dessous (« 1 sur 120 cette année »), et deux cartes du même écran qui
   // divisent le même objectif autrement ne se réconcilient jamais à l'œil.
   // Le « mois N sur 12 » de l'en-tête dit où l'on en est dans l'année.
+  // ⚠ EN VUE EXERCICE, LE GRAPHIQUE PREND LE CADRE DE L'ANNÉE COMPTABLE
+  // (10/11/2026, Élodie : « juste pour l'exercice je voudrais que le graphique
+  // s'adapte à la période du 1er octobre au 30 septembre »). Douze cases,
+  // octobre → septembre, et non plus les douze mois glissants.
+  //
+  // ⚠ LES MOIS À VENIR RESTENT VIDES, ILS NE VALENT PAS ZÉRO. Une courbe qui
+  // retombe à zéro sur les huit mois qui n'ont pas encore eu lieu se lirait
+  // comme un effondrement ; elle s'arrête donc au mois en cours, et les cases
+  // suivantes restent en blanc. C'est la règle qu'appliquait déjà l'ancienne
+  // courbe du chiffre d'affaires.
+  //
+  // ⚠ ET LA FENÊTRE GLISSANTE SUFFIT À LA REMPLIR : l'exercice en cours a au
+  // plus douze mois, son premier est donc toujours dans les douze derniers.
+  const moisExercice = () => {
+    const a = Number(ex.du.slice(0, 4));
+    return Array.from({ length: 12 }, (_, i) => {
+      const d = new Date(a, 9 + i, 1);
+      const cle = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      return mois.find(m => m.cle === cle) || {
+        cle, label: d.toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' }),
+        demandes: null, rdv: null, devisSignes: null, ca: null,
+      };
+    });
+  };
+
   const periode = vue === 'exercice'
     ? { valeur: cumul, cible: (se) => obj[se.cible] * 12, cles: dansEx.map(m => m.cle),
         titre: 'Objectifs de l’exercice', note: `mois ${dansEx.length} sur 12`,
@@ -510,7 +536,11 @@ function carteObjectifs(mois, obj) {
           ${/* ⚠ PAS DE LÉGENDE SOUS LE GRAPHIQUE : les quatre tuiles au-dessus
                 en tiennent lieu, chacune à la couleur de sa courbe. Une
                 légende de plus répéterait quatre noms déjà écrits. */ ''}
-          ${grapheObjectifs(mois, formats, periode.cles)}
+          ${/* ⚠ PAS DE BANDE EN VUE EXERCICE : le cadre EST l'exercice, la
+                marquer en entier ne désignerait rien. En vue Mois elle montre
+                le mois dont parlent les tuiles. */ ''}
+          ${grapheObjectifs(vue === 'exercice' ? moisExercice() : mois, formats,
+            vue === 'exercice' ? [] : periode.cles, dernier.cle)}
 
           ${/* ⚠ LE PIED SUIT LE DESSIN : il parlait de colonnes, de ligne
                 pointillée d'objectif et de vignettes qui gardent leur unité —
@@ -523,8 +553,11 @@ function carteObjectifs(mois, obj) {
           <b>Deux devis pour un même client comptent pour un.</b>
           Sur le graphique, les <b>comptages se lisent à gauche</b> et le <b>chiffre d’affaires à droite</b>,
           en euros — l’axe est écrit dans sa couleur. Survolez un mois pour avoir les quatre chiffres.
-          Un mois sans point veut dire que le CRM n’a pas la donnée, pas qu’elle vaut zéro ; le dernier
-          mois est en cours, d’où son pointillé.
+          ${vue === 'exercice'
+            ? 'Le graphique couvre l’exercice, du 1<sup>er</sup> octobre au 30 septembre : les mois à venir restent vides, ils ne valent pas zéro.'
+            : 'Le graphique couvre les douze derniers mois.'}
+          Un mois sans point veut dire que le CRM n’a pas la donnée, pas qu’elle vaut zéro ; le mois
+          en cours est le dernier point, d’où son pointillé.
           Objectifs modifiables dans les <a href="#/rgd/reglages">réglages</a>.</p>
         </section>
 `;
