@@ -352,17 +352,61 @@ function listesCrm(a) {
   };
 }
 
+/**
+ * Le client et le chantier de chaque NUMÉRO DE DEVIS saisi par Élodie.
+ *
+ * ⚠ C'EST LA SEULE SOURCE QUI RELIE UNE FACTURE ORPHELINE À SON CLIENT.
+ * 50 des 138 factures du CA ne sont rattachées à aucune affaire : l'affaire naît
+ * avec le devis, et la copie des devis Costructor ne retient que 52 des 811.
+ * Ces 50 factures portent en revanche un `costructor_quote_number`, et la liste
+ * de devis signés d'Élodie (`bilan_details`) donne le client et le chantier de
+ * ce numéro. 40 des 50 s'y retrouvent (mesuré en base le 10/11/2026).
+ *
+ * ⚠ PAS DE CACHE ICI, ET C'EST VOULU : `bilan_details` change dès qu'Élodie
+ * modifie sa saisie dans les réglages, et une carte gardeée en mémoire
+ * répondrait avec l'ancienne liste jusqu'au rechargement complet de la page.
+ * La carte fait moins de cent entrées, on la refabrique.
+ */
+function clientsSaisisParDevis() {
+  const m = new Map();
+  for (const annee of Object.values(bilanDetails())) {
+    for (const d of annee?.signes || []) {
+      // Le premier gagne : un même numéro ne peut appartenir qu'à un exercice.
+      if (d?.numero && !m.has(d.numero)) {
+        m.set(d.numero, {
+          client: d.client || '',
+          // Une entrée de 2023/2024 n'a pas d'adresse mais une clé de chantier
+          // (« DAWEI IMMO ») : mieux vaut la clé qu'un tiret.
+          chantier: d.chantier || d.cle_chantier || '',
+        });
+      }
+    }
+  }
+  return m;
+}
+
 /** Les factures d'un exercice : celles que compte le CA (ni annulées, ni avoirs). */
 function facturesCrm(a) {
   const estDans = dansEx(a);
+  const saisis = clientsSaisisParDevis();
   return scope.rgd('rgd_paiements')
     .filter(p => p.statut !== 'annule' && p.type !== 'remboursement' && estDans(p.date_facturation))
     .map(p => {
       const deal = p.deal_id && db.byId('deals', p.deal_id);
+      // ⚠ LA SAISIE NE SERT QUE QUAND LE CRM NE SAIT RIEN, jamais à la place de
+      // ce qu'il sait : les 88 factures rattachées à une affaire portent toutes
+      // un client et une fiche chantier (vérifié en base), le manque était
+      // ENTIER du côté des orphelines. Les deux sources ne peuvent donc pas se
+      // contredire ici, et aucun MONTANT ne bouge — on remplit deux colonnes de
+      // texte, le total du CA est le même avant et après.
+      const repris = !deal ? saisis.get(p.costructor_quote_number) : null;
       return {
         numero: p.reference_facture || p.libelle || '—',
-        client: deal ? nomDe(deal) : '—', chantier: chantierDe(p),
+        client: (deal ? nomDe(deal) : repris?.client) || '—',
+        chantier: (!deal && repris?.chantier) || chantierDe(p),
         date: p.date_facturation, montant: Number(p.montant_ht) || 0,
+        // Pour la note de la fenêtre : d'où vient cette ligne.
+        venue: deal ? 'affaire' : repris ? 'saisie' : 'inconnue',
       };
     });
 }
@@ -438,6 +482,24 @@ export function justifier(a, mesure, aujourdhui = new Date()) {
       }
       lignes.push(...facturesCrm(an));
     }
+    // ⚠ LA FENÊTRE DIT D'OÙ VIENNENT LES COLONNES CLIENT ET CHANTIER quand
+    // elles ne viennent pas du CRM, et elle NOMME les factures qui restent sans
+    // client. Sans ça, un tiret se lit comme un bug d'affichage — c'est
+    // exactement ce qu'Élodie a signalé le 10/11/2026 — alors que c'est une
+    // facture que rien ne relie à un dossier.
+    const reprises = lignes.filter(l => l.venue === 'saisie').length;
+    const muettes = lignes.filter(l => l.venue === 'inconnue');
+    if (reprises) {
+      notes.push(`${reprises} facture${reprises > 1 ? 's ne sont' : ' n’est'} rattachée${reprises > 1 ? 's' : ''} `
+        + `à aucune affaire du CRM : ${reprises > 1 ? 'leur client et leur chantier viennent' : 'son client et son chantier viennent'} `
+        + 'de ta liste de devis signés, retrouvés par le numéro de devis de la facture.');
+    }
+    if (muettes.length) {
+      notes.push(`${muettes.length} facture${muettes.length > 1 ? 's restent' : ' reste'} sans client : `
+        + `${muettes.map(l => l.numero).join(', ')}. ${muettes.length > 1 ? 'Elles n’ont' : 'Elle n’a'} pas de numéro `
+        + `de devis, ou ce devis n’existe ni dans le CRM ni dans ta liste.`);
+    }
+
     const avecListe = annees.filter(an => details[an]?.factures?.length);
     sourceListe = avecListe.length === annees.length ? (details[avecListe[0]].source_factures || 'ta saisie')
       : avecListe.length ? 'ta saisie et les factures du CRM' : 'les factures du CRM';
