@@ -418,15 +418,22 @@ function grapheObjectifs(mois, formats, marques, cleEnCours) {
   //
   // ⚠ LE `<title>` RESTE SOUS LA BULLE : la bulle naît du survol, que le
   // doigt n'a pas. Sur téléphone, l'appui long reste le seul moyen de lire.
-  const LB = 196, HB = 24 + SERIES.length * 16;
+  // ⚠ LA BULLE EST ÉCRITE EN UNITÉS DU `viewBox`, PAS EN PIXELS, et c'est ce
+  // qui a trompé : le cadre fait 940 de large pour environ 1215 px à l'écran,
+  // donc tout ce qu'on écrit ici est AGRANDI D'UN TIERS. À sept lignes de 16,
+  // elle faisait 253 × 176 px et couvrait les deux tiers de la hauteur du
+  // graphique (Élodie, 10/11/2026 : « les éléments sont beaucoup trop gros »).
+  // Elle en fait maintenant 191 × 141. Si on y ajoute une huitième ligne un
+  // jour, c'est `LIG` qu'il faut regarder, pas `HB`.
+  const LIG = 12.5, LB = 148, HB = 34 + (SERIES.length - 1) * LIG;
   const survols = mois.map((m, i) => {
     if (!SERIES.some(se => connu(m[se.champ]))) return '';
     const cx = x(i);
     const bx = cx < L / 2 ? Math.min(cx + 14, L - LB - 2) : Math.max(cx - LB - 14, 2);
     const lignes = SERIES.map((se, k) => {
       const v = m[se.champ];
-      return `<text class="rgd-bulle-mois" style="font-size:11.5px;opacity:.72" x="11" y="${36 + k * 16}">${esc(se.label)}</text>
-        <text class="rgd-bulle-ca" style="font-size:12px" x="${LB - 11}" y="${36 + k * 16}"
+      return `<text class="rgd-bulle-mois" style="font-size:9.5px;opacity:.72" x="9" y="${28 + k * LIG}">${esc(se.label)}</text>
+        <text class="rgd-bulle-ca" style="font-size:10px" x="${LB - 9}" y="${28 + k * LIG}"
           text-anchor="end">${connu(v) ? esc(formats[se.champ](v)) : '—'}</text>`;
     }).join('');
     const dit = SERIES.map(se => `${se.court} ${connu(m[se.champ]) ? formats[se.champ](m[se.champ]) : '—'}`).join(' · ');
@@ -436,7 +443,7 @@ function grapheObjectifs(mois, formats, marques, cleEnCours) {
         <line class="rgd-ob-guide" x1="${cx.toFixed(1)}" x2="${cx.toFixed(1)}" y1="${cime - 6}" y2="${bas}"></line>
         <g transform="translate(${bx.toFixed(1)},6)">
           <rect width="${LB}" height="${HB}" rx="9" class="rgd-bulle"></rect>
-          <text class="rgd-bulle-mois" x="11" y="18">${esc(m.label)}</text>
+          <text class="rgd-bulle-mois" style="font-size:10px" x="9" y="14.5">${esc(m.label)}</text>
           ${lignes}
         </g>
       </g>
