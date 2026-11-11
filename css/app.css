@@ -7811,6 +7811,21 @@ tr.est-modifie td { background: var(--accent-soft); }
    en trois blocs et la place du champ de précision.
    ⚠ LES CASES EN LIGNE (`rba-tache`) SONT PARTIES AVEC : plus un fichier ne
    les écrit, vérifié par recherche. */
+/* ⚠ LES CGV AU-DESSUS DU TRACÉ, REPLIÉES. Six mille caractères dépliés sur un
+   téléphone tendu au client auraient enterré ce qu'il vient signer ; repliées,
+   elles restent à un doigt. Le texte garde ses retours à la ligne et défile
+   dans sa boîte, pour ne pas pousser le cadre de signature hors de l'écran. */
+.rdc-cgv { border: 1px solid var(--line); border-radius: 12px; background: var(--card-2);
+  margin: 0 0 14px; overflow: hidden; }
+.rdc-cgv-tete { padding: 11px 14px; cursor: pointer; font-size: 13.5px; font-weight: 700;
+  list-style: none; }
+.rdc-cgv-tete::-webkit-details-marker { display: none; }
+.rdc-cgv-tete::after { content: '›'; float: right; font-size: 18px; color: var(--muted);
+  transform: rotate(90deg); }
+.rdc-cgv[open] .rdc-cgv-tete::after { transform: rotate(-90deg); }
+.rdc-cgv-texte { max-height: 220px; overflow: auto; padding: 0 14px 12px; font-size: 12.5px;
+  line-height: 1.55; white-space: pre-wrap; color: var(--muted-2);
+  border-top: 1px solid var(--line); padding-top: 10px; }
 .rba-bloc { border: 1px solid var(--line); border-radius: 14px; background: var(--card);
   margin: 0 0 12px; overflow: hidden; }
 .rba-bloc[open] { border-color: var(--line-strong); box-shadow: 0 2px 12px rgba(20, 20, 40, .06); }

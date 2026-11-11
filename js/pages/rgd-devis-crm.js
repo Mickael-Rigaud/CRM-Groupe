@@ -28,6 +28,7 @@ import {
   estAnnulee, annulerFacture, retablirFacture,
 } from '../data/rgd-devis-crm.js';
 import { posePadSignature } from '../pad-signature.js';
+import { lireCgv } from '../data/rgd-cgv.js';
 import { ouvrirImportFacture, peutImporterFacture } from './rgd-facture-import.js';
 import { db } from '../data/db.js';
 import { bonRempli, bonDuDevis, creerBon } from '../data/rgd-bon-attachement.js';
@@ -463,9 +464,11 @@ export function ouvrirDevisCrm(x, existant = null, retour = null, genreNeuf = 'f
       // rendez-vous n'aurait aucune valeur — et serait faux.
       aide: dev
         ? `Signature de <b>${esc(x.nom || 'la personne présente')}</b>. Signer vaut acceptation du `
-          + 'devis et des prix indiqués, avant l’exécution des travaux.'
+          + 'devis, des prix indiqués et des conditions générales de vente ci-dessus, '
+          + 'avant l’exécution des travaux.'
         : `Signature de <b>${esc(x.nom || 'la personne présente')}</b>. Signer vaut reconnaissance `
-          + 'que les prestations facturées ont été exécutées, et acceptation sans réserve.',
+          + 'que les prestations facturées ont été exécutées, acceptation sans réserve '
+          + 'et acceptation des conditions générales de vente ci-dessus.',
       nom: x.nom || '',
       surAnnuler: () => redessiner(),
       surValider: async ({ image, nom }) => {
@@ -484,6 +487,30 @@ export function ouvrirDevisCrm(x, existant = null, retour = null, genreNeuf = 'f
         ouvrirDevisCrm(x, existant, retour);
       },
     });
+    // ⚠ LES CONDITIONS GÉNÉRALES SE LISENT AVANT DE SIGNER, PAS APRÈS
+    // (11/11/2026, Élodie : « on propose la signature du client avec les
+    // conditions générales de vente »). Le texte vient de l'écran « Conditions
+    // générales de vente » des réglages — une seule source, celle qui s'imprime
+    // déjà sur les devis et les factures. Pas un mot n'est écrit ici : des
+    // conditions recopiées dans un écran divergent de celles du papier, et
+    // c'est le genre d'écart qui se découvre devant un litige.
+    //
+    // ⚠ ELLES SE DÉPLIENT, ELLES NE S'IMPOSENT PAS : six mille caractères
+    // au-dessus d'un cadre de signature, sur un téléphone tendu au client,
+    // auraient enterré ce qu'il vient signer. Repliées, elles restent à un
+    // doigt — et la phrase sous le tracé dit que signer vaut acceptation.
+    //
+    // ⚠ ET S'IL N'Y EN A PAS, ON NE DIT RIEN. Annoncer des conditions
+    // absentes serait pire que de se taire.
+    const cgv = lireCgv();
+    if (cgv.texte) {
+      hote.insertAdjacentHTML('afterbegin', `
+        <details class="rdc-cgv">
+          <summary class="rdc-cgv-tete">Conditions générales de vente
+            <span class="muted small">— à lire avant de signer</span></summary>
+          <div class="rdc-cgv-texte">${esc(cgv.texte)}</div>
+        </details>`);
+    }
   };
 
   /**
