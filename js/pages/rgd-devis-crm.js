@@ -461,12 +461,53 @@ export function ouvrirDevisCrm(x, existant = null, retour = null, genreNeuf = 'f
       surValider: async ({ image, nom }) => {
         existant = await signerSurPlace(existant, { signature: image, signe_par: nom });
         toast(`${G.label} ${existant.numero || ''} ${dev ? 'accepté' : 'signée'}`);
-        if (!dev && !bonRempli(existant)) { proposerLeBon(); return; }
+        // ⚠ LA FACTURE PART AVANT LE BON, ET C'EST UNE CORRECTION
+        // (11/11/2026, Élodie : « j'ai fait tout le processus et à la fin j'ai
+        // cliqué sur envoyé et je n'ai reçu que le bon d'attachement, je n'ai pas
+        // reçu la facture »). Le code sautait de la signature AU BON : l'étape
+        // d'envoi de la facture n'était jamais proposée, et le seul bouton
+        // « Envoyer » qu'on rencontrait ensuite était celui du bon. Le client
+        // recevait donc le constat d'heures sans la facture qu'il venait de
+        // signer — et personne ne pouvait s'en apercevoir depuis l'écran.
+        if (!dev) { proposerEnvoi(); return; }
         closeModal(true);
         ouvrirDevisCrm(x, existant, retour);
       },
     });
   };
+
+  /**
+   * Juste après la signature : on envoie la facture au client.
+   *
+   * ⚠ C'EST UNE ÉTAPE À ELLE, PAS UN BOUTON PARMI D'AUTRES (11/11/2026,
+   * Élodie : « une fois que le client a signé on peut lui envoyer par mail
+   * grâce à un bouton »). Elle s'intercale entre la signature et le bon
+   * d'attachement, qui ne vient qu'une fois la facture partie.
+   *
+   * ⚠ « PLUS TARD » EXISTE, SANS PÉNALITÉ : le réseau tombe, le client n'a
+   * pas son adresse en tête. La facture est signée et en base, elle se
+   * renverra depuis la fiche — ce qui est perdu ici ne l'est pas ailleurs.
+   */
+  function proposerEnvoi() {
+    m.querySelector('.modal-head h2').textContent = `${G.label} ${existant.numero || ''} signée`;
+    hote.innerHTML = `
+      <div class="rdc-apres">
+        <p class="rdc-apres-titre">✓ ${esc(G.label)} ${esc(existant.numero || '')} signée</p>
+        <p class="rdc-aide">Elle part maintenant au client, en pièce jointe.
+        Le <b>bon d'attachement</b> s'ouvrira juste après : le client est encore là, c'est le
+        seul moment où il peut le signer.</p>
+        <div class="form-actions">
+          <button type="button" class="btn ghost" id="rdc-envoi-tard">Plus tard</button>
+          <button type="button" class="btn" id="rdc-envoi-maintenant">Envoyer la facture ▸</button>
+        </div>
+      </div>`;
+    hote.querySelector('#rdc-envoi-tard').onclick = () => {
+      closeModal(true);
+      ouvrirDevisCrm(x, existant, retour);
+    };
+    hote.querySelector('#rdc-envoi-maintenant').onclick = () =>
+      ouvrirEnvoi(existant, () => proposerLeBon());
+  }
 
   /**
    * Juste après la signature de la facture : on propose le bon d'attachement.
@@ -702,7 +743,7 @@ export function ouvrirDevisCrm(x, existant = null, retour = null, genreNeuf = 'f
     // mail, le bon d'attachement suit — chaque étape appelle la suivante.
     const bSuivant = hote.querySelector('#rdc-suivant');
     if (bSuivant) bSuivant.onclick = async () => {
-      if (signe) { ouvrirEnvoi(existant); return; }
+      if (signe) { ouvrirEnvoi(existant, bonRempli(existant) ? null : () => proposerLeBon()); return; }
       const d = await enregistrer();
       if (!d) return;
       modifie = false;
@@ -848,7 +889,7 @@ export function ouvrirDevisCrm(x, existant = null, retour = null, genreNeuf = 'f
   // et message sont pré-remplis et se corrigent ; le PDF est fabriqué au
   // moment d'envoyer, depuis le devis ENREGISTRÉ — ce qui part est ce qui est
   // en base, numéro compris.
-  async function ouvrirEnvoi(d) {
+  async function ouvrirEnvoi(d, apres = null) {
     const docs = await import('./rgd-documents.js');
     const qui = docs.donneesDocument(x);
     // Une annulée s'annonce pour ce qu'elle est : le client reçoit une
@@ -893,6 +934,10 @@ export function ouvrirDevisCrm(x, existant = null, retour = null, genreNeuf = 'f
         }, pdf);
         if (!r.ok) throw new Error(r.motif);
         toast(`${G.label} ${d.numero || ''} ${dev ? 'envoyé' : 'envoyée'} à ${a}`);
+        // ⚠ ON NE FERME PAS SI UNE ÉTAPE SUIT : le bon d'attachement se dessine
+        // dans CETTE fenêtre. Fermer ici, c'était rendre la main à la fiche au
+        // moment précis où le client attend pour signer.
+        if (apres) { apres(); return; }
         closeModal();
       } catch (e) {
         bouton.disabled = false; bouton.textContent = 'Envoyer';

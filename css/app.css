@@ -7800,6 +7800,10 @@ tr.est-modifie td { background: var(--accent-soft); }
    un PDF remis à un client. */
 .rba .rba-section { margin: 20px 0 8px; padding-top: 14px; border-top: 1px solid var(--line);
   font-size: 13px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted-2); }
+/* Ce qui manque pour envoyer le bon, dit juste au-dessus des signatures —
+   là où on va le corriger, pas en bas à côté d'un bouton grisé. */
+.rba-manque { font-size: 13px; background: color-mix(in srgb, var(--amber) 12%, var(--card));
+  border-left: 3px solid var(--amber); padding: 8px 12px; border-radius: 6px; margin: 14px 0 0; }
 .rba .rba-section:first-of-type { margin-top: 12px; }
 .rba .rba-rangee { padding: 10px 12px; margin-bottom: 8px; border: 1px solid var(--line); border-radius: 10px;
   background: var(--card-2); }

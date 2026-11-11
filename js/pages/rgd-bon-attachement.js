@@ -126,6 +126,15 @@ export function ouvrirBonAttachement(x, { bon = null, devis = null } = {}, retou
 
   const dessine = () => {
     const heures = totalHeures(s);
+    // ⚠ LES DEUX SIGNATURES, PAS UNE : celle de l'intervenant vit dans la
+    // SAISIE (`s.signature_rgd`, elle se refait tant que le bon n'est pas
+    // signé), celle du client dans le BON enregistré (`courant.signature`,
+    // qui le fige). Les chercher au même endroit était l'erreur à ne pas faire.
+    const manquent = [];
+    if (!s.signature_rgd) manquent.push('la signature de l’intervenant');
+    if (!courant?.signature) manquent.push('la signature du client');
+    const pretAEnvoyer = manquent.length === 0;
+    const manqueSignature = manquent.join(' et ');
     const fournitures = Array.isArray(s.fournitures) ? s.fournitures : [];
     hote.innerHTML = `
       <p class="rdc-aide">Ce bon constate les <b>temps passés</b> et les <b>fournitures posées</b>.
@@ -179,6 +188,8 @@ export function ouvrirBonAttachement(x, { bon = null, devis = null } = {}, retou
       ${groupe('suite')}
       ${groupe('reception')}
 
+      ${pretAEnvoyer ? '' : `<p class="rba-manque">Pour envoyer ce bon au client, il manque
+        <b>${esc(manqueSignature)}</b>. Les deux signatures font la valeur du document.</p>`}
       <h4 class="rba-section">Signatures</h4>
       <div class="mf-grille">${champ('intervenant', 'Intervenant RGD Renova', { aide: 'Le nom qui s’imprime sous la signature.' })}</div>
       <div class="rdc-statut"><span class="muted small">Intervenant</span>
@@ -201,7 +212,17 @@ export function ouvrirBonAttachement(x, { bon = null, devis = null } = {}, retou
           : ''}
         <button type="button" class="btn ghost" data-close>Fermer</button>
         <button type="button" class="btn ghost" id="rba-imprimer">Imprimer</button>
-        <button type="button" class="btn ghost" id="rba-mail">Envoyer par mail</button>
+        ${/* ⚠ UN BON SANS SES DEUX SIGNATURES NE S'ENVOIE PAS (11/11/2026,
+              Élodie : « on doit ne pas pouvoir l'envoyer si le client ne l'a pas
+              signé ni l'intervenant »). Ce document ne vaut que par elles : c'est
+              la pièce qu'on ressort quand des heures sont contestées, et un
+              constat non signé ne constate rien. L'envoyer quand même, c'était
+              laisser croire au client que l'affaire était documentée.
+              ⚠ L'IMPRESSION, ELLE, RESTE OUVERTE : on imprime justement pour
+              faire signer sur papier quand l'écran ne s'y prête pas. */ ''}
+        <button type="button" class="btn ghost" id="rba-mail"${pretAEnvoyer ? '' : ' disabled'}
+          title="${pretAEnvoyer ? 'Envoyer le bon au client'
+            : esc('Il manque ' + manqueSignature)}">Envoyer par mail</button>
         <button type="button" class="btn" id="rba-enregistrer">Enregistrer</button>
       </div>`;
     m.querySelector('.modal-head h2').textContent = titre();
