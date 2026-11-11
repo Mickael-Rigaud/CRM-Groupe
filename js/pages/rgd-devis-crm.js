@@ -36,8 +36,26 @@ import { lireCgv } from '../data/rgd-cgv.js';
 import { ouvrirImportFacture, peutImporterFacture } from './rgd-facture-import.js';
 import { db } from '../data/db.js';
 import { bonRempli, bonDuDevis, creerBon } from '../data/rgd-bon-attachement.js';
+// ⚠ LES DESSINS VIENNENT DE L'ÉCRAN D'ENCAISSEMENT, ils n'y sont pas recopiés :
+// un trait dessiné deux fois finit par diverger, et c'est précisément ce qu'on
+// reprochait aux émojis — le même symbole qui ne rend pas pareil d'un endroit
+// à l'autre. `ic` enveloppe un chemin, `COCHE` est la coche.
+import { ic, COCHE, ouvrirEncaissement } from './rgd-encaissement.js';
 
 const euros = (n) => eur(n, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// ⚠ CINQ DESSINS, UN PAR ÉTAPE, ET TOUS DIFFÉRENTS DE LOIN : à 17 px, deux
+// enveloppes ou deux rectangles se confondent, et la frise redevient une
+// rangée de points. Le paraphe pour la signature, l'enveloppe pour la facture
+// qui part, le bloc coché pour le bon, l'avion pour le bon qui part, le billet
+// pour l'argent qui entre.
+const DESSINS = {
+  paraphe: ic('<path d="M3 15.6c2.4 0 2.9-9 4.8-9s1.7 9 3.9 9 2.4-5 3.9-5 1.9 2 4.4 2"/><path d="M3 20h18"/>'),
+  enveloppe: ic('<rect x="2.5" y="5" width="19" height="14" rx="2.4"/><path d="M3.2 7.2l8.8 6 8.8-6"/>'),
+  bloc: ic('<rect x="5" y="4" width="14" height="17" rx="2.2"/><path d="M9.2 3.2h5.6v3.2H9.2z"/><path d="M9 13.4l2 2 4-4"/>'),
+  avion: ic('<path d="M21.4 3.1L2.9 10.3l7.1 2.7 2.7 7.1z"/><path d="M21.4 3.1l-11.4 9.9"/>'),
+  billet: ic('<rect x="2" y="6" width="20" height="12" rx="2.2"/><circle cx="12" cy="12" r="2.7"/><path d="M5.6 12h.02M18.4 12h.02"/>'),
+};
 
 /**
  * Le bloc de la fiche : les factures, les devis, et le bouton pour en faire un.
@@ -317,6 +335,134 @@ export function ouvrirDevisCrm(x, existant = null, retour = null, genreNeuf = 'f
   hote.addEventListener('input', () => { modifie = true; }, true);
   hote.addEventListener('change', () => { modifie = true; }, true);
 
+  /**
+   * La frise des étapes d'une facture, en tête de la fenêtre.
+   *
+   * Élodie, le 11/11/2026 : « quand on retourne sur la facture qui est signée
+   * et envoyée et que le bon d'attachement a été fait et envoyé, je ne veux pas
+   * tout refaire. Pour cela, on pourrait mettre un système d'étapes […] comme
+   * les fiches projet ??? Et je voudrais aussi avoir un raccourci pour
+   * encaisser directement sans avoir à tout refaire ».
+   *
+   * ⚠ C'EST LA FRISE DE LA FICHE PROJET, PAS UNE AUTRE. Elle en reprend les
+   * classes (`rgdf-piste`, `rgdf-jalons`, `rgdf-rail`) : même rail, mêmes
+   * pastilles, même anneau sur l'étape courante. Élodie a nommé ce modèle
+   * elle-même ; en dessiner un second aurait donné deux façons de lire un
+   * avancement dans le même CRM.
+   *
+   * ⚠ MAIS LES ÉTAPES SONT DES FAITS, PAS UN STATUT QU'ON DÉCLARE. Sur la
+   * fiche, cliquer une étape ÉCRIT le statut du dossier. Ici, chaque étape se
+   * LIT de la base — signée, envoyée, bon signé, bon envoyé, encaissée — et
+   * cliquer la FAIT. On ne peut pas décréter qu'une facture est partie.
+   *
+   * ⚠ ET L'ENCAISSEMENT EST OUVERT DÈS QUE LA FACTURE PORTE UN NUMÉRO, même
+   * si elle n'est ni signée ni envoyée : c'est le raccourci demandé. Une
+   * facture payée par virement n'est jamais signée par personne, et l'attendre
+   * aurait fermé l'encaissement à tout ce qui ne passe pas par le téléphone de
+   * Franck.
+   *
+   * ⚠ UNE ÉTAPE DÉJÀ FAITE RESTE CLIQUABLE : on revient voir un bon, on
+   * renvoie une facture égarée, on corrige un encaissement. La grîver serait
+   * reproduire le défaut qu'elle signale, dans l'autre sens.
+   */
+  /**
+   * Les cinq étapes d'une facture, lues de la base à chaque dessin.
+   *
+   * ⚠ CINQ, PAS SIX : « Facture » n'y est pas. Ce serait la seule qui ne
+   * désigne aucun geste — le contenu est sous les yeux, dans la même fenêtre.
+   * L'y mettre aurait aussi décalé « Suivant » d'un cran, qui doit nommer la
+   * prochaine ACTION.
+   *
+   * ⚠ ET L'ENCAISSEMENT EST OUVERT DÈS QUE LA FACTURE PORTE UN NUMÉRO, même
+   * non signée ni envoyée : c'est le raccourci demandé le 11/11. Une facture
+   * payée par virement n'est signée par personne, et l'attendre aurait fermé
+   * l'encaissement à tout ce qui ne passe pas par le téléphone de Franck.
+   */
+  function pasDeLaFacture() {
+    if (dev || !existant) return [];
+    const b = bonDuDevis(existant);
+    const emise = !!existant.numero;
+    return [
+      { cle: 'signature', label: 'Signée', mot: 'Faire signer ▸',
+        fait: !!existant.signature || existant.statut === 'signe',
+        quand: existant.date_signature,
+        icone: DESSINS.paraphe,
+        ouvert: !annulee, aide: 'Faire signer le client sur place' },
+      { cle: 'envoi', label: 'Envoyée', mot: 'Envoyer la facture ▸',
+        fait: !!existant.envoye_le, quand: existant.envoye_le,
+        icone: DESSINS.enveloppe,
+        ouvert: true, aide: 'Envoyer la facture par mail' },
+      { cle: 'bon', label: 'Bon signé', mot: 'Remplir le bon ▸',
+        fait: !!b?.signature, quand: b?.signe_a,
+        icone: DESSINS.bloc,
+        ouvert: emise && !annulee, aide: 'Remplir et faire signer le bon d’attachement' },
+      { cle: 'bonEnvoi', label: 'Bon envoyé', mot: 'Envoyer le bon ▸',
+        fait: !!b?.envoye_le, quand: b?.envoye_le,
+        icone: DESSINS.avion,
+        ouvert: emise && !annulee && !!b, aide: 'Envoyer le bon d’attachement' },
+      { cle: 'encaisse', label: 'Encaissée', mot: 'Encaisser ▸',
+        fait: !!existant.regle_le, quand: existant.regle_le,
+        icone: DESSINS.billet,
+        ouvert: emise, aide: 'Enregistrer le règlement du client' },
+    ];
+  }
+
+  /**
+   * La prochaine étape à faire, ou `null` quand il n'y en a plus.
+   *
+   * ⚠ C'EST LA PREMIÈRE QUI MANQUE, pas la suivante de la dernière faite : une
+   * facture encaissée mais jamais envoyée doit encore partir au client.
+   *
+   * ⚠ ET ELLE SERT AUX DEUX : l'anneau de la frise ET le bouton du bas. Les
+   * faire diverger aurait donné deux avis sur ce qu'il reste à faire, dans la
+   * même fenêtre.
+   */
+  const prochainPas = () => pasDeLaFacture().find(p => !p.fait && p.ouvert) || null;
+
+  /**
+   * La frise, dessinée.
+   *
+   * ⚠ ELLE A ÉTÉ REPRISE LE JOUR MÊME (11/11/2026, Élodie : « un peu plus
+   * dynamique et moderne la frise étapes stp »). La première version empruntait
+   * telles quelles les pastilles de la fiche projet — cinq points gris de
+   * 15 px. Ce qui change n'est pas la décoration :
+   *   · chaque étape porte SON dessin, et une COCHE une fois faite ;
+   *   · chaque étape faite porte SA DATE en dessous, et c'est la vraie
+   *     réponse à « je ne veux pas tout refaire » : on voit d'un coup d'œil
+   *     que le bon est parti le 10, pas seulement qu'il est parti ;
+   *   · l'étape courante respire (halo lent) au lieu d'être un point un peu
+   *     plus gros, et le trait qui y mène est un dégradé.
+   *
+   * ⚠ LE HALO S'ARRÊTE SI LE SYSTÈME DEMANDE MOINS D'ANIMATION
+   * (`prefers-reduced-motion`) : une pulsation permanente dans le champ de
+   * vision se paie cher chez qui y est sensible, et la frise se lit sans elle.
+   *
+   * ⚠ ON COMPARE LES CLÉS, PAS LES OBJETS : `prochainPas()` rappelle
+   * `pasDeLaFacture()`, qui fabrique une liste NEUVE à chaque appel. L'identité
+   * n'était jamais vraie et l'anneau de l'étape courante ne s'affichait nulle
+   * part. Vu à l'écran, pas deviné.
+   */
+  function frise() {
+    const pas = pasDeLaFacture();
+    if (!pas.length) return '';
+    const suivant = prochainPas();
+    const jour = (v) => (v ? fmtDate(String(v).slice(0, 10)) : '');
+    return `<ol class="rdc-pas">
+      ${pas.map((p) => {
+        const etat = p.fait ? 'est-fait' : p.cle === suivant?.cle ? 'est-courant' : '';
+        const quand = p.fait ? jour(p.quand) : (p.cle === suivant?.cle ? 'à faire' : '');
+        return `<li class="rdc-pas-item ${etat}">
+          <button type="button" class="rdc-pas-bouton" data-pas="${esc(p.cle)}"
+            title="${esc(p.aide)}" ${p.ouvert ? '' : 'disabled'}>
+            <span class="rdc-pas-pastille">${p.fait ? COCHE : p.icone}</span>
+            <span class="rdc-pas-nom">${esc(p.label)}</span>
+            <span class="rdc-pas-quand">${esc(quand)}</span>
+          </button>
+        </li>`;
+      }).join('')}
+    </ol>`;
+  }
+
   const totalLigne = (l) => (Number(l.quantite) || 0) * (Number(l.prix_ht) || 0);
   const dis = signe ? 'disabled' : '';
   // Le devis d'où vient cette facture, et la facture tirée de ce devis. Relus
@@ -409,6 +555,7 @@ export function ouvrirDevisCrm(x, existant = null, retour = null, genreNeuf = 'f
     const suite = factureSuite();
 
     hote.innerHTML = `
+      ${frise()}
       ${signe ? `<p class="rdc-note">${annulee
           ? 'Cette facture est annulée : son contenu ne se modifie plus. Elle garde son numéro et sa place dans la suite — c’est ce que la loi demande — mais elle ne réclame plus rien.'
           : dev
@@ -497,7 +644,12 @@ export function ouvrirDevisCrm(x, existant = null, retour = null, genreNeuf = 'f
             corriger. Elle ouvre désormais le MÊME écran que la fin du parcours
             (`rgd-encaissement.js`) : deux endroits où marquer une facture
             payée auraient fini par ne plus faire la même chose. */ ''}
-      ${dev || !signe ? '' : `<div class="rdc-statut"><span class="muted small">Règlement</span>
+      ${/* ⚠ « ÉMISE », PAS « SIGNÉE » (11/11/2026) : la condition disait
+            `signe`, alors que le commentaire ci-dessus dit « une fois la
+            facture ÉMISE ». Une facture envoyée par mail et payée par virement
+            n'est signée par personne — et son encaissement était inatteignable.
+            Porter un numéro, c'est être émise. */ ''}
+      ${dev || !existant.numero ? '' : `<div class="rdc-statut"><span class="muted small">Règlement</span>
         ${existant.regle_le
           ? `<span class="chip green">Réglée le ${esc(fmtDate(existant.regle_le))}${existant.regle_par ? ' · ' + esc(MOYENS_PAIEMENT[existant.regle_par] || existant.regle_par) : ''}</span>
              <button type="button" class="btn ghost sm" id="rdc-encaisser">Revoir l’encaissement</button>`
@@ -550,7 +702,19 @@ export function ouvrirDevisCrm(x, existant = null, retour = null, genreNeuf = 'f
           : `<button type="button" class="btn ghost" id="rdc-fermer">Fermer</button>
           ${signe ? `<button type="button" class="btn ghost" id="rdc-pdf">Imprimer le PDF</button>`
             : '<button type="button" class="btn ghost" id="rdc-enregistrer">Enregistrer brouillon</button>'}
-          <button type="button" class="btn" id="rdc-suivant">Suivant</button>`}
+          ${/* ⚠ LE BOUTON DIT CE QU'IL VA FAIRE, ET DISPARAÎT QUAND TOUT EST
+                FAIT (11/11/2026, Élodie : « je ne veux pas tout refaire »). Il
+                s'appelait « Suivant » en toutes circonstances : sur une facture
+                signée, envoyée, avec son bon parti et encaissée, il invitait
+                encore à recommencer le parcours. Il nomme maintenant la
+                prochaine étape de la frise, et il n'y en a plus aucune quand
+                la frise est pleine — restent « Fermer » et le PDF. */ ''}
+          ${(() => {
+            const suite = dev ? null : prochainPas();
+            if (!dev && existant && !suite) return '';
+            return `<button type="button" class="btn" id="rdc-suivant">${
+              esc(suite ? suite.mot : 'Suivant')}</button>`;
+          })()}`}
         </div>
       </div>`;
     lier();
@@ -909,6 +1073,40 @@ export function ouvrirDevisCrm(x, existant = null, retour = null, genreNeuf = 'f
         closeModal();
       } catch (e) { toast(e.message || 'Suppression impossible', 'error'); }
     };
+    // ⚠ CHAQUE JALON FAIT SON ÉTAPE, il ne la déclare pas. Et le bouton du bas
+    // appelle LA MÊME fonction : un second chemin vers les mêmes gestes aurait
+    // fini par ne plus faire la même chose.
+    hote.querySelectorAll('[data-pas]').forEach(b => b.onclick = () => faireLePas(b.dataset.pas));
+    async function faireLePas(quoi) {
+      if (quoi === 'encaisse') {
+        const doc = existant;
+        closeModal(true);
+        ouvrirEncaissement(x, doc, () => ouvrirDevisCrm(x, db.byId('rgd_devis_crm', doc.id) || doc, retour));
+        return;
+      }
+      if (quoi === 'bon' || quoi === 'bonEnvoi') {
+        const { ouvrirBonDeLaFacture } = await import('./rgd-bon-attachement.js');
+        const doc = existant;
+        closeModal(true);
+        ouvrirBonDeLaFacture(x, doc, () => ouvrirDevisCrm(x, db.byId('rgd_devis_crm', doc.id) || doc, retour));
+        return;
+      }
+      if (quoi === 'signature') {
+        if (signe) return;
+        const d = await enregistrer();
+        if (!d) return;
+        modifie = false; existant = d; faireSigner();
+        return;
+      }
+      if (quoi === 'envoi') {
+        // Un brouillon s'enregistre d'abord : sans numéro, le mail partirait
+        // avec une facture qui n'en a pas.
+        let d = existant;
+        if (existant.statut === 'brouillon') { d = await enregistrer(); if (!d) return; }
+        modifie = false; existant = d;
+        ouvrirEnvoi(existant, null);
+      }
+    }
     const bEnr = hote.querySelector('#rdc-enregistrer');
     if (bEnr) bEnr.onclick = async () => {
       const d = await enregistrer();
@@ -926,7 +1124,22 @@ export function ouvrirDevisCrm(x, existant = null, retour = null, genreNeuf = 'f
     // mail, le bon d'attachement suit — chaque étape appelle la suivante.
     const bSuivant = hote.querySelector('#rdc-suivant');
     if (bSuivant) bSuivant.onclick = async () => {
-      if (signe) { ouvrirEnvoi(existant, bonRempli(existant) ? null : () => proposerLeBon()); return; }
+      // ⚠ SUR UNE FACTURE, IL DÉLÈGUE À LA FRISE : même étape, même geste. Sur
+      // un DEVIS il n'y a pas de frise (ni bon, ni encaissement) et le fil
+      // reste celui d'avant — enregistrer puis faire accepter, envoyer ensuite.
+      const suite = dev ? null : prochainPas();
+      if (suite) {
+        // L'envoi enchaîne sur le bon tant que celui-ci n'est pas signé : c'est
+        // le parcours du dépannage, pas un aller simple.
+        if (suite.cle === 'envoi' && signe) {
+          const b = bonDuDevis(existant);
+          ouvrirEnvoi(existant, b?.signature ? null : () => proposerLeBon());
+          return;
+        }
+        faireLePas(suite.cle);
+        return;
+      }
+      if (signe) { ouvrirEnvoi(existant, null); return; }
       const d = await enregistrer();
       if (!d) return;
       modifie = false;

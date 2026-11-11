@@ -31,11 +31,11 @@ const aujourdhui = () => new Date().toISOString().slice(0, 10);
 // l'a pas. On ne peut donc ni le montrer d'avance, ni l'accorder au reste de
 // l'écran. Un trait dessiné ici prend la couleur du thème et ne bouge nulle
 // part — et il s'affine quand la tuile est choisie.
-const ic = (d, large = false) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+export const ic = (d, large = false) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
   stroke-width="${large ? 2.4 : 1.7}" stroke-linecap="round" stroke-linejoin="round"
   aria-hidden="true">${d}</svg>`;
 
-const COCHE = ic('<path d="M4 12.5l5 5L20 6.5"/>', true);
+export const COCHE = ic('<path d="M4 12.5l5 5L20 6.5"/>', true);
 
 // ⚠ L'ORDRE EST CELUI D'UN DÉPANNAGE CHEZ UN PARTICULIER, pas l'alphabet : la
 // carte d'abord parce que c'est ce que Franck tendra au client sur place, les

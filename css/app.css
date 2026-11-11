@@ -7835,6 +7835,65 @@ tr.est-modifie td { background: var(--accent-soft); }
 /* ⚠ LA PHRASE DE SUPPRESSION EST AMBRÉE, PAS ROUGE : rien n'est cassé, et la
    corbeille rattrape le geste. Le rouge est gardé pour ce qui ne se reprend
    pas — la purge de la corbeille. */
+/* ⚠ LA FRISE DE LA FACTURE EMPRUNTE CELLE DE LA FICHE (`rgdf-piste`), et ne
+   pose ici que ses écarts : elle vit dans une fenêtre, pas en tête d'une page.
+   Un filet la sépare du formulaire, sans quoi les pastilles flottaient
+   au-dessus des prestations sans qu'on sache à quoi elles appartenaient. */
+.rdc-pas { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr);
+  list-style: none; margin: 2px 0 18px; padding: 2px 0 16px;
+  border-bottom: 1px solid var(--line); }
+.rdc-pas-item { position: relative; min-width: 0; }
+/* ⚠ LE TRAIT EST POSÉ PAR CHAQUE ÉTAPE SUR SA GAUCHE, et pas par un rail
+   absolu calculé en pourcentage : avec cinq colonnes égales, chaque segment
+   relie exactement deux pastilles quelle que soit la largeur — téléphone
+   compris. Le rail calculé de la fiche projet, lui, tombait toujours un peu
+   à côté des points. */
+.rdc-pas-item::before { content: ''; position: absolute; left: -50%; right: 50%; top: 19px;
+  height: 3px; border-radius: 2px; background: var(--line); }
+.rdc-pas-item:first-child::before { display: none; }
+.rdc-pas-item.est-fait::before, .rdc-pas-item.est-courant::before {
+  background: linear-gradient(90deg, var(--accent-2), var(--accent)); }
+.rdc-pas-bouton { display: flex; flex-direction: column; align-items: center; gap: 6px;
+  width: 100%; padding: 2px 2px 0; background: none; border: 0; cursor: pointer;
+  font: inherit; color: inherit; }
+.rdc-pas-pastille { position: relative; z-index: 1; display: grid; place-items: center;
+  width: 36px; height: 36px; border-radius: 50%; background: var(--card);
+  border: 2px solid var(--line); color: var(--muted);
+  transition: transform .18s ease, background .18s ease, border-color .18s ease,
+    color .18s ease, box-shadow .18s ease; }
+.rdc-pas-pastille svg { width: 17px; height: 17px; }
+.est-fait .rdc-pas-pastille { border-color: transparent; color: var(--on-accent);
+  background: linear-gradient(135deg, var(--accent), var(--accent-2)); }
+.est-courant .rdc-pas-pastille { border-color: var(--accent); color: var(--accent);
+  transform: scale(1.06); animation: rdc-pouls 2.6s ease-in-out infinite; }
+.rdc-pas-bouton:hover:not(:disabled) .rdc-pas-pastille { transform: translateY(-2px) scale(1.07); }
+.rdc-pas-bouton:focus-visible .rdc-pas-pastille { outline: 2px solid var(--accent); outline-offset: 3px; }
+.rdc-pas-nom { font-size: 12px; font-weight: 600; color: var(--muted); line-height: 1.2;
+  text-align: center; overflow-wrap: anywhere; }
+.est-fait .rdc-pas-nom { color: var(--text); }
+.est-courant .rdc-pas-nom { color: var(--accent-ink); font-weight: 800; }
+.rdc-pas-quand { font-size: 10.5px; color: var(--muted); line-height: 1.2; min-height: 1em; }
+.est-courant .rdc-pas-quand { color: var(--accent); font-weight: 700; }
+.rdc-pas-bouton:disabled { cursor: default; opacity: .42; }
+
+/* ⚠ LE HALO RESPIRE, IL NE CLIGNOTE PAS : 2,6 s et deux opacités proches. Une
+   pulsation rapide dans un coin de l'œil se remarque une fois puis fatigue. */
+@keyframes rdc-pouls {
+  0%, 100% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 15%, transparent); }
+  50% { box-shadow: 0 0 0 10px color-mix(in srgb, var(--accent) 5%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .est-courant .rdc-pas-pastille { animation: none;
+    box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 15%, transparent); }
+}
+@media screen and (max-width: 560px) {
+  .rdc-pas-pastille { width: 32px; height: 32px; }
+  .rdc-pas-pastille svg { width: 15px; height: 15px; }
+  .rdc-pas-item::before { top: 17px; }
+  .rdc-pas-nom { font-size: 10.5px; }
+  .rdc-pas-quand { font-size: 9.5px; }
+}
+
 /* ---- encaisser une facture (11/11/2026) ----
    ⚠ LA TUILE DU MONTANT EST CELLE DU TABLEAU DE BORD, pas une invention :
    même dégradé à 135°, même pastille claire en haut à droite, même ombre
