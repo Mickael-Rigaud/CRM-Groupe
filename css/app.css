@@ -8117,17 +8117,24 @@ tr.est-modifie td { background: var(--accent-soft); }
 @keyframes pl-pouls { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--pl-c) 55%, transparent); }
   70% { box-shadow: 0 0 0 7px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
 .pl-frise-piste { position: relative; min-height: 52px; }
-.pl-frise-tete { min-height: 44px; position: sticky; top: 0; z-index: 4;
+.pl-frise-tete { min-height: 66px; position: sticky; top: 0; z-index: 4;
   background: linear-gradient(180deg, var(--card-2), var(--card)); border-bottom: 1px solid var(--line); }
 .pl-frise-tete .pl-frise-nom { background: var(--card-2); }
 .pl-frise-tete .pl-frise-nom span { font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
-.pl-frise-mois { position: absolute; top: 0; bottom: 0; display: flex; align-items: center; padding-left: 6px; }
+.pl-frise-mois { position: absolute; top: 0; height: 40px; display: flex; align-items: center; padding-left: 6px; }
 .pl-frise-mois span { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--muted);
   white-space: nowrap; padding: 4px 10px; border-radius: 99px; }
 .pl-frise-mois small { margin-left: 4px; font-weight: 800; color: #c2410c; }
 .pl-frise-mois.courant span { background: #fd7a2d; color: #fff; box-shadow: 0 4px 12px -4px rgba(253, 122, 45, .6); }
 .pl-frise-mois.courant small { color: #fff; }
-.pl-frise-auj-pastille { position: absolute; bottom: -9px; transform: translateX(-50%); z-index: 5; font-size: 10px; font-weight: 800;
+/* Les numéros de semaine, sous les mois (11/11/2026). */
+.pl-frise-semaines { position: absolute; left: 0; right: 0; top: 40px; height: 22px; }
+.pl-frise-sem { position: absolute; top: 0; bottom: 0; display: flex; align-items: center; justify-content: center;
+  font-size: 10.5px; font-weight: 700; color: var(--muted); border-left: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+  white-space: nowrap; overflow: hidden; }
+.pl-frise-sem.courante { color: #fff; background: color-mix(in srgb, #fd7a2d 85%, #fff); border-radius: 6px; font-weight: 800; }
+.pl-frise-fond b { position: absolute; top: 0; bottom: 0; border-left: 1px dashed color-mix(in srgb, var(--line) 75%, transparent); }
+.pl-frise-auj-pastille { position: absolute; bottom: -13px; transform: translateX(-50%); z-index: 5; font-size: 10px; font-weight: 800;
   color: #fff; background: #dc2626; padding: 2px 8px; border-radius: 99px; white-space: nowrap;
   box-shadow: 0 3px 8px -2px rgba(220, 38, 38, .5); }
 /* Les barres : des pilules en dégradé, qui s'allongent à l'ouverture. */
@@ -8160,7 +8167,7 @@ tr.est-modifie td { background: var(--accent-soft); }
 .pl-frise-barre.est-passe { background: linear-gradient(135deg, #cbd5e1, #e2e8f0); color: #475569; box-shadow: none; }
 .pl-frise-barre.est-passe em { background: rgba(255, 255, 255, .6); }
 /* Le fond : une bande par mois, une sur deux teintée, le mois courant en orange pâle. */
-.pl-frise-fond { position: absolute; top: 44px; bottom: 0; left: var(--pl-nom); width: var(--pl-larg); pointer-events: none; z-index: 1; }
+.pl-frise-fond { position: absolute; top: 66px; bottom: 0; left: var(--pl-nom); width: var(--pl-larg); pointer-events: none; z-index: 1; }
 .pl-frise-fond i { position: absolute; top: 0; bottom: 0; border-left: 1px solid color-mix(in srgb, var(--line) 70%, transparent); }
 .pl-frise-fond i.pair { background: color-mix(in srgb, var(--card-2) 55%, transparent); }
 .pl-frise-fond i.courant { background: color-mix(in srgb, #fd7a2d 6%, transparent); }

@@ -222,6 +222,16 @@ function bornesFrise(tous) {
   return { de, a };
 }
 
+// Le numéro de semaine ISO (celui des agendas français : la semaine 1 est
+// celle qui contient le premier jeudi de janvier).
+function semaineIso(d) {
+  const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const jour = t.getUTCDay() || 7;
+  t.setUTCDate(t.getUTCDate() + 4 - jour);
+  const debutAn = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
+  return Math.ceil(((t - debutAn) / 86400000 + 1) / 7);
+}
+
 function frise(tous) {
   const { de, a } = bornesFrise(tous);
   const pos = (iso) => Math.round((versDate(iso) - versDate(de)) / 86400000);
@@ -246,11 +256,28 @@ function frise(tous) {
   const lignes = tous.map((c, i) => ({ c, i, fin: finDe(c), e: etatDe(c) }))
     .sort((x, y) => rang[x.e.cle] - rang[y.e.cle] || String(x.c.date_debut).localeCompare(String(y.c.date_debut)));
   const xAuj = pos(auj) * PX_JOUR + PX_JOUR / 2;
+  // ⚠ LES NUMÉROS DE SEMAINE (11/11/2026, Élodie : « sur la frise de tous les
+  // chantiers je voudrais avoir le numéro des semaines »). Une case par
+  // semaine, du lundi au dimanche, sous la ligne des mois ; la semaine en
+  // cours est surlignée, et un trait léger marque chaque lundi dans la frise.
+  const semaines = [], lundis = [];
+  const premierLundi = versDate(de);
+  premierLundi.setDate(premierLundi.getDate() - ((premierLundi.getDay() + 6) % 7));
+  for (let d = new Date(premierLundi); versIso(d) <= a; d.setDate(d.getDate() + 7)) {
+    const x = pos(versIso(d)) * PX_JOUR;
+    const n = semaineIso(d);
+    const dimanche = new Date(d); dimanche.setDate(d.getDate() + 6);
+    const courante = auj >= versIso(d) && auj <= versIso(dimanche);
+    semaines.push(`<div class="pl-frise-sem${courante ? ' courante' : ''}" style="left:${x}px; width:${7 * PX_JOUR}px"
+      title="Semaine ${n} — du ${esc(dateCourte(versIso(d)))} au ${esc(dateCourte(versIso(dimanche)))}">S${n}</div>`);
+    if (x > 0) lundis.push(`<b style="left:${x}px"></b>`);
+  }
   return `
     <div class="pl-frise-defile" data-auj="${xAuj}">
       <div class="pl-frise" style="--pl-larg:${largeur}px">
         <div class="pl-frise-ligne pl-frise-tete"><div class="pl-frise-nom"><span>${lignes.length} chantier${lignes.length > 1 ? 's' : ''}</span></div>
           <div class="pl-frise-piste">${mois.join('')}
+            <div class="pl-frise-semaines">${semaines.join('')}</div>
             <div class="pl-frise-auj-pastille" style="left:${xAuj}px">Aujourd’hui</div></div></div>
         ${lignes.length ? lignes.map((x, k) => {
           const jours = pos(x.fin) - pos(x.c.date_debut) + 1;
@@ -270,7 +297,7 @@ function frise(tous) {
           </div></div>`;
         }).join('')
           : '<div class="pl-frise-ligne"><div class="pl-frise-nom"><span>Aucun chantier planifié.</span></div><div class="pl-frise-piste"></div></div>'}
-        <div class="pl-frise-fond">${bandes.join('')}<div class="pl-frise-auj" style="left:${xAuj}px"></div></div>
+        <div class="pl-frise-fond">${bandes.join('')}${lundis.join('')}<div class="pl-frise-auj" style="left:${xAuj}px"></div></div>
       </div>
     </div>`;
 }
