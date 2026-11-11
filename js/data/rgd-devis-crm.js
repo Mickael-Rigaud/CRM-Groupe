@@ -663,6 +663,50 @@ async function envoyerDocument({ a, nom, objet, message, copie }, pdf, { chemin,
   return { ok: true };
 }
 
+// ⚠ REPRENDRE UNE INTERVENTION INTERROMPUE (11/11/2026, Élodie : « si le
+// processus se coupe pour je ne sais quelle raison, on doit pouvoir retrouver
+// ce qu'on était en train de faire »).
+//
+// ⚠ RIEN N'EST GARDÉ DANS LE NAVIGATEUR, ET C'EST TOUT LE DESSIN. Un brouillon
+// local aurait été le réflexe : il meurt avec l'onglet, ne suit pas d'un
+// téléphone à l'autre, et se périme dès qu'un autre écran écrit la même
+// facture. Chaque étape du parcours écrit DÉJÀ en base — brouillon, signée,
+// envoyée, bon créé, bon signé, bon envoyé. La reprise n'est donc pas une
+// mémoire à tenir, c'est une LECTURE : on regarde où s'arrête la trace.
+//
+// ⚠ L'ÉTAPE EST LA PREMIÈRE QUI MANQUE, dans l'ordre du parcours. Une facture
+// signée mais non envoyée attend son envoi, même si son bon existe déjà.
+//
+// ⚠ ET ON NE REMONTE PAS PLUS LOIN QUE QUINZE JOURS : au-delà, ce n'est plus
+// une intervention interrompue, c'est un dossier en souffrance — il se voit
+// dans la fiche et dans le pipeline, pas dans un bandeau « reprenez ».
+const JOURS_REPRISE = 15;
+
+export function interventionsEnCours() {
+  const limite = new Date(Date.now() - JOURS_REPRISE * 86400000).toISOString();
+  const bons = scope.rgd('rgd_bons');
+  return scope.rgd('rgd_devis_crm')
+    .filter(d => d.genre !== 'devis' && !d.annule_le)
+    .map((devis) => {
+      const bon = bons.find(b => b.devis_id === devis.id) || null;
+      const etape = devis.statut === 'brouillon' ? 'facture'
+        : !devis.envoye_le ? 'envoi'
+        : !bon || !bon.signature ? 'bon'
+        : !bon.envoye_le ? 'bon_envoi' : null;
+      return { devis, bon, etape, quand: devis.updated_at || devis.created_at || '' };
+    })
+    .filter(i => i.etape && String(i.quand) >= limite)
+    .sort((a, b) => String(b.quand).localeCompare(String(a.quand)));
+}
+
+/** Ce qu'il reste à faire, en une phrase. */
+export const ETAPES_REPRISE = {
+  facture: { mot: 'Facture à finir', aide: 'elle n’est pas encore signée' },
+  envoi: { mot: 'Facture à envoyer', aide: 'signée, elle n’est pas partie au client' },
+  bon: { mot: 'Bon d’attachement à faire signer', aide: 'la facture est partie' },
+  bon_envoi: { mot: 'Bon d’attachement à envoyer', aide: 'il est signé des deux côtés' },
+};
+
 /**
  * Envoyer le devis ou la facture. `pdf` vient de `pdfDevisCrm`.
  * Rend { ok } ou { ok: false, motif }. Un brouillon passe en « Envoyé ».
@@ -685,6 +729,20 @@ export async function envoyerDevisCrm(devis, dest, pdf) {
   if (devis.statut === 'brouillon') {
     try { await changerStatutDevisCrm(devis, 'envoye'); } catch (e) { console.warn('[RGD] devis envoyé, statut non changé :', e.message); }
   }
+  // ⚠ LA DATE D'ENVOI MANQUAIT, ET SON ABSENCE A COÛTÉ CHER (11/11/2026).
+  // Seul un BROUILLON laissait une marque, en passant à « Envoyé ». Une facture
+  // SIGNÉE envoyée au client ne changeait rien du tout : le CRM ne savait pas
+  // dire si elle était partie. Élodie a fait tout le parcours, n'a reçu que le
+  // bon d'attachement, et rien à l'écran ne permettait de le constater.
+  //
+  // ⚠ ELLE S'ÉCRIT APRÈS COUP ET SANS BLOQUER : le mail est DÉJÀ parti quand on
+  // arrive ici. Si l'écriture échoue, le client a quand même reçu son document
+  // — on le dit en console, on ne fait pas croire à un échec d'envoi.
+  try {
+    await db.update('rgd_devis_crm', devis.id, {
+      envoye_le: new Date().toISOString(), envoye_a: dest.a || null,
+    });
+  } catch (e) { console.warn('[RGD] document envoyé, trace non écrite :', e.message); }
   return { ok: true };
 }
 
@@ -695,11 +753,21 @@ export async function envoyerDevisCrm(devis, dest, pdf) {
  * passer une facture en « Envoyée » : ce sont deux documents, et c'est le
  * suivi des règlements qui s'en trouverait faussé.
  */
-export const envoyerBonAttachement = (bon, dest, pdf) =>
-  envoyerDocument(dest, pdf, {
+export async function envoyerBonAttachement(bon, dest, pdf) {
+  const r = await envoyerDocument(dest, pdf, {
     // ⚠ LE CHEMIN PART DE L'IDENTIFIANT DU BON, plus de celui de la facture :
     // un bon autonome n'en a pas, et deux bons du même dossier se seraient
     // écrasés l'un l'autre dans le seau.
     chemin: `bon-${bon.id}.pdf`,
     mot: 'mon bon d’attachement',
   });
+  if (!r.ok) return r;
+  // Même trace que pour la facture, et pour la même raison : c'est elle qui
+  // dit qu'une intervention est terminée, et non pas interrompue.
+  try {
+    await db.update('rgd_bons', bon.id, {
+      envoye_le: new Date().toISOString(), envoye_a: dest.a || null,
+    });
+  } catch (e) { console.warn('[RGD] bon envoyé, trace non écrite :', e.message); }
+  return { ok: true };
+}

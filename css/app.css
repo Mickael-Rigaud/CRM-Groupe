@@ -7815,6 +7815,20 @@ tr.est-modifie td { background: var(--accent-soft); }
    téléphone tendu au client auraient enterré ce qu'il vient signer ; repliées,
    elles restent à un doigt. Le texte garde ses retours à la ligne et défile
    dans sa boîte, pour ne pas pousser le cadre de signature hors de l'écran. */
+/* ⚠ LE BANDEAU « À REPRENDRE » : une carte comme les autres, mais ambrée —
+   elle demande quelque chose, là où le reste de l'écran raconte. Pas rouge :
+   rien n'est cassé, une intervention s'est juste arrêtée en chemin. */
+.rdc-reprise { border-left: 4px solid var(--amber); }
+.rdc-repr { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+  padding: 11px 13px; margin-top: 8px; border: 1px solid var(--line); border-radius: 12px;
+  background: var(--card); cursor: pointer; font: inherit; color: inherit;
+  transition: border-color .12s, background .12s, transform .12s; }
+.rdc-repr:hover { border-color: var(--amber); background: color-mix(in srgb, var(--amber) 8%, var(--card));
+  transform: translateX(2px); }
+.rdc-repr-quoi { flex: 1; min-width: 0; }
+.rdc-repr-quoi b { display: block; font-size: 14px; }
+.rdc-repr-quoi small { display: block; font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+.rdc-repr-fleche { flex: none; color: var(--amber); font-size: 15px; }
 .rdc-cgv { border: 1px solid var(--line); border-radius: 12px; background: var(--card-2);
   margin: 0 0 14px; overflow: hidden; }
 .rdc-cgv-tete { padding: 11px 14px; cursor: pointer; font-size: 13.5px; font-weight: 700;

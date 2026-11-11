@@ -44,6 +44,10 @@ import { etapesRgd, ETAPES_HORS_CYCLE } from '../data/rgd-etapes.js';
 import { objectifsMensuels, moisObjectifs, tauxPeriode, taux, detailMoisObjectif } from '../data/rgd-objectifs.js';
 import { encadreCaOuvrier } from './rgd-ca-ouvrier.js';
 import { carteBilan } from './rgd-bilan.js';
+// ⚠ LE BANDEAU « À REPRENDRE » VIT SUR CET ÉCRAN, et pas sur la fiche : c'est
+// celui qu'on ouvre en arrivant, et le propre d'une intervention interrompue
+// est qu'on ne sait plus chez QUI on en était.
+import { blocReprise, brancherReprise } from './rgd-devis-crm.js';
 import { bilanCommercial } from '../data/rgd-bilan.js';
 
 // L'exercice comptable de RGD Renova : 1er octobre → 30 septembre, aligné sur
@@ -757,6 +761,7 @@ function vueOuvrier({ etapes, rdv, aujourdhui, vide }) {
     <span class="rgd-et-n">${n(g.cles)}</span>
     <span class="rgd-et-label">${esc(g.label)}</span></a>`).join('');
   return `
+    ${blocReprise()}
     <section class="card rgd-jour">
       <div class="card-head"><h2>Aujourd’hui</h2>
         <span class="grow"></span>
@@ -824,6 +829,7 @@ export const rgdPilotagePage = {
       if (scope.isOuvrier) {
         root.innerHTML = cadre('#/rgd', 'Vue d’ensemble',
           vueOuvrier({ etapes: etapesRgd(), rdv, aujourdhui, vide: journeeVide('intervention') }));
+        brancherReprise(root, draw);
         return;
       }
       const reglage =(cle) => scope.rgd('rgd_reglages').find(r => r.cle === cle)?.valeur ?? null;
@@ -974,6 +980,11 @@ export const rgdPilotagePage = {
       // cinq cents lignes mortes et quatre appels d'API que personne ne lit.
       // Elles restent dans l'historique Git, qui est fait pour ça.
       const corps = `
+        ${/* ⚠ IL PASSE AVANT LE PIPELINE, et c'est la seule chose qui le
+              mérite : une facture signée qui n'est pas partie se règle en une
+              minute, et elle attend le client. Le reste de l'écran raconte,
+              celui-ci demande. */ ''}
+        ${blocReprise()}
         ${/* ⚠ L'ORDRE DE L'ÉCRAN, ARRÊTÉ PAR ÉLODIE LE 10/11/2026 : le pipeline
               et la journée d'abord, les objectifs EN DESSOUS, le bilan en
               dernier. Les tuiles sont montées tout en haut pendant une heure ce
@@ -1058,6 +1069,7 @@ ${carteBilan(new Date(), alerteSync)}
         a rien à faire, alors que le CRM n’en sait rien.</p>`;
 
       root.innerHTML = cadre('#/rgd', 'Vue d’ensemble', corps);
+      brancherReprise(root, draw);
     };
 
     draw();

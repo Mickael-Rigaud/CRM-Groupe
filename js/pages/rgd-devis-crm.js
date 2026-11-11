@@ -26,6 +26,7 @@ import {
   MOYENS_PAIEMENT, marquerReglee, annulerReglement,
   GENRES, genreDe, estDevis, statutsDe, statutDoc, facturerLeDevis, factureDuDevis, devisDeLaFacture,
   estAnnulee, annulerFacture, retablirFacture,
+  interventionsEnCours, ETAPES_REPRISE,
 } from '../data/rgd-devis-crm.js';
 import { posePadSignature } from '../pad-signature.js';
 import { lireCgv } from '../data/rgd-cgv.js';
@@ -141,6 +142,80 @@ export function blocDevisCrm(devis, peutFaire) {
  * et sur téléphone la réponse doit rester sous le doigt, pas à l'autre bout de
  * l'écran. Même procédé que `confirmerSuppr` pour la suppression du devis.
  */
+/**
+ * Le bandeau « reprendre » de la vue d'ensemble.
+ *
+ * ⚠ IL NE S'AFFICHE QUE S'IL Y A QUELQUE CHOSE À REPRENDRE : un bandeau
+ * permanent qui dit « rien en cours » occupe la place de ce qu'on est venu
+ * voir, et on cesse de le lire le troisième jour.
+ *
+ * ⚠ ET IL DIT OÙ ÇA S'EST ARRÊTÉ, pas seulement qu'il s'est arrêté : « signée,
+ * elle n'est pas partie au client » se corrige, « intervention incomplète »
+ * se devine.
+ */
+export function blocReprise() {
+  const l = interventionsEnCours();
+  if (!l.length) return '';
+  return `<section class="card rdc-reprise">
+    <div class="card-head"><h2>À reprendre</h2>
+      <span class="grow"></span>
+      <span class="muted small">interrompu${l.length > 1 ? 's' : ''} en cours de route</span></div>
+    ${l.slice(0, 4).map((i) => {
+      const e = ETAPES_REPRISE[i.etape];
+      const qui = nomDuDossier(i.devis);
+      return `<button type="button" class="rdc-repr" data-reprendre="${esc(i.devis.id)}">
+        <span class="rdc-repr-quoi"><b>${esc(e.mot)}</b>
+          <small>${esc(qui)}${i.devis.numero ? ' · ' + esc(i.devis.numero) : ''} — ${esc(e.aide)}</small></span>
+        <span class="rdc-repr-fleche" aria-hidden="true">▸</span>
+      </button>`;
+    }).join('')}
+  </section>`;
+}
+
+/** Le nom qu'on lit sur le bandeau : celui de la fiche ou de la demande. */
+function nomDuDossier(devis) {
+  const f = devis.fiche_id && db.byId('rgd_clients', devis.fiche_id);
+  if (f) return nomDeLaFiche(f);
+  const d = devis.demande_id && db.byId('rgd_demandes', devis.demande_id);
+  if (d) return [d.prenom, d.nom].filter(Boolean).join(' ').trim() || 'Demande';
+  return 'Dossier';
+}
+
+const nomDeLaFiche = (f) => {
+  const c = f.contact_id && db.byId('contacts', f.contact_id);
+  if (c) return [c.first_name, c.last_name].filter(Boolean).join(' ').trim() || '—';
+  const o = f.organisation_id && db.byId('organisations', f.organisation_id);
+  return o?.name || '—';
+};
+
+/**
+ * Brancher le bandeau. `root` est l'écran, `apres` le redessin à rappeler.
+ *
+ * ⚠ ON ROUVRE À L'ÉTAPE, PAS AU DÉBUT : une facture signée rouvre sur son
+ * écran, où « Suivant » est devenu l'envoi ; un bon à signer rouvre le bon.
+ * Rouvrir au premier écran du parcours aurait fait reprendre d'en haut ce qui
+ * est déjà fait — c'est-à-dire exactement ce qu'elle veut éviter.
+ */
+export function brancherReprise(root, apres = null) {
+  root.querySelectorAll('[data-reprendre]').forEach((b) => {
+    b.onclick = async () => {
+      const devis = db.byId('rgd_devis_crm', b.dataset.reprendre);
+      if (!devis) { toast('Document introuvable', 'error'); return; }
+      const i = interventionsEnCours().find(k => k.devis.id === devis.id);
+      const fiche = devis.fiche_id && db.byId('rgd_clients', devis.fiche_id);
+      if (!fiche) { toast('Dossier introuvable', 'error'); return; }
+      const { ficheDe } = await import('./rgd-clients.js');
+      const x = ficheDe(fiche, () => 'devis_accepte');
+      if (i && (i.etape === 'bon' || i.etape === 'bon_envoi')) {
+        const { ouvrirBonDeLaFacture } = await import('./rgd-bon-attachement.js');
+        ouvrirBonDeLaFacture(x, devis, apres);
+        return;
+      }
+      ouvrirDevisCrm(x, devis, apres);
+    };
+  });
+}
+
 export function ouvrirDevisCrm(x, existant = null, retour = null, genreNeuf = 'facture') {
   const metiers = metiersAvecGrille();
   if (!existant && !metiers.length) { toast('Aucune grille de tarifs n’est en place', 'error'); return; }
