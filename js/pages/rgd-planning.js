@@ -571,10 +571,18 @@ function formulaire(c, defaut = {}) {
   const duree = c ? dureeLue(c) : { nombre: 1, unite: 'jours' };
   const couleur = c?.couleur || '';
   return `
+    ${'' /* ⚠ FORMULAIRE RESSERRÉ (11/11/2026, Élodie : « remonter toutes les
+       infos pour laisser de la place en bas » — la place servira aux cahiers
+       des charges ouvriers / clients). Trois rangs : Chantier + Dossier ;
+       Début + Durée + Couleur ; Notes + Partage. L'adresse n'est plus un
+       champ : elle est reprise du dossier choisi (champ caché), et reste
+       affichée sous le nom du dossier. */}
     <form class="pl-form" id="pl-form">
-      <label class="pl-champ pl-large"><span>Chantier</span>
+      <input type="hidden" name="adresse" value="${esc(c?.adresse || '')}">
+      <div class="pl-rang pl-rang-1">
+      <label class="pl-champ"><span>Chantier</span>
         <input name="titre" required value="${esc(c?.titre || '')}" placeholder="Ex. Rénovation salle de bain — Dupont"></label>
-      <div class="pl-champ pl-large"><span>Dossier client</span>
+      <div class="pl-champ"><span>Dossier client</span>
         <input type="hidden" name="rattachement" value="${esc(actuel)}">
         ${'' /* ⚠ LE SÉLECTEUR SE REPLIE UNE FOIS UN DOSSIER CHOISI (11/11/2026,
            Élodie : « lorsque l'on clique sur un dossier client, la liste
@@ -604,6 +612,8 @@ function formulaire(c, defaut = {}) {
             <p class="muted small pl-rien" hidden>Aucun dossier ne correspond à cette recherche.</p>
           </div>
         </div></div>
+      </div>
+      <div class="pl-rang pl-rang-2">
       <label class="pl-champ"><span>Début</span>
         <input type="date" name="date_debut" required value="${esc(c?.date_debut || defaut.date_debut || '')}"></label>
       <div class="pl-champ"><span>Durée</span>
@@ -613,17 +623,17 @@ function formulaire(c, defaut = {}) {
             ${Object.entries(UNITES).map(([k, u]) => `<option value="${k}"${duree.unite === k ? ' selected' : ''}>${esc(u.plusieurs)}</option>`).join('')}
           </select>
         </div></div>
-      <p class="pl-fin" id="pl-fin"></p>
-      <label class="pl-champ pl-large"><span>Adresse du chantier</span>
-        <input name="adresse" value="${esc(c?.adresse || '')}" placeholder="Reprise du dossier client choisi"></label>
-      <div class="pl-champ pl-large"><span>Couleur</span>
+      <div class="pl-champ"><span>Couleur</span>
         <div class="pl-couleurs">
-          <label class="pl-pastille auto"><input type="radio" name="couleur" value=""${!couleur ? ' checked' : ''}><i></i>Auto</label>
+          <label class="pl-pastille auto" title="Automatique"><input type="radio" name="couleur" value=""${!couleur ? ' checked' : ''}><i></i></label>
           ${COULEURS.map(k => `<label class="pl-pastille"><input type="radio" name="couleur" value="${k}"${couleur === k ? ' checked' : ''}><i style="background:${k}"></i></label>`).join('')}
         </div></div>
-      <label class="pl-champ pl-large"><span>Notes</span>
+      <p class="pl-fin" id="pl-fin"></p>
+      </div>
+      <div class="pl-rang pl-rang-3">
+      <label class="pl-champ"><span>Notes</span>
         <textarea name="notes" rows="2">${esc(c?.notes || '')}</textarea></label>
-      <div class="pl-champ pl-large"><span>Partager avec</span>
+      <div class="pl-champ"><span>Partager avec</span>
         ${equipe.length ? `<div class="pl-partage">
           ${equipe.map(u => `<label class="pl-membre"><input type="checkbox" name="partage" value="${esc(u.id)}"${
             partage.has(u.id) ? ' checked' : ''}><span>${esc(u.full_name || u.email || 'Sans nom')}</span></label>`).join('')}
@@ -631,7 +641,8 @@ function formulaire(c, defaut = {}) {
         <small class="muted">La personne voit ce chantier dans son planning et peut cocher ses listes ; elle ne change ni les dates ni le dossier.</small>`
         : '<small class="muted">Personne dans l’équipe RGD à qui le partager.</small>'}
       </div>
-      <div class="form-actions pl-large">
+      </div>
+      <div class="form-actions">
         ${c ? '<button type="button" class="btn danger ghost" id="pl-suppr">Supprimer le chantier</button>' : ''}
         <span class="grow"></span>
         <button type="button" class="btn ghost" data-close>Fermer</button>
@@ -713,7 +724,9 @@ function brancher(m, c, apres) {
   // Le choix du dossier : un clic le retient, la liste se replie sur lui
   // (11/11/2026) et l'ADRESSE DU CHANTIER EST REMPLIE PAR CELLE DU DOSSIER —
   // remplacée, pas seulement complétée : changer de dossier doit changer
-  // l'adresse. On peut toujours la corriger à la main ensuite.
+  // l'adresse. Depuis le 11/11/2026 ce n'est plus un champ visible.
+  // Ouverte, la liste flotte sous la recherche (classe `ouvert`) au lieu de
+  // pousser le reste du formulaire vers le bas.
   // La recherche porte sur le nom, le projet et l'adresse.
   const boite = m.querySelector('.pl-choix');
   const choisir = (bouton) => {
@@ -724,18 +737,26 @@ function brancher(m, c, apres) {
       const retenu = boite.querySelector('.pl-choix-retenu > div');
       retenu.innerHTML = `<b>${esc(bouton.dataset.nom)}</b>${bouton.dataset.projet ? `<span>${esc(bouton.dataset.projet)}</span>` : ''}${
         bouton.dataset.adresse ? `<em>${esc(bouton.dataset.adresse)}</em>` : ''}`;
-      if (bouton.dataset.adresse) form.adresse.value = bouton.dataset.adresse;
-    }
+      form.adresse.value = bouton.dataset.adresse || '';
+    } else form.adresse.value = '';
     boite.classList.toggle('replie', !!cle);
+    boite.classList.remove('ouvert');
   };
+  const ouvrir = () => boite.classList.add('ouvert');
+  const surDehors = (e) => { if (!boite.isConnected) document.removeEventListener('pointerdown', surDehors);
+    else if (!boite.contains(e.target)) boite.classList.remove('ouvert'); };
+  document.addEventListener('pointerdown', surDehors);
   m.querySelectorAll('.pl-dossier').forEach(b => b.onclick = () => choisir(b));
   m.querySelector('[data-aucun]').onclick = () => choisir(null);
   m.querySelector('[data-changer]').onclick = () => {
     boite.classList.remove('replie');
+    ouvrir();
     m.querySelector('.pl-cherche').focus();
   };
   const cherche = m.querySelector('.pl-cherche');
+  cherche.onfocus = ouvrir; cherche.onclick = ouvrir;
   cherche.oninput = () => {
+    ouvrir();
     const mots = cherche.value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(/\s+/).filter(Boolean);
     let vus = 0;
     m.querySelectorAll('.pl-groupe').forEach(g => {
@@ -750,7 +771,8 @@ function brancher(m, c, apres) {
     const rien = m.querySelector('.pl-rien'); if (rien) rien.hidden = !!vus || !mots.length;
   };
   // Entrée dans la recherche ne doit pas enregistrer le chantier.
-  cherche.onkeydown = (e) => { if (e.key === 'Enter') e.preventDefault(); };
+  cherche.onkeydown = (e) => { if (e.key === 'Enter') e.preventDefault();
+    if (e.key === 'Escape' && boite.classList.contains('ouvert')) { e.stopPropagation(); boite.classList.remove('ouvert'); } };
   form.onsubmit = async (e) => {
     e.preventDefault();
     const [genre, id] = (form.rattachement.value || ':').split(':');
