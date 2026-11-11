@@ -677,10 +677,22 @@ export function ouvrirDevisCrm(x, existant = null, retour = null, genreNeuf = 'f
    * ferait fermer la fenêtre — et la fermer ici fermait aussi la facture.
    */
   function proposerLeBon() {
-    m.querySelector('.modal-head h2').textContent = `${G.label} ${existant.numero || ''} signée`;
+    // ⚠ « ENVOYÉE », PAS « SIGNÉE » (11/11/2026, Élodie : « quand la facture
+    // est envoyée je voudrais plutôt Facture XXXX envoyée à la place de Facture
+    // XXX signée »). On arrive ici APRÈS un envoi réussi : l'écran annonçait le
+    // fait précédent, celui qu'on venait de dépasser, et on se demandait si le
+    // mail était bien parti. Le mot se lit sur `envoye_le`, pas sur le chemin
+    // emprunté : quelle que soit la porte, il dit ce qui est vrai.
+    // ⚠ ON RELIT LA LIGNE DU CACHE, PAS `existant` : l'envoi a écrit `envoye_le`
+    // par `db.update`, qui REMPLACE l'objet du cache — celui que cette
+    // fermeture tient encore date d'avant l'envoi, et le mot serait resté
+    // « signée » exactement dans le cas qu'Élodie signale.
+    const fraiche = db.byId('rgd_devis_crm', existant.id) || existant;
+    const fait = fraiche.envoye_le ? (dev ? 'envoyé' : 'envoyée') : (dev ? 'signé' : 'signée');
+    m.querySelector('.modal-head h2').textContent = `${G.label} ${existant.numero || ''} ${fait}`;
     hote.innerHTML = `
       <div class="rdc-apres">
-        <p class="rdc-apres-titre">✓ ${esc(G.label)} ${esc(existant.numero || '')} signée</p>
+        <p class="rdc-apres-titre">✓ ${esc(G.label)} ${esc(existant.numero || '')} ${esc(fait)}</p>
         <p class="rdc-aide">Le client est encore là : son <b>bon d’attachement</b> se remplit et se
         signe maintenant. Il constate les heures passées et les fournitures posées — c’est la pièce
         qu’on ressort si elles sont contestées.</p>
