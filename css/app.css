@@ -7804,6 +7804,25 @@ tr.est-modifie td { background: var(--accent-soft); }
    là où on va le corriger, pas en bas à côté d'un bouton grisé. */
 .rba-manque { font-size: 13px; background: color-mix(in srgb, var(--amber) 12%, var(--card));
   border-left: 3px solid var(--amber); padding: 8px 12px; border-radius: 6px; margin: 14px 0 0; }
+/* ⚠ UNE CHECK-LIST SE POINTE AVEC LE POUCE : une rangée par ligne, toute la
+   largeur, 44 px de haut — la taille d'une cible qu'on touche sans viser. Les
+   étiquettes en ligne (`checks`) restent pour ce qui se lit d'un coup d'œil ;
+   ceci est pour ce qui se vérifie un par un, sur un chantier. */
+.rba-taches { display: grid; gap: 6px; }
+.rba-tache { display: flex; align-items: center; gap: 10px; min-height: 44px;
+  padding: 7px 12px; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--card); cursor: pointer; transition: background .12s, border-color .12s; }
+.rba-tache:hover { border-color: var(--line-strong); }
+.rba-tache input { width: 20px; height: 20px; flex: none; accent-color: var(--green); }
+/* ⚠ UNE TÂCHE SE LIT COMME UNE PHRASE, PAS COMME UNE ÉTIQUETTE : `.field
+   label` met tout en petites capitales, ce qui va pour un intitulé de champ et
+   pas pour « Essai des différentiels 30 mA », qu'on lit six fois de suite. */
+.rba-tache > span { flex: 1; font-size: 14px; font-weight: 500; color: var(--text);
+  text-transform: none; letter-spacing: 0; }
+.rba-tache.est-faite { background: color-mix(in srgb, var(--green) 9%, var(--card));
+  border-color: color-mix(in srgb, var(--green) 35%, var(--line)); }
+.rba-tache.est-faite > span { color: var(--green); font-weight: 600; }
+.rba-tache .rba-aussi { width: 92px; flex: none; }
 .rba .rba-section:first-of-type { margin-top: 12px; }
 .rba .rba-rangee { padding: 10px 12px; margin-bottom: 8px; border: 1px solid var(--line); border-radius: 10px;
   background: var(--card-2); }

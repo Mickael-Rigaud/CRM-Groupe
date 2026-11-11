@@ -78,15 +78,25 @@ export function ouvrirBonAttachement(x, { bon = null, devis = null } = {}, retou
       <textarea data-cle="${cle}" rows="${lignes}">${esc(s[cle] ?? '')}</textarea>
       ${aide ? `<small class="muted">${esc(aide)}</small>` : ''}</label>`;
 
-  const groupe = (nom, { titre: avecTitre = true } = {}) => {
+  // ⚠ DEUX FAÇONS DE COCHER, ET CE N'EST PAS UNE COQUETTERIE (11/11/2026,
+  // Élodie : « pour les contrôles avant remise sous tension, je voudrais que ce
+  // soit sous forme de check-list »). En ligne, c'est bien pour des étiquettes
+  // qu'on lit d'un coup d'œil — la nature des travaux, le régime. Mais une
+  // vérification se POINTE, une par une, souvent le téléphone dans une main :
+  // elle veut une rangée par ligne, large, qu'on touche sans viser, et qui se
+  // teinte quand c'est fait. C'est la différence entre une liste de mots et
+  // une liste de tâches.
+  const groupe = (nom, { titre: avecTitre = true, liste = false } = {}) => {
     const g = GROUPES[nom];
-    return `<div class="field">${avecTitre ? `<label>${esc(g.titre)}${g.mode === 'plusieurs' ? ' <span class="muted small">(plusieurs possibles)</span>' : ''}</label>` : ''}
-      <div class="checks">${g.options.map(o => `<label class="check">
+    const faites = g.options.filter(o => coche(s, nom, o.c)).length;
+    const option = (o) => `<label class="${liste ? 'rba-tache' : 'check'}${coche(s, nom, o.c) ? ' est-faite' : ''}">
         <input type="checkbox" data-groupe="${nom}" data-code="${o.c}" ${coche(s, nom, o.c) ? 'checked' : ''}>
         <span>${esc(o.l)}</span>
         ${o.aussi ? `<input class="rba-aussi" data-cle="${o.aussi}" value="${esc(s[o.aussi] ?? '')}"
           placeholder="${esc(o.unite || 'à préciser')}" autocomplete="off">${o.unite ? ` <span class="muted small">${esc(o.unite)}</span>` : ''}` : ''}
-      </label>`).join('')}</div></div>`;
+      </label>`;
+    return `<div class="field">${avecTitre ? `<label>${esc(g.titre)}${g.mode === 'plusieurs' ? ' <span class="muted small">(plusieurs possibles)</span>' : ''}</label>` : ''}
+      <div class="${liste ? 'rba-taches' : 'checks'}" data-liste="${nom}">${g.options.map(option).join('')}</div></div>`;
   };
 
   const rangeeMo = (r, i) => `<div class="rba-rangee">
@@ -163,7 +173,10 @@ export function ouvrirBonAttachement(x, { bon = null, devis = null } = {}, retou
         ${zone('constat', 'Ce qui a été constaté et fait', { lignes: 4, aide: 'Une ligne par observation : elles s’impriment ligne par ligne.' })}
       </div>
 
-      <h4 class="rba-section">Main-d’œuvre <span class="muted small">— total ${esc(String(heures).replace('.', ','))} h</span></h4>
+      ${/* Le total suit la frappe : on tape une durée, il se met à jour sans
+            redessiner la page — sinon le curseur saute hors du champ. */ ''}
+      <h4 class="rba-section">Main-d’œuvre <span class="muted small">— total
+        <b id="rba-heures">${esc(String(heures).replace('.', ','))}</b> h</span></h4>
       <div id="rba-mo">${(s.mo || []).map(rangeeMo).join('')}</div>
       <button type="button" class="btn ghost sm" id="rba-mo-plus">+ Une rangée d’heures</button>
       ${groupe('deplacement')}
@@ -177,8 +190,15 @@ export function ouvrirBonAttachement(x, { bon = null, devis = null } = {}, retou
       <button type="button" class="btn ghost sm" id="rba-four-plus">+ Une fourniture</button>
       ${groupe('materiel')}
 
-      <h4 class="rba-section">Contrôles avant remise sous tension</h4>
-      ${groupe('controles', { titre: false })}
+      ${/* ⚠ LE COMPTE EST DANS LE TITRE, et il bouge à chaque coche : sur un
+            téléphone, la liste dépasse l'écran et on ne sait plus où l'on en est
+            sans remonter. Six contrôles, c'est le genre de chose qu'on croit
+            avoir fini. */ ''}
+      <h4 class="rba-section">Contrôles avant remise sous tension
+        <span class="muted small" id="rba-ctrl-compte">— ${
+          GROUPES.controles.options.filter(o => coche(s, 'controles', o.c)).length} sur ${
+          GROUPES.controles.options.length}</span></h4>
+      ${groupe('controles', { titre: false, liste: true })}
       ${groupe('sous_tension')}
 
       <h4 class="rba-section">Anomalies et suite à donner</h4>
@@ -262,13 +282,31 @@ export function ouvrirBonAttachement(x, { bon = null, devis = null } = {}, retou
           const liste = Array.isArray(s[nom]) ? s[nom].filter(c => c !== code) : [];
           s[nom] = el.checked ? [...liste, code] : liste;
         }
+        // ⚠ ON TEINTE SANS REDESSINER : la page est longue, un redessin la
+        // ramène en haut et fait perdre la ligne qu'on était en train de
+        // pointer. Deux classes et un compteur suffisent.
+        const boite = el.closest('[data-liste]');
+        if (boite) {
+          boite.querySelectorAll('input[data-code]').forEach(c =>
+            c.closest('label')?.classList.toggle('est-faite', c.checked));
+        }
+        const compte = hote.querySelector('#rba-ctrl-compte');
+        if (compte && nom === 'controles') {
+          const n = GROUPES.controles.options.filter(o => coche(s, 'controles', o.c)).length;
+          compte.textContent = `— ${n} sur ${GROUPES.controles.options.length}`;
+        }
       };
     });
 
+    const majHeures = () => {
+      const t = hote.querySelector('#rba-heures');
+      if (t) t.textContent = String(totalHeures(s)).replace('.', ',');
+    };
     hote.querySelectorAll('[data-mo]').forEach(el => {
       el.oninput = () => {
         const r = s.mo[Number(el.dataset.mo)];
         if (r) r[el.dataset.col] = el.value;
+        if (el.dataset.col === 'duree') majHeures();
       };
     });
     hote.querySelectorAll('[data-four]').forEach(el => {

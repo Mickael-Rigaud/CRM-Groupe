@@ -171,8 +171,31 @@ export const nomDuResponsable = (devis) => {
 
 /** Les lignes à l'heure de la facture — celles qui alimentent la feuille d'heures. */
 export const lignesHeure = (devis) => (devis?.lignes || []).filter(l => l.unite === 'heure');
+
+// ⚠ LE DÉPLACEMENT N'EST PAS UNE FOURNITURE POSÉE (11/11/2026, Élodie : « pour
+// le déplacement c'est un forfait établi dans la facture, donc inspire-toi en »).
+// Il arrivait dans le tableau des fournitures, entre un disjoncteur et une
+// gaine — on ne pose pas un déplacement. Il a sa propre case, « Forfait », que
+// la facture remplit désormais toute seule.
+const EST_DEPLACEMENT = (l) => l.code === 'deplacement';
 /** Les autres : ce sont les fournitures posées. */
-export const lignesFourniture = (devis) => (devis?.lignes || []).filter(l => l.unite !== 'heure');
+export const lignesFourniture = (devis) => (devis?.lignes || [])
+  .filter(l => l.unite !== 'heure' && !EST_DEPLACEMENT(l));
+
+/**
+ * Une ligne de facture, écrite comme on la raconte sur un bon.
+ *
+ * ⚠ LA QUANTITÉ NE S'ÉCRIT QUE SI ELLE DIT QUELQUE CHOSE : « Diagnostic — 1 »
+ * n'apprend rien, « Passage de câble — 12 ml » si. Et « forfait » ne
+ * s'imprime pas comme une unité : un forfait n'a pas de quantité à montrer.
+ */
+export const ligneRacontee = (l) => {
+  const nom = [l.libelle, l.variante, l.precision].filter(Boolean).join(' — ');
+  if (!nom) return '';
+  const q = Number(String(l.quantite ?? '').replace(',', '.'));
+  const u = l.unite && !['forfait', 'u'].includes(l.unite) ? ` ${l.unite}` : '';
+  return Number.isFinite(q) && q > 1 ? `${nom} — ${String(l.quantite).replace('.', ',')}${u}` : nom;
+};
 
 /** Le bon d'une facture, s'il existe. Un seul par facture, la base le garantit. */
 export const bonDuDevis = (devis) =>
@@ -247,7 +270,25 @@ export function saisieDepart({ bon = null, devis = null, d = {} } = {}) {
   const vide = (k) => faite[k] === undefined || faite[k] === null || faite[k] === '';
 
   const objet = devis?.objet || bon?.objet || '';
-  if (vide('constat') && objet) faite.constat = objet;
+  // ⚠ LE CONSTAT SE DEVINE DEPUIS LES LIGNES DE LA FACTURE (11/11/2026,
+  // Élodie : « l'encadré ce qui a été fait je voudrais qu'il soit pré-rempli
+  // par rapport aux fournitures, on peut le deviner »). Il ne portait que
+  // l'objet — « Dépannage électrique » —, c'est-à-dire le titre, pas le
+  // contenu : Franck devait retaper chez le client ce qu'il venait de cocher
+  // dans la facture.
+  //
+  // ⚠ L'OBJET RESTE EN TÊTE, puis une ligne par prestation. Elles s'impriment
+  // ligne par ligne, et chacune reste modifiable : ce bon dit ce qui a
+  // RÉELLEMENT été fait, pas ce qui avait été chiffré.
+  if (vide('constat')) {
+    // ⚠ LES FOURNITURES, PAS TOUTES LES LIGNES (« pré-rempli par rapport aux
+    // fournitures »). Le déplacement et les heures ont chacun leur bloc plus
+    // bas : les répéter ici donnait un constat qui commence par
+    // « Déplacement. Main-d'œuvre. » avant de dire ce qui a été fait.
+    const racontees = lignesFourniture(devis).map(ligneRacontee).filter(Boolean);
+    const tout = [objet, ...racontees].filter(Boolean);
+    if (tout.length) faite.constat = tout.join('\n');
+  }
   if (vide('lieu_cp_ville')) faite.lieu_cp_ville = [d.cpChantier, d.villeChantier].filter(Boolean).join(' ');
   // ⚠ L'INTERVENANT EST CELUI DU DOCUMENT, PAS CELUI QUI OUVRE L'ÉCRAN. La
   // direction consulte et imprime depuis le bureau : son nom se serait posé
@@ -269,6 +310,23 @@ export function saisieDepart({ bon = null, devis = null, d = {} } = {}) {
       habilitation: '', arrivee: '', depart: '', pause: '',
       duree: l ? String(l.quantite ?? '').replace('.', ',') : '',
     }));
+  }
+
+  // ⚠ LE DÉPLACEMENT EST COCHÉ PAR LA FACTURE, PAS PAR LA MÉMOIRE DE FRANCK.
+  // S'il a facturé un déplacement, c'est un forfait, et le bon le sait. La
+  // quantité devient le nombre de déplacements — deux passages se facturent
+  // deux fois et se constatent deux fois.
+  //
+  // ⚠ ON NE COCHE RIEN SI LA FACTURE NE DIT RIEN : pas de ligne de
+  // déplacement, pas de case. Un bon qui coche à la place de celui qui était
+  // sur place ne constate plus, il suppose.
+  const deplacement = (devis?.lignes || []).find(l => l.code === 'deplacement');
+  if (deplacement) {
+    if (vide('deplacement')) faite.deplacement = 'forfait';
+    if (vide('deplacement_nb')) {
+      const n = Number(String(deplacement.quantite ?? '').replace(',', '.'));
+      faite.deplacement_nb = Number.isFinite(n) && n > 0 ? String(Math.round(n)) : '1';
+    }
   }
 
   // ⚠ UNE FOURNITURE PORTE DÉSORMAIS TOUT CE QUI S'IMPRIME, pas seulement ce
