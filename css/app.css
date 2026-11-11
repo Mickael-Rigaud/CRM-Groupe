@@ -7815,15 +7815,18 @@ tr.est-modifie td { background: var(--accent-soft); }
    téléphone tendu au client auraient enterré ce qu'il vient signer ; repliées,
    elles restent à un doigt. Le texte garde ses retours à la ligne et défile
    dans sa boîte, pour ne pas pousser le cadre de signature hors de l'écran. */
-/* ⚠ LE BANDEAU « À REPRENDRE » : une carte comme les autres, mais ambrée —
-   elle demande quelque chose, là où le reste de l'écran raconte. Pas rouge :
-   rien n'est cassé, une intervention s'est juste arrêtée en chemin. */
+/* ⚠ LE BLOC « À REPRENDRE » : un bloc de fiche comme les autres, mais ambré —
+   il demande quelque chose, là où le reste de la fiche raconte. Pas rouge :
+   rien n'est cassé, une intervention s'est juste arrêtée en chemin.
+   ⚠ LES RANGÉES SONT EN `--card-2` ET LE BLOC EN `--card` : l'inverse les
+   rendrait invisibles, un fond sur le même fond. */
 .rdc-reprise { border-left: 4px solid var(--amber); }
 .rdc-repr { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
   padding: 11px 13px; margin-top: 8px; border: 1px solid var(--line); border-radius: 12px;
-  background: var(--card); cursor: pointer; font: inherit; color: inherit;
+  background: var(--card-2); cursor: pointer; font: inherit; color: inherit;
   transition: border-color .12s, background .12s, transform .12s; }
-.rdc-repr:hover { border-color: var(--amber); background: color-mix(in srgb, var(--amber) 8%, var(--card));
+.rdc-repr:first-of-type { margin-top: 0; }
+.rdc-repr:hover { border-color: var(--amber); background: color-mix(in srgb, var(--amber) 10%, var(--card-2));
   transform: translateX(2px); }
 .rdc-repr-quoi { flex: 1; min-width: 0; }
 .rdc-repr-quoi b { display: block; font-size: 14px; }

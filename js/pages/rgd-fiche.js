@@ -100,7 +100,8 @@ import { attribuerFicheRgd, proprietaireDeLaFiche } from './rgd-attribuer.js';
 import { majNote, COLONNE_NOTE } from '../data/rgd-clients.js';
 // Les devis faits dans le CRM avec la grille des tarifs (29/10/2026).
 import { devisCrmDe } from '../data/rgd-devis-crm.js';
-import { blocDevisCrm, ouvrirDevisCrm, choisirFacture, libelleBoutonFacture, peutFaireDevisCrm } from './rgd-devis-crm.js';
+import { blocDevisCrm, ouvrirDevisCrm, choisirFacture, libelleBoutonFacture, peutFaireDevisCrm,
+  blocReprise, brancherReprise } from './rgd-devis-crm.js';
 import { bonsDeLaFiche, bonRempli, numeroBon } from '../data/rgd-bon-attachement.js';
 import { ouvrirPdfImporte } from './rgd-facture-import.js';
 import { lienAvis, messageAvis, envoyerDemandeAvis, avisDejaDemande, KIND_AVIS,
@@ -839,6 +840,10 @@ export function ouvrirFicheRgd(x, onChange, retour = null) {
         </div>
 
         <div class="rgdf-colonne">
+          ${/* ⚠ « À REPRENDRE » PASSE AVANT LES FACTURES, et seulement s'il a
+                quelque chose à dire : c'est le geste à finir, pas l'inventaire
+                des pièces. Il parle des mêmes documents que le bloc suivant. */ ''}
+          ${blocReprise(x)}
           ${/* Le bouton est en haut de la fiche : le bloc ne montre que les devis faits. */ blocDevisCrm(devisCrm, false)}
 
           ${(() => {
@@ -999,6 +1004,9 @@ export function ouvrirFicheRgd(x, onChange, retour = null) {
     const bReception = m.querySelector('#rgdf-doc-reception');
     if (bReception) bReception.onclick = () => imprimer('reception');
 
+    // Le bandeau « À reprendre » rouvre À L'ÉTAPE où le parcours s'est arrêté :
+    // la facture si elle n'est pas finie ou pas partie, le bon sinon.
+    brancherReprise(m, x, () => dessine());
     // Les devis du CRM : la fenêtre du devis remplace la fiche, et la fiche se
     // reconstruit à sa fermeture — comme pour « Modifier les informations ».
     m.querySelectorAll('#rdc-nouveau, [data-faire-devis]').forEach(b =>

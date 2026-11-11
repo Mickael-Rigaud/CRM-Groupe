@@ -677,15 +677,27 @@ async function envoyerDocument({ a, nom, objet, message, copie }, pdf, { chemin,
 // ⚠ L'ÉTAPE EST LA PREMIÈRE QUI MANQUE, dans l'ordre du parcours. Une facture
 // signée mais non envoyée attend son envoi, même si son bon existe déjà.
 //
-// ⚠ ET ON NE REMONTE PAS PLUS LOIN QUE QUINZE JOURS : au-delà, ce n'est plus
-// une intervention interrompue, c'est un dossier en souffrance — il se voit
-// dans la fiche et dans le pipeline, pas dans un bandeau « reprenez ».
+// ⚠ ÇA SE LIT DANS LA FICHE DU PROJET, PLUS SUR LA VUE D'ENSEMBLE
+// (11/11/2026, Élodie : « enlève "à reprendre" dans la vue d'ensemble, je
+// voudrais les retrouver les "à reprendre" dans la fiche projet »). Le bandeau
+// est donc TOUJOURS CADRÉ SUR UN DOSSIER, et on lui passe le contexte de la
+// fiche — pas un `fiche_id`, parce que `devisCrmDe` rattache aussi les
+// documents posés sur le contact ou sur l'organisation. Prendre une autre
+// règle que celle du bloc « Factures » juste en dessous ferait apparaître dans
+// l'un ce qui manque dans l'autre.
+//
+// ⚠ ET DANS UNE FICHE, LES QUINZE JOURS N'ONT PLUS DE RAISON D'ÊTRE. Ils
+// bornaient un bandeau qui s'imposait à l'ouverture du CRM : au-delà, ce
+// n'était plus une intervention interrompue mais un dossier en souffrance. Ici
+// on est DÉJÀ venu voir ce dossier-là : une facture signée jamais envoyée
+// reste à envoyer, qu'elle ait trois jours ou trois mois. La borne reste pour
+// la lecture sans dossier, qui ne sert plus à l'écran mais reste juste.
 const JOURS_REPRISE = 15;
 
-export function interventionsEnCours() {
+export function interventionsEnCours(dossier = null) {
   const limite = new Date(Date.now() - JOURS_REPRISE * 86400000).toISOString();
   const bons = scope.rgd('rgd_bons');
-  return scope.rgd('rgd_devis_crm')
+  return (dossier ? devisCrmDe(dossier) : scope.rgd('rgd_devis_crm'))
     .filter(d => d.genre !== 'devis' && !d.annule_le)
     .map((devis) => {
       const bon = bons.find(b => b.devis_id === devis.id) || null;
@@ -695,7 +707,7 @@ export function interventionsEnCours() {
         : !bon.envoye_le ? 'bon_envoi' : null;
       return { devis, bon, etape, quand: devis.updated_at || devis.created_at || '' };
     })
-    .filter(i => i.etape && String(i.quand) >= limite)
+    .filter(i => i.etape && (dossier || String(i.quand) >= limite))
     .sort((a, b) => String(b.quand).localeCompare(String(a.quand)));
 }
 

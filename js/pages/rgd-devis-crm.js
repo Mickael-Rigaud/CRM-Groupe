@@ -143,69 +143,66 @@ export function blocDevisCrm(devis, peutFaire) {
  * l'écran. Même procédé que `confirmerSuppr` pour la suppression du devis.
  */
 /**
- * Le bandeau « reprendre » de la vue d'ensemble.
+ * Le bandeau « À reprendre » de la fiche projet. `x` est le contexte de la
+ * fiche : ce qu'on montre ici est ce que montre le bloc « Factures » juste en
+ * dessous, rien de plus et rien d'autre.
  *
- * ⚠ IL NE S'AFFICHE QUE S'IL Y A QUELQUE CHOSE À REPRENDRE : un bandeau
- * permanent qui dit « rien en cours » occupe la place de ce qu'on est venu
- * voir, et on cesse de le lire le troisième jour.
+ * ⚠ IL ÉTAIT SUR LA VUE D'ENSEMBLE, IL A DÉMÉNAGÉ LE JOUR MÊME (11/11/2026,
+ * Élodie : « enlève "à reprendre" dans la vue d'ensemble, je voudrais les
+ * retrouver les "à reprendre" dans la fiche projet »). Ce qui change vraiment :
+ * sur l'accueil il interpellait sans contexte, et il fallait cliquer pour
+ * savoir de quel dossier il parlait ; ici il répond à la question qu'on est
+ * venu poser, à côté des pièces du dossier.
+ *
+ * ⚠ IL NE S'AFFICHE QUE S'IL Y A QUELQUE CHOSE À REPRENDRE : un bloc permanent
+ * qui dit « rien en cours » occupe la place de ce qu'on est venu voir, et on
+ * cesse de le lire le troisième jour.
+ *
+ * ⚠ ON NE RÉPÈTE PAS LE NOM DU CLIENT : il est en tête de la fiche, et le
+ * redire sur chaque ligne volerait la place du numéro, qui lui dit DE QUELLE
+ * facture on parle quand le dossier en porte plusieurs.
  *
  * ⚠ ET IL DIT OÙ ÇA S'EST ARRÊTÉ, pas seulement qu'il s'est arrêté : « signée,
  * elle n'est pas partie au client » se corrige, « intervention incomplète »
- * se devine.
+ * se devine. C'est aussi la seule chose que la ligne de la facture ne dit pas :
+ * sa pastille affiche « Signé », et se tait sur l'envoi.
  */
-export function blocReprise() {
-  const l = interventionsEnCours();
+export function blocReprise(x) {
+  const l = interventionsEnCours(x);
   if (!l.length) return '';
-  return `<section class="card rdc-reprise">
-    <div class="card-head"><h2>À reprendre</h2>
-      <span class="grow"></span>
-      <span class="muted small">interrompu${l.length > 1 ? 's' : ''} en cours de route</span></div>
-    ${l.slice(0, 4).map((i) => {
+  return `<section class="rgdf-bloc rdc-reprise">
+    <h3>À reprendre <span class="rgdf-compte">${l.length}</span></h3>
+    ${l.map((i) => {
       const e = ETAPES_REPRISE[i.etape];
-      const qui = nomDuDossier(i.devis);
+      const quoi = i.devis.numero || i.devis.objet || 'Facture en cours';
       return `<button type="button" class="rdc-repr" data-reprendre="${esc(i.devis.id)}">
         <span class="rdc-repr-quoi"><b>${esc(e.mot)}</b>
-          <small>${esc(qui)}${i.devis.numero ? ' · ' + esc(i.devis.numero) : ''} — ${esc(e.aide)}</small></span>
+          <small>${esc(quoi)} — ${esc(e.aide)}</small></span>
         <span class="rdc-repr-fleche" aria-hidden="true">▸</span>
       </button>`;
     }).join('')}
   </section>`;
 }
 
-/** Le nom qu'on lit sur le bandeau : celui de la fiche ou de la demande. */
-function nomDuDossier(devis) {
-  const f = devis.fiche_id && db.byId('rgd_clients', devis.fiche_id);
-  if (f) return nomDeLaFiche(f);
-  const d = devis.demande_id && db.byId('rgd_demandes', devis.demande_id);
-  if (d) return [d.prenom, d.nom].filter(Boolean).join(' ').trim() || 'Demande';
-  return 'Dossier';
-}
-
-const nomDeLaFiche = (f) => {
-  const c = f.contact_id && db.byId('contacts', f.contact_id);
-  if (c) return [c.first_name, c.last_name].filter(Boolean).join(' ').trim() || '—';
-  const o = f.organisation_id && db.byId('organisations', f.organisation_id);
-  return o?.name || '—';
-};
-
 /**
- * Brancher le bandeau. `root` est l'écran, `apres` le redessin à rappeler.
+ * Brancher le bandeau. `root` est l'écran, `x` la fiche, `apres` le redessin.
  *
  * ⚠ ON ROUVRE À L'ÉTAPE, PAS AU DÉBUT : une facture signée rouvre sur son
  * écran, où « Suivant » est devenu l'envoi ; un bon à signer rouvre le bon.
  * Rouvrir au premier écran du parcours aurait fait reprendre d'en haut ce qui
  * est déjà fait — c'est-à-dire exactement ce qu'elle veut éviter.
+ *
+ * ⚠ ET C'EST LA FICHE OUVERTE QU'ON ROUVRE AVEC, pas une fiche reconstruite
+ * depuis le `fiche_id` du document : sur la vue d'ensemble il fallait la
+ * refabriquer, et un document posé sur le contact seul n'en avait aucune. Ici
+ * le contexte est sous les yeux, c'est celui-là qui doit servir.
  */
-export function brancherReprise(root, apres = null) {
+export function brancherReprise(root, x, apres = null) {
   root.querySelectorAll('[data-reprendre]').forEach((b) => {
     b.onclick = async () => {
       const devis = db.byId('rgd_devis_crm', b.dataset.reprendre);
       if (!devis) { toast('Document introuvable', 'error'); return; }
-      const i = interventionsEnCours().find(k => k.devis.id === devis.id);
-      const fiche = devis.fiche_id && db.byId('rgd_clients', devis.fiche_id);
-      if (!fiche) { toast('Dossier introuvable', 'error'); return; }
-      const { ficheDe } = await import('./rgd-clients.js');
-      const x = ficheDe(fiche, () => 'devis_accepte');
+      const i = interventionsEnCours(x).find(k => k.devis.id === devis.id);
       if (i && (i.etape === 'bon' || i.etape === 'bon_envoi')) {
         const { ouvrirBonDeLaFacture } = await import('./rgd-bon-attachement.js');
         ouvrirBonDeLaFacture(x, devis, apres);
