@@ -51,6 +51,8 @@ import { lienAvis, lienAvisValide, enregistrerLienAvis } from '../data/rgd-avis.
 import { objectifsMensuels, OBJECTIFS_DEFAUT } from '../data/rgd-objectifs.js';
 import { signatureRgd, enregistrerSignatureRgd, retirerSignatureRgd } from '../data/rgd-devis-crm.js';
 import { posePadSignature } from '../pad-signature.js';
+import { lireCompteSumUp, appairerLecteurSumUp, estPilotable,
+  lecteurSumUp, choisirLecteurSumUp } from '../data/rgd-sumup.js';
 
 const nombreDe = (v) => {
   const n = Number(String(v ?? '').replace(/\s/g, '').replace(',', '.'));
@@ -65,6 +67,11 @@ export const rgdReglagesPage = {
     // La policy `rgd_reglages_acces` est en `has_activity('rgd')` : il n'y a
     // plus de compte sur le tableau de bord à exiger, puisqu'on n'y va plus.
     const state = { ecriture: scope.canRgd };
+    // ⚠ L'INTERROGATION DE SUMUP N'EST PAS AUTOMATIQUE : c'est un appel vers
+    // l'extérieur, au chargement d'un écran qu'on ouvre pour tout autre chose.
+    // On le déclenche à la demande, et on garde la réponse dans `state` pour
+    // que le redessin ne la reperde pas.
+    const sumup = { etat: 'repos', info: null, motif: null, code: '' };
 
     const draw = () => {
       const avis = lienAvis();
@@ -99,6 +106,94 @@ export const rgdReglagesPage = {
       // sont vides et `manual_clients_actifs` porte encore le 34 déclaré. Rien ne
       // les lit, elles ne gênent personne, et les supprimer ferait perdre une
       // trace sans rien gagner. Le tableau du bas le dit à qui les chercherait.
+      /**
+       * Ce que SumUp répond, mis en français.
+       *
+       * ⚠ LE MODÈLE DU LECTEUR EST LE SEUL CHIFFRE QUI COMPTE ICI. `solo` et
+       * `go` se pilotent depuis le CRM ; un `air`, un `solo lite`, un `3G` se
+       * jumellent en Bluetooth à l'application SumUp et aucune API ne les
+       * atteint. L'écran le dit en toutes lettres plutôt que d'afficher un nom
+       * de modèle et de laisser deviner — c'est cette distinction qui décide
+       * si Franck tendra le terminal ou tapera le montant à la main.
+       */
+      function blocSumUp() {
+        if (sumup.etat === 'repos') {
+          return `<p class="small muted">Les deux clés SumUp sont posées dans les secrets du CRM,
+            jamais dans cette page. Interrogez SumUp pour voir le compte et les lecteurs reliés.</p>
+            <div class="toolbar"><button type="button" class="btn primary" id="reg-su-info">Interroger SumUp</button></div>`;
+        }
+        if (sumup.etat === 'attente') {
+          return '<p class="small muted">Interrogation de SumUp…</p>';
+        }
+        if (sumup.etat === 'echec') {
+          return `<p class="reg-su-mal"><b>SumUp n’a pas répondu.</b> ${esc(sumup.motif || '')}</p>
+            <p class="small muted">Si le message parle d’une clé absente, elle n’est pas posée
+            dans les secrets du CRM. S’il parle d’un 401, la clé est là mais SumUp la refuse —
+            vérifiez qu’il s’agit de la clé <b>secrète</b> et non de la publique, et qu’aucun
+            espace ne traîne au bout.</p>
+            <div class="toolbar"><button type="button" class="btn" id="reg-su-info">Réessayer</button></div>`;
+        }
+        const d = sumup.info || {};
+        const lecteurs = d.lecteurs || [];
+        const retenu = lecteurSumUp();
+        // ⚠ LE LECTEUR MIS EN AVANT EST CELUI QUE LE CRM ADRESSE, pas le
+        // premier pilotable de la liste : sur un compte d'entreprise, le
+        // premier de la liste n'est celui de personne en particulier.
+        const pilotable = (retenu && lecteurs.find(l => l.id === retenu.id && estPilotable(l.modele)))
+          || lecteurs.find(l => estPilotable(l.modele));
+        return `<div class="reg-su-compte">
+            <span><b>${esc(d.marchand?.nom || 'Compte SumUp')}</b></span>
+            <span class="muted small">code marchand ${esc(d.marchand?.code || '—')}${
+              d.marchand?.pays ? ' · ' + esc(d.marchand.pays) : ''}</span>
+          </div>
+          ${/* ⚠ UNE COLONNE « UTILISÉ », PARCE QUE LE COMPTE EST CELUI DE
+                L'ENTREPRISE (11/11/2026, Élodie). Plusieurs personnes peuvent
+                y relier leur terminal ; le CRM n'en adresse qu'un, et envoyer
+                un montant sur le mauvais ferait sonner la carte à l'autre
+                bout du département. Le choix est explicite. */ ''}
+          ${lecteurs.length ? `<div class="table-wrap"><table>
+            <thead><tr><th>Lecteur</th><th>Modèle</th><th>État</th><th>Pilotable par le CRM</th><th></th></tr></thead>
+            <tbody>${lecteurs.map(l => `<tr>
+              <td><b>${esc(l.nom || '—')}</b></td>
+              <td>${esc(l.modele || '—')}</td>
+              <td>${esc(l.statut || '—')}</td>
+              <td>${estPilotable(l.modele)
+                ? '<span class="chip green">Oui</span>'
+                : '<span class="chip amber">Non — appli SumUp seule</span>'}</td>
+              <td class="rgdf-fin">${!estPilotable(l.modele) ? ''
+                : (retenu && retenu.id === l.id)
+                  ? '<span class="chip green">Utilisé par le CRM</span>'
+                  : (state.ecriture ? `<button type="button" class="btn ghost sm"
+                      data-su-choisir="${esc(l.id)}">Utiliser celui-ci</button>` : '')}</td>
+            </tr>`).join('')}</tbody>
+          </table></div>`
+          : '<p class="reg-su-mal"><b>Aucun lecteur n’est relié au compte.</b> Tant qu’il n’y en a pas, le CRM ne peut rien pousser sur un terminal.</p>'}
+          ${pilotable
+            ? `<p class="small muted">✓ <b>${esc(pilotable.nom || 'Le lecteur')}</b> est un
+              <b>${esc(pilotable.modele)}</b> : le CRM pourra lui envoyer le montant d’une facture,
+              et la marquer encaissée tout seul quand le client aura payé.${
+                retenu && retenu.id === pilotable.id ? '' :
+                ' <b>Reste à dire au CRM de l’utiliser</b>, avec le bouton de sa ligne.'}</p>`
+            : `<p class="small muted">Seuls les lecteurs <b>Solo</b> (et <b>Go</b>, qui n’est pas
+              vendu en France) acceptent d’être pilotés à distance. Un <b>Air</b>, un
+              <b>Solo Lite</b>, un <b>3G</b> ou un <b>PIN+</b> ne parlent qu’à l’application
+              SumUp : le CRM enregistrera alors le paiement après coup, sans le déclencher.</p>`}
+          ${state.ecriture ? `<div class="reg-su-appairer">
+            <p class="small muted"><b>Relier un lecteur Solo :</b> sur l’appareil <b>déconnecté</b>,
+            ouvrez <b>Connexions → API → Connecter</b>. Un code apparaît — il expire en
+            <b>cinq minutes</b>.</p>
+            <div class="toolbar">
+              <input type="text" id="reg-su-code" placeholder="code affiché sur le lecteur"
+                autocomplete="off" spellcheck="false">
+              <input type="text" id="reg-su-nom" class="reg-su-nom" placeholder="nom de l’appareil (ex. Franck)"
+                autocomplete="off">
+              <button type="button" class="btn" id="reg-su-appairer">Relier</button>
+              <span class="muted small" id="reg-su-etat"></span>
+            </div>
+          </div>` : ''}
+          <div class="toolbar"><button type="button" class="btn ghost" id="reg-su-info">Rafraîchir</button></div>`;
+      }
+
       const corps = `
         <!-- Les objectifs mensuels de la vue d'ensemble (04/11/2026, Elodie).
              Une seule cle, « objectifs_mensuels », qui porte un objet JSON :
@@ -192,6 +287,21 @@ export const rgdReglagesPage = {
           </div>` : ''}
         </section>
 
+        <!-- ⚠ L'ENCAISSEMENT PAR CARTE (11/11/2026, Élodie). Cette carte ne
+             contient AUCUNE clé : les deux vivent dans les secrets de la
+             fonction sumup, côté serveur. Une clé API SumUp permet
+             d'encaisser — la poser dans une page qui part dans le navigateur
+             reviendrait à la donner. L'écran ne fait que PARLER à la fonction,
+             avec la session du CRM.
+             ⚠ ET PAS D'ACCENT GRAVE DANS CE COMMENTAIRE : il vit DANS un
+             gabarit de chaîne JavaScript, où un accent grave ferme la chaîne.
+             Payé à l'instant. -->
+        <section class="card">
+          <div class="card-head"><h2>Encaissement par carte</h2>
+            <span class="muted small">le compte SumUp de RGD Renova</span></div>
+          ${blocSumUp()}
+        </section>
+
         <section class="card">
           <div class="card-head"><h2>Ce qui n’est pas réglable ici</h2></div>
           <div class="table-wrap"><table>
@@ -235,7 +345,62 @@ export const rgdReglagesPage = {
           </table></div>
         </section>`;
 
+      // ── SumUp ──────────────────────────────────────────────
+      const brancherSumUp = () => {
+        const bInfo = root.querySelector('#reg-su-info');
+        if (bInfo) bInfo.onclick = async () => {
+          sumup.etat = 'attente'; draw();
+          const r = await lireCompteSumUp();
+          if (r.ok) { sumup.etat = 'lu'; sumup.info = r.donnees; sumup.motif = null; }
+          else { sumup.etat = 'echec'; sumup.motif = r.motif; }
+          draw();
+        };
+        root.querySelectorAll('[data-su-choisir]').forEach(b => b.onclick = async () => {
+          const l = (sumup.info?.lecteurs || []).find(x => String(x.id) === b.dataset.suChoisir);
+          if (!l) return;
+          b.disabled = true;
+          try {
+            await choisirLecteurSumUp({ ...l, marchand: sumup.info?.marchand?.code || null });
+            toast(`Le CRM enverra les montants sur « ${l.nom || l.modele} »`);
+            draw();
+          } catch (e) {
+            b.disabled = false;
+            toast(e.message || 'Choix non enregistré', 'error');
+          }
+        });
+        const bApp = root.querySelector('#reg-su-appairer');
+        if (bApp) bApp.onclick = async () => {
+          const champ = root.querySelector('#reg-su-code');
+          const etat = root.querySelector('#reg-su-etat');
+          const code = (champ?.value || '').trim();
+          if (!code) { toast('Entrez le code affiché sur le lecteur', 'error'); return; }
+          bApp.disabled = true; if (etat) etat.textContent = 'Appairage…';
+          // Le nom sert à reconnaître l'appareil dans la liste du compte : on
+          // le demande plutôt que de le deviner, puisque plusieurs personnes
+          // peuvent relier le leur.
+          const nom = (root.querySelector('#reg-su-nom')?.value || '').trim();
+          const r = await appairerLecteurSumUp(code, nom || 'Lecteur RGD');
+          bApp.disabled = false;
+          if (!r.ok) {
+            if (etat) etat.textContent = '';
+            // ⚠ LE CODE EXPIRÉ EST LE CAS LE PLUS FRÉQUENT, et le message de
+            // SumUp ne le dit pas toujours : on le rappelle plutôt que de
+            // laisser chercher.
+            toast(`Appairage impossible : ${r.motif} — le code expire en cinq minutes, refaites-en un`, 'error');
+            return;
+          }
+          if (champ) champ.value = '';
+          await db.recharger('rgd_reglages').catch(() => {});
+          toast('Lecteur relié au CRM');
+          const info = await lireCompteSumUp();
+          if (info.ok) { sumup.etat = 'lu'; sumup.info = info.donnees; }
+          draw();
+        };
+      };
+
       root.innerHTML = cadre('#/rgd/reglages', 'Réglages', corps);
+
+      brancherSumUp();
 
       // ⚠ LE LIEN A SON PROPRE BOUTON, et ce n'est pas du rangement : celui du
       // dessus écrit dans `rgd_reglages`, celui-ci dans `settings`. Deux tables,

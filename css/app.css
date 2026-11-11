@@ -7894,6 +7894,23 @@ tr.est-modifie td { background: var(--accent-soft); }
   .rdc-pas-quand { font-size: 9.5px; }
 }
 
+/* ---- la carte SumUp des réglages (11/11/2026) ---- */
+.reg-su-compte { display: flex; flex-direction: column; gap: 2px; padding: 11px 14px;
+  margin-bottom: 12px; border-radius: 12px; background: var(--card-2);
+  border: 1px solid var(--line); }
+.reg-su-mal { margin: 0 0 10px; padding: 10px 13px; border-radius: 10px; font-size: 13px;
+  border-left: 3px solid var(--amber); color: var(--amber);
+  background: color-mix(in srgb, var(--amber) 9%, transparent); }
+.reg-su-appairer { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.reg-su-appairer input { flex: 1 1 200px; min-width: 0; padding: 9px 11px;
+  border: 1px solid var(--line); border-radius: 10px; background: var(--card);
+  color: inherit; font: inherit; letter-spacing: .06em; text-transform: uppercase; }
+/* ⚠ LE NOM DE L'APPAREIL N'EST PAS UN CODE : ni majuscules forcées, ni
+   lettres espacées. « FRANCK » à côté d'un code d'appairage se lirait comme un
+   second code. */
+.reg-su-appairer input.reg-su-nom { flex: 1 1 160px; letter-spacing: normal;
+  text-transform: none; }
+
 /* ---- encaisser une facture (11/11/2026) ----
    ⚠ LA TUILE DU MONTANT EST CELLE DU TABLEAU DE BORD, pas une invention :
    même dégradé à 135°, même pastille claire en haut à droite, même ombre
