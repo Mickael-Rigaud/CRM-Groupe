@@ -261,15 +261,21 @@ export function joursDeVisite(agenda) {
 // mêmes que lit `etapeParLesFaits`, sans quoi un dossier serait rangé dans un
 // onglet par un devis et chiffré par un autre.
 //
-// ⚠ À « DEVIS ACCEPTÉ », UN DEVIS DÉJÀ FACTURÉ NE COMPTE PLUS (10/11/2026,
-// Élodie : « les montants de [devis] accepté, mets le montant du dernier devis
-// signé en avant, parce que là ça fait un doublon sur un projet déjà
-// facturé »). C'est la conséquence directe de la règle posée le même jour : un
-// client dont le chantier est fini revient à cette étape quand il rachète des
-// travaux, et il traîne alors TOUS ses devis signés — ceux du chantier
-// terminé comme celui qui arrive. Thibaud Prié affichait 48 985 € à « Devis
-// accepté », dont 26 253 € déjà facturés et déjà comptés dans le chiffre
-// d'affaires. Il en affiche 22 732, le devis qui reste à faire.
+// ⚠ À « DEVIS ACCEPTÉ » ET À « CHANTIER EN COURS », UN DEVIS DÉJÀ FACTURÉ NE
+// COMPTE PLUS (10/11/2026, Élodie : « les montants de [devis] accepté, mets le
+// montant du dernier devis signé en avant, parce que là ça fait un doublon sur
+// un projet déjà facturé » ; étendu le 11/11 à sa demande : « fais la même
+// chose pour les chantiers en cours »). Un client dont le chantier est fini
+// revient dans le cycle quand il rachète des travaux, et il traîne alors TOUS
+// ses devis signés — ceux du chantier terminé comme celui qui arrive.
+//
+// ⚠ ET LE DOUBLON RÉPARÉ LE 10/11 EST REVENU LE LENDEMAIN EN CHANGEANT
+// D'ÉTAPE : c'est ce qui vaut la seconde demande, et c'est la leçon à retenir.
+// Thibaud Prié affichait 48 985 € à « Devis accepté », ramenés à 22 732 ; son
+// chantier au planning commence le 11/11, il est donc passé à « Chantier en
+// cours » — où la règle ne s'appliquait pas, et où les 48 985 € sont
+// réapparus, 26 253 € de chantier déjà facturé compris. Une règle posée sur
+// une seule étape ne tient que jusqu'à ce que le dossier en change.
 //
 // ⚠ LE CRITÈRE EST LA FACTURE, PAS LA DATE, et c'est sa phrase qui le dit :
 // « un projet déjà facturé ». `facture` est posé par Costructor au départ de la
@@ -277,16 +283,33 @@ export function joursDeVisite(agenda) {
 // nombre chez elle, mais perdu les TRANCHES : trois devis signés pour un même
 // chantier à venir ne vaudraient plus que le dernier.
 //
-// ⚠ ET LES DEUX ÉTAPES DE CHANTIER GARDENT LEUR TOTAL : là, le montant dit ce
-// que vaut le chantier, facturé ou non. C'est seulement à « Devis accepté »
-// qu'il répond à « qu'est-ce qui reste à faire ».
+// ⚠ CE QUE LE CRITÈRE NE SAIT PAS FAIRE, ET IL FAUT LE SAVOIR : il ne distingue
+// pas l'ancien chantier d'un ACOMPTE du chantier qui tourne. Deux tranches d'un
+// même chantier en cours, l'une déjà facturée en acompte et l'autre non, ne
+// compteraient que pour la seconde. Mesuré en base le 11/11/2026 : sur toute la
+// base, UN SEUL dossier mêle du signé facturé et du signé non facturé — Prié,
+// celui d'Élodie — et chez lui le facturé est bien l'ancien chantier. Le jour
+// où ce cas apparaîtra, c'est le rattachement devis → chantier qu'il faudra,
+// pas un critère plus fin sur la facture.
+//
+// ⚠ MAIS « CHANTIER TERMINÉ » GARDE SON TOTAL, et ce n'est pas un oubli : là,
+// tout est facturé par construction. Y écarter le facturé afficherait zéro
+// partout — ou, par le repli, le seul dernier devis d'un chantier qui en
+// comptait trois. Ce montant-là répond à « combien ce chantier a-t-il valu »,
+// pas à « qu'est-ce qui reste à faire ».
 const DEVIS_DE_L_ETAPE = {
   devis_encours: (v) => devisOuvert(v) && !devisEnvoye(v),
   devis_envoye: devisEnvoye,
   devis_accepte: (v) => v.statut === 'signe' && !v.facture,
-  chantier_encours: (v) => v.statut === 'signe',
+  chantier_encours: (v) => v.statut === 'signe' && !v.facture,
   chantier_termine: (v) => v.statut === 'signe',
 };
+
+// Les étapes où le montant répond à « qu'est-ce qui reste à faire » — donc
+// celles qui écartent le déjà-facturé, et les seules où le repli ci-dessous a
+// un sens. Écrites une fois : la liste du filtre et celle du repli qui se
+// répondent sont la première chose qui diverge.
+const ETAPES_SANS_DEJA_FACTURE = ['devis_accepte', 'chantier_encours'];
 
 /** Les étapes où un montant de devis a un sens. */
 export const etapeAvecMontant = (etape) => !!DEVIS_DE_L_ETAPE[etape];
@@ -336,13 +359,19 @@ export function devisDeLEtape(f, devis, etape) {
   const compte = DEVIS_DE_L_ETAPE[etape];
   if (!compte) return [];
   const siens = (devis || []).filter(v => memeQue(v, f) && compte(v));
-  if (siens.length || etape !== 'devis_accepte') return siens;
+  if (siens.length || !ETAPES_SANS_DEJA_FACTURE.includes(etape)) return siens;
   // ⚠ LE REPLI EXISTE POUR NE PAS AFFICHER « 0 € » SUR UN DOSSIER QUI VAUT
   // QUELQUE CHOSE. RGD facture souvent un acompte dès la signature : le devis
   // porte alors `facture`, le chantier n'a pas commencé, et le dossier reste à
   // « Devis accepté ». Sans ce repli, sa colonne tomberait à zéro — ce qui se
   // lirait comme une donnée manquante, pas comme une facture déjà partie.
   // On reprend alors le DERNIER devis signé, au sens propre de la demande.
+  //
+  // ⚠ IL COUVRE « CHANTIER EN COURS » DEPUIS LE 11/11/2026, et il y est encore
+  // plus nécessaire qu'à « Devis accepté » : un chantier qui tourne a souvent
+  // reçu sa facture d'acompte, et c'est précisément l'étape où l'on regarde
+  // combien vaut le chantier. Sans le repli, le filtre neuf y aurait fabriqué
+  // des colonnes vides là où il n'y a rien de vide.
   const signes = (devis || []).filter(v => memeQue(v, f) && v.statut === 'signe');
   if (!signes.length) return [];
   const quand = (v) => String(v.date_signature || v.date_envoi || v.date_creation || '');
