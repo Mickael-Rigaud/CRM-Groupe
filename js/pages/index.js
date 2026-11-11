@@ -52,6 +52,8 @@ export const pages = {
   // `rgd-chantiers.js` reste dans le dépôt, il suffit de remettre cette ligne.
   // Le planning des chantiers (10/11/2026), direction seule.
   rgd_planning: ecran('./rgd-planning.js', 'rgdPlanningPage'),
+  // Les conditions générales de vente (11/11/2026), direction seule.
+  rgd_cgv: ecran('./rgd-cgv.js', 'rgdCgvPage'),
   rgd_clients: ecran('./rgd-clients.js', 'rgdClientsPage'),
   rgd_agenda: ecran('./rgd-agenda.js', 'rgdAgendaPage'),
   rgd_devis: ecran('./rgd-facturation.js', 'rgdDevisPage'),

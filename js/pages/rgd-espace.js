@@ -83,6 +83,9 @@ export const ONGLETS = [
     { hash: '#/rgd/devis', label: 'Devis' },
     { hash: '#/rgd/factures', label: 'Facturation' },
     { hash: '#/rgd/paiements', label: 'Encaissements' },
+    // Les CGV (11/11/2026) : écrites ici, imprimées sur les devis et factures
+    // du CRM, et recopiées dans Costructor d'un bouton (son API ne les écrit pas).
+    { hash: '#/rgd/cgv', label: 'Conditions générales de vente' },
   ] },
   // Ce qu'on n'ouvre pas pour travailler : poussé en bas (`bas`), replié.
   { label: 'Autres', bas: true, pliable: true, sous: [
@@ -177,7 +180,7 @@ const SANS_BANDEAU = ['#/rgd/clients', '#/rgd/factures'];
 // ⚠ LE GROUPE « COMMUNICATION » ENTIER est réservé depuis le 08/10/2026,
 // Réalisations comprises (Élodie : « tu ne dois donner les accès qu'à la
 // direction et pas aux chargés d'affaires »). Le groupe vidé sort du menu.
-const RESERVES_DIRECTION = ['#/rgd/tarifs', '#/rgd/factures', '#/rgd/prospection', '#/rgd/realisations', '#/rgd/inspirations', '#/rgd/communication', '#/rgd/analyse'];
+const RESERVES_DIRECTION = ['#/rgd/cgv', '#/rgd/tarifs', '#/rgd/factures', '#/rgd/prospection', '#/rgd/realisations', '#/rgd/inspirations', '#/rgd/communication', '#/rgd/analyse'];
 // ⚠ LE PLANNING N'EST PLUS RÉSERVÉ À LA DIRECTION DEPUIS LE 11/11/2026 : un
 // chantier peut être partagé avec un membre de l'équipe. L'entrée n'apparaît
 // chez lui QUE s'il a au moins un chantier partagé — sinon c'est une page vide.
@@ -208,7 +211,7 @@ const sansDirection = (liste) => liste
 // factures de Mickael — celles de Franck invisibles et les totaux à zéro, sous
 // un titre qui promet toutes les factures. L'écran a son propre filtre par
 // responsable, qui s'ouvre sur tout le monde.
-const SANS_VUE = ['#/rgd/planning', '#/rgd/tarifs', '#/rgd/factures', '#/rgd/realisations', '#/rgd/inspirations', '#/rgd/communication', '#/rgd/analyse', '#/rgd/agenda'];
+const SANS_VUE = ['#/rgd/cgv', '#/rgd/planning', '#/rgd/tarifs', '#/rgd/factures', '#/rgd/realisations', '#/rgd/inspirations', '#/rgd/communication', '#/rgd/analyse', '#/rgd/agenda'];
 
 export const cadre = (actif, titre, corps) => coquilleEspace({
   actif, titre,

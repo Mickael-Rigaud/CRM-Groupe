@@ -8299,3 +8299,27 @@ body.pl-deplace, body.pl-deplace * { cursor: grabbing !important; user-select: n
    comme un chantier à venir, sinon le blanc se perd dans les rayures. */
 .pl-barre.est-encours[style*="--pl-av:0%"] { color: color-mix(in srgb, var(--pl-c) 75%, #000); }
 .pl-barre.est-encours[style*="--pl-av:0%"] .pl-barre-texte { text-shadow: none; }
+/* ------------------------------------------------ Conditions générales de vente RGD (11/11/2026) */
+.cgv-grille { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; }
+.cgv-carte { padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.cgv-tete { display: flex; align-items: center; gap: 10px; }
+.cgv-tete h3 { margin: 0; font-size: 14px; text-transform: uppercase; letter-spacing: .05em; }
+.cgv-tete .grow, .cgv-actions .grow { flex: 1; }
+.cgv-texte { min-height: 460px; resize: vertical; border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px;
+  font: inherit; font-size: 13.5px; line-height: 1.5; background: var(--card); color: var(--text); }
+.cgv-texte:focus { outline: none; border-color: #fd7a2d; box-shadow: 0 0 0 3px color-mix(in srgb, #fd7a2d 18%, transparent); }
+.cgv-actions { display: flex; align-items: center; gap: 10px; }
+.cgv-apercu { max-height: 520px; overflow-y: auto; padding: 14px 16px; border: 1px solid var(--line); border-radius: 10px;
+  background: #fff; color: #333; font-size: 12px; line-height: 1.45; }
+.cgv-apercu h4 { margin: 10px 0 3px; font-size: 12.5px; color: #111; }
+.cgv-apercu p { margin: 0 0 6px; white-space: pre-line; text-align: justify; }
+.cgv-costructor { margin-top: 18px; padding: 16px 18px; display: flex; align-items: center; gap: 18px;
+  border-left: 4px solid #6665dd; }
+.cgv-costructor h3 { margin: 0 0 6px; font-size: 14px; }
+.cgv-costructor p, .cgv-costructor ol { margin: 0 0 4px; font-size: 13.5px; }
+.cgv-costructor ol { padding-left: 20px; }
+.cgv-copier { flex: none; }
+@media screen and (max-width: 900px) {
+  .cgv-grille { grid-template-columns: 1fr; }
+  .cgv-costructor { flex-direction: column; align-items: stretch; }
+}

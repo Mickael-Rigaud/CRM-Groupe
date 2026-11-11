@@ -39,6 +39,7 @@
 // bannière sombre en tête reste possible, mais elle coûterait de l'encre sur
 // chaque feuille d'un document qu'on imprime à l'unité, sur site.
 import { esc } from '../ui.js';
+import { lireCgv, cgvEnBlocs } from '../data/rgd-cgv.js';
 import { imprimerPage } from './btp-fiche.js';
 import { valeursProjet, personneDe, nomComplet, adresseChantier } from '../data/rgd-projet.js';
 import { montantDevisDe, etapeAvecMontant } from '../data/rgd-etapes.js';
@@ -546,7 +547,22 @@ const styleDevis = `
   .annul-bandeau span { font-size: 9pt; color: #7F1D1D; }
   .annulee-txt { border-left: 2.5pt solid #B91C1C; padding-left: 7px; color: #111827; }
   .pied-legal { margin-top: 14px; padding-top: 6px; border-top: .75pt solid ${FILET}; font-size: 7.6pt; color: ${GRIS}; }
+  .cgv { break-before: page; page-break-before: always; padding-top: 18px; font-size: 7.4pt; line-height: 1.38; color: #333; }
+  .cgv h2 { margin: 0 0 8px; font-size: 11pt; letter-spacing: .02em; text-transform: uppercase; }
+  .cgv h3 { margin: 7px 0 2px; font-size: 8pt; }
+  .cgv p { margin: 0 0 4px; white-space: pre-line; text-align: justify; }
 `;
+
+// ⚠ LES CGV EN DERNIÈRE PAGE (11/11/2026, Élodie), sur le devis comme sur la
+// facture. Elles viennent de l'écran « Conditions générales de vente » du
+// menu Costructor (`rgd_reglages`, clé `cgv`) ; tant qu'il est vide, rien ne
+// s'ajoute — une page « CGV » sans texte se lirait comme un oubli.
+function pageCgv() {
+  const { texte } = lireCgv();
+  if (!texte.trim()) return '';
+  return `<section class="cgv"><h2>Conditions générales de vente</h2>${cgvEnBlocs(texte).map(b =>
+    `${b.titre ? `<h3>${esc(b.titre)}</h3>` : ''}${b.texte ? `<p>${esc(b.texte)}</p>` : ''}`).join('')}</section>`;
+}
 
 export function devisCrmHtml(d, devis) {
   const lignes = devis.lignes || [];
@@ -705,6 +721,7 @@ ${dev
 </div>
 
 <p class="pied-legal">${esc(MENTIONS_RGD)}<br>${esc(MENTIONS_ASSURANCE)}</p>
+${pageCgv()}
 </body></html>`;
   return pageDevis;
 }
