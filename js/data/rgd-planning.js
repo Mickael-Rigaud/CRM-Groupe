@@ -111,7 +111,14 @@ export const dureeLue = (c) => {
   return { nombre, unite, texte: `${nombre} ${nombre > 1 ? UNITES[unite].plusieurs : UNITES[unite].un}` };
 };
 
-export const chantiersPlanifies = () => (scope.isDirection ? db.t('rgd_planning') : [])
+// ⚠ UN CHANTIER PEUT ÊTRE PARTAGÉ AVEC UN MEMBRE DE L'ÉQUIPE (11/11/2026) :
+// `partage_avec` porte les identifiants. La base ne renvoie à un non-direction
+// QUE les chantiers partagés avec lui (policy `rgd_planning_partage_lecture`) ;
+// le filtre ci-dessous dit la même chose pour le mode démo, qui n'a pas de
+// serveur pour le dire.
+export const estPartageAvec = (c, id = scope.user?.id) => !!id && (c.partage_avec || []).includes(id);
+export const chantiersPlanifies = () => db.t('rgd_planning')
+  .filter(c => scope.isDirection || estPartageAvec(c))
   .slice().sort((a, b) => String(a.date_debut).localeCompare(String(b.date_debut))
     || String(a.created_at).localeCompare(String(b.created_at)));
 
@@ -137,6 +144,7 @@ const propre = (champs) => {
   adresse: String(champs.adresse || '').trim() || null,
   couleur: champs.couleur || null,
   notes: String(champs.notes || '').trim() || null,
+  partage_avec: Array.isArray(champs.partage_avec) ? [...new Set(champs.partage_avec.filter(Boolean))] : [],
   };
 };
 

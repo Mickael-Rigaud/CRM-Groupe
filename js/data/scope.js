@@ -29,7 +29,9 @@ export const scope = {
     if (nom === 'today' || nom === 'messagerie') return true;
     // `pilotage` et `app` sont deux anciens noms de la vue d'ensemble,
     // `prospects` un ancien nom de Clients & prospects.
-    if (nom === 'rgd') return ['', 'pilotage', 'app', 'clients', 'prospects', 'agenda'].includes(param);
+    // `planning` depuis le 11/11/2026 : l'ouvrier y voit les chantiers que la
+    // direction partage avec lui (la base ne lui renvoie que ceux-là).
+    if (nom === 'rgd') return ['', 'pilotage', 'app', 'clients', 'prospects', 'agenda', 'planning'].includes(param);
     return false;
   },
   // Où l'on renvoie un ouvrier qui demande un écran fermé.

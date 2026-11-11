@@ -8056,3 +8056,66 @@ tr.est-modifie td { background: var(--accent-soft); }
 .pl-dossier.choisi { background: color-mix(in srgb, #fd7a2d 12%, var(--card)); border-color: #fd7a2d; }
 .pl-dossier[hidden], .pl-groupe[hidden] { display: none; }
 .pl-choix-tete [data-aucun][hidden], .pl-rien[hidden] { display: none; }
+/* Planning (11/11/2026) : le sélecteur replié sur le dossier choisi. */
+.pl-choix-retenu { display: none; align-items: center; gap: 8px; padding: 10px 12px; }
+.pl-choix-retenu > div { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: 2px 10px; align-items: baseline; }
+.pl-choix-retenu b { font-size: 14px; }
+.pl-choix-retenu span { font-size: 12.5px; color: var(--blue); }
+.pl-choix-retenu em { font-size: 12px; font-style: normal; color: var(--muted); width: 100%; }
+.pl-choix.replie { border-color: #fd7a2d; background: color-mix(in srgb, #fd7a2d 7%, var(--card)); }
+.pl-choix.replie .pl-choix-retenu { display: flex; }
+.pl-choix.replie .pl-choix-tete, .pl-choix.replie .pl-choix-liste { display: none; }
+/* Le partage avec l'équipe. */
+.pl-partage { display: flex; flex-wrap: wrap; gap: 8px; }
+.pl-membre { display: inline-flex; align-items: center; gap: 7px; padding: 7px 12px; border: 1px solid var(--line);
+  border-radius: 999px; cursor: pointer; font-size: 13.5px; background: var(--card); }
+.pl-membre input { width: 16px; height: 16px; accent-color: #fd7a2d; }
+.pl-membre:has(input:checked) { border-color: #fd7a2d; background: color-mix(in srgb, #fd7a2d 10%, var(--card)); font-weight: 700; }
+/* Le chantier en lecture, pour l'équipe. */
+.pl-resume { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px 16px;
+  padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--card-2); }
+.pl-resume div { display: flex; flex-direction: column; gap: 2px; }
+.pl-resume span { font-size: 11.5px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.pl-resume b { font-size: 14px; }
+.pl-jour:disabled { cursor: default; }
+.pl-jour:disabled:hover { background: var(--card); }
+/* La bascule Mois / Année. */
+.pl-bascule { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.pl-bascule button { border: 0; background: var(--card); padding: 8px 16px; font: inherit; font-weight: 700;
+  font-size: 13.5px; color: var(--muted); cursor: pointer; }
+.pl-bascule button.on { background: #fd7a2d; color: #fff; }
+.pl-etat { font-size: 12px; font-weight: 700; padding: 2px 9px; border-radius: 999px; white-space: nowrap; }
+.pl-etat.est-passe { background: var(--card-2); color: var(--muted); }
+.pl-etat.est-encours { background: color-mix(in srgb, #fd7a2d 16%, var(--card)); color: #c2410c; }
+.pl-etat.est-futur { background: color-mix(in srgb, #0284c7 12%, var(--card)); color: #075985; }
+/* La frise de l'année : une colonne de noms, puis une piste où chaque barre est
+   placée au jour près. Le trait d'aujourd'hui traverse toutes les lignes. */
+.pl-frise { position: relative; --pl-nom: 230px; }
+.pl-frise-ligne { display: grid; grid-template-columns: var(--pl-nom) minmax(0, 1fr); align-items: center;
+  min-height: 38px; border-bottom: 1px solid var(--line); }
+.pl-frise-nom { padding: 4px 10px 4px 2px; display: flex; flex-direction: column; min-width: 0; }
+.pl-frise-nom b { font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pl-frise-nom span { font-size: 11.5px; color: var(--muted); }
+.pl-frise-piste { position: relative; height: 100%; min-height: 38px;
+  background: repeating-linear-gradient(90deg, transparent 0 calc(100% / 12 - 1px), var(--line) calc(100% / 12 - 1px) calc(100% / 12)); }
+.pl-frise-tete { min-height: 30px; background: var(--card-2); border-radius: 10px 10px 0 0; }
+.pl-frise-tete .pl-frise-piste { background: none; min-height: 30px; }
+.pl-frise-tete .pl-frise-piste div { position: absolute; top: 0; bottom: 0; display: grid; place-items: center;
+  font-size: 11.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.pl-frise-barre { position: absolute; top: 8px; bottom: 8px; min-width: 6px; border: 0; border-radius: 6px;
+  background: var(--pl-c); cursor: pointer; padding: 0; }
+.pl-frise-barre.est-passe { background: #cbd5e1; }
+.pl-frise-barre.est-futur { background: color-mix(in srgb, var(--pl-c) 45%, var(--card)); border: 2px solid var(--pl-c); }
+.pl-frise-barre.est-encours { box-shadow: 0 0 0 3px color-mix(in srgb, var(--pl-c) 30%, transparent); }
+.pl-frise-barre.coupe-g { border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.pl-frise-barre.coupe-d { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.pl-frise-barre:hover { filter: brightness(1.06); }
+.pl-frise-fond { position: absolute; top: 0; bottom: 0; left: var(--pl-nom); right: 0; pointer-events: none; }
+.pl-frise-auj { position: absolute; top: 0; bottom: 0; width: 2px; background: #dc2626; }
+.pl-frise-auj::before { content: 'Aujourd’hui'; position: absolute; top: -2px; left: 4px; font-size: 10px; font-weight: 800;
+  color: #dc2626; white-space: nowrap; background: var(--card); padding: 0 3px; border-radius: 4px; }
+@media screen and (max-width: 760px) {
+  .pl-frise { --pl-nom: 110px; }
+  .pl-frise-nom b { font-size: 12px; }
+  .pl-frise-tete .pl-frise-piste div { font-size: 9px; letter-spacing: 0; }
+}

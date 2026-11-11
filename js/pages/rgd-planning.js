@@ -25,6 +25,14 @@ import { LISTES, UNITES, joursPour, dureeLue, listesStandard, enregistrerStandar
          chantiersPlanifies, lignesDe, resteA, creerChantier, majChantier, supprimerChantier,
          ajouterLigne, ajouterStandard, majLigne, retirerLigne } from '../data/rgd-planning.js';
 
+// ⚠ LE 11/11/2026 : PARTAGE, LECTURE PAR L'ÉQUIPE ET VUE DE L'ANNÉE.
+// · Un chantier peut être partagé avec un membre de l'équipe (`partage_avec`).
+//   Il le VOIT et peut COCHER / AJOUTER des lignes à ses listes ; les dates,
+//   le dossier, le partage et la suppression restent à la direction (choix
+//   d'Élodie, tenu aussi côté base par les policies).
+// · Une vue « Année » : une frise des douze mois, une ligne par chantier,
+//   passés grisés, en cours en couleur vive, à venir en couleur adoucie.
+
 const MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août',
   'septembre', 'octobre', 'novembre', 'décembre'];
 const JOURS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
@@ -51,11 +59,21 @@ function nomFiche(f) {
   const o = f.organisation_id && db.byId('organisations', f.organisation_id);
   return [c?.first_name, c?.last_name].filter(Boolean).join(' ') || o?.name || '(fiche sans nom)';
 }
-const adresseFiche = (f) => [f.adresse_chantier, [f.code_postal_chantier, f.ville_chantier]
-  .filter(Boolean).join(' ')].filter(Boolean).join(', ');
+const assembler = (rue, cp, ville) => [rue, [cp, ville].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+// ⚠ L'ADRESSE DU CHANTIER D'ABORD, PUIS CELLE DE LA PERSONNE (11/11/2026) :
+// mesuré ce jour-là, 5 fiches clients sur 201 seulement portent une adresse
+// de chantier ; sans repli, choisir un dossier ne remplissait presque jamais
+// l'adresse. Le contact (ou l'organisation) a la sienne.
+function adresseFiche(f) {
+  const chantier = assembler(f.adresse_chantier, f.code_postal_chantier, f.ville_chantier);
+  if (chantier) return chantier;
+  const c = f.contact_id && db.byId('contacts', f.contact_id);
+  const o = f.organisation_id && db.byId('organisations', f.organisation_id);
+  return assembler(c?.address, c?.postal_code, c?.city) || assembler(o?.address, o?.postal_code, o?.city);
+}
 const nomDemande = (d) => `${d.prenom || ''} ${d.nom || ''}`.trim() || '(demande sans nom)';
-const adresseDemande = (d) => [d.adresse, [d.code_postal, d.ville].filter(Boolean).join(' ')]
-  .filter(Boolean).join(', ');
+const adresseDemande = (d) => assembler(d.adresse_chantier, d.code_postal_chantier, d.ville_chantier)
+  || assembler(d.adresse, d.code_postal, d.ville);
 
 // ⚠ LES DOSSIERS DES TROIS ÉTAPES DU DEVIS (10/11/2026, Élodie : « je veux
 // que l'on puisse rattacher un dossier devis en cours, devis envoyé, devis
@@ -169,10 +187,62 @@ function calendrier(annee, mois, chantiers) {
     </div>`;
 }
 
+// ------------------------------------------------------------ la vue de l'année
+// Passé, en cours, à venir : lu sur les dates, au jour près.
+function etatDe(c) {
+  const auj = aujourdhui();
+  if (finDe(c) < auj) return { cle: 'passe', label: 'Terminé' };
+  if (c.date_debut > auj) return { cle: 'futur', label: 'À venir' };
+  return { cle: 'encours', label: 'En cours' };
+}
+
+// ⚠ LA FRISE EST EN JOURS, PAS EN MOIS : une barre commence et finit au jour
+// près, proportionnellement à l'année (365 ou 366 jours). Un chantier qui
+// déborde sur l'année d'avant ou d'après est coupé au bord, et un petit
+// chevron le dit.
+function frise(annee, tous) {
+  const debutAn = `${annee}-01-01`, finAn = `${annee}-12-31`;
+  const nbJours = Math.round((versDate(`${annee + 1}-01-01`) - versDate(debutAn)) / 86400000);
+  const pos = (iso) => Math.round((versDate(iso) - versDate(debutAn)) / 86400000);
+  const lignes = tous.map((c, i) => ({ c, i, fin: finDe(c) }))
+    .filter(x => x.c.date_debut <= finAn && x.fin >= debutAn);
+  const auj = aujourdhui();
+  const trait = auj >= debutAn && auj <= finAn
+    ? `<div class="pl-frise-auj" style="left:${(pos(auj) + .5) / nbJours * 100}%" title="Aujourd’hui"></div>` : '';
+  const mois = MOIS.map((m, k) => {
+    const de = pos(versIso(new Date(annee, k, 1)));
+    const a = pos(versIso(new Date(annee, k + 1, 1)));
+    return `<div style="left:${de / nbJours * 100}%; width:${(a - de) / nbJours * 100}%">${esc(m.slice(0, 3))}</div>`;
+  }).join('');
+  return `
+    <div class="pl-frise">
+      <div class="pl-frise-ligne pl-frise-tete"><div class="pl-frise-nom"></div>
+        <div class="pl-frise-piste">${mois}</div></div>
+      ${lignes.length ? lignes.map(x => {
+        const de = Math.max(0, pos(x.c.date_debut));
+        const a = Math.min(nbJours - 1, pos(x.fin));
+        const e = etatDe(x.c);
+        return `<div class="pl-frise-ligne">
+          <div class="pl-frise-nom"><b>${esc(x.c.titre)}</b><span>${esc(dateCourte(x.c.date_debut))} → ${esc(dateCourte(x.fin))}</span></div>
+          <div class="pl-frise-piste">
+            <button type="button" class="pl-frise-barre est-${e.cle}${x.c.date_debut < debutAn ? ' coupe-g' : ''}${x.fin > finAn ? ' coupe-d' : ''}"
+              style="left:${de / nbJours * 100}%; width:${(a - de + 1) / nbJours * 100}%; --pl-c:${couleurDe(x.c, x.i)}"
+              data-chantier="${esc(x.c.id)}" title="${esc(`${x.c.titre} — ${e.label.toLowerCase()} — du ${dateLongue(x.c.date_debut)} au ${dateLongue(x.fin)}`)}"></button>
+          </div></div>`;
+      }).join('') : '<div class="empty">Aucun chantier cette année.</div>'}
+      ${lignes.length ? `<div class="pl-frise-fond">${trait}</div>` : ''}
+    </div>`;
+}
+
 // ------------------------------------------------------------ la fiche chantier
 function formulaire(c, defaut = {}) {
   const actuel = c ? cleDe(c) : '';
   const choix = rattachements(actuel);
+  const retenu = choix.flatMap(g => g.dossiers).find(x => x.cle === actuel);
+  // L'équipe avec qui partager : les membres RGD qui ne sont pas la direction
+  // (chargés d'affaires, ouvrier). La direction voit tout, la cocher n'a pas de sens.
+  const equipe = scope.chargesRgd();
+  const partage = new Set(c?.partage_avec || []);
   const duree = c ? dureeLue(c) : { nombre: 1, unite: 'jours' };
   const couleur = c?.couleur || '';
   return `
@@ -181,17 +251,26 @@ function formulaire(c, defaut = {}) {
         <input name="titre" required value="${esc(c?.titre || '')}" placeholder="Ex. Rénovation salle de bain — Dupont"></label>
       <div class="pl-champ pl-large"><span>Dossier client</span>
         <input type="hidden" name="rattachement" value="${esc(actuel)}">
-        <div class="pl-choix">
+        ${'' /* ⚠ LE SÉLECTEUR SE REPLIE UNE FOIS UN DOSSIER CHOISI (11/11/2026,
+           Élodie : « lorsque l'on clique sur un dossier client, la liste
+           déroulante se ferme »). Replié, il montre le dossier retenu et
+           deux boutons : Changer, Retirer. */}
+        <div class="pl-choix${retenu ? ' replie' : ''}">
+          <div class="pl-choix-retenu">
+            <div><b>${esc(retenu?.nom || '')}</b>${retenu?.projet ? `<span>${esc(retenu.projet)}</span>` : ''}${
+              retenu?.adresse ? `<em>${esc(retenu.adresse)}</em>` : ''}</div>
+            <button type="button" class="btn ghost sm" data-changer>Changer</button>
+            <button type="button" class="btn ghost sm" data-aucun>Retirer</button>
+          </div>
           <div class="pl-choix-tete">
             <input type="search" class="pl-cherche" placeholder="Rechercher un client ou un projet…" aria-label="Rechercher un dossier">
-            <button type="button" class="btn ghost sm" data-aucun${actuel ? '' : ' hidden'}>Retirer le lien</button>
           </div>
           <div class="pl-choix-liste">
             ${choix.length ? choix.map(g => `
             <div class="pl-groupe">
               <div class="pl-groupe-titre">${esc(g.label)} <span>${g.dossiers.length}</span></div>
               ${g.dossiers.map(x => `<button type="button" class="pl-dossier${x.cle === actuel ? ' choisi' : ''}"
-                  data-cle="${esc(x.cle)}" data-adresse="${esc(x.adresse)}"
+                  data-cle="${esc(x.cle)}" data-adresse="${esc(x.adresse)}" data-nom="${esc(x.nom)}" data-projet="${esc(x.projet)}"
                   data-texte="${esc(`${x.nom} ${x.projet} ${x.adresse}`.toLowerCase())}">
                 <b>${esc(x.nom)}</b>${x.projet ? `<span>${esc(x.projet)}</span>` : ''}${x.adresse ? `<em>${esc(x.adresse)}</em>` : ''}
               </button>`).join('')}
@@ -211,7 +290,7 @@ function formulaire(c, defaut = {}) {
         </div></div>
       <p class="pl-fin" id="pl-fin"></p>
       <label class="pl-champ pl-large"><span>Adresse du chantier</span>
-        <input name="adresse" value="${esc(c?.adresse || '')}" placeholder="Reprise de la fiche si vide"></label>
+        <input name="adresse" value="${esc(c?.adresse || '')}" placeholder="Reprise du dossier client choisi"></label>
       <div class="pl-champ pl-large"><span>Couleur</span>
         <div class="pl-couleurs">
           <label class="pl-pastille auto"><input type="radio" name="couleur" value=""${!couleur ? ' checked' : ''}><i></i>Auto</label>
@@ -219,6 +298,14 @@ function formulaire(c, defaut = {}) {
         </div></div>
       <label class="pl-champ pl-large"><span>Notes</span>
         <textarea name="notes" rows="2">${esc(c?.notes || '')}</textarea></label>
+      <div class="pl-champ pl-large"><span>Partager avec</span>
+        ${equipe.length ? `<div class="pl-partage">
+          ${equipe.map(u => `<label class="pl-membre"><input type="checkbox" name="partage" value="${esc(u.id)}"${
+            partage.has(u.id) ? ' checked' : ''}><span>${esc(u.full_name || u.email || 'Sans nom')}</span></label>`).join('')}
+        </div>
+        <small class="muted">La personne voit ce chantier dans son planning et peut cocher ses listes ; elle ne change ni les dates ni le dossier.</small>`
+        : '<small class="muted">Personne dans l’équipe RGD à qui le partager.</small>'}
+      </div>
       <div class="form-actions pl-large">
         ${c ? '<button type="button" class="btn danger ghost" id="pl-suppr">Supprimer le chantier</button>' : ''}
         <span class="grow"></span>
@@ -248,7 +335,7 @@ function blocListe(c, liste) {
           <label class="pl-case" title="Acheté"><input type="checkbox" data-case="achete"${l.achete ? ' checked' : ''}></label>
           <input class="pl-libelle" data-champ="libelle" value="${esc(l.libelle)}" aria-label="Libellé">
           <input class="pl-qte" data-champ="quantite" value="${esc(l.quantite || '')}" placeholder="—" aria-label="Quantité">
-          <button type="button" class="icon-btn" data-retirer title="Retirer la ligne">✕</button>
+          ${scope.isDirection ? '<button type="button" class="icon-btn" data-retirer title="Retirer la ligne">✕</button>' : '<span></span>'}
         </div>`).join('')}
       </div>` : `<p class="muted small">Rien pour l’instant : ajoutez la liste standard, ou une ligne ci-dessous.</p>`}
       <form class="pl-ajout" data-ajout="${liste}">
@@ -258,7 +345,27 @@ function blocListe(c, liste) {
     </section>`;
 }
 
+// Ce que voit un membre de l'équipe avec qui le chantier est partagé : le
+// chantier en lecture, puis les listes (qu'il peut cocher).
+function resume(c) {
+  const r = rattachementDe(c);
+  const ligne = (q, v) => (v ? `<div><span>${esc(q)}</span><b>${esc(v)}</b></div>` : '');
+  return `<div class="pl-resume">
+    ${ligne('Dossier', r?.nom)}
+    ${ligne('Du', dateLongue(c.date_debut))}${ligne('Au', dateLongue(finDe(c)))}
+    ${ligne('Durée', dureeLue(c).texte)}${ligne('Adresse', c.adresse)}${ligne('Notes', c.notes)}
+  </div>`;
+}
+
 function ouvrirChantier(c, apres, jour = null) {
+  if (c && !scope.isDirection) {
+    const m = openModal(c.titre, `${resume(c)}
+      <div class="pl-listes">${blocListe(c, 'materiaux')}${blocListe(c, 'outils')}</div>
+      <div class="form-actions"><span class="grow"></span><button type="button" class="btn ghost" data-close>Fermer</button></div>`,
+      { wide: true, onClose: apres });
+    brancherListesDe(m, c);
+    return;
+  }
   const r = c && rattachementDe(c);
   const corps = () => `
     ${r ? `<p class="pl-lien">Fiche : <button type="button" class="btn ghost sm" id="pl-fiche">${esc(r.nom)}</button></p>` : ''}
@@ -278,18 +385,30 @@ function brancher(m, c, apres) {
     fin.textContent = d ? `Fin : ${dateLongue(ajouterJours(d, Math.max(1, n) - 1))} · ${n} jour${n > 1 ? 's' : ''} calendaire${n > 1 ? 's' : ''}` : '';
   };
   form.date_debut.oninput = majFin; form.duree_nombre.oninput = majFin; form.duree_unite.onchange = majFin; majFin();
-  // Le choix du dossier : un clic le retient (et le surligne), un second clic
-  // sur le même le retire. L'adresse se reprend du dossier si on n'en a pas
-  // tapé une. La recherche porte sur le nom, le projet et l'adresse.
+  // Le choix du dossier : un clic le retient, la liste se replie sur lui
+  // (11/11/2026) et l'ADRESSE DU CHANTIER EST REMPLIE PAR CELLE DU DOSSIER —
+  // remplacée, pas seulement complétée : changer de dossier doit changer
+  // l'adresse. On peut toujours la corriger à la main ensuite.
+  // La recherche porte sur le nom, le projet et l'adresse.
+  const boite = m.querySelector('.pl-choix');
   const choisir = (bouton) => {
-    const cle = bouton && !bouton.classList.contains('choisi') ? bouton.dataset.cle : '';
+    const cle = bouton ? bouton.dataset.cle : '';
     form.rattachement.value = cle;
     m.querySelectorAll('.pl-dossier').forEach(b => b.classList.toggle('choisi', b.dataset.cle === cle));
-    m.querySelector('[data-aucun]').hidden = !cle;
-    if (cle && !form.adresse.value && bouton.dataset.adresse) form.adresse.value = bouton.dataset.adresse;
+    if (bouton) {
+      const retenu = boite.querySelector('.pl-choix-retenu > div');
+      retenu.innerHTML = `<b>${esc(bouton.dataset.nom)}</b>${bouton.dataset.projet ? `<span>${esc(bouton.dataset.projet)}</span>` : ''}${
+        bouton.dataset.adresse ? `<em>${esc(bouton.dataset.adresse)}</em>` : ''}`;
+      if (bouton.dataset.adresse) form.adresse.value = bouton.dataset.adresse;
+    }
+    boite.classList.toggle('replie', !!cle);
   };
   m.querySelectorAll('.pl-dossier').forEach(b => b.onclick = () => choisir(b));
   m.querySelector('[data-aucun]').onclick = () => choisir(null);
+  m.querySelector('[data-changer]').onclick = () => {
+    boite.classList.remove('replie');
+    m.querySelector('.pl-cherche').focus();
+  };
   const cherche = m.querySelector('.pl-cherche');
   cherche.oninput = () => {
     const mots = cherche.value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(/\s+/).filter(Boolean);
@@ -315,6 +434,7 @@ function brancher(m, c, apres) {
       duree_nombre: form.duree_nombre.value, duree_unite: form.duree_unite.value,
       fiche_id: genre === 'fiche' ? id : null, demande_id: genre === 'demande' ? id : null,
       adresse: form.adresse.value, couleur: form.couleur.value, notes: form.notes.value,
+      partage_avec: [...form.querySelectorAll('input[name="partage"]:checked')].map(x => x.value),
     };
     try {
       if (c) { await majChantier(c.id, champs); toast('Chantier enregistré'); closeModal(); }
@@ -339,9 +459,12 @@ function brancher(m, c, apres) {
       { label: '← Retour au chantier', action: () => ouvrirChantier(db.byId('rgd_planning', c.id), apres) });
   };
   if (!c) return;
+  brancherListesDe(m, c);
+}
 
-  // Les listes : on redessine la seule zone des listes, pas la fenêtre, pour
-  // ne pas perdre ce qu'on est en train de taper dans le formulaire du haut.
+// Les listes : on redessine la seule zone des listes, pas la fenêtre, pour
+// ne pas perdre ce qu'on est en train de taper dans le formulaire du haut.
+function brancherListesDe(m, c) {
   const zone = m.querySelector('.pl-listes');
   const redessiner = () => {
     zone.innerHTML = blocListe(c, 'materiaux') + blocListe(c, 'outils');
@@ -375,7 +498,8 @@ function brancher(m, c, apres) {
         try { await majLigne(id, { [inp.dataset.champ]: v || null }); }
         catch (err) { toast(err.message, 'error'); }
       });
-      row.querySelector('[data-retirer]').onclick = async () => {
+      const bRetirer = row.querySelector('[data-retirer]');
+      if (bRetirer) bRetirer.onclick = async () => {
         try { await retirerLigne(id); redessiner(); } catch (err) { toast(err.message, 'error'); }
       };
     });
@@ -410,64 +534,83 @@ export const rgdPlanningPage = {
     if (guard(root)) return {};
     const coquille = poserEspace(root);
     const auj = versDate(aujourdhui());
-    const state = { annee: auj.getFullYear(), mois: auj.getMonth() };
+    let vueMemo = '';
+    try { vueMemo = localStorage.getItem('rgd_planning_vue') || ''; } catch { /* navigation privée */ }
+    const state = { annee: auj.getFullYear(), mois: auj.getMonth(), vue: vueMemo === 'annee' ? 'annee' : 'mois' };
 
     const draw = () => {
-      if (!scope.isDirection) {
-        root.innerHTML = cadre('#/rgd/planning', 'Planning chantier',
-          '<div class="card"><div class="empty">Le planning des chantiers est réservé à la direction.</div></div>');
-        return;
-      }
+      const direction = scope.isDirection;
       const tous = chantiersPlanifies();
-      const premier = versIso(new Date(state.annee, state.mois, 1));
-      const dernier = versIso(new Date(state.annee, state.mois + 1, 0));
-      const duMois = tous.filter(c => c.date_debut <= dernier && finDe(c) >= premier);
+      const enAnnee = state.vue === 'annee';
+      const premier = enAnnee ? `${state.annee}-01-01` : versIso(new Date(state.annee, state.mois, 1));
+      const dernier = enAnnee ? `${state.annee}-12-31` : versIso(new Date(state.annee, state.mois + 1, 0));
+      const periode = tous.filter(c => c.date_debut <= dernier && finDe(c) >= premier);
+      const nomPeriode = enAnnee ? String(state.annee) : `${MOIS[state.mois]} ${state.annee}`;
 
       const corps = `
         <div class="pl-barre-outils">
+          <div class="pl-bascule" role="tablist">
+            <button type="button" role="tab" data-vue="mois" class="${!enAnnee ? 'on' : ''}">Mois</button>
+            <button type="button" role="tab" data-vue="annee" class="${enAnnee ? 'on' : ''}">Année</button>
+          </div>
           <div class="pl-nav">
-            <button type="button" class="btn ghost" data-pas="-1" aria-label="Mois précédent">‹</button>
-            <h2>${esc(MOIS[state.mois])} ${state.annee}</h2>
-            <button type="button" class="btn ghost" data-pas="1" aria-label="Mois suivant">›</button>
+            <button type="button" class="btn ghost" data-pas="-1" aria-label="${enAnnee ? 'Année' : 'Mois'} précédent${enAnnee ? 'e' : ''}">‹</button>
+            <h2>${esc(nomPeriode)}</h2>
+            <button type="button" class="btn ghost" data-pas="1" aria-label="${enAnnee ? 'Année' : 'Mois'} suivant${enAnnee ? 'e' : ''}">›</button>
             <button type="button" class="btn ghost sm" id="pl-auj">Aujourd’hui</button>
           </div>
           <span class="grow"></span>
-          <button type="button" class="btn ghost" id="pl-std">Listes standard</button>
-          <button type="button" class="btn primary" id="pl-neuf">+ Nouveau chantier</button>
+          ${direction ? `<button type="button" class="btn ghost" id="pl-std">Listes standard</button>
+          <button type="button" class="btn primary" id="pl-neuf">+ Nouveau chantier</button>` : ''}
         </div>
+        ${!direction ? '<p class="muted small">Les chantiers que la direction a partagés avec vous. Vous pouvez cocher leurs listes de matériaux et d’outils.</p>' : ''}
         <section class="card pl-carte">
-          ${calendrier(state.annee, state.mois, tous)}
-          <p class="muted small pl-aide">Cliquez sur un jour pour y planifier un chantier, sur une barre pour ouvrir sa fiche.</p>
+          ${enAnnee ? frise(state.annee, tous) : calendrier(state.annee, state.mois, tous)}
+          <p class="muted small pl-aide">${enAnnee
+            ? 'Grisés : terminés. En couleur vive : en cours. En couleur adoucie : à venir. Cliquez sur une barre pour ouvrir le chantier.'
+            : direction ? 'Cliquez sur un jour pour y planifier un chantier, sur une barre pour ouvrir sa fiche.'
+            : 'Cliquez sur une barre pour ouvrir le chantier.'}</p>
         </section>
         <section class="card pl-carte">
-          <h3 class="pl-titre">Chantiers de ${esc(MOIS[state.mois])} <span>${duMois.length}</span></h3>
-          ${duMois.length ? `<div class="table-wrap"><table>
-            <thead><tr><th>Chantier</th><th>Fiche</th><th>Du</th><th>Au</th><th>Durée</th><th>À trouver</th></tr></thead>
-            <tbody>${duMois.map(c => {
+          <h3 class="pl-titre">Chantiers ${enAnnee ? 'de ' : 'de '}${esc(nomPeriode)} <span>${periode.length}</span></h3>
+          ${periode.length ? `<div class="table-wrap"><table>
+            <thead><tr><th>Chantier</th><th>État</th><th>Fiche</th><th>Du</th><th>Au</th><th>Durée</th><th>À trouver</th></tr></thead>
+            <tbody>${periode.map(c => {
               const r = rattachementDe(c);
               const reste = resteA(c.id);
               const n = lignesDe(c.id).length;
+              const e = etatDe(c);
               return `<tr data-chantier="${esc(c.id)}">
                 <td><span class="pl-point" style="background:${couleurDe(c, tous.indexOf(c))}"></span><b>${esc(c.titre)}</b></td>
+                <td><span class="pl-etat est-${e.cle}">${esc(e.label)}</span></td>
                 <td>${r ? esc(r.nom) : '<span class="muted">—</span>'}</td>
-                <td>${esc(dateCourte(c.date_debut))}</td><td>${esc(dateCourte(finDe(c)))}</td>
+                <td>${esc(dateCourte(c.date_debut))}${enAnnee ? '' : ''}</td><td>${esc(dateCourte(finDe(c)))}</td>
                 <td>${esc(dureeLue(c).texte)}</td>
                 <td>${!n ? '<span class="muted">Pas de liste</span>'
                   : reste ? `<span class="chip amber">${reste} à trouver</span>` : '<span class="chip green">Tout est prêt</span>'}</td>
               </tr>`;
             }).join('')}</tbody></table></div>`
-            : '<div class="empty">Aucun chantier ce mois-ci.</div>'}
+            : `<div class="empty">Aucun chantier ${enAnnee ? 'cette année' : 'ce mois-ci'}.</div>`}
         </section>`;
 
       root.innerHTML = cadre('#/rgd/planning', 'Planning chantier', corps);
       root.querySelectorAll('[data-pas]').forEach(b => b.onclick = () => {
+        if (state.vue === 'annee') { state.annee += Number(b.dataset.pas); draw(); return; }
         const d = new Date(state.annee, state.mois + Number(b.dataset.pas), 1);
         state.annee = d.getFullYear(); state.mois = d.getMonth(); draw();
       });
+      root.querySelectorAll('[data-vue]').forEach(b => b.onclick = () => {
+        state.vue = b.dataset.vue;
+        try { localStorage.setItem('rgd_planning_vue', state.vue); } catch { /* navigation privée */ }
+        draw();
+      });
       root.querySelector('#pl-auj').onclick = () => { state.annee = auj.getFullYear(); state.mois = auj.getMonth(); draw(); };
-      root.querySelector('#pl-neuf').onclick = () => ouvrirChantier(null, draw);
-      root.querySelector('#pl-std').onclick = ouvrirStandard;
-      root.querySelectorAll('[data-jour]').forEach(b => b.onclick = () => ouvrirChantier(null, draw, b.dataset.jour));
+      const bNeuf = root.querySelector('#pl-neuf');
+      if (bNeuf) bNeuf.onclick = () => ouvrirChantier(null, draw);
+      const bStd = root.querySelector('#pl-std');
+      if (bStd) bStd.onclick = ouvrirStandard;
+      if (direction) root.querySelectorAll('[data-jour]').forEach(b => b.onclick = () => ouvrirChantier(null, draw, b.dataset.jour));
+      else root.querySelectorAll('[data-jour]').forEach(b => { b.disabled = true; b.removeAttribute('title'); });
       root.querySelectorAll('[data-chantier]').forEach(el => el.onclick = () => {
         const c = db.byId('rgd_planning', el.dataset.chantier);
         if (c) ouvrirChantier(c, draw);

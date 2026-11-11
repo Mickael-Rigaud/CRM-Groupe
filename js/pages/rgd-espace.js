@@ -177,9 +177,15 @@ const SANS_BANDEAU = ['#/rgd/clients', '#/rgd/factures'];
 // ⚠ LE GROUPE « COMMUNICATION » ENTIER est réservé depuis le 08/10/2026,
 // Réalisations comprises (Élodie : « tu ne dois donner les accès qu'à la
 // direction et pas aux chargés d'affaires »). Le groupe vidé sort du menu.
-const RESERVES_DIRECTION = ['#/rgd/planning', '#/rgd/tarifs', '#/rgd/factures', '#/rgd/prospection', '#/rgd/realisations', '#/rgd/inspirations', '#/rgd/communication', '#/rgd/analyse'];
+const RESERVES_DIRECTION = ['#/rgd/tarifs', '#/rgd/factures', '#/rgd/prospection', '#/rgd/realisations', '#/rgd/inspirations', '#/rgd/communication', '#/rgd/analyse'];
+// ⚠ LE PLANNING N'EST PLUS RÉSERVÉ À LA DIRECTION DEPUIS LE 11/11/2026 : un
+// chantier peut être partagé avec un membre de l'équipe. L'entrée n'apparaît
+// chez lui QUE s'il a au moins un chantier partagé — sinon c'est une page vide.
+const aUnChantierPartage = () => db.t('rgd_planning')
+  .some(c => (c.partage_avec || []).includes(scope.user?.id));
 const sansDirection = (liste) => liste
   .filter(o => !RESERVES_DIRECTION.includes(o.hash))
+  .filter(o => o.hash !== '#/rgd/planning' || aUnChantierPartage())
   .map(o => (o.sous ? { ...o, sous: sansDirection(o.sous) } : o))
   // Un groupe vidé par le filtre partirait en intitulé seul, au-dessus de rien.
   .filter(o => !o.sous || o.sous.length);
@@ -216,6 +222,7 @@ export const cadre = (actif, titre, corps) => coquilleEspace({
 // règle que `sansDirection` — un groupe vidé sort du menu avec ses entrées.
 const pourOuvrier = (liste) => liste
   .filter(o => !o.hash || scope.ouvrierPeut(o.hash))
+  .filter(o => o.hash !== '#/rgd/planning' || aUnChantierPartage())
   .map(o => (o.sous ? { ...o, sous: pourOuvrier(o.sous) } : o))
   .filter(o => !o.sous || o.sous.length);
 
