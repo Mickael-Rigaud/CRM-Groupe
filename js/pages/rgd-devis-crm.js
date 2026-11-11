@@ -180,10 +180,41 @@ export function ouvrirDevisCrm(x, existant = null, retour = null, genreNeuf = 'f
   let motifAnnulation = '';
   // La prestation qui attend un second appui pour être retirée, s'il y en a une.
   let aRetirer = null;
+  // ⚠ CE QUI N'EST PAS ENREGISTRÉ EST PERDU, ET L'ÉCRAN DOIT LE DIRE AVANT
+  // (11/11/2026, Élodie : « quand on clique sur fermer je voudrais un message
+  // d'avertissement pour dire que si on ferme sans enregistrer la facture sera
+  // perdue »). `modifie` passe à vrai dès qu'on touche à quoi que ce soit, et
+  // retombe à faux à chaque enregistrement réussi.
+  //
+  // ⚠ LA DEMANDE S'AFFICHE DANS CETTE FENÊTRE, pas dans une seconde : deux
+  // modales partagent `closeModal` et se ferment mal. Même procédé que la
+  // suppression d'un brouillon et que l'annulation d'une facture.
+  let modifie = false;
+  let demandeFermeture = false;
 
   const titre = existant ? `${G.label} ${existant.numero || '(brouillon)'}` : `${G.nouveau}${x.nom ? ' — ' + x.nom : ''}`;
-  const m = openModal(titre, '<div id="rdc-hote" class="rdc"></div>', { wide: true, onClose: () => retour?.() });
+  // ⚠ LE GARDE COUVRE LES TROIS PORTES : la croix, le fond et le bouton. Il
+  // ne retient rien d'enregistré ni de signé — une pièce en base ne se perd
+  // pas en fermant une fenêtre.
+  const gardeFermeture = () => {
+    if (!modifie || signe || demandeFermeture) return true;
+    demandeFermeture = true;
+    // ⚠ `lire()` AVANT DE REDESSINER, SINON LA QUESTION EFFACE LA RÉPONSE :
+    // l'objet et les remarques ne passent dans `etat` qu'à cet appel. Sans lui,
+    // demander « fermer sans enregistrer ? » perdait ce qui venait d'être tapé
+    // — y compris si on répondait « Revenir ».
+    lire();
+    redessiner();
+    return false;
+  };
+  const m = openModal(titre, '<div id="rdc-hote" class="rdc"></div>',
+    { wide: true, onClose: () => retour?.(), avantFermeture: gardeFermeture });
   const hote = m.querySelector('#rdc-hote');
+  // ⚠ EN PHASE DE CAPTURE, ET SUR `hote` QUI SURVIT AUX REDESSINS : son
+  // `innerHTML` est remplacé à chaque dessin, l'élément lui-même non. Un
+  // écouteur posé dans `lier()` se serait ajouté une fois par dessin.
+  hote.addEventListener('input', () => { modifie = true; }, true);
+  hote.addEventListener('change', () => { modifie = true; }, true);
 
   const totalLigne = (l) => (Number(l.quantite) || 0) * (Number(l.prix_ht) || 0);
   const dis = signe ? 'disabled' : '';
@@ -372,12 +403,26 @@ export function ouvrirDevisCrm(x, existant = null, retour = null, genreNeuf = 'f
           <span>TVA ${String(etat.tva_taux).replace('.', ',')} % <b data-total="tva">${euros(t.tva)}</b></span>
           <span class="rdc-ttc">TTC <b data-total="ttc">${euros(t.ttc)}</b></span>
         </div>
+        ${/* ⚠ TROIS BOUTONS, ET C'EST UN PARCOURS, PLUS UN TABLEAU DE BORD
+              (11/11/2026, Élodie : « au niveau des boutons en bas je voudrais
+              "fermer", "enregistrer brouillon" et "suivant" »). Il y en avait
+              cinq, posés côte à côte, qui laissaient choisir l'ordre : on
+              pouvait envoyer par mail une facture que le client n'avait pas
+              signée, ou sortir le PDF avant de l'enregistrer. « Suivant »
+              enlève ce choix et fait l'étape d'après, celle qui va de soi :
+              signer quand rien n'est signé, envoyer quand c'est signé.
+              ⚠ L'IMPRESSION RESTE, MAIS APRÈS LA SIGNATURE : avant, le document
+              n'a pas de numéro définitif, et un PDF de brouillon chez le client
+              est une facture qui n'existe pas. */ ''}
         <div class="rdc-boutons">
-          <button type="button" class="btn ghost" data-close>Fermer</button>
-          ${signe ? '' : '<button type="button" class="btn ghost" id="rdc-enregistrer">Enregistrer</button>'}
-          ${signe ? '' : `<button type="button" class="btn ghost" id="rdc-signer">${esc(G.signer)}</button>`}
-          <button type="button" class="btn ghost" id="rdc-mail">Envoyer par mail</button>
-          <button type="button" class="btn" id="rdc-pdf">${signe ? 'Imprimer le PDF' : 'Enregistrer et PDF'}</button>
+          ${demandeFermeture ? `<span class="rdc-perdu">Fermer sans enregistrer ?
+            ${existant ? 'Les modifications seront perdues.' : `${dev ? 'Ce devis' : 'Cette facture'} sera perdu${dev ? '' : 'e'}.`}</span>
+          <button type="button" class="btn ghost" id="rdc-revenir">Revenir</button>
+          <button type="button" class="btn danger" id="rdc-fermer-quand-meme">Fermer quand même</button>`
+          : `<button type="button" class="btn ghost" id="rdc-fermer">Fermer</button>
+          ${signe ? `<button type="button" class="btn ghost" id="rdc-pdf">Imprimer le PDF</button>`
+            : '<button type="button" class="btn ghost" id="rdc-enregistrer">Enregistrer brouillon</button>'}
+          <button type="button" class="btn" id="rdc-suivant">Suivant</button>`}
         </div>
       </div>`;
     lier();
@@ -643,7 +688,26 @@ export function ouvrirDevisCrm(x, existant = null, retour = null, genreNeuf = 'f
     const bEnr = hote.querySelector('#rdc-enregistrer');
     if (bEnr) bEnr.onclick = async () => {
       const d = await enregistrer();
-      if (d) { closeModal(true); ouvrirDevisCrm(x, d, retour); }
+      if (d) { modifie = false; closeModal(true); ouvrirDevisCrm(x, d, retour); }
+    };
+    const bFermer = hote.querySelector('#rdc-fermer');
+    if (bFermer) bFermer.onclick = () => { if (gardeFermeture()) closeModal(); };
+    const bRevenir = hote.querySelector('#rdc-revenir');
+    if (bRevenir) bRevenir.onclick = () => { demandeFermeture = false; redessiner(); };
+    const bQuandMeme = hote.querySelector('#rdc-fermer-quand-meme');
+    if (bQuandMeme) bQuandMeme.onclick = () => { modifie = false; closeModal(); };
+    // ⚠ « SUIVANT » N'EST PAS UN BOUTON DE PLUS, C'EST LE FIL DU PARCOURS :
+    // il enregistre puis fait signer tant que rien n'est signé, et il envoie
+    // une fois que ça l'est. Le client signe sur place, la facture part par
+    // mail, le bon d'attachement suit — chaque étape appelle la suivante.
+    const bSuivant = hote.querySelector('#rdc-suivant');
+    if (bSuivant) bSuivant.onclick = async () => {
+      if (signe) { ouvrirEnvoi(existant); return; }
+      const d = await enregistrer();
+      if (!d) return;
+      modifie = false;
+      existant = d;
+      faireSigner();
     };
     // ⚠ MARQUER RÉGLÉE CHANGE LE DOCUMENT, PAS SEULEMENT UNE ÉTIQUETTE : la
     // facture perd son échéance et ses pénalités et porte « acquittée ». On
@@ -746,11 +810,7 @@ export function ouvrirDevisCrm(x, existant = null, retour = null, genreNeuf = 'f
         ouvrirDevisCrm(x, db.byId('rgd_devis_crm', existant.id) || existant, retour);
       });
     };
-    const bSign = hote.querySelector('#rdc-signer');
-    if (bSign) bSign.onclick = async () => {
-      const d = await enregistrer();
-      if (d) { existant = d; faireSigner(); }
-    };
+
     // ⚠ ON QUITTE LE DEVIS POUR OUVRIR LA FACTURE NEUVE : elle naît en
     // brouillon, et c'est là qu'il faut corriger les écarts du chantier avant
     // de l'émettre. Laisser le devis ouvert aurait fait croire que la facture
@@ -775,16 +835,11 @@ export function ouvrirDevisCrm(x, existant = null, retour = null, genreNeuf = 'f
       closeModal(true);
       ouvrirDevisCrm(x, f, retour);
     };
-    hote.querySelector('#rdc-mail').onclick = async () => {
-      const d = signe ? existant : await enregistrer();
-      if (d) ouvrirEnvoi(d);
-    };
-    hote.querySelector('#rdc-pdf').onclick = async () => {
-      const d = signe ? existant : await enregistrer();
-      if (!d) return;
-      imprimer(d);
+    const bPdf = hote.querySelector('#rdc-pdf');
+    if (bPdf) bPdf.onclick = () => {
+      imprimer(existant);
       closeModal(true);
-      ouvrirDevisCrm(x, d, retour);
+      ouvrirDevisCrm(x, existant, retour);
     };
   }
 

@@ -7733,6 +7733,12 @@ span.rpv-statut { display: inline-block; margin-bottom: 4px; }
 .rdc-totaux .rdc-ttc { font-size: 16px; color: inherit; font-weight: 700; }
 .rdc-totaux .rdc-ttc b { color: var(--accent); }
 .rdc-boutons { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-left: auto; }
+/* ⚠ L'AVERTISSEMENT DE FERMETURE PREND LA PLACE DES BOUTONS, il ne s'ajoute
+   pas à côté : une question qu'on peut ignorer d'un clic sur le bouton d'à
+   côté n'est pas une question. Même procédé que la suppression d'un brouillon. */
+.rdc-perdu { font-size: 13px; font-weight: 600; color: var(--red);
+  margin-right: auto; align-self: center; }
+@media screen and (max-width: 760px) { .rdc-perdu { width: 100%; margin-bottom: 6px; } }
 @media screen and (max-width: 720px) {
   .rdc-saisie { padding-left: 12px; }
   .rdc-presta { scroll-margin-bottom: 150px; }

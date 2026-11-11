@@ -113,14 +113,31 @@ export function toastGeste(msg, { libelle, action, duree = 15000 } = {}) {
 
 // ---------- Modales ----------
 let modalOnClose = null;
-export function openModal(title, bodyHtml, { wide = false, onOpen, onClose = null } = {}) {
+// ⚠ UNE FENÊTRE PEUT REFUSER DE SE FERMER (11/11/2026). `avantFermeture`
+// est appelé à chaque tentative — la croix, le fond, un bouton `data-close` —
+// et rendre `false` l'annule. Il a été ajouté pour la facture de dépannage :
+// Élodie veut un avertissement « si on ferme sans enregistrer la facture sera
+// perdue », et un garde posé sur le seul bouton « Fermer » aurait laissé deux
+// portes ouvertes sur trois.
+//
+// ⚠ IL EST SYNCHRONE, EXPRÈS : une question posée dans une seconde fenêtre se
+// ferme mal (deux modales partagent `closeModal`). L'appelant répond `false`,
+// affiche sa demande DANS sa propre fenêtre, et appelle `closeModal()` lui-même
+// quand l'utilisateur confirme.
+let modalAvantFermeture = null;
+export function openModal(title, bodyHtml, { wide = false, onOpen, onClose = null, avantFermeture = null } = {}) {
   closeModal(true);
   modalOnClose = onClose;
+  modalAvantFermeture = avantFermeture;
   const wrap = document.createElement('div'); wrap.className = 'modal-backdrop'; wrap.id = 'modal';
   wrap.innerHTML = `<div class="modal ${wide ? 'wide' : ''}" role="dialog" aria-modal="true">
     <div class="modal-head"><h2>${esc(title)}</h2><button class="icon-btn" data-close aria-label="Fermer">✕</button></div>
     <div class="modal-body">${bodyHtml}</div></div>`;
-  wrap.addEventListener('click', e => { if (e.target === wrap || e.target.closest('[data-close]')) closeModal(); });
+  wrap.addEventListener('click', e => {
+    if (e.target !== wrap && !e.target.closest('[data-close]')) return;
+    if (modalAvantFermeture && modalAvantFermeture() === false) return;
+    closeModal();
+  });
   document.body.appendChild(wrap);
   document.body.classList.add('no-scroll');
   onOpen?.(wrap.querySelector('.modal'));
@@ -130,6 +147,7 @@ export function openModal(title, bodyHtml, { wide = false, onOpen, onClose = nul
 export function closeModal(replacing = false) {
   const el = document.getElementById('modal'); if (!el) return;
   el.remove(); document.body.classList.remove('no-scroll');
+  modalAvantFermeture = null;
   const cb = modalOnClose; modalOnClose = null;
   if (!replacing && cb) cb();
 }
