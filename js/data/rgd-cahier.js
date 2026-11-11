@@ -131,6 +131,17 @@ export async function retirerPhoto(k, chemin) {
   return ligne;
 }
 
+// Une pièce renommée emmène ses photos : sans ça, elles resteraient
+// rattachées à l'ancien nom et ne s'imprimeraient plus.
+export async function renommerPhotos(k, renommes) {
+  const a_jour = cahierDe(k.planning_id) || k;
+  const photos = a_jour.photos || [];
+  if (!photos.some(p => renommes[p.lot || ''] !== undefined)) return a_jour;
+  return db.update('rgd_cahiers', k.id, {
+    photos: photos.map(p => (renommes[p.lot || ''] !== undefined ? { ...p, lot: renommes[p.lot || ''] } : p)),
+  });
+}
+
 export async function poserPlan(k, fichier) {
   if (estSigne(k)) throw new Error('Le cahier est signé : retirez la signature avant de le modifier.');
   const ancien = k.plan;

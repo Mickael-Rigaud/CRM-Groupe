@@ -8784,3 +8784,23 @@ ul.cp-travaux.petite li { font-size: 1.45cqw; }
   .cp-scene { width: 100%; border-radius: 10px; }
   .cp-vig { width: 84px; }
 }
+/* Cahier des charges : les travaux classés par pièce (11/11/2026) */
+.ca-salles { display: flex; flex-direction: column; gap: 12px; }
+.ca-salle { border: 1px solid var(--line); border-left: 4px solid #E48312; border-radius: 12px; padding: 10px 12px 12px;
+  background: var(--card); display: flex; flex-direction: column; gap: 8px; }
+.ca-salle-tete { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ca-salle-nom { flex: 1 1 220px; min-width: 0; border: 1px solid transparent; border-radius: 8px; padding: 4px 8px;
+  font: inherit; font-size: 18px; font-weight: 800; color: #c2410c; background: transparent; }
+.ca-salle-nom:hover, .ca-salle-nom:focus { border-color: var(--line); background: var(--card-2); outline: none; }
+.ca-salle-nom:disabled { color: #c2410c; }
+.ca-salle .ca-postes { display: flex; flex-direction: column; gap: 4px; }
+.ca-salle .ca-poste { grid-template-columns: minmax(0, 1fr) 70px 80px 120px 30px; }
+.ca-salle > .btn { align-self: flex-start; }
+.ca-deplacer { border: 1px solid var(--line); border-radius: 8px; padding: 5px 6px; font: inherit; font-size: 12.5px;
+  background: var(--card); color: var(--muted); min-width: 0; }
+.ca-ajouter-piece { align-self: flex-start; }
+@media screen and (max-width: 760px) {
+  .ca-salle .ca-poste { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 30px; }
+  .ca-salle .ca-poste > .ca-poste-texte { grid-column: 1 / -1; }
+  .ca-salle .ca-poste > .ca-deplacer { grid-column: 1 / 3; }
+}

@@ -15,7 +15,7 @@ import { COSTRUCTOR_APP } from '../data/rgd-cgv.js';
 import { cahierDe, estSigne, creerCahier, majCahier, signerCahier, retirerSignature,
          preparerLien, lienSignature, lienValable, envoyerPourSignature,
          devisSignesDu, postesDuDevisCrm, decouperCollage, lireDevisCostructor,
-         ajouterPhotos, retirerPhoto, poserPlan, liensDuCahier, piecesDe } from '../data/rgd-cahier.js';
+         ajouterPhotos, retirerPhoto, poserPlan, liensDuCahier, piecesDe, renommerPhotos } from '../data/rgd-cahier.js';
 import { imprimerCahierClient, imprimerCahierOuvriers } from './rgd-cahier-doc.js';
 import { donneesDocument } from './rgd-documents.js';
 
@@ -44,6 +44,8 @@ export function ouvrirCahier(chantier, dossier, retour) {
     type_bien: k?.type_bien || (dossier ? donneesDocument(dossier).typeBien : '') || '',
     nature: k?.nature || (dossier ? donneesDocument(dossier).travaux : '') || '',
     envoiPhoto: '',      // la pièce dont les photos partent en ce moment
+    piecesVides: [],     // les pièces ajoutées à la main, pas encore garnies
+    renommes: {},        // ancien nom de pièce → nouveau, pour emmener les photos
     collage: false,
     modifie: false,
     lecture: false,      // lecture du devis Costructor en cours
@@ -94,15 +96,16 @@ export function ouvrirCahier(chantier, dossier, retour) {
     };
   };
 
-  const ligneP = (p, i, fige) => `
+  const ligneP = (p, i, fige, pieces) => `
     <div class="ca-poste" data-i="${i}">
-      <input data-c="lot" value="${esc(p.lot)}" placeholder="Lot" aria-label="Lot"${fige ? ' disabled' : ''}>
       <div class="ca-poste-texte">
         <input data-c="designation" value="${esc(p.designation)}" placeholder="Travaux" aria-label="Désignation"${fige ? ' disabled' : ''}>
         <input data-c="detail" value="${esc(p.detail)}" placeholder="Précision (facultatif)" aria-label="Détail" class="ca-detail"${fige ? ' disabled' : ''}>
       </div>
       <input data-c="quantite" value="${esc(p.quantite)}" placeholder="Qté" aria-label="Quantité" class="ca-qte"${fige ? ' disabled' : ''}>
       <input data-c="unite" value="${esc(p.unite)}" placeholder="Unité" aria-label="Unité" class="ca-unite"${fige ? ' disabled' : ''}>
+      ${fige || pieces.length < 2 ? '<span></span>' : `<select class="ca-deplacer" data-deplacer aria-label="Déplacer vers une autre pièce" title="Déplacer vers une autre pièce">
+        <option value="__">Déplacer…</option>${pieces.filter(x => x !== (p.lot || '')).map(x => `<option value="${esc(x)}">${esc(x || 'Travaux')}</option>`).join('')}</select>`}
       ${fige ? '<span></span>' : '<button type="button" class="icon-btn" data-retirer title="Retirer ce poste">✕</button>'}
     </div>`;
 
@@ -148,15 +151,7 @@ export function ouvrirCahier(chantier, dossier, retour) {
         <div class="ca-collage-actions"><span class="muted small">Les montants et la TVA sont retirés. Vous pourrez tout retoucher ensuite.</span>
           <span class="grow"></span><button type="button" class="btn primary sm" id="ca-decouper">Transformer en postes</button></div>
       </div>` : ''}`}
-      <div class="ca-titre"><h4 class="ca-h">Postes de travaux <span>${s.postes.length}</span></h4>
-        <span class="muted small">Aucun prix : ce document va aux ouvriers et au client.</span></div>
-      <div class="ca-postes">
-        ${s.postes.length ? `<div class="ca-poste ca-poste-tete"><span>Lot</span><span>Travaux</span><span>Qté</span><span>Unité</span><span></span></div>
-          ${s.postes.map((p, i) => ligneP(p, i, fige)).join('')}`
-          : `<p class="muted small">${s.lecture ? 'Les postes arrivent…' : 'Aucun poste pour l’instant.'}</p>`}
-        ${fige ? '' : '<button type="button" class="btn ghost sm" id="ca-ajouter">+ Ajouter un poste</button>'}
-      </div>
-      ${blocPhotos(fige)}
+      ${blocSalles(fige)}
       <div class="ca-textes">
         <label class="pl-champ"><span>Consignes pour l’équipe <em>(version équipe seulement)</em></span>
           <textarea id="ca-consignes" rows="3" placeholder="Accès, horaires, protections, points de vigilance…"${fige ? ' disabled' : ''}>${esc(s.consignes)}</textarea></label>
@@ -188,34 +183,58 @@ export function ouvrirCahier(chantier, dossier, retour) {
     remplirVignettes();
   };
 
-  // ⚠ UNE PAGE PAR PIÈCE AVEC SA PHOTO (modèle d'Élodie, 11/11/2026). Les
-  // pièces sont les lots des postes ; on y attache une ou deux photos (au-delà,
-  // le document n'en imprime que deux). Le plan a sa propre page. Les photos
-  // exigent un cahier enregistré : elles sont rangées sous son chantier.
-  function blocPhotos(fige) {
-    const pieces = piecesDe(s.postes);
+  // ⚠ LES POSTES SONT CLASSÉS PAR PIÈCE (11/11/2026, Élodie : « les postes de
+  // travaux je voudrais qu'ils soient classés par pièce aussi »). Un bloc par
+  // pièce — son nom (modifiable, il renomme tout), ses travaux, ses photos —
+  // comme une page du document. La pièce d'un poste est son `lot`.
+  const piecesEcran = () => {
+    const l = piecesDe(s.postes);
+    for (const v of s.piecesVides) if (!l.includes(v)) l.push(v);
+    return l;
+  };
+  function blocSalles(fige) {
+    const pieces = piecesEcran();
     const photos = k?.photos || [];
     const vignette = (chemin, retirable) => `<span class="ca-vignette"><img data-chemin="${esc(chemin)}" alt="">${
       retirable ? `<button type="button" class="ca-vignette-x" data-retirer-photo="${esc(chemin)}" title="Retirer la photo">✕</button>` : ''}</span>`;
-    const ajout = (lot, libelle = '+ Photo') => fige ? '' : `<label class="btn ghost sm ca-ajout-photo">${
-      s.envoiPhoto === lot ? 'Envoi…' : libelle}<input type="file" accept="image/*" multiple hidden data-photo-lot="${esc(lot)}"></label>`;
+    return `<div class="ca-titre"><h4 class="ca-h">Travaux par pièce <span>${pieces.length} pièce${pieces.length > 1 ? 's' : ''} · ${s.postes.length} poste${s.postes.length > 1 ? 's' : ''}</span></h4>
+        <span class="muted small">Aucun prix : ce document va aux ouvriers et au client. Une page par pièce, avec ses photos (deux au plus).</span></div>
+      <div class="ca-salles">
+        ${!pieces.length ? `<p class="muted small">${s.lecture ? 'Les postes arrivent…' : 'Aucune pièce pour l’instant.'}</p>` : pieces.map(lot => {
+          const lignes = s.postes.map((p, i) => ({ p, i })).filter(x => (x.p.lot || '') === lot);
+          const ph = photos.filter(x => (x.lot || '') === lot);
+          return `<section class="ca-salle" data-piece="${esc(lot)}">
+            <div class="ca-salle-tete">
+              <input class="ca-salle-nom" data-piece-nom value="${esc(lot)}" placeholder="Nom de la pièce" aria-label="Nom de la pièce"${fige ? ' disabled' : ''}>
+              <span class="muted small">${lignes.length} poste${lignes.length > 1 ? 's' : ''}</span>
+              ${fige || lignes.length ? '' : '<button type="button" class="btn ghost sm" data-retirer-piece>Retirer la pièce</button>'}
+            </div>
+            <div class="ca-vignettes">${ph.map(x => vignette(x.chemin, !fige)).join('')}${fige ? '' : `<label class="btn ghost sm ca-ajout-photo">${
+              s.envoiPhoto === lot ? 'Envoi…' : '+ Photo'}<input type="file" accept="image/*" multiple hidden data-photo-lot="${esc(lot)}"></label>`}</div>
+            <div class="ca-postes">${lignes.map(x => ligneP(x.p, x.i, fige, pieces)).join('')}</div>
+            ${fige ? '' : '<button type="button" class="btn ghost sm" data-ajouter-poste>+ Ajouter un poste</button>'}
+          </section>`;
+        }).join('')}
+        ${fige ? '' : '<button type="button" class="btn sm ca-ajouter-piece" id="ca-ajouter-piece">+ Ajouter une pièce</button>'}
+      </div>
+      ${blocPlan(fige)}`;
+  }
+
+  // Le plan, et les photos dont la pièce a disparu.
+  function blocPlan(fige) {
+    const pieces = piecesEcran();
+    const photos = k?.photos || [];
+    const vignette = (chemin, retirable) => `<span class="ca-vignette"><img data-chemin="${esc(chemin)}" alt="">${
+      retirable ? `<button type="button" class="ca-vignette-x" data-retirer-photo="${esc(chemin)}" title="Retirer la photo">✕</button>` : ''}</span>`;
     const orphelines = photos.filter(p => !pieces.includes(p.lot || ''));
-    return `<div class="ca-titre"><h4 class="ca-h">Photos des pièces</h4>
-        <span class="muted small">Une page par pièce dans le document, avec ses photos (deux au plus).</span></div>
-      <div class="ca-pieces">
-        ${!pieces.length ? '<p class="muted small">Les pièces apparaissent avec les postes de travaux.</p>'
-          : pieces.map(lot => {
-            const ph = photos.filter(p => (p.lot || '') === lot);
-            return `<div class="ca-piece"><b>${esc(lot || 'Travaux')}</b>
-              <div class="ca-vignettes">${ph.map(p => vignette(p.chemin, !fige)).join('')}${ajout(lot)}</div></div>`;
-          }).join('')}
+    return `<div class="ca-pieces">
         <div class="ca-piece"><b>Plan du logement</b>
           <div class="ca-vignettes">${k?.plan ? vignette(k.plan, false) : ''}${fige ? '' : `<label class="btn ghost sm ca-ajout-photo">${
             s.envoiPhoto === '__plan' ? 'Envoi…' : k?.plan ? 'Remplacer' : '+ Plan'}<input type="file" accept="image/*" hidden data-plan></label>${
             k?.plan ? '<button type="button" class="btn ghost sm" id="ca-plan-retirer">Retirer</button>' : ''}`}</div></div>
         ${orphelines.length ? `<div class="ca-piece"><b class="muted">Photos d’une pièce renommée</b>
           <div class="ca-vignettes">${orphelines.map(p => vignette(p.chemin, !fige)).join('')}</div>
-          <small class="muted">Elles ne s’impriment plus : retirez-les et rajoutez-les dans la bonne pièce.</small></div>` : ''}
+          <small class="muted">Elles ne s’impriment pas : retirez-les et rajoutez-les dans la bonne pièce.</small></div>` : ''}
       </div>`;
   }
 
@@ -230,7 +249,8 @@ export function ouvrirCahier(chantier, dossier, retour) {
     hote.querySelectorAll('input[data-photo-lot]').forEach(inp => inp.onchange = async () => {
       const fichiers = [...inp.files];
       if (!fichiers.length) return;
-      const lot = inp.dataset.photoLot;
+      const nom = inp.closest('.ca-salle')?.querySelector('[data-piece-nom]')?.value.trim();
+      const lot = nom ?? inp.dataset.photoLot;
       try {
         await enregistrer();
         s.envoiPhoto = lot; dessiner();
@@ -271,9 +291,19 @@ export function ouvrirCahier(chantier, dossier, retour) {
     s.devis = v('#ca-devis'); s.objet = v('#ca-objet');
     s.consignes = v('#ca-consignes'); s.precisions = v('#ca-precisions');
     s.type_bien = v('#ca-type'); s.nature = v('#ca-nature');
-    hote.querySelectorAll('.ca-poste[data-i]').forEach(r => {
-      const p = s.postes[Number(r.dataset.i)];
-      r.querySelectorAll('[data-c]').forEach(inp => { p[inp.dataset.c] = inp.value; });
+    hote.querySelectorAll('.ca-salle').forEach(bloc => {
+      const ancien = bloc.dataset.piece;
+      const nom = (bloc.querySelector('[data-piece-nom]')?.value || '').trim();
+      if (nom !== ancien) {
+        s.renommes[ancien] = nom;
+        s.piecesVides = s.piecesVides.map(v => (v === ancien ? nom : v));
+        bloc.dataset.piece = nom;
+      }
+      bloc.querySelectorAll('.ca-poste[data-i]').forEach(r => {
+        const p = s.postes[Number(r.dataset.i)];
+        r.querySelectorAll('[data-c]').forEach(inp => { p[inp.dataset.c] = inp.value; });
+        p.lot = nom;
+      });
     });
   };
 
@@ -289,7 +319,13 @@ export function ouvrirCahier(chantier, dossier, retour) {
     };
     k = k ? await majCahier(k, champs) : await creerCahier(chantier.id, champs);
     k = cahierDe(chantier.id) || k;
+    if (Object.keys(s.renommes).length) {
+      await renommerPhotos(k, s.renommes);
+      k = cahierDe(chantier.id) || k;
+      s.renommes = {};
+    }
     s.postes = (k.postes || []).map(p => ({ ...p }));
+    s.piecesVides = s.piecesVides.filter(v => !piecesDe(s.postes).includes(v));
     s.modifie = false;
     return k;
   };
@@ -367,13 +403,48 @@ export function ouvrirCahier(chantier, dossier, retour) {
       if (s.postes.length && !await demander(`Remplacer les ${s.postes.length} postes actuels par les lignes du devis ?`)) { dessiner(); return; }
       s.postes = nouveaux; s.modifie = true; dessiner();
     };
-    hote.querySelector('#ca-ajouter').onclick = () => {
+    hote.querySelectorAll('[data-ajouter-poste]').forEach(b => b.onclick = () => {
       lire();
-      const dernier = s.postes[s.postes.length - 1];
-      s.postes.push({ lot: dernier?.lot || '', designation: '', detail: '', quantite: '', unite: '' });
+      const lot = b.closest('.ca-salle').dataset.piece;
+      // Le nouveau poste se range à la fin de SA pièce, pas à la fin du cahier.
+      let apres = -1;
+      s.postes.forEach((p, n) => { if ((p.lot || '') === lot) apres = n; });
+      // Une pièce encore vide : le poste va à la fin, la pièce reste en dernier.
+      s.postes.splice(apres === -1 ? s.postes.length : apres + 1, 0, { lot, designation: '', detail: '', quantite: '', unite: '' });
       s.modifie = true; dessiner();
-      hote.querySelector('.ca-poste[data-i]:last-of-type [data-c="designation"]')?.focus();
+      const bloc = [...hote.querySelectorAll('.ca-salle')].find(x => x.dataset.piece === lot);
+      [...(bloc?.querySelectorAll('[data-c="designation"]') || [])].pop()?.focus();
+    });
+    hote.querySelector('#ca-ajouter-piece').onclick = () => {
+      lire();
+      const deja = piecesEcran();
+      let nom = 'Nouvelle pièce', n = 2;
+      while (deja.includes(nom)) nom = `Nouvelle pièce ${n++}`;
+      s.piecesVides.push(nom); s.modifie = true; dessiner();
+      const bloc = [...hote.querySelectorAll('.ca-salle')].find(x => x.dataset.piece === nom);
+      const champ = bloc?.querySelector('[data-piece-nom]');
+      if (champ) { champ.focus(); champ.select(); bloc.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
     };
+    hote.querySelectorAll('[data-retirer-piece]').forEach(b => b.onclick = () => {
+      lire();
+      const lot = b.closest('.ca-salle').dataset.piece;
+      s.piecesVides = s.piecesVides.filter(v => v !== lot);
+      s.modifie = true; dessiner();
+    });
+    hote.querySelectorAll('[data-deplacer]').forEach(sel => sel.onchange = () => {
+      if (sel.value === '__') return;
+      lire();
+      const p = s.postes[Number(sel.closest('[data-i]').dataset.i)];
+      // Le poste part à la fin de sa nouvelle pièce, pour que les pièces
+      // restent d'un seul tenant dans le document.
+      const cible = sel.value;
+      s.postes = s.postes.filter(x => x !== p);
+      p.lot = cible;
+      let apres = -1;
+      s.postes.forEach((x, n) => { if ((x.lot || '') === cible) apres = n; });
+      s.postes.splice(apres === -1 ? s.postes.length : apres + 1, 0, p);
+      s.modifie = true; dessiner();
+    });
     hote.querySelectorAll('[data-retirer]').forEach(b => b.onclick = () => {
       lire();
       s.postes.splice(Number(b.closest('[data-i]').dataset.i), 1);
