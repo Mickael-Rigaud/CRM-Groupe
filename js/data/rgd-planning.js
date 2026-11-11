@@ -130,7 +130,15 @@ export const lignesDe = (id, liste) => db.t('rgd_planning_lignes')
 export const resteA = (id) => lignesDe(id).filter(l => !l.deja_la && !l.achete).length;
 
 // ------------------------------------------------------------ écritures
+// ⚠ UNE LIGNE DU PLANNING EST UN CHANTIER OU UNE FORMATION (11/11/2026,
+// Élodie : « rajouter des périodes de formations »). Même table, colonne
+// `genre`. Une formation n'a ni dossier client ni listes ; `adresse` y porte
+// l'organisme ou le lieu, `partage_avec` les participants (elle apparaît dans
+// leur planning, comme un chantier partagé).
+export const estFormation = (c) => c?.genre === 'formation';
+
 const propre = (champs) => {
+  const formation = champs.genre === 'formation';
   const unite = UNITES[champs.duree_unite] ? champs.duree_unite : 'jours';
   const nombre = Math.max(1, Math.min(UNITES[unite].max, parseInt(champs.duree_nombre, 10) || 1));
   return {
@@ -139,8 +147,9 @@ const propre = (champs) => {
   duree_nombre: nombre,
   duree_unite: unite,
   duree_jours: champs.date_debut ? Math.min(366, joursPour(champs.date_debut, nombre, unite)) : nombre,
-  fiche_id: champs.fiche_id || null,
-  demande_id: champs.demande_id || null,
+  genre: formation ? 'formation' : 'chantier',
+  fiche_id: formation ? null : champs.fiche_id || null,
+  demande_id: formation ? null : champs.demande_id || null,
   adresse: String(champs.adresse || '').trim() || null,
   couleur: champs.couleur || null,
   notes: String(champs.notes || '').trim() || null,
@@ -150,14 +159,14 @@ const propre = (champs) => {
 
 export async function creerChantier(champs) {
   const ligne = propre(champs);
-  if (!ligne.titre) throw new Error('Donnez un nom au chantier.');
+  if (!ligne.titre) throw new Error(ligne.genre === 'formation' ? 'Donnez un nom à la formation.' : 'Donnez un nom au chantier.');
   if (!ligne.date_debut) throw new Error('La date de début manque.');
   return db.insert('rgd_planning', ligne);
 }
 
 export async function majChantier(id, champs) {
   const ligne = propre(champs);
-  if (!ligne.titre) throw new Error('Donnez un nom au chantier.');
+  if (!ligne.titre) throw new Error(ligne.genre === 'formation' ? 'Donnez un nom à la formation.' : 'Donnez un nom au chantier.');
   if (!ligne.date_debut) throw new Error('La date de début manque.');
   return db.update('rgd_planning', id, ligne);
 }

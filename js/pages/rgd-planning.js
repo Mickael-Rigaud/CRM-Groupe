@@ -23,7 +23,7 @@ import { cadre, guard } from './rgd-espace.js';
 import { etapeDeFiche, etapeDeDemande, joursDeVisite } from '../data/rgd-etapes.js';
 import { LISTES, UNITES, joursPour, dureeLue, listesStandard, enregistrerStandard, versDate, versIso, ajouterJours, finDe,
          chantiersPlanifies, lignesDe, resteA, creerChantier, majChantier, supprimerChantier,
-         ajouterLigne, ajouterStandard, majLigne, retirerLigne, changerFin, deplacerChantier } from '../data/rgd-planning.js';
+         ajouterLigne, ajouterStandard, majLigne, retirerLigne, changerFin, deplacerChantier, estFormation } from '../data/rgd-planning.js';
 
 // ⚠ LE 11/11/2026 : PARTAGE, LECTURE PAR L'ÉQUIPE ET VUE DE L'ANNÉE.
 // · Un chantier peut être partagé avec un membre de l'équipe (`partage_avec`).
@@ -38,7 +38,13 @@ const MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 
 const JOURS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 // Des teintes franches et distinctes, lisibles en texte blanc.
 const COULEURS = ['#fd7a2d', '#0284c7', '#16a34a', '#7c3aed', '#db2777', '#0d9488', '#ca8a04', '#475569'];
-const couleurDe = (c, i = 0) => c.couleur || COULEURS[i % COULEURS.length];
+// Une formation sans couleur choisie prend l'indigo, absent de la palette des
+// chantiers : on la distingue d'un coup d'œil.
+const COULEUR_FORMATION = '#4f46e5';
+const couleurDe = (c, i = 0) => c.couleur || (estFormation(c) ? COULEUR_FORMATION : COULEURS[i % COULEURS.length]);
+// La toque, devant le nom d'une formation (barres, frise, tableau).
+const TOQUE = '<svg class="pl-toque" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 1 9l11 6 9-4.9V17h2V9L12 3zm-6.5 9.6V16c0 1.9 2.9 3.5 6.5 3.5s6.5-1.6 6.5-3.5v-3.4L12 16.2l-6.5-3.6z"/></svg>';
+const marque = (c) => (estFormation(c) ? TOQUE : '');
 
 const aujourdhui = () => versIso(new Date());
 const dateLongue = (iso) => {
@@ -200,12 +206,12 @@ function calendrier(annee, mois, chantiers) {
             const total = Math.max(1, Number(m.c.duree_jours) || 1);
             const jourN = Math.round((versDate(auj) - versDate(m.c.date_debut)) / 86400000) + 1;
             const ici = e.cle === 'encours' && auj >= debutSeg && auj <= finSeg;
-            return `<button type="button" class="pl-barre est-${e.cle}${m.suite ? ' suite' : ''}${m.continue ? ' continue' : ''}"
+            return `<button type="button" class="pl-barre est-${e.cle}${estFormation(m.c) ? ' formation' : ''}${m.suite ? ' suite' : ''}${m.continue ? ' continue' : ''}"
               style="grid-column:${m.col} / ${m.fin_col}; grid-row:${m.couloir}; --pl-c:${couleurDe(m.c, m.i)}; --k:${k++}; --pl-av:${av}%"
               data-chantier="${esc(m.c.id)}"
               title="${esc(`${m.c.titre} — du ${dateLongue(m.c.date_debut)} au ${dateLongue(m.fin)}${
                 e.cle === 'encours' ? ` — jour ${jourN} sur ${total} (${Math.round(jourN / total * 100)} %)` : ''}`)}">
-              <span class="pl-barre-texte">${m.suite ? '<i>suite</i> ' : ''}${esc(m.c.titre)}</span>${
+              <span class="pl-barre-texte">${m.suite ? '<i>suite</i> ' : ''}${marque(m.c)}${esc(m.c.titre)}</span>${
               ici ? `<em class="pl-barre-jour">J${jourN}/${total}</em>` : ''}${
               direction && !m.continue ? `<span class="pl-poignee" data-poignee="${esc(m.c.id)}" title="Tirer pour changer la fin"></span>` : ''}</button>`;
           }).join('')}
@@ -310,7 +316,7 @@ function frise(tous) {
   return `
     <div class="pl-frise-defile" data-auj="${xAuj}" data-depart="${xDepart}">
       <div class="pl-frise" style="--pl-larg:${largeur}px">
-        <div class="pl-frise-ligne pl-frise-tete"><div class="pl-frise-nom"><span>${lignes.length} chantier${lignes.length > 1 ? 's' : ''}</span></div>
+        <div class="pl-frise-ligne pl-frise-tete"><div class="pl-frise-nom"><span>${lignes.length} au planning</span></div>
           <div class="pl-frise-piste">${mois.join('')}
             <div class="pl-frise-semaines">${semaines.join('')}</div>
             <div class="pl-frise-auj-pastille" style="left:${xAuj}px">Aujourd’hui</div></div></div>
@@ -322,13 +328,13 @@ function frise(tous) {
           const etiquette = x.e.cle === 'encours' ? `${ecoule} %` : x.e.cle === 'futur'
             ? `dans ${pos(x.c.date_debut) - pos(auj)} j` : 'terminé';
           return `<div class="pl-frise-ligne" style="--k:${k}">
-          <div class="pl-frise-nom"><b><i class="pl-frise-puce est-${x.e.cle}" style="--pl-c:${couleurDe(x.c, x.i)}"></i>${esc(x.c.titre)}</b>
+          <div class="pl-frise-nom"><b><i class="pl-frise-puce est-${x.e.cle}" style="--pl-c:${couleurDe(x.c, x.i)}"></i>${marque(x.c)}${esc(x.c.titre)}</b>
             <span>${esc(dateCourte(x.c.date_debut))} → ${esc(dateCourte(x.fin))} · ${esc(dureeLue(x.c).texte)}</span></div>
           <div class="pl-frise-piste">
-            <button type="button" class="pl-frise-barre est-${x.e.cle}${w < 70 ? ' etroite' : ''}"
+            <button type="button" class="pl-frise-barre est-${x.e.cle}${estFormation(x.c) ? ' formation' : ''}${w < 70 ? ' etroite' : ''}"
               style="left:${pos(x.c.date_debut) * PX_JOUR}px; width:${w}px; --pl-c:${couleurDe(x.c, x.i)}; --pl-av:${ecoule}%"
               data-chantier="${esc(x.c.id)}" title="${esc(`${x.c.titre} — ${x.e.label.toLowerCase()} — du ${dateLongue(x.c.date_debut)} au ${dateLongue(x.fin)}`)}">
-              <span class="pl-frise-texte">${esc(x.c.titre)}</span>${w >= 160 ? `<em>${esc(etiquette)}</em>` : ''}${
+              <span class="pl-frise-texte">${marque(x.c)}${esc(x.c.titre)}</span>${w >= 160 ? `<em>${esc(etiquette)}</em>` : ''}${
               scope.isDirection ? `<span class="pl-poignee" data-poignee="${esc(x.c.id)}" title="Tirer pour changer la fin"></span>` : ''}</button>
           </div></div>`;
         }).join('')
@@ -561,15 +567,21 @@ function brancherDeplacement(root, apres) {
 
 // ------------------------------------------------------------ la fiche chantier
 function formulaire(c, defaut = {}) {
+  // Une formation (11/11/2026) : même fiche, sans dossier client ni listes ;
+  // l'organisme ou le lieu à la place du dossier, des participants à la
+  // place du partage.
+  const formation = c ? estFormation(c) : defaut.genre === 'formation';
   const actuel = c ? cleDe(c) : '';
-  const choix = rattachements(actuel);
+  const choix = formation ? [] : rattachements(actuel);
   const retenu = choix.flatMap(g => g.dossiers).find(x => x.cle === actuel);
   // L'équipe avec qui partager : les membres RGD qui ne sont pas la direction
   // (chargés d'affaires, ouvrier). La direction voit tout, la cocher n'a pas de sens.
-  const equipe = scope.chargesRgd();
+  // Pour une formation, toute l'équipe, direction comprise : on note qui y va.
+  const equipe = formation ? scope.candidatsRgd() : scope.chargesRgd();
   const partage = new Set(c?.partage_avec || []);
   const duree = c ? dureeLue(c) : { nombre: 1, unite: 'jours' };
   const couleur = c?.couleur || '';
+  const nom = formation ? 'la formation' : 'le chantier';
   return `
     ${'' /* ⚠ FORMULAIRE RESSERRÉ (11/11/2026, Élodie : « remonter toutes les
        infos pour laisser de la place en bas » — la place servira aux cahiers
@@ -577,7 +589,16 @@ function formulaire(c, defaut = {}) {
        Début + Durée + Couleur ; Notes + Partage. L'adresse n'est plus un
        champ : elle est reprise du dossier choisi (champ caché), et reste
        affichée sous le nom du dossier. */}
-    <form class="pl-form" id="pl-form">
+    <form class="pl-form${formation ? ' est-formation' : ''}" id="pl-form">
+      <input type="hidden" name="genre" value="${formation ? 'formation' : 'chantier'}">
+      ${formation ? `
+      <div class="pl-rang pl-rang-1">
+      <label class="pl-champ"><span>Formation</span>
+        <input name="titre" required value="${esc(c?.titre || '')}" placeholder="Ex. Habilitation électrique B1V"></label>
+      <label class="pl-champ"><span>Organisme / lieu</span>
+        <input name="adresse" value="${esc(c?.adresse || '')}" placeholder="Ex. AFPA Compiègne"></label>
+      <input type="hidden" name="rattachement" value="">
+      </div>` : `
       <input type="hidden" name="adresse" value="${esc(c?.adresse || '')}">
       <div class="pl-rang pl-rang-1">
       <label class="pl-champ"><span>Chantier</span>
@@ -612,7 +633,7 @@ function formulaire(c, defaut = {}) {
             <p class="muted small pl-rien" hidden>Aucun dossier ne correspond à cette recherche.</p>
           </div>
         </div></div>
-      </div>
+      </div>`}
       <div class="pl-rang pl-rang-2">
       <label class="pl-champ"><span>Début</span>
         <input type="date" name="date_debut" required value="${esc(c?.date_debut || defaut.date_debut || '')}"></label>
@@ -633,20 +654,22 @@ function formulaire(c, defaut = {}) {
       <div class="pl-rang pl-rang-3">
       <label class="pl-champ"><span>Notes</span>
         <textarea name="notes" rows="2">${esc(c?.notes || '')}</textarea></label>
-      <div class="pl-champ"><span>Partager avec</span>
+      <div class="pl-champ"><span>${formation ? 'Participants' : 'Partager avec'}</span>
         ${equipe.length ? `<div class="pl-partage">
           ${equipe.map(u => `<label class="pl-membre"><input type="checkbox" name="partage" value="${esc(u.id)}"${
             partage.has(u.id) ? ' checked' : ''}><span>${esc(u.full_name || u.email || 'Sans nom')}</span></label>`).join('')}
         </div>
-        <small class="muted">La personne voit ce chantier dans son planning et peut cocher ses listes ; elle ne change ni les dates ni le dossier.</small>`
+        <small class="muted">${formation
+          ? 'La formation apparaît dans le planning de chaque participant.'
+          : 'La personne voit ce chantier dans son planning et peut cocher ses listes ; elle ne change ni les dates ni le dossier.'}</small>`
         : '<small class="muted">Personne dans l’équipe RGD à qui le partager.</small>'}
       </div>
       </div>
       <div class="form-actions">
-        ${c ? '<button type="button" class="btn danger ghost" id="pl-suppr">Supprimer le chantier</button>' : ''}
+        ${c ? `<button type="button" class="btn danger ghost" id="pl-suppr">Supprimer ${nom}</button>` : ''}
         <span class="grow"></span>
         <button type="button" class="btn ghost" data-close>Fermer</button>
-        <button type="submit" class="btn primary">${c ? 'Enregistrer' : 'Créer le chantier'}</button>
+        <button type="submit" class="btn primary">${c ? 'Enregistrer' : `Créer ${nom}`}</button>
       </div>
     </form>`;
 }
@@ -686,29 +709,34 @@ function blocListe(c, liste) {
 function resume(c) {
   const r = rattachementDe(c);
   const ligne = (q, v) => (v ? `<div><span>${esc(q)}</span><b>${esc(v)}</b></div>` : '');
+  const formation = estFormation(c);
+  const qui = formation ? (c.partage_avec || []).map(id => scope.users().find(u => u.id === id))
+    .filter(Boolean).map(u => u.full_name || u.email).join(', ') : '';
   return `<div class="pl-resume">
-    ${ligne('Dossier', r?.nom)}
+    ${formation ? '' : ligne('Dossier', r?.nom)}
     ${ligne('Du', dateLongue(c.date_debut))}${ligne('Au', dateLongue(finDe(c)))}
-    ${ligne('Durée', dureeLue(c).texte)}${ligne('Adresse', c.adresse)}${ligne('Notes', c.notes)}
+    ${ligne('Durée', dureeLue(c).texte)}${ligne(formation ? 'Organisme / lieu' : 'Adresse', c.adresse)}${
+    ligne('Participants', qui)}${ligne('Notes', c.notes)}
   </div>`;
 }
 
-function ouvrirChantier(c, apres, jour = null) {
+function ouvrirChantier(c, apres, jour = null, genre = 'chantier') {
+  const formation = c ? estFormation(c) : genre === 'formation';
   if (c && !scope.isDirection) {
     const m = openModal(c.titre, `${resume(c)}
-      <div class="pl-listes">${blocListe(c, 'materiaux')}${blocListe(c, 'outils')}</div>
+      ${formation ? '' : `<div class="pl-listes">${blocListe(c, 'materiaux')}${blocListe(c, 'outils')}</div>`}
       <div class="form-actions"><span class="grow"></span><button type="button" class="btn ghost" data-close>Fermer</button></div>`,
       { wide: true, onClose: apres });
-    brancherListesDe(m, c);
+    if (!formation) brancherListesDe(m, c);
     return;
   }
   const r = c && rattachementDe(c);
   const corps = () => `
     ${r ? `<p class="pl-lien">Fiche : <button type="button" class="btn ghost sm" id="pl-fiche">${esc(r.nom)}</button></p>` : ''}
-    ${formulaire(c, { date_debut: jour || aujourdhui() })}
-    ${c ? `<div class="pl-listes">${blocListe(c, 'materiaux')}${blocListe(c, 'outils')}</div>`
+    ${formulaire(c, { date_debut: jour || aujourdhui(), genre })}
+    ${formation ? '' : c ? `<div class="pl-listes">${blocListe(c, 'materiaux')}${blocListe(c, 'outils')}</div>`
       : '<p class="muted small pl-apres">Les listes matériaux et outils s’ouvrent une fois le chantier créé.</p>'}`;
-  const m = openModal(c ? c.titre : 'Nouveau chantier', corps(), { wide: true, onClose: apres });
+  const m = openModal(c ? c.titre : formation ? 'Nouvelle formation' : 'Nouveau chantier', corps(), { wide: true, onClose: apres });
   brancher(m, c, apres);
 }
 
@@ -729,54 +757,58 @@ function brancher(m, c, apres) {
   // pousser le reste du formulaire vers le bas.
   // La recherche porte sur le nom, le projet et l'adresse.
   const boite = m.querySelector('.pl-choix');
-  const choisir = (bouton) => {
-    const cle = bouton ? bouton.dataset.cle : '';
-    form.rattachement.value = cle;
-    m.querySelectorAll('.pl-dossier').forEach(b => b.classList.toggle('choisi', b.dataset.cle === cle));
-    if (bouton) {
-      const retenu = boite.querySelector('.pl-choix-retenu > div');
-      retenu.innerHTML = `<b>${esc(bouton.dataset.nom)}</b>${bouton.dataset.projet ? `<span>${esc(bouton.dataset.projet)}</span>` : ''}${
-        bouton.dataset.adresse ? `<em>${esc(bouton.dataset.adresse)}</em>` : ''}`;
-      form.adresse.value = bouton.dataset.adresse || '';
-    } else form.adresse.value = '';
-    boite.classList.toggle('replie', !!cle);
-    boite.classList.remove('ouvert');
-  };
-  const ouvrir = () => boite.classList.add('ouvert');
-  const surDehors = (e) => { if (!boite.isConnected) document.removeEventListener('pointerdown', surDehors);
-    else if (!boite.contains(e.target)) boite.classList.remove('ouvert'); };
-  document.addEventListener('pointerdown', surDehors);
-  m.querySelectorAll('.pl-dossier').forEach(b => b.onclick = () => choisir(b));
-  m.querySelector('[data-aucun]').onclick = () => choisir(null);
-  m.querySelector('[data-changer]').onclick = () => {
-    boite.classList.remove('replie');
-    ouvrir();
-    m.querySelector('.pl-cherche').focus();
-  };
-  const cherche = m.querySelector('.pl-cherche');
-  cherche.onfocus = ouvrir; cherche.onclick = ouvrir;
-  cherche.oninput = () => {
-    ouvrir();
-    const mots = cherche.value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(/\s+/).filter(Boolean);
-    let vus = 0;
-    m.querySelectorAll('.pl-groupe').forEach(g => {
-      let n = 0;
-      g.querySelectorAll('.pl-dossier').forEach(b => {
-        const t = b.dataset.texte.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-        const ok = mots.every(w => t.includes(w));
-        b.hidden = !ok; if (ok) n++;
+  // Une formation n'a pas de dossier : pas de sélecteur.
+  if (boite) {
+    const choisir = (bouton) => {
+      const cle = bouton ? bouton.dataset.cle : '';
+      form.rattachement.value = cle;
+      m.querySelectorAll('.pl-dossier').forEach(b => b.classList.toggle('choisi', b.dataset.cle === cle));
+      if (bouton) {
+        const retenu = boite.querySelector('.pl-choix-retenu > div');
+        retenu.innerHTML = `<b>${esc(bouton.dataset.nom)}</b>${bouton.dataset.projet ? `<span>${esc(bouton.dataset.projet)}</span>` : ''}${
+          bouton.dataset.adresse ? `<em>${esc(bouton.dataset.adresse)}</em>` : ''}`;
+        form.adresse.value = bouton.dataset.adresse || '';
+      } else form.adresse.value = '';
+      boite.classList.toggle('replie', !!cle);
+      boite.classList.remove('ouvert');
+    };
+    const ouvrir = () => boite.classList.add('ouvert');
+    const surDehors = (e) => { if (!boite.isConnected) document.removeEventListener('pointerdown', surDehors);
+      else if (!boite.contains(e.target)) boite.classList.remove('ouvert'); };
+    document.addEventListener('pointerdown', surDehors);
+    m.querySelectorAll('.pl-dossier').forEach(b => b.onclick = () => choisir(b));
+    m.querySelector('[data-aucun]').onclick = () => choisir(null);
+    m.querySelector('[data-changer]').onclick = () => {
+      boite.classList.remove('replie');
+      ouvrir();
+      m.querySelector('.pl-cherche').focus();
+    };
+    const cherche = m.querySelector('.pl-cherche');
+    cherche.onfocus = ouvrir; cherche.onclick = ouvrir;
+    cherche.oninput = () => {
+      ouvrir();
+      const mots = cherche.value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(/\s+/).filter(Boolean);
+      let vus = 0;
+      m.querySelectorAll('.pl-groupe').forEach(g => {
+        let n = 0;
+        g.querySelectorAll('.pl-dossier').forEach(b => {
+          const t = b.dataset.texte.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+          const ok = mots.every(w => t.includes(w));
+          b.hidden = !ok; if (ok) n++;
+        });
+        g.hidden = !n; vus += n;
       });
-      g.hidden = !n; vus += n;
-    });
-    const rien = m.querySelector('.pl-rien'); if (rien) rien.hidden = !!vus || !mots.length;
-  };
-  // Entrée dans la recherche ne doit pas enregistrer le chantier.
-  cherche.onkeydown = (e) => { if (e.key === 'Enter') e.preventDefault();
-    if (e.key === 'Escape' && boite.classList.contains('ouvert')) { e.stopPropagation(); boite.classList.remove('ouvert'); } };
+      const rien = m.querySelector('.pl-rien'); if (rien) rien.hidden = !!vus || !mots.length;
+    };
+    // Entrée dans la recherche ne doit pas enregistrer le chantier.
+    cherche.onkeydown = (e) => { if (e.key === 'Enter') e.preventDefault();
+      if (e.key === 'Escape' && boite.classList.contains('ouvert')) { e.stopPropagation(); boite.classList.remove('ouvert'); } };
+  }
   form.onsubmit = async (e) => {
     e.preventDefault();
     const [genre, id] = (form.rattachement.value || ':').split(':');
     const champs = {
+      genre: form.genre.value,
       titre: form.titre.value, date_debut: form.date_debut.value,
       duree_nombre: form.duree_nombre.value, duree_unite: form.duree_unite.value,
       fiche_id: genre === 'fiche' ? id : null, demande_id: genre === 'demande' ? id : null,
@@ -784,7 +816,9 @@ function brancher(m, c, apres) {
       partage_avec: [...form.querySelectorAll('input[name="partage"]:checked')].map(x => x.value),
     };
     try {
-      if (c) { await majChantier(c.id, champs); toast('Chantier enregistré'); closeModal(); }
+      const formation = champs.genre === 'formation';
+      if (c) { await majChantier(c.id, champs); toast(formation ? 'Formation enregistrée' : 'Chantier enregistré'); closeModal(); }
+      else if (formation) { await creerChantier(champs); toast('Formation ajoutée au planning'); closeModal(); }
       else {
         const neuf = await creerChantier(champs);
         toast('Chantier créé — ajoutez ses listes');
@@ -794,8 +828,10 @@ function brancher(m, c, apres) {
   };
   const bSuppr = m.querySelector('#pl-suppr');
   if (bSuppr) bSuppr.onclick = async () => {
-    if (!await confirm(`Supprimer « ${c.titre} » et ses listes ? C’est définitif.`)) { ouvrirChantier(c, apres); return; }
-    try { await supprimerChantier(c.id); toast('Chantier supprimé'); apres?.(); }
+    const formation = estFormation(c);
+    if (!await confirm(formation ? `Supprimer la formation « ${c.titre} » ? C’est définitif.`
+      : `Supprimer « ${c.titre} » et ses listes ? C’est définitif.`)) { ouvrirChantier(c, apres); return; }
+    try { await supprimerChantier(c.id); toast(formation ? 'Formation supprimée' : 'Chantier supprimé'); apres?.(); }
     catch (err) { toast(err.message, 'error'); }
   };
   const bFiche = m.querySelector('#pl-fiche');
@@ -914,6 +950,7 @@ export const rgdPlanningPage = {
           </div>
           <span class="grow"></span>
           ${direction ? `<button type="button" class="btn ghost" id="pl-std">Listes standard</button>
+          <button type="button" class="btn ghost pl-btn-formation" id="pl-formation">+ Formation</button>
           <button type="button" class="btn primary" id="pl-neuf">+ Nouveau chantier</button>` : ''}
         </div>
         ${!direction ? '<p class="muted small">Les chantiers que la direction a partagés avec vous. Vous pouvez cocher leurs listes de matériaux et d’outils.</p>' : ''}
@@ -927,19 +964,21 @@ export const rgdPlanningPage = {
         <section class="card pl-carte">
           <h3 class="pl-titre">${enAnnee ? 'Tous les chantiers' : `Chantiers de ${esc(nomPeriode)}`} <span>${periode.length}</span></h3>
           ${periode.length ? `<div class="table-wrap"><table>
-            <thead><tr><th>Chantier</th><th>État</th><th>Fiche</th><th>Du</th><th>Au</th><th>Durée</th><th>À trouver</th></tr></thead>
+            <thead><tr><th>Chantier / formation</th><th>État</th><th>Fiche</th><th>Du</th><th>Au</th><th>Durée</th><th>À trouver</th></tr></thead>
             <tbody>${periode.map(c => {
               const r = rattachementDe(c);
+              const f = estFormation(c);
               const reste = resteA(c.id);
               const n = lignesDe(c.id).length;
               const e = etatDe(c);
               return `<tr data-chantier="${esc(c.id)}">
-                <td><span class="pl-point" style="background:${couleurDe(c, tous.indexOf(c))}"></span><b>${esc(c.titre)}</b></td>
+                <td><span class="pl-point" style="background:${couleurDe(c, tous.indexOf(c))}"></span>${marque(c)}<b>${esc(c.titre)}</b></td>
                 <td><span class="pl-etat est-${e.cle}">${esc(e.label)}</span></td>
-                <td>${r ? esc(r.nom) : '<span class="muted">—</span>'}</td>
+                <td>${f ? `<span class="pl-etiquette-formation">Formation</span>${c.adresse ? ` <span class="muted small">${esc(c.adresse)}</span>` : ''}`
+                  : r ? esc(r.nom) : '<span class="muted">—</span>'}</td>
                 <td>${esc(enAnnee ? dateLongue(c.date_debut) : dateCourte(c.date_debut))}</td><td>${esc(enAnnee ? dateLongue(finDe(c)) : dateCourte(finDe(c)))}</td>
                 <td>${esc(dureeLue(c).texte)}</td>
-                <td>${!n ? '<span class="muted">Pas de liste</span>'
+                <td>${f ? '<span class="muted">—</span>' : !n ? '<span class="muted">Pas de liste</span>'
                   : reste ? `<span class="chip amber">${reste} à trouver</span>` : '<span class="chip green">Tout est prêt</span>'}</td>
               </tr>`;
             }).join('')}</tbody></table></div>`
@@ -967,6 +1006,8 @@ export const rgdPlanningPage = {
       };
       const bNeuf = root.querySelector('#pl-neuf');
       if (bNeuf) bNeuf.onclick = () => ouvrirChantier(null, draw);
+      const bFormation = root.querySelector('#pl-formation');
+      if (bFormation) bFormation.onclick = () => ouvrirChantier(null, draw, null, 'formation');
       const bStd = root.querySelector('#pl-std');
       if (bStd) bStd.onclick = ouvrirStandard;
       if (direction) root.querySelectorAll('[data-jour]').forEach(b => b.onclick = () => ouvrirChantier(null, draw, b.dataset.jour));

@@ -8425,3 +8425,15 @@ body.pl-deplace, body.pl-deplace * { cursor: grabbing !important; user-select: n
 @media screen and (max-width: 760px) {
   .pl-rang-1, .pl-rang-2, .pl-rang-3 { grid-template-columns: 1fr; }
 }
+/* ------------------------------------------------ Planning : les formations (11/11/2026) */
+/* Indigo par défaut, une toque devant le nom, un liseré pointillé dans la
+   barre : une formation se distingue d'un chantier sans lire son nom. */
+.pl-toque { width: 13px; height: 13px; fill: currentColor; vertical-align: -2px; margin-right: 4px; flex: none; }
+.pl-barre.formation, .pl-frise-barre.formation { outline: 1.5px dashed rgba(255, 255, 255, .75); outline-offset: -4px; }
+.pl-barre.formation.est-futur, .pl-frise-barre.formation.est-futur { outline-color: color-mix(in srgb, var(--pl-c) 70%, transparent); }
+.pl-frise-nom b .pl-toque { color: #4f46e5; }
+.pl-btn-formation { color: #4f46e5; border-color: color-mix(in srgb, #4f46e5 40%, var(--line)); }
+.pl-btn-formation:hover { background: color-mix(in srgb, #4f46e5 8%, var(--card)); }
+.pl-etiquette-formation { display: inline-block; font-size: 12px; font-weight: 700; padding: 2px 9px; border-radius: 999px;
+  background: color-mix(in srgb, #4f46e5 12%, var(--card)); color: #4338ca; }
+td .pl-toque { color: #4f46e5; }
