@@ -35,15 +35,37 @@
 // qui est chaque ligne, mieux qu'une phrase en tête.
 import { db } from '../data/db.js';
 import { scope } from '../data/scope.js';
-import { esc, eur, fmtDate, terms, hit, searchInput, bindSearch, restoreFocus } from '../ui.js';
+import { esc, eur, fmtDate, terms, hit, searchInput, bindSearch, restoreFocus, toast, confirm } from '../ui.js';
 import { poserEspace, kpiEspace } from './espace.js';
 import { cadre, guard } from './rgd-espace.js';
-import { statutsDe, statutDoc, estDevis, nomMetier } from '../data/rgd-devis-crm.js';
+import { statutsDe, statutDoc, estDevis, nomMetier,
+  corbeilleFactures, reprendreFacture, purgerFactureJetee } from '../data/rgd-devis-crm.js';
 import { ouvrirDevisCrm } from './rgd-devis-crm.js';
 import { ouvrirPdfImporte } from './rgd-facture-import.js';
 import { demandeDe, ficheDe } from './rgd-clients.js';
 
 const euros = (n) => eur(n, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+/**
+ * Les trois onglets, écrits UNE fois pour les deux sorties de l'écran.
+ *
+ * ⚠ LA CORBEILLE NE S'AFFICHE QUE SI ELLE CONTIENT QUELQUE CHOSE, sauf quand
+ * on y est : un onglet à zéro, en permanence, apprend à ne plus le lire. Et on
+ * garde l'onglet visible une fois dedans, sinon vider la corbeille ferait
+ * disparaître l'onglet sous les doigts.
+ */
+const ongletsGenre = (tous, jetees, state) => {
+  const g = state.genre || GENRE_PAR_DEFAUT;
+  return `<div class="pill-tabs">
+    <button type="button" data-genre="facture" class="${g === 'facture' ? 'on' : ''}">Factures<span>${
+      tous.filter(d => !estDevis(d)).length}</span></button>
+    <button type="button" data-genre="devis" class="${g === 'devis' ? 'on' : ''}">Devis<span>${
+      tous.filter(estDevis).length}</span></button>
+    ${jetees.length || g === 'corbeille'
+      ? `<button type="button" data-genre="corbeille" class="${g === 'corbeille' ? 'on' : ''}">Corbeille<span>${
+        jetees.length}</span></button>` : ''}
+  </div>`;
+};
 
 // L'ordre des pastilles : celui de la vie d'une facture, pas l'alphabet.
 const ORDRE = ['brouillon', 'envoye', 'signe', 'refuse'];
@@ -112,6 +134,8 @@ export const rgdFacturesPage = {
       // l'équipe avec sa seule liste en dessous.
       const genre = state.genre || GENRE_PAR_DEFAUT;
       const dev = genre === 'devis';
+      const corb = genre === 'corbeille';
+      const jetees = corbeilleFactures();
       const STATUTS = statutsDe(genre);
       const tous = db.t('rgd_devis_crm').filter(d => !state.qui || d.owner_id === state.qui);
       const toutes = tous
@@ -147,6 +171,86 @@ export const rgdFacturesPage = {
       const duMois = tous.filter(d => !estDevis(d) && ['envoye', 'signe'].includes(d.statut)
         && String(d.date_devis || d.created_at || '').slice(0, 7) === mois);
 
+      // ── L'onglet « Corbeille » ──────────────────────────────────
+      // ⚠ IL A SA PROPRE SORTIE, et ne passe pas par l'écran du dessous : les
+      // chiffres en tête comptent de l'argent facturé, les pastilles de statut
+      // trient des factures vivantes, le filtre « Responsable » lit une table
+      // qui n'a plus ces lignes. Tout cela n'a rien à dire d'une corbeille, et
+      // le laisser en place aurait montré des totaux à côté d'une liste qui ne
+      // les alimente pas.
+      //
+      // ⚠ CET ÉCRAN EST DÉJÀ RÉSERVÉ À LA DIRECTION (`directionOnly`), donc
+      // l'onglet l'est aussi sans rien ajouter — c'est la même main qui jette
+      // et qui reprend.
+      if (corb) {
+        const lignes = jetees.filter(r => hit([r.numero, r.nom, r.objet], ts));
+        root.innerHTML = cadre('#/rgd/factures', 'Factures & devis', `
+          ${ongletsGenre(tous, jetees, state)}
+          <div class="toolbar">
+            ${searchInput('rfa-q', state, 'Rechercher un numéro, un client, un objet…')}
+            <span class="grow"></span>
+            <span class="muted small">${lignes.length} document${lignes.length > 1 ? 's' : ''} jeté${
+              lignes.length > 1 ? 's' : ''}</span>
+          </div>
+          <section class="card table-wrap">
+            <table>
+              <thead><tr><th>Numéro</th><th>Jetée le</th><th>Client</th><th>Objet</th>
+                <th class="num">Montant TTC</th><th></th></tr></thead>
+              <tbody>${lignes.map(r => `<tr>
+                <td><b>${esc(r.numero || '—')}</b>${r.numero ? '' : '<div class="s muted">brouillon</div>'}
+                  ${(r.bons || []).length ? '<div class="s muted">avec son bon</div>' : ''}</td>
+                <td>${esc(fmtDate(String(r.supprime_le || '').slice(0, 10)))}</td>
+                <td>${esc(r.nom || '—')}</td>
+                <td class="muted">${esc(r.objet || '—')}</td>
+                <td class="num">${euros(r.montant_ttc)}</td>
+                <td class="rgdf-fin">
+                  <button type="button" class="btn ghost sm" data-remettre="${esc(r.id)}">Remettre</button>
+                  <button type="button" class="btn ghost sm rfa-purge" data-purger="${esc(r.id)}">Supprimer définitivement</button>
+                </td>
+              </tr>`).join('') || `<tr><td colspan="6"><div class="empty">${jetees.length
+                ? 'Aucun document jeté ne correspond.'
+                : 'La corbeille est vide — aucune facture n’a été supprimée.'}</div></td></tr>`}</tbody>
+            </table>
+            <p class="small muted">Une facture supprimée vient ici avec son bon d’attachement, et
+            <b>se remet</b> telle quelle. Son <b>numéro</b> lui revient aussi, sauf s’il a été
+            redonné à une autre facture entre-temps — dans ce cas la reprise le dit et refuse,
+            plutôt que de mettre deux documents sous un même numéro.
+            <b>Supprimer définitivement</b> détruit la copie : après, il n’y a plus rien à reprendre.</p>
+          </section>`);
+        bindSearch(root, 'rfa-q', state, draw); restoreFocus(root, state);
+        root.querySelectorAll('[data-genre]').forEach(b => b.onclick = () => {
+          state.genre = b.dataset.genre; state.statut = ''; draw();
+        });
+        root.querySelectorAll('[data-remettre]').forEach(b => b.onclick = async () => {
+          const r = jetees.find(x => x.id === b.dataset.remettre);
+          if (!r) return;
+          if (!await confirm(`Remettre la facture ${r.numero || 'sans numéro'} ?${
+            (r.bons || []).length ? ' Son bon d’attachement revient avec elle.' : ''}`)) return;
+          const rep = await reprendreFacture(r.id);
+          if (!rep.ok) return toast(`Reprise impossible : ${rep.motif}`, 'error');
+          await db.recharger('rgd_devis_crm');
+          await db.recharger('rgd_bons').catch(() => {});
+          await db.recharger('rgd_factures_corbeille').catch(() => {});
+          toast(`Facture ${r.numero || ''} remise`);
+          draw();
+        });
+        // ⚠ LA PURGE DEMANDE EN NOMMANT CE QUI DISPARAÎT, et dit que c'est
+        // sans retour : la corbeille était le filet, on retire le filet.
+        root.querySelectorAll('[data-purger]').forEach(b => b.onclick = async () => {
+          const r = jetees.find(x => x.id === b.dataset.purger);
+          if (!r) return;
+          if (!await confirm(`Supprimer définitivement la facture ${r.numero || 'sans numéro'} ?`
+            + ` Sa copie${(r.bons || []).length ? ' et celle de son bon' : ''} disparaît.`
+            + ' Elle ne pourra plus être remise : c’est irréversible.')) return;
+          const rep = await purgerFactureJetee(r.id);
+          if (!rep.ok) return toast(`Suppression impossible : ${rep.motif}`, 'error');
+          await db.recharger('rgd_factures_corbeille').catch(() => {});
+          toast('Facture supprimée définitivement');
+          draw();
+        });
+        return;
+      }
+
       const corps = `
         <div class="esp-kpis">
           ${kpiEspace({ label: dev ? 'Acceptés' : 'Signées', valeur: signees.length,
@@ -169,12 +273,7 @@ export const rgdFacturesPage = {
               sous: `${euros(somme(duMois))} TTC facturés`, icone: '📅', href: '#/rgd/factures' })}
         </div>
 
-        <div class="pill-tabs">
-          <button type="button" data-genre="facture" class="${dev ? '' : 'on'}">Factures<span>${
-            tous.filter(d => !estDevis(d)).length}</span></button>
-          <button type="button" data-genre="devis" class="${dev ? 'on' : ''}">Devis<span>${
-            tous.filter(estDevis).length}</span></button>
-        </div>
+        ${ongletsGenre(tous, jetees, state)}
 
         <div class="pill-tabs">
           <button type="button" data-statut="" class="${state.statut ? '' : 'on'}">${dev ? 'Tous' : 'Toutes'}<span>${toutes.length}</span></button>

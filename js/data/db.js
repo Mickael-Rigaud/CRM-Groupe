@@ -114,6 +114,12 @@ export const TABLES = ['profiles', 'organisations', 'contacts', 'deals', 'activi
   // le contenu des fiches supprimées, pour pouvoir les remettre. Sa policy ne
   // la rend qu'à la direction, donc un chargé d'affaires la charge vide.
   'rgd_corbeille',
+  // ⚠ ET LA CORBEILLE DES FACTURES (11/11/2026), une table à part et pas une
+  // colonne de plus dans `rgd_corbeille` : celle-là est taillée pour une fiche
+  // client — `fiche_id` y est `not null`, elle porte les affaires et les
+  // chantiers. Une facture n'a rien de tout ça, et elle emporte autre chose :
+  // son bon d'attachement et son numéro.
+  'rgd_factures_corbeille',
   'rgd_reglages', 'rgd_clients', 'rgd_costructor_etat',
   'rgd_costructor_journal', 'rgd_costructor_ignores',
   // messagerie interne (canaux par structure + conversations privées)
@@ -416,6 +422,87 @@ const localAdapter = {
       d.updated_at = new Date().toISOString();
       this.save();
       return { ok: true, id: d.id, ancien_statut: ancien, date_signature: d.date_signature };
+    }
+
+    // ── Jeter une facture, et la garder dans la corbeille ───────────────
+    // ⚠ DOUBLE DU SQL de `rgd_supprimer_facture`, même règle que les autres :
+    // si les bornes bougent en base, elles bougent ici aussi. Et le rôle est
+    // vérifié ICI AUSSI, sans quoi la démonstration montrerait l'absence d'un
+    // cloisonnement qui existe.
+    if (nom === 'rgd_supprimer_facture') {
+      if (this.monRole() !== 'direction') {
+        throw new Error("la suppression d'une facture est réservée à la direction");
+      }
+      const liste = this.data.rgd_devis_crm || [];
+      const i = liste.findIndex(x => x.id === args.p_id);
+      if (i < 0) return { ok: false, error: 'facture introuvable' };
+      const f = liste[i];
+      const bons = (this.data.rgd_bons || []).filter(b => b.devis_id === f.id);
+      // ⚠ LES DEUX CONDITIONS DU NUMÉRO RENDU, comme en base : il doit être le
+      // DERNIER de sa suite, et la facture ne doit PAS être partie au client.
+      const rang = (n) => Number(String(n || '').replace(/^.*-/, '')) || 0;
+      const sien = rang(f.numero);
+      const plusHaut = Math.max(0, ...liste
+        .filter(d => d.id !== f.id && (d.genre === 'devis') === (f.genre === 'devis'))
+        .map(d => rang(d.numero)));
+      const rendu = !!f.numero && !f.envoye_le && sien > plusHaut;
+      const c = f.contact_id && (this.data.contacts || []).find(x => x.id === f.contact_id);
+      const o = f.organisation_id && (this.data.organisations || []).find(x => x.id === f.organisation_id);
+      const ligne = {
+        id: uid(), facture_id: f.id, numero: f.numero || null, genre: f.genre || null,
+        nom: (c && (c.last_name || c.first_name)) || (o && o.name) || '—',
+        objet: f.objet || null, montant_ttc: f.montant_ttc ?? null, owner_id: f.owner_id || null,
+        facture: { ...f }, bons: bons.map(b => ({ ...b })), numero_rendu: rendu,
+        supprime_le: new Date().toISOString(), par: this.moi()?.id || null,
+        restauree_le: null, restauree_par: null,
+      };
+      this.data.rgd_factures_corbeille = this.data.rgd_factures_corbeille || [];
+      this.data.rgd_factures_corbeille.push(ligne);
+      this.data.rgd_bons = (this.data.rgd_bons || []).filter(b => b.devis_id !== f.id);
+      liste.splice(i, 1);
+      this.save();
+      return { ok: true, corbeille: ligne.id, numero: f.numero || null,
+        numero_rendu: rendu, bons: bons.length };
+    }
+
+    // ── Remettre une facture prise dans la corbeille ───────────────────
+    if (nom === 'rgd_restaurer_facture') {
+      if (this.monRole() !== 'direction') {
+        throw new Error("la reprise d'une facture est réservée à la direction");
+      }
+      const r = (this.data.rgd_factures_corbeille || []).find(x => x.id === args.p_corbeille);
+      if (!r) return { ok: false, error: 'ligne de corbeille introuvable' };
+      if (r.restauree_le) return { ok: false, error: 'cette facture a déjà été remise' };
+      this.data.rgd_devis_crm = this.data.rgd_devis_crm || [];
+      if (this.data.rgd_devis_crm.some(x => x.id === r.facture_id)) {
+        return { ok: false, error: 'une facture porte déjà cet identifiant' };
+      }
+      if (r.numero && this.data.rgd_devis_crm.some(x => x.numero === r.numero)) {
+        return { ok: false, error: `le numéro ${r.numero} a été repris par une autre facture` };
+      }
+      this.data.rgd_devis_crm.push({ ...r.facture });
+      this.data.rgd_bons = this.data.rgd_bons || [];
+      (r.bons || []).forEach((b) => {
+        if (!this.data.rgd_bons.some(x => x.id === b.id)) this.data.rgd_bons.push({ ...b });
+      });
+      r.restauree_le = new Date().toISOString();
+      r.restauree_par = this.moi()?.id || null;
+      this.save();
+      return { ok: true, facture_id: r.facture_id, numero: r.numero,
+        bons: (r.bons || []).length };
+    }
+
+    // ── Détruire pour de bon une facture jetée ───────────────────────
+    if (nom === 'rgd_purger_facture') {
+      if (this.monRole() !== 'direction') {
+        throw new Error('la suppression définitive est réservée à la direction');
+      }
+      const l = this.data.rgd_factures_corbeille || [];
+      const i = l.findIndex(x => x.id === args.p_corbeille);
+      if (i < 0) return { ok: false, error: 'ligne de corbeille introuvable' };
+      const [r] = l.splice(i, 1);
+      this.save();
+      return { ok: true, numero: r.numero };
     }
 
     // ── Supprimer une fiche, et la garder dans la corbeille ───────────────

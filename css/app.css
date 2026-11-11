@@ -7832,6 +7832,21 @@ tr.est-modifie td { background: var(--accent-soft); }
 .rdc-repr-quoi b { display: block; font-size: 14px; }
 .rdc-repr-quoi small { display: block; font-size: 12.5px; color: var(--muted); margin-top: 2px; }
 .rdc-repr-fleche { flex: none; color: var(--amber); font-size: 15px; }
+/* ⚠ LA PHRASE DE SUPPRESSION EST AMBRÉE, PAS ROUGE : rien n'est cassé, et la
+   corbeille rattrape le geste. Le rouge est gardé pour ce qui ne se reprend
+   pas — la purge de la corbeille. */
+/* ⚠ LA PURGE EST LE SEUL BOUTON ROUGE DE L'ÉCRAN : c'est le seul geste
+   après lequel il n'y a plus rien à reprendre. « Remettre » reste neutre —
+   il répare, il n'alerte pas. */
+/* ⚠ `.btn.rfa-purge`, PAS `.rfa-purge` SEUL : `.btn.ghost` pose déjà une
+   couleur avec deux classes, et la règle à une classe passait dessous — le
+   bouton restait noir. Mesuré à l'écran, pas deviné. */
+.btn.rfa-purge { color: var(--red); }
+.btn.rfa-purge:hover { border-color: var(--red);
+  background: color-mix(in srgb, var(--red) 8%, transparent); }
+.rdc-suppr-dit { margin: 8px 0 0; font-size: 12.5px; line-height: 1.45;
+  color: var(--amber); background: color-mix(in srgb, var(--amber) 9%, transparent);
+  border-left: 3px solid var(--amber); border-radius: 0 8px 8px 0; padding: 8px 11px; }
 .rdc-cgv { border: 1px solid var(--line); border-radius: 12px; background: var(--card-2);
   margin: 0 0 14px; overflow: hidden; }
 .rdc-cgv-tete { padding: 11px 14px; cursor: pointer; font-size: 13.5px; font-weight: 700;

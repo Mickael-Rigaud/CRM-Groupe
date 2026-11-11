@@ -27,6 +27,7 @@ import {
   GENRES, genreDe, estDevis, statutsDe, statutDoc, facturerLeDevis, factureDuDevis, devisDeLaFacture,
   estAnnulee, annulerFacture, retablirFacture,
   interventionsEnCours, ETAPES_REPRISE,
+  jeterFacture,
 } from '../data/rgd-devis-crm.js';
 import { posePadSignature } from '../pad-signature.js';
 import { lireCgv } from '../data/rgd-cgv.js';
@@ -142,6 +143,31 @@ export function blocDevisCrm(devis, peutFaire) {
  * et sur téléphone la réponse doit rester sous le doigt, pas à l'autre bout de
  * l'écran. Même procédé que `confirmerSuppr` pour la suppression du devis.
  */
+/**
+ * Ce que la suppression emporte, en une phrase, avant le second clic.
+ *
+ * ⚠ ELLE NOMME LE NUMÉRO ET LE BON : « Êtes-vous sûr ? » ne dit rien de ce
+ * qu'on perd, et un bon d'attachement signé qui part avec sa facture est
+ * exactement le genre de chose qu'on découvre après coup.
+ *
+ * ⚠ ET ELLE DIT LE SORT DU NUMÉRO, parce que les deux réponses existent : il
+ * revient à la suite s'il en était le dernier et que rien n'est parti ; il
+ * reste pris si la facture est allée chez le client — son numéro est dans des
+ * mains extérieures, le redistribuer mettrait deux documents dessous.
+ */
+function ditSuppression(d) {
+  const bon = bonDuDevis(d);
+  // ⚠ « LE DEVIS » OU « LA FACTURE », pas « la facture » pour les deux : le
+  // bouton porte déjà le bon mot, et la phrase disait l'autre.
+  const nom = estDevis(d) ? 'Le devis' : 'La facture';
+  const quoi = `${nom} ${d.numero || ''}${bon ? ' et son bon d’attachement' : ''} ${
+    bon ? 'partent' : 'part'} à la corbeille, et se ${bon ? 'reprennent' : 'reprend'} de là.`;
+  const num = d.envoye_le
+    ? ` Elle est partie au client : son numéro ne sera pas redonné.`
+    : ` Son numéro revient à la suite s'il en était le dernier.`;
+  return quoi + num;
+}
+
 /**
  * Le bandeau « À reprendre » de la fiche projet. `x` est le contexte de la
  * fiche : ce qu'on montre ici est ce que montre le bloc « Factures » juste en
@@ -418,8 +444,20 @@ export function ouvrirDevisCrm(x, existant = null, retour = null, genreNeuf = 'f
 
       ${existant ? `<div class="rdc-statut"><span class="muted small">Statut</span>
         ${Object.entries(STATUTS).filter(([k]) => !(k === 'refuse' && !dev)).map(([k, st]) => `<button type="button" class="chip ${k === existant.statut ? st.ton : ''}" data-statut="${k}">${esc(st.label)}</button>`).join('')}
-        ${existant.statut === 'brouillon' ? `<button type="button" class="btn ghost sm rdc-suppr" id="rdc-suppr">${confirmerSuppr ? 'Confirmer la suppression' : 'Supprimer le brouillon'}</button>` : ''}
+        ${/* ⚠ LA DIRECTION PEUT SUPPRIMER UNE FACTURE ÉMISE DEPUIS LE
+              11/11/2026 (Élodie : « je voudrais que tu puisses laisser la main
+              de pouvoir supprimer les factures »). Pas Franck : il a
+              « Annuler », qui répare une facture de trop sans toucher à la
+              suite des numéros. Un brouillon, lui, reste supprimable par son
+              auteur — il n'a pas de numéro et n'est parti nulle part. */ ''}
+        ${existant.statut === 'brouillon' || scope.isDirection
+          ? `<button type="button" class="btn ghost sm rdc-suppr" id="rdc-suppr">${
+            confirmerSuppr ? 'Confirmer la suppression'
+            : existant.statut === 'brouillon' ? 'Supprimer le brouillon'
+            : `Supprimer ${dev ? 'le devis' : 'la facture'}`}</button>` : ''}
       </div>
+      ${confirmerSuppr && existant.statut !== 'brouillon'
+        ? `<p class="rdc-suppr-dit">${esc(ditSuppression(existant))}</p>` : ''}
       ${/* ⚠ « Annulée » N'EST PLUS UNE PASTILLE SUR UNE FACTURE (filtrée
             ci-dessus) : annuler se motive, et un clic sur une pastille ne
             demande rien. Le motif s'imprime sur le PDF remis au client, c'est
@@ -830,8 +868,25 @@ export function ouvrirDevisCrm(x, existant = null, retour = null, genreNeuf = 'f
     if (suppr) suppr.onclick = async () => {
       if (!confirmerSuppr) { lire(); confirmerSuppr = true; redessiner(); return; }
       try {
-        await supprimerDevisCrm(existant);
-        toast(`Brouillon ${existant.numero || ''} supprimé`);
+        // ⚠ DEUX GESTES SOUS UN MÊME BOUTON, ET C'EST VOULU. Un BROUILLON
+        // s'efface pour de bon : il n'a pas de numéro, personne ne l'a vu, une
+        // copie gardée n'aurait rien à reprendre. Un document NUMÉROTÉ passe
+        // par la corbeille — lui, on peut regretter de l'avoir jeté.
+        if (existant.statut === 'brouillon') {
+          await supprimerDevisCrm(existant);
+          toast('Brouillon supprimé');
+        } else {
+          const r = await jeterFacture(existant);
+          if (!r.ok) { toast(`Suppression impossible : ${r.motif}`, 'error'); return; }
+          // La fonction de base écrit HORS DU CACHE : sans ces rechargements,
+          // la liste continuerait d'afficher une facture que la base ne
+          // connaît plus, et sa corbeille serait vide à l'écran.
+          await db.recharger('rgd_devis_crm');
+          await db.recharger('rgd_bons').catch(() => {});
+          await db.recharger('rgd_factures_corbeille').catch(() => {});
+          toast(`${G.label} ${existant.numero || ''} à la corbeille${
+            r.donnees?.numero_rendu ? ' — son numéro revient à la suite' : ''}`);
+        }
         closeModal();
       } catch (e) { toast(e.message || 'Suppression impossible', 'error'); }
     };

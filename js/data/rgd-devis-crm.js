@@ -359,6 +359,72 @@ export const marquerReglee = (d, moyen) => db.update('rgd_devis_crm', d.id, {
 export const annulerReglement = (d) =>
   db.update('rgd_devis_crm', d.id, { regle_le: null, regle_par: null });
 
+// ------------------------------------------ jeter une facture à la corbeille
+// Élodie, le 11/11/2026 : « je voudrais que tu puisses laisser la main de
+// pouvoir supprimer les factures ».
+//
+// ⚠ ELLE AVAIT DÉJÀ POSÉ LA QUESTION LE 02/11, ET TRANCHÉ L'INVERSE (voir le
+// bloc suivant) : « annuler » plutôt que « supprimer ». Les deux gestes
+// restent, et ils ne servent pas à la même chose. ANNULER garde la facture au
+// dossier parce qu'elle a existé pour le client : elle cesse d'être due, le PDF
+// le dit en grand. SUPPRIMER sert à l'autre cas, celle qui n'aurait jamais dû
+// exister — un essai, un doublon, une erreur de saisie.
+//
+// ⚠ RIEN N'EST DÉTRUIT : la facture va à la CORBEILLE, avec son bon
+// d'attachement, et se reprend. Même dessin que pour les fiches clients
+// (`rgd_corbeille`, 06/10/2026) — choix d'Élodie entre les deux propositions.
+//
+// ⚠ ET LE NUMÉRO REVIENT À LA SUITE quand il en était le dernier ET que la
+// facture n'est pas partie au client. C'est ce qui évite le trou dans la
+// numérotation plutôt que de s'en excuser. La seconde condition n'est pas un
+// détail : une facture envoyée a son numéro dans des mains extérieures, et deux
+// documents différents sous un même numéro seraient pires que le trou.
+//
+// ⚠ LA POLICY `rgd_devis_crm_suppr` N'A PAS BOUGÉ : elle porte toujours
+// `statut = 'brouillon'`. Tout ceci passe par trois fonctions `security
+// definer` réservées à la direction, pas par la porte ouverte à tous.
+
+const echecRpc = (e) => ({ ok: false, motif: e?.message || 'erreur inconnue' });
+
+/** Jeter une facture à la corbeille. Rend { ok, donnees } ou { ok, motif }. */
+export async function jeterFacture(d) {
+  try {
+    const r = await db.rpc('rgd_supprimer_facture', { p_id: d.id });
+    if (r?.ok === false) return { ok: false, motif: r.error || 'refusé' };
+    return { ok: true, donnees: r };
+  } catch (e) { return echecRpc(e); }
+}
+
+/** Remettre une facture prise dans la corbeille, avec son bon. */
+export async function reprendreFacture(corbeilleId) {
+  try {
+    const r = await db.rpc('rgd_restaurer_facture', { p_corbeille: corbeilleId });
+    if (r?.ok === false) return { ok: false, motif: r.error || 'refusé' };
+    return { ok: true, donnees: r };
+  } catch (e) { return echecRpc(e); }
+}
+
+/** Détruire la copie gardée : après ça, il n'y a plus rien à reprendre. */
+export async function purgerFactureJetee(corbeilleId) {
+  try {
+    const r = await db.rpc('rgd_purger_facture', { p_corbeille: corbeilleId });
+    if (r?.ok === false) return { ok: false, motif: r.error || 'refusé' };
+    return { ok: true, donnees: r };
+  } catch (e) { return echecRpc(e); }
+}
+
+/**
+ * Les factures jetées, la dernière d'abord.
+ *
+ * ⚠ ON LIT `db.t`, PAS `scope.rgd` : cette table n'est pas au portefeuille
+ * RGD, et sa policy fait déjà le tri à la source — `rgd_voit_ligne(owner_id)`.
+ * La passer par la vue de l'espace rendrait zéro sans rien dire.
+ */
+export const corbeilleFactures = () => db.t('rgd_factures_corbeille')
+  .filter(r => !r.restauree_le)
+  .slice()
+  .sort((a, b) => String(b.supprime_le || '').localeCompare(String(a.supprime_le || '')));
+
 // ------------------------------------------ annuler une facture émise
 // Élodie, le 02/11/2026 : « je voudrais avoir la possibilité de supprimer des
 // factures ». Question posée, réponse arrêtée par elle : ANNULER.
