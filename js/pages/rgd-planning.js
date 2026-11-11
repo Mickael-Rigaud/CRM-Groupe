@@ -23,7 +23,7 @@ import { cadre, guard } from './rgd-espace.js';
 import { etapeDeFiche, etapeDeDemande, joursDeVisite } from '../data/rgd-etapes.js';
 import { LISTES, UNITES, joursPour, dureeLue, listesStandard, enregistrerStandard, versDate, versIso, ajouterJours, finDe,
          chantiersPlanifies, lignesDe, resteA, creerChantier, majChantier, supprimerChantier,
-         ajouterLigne, ajouterStandard, majLigne, retirerLigne, changerFin } from '../data/rgd-planning.js';
+         ajouterLigne, ajouterStandard, majLigne, retirerLigne, changerFin, deplacerChantier } from '../data/rgd-planning.js';
 
 // ⚠ LE 11/11/2026 : PARTAGE, LECTURE PAR L'ÉQUIPE ET VUE DE L'ANNÉE.
 // · Un chantier peut être partagé avec un membre de l'équipe (`partage_avec`).
@@ -265,6 +265,14 @@ function frise(tous) {
   const lignes = tous.map((c, i) => ({ c, i, fin: finDe(c), e: etatDe(c) }))
     .sort((x, y) => rang[x.e.cle] - rang[y.e.cle] || String(x.c.date_debut).localeCompare(String(y.c.date_debut)));
   const xAuj = pos(auj) * PX_JOUR + PX_JOUR / 2;
+  // ⚠ LA FRISE S'OUVRE TROIS SEMAINES AVANT LA SEMAINE EN COURS (11/11/2026,
+  // Élodie : « que l'affichage commence 3 semaines avant la semaine en cours
+  // de la date du jour ; là ça commence en août, c'est trop ancien »). Le bord
+  // gauche visible est le lundi de la semaine en cours moins 21 jours. On peut
+  // toujours la faire glisser vers les chantiers plus anciens.
+  const lundiAuj = versDate(auj);
+  lundiAuj.setDate(lundiAuj.getDate() - ((lundiAuj.getDay() + 6) % 7) - 21);
+  const xDepart = Math.max(0, pos(versIso(lundiAuj)) * PX_JOUR);
   // ⚠ LES NUMÉROS DE SEMAINE (11/11/2026, Élodie : « sur la frise de tous les
   // chantiers je voudrais avoir le numéro des semaines »). Une case par
   // semaine, du lundi au dimanche, sous la ligne des mois ; la semaine en
@@ -282,7 +290,7 @@ function frise(tous) {
     if (x > 0) lundis.push(`<b style="left:${x}px"></b>`);
   }
   return `
-    <div class="pl-frise-defile" data-auj="${xAuj}">
+    <div class="pl-frise-defile" data-auj="${xAuj}" data-depart="${xDepart}">
       <div class="pl-frise" style="--pl-larg:${largeur}px">
         <div class="pl-frise-ligne pl-frise-tete"><div class="pl-frise-nom"><span>${lignes.length} chantier${lignes.length > 1 ? 's' : ''}</span></div>
           <div class="pl-frise-piste">${mois.join('')}
@@ -344,7 +352,7 @@ function brancherFrise(root, centrer) {
     anim = requestAnimationFrame(pas);
   };
   boite.glisserVers = glisserVers;
-  if (centrer) { boite.scrollLeft = Number(boite.dataset.auj) - boite.clientWidth / 3; cible = boite.scrollLeft; }
+  if (centrer) { boite.scrollLeft = Number(boite.dataset.depart); cible = boite.scrollLeft; }
 
   boite.addEventListener('wheel', (e) => {
     const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
@@ -359,6 +367,7 @@ function brancherFrise(root, centrer) {
   boite.addEventListener('pointerdown', (e) => {
     if (e.pointerType !== 'mouse' || e.button !== 0) return;
     if (e.target.closest('[data-poignee]')) return;      // on étire une barre, on ne fait pas glisser
+    if (scope.isDirection && e.target.closest('.pl-frise-barre')) return;   // on déplace une barre
     cancelAnimationFrame(anim); anim = 0;
     depart = { x: e.clientX, gauche: boite.scrollLeft, bouge: false };
     boite.classList.add('saisie');
@@ -449,6 +458,85 @@ function brancherPoignees(root, apres) {
       h.addEventListener('pointercancel', lacher);
       montrer(e);
       if (!enFrise) eclairer();
+    });
+  });
+}
+
+// ------------------------------------------------------------ déplacer à la souris
+// On attrape une barre et on la tire : le chantier se décale, sa durée ne
+// change pas. Le geste ne démarre qu'au-delà de 5 px, sinon c'est un clic qui
+// ouvre la fiche. Pendant le geste, une bulle dit « du … au … » et :
+//   · dans le MOIS, on vise un jour de la grille (le jour attrapé dans la
+//     barre suit le pointeur), et les jours couverts s'éclairent ;
+//   · dans la FRISE, la barre suit la souris au jour près.
+function brancherDeplacement(root, apres) {
+  const bulle = document.createElement('div');
+  bulle.className = 'pl-bulle';
+  const jourSous = (x, y) => document.elementsFromPoint(x, y).find(el => el.dataset && el.dataset.jour)?.dataset.jour || null;
+  const ecart = (de, a) => Math.round((versDate(a) - versDate(de)) / 86400000);
+  root.querySelectorAll('[data-chantier].pl-barre, [data-chantier].pl-frise-barre').forEach(barre => {
+    barre.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0 || e.target.closest('[data-poignee]')) return;
+      const c = db.byId('rgd_planning', barre.dataset.chantier);
+      if (!c) return;
+      e.stopPropagation();
+      const enFrise = barre.classList.contains('pl-frise-barre');
+      const duree = Math.max(1, Number(c.duree_jours) || 1);
+      const x0 = e.clientX, gauche0 = barre.offsetLeft;
+      // Dans le mois : quel jour du chantier a-t-on attrapé ?
+      const attrape = enFrise ? null : jourSous(e.clientX, e.clientY);
+      const decalage = attrape ? ecart(c.date_debut, attrape) : 0;
+      let debut = c.date_debut, parti = false;
+      const montrer = (ev) => {
+        const fin = ajouterJours(debut, duree - 1);
+        bulle.innerHTML = `<b>Du ${esc(dateLongue(debut))}</b><span>au ${esc(dateLongue(fin))} · ${duree} jour${duree > 1 ? 's' : ''}</span>`;
+        bulle.style.left = `${ev.clientX + 14}px`; bulle.style.top = `${ev.clientY + 16}px`;
+      };
+      const eclairer = () => {
+        const fin = ajouterJours(debut, duree - 1);
+        root.querySelectorAll('[data-jour]').forEach(j => j.classList.toggle('apercu', j.dataset.jour >= debut && j.dataset.jour <= fin));
+      };
+      const bouger = (ev) => {
+        if (!parti) {
+          if (Math.abs(ev.clientX - x0) < 6 && Math.abs(ev.clientY - e.clientY) < 6) return;
+          parti = true;
+          try { barre.setPointerCapture(ev.pointerId); } catch { /* pointeur relâché */ }
+          document.body.appendChild(bulle);
+          document.body.classList.add('pl-deplace');
+          barre.classList.add('deplacee');
+        }
+        if (enFrise) {
+          const dj = Math.round((ev.clientX - x0) / PX_JOUR);
+          debut = ajouterJours(c.date_debut, dj);
+          barre.style.left = `${gauche0 + dj * PX_JOUR}px`;
+        } else {
+          const j = jourSous(ev.clientX, ev.clientY);
+          if (j) debut = ajouterJours(j, -decalage);
+          eclairer();
+        }
+        montrer(ev);
+      };
+      const lacher = async () => {
+        window.removeEventListener('pointermove', bouger);
+        window.removeEventListener('pointerup', lacher);
+        window.removeEventListener('pointercancel', lacher);
+        if (!parti) return;                              // un simple clic : la fiche s'ouvre
+        root.dataset.deplace = '1';
+        setTimeout(() => { delete root.dataset.deplace; }, 0);
+        bulle.remove();
+        document.body.classList.remove('pl-deplace');
+        barre.classList.remove('deplacee');
+        root.querySelectorAll('.apercu').forEach(j => j.classList.remove('apercu'));
+        if (debut === c.date_debut) { if (enFrise) barre.style.left = `${gauche0}px`; return; }
+        try {
+          await deplacerChantier(c, debut);
+          toast(`« ${c.titre} » : du ${dateLongue(debut)} au ${dateLongue(ajouterJours(debut, duree - 1))}`);
+        } catch (err) { toast(err.message, 'error'); }
+        apres();
+      };
+      window.addEventListener('pointermove', bouger);
+      window.addEventListener('pointerup', lacher);
+      window.addEventListener('pointercancel', lacher);
     });
   });
 }
@@ -821,7 +909,7 @@ export const rgdPlanningPage = {
       root.innerHTML = cadre('#/rgd/planning', 'Planning chantier', corps);
       const boiteFrise = root.querySelector('.pl-frise-defile');
       brancherFrise(root, friseGauche === null);
-      if (direction) brancherPoignees(root, draw);
+      if (direction) { brancherPoignees(root, draw); brancherDeplacement(root, draw); }
       root.querySelectorAll('[data-pas]').forEach(b => b.onclick = () => {
         // En frise, les flèches font glisser de trois mois.
         if (boiteFrise) { boiteFrise.glisserVers(boiteFrise.scrollLeft + Number(b.dataset.pas) * 90 * PX_JOUR); return; }
@@ -834,7 +922,7 @@ export const rgdPlanningPage = {
         draw();
       });
       root.querySelector('#pl-auj').onclick = () => {
-        if (boiteFrise) { boiteFrise.glisserVers(Number(boiteFrise.dataset.auj) - boiteFrise.clientWidth / 3); return; }
+        if (boiteFrise) { boiteFrise.glisserVers(Number(boiteFrise.dataset.depart)); return; }
         state.annee = auj.getFullYear(); state.mois = auj.getMonth(); draw();
       };
       const bNeuf = root.querySelector('#pl-neuf');
@@ -845,6 +933,7 @@ export const rgdPlanningPage = {
       else root.querySelectorAll('[data-jour]').forEach(b => { b.disabled = true; b.removeAttribute('title'); });
       root.querySelectorAll('[data-chantier]').forEach(el => el.onclick = () => {
         if (boiteFrise?.dataset.glisse) return;              // c'était un glissement
+        if (root.dataset.deplace) return;                     // c'était un déplacement
         const c = db.byId('rgd_planning', el.dataset.chantier);
         if (c) ouvrirChantier(c, draw);
       });

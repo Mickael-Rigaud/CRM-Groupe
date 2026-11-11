@@ -8237,3 +8237,8 @@ body.pl-etire, body.pl-etire * { cursor: ew-resize !important; user-select: none
 .pl-bulle span { font-size: 11.5px; opacity: .75; }
 @media (prefers-reduced-motion: reduce) { .pl-barre, .pl-cal.pl-entree { animation: none; } }
 @media (hover: none) { .pl-poignee { opacity: 1; width: 18px; } }
+/* Planning : déplacer un chantier à la souris (11/11/2026). */
+.pl-barre, .pl-frise-barre { cursor: grab; }
+.deplacee { opacity: .85; filter: saturate(1.2); z-index: 6 !important;
+  box-shadow: 0 14px 28px -10px color-mix(in srgb, var(--pl-c) 80%, #000) !important; }
+body.pl-deplace, body.pl-deplace * { cursor: grabbing !important; user-select: none; }

@@ -175,6 +175,13 @@ export async function changerFin(c, fin) {
   return db.update('rgd_planning', c.id, { duree_jours: n, duree_nombre: n, duree_unite: 'jours' });
 }
 
+// ⚠ DÉPLACER UN CHANTIER À LA SOURIS (11/11/2026, Élodie). Seul le début
+// change : la durée reste celle saisie (3 semaines restent 3 semaines).
+export async function deplacerChantier(c, debut) {
+  if (!debut) throw new Error('La date de début manque.');
+  return db.update('rgd_planning', c.id, { date_debut: debut });
+}
+
 // Les lignes partent avec le chantier (`on delete cascade` en base) ; en
 // démo il n'y a pas de cascade, on les retire à la main.
 export async function supprimerChantier(id) {
