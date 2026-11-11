@@ -24,7 +24,7 @@ import { etapeDeFiche, etapeDeDemande, joursDeVisite } from '../data/rgd-etapes.
 import { LISTES, UNITES, joursPour, dureeLue, listesStandard, enregistrerStandard, versDate, versIso, ajouterJours, finDe,
          chantiersPlanifies, lignesDe, resteA, creerChantier, majChantier, supprimerChantier,
          ajouterLigne, ajouterStandard, majLigne, retirerLigne, changerFin, deplacerChantier, estFormation,
-         UNITES_FORMATION, ouvresPour, prochainOuvre, finOuvree } from '../data/rgd-planning.js';
+         UNITES_FORMATION, ouvresPour, prochainOuvre, finOuvree, plagesOuvrees } from '../data/rgd-planning.js';
 
 // ⚠ LE 11/11/2026 : PARTAGE, LECTURE PAR L'ÉQUIPE ET VUE DE L'ANNÉE.
 // · Un chantier peut être partagé avec un membre de l'équipe (`partage_avec`).
@@ -150,24 +150,64 @@ function semainesDu(annee, mois) {
 }
 
 // Les barres d'une semaine, rangées en couloirs.
+// Les tronçons à dessiner entre deux dates : un seul pour un chantier, un par
+// plage de jours ouvrés pour une formation.
+//
+// ⚠ LE REPLI EXISTE POUR QU'UNE LIGNE NE DISPARAISSE JAMAIS DU PLANNING. Une
+// formation posée entièrement sur des jours non ouvrés — une ligne ancienne,
+// saisie avant la règle du 11/11, ou un samedi au dimanche — n'a aucune plage
+// ouvrée : sans ce repli elle n'aurait plus une seule barre, et son absence se
+// lirait comme une suppression. On la montre alors d'un tenant.
+const tronconsDe = (c, de, a) => {
+  if (!estFormation(c)) return [[de, a]];
+  const p = plagesOuvrees(de, a);
+  return p.length ? p : [[de, a]];
+};
+
 function barresDe(semaine, chantiers) {
   const [lundi, dimanche] = [semaine[0], semaine[6]];
   const morceaux = chantiers
     .map((c, i) => ({ c, i, fin: finDe(c) }))
     .filter(x => x.c.date_debut <= dimanche && x.fin >= lundi)
-    .map(x => {
+    // ⚠ UNE FORMATION SE COUPE SUR LES JOURS NON OUVRÉS (11/11/2026, Élodie :
+    // « si la formation dure 4 jours du jeudi au mardi enlève la barre de
+    // suivi sur le week-end, ça porte à confusion »). Un morceau par plage de
+    // jours ouvrés, au lieu d'un seul qui irait jusqu'au dimanche. Un chantier
+    // garde sa barre d'un seul tenant : on y travaille le samedi.
+    .flatMap(x => {
       const de = x.c.date_debut < lundi ? lundi : x.c.date_debut;
       const a = x.fin > dimanche ? dimanche : x.fin;
-      return { ...x, col: semaine.indexOf(de) + 1, fin_col: semaine.indexOf(a) + 2,
-        suite: x.c.date_debut < lundi, continue: x.fin > dimanche };
+      const avant = x.c.date_debut < lundi, apres = x.fin > dimanche;
+      if (!estFormation(x.c)) {
+        return [{ ...x, col: semaine.indexOf(de) + 1, fin_col: semaine.indexOf(a) + 2,
+          suite: avant, continue: apres }];
+      }
+      const plages = tronconsDe(x.c, de, a);
+      // ⚠ `suite` ET `continue` NE DISENT PLUS SEULEMENT « LA SEMAINE
+      // D'AVANT / D'APRÈS » : ils disent « ce bord n'est pas le bout de la
+      // barre ». C'est ce qui coupe l'arrondi entre deux plages et, surtout,
+      // ce qui empêche une POIGNÉE de pousser au milieu d'une formation —
+      // tirer depuis un bord intérieur aurait changé la fin sans qu'on voie
+      // quel bout on tenait.
+      return plages.map(([p0, p1], n) => ({ ...x,
+        col: semaine.indexOf(p0) + 1, fin_col: semaine.indexOf(p1) + 2,
+        suite: n > 0 || avant,
+        continue: n < plages.length - 1 ? true : apres }));
     })
     .sort((p, q) => p.col - q.col || (q.fin_col - q.col) - (p.fin_col - p.col));
   const couloirs = [];                                   // fin_col occupée par couloir
+  // ⚠ LES MORCEAUX D'UNE MÊME LIGNE RESTENT SUR LE MÊME COULOIR : sans ça, les
+  // deux bouts d'une formation coupée par un week-end pouvaient tomber sur
+  // deux rangs différents et se lire comme deux formations.
+  const couloirDe = new Map();
   for (const m of morceaux) {
+    const deja = couloirDe.get(m.c.id);
+    if (deja !== undefined) { m.couloir = deja; couloirs[deja - 2] = m.fin_col; continue; }
     let k = couloirs.findIndex(fin => fin <= m.col);
     if (k === -1) { k = couloirs.length; couloirs.push(0); }
     couloirs[k] = m.fin_col;
     m.couloir = k + 2;                                   // ligne 1 = numéros des jours
+    couloirDe.set(m.c.id, m.couloir);
   }
   return { morceaux, nb: couloirs.length };
 }
@@ -333,15 +373,38 @@ function frise(tous) {
           const ecoule = x.e.cle === 'encours' ? Math.min(100, Math.round((pos(auj) - pos(x.c.date_debut) + 1) / jours * 100)) : 0;
           const etiquette = x.e.cle === 'encours' ? `${ecoule} %` : x.e.cle === 'futur'
             ? `dans ${pos(x.c.date_debut) - pos(auj)} j` : 'terminé';
+          // ⚠ UNE FORMATION EST DESSINÉE EN UNE PILULE PAR PLAGE DE JOURS
+          // OUVRÉS (11/11/2026, Élodie). Le week-end n'est plus barré : on voit
+          // « deux jours, puis deux jours » au lieu d'une barre de six qui
+          // laissait croire qu'on se forme le samedi.
+          const plages = tronconsDe(x.c, x.c.date_debut, x.fin);
+          // Le nom ne s'écrit qu'une fois, sur la plage la plus large : répété
+          // sur chaque bout il se lirait comme plusieurs formations.
+          const large = plages.reduce((meilleur, p, n) =>
+            (pos(p[1]) - pos(p[0])) > (pos(plages[meilleur][1]) - pos(plages[meilleur][0])) ? n : meilleur, 0);
           return `<div class="pl-frise-ligne" style="--k:${k}">
           <div class="pl-frise-nom"><b><i class="pl-frise-puce est-${x.e.cle}" style="--pl-c:${couleurDe(x.c, x.i)}"></i>${marque(x.c)}${esc(x.c.titre)}</b>
             <span>${esc(dateCourte(x.c.date_debut))} → ${esc(dateCourte(x.fin))} · ${esc(dureeLue(x.c).texte)}</span></div>
           <div class="pl-frise-piste">
-            <button type="button" class="pl-frise-barre est-${x.e.cle}${estFormation(x.c) ? ' formation' : ''}${w < 70 ? ' etroite' : ''}"
-              style="left:${pos(x.c.date_debut) * PX_JOUR}px; width:${w}px; --pl-c:${couleurDe(x.c, x.i)}; --pl-av:${ecoule}%"
+            ${plages.map(([p0, p1], n) => {
+              const jp = pos(p1) - pos(p0) + 1;
+              const wp = jp * PX_JOUR;
+              // L'avancée se lit plage par plage : celle qui est passée est
+              // pleine, celle qui vient est vide, même un samedi entre les deux.
+              const av = x.e.cle === 'encours'
+                ? Math.max(0, Math.min(100, Math.round((pos(auj) - pos(p0) + 1) / jp * 100))) : 0;
+              const porteNom = n === large;
+              // ⚠ LA POIGNÉE NE VA QUE SUR LE DERNIER BOUT : au milieu d'une
+              // formation, tirer aurait changé la fin sans qu'on voie quel
+              // bord on tenait.
+              const derniere = n === plages.length - 1;
+              return `<button type="button" class="pl-frise-barre est-${x.e.cle}${estFormation(x.c) ? ' formation' : ''}${wp < 70 || !porteNom ? ' etroite' : ''}"
+              style="left:${pos(p0) * PX_JOUR}px; width:${wp}px; --pl-c:${couleurDe(x.c, x.i)}; --pl-av:${av}%"
               data-chantier="${esc(x.c.id)}" title="${esc(`${x.c.titre} — ${x.e.label.toLowerCase()} — du ${dateLongue(x.c.date_debut)} au ${dateLongue(x.fin)}`)}">
-              <span class="pl-frise-texte">${marque(x.c)}${esc(x.c.titre)}</span>${w >= 160 ? `<em>${esc(etiquette)}</em>` : ''}${
-              scope.isDirection ? `<span class="pl-poignee" data-poignee="${esc(x.c.id)}" title="Tirer pour changer la fin"></span>` : ''}</button>
+              ${porteNom ? `<span class="pl-frise-texte">${marque(x.c)}${esc(x.c.titre)}</span>` : ''}${
+              porteNom && wp >= 160 ? `<em>${esc(etiquette)}</em>` : ''}${
+              scope.isDirection && derniere ? `<span class="pl-poignee" data-poignee="${esc(x.c.id)}" title="Tirer pour changer la fin"></span>` : ''}</button>`;
+            }).join('')}
           </div></div>`;
         }).join('')
           : '<div class="pl-frise-ligne"><div class="pl-frise-nom"><span>Aucun chantier planifié.</span></div><div class="pl-frise-piste"></div></div>'}

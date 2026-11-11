@@ -180,6 +180,27 @@ export const finOuvree = (debut, nOuvres) => {
   return d;
 };
 
+// ⚠ LES PLAGES DE JOURS OUVRÉS CONSÉCUTIFS entre deux dates, les deux
+// comprises (11/11/2026, Élodie : « si la formation dure 4 jours du jeudi au
+// mardi enlève la barre de suivi sur le week-end, ça porte à confusion »).
+// Une formation du jeudi au mardi rend [[jeudi, vendredi], [lundi, mardi]] :
+// le calendrier et la frise dessinent une pilule par plage au lieu d'une barre
+// qui enjambe le week-end. Un chantier, lui, garde sa barre d'un seul tenant —
+// on y travaille le samedi.
+export const plagesOuvrees = (debut, fin) => {
+  const plages = [];
+  let d = String(debut).slice(0, 10);
+  const stop = String(fin).slice(0, 10);
+  let courante = null;
+  for (let i = 0; d <= stop && i < 1100; i++) {
+    if (estOuvre(d)) {
+      if (courante) courante[1] = d; else { courante = [d, d]; plages.push(courante); }
+    } else courante = null;
+    d = ajouterJours(d, 1);
+  }
+  return plages;
+};
+
 // Combien de jours ouvrés entre ces deux dates, les deux comprises — la lecture
 // inverse, pour quand on tire le bord d'une barre à la souris.
 export const ouvresEntre = (debut, fin) => {
