@@ -204,10 +204,10 @@ function etatDe(c) {
 //
 // La frise va du mois du plus ancien chantier (au moins 3 mois avant
 // aujourd'hui) au mois du plus lointain (au moins 6 mois après), à largeur
-// fixe par jour : on la fait glisser à la souris, au doigt, ou avec les
+// fixe par jour (6 px) : on la fait glisser à la souris, au doigt, ou avec les
 // flèches. Elle s'ouvre centrée sur aujourd'hui. La colonne des noms reste
 // collée à gauche pendant le glissement.
-const PX_JOUR = 4;
+const PX_JOUR = 6;                                      // ≈ 180 px par mois
 const MOIS_COURTS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];                                      // ≈ 120 px par mois
 const debutDuMois = (iso) => `${iso.slice(0, 7)}-01`;
 function bornesFrise(tous) {
@@ -226,49 +226,96 @@ function frise(tous) {
   const { de, a } = bornesFrise(tous);
   const pos = (iso) => Math.round((versDate(iso) - versDate(de)) / 86400000);
   const largeur = (pos(a) + 1) * PX_JOUR;
-  const mois = [], seps = [];
+  const auj = aujourdhui();
+  const moisCourant = auj.slice(0, 7);
+  const mois = [], bandes = [];
   for (let d = versDate(de); versIso(d) <= a; d = new Date(d.getFullYear(), d.getMonth() + 1, 1)) {
     const x = pos(versIso(d)) * PX_JOUR;
     const w = (pos(versIso(new Date(d.getFullYear(), d.getMonth() + 1, 1))) - pos(versIso(d))) * PX_JOUR;
     const janvier = d.getMonth() === 0;
-    seps.push(`<i class="${janvier ? 'janvier' : ''}" style="left:${x}px"></i>`);
-    mois.push(`<div class="pl-frise-mois${janvier ? ' janvier' : ''}" style="left:${x}px; width:${w}px">${
-      esc(MOIS_COURTS[d.getMonth()])}${janvier || mois.length === 0 ? ` <small>${d.getFullYear()}</small>` : ''}</div>`);
+    const courant = versIso(d).slice(0, 7) === moisCourant;
+    // Une bande par mois, une sur deux teintée : l'œil suit les mois sans
+    // lire les traits.
+    bandes.push(`<i class="${mois.length % 2 ? 'pair' : ''}${janvier ? ' janvier' : ''}${courant ? ' courant' : ''}" style="left:${x}px; width:${w}px"></i>`);
+    mois.push(`<div class="pl-frise-mois${courant ? ' courant' : ''}" style="left:${x}px; width:${w}px"><span>${
+      esc(MOIS_COURTS[d.getMonth()])}${janvier || mois.length === 0 ? ` <small>${d.getFullYear()}</small>` : ''}</span></div>`);
   }
   // Les chantiers en cours d'abord, puis à venir, puis terminés : c'est
   // l'ordre dans lequel on les cherche.
   const rang = { encours: 0, futur: 1, passe: 2 };
   const lignes = tous.map((c, i) => ({ c, i, fin: finDe(c), e: etatDe(c) }))
     .sort((x, y) => rang[x.e.cle] - rang[y.e.cle] || String(x.c.date_debut).localeCompare(String(y.c.date_debut)));
-  const auj = aujourdhui();
+  const xAuj = pos(auj) * PX_JOUR + PX_JOUR / 2;
   return `
-    <div class="pl-frise-defile" data-auj="${pos(auj) * PX_JOUR}">
+    <div class="pl-frise-defile" data-auj="${xAuj}">
       <div class="pl-frise" style="--pl-larg:${largeur}px">
-        <div class="pl-frise-ligne pl-frise-tete"><div class="pl-frise-nom"></div>
-          <div class="pl-frise-piste">${mois.join('')}</div></div>
-        ${lignes.length ? lignes.map(x => `<div class="pl-frise-ligne">
-          <div class="pl-frise-nom"><b>${esc(x.c.titre)}</b><span>${esc(dateCourte(x.c.date_debut))} → ${esc(dateCourte(x.fin))}</span></div>
+        <div class="pl-frise-ligne pl-frise-tete"><div class="pl-frise-nom"><span>${lignes.length} chantier${lignes.length > 1 ? 's' : ''}</span></div>
+          <div class="pl-frise-piste">${mois.join('')}
+            <div class="pl-frise-auj-pastille" style="left:${xAuj}px">Aujourd’hui</div></div></div>
+        ${lignes.length ? lignes.map((x, k) => {
+          const jours = pos(x.fin) - pos(x.c.date_debut) + 1;
+          const w = jours * PX_JOUR;
+          // En cours : la part déjà écoulée se lit dans la barre.
+          const ecoule = x.e.cle === 'encours' ? Math.min(100, Math.round((pos(auj) - pos(x.c.date_debut) + 1) / jours * 100)) : 0;
+          const etiquette = x.e.cle === 'encours' ? `${ecoule} %` : x.e.cle === 'futur'
+            ? `dans ${pos(x.c.date_debut) - pos(auj)} j` : 'terminé';
+          return `<div class="pl-frise-ligne" style="--k:${k}">
+          <div class="pl-frise-nom"><b><i class="pl-frise-puce est-${x.e.cle}" style="--pl-c:${couleurDe(x.c, x.i)}"></i>${esc(x.c.titre)}</b>
+            <span>${esc(dateCourte(x.c.date_debut))} → ${esc(dateCourte(x.fin))} · ${esc(dureeLue(x.c).texte)}</span></div>
           <div class="pl-frise-piste">
-            <button type="button" class="pl-frise-barre est-${x.e.cle}"
-              style="left:${pos(x.c.date_debut) * PX_JOUR}px; width:${(pos(x.fin) - pos(x.c.date_debut) + 1) * PX_JOUR}px; --pl-c:${couleurDe(x.c, x.i)}"
+            <button type="button" class="pl-frise-barre est-${x.e.cle}${w < 70 ? ' etroite' : ''}"
+              style="left:${pos(x.c.date_debut) * PX_JOUR}px; width:${w}px; --pl-c:${couleurDe(x.c, x.i)}; --pl-av:${ecoule}%"
               data-chantier="${esc(x.c.id)}" title="${esc(`${x.c.titre} — ${x.e.label.toLowerCase()} — du ${dateLongue(x.c.date_debut)} au ${dateLongue(x.fin)}`)}">
-              <span>${esc(x.c.titre)}</span></button>
-          </div></div>`).join('')
+              <span class="pl-frise-texte">${esc(x.c.titre)}</span>${w >= 160 ? `<em>${esc(etiquette)}</em>` : ''}</button>
+          </div></div>`;
+        }).join('')
           : '<div class="pl-frise-ligne"><div class="pl-frise-nom"><span>Aucun chantier planifié.</span></div><div class="pl-frise-piste"></div></div>'}
-        <div class="pl-frise-fond">${seps.join('')}<div class="pl-frise-auj" style="left:${pos(auj) * PX_JOUR + PX_JOUR / 2}px"></div></div>
+        <div class="pl-frise-fond">${bandes.join('')}<div class="pl-frise-auj" style="left:${xAuj}px"></div></div>
       </div>
     </div>`;
 }
 
-// Le glissement à la souris (au doigt, le navigateur fait défiler tout seul).
-// Un glissement de plus de 5 px n'ouvre pas la barre sur laquelle on a lâché.
+// ⚠ LA FRISE DÉFILE À LA MOLETTE DE LA SOURIS (11/11/2026, Élodie : « je
+// voudrais défiler les mois de la frise avec la souris »). La molette, qui
+// fait d'ordinaire monter et descendre, fait glisser la frise de gauche à
+// droite tant que le pointeur est dessus ; arrivée au bout, elle rend la main
+// à la page. Le défilement est animé ici (et non par `behavior: 'smooth'`,
+// que certains navigateurs ignorent).
+// Le glissement « clic maintenu » reste possible, et au doigt le navigateur
+// fait défiler tout seul. Un glissement de plus de 5 px n'ouvre pas la barre
+// sur laquelle on a lâché.
 function brancherFrise(root, centrer) {
   const boite = root.querySelector('.pl-frise-defile');
   if (!boite) return;
-  if (centrer) boite.scrollLeft = Number(boite.dataset.auj) - boite.clientWidth / 3;
+  const max = () => boite.scrollWidth - boite.clientWidth;
+  let cible = boite.scrollLeft, anim = 0;
+  const glisserVers = (x) => {
+    cible = Math.max(0, Math.min(max(), x));
+    if (anim) return;
+    const pas = () => {
+      const ecart = cible - boite.scrollLeft;
+      if (Math.abs(ecart) < 1) { boite.scrollLeft = cible; anim = 0; return; }
+      boite.scrollLeft += ecart * 0.22;
+      anim = requestAnimationFrame(pas);
+    };
+    anim = requestAnimationFrame(pas);
+  };
+  boite.glisserVers = glisserVers;
+  if (centrer) { boite.scrollLeft = Number(boite.dataset.auj) - boite.clientWidth / 3; cible = boite.scrollLeft; }
+
+  boite.addEventListener('wheel', (e) => {
+    const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+    const base = anim ? cible : boite.scrollLeft;
+    const auBout = (delta < 0 && base <= 0) || (delta > 0 && base >= max() - 1);
+    if (auBout) return;                                  // la page reprend la main
+    e.preventDefault();
+    glisserVers(base + delta * (e.deltaMode === 1 ? 40 : 1.4));
+  }, { passive: false });
+
   let depart = null;
   boite.addEventListener('pointerdown', (e) => {
     if (e.pointerType !== 'mouse' || e.button !== 0) return;
+    cancelAnimationFrame(anim); anim = 0;
     depart = { x: e.clientX, gauche: boite.scrollLeft, bouge: false };
     boite.classList.add('saisie');
   });
@@ -279,6 +326,7 @@ function brancherFrise(root, centrer) {
     // l'appui, elle volerait le clic aux barres.
     if (Math.abs(dx) > 5 && !depart.bouge) { depart.bouge = true; boite.setPointerCapture(e.pointerId); }
     boite.scrollLeft = depart.gauche - dx;
+    cible = boite.scrollLeft;
   });
   boite.addEventListener('pointerup', () => {
     if (!depart) return;
@@ -628,7 +676,7 @@ export const rgdPlanningPage = {
         <section class="card pl-carte">
           ${enAnnee ? frise(tous) : calendrier(state.annee, state.mois, tous)}
           <p class="muted small pl-aide">${enAnnee
-            ? 'Faites glisser la frise vers la gauche ou la droite. Grisés : terminés. En couleur vive : en cours. En couleur adoucie : à venir. Cliquez sur une barre pour ouvrir le chantier.'
+            ? 'La molette de la souris fait défiler les mois (ou cliquez-glissez). En couleur vive : en cours, avec la part écoulée. Hachurés : à venir. Gris : terminés. Cliquez sur une barre pour ouvrir le chantier.'
             : direction ? 'Cliquez sur un jour pour y planifier un chantier, sur une barre pour ouvrir sa fiche.'
             : 'Cliquez sur une barre pour ouvrir le chantier.'}</p>
         </section>
@@ -659,7 +707,7 @@ export const rgdPlanningPage = {
       brancherFrise(root, true);
       root.querySelectorAll('[data-pas]').forEach(b => b.onclick = () => {
         // En frise, les flèches font glisser de trois mois.
-        if (boiteFrise) { boiteFrise.scrollLeft += Number(b.dataset.pas) * 90 * PX_JOUR; return; }
+        if (boiteFrise) { boiteFrise.glisserVers(boiteFrise.scrollLeft + Number(b.dataset.pas) * 90 * PX_JOUR); return; }
         const d = new Date(state.annee, state.mois + Number(b.dataset.pas), 1);
         state.annee = d.getFullYear(); state.mois = d.getMonth(); draw();
       });
@@ -669,7 +717,7 @@ export const rgdPlanningPage = {
         draw();
       });
       root.querySelector('#pl-auj').onclick = () => {
-        if (boiteFrise) { boiteFrise.scrollLeft = Number(boiteFrise.dataset.auj) - boiteFrise.clientWidth / 3; return; }
+        if (boiteFrise) { boiteFrise.glisserVers(Number(boiteFrise.dataset.auj) - boiteFrise.clientWidth / 3); return; }
         state.annee = auj.getFullYear(); state.mois = auj.getMonth(); draw();
       };
       const bNeuf = root.querySelector('#pl-neuf');

@@ -8088,47 +8088,92 @@ tr.est-modifie td { background: var(--accent-soft); }
 .pl-etat.est-passe { background: var(--card-2); color: var(--muted); }
 .pl-etat.est-encours { background: color-mix(in srgb, #fd7a2d 16%, var(--card)); color: #c2410c; }
 .pl-etat.est-futur { background: color-mix(in srgb, #0284c7 12%, var(--card)); color: #075985; }
-/* La frise continue (11/11/2026) : elle défile de gauche à droite, à la
-   souris (glisser), au doigt ou aux flèches. La colonne des noms reste collée
-   à gauche. Chaque barre est placée au jour près (4 px par jour). Le trait
-   rouge marque aujourd'hui, un trait plus marqué chaque mois de janvier. */
-.pl-frise-defile { overflow-x: auto; overflow-y: hidden; cursor: grab; border: 1px solid var(--line);
-  border-radius: 12px; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; }
+/* La frise continue (11/11/2026), version « moderne et dynamique » demandée
+   le même jour : elle défile à la molette, les mois alternent en bandes, le
+   mois en cours est surligné, les barres sont des pilules en dégradé qui
+   s'allongent à l'ouverture. Un chantier en cours montre sa part écoulée,
+   un chantier à venir est hachuré, un terminé passe en gris.
+   La colonne des noms reste collée à gauche. 6 px par jour. */
+.pl-frise-defile { overflow-x: auto; overflow-y: hidden; cursor: grab; border-radius: 16px;
+  border: 1px solid var(--line); background: var(--card);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .04), 0 8px 24px -12px rgba(15, 23, 42, .12);
+  -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, #fd7a2d 45%, var(--line)) transparent; }
+.pl-frise-defile::-webkit-scrollbar { height: 8px; }
+.pl-frise-defile::-webkit-scrollbar-thumb { background: color-mix(in srgb, #fd7a2d 45%, var(--line)); border-radius: 99px; }
 .pl-frise-defile.saisie { cursor: grabbing; user-select: none; }
-.pl-frise { position: relative; --pl-nom: 220px; width: calc(var(--pl-nom) + var(--pl-larg)); }
-.pl-frise-ligne { display: grid; grid-template-columns: var(--pl-nom) var(--pl-larg); align-items: stretch;
-  min-height: 42px; border-bottom: 1px solid var(--line); }
-.pl-frise-ligne:last-of-type { border-bottom: 0; }
-.pl-frise-nom { position: sticky; left: 0; z-index: 3; background: var(--card); padding: 5px 10px 5px 12px;
-  display: flex; flex-direction: column; justify-content: center; min-width: 0;
-  border-right: 1px solid var(--line); box-shadow: 4px 0 8px -6px rgba(0, 0, 0, .18); }
-.pl-frise-nom b { font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.pl-frise-nom span { font-size: 11.5px; color: var(--muted); }
-.pl-frise-piste { position: relative; min-height: 42px; }
-.pl-frise-tete { min-height: 34px; background: var(--card-2); position: sticky; top: 0; z-index: 4; }
+.pl-frise { position: relative; --pl-nom: 240px; width: calc(var(--pl-nom) + var(--pl-larg)); }
+.pl-frise-ligne { display: grid; grid-template-columns: var(--pl-nom) var(--pl-larg); align-items: stretch; min-height: 52px; }
+.pl-frise-ligne:not(.pl-frise-tete):hover .pl-frise-nom { background: color-mix(in srgb, #fd7a2d 6%, var(--card)); }
+.pl-frise-nom { position: sticky; left: 0; z-index: 3; background: var(--card); padding: 6px 12px 6px 16px;
+  display: flex; flex-direction: column; justify-content: center; gap: 2px; min-width: 0;
+  border-right: 1px solid var(--line); box-shadow: 6px 0 12px -10px rgba(15, 23, 42, .35); transition: background .15s; }
+.pl-frise-nom b { font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  display: flex; align-items: center; gap: 8px; }
+.pl-frise-nom > span { font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pl-frise-puce { flex: none; width: 10px; height: 10px; border-radius: 99px; background: var(--pl-c); }
+.pl-frise-puce.est-passe { background: #cbd5e1; }
+.pl-frise-puce.est-encours { box-shadow: 0 0 0 0 color-mix(in srgb, var(--pl-c) 60%, transparent); animation: pl-pouls 2s infinite; }
+@keyframes pl-pouls { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--pl-c) 55%, transparent); }
+  70% { box-shadow: 0 0 0 7px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
+.pl-frise-piste { position: relative; min-height: 52px; }
+.pl-frise-tete { min-height: 44px; position: sticky; top: 0; z-index: 4;
+  background: linear-gradient(180deg, var(--card-2), var(--card)); border-bottom: 1px solid var(--line); }
 .pl-frise-tete .pl-frise-nom { background: var(--card-2); }
-.pl-frise-mois { position: absolute; top: 0; bottom: 0; display: flex; align-items: center; padding-left: 8px;
-  font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: var(--muted);
-  white-space: nowrap; }
-.pl-frise-mois small { margin-left: 5px; font-weight: 800; color: #c2410c; }
-.pl-frise-barre { position: absolute; top: 8px; bottom: 8px; min-width: 8px; border: 0; border-radius: 7px; z-index: 2;
-  background: var(--pl-c); cursor: pointer; padding: 0 8px; color: #fff; font: inherit; font-size: 12px; font-weight: 700;
-  text-align: left; overflow: hidden; }
-.pl-frise-barre span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.pl-frise-barre.est-passe { background: #cbd5e1; color: #475569; }
-.pl-frise-barre.est-futur { background: color-mix(in srgb, var(--pl-c) 35%, var(--card)); border: 2px solid var(--pl-c);
-  color: var(--text); }
-.pl-frise-barre.est-encours { box-shadow: 0 0 0 3px color-mix(in srgb, var(--pl-c) 30%, transparent); }
-.pl-frise-barre:hover { filter: brightness(1.06); }
-.pl-frise-fond { position: absolute; top: 0; bottom: 0; left: var(--pl-nom); width: var(--pl-larg); pointer-events: none; z-index: 1; }
-.pl-frise-fond i { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--line); }
-.pl-frise-fond i.janvier { width: 2px; background: color-mix(in srgb, #c2410c 45%, var(--line)); }
-.pl-frise-auj { position: absolute; top: 0; bottom: 0; width: 2px; background: #dc2626; z-index: 2; }
-.pl-frise-auj::before { content: 'Aujourd’hui'; position: absolute; bottom: 1px; left: 4px; font-size: 10px; font-weight: 800;
-  color: #dc2626; white-space: nowrap; background: var(--card); padding: 0 3px; border-radius: 4px; }
+.pl-frise-tete .pl-frise-nom span { font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.pl-frise-mois { position: absolute; top: 0; bottom: 0; display: flex; align-items: center; padding-left: 6px; }
+.pl-frise-mois span { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--muted);
+  white-space: nowrap; padding: 4px 10px; border-radius: 99px; }
+.pl-frise-mois small { margin-left: 4px; font-weight: 800; color: #c2410c; }
+.pl-frise-mois.courant span { background: #fd7a2d; color: #fff; box-shadow: 0 4px 12px -4px rgba(253, 122, 45, .6); }
+.pl-frise-mois.courant small { color: #fff; }
+.pl-frise-auj-pastille { position: absolute; bottom: -9px; transform: translateX(-50%); z-index: 5; font-size: 10px; font-weight: 800;
+  color: #fff; background: #dc2626; padding: 2px 8px; border-radius: 99px; white-space: nowrap;
+  box-shadow: 0 3px 8px -2px rgba(220, 38, 38, .5); }
+/* Les barres : des pilules en dégradé, qui s'allongent à l'ouverture. */
+.pl-frise-barre { position: absolute; top: 10px; bottom: 10px; min-width: 10px; border: 0; border-radius: 99px; z-index: 2;
+  background: linear-gradient(135deg, var(--pl-c), color-mix(in srgb, var(--pl-c) 70%, #fff));
+  cursor: pointer; padding: 0 12px; color: #fff; font: inherit; text-align: left; overflow: hidden;
+  display: flex; align-items: center; gap: 8px;
+  box-shadow: 0 6px 14px -8px color-mix(in srgb, var(--pl-c) 90%, #000), inset 0 1px 0 rgba(255, 255, 255, .25);
+  transform-origin: left center; animation: pl-allonge .55s cubic-bezier(.2, .8, .2, 1) backwards;
+  animation-delay: calc(var(--k, 0) * 60ms); transition: transform .15s, box-shadow .15s, filter .15s; }
+@keyframes pl-allonge { from { transform: scaleX(0); opacity: 0; } to { transform: scaleX(1); opacity: 1; } }
+.pl-frise-barre:hover { transform: translateY(-2px); filter: saturate(1.15);
+  box-shadow: 0 10px 20px -8px color-mix(in srgb, var(--pl-c) 90%, #000), inset 0 1px 0 rgba(255, 255, 255, .25); }
+.pl-frise-texte { flex: 1; min-width: 0; font-size: 12.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  position: relative; z-index: 1; }
+.pl-frise-barre em { flex: none; font-style: normal; font-size: 10.5px; font-weight: 800; padding: 1px 7px; border-radius: 99px;
+  background: rgba(255, 255, 255, .28); position: relative; z-index: 1; }
+.pl-frise-barre.etroite { padding: 0; }
+.pl-frise-barre.etroite .pl-frise-texte, .pl-frise-barre.etroite em { display: none; }
+/* En cours : la part écoulée en plein, le reste éclairci. */
+.pl-frise-barre.est-encours::after { content: ''; position: absolute; top: 0; bottom: 0; left: var(--pl-av); right: 0;
+  background: rgba(255, 255, 255, .38); }
+/* À venir : hachuré, contour de sa couleur. */
+.pl-frise-barre.est-futur { color: color-mix(in srgb, var(--pl-c) 75%, #000);
+  background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--pl-c) 22%, var(--card)) 0 8px,
+    color-mix(in srgb, var(--pl-c) 12%, var(--card)) 8px 16px);
+  box-shadow: inset 0 0 0 2px var(--pl-c); }
+.pl-frise-barre.est-futur em { background: color-mix(in srgb, var(--pl-c) 18%, var(--card)); }
+/* Terminés : gris, plus discrets. */
+.pl-frise-barre.est-passe { background: linear-gradient(135deg, #cbd5e1, #e2e8f0); color: #475569; box-shadow: none; }
+.pl-frise-barre.est-passe em { background: rgba(255, 255, 255, .6); }
+/* Le fond : une bande par mois, une sur deux teintée, le mois courant en orange pâle. */
+.pl-frise-fond { position: absolute; top: 44px; bottom: 0; left: var(--pl-nom); width: var(--pl-larg); pointer-events: none; z-index: 1; }
+.pl-frise-fond i { position: absolute; top: 0; bottom: 0; border-left: 1px solid color-mix(in srgb, var(--line) 70%, transparent); }
+.pl-frise-fond i.pair { background: color-mix(in srgb, var(--card-2) 55%, transparent); }
+.pl-frise-fond i.courant { background: color-mix(in srgb, #fd7a2d 6%, transparent); }
+.pl-frise-fond i.janvier { border-left: 2px solid color-mix(in srgb, #c2410c 40%, var(--line)); }
+.pl-frise-auj { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; z-index: 2;
+  background: linear-gradient(180deg, #dc2626, color-mix(in srgb, #dc2626 25%, transparent)); }
+@media (prefers-reduced-motion: reduce) {
+  .pl-frise-barre, .pl-frise-puce.est-encours { animation: none; }
+}
 @media screen and (max-width: 760px) {
-  .pl-frise { --pl-nom: 120px; }
+  .pl-frise { --pl-nom: 130px; }
+  .pl-frise-nom { padding: 6px 8px 6px 10px; }
   .pl-frise-nom b { font-size: 12px; }
-  .pl-frise-nom span { font-size: 10.5px; }
+  .pl-frise-nom > span { font-size: 10.5px; }
 }
 .pl-nav h2.pl-h2-libre { text-transform: none; }
