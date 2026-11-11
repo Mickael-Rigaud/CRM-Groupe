@@ -76,6 +76,127 @@ export const ajouterJours = (iso, n) => {
 // Le dernier jour du chantier : un chantier d'un jour finit le jour où il commence.
 export const finDe = (c) => ajouterJours(c.date_debut, Math.max(1, Number(c.duree_jours) || 1) - 1);
 
+// ------------------------------------------------- les jours ouvrés (formations)
+// ⚠ UNE FORMATION SE COMPTE EN JOURS OUVRÉS, PAS EN JOURS CALENDAIRES
+// (11/11/2026, Élodie : « en ajoutant les dates d'une formation, je veux que ce
+// soit des jours ouvrés et pas des jours calendaires »). Le défaut se voyait en
+// base le jour même : « formation », 4 jours à partir du mercredi 11/11,
+// finissait le SAMEDI 14. Elle finit maintenant le lundi 16.
+//
+// ⚠ ET C'EST LA SEULE CHOSE QUI CHANGE : `duree_jours` reste la durée
+// CALENDAIRE, parce que c'est elle que lisent `finDe`, le calendrier, la frise,
+// le tableau et `etapeDuPlanning`. Une formation de 4 jours ouvrés à partir du
+// mercredi porte donc `duree_jours = 6`. Faire de `duree_jours` un compte de
+// jours ouvrés aurait demandé de corriger tous ces lecteurs, et le premier
+// oublié aurait dessiné une barre fausse sans que rien ne le dise.
+//
+// ⚠ « OUVRÉ » EXCLUT LES JOURS FÉRIÉS, pas seulement le week-end, et c'est le
+// sens du mot : personne ne se forme un 1er mai. Le cas s'est posé tout de
+// suite — le 11 novembre est férié. Les onze fériés français se CALCULENT
+// plutôt qu'ils ne se listent : une liste à tenir à la main est fausse l'année
+// où personne ne pense à la rallonger.
+const paquesDe = (an) => {
+  // Meeus / Jones / Butcher, le calcul grégorien. Rend [mois, jour].
+  const a = an % 19, b = Math.floor(an / 100), c = an % 100;
+  const d = Math.floor(b / 4), e = b % 4;
+  const f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4), k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const n = h + l - 7 * m + 114;
+  return [Math.floor(n / 31), (n % 31) + 1];
+};
+
+const _feries = new Map();
+const feriesDe = (an) => {
+  if (_feries.has(an)) return _feries.get(an);
+  const [mois, jour] = paquesDe(an);
+  const paques = versIso(new Date(an, mois - 1, jour));
+  const s = new Set([
+    `${an}-01-01`,                  // Jour de l'An
+    ajouterJours(paques, 1),        // lundi de Pâques
+    `${an}-05-01`,                  // Fête du Travail
+    `${an}-05-08`,                  // Victoire 1945
+    ajouterJours(paques, 39),       // Ascension
+    ajouterJours(paques, 50),       // lundi de Pentecôte
+    `${an}-07-14`,                  // Fête nationale
+    `${an}-08-15`,                  // Assomption
+    `${an}-11-01`,                  // Toussaint
+    `${an}-11-11`,                  // Armistice
+    `${an}-12-25`,                  // Noël
+  ]);
+  _feries.set(an, s);
+  return s;
+};
+
+export const estOuvre = (iso) => {
+  const d = versDate(iso);
+  const j = d.getDay();
+  if (j === 0 || j === 6) return false;
+  return !feriesDe(d.getFullYear()).has(String(iso).slice(0, 10));
+};
+
+// Le premier jour ouvré à partir de cette date, elle comprise.
+// ⚠ LA BOUCLE EST BORNÉE : sans borne, une date illisible la ferait tourner
+// sans fin et figerait l'écran au lieu d'afficher une erreur.
+export const prochainOuvre = (iso) => {
+  let d = String(iso).slice(0, 10);
+  for (let i = 0; i < 30; i++) { if (estOuvre(d)) return d; d = ajouterJours(d, 1); }
+  return d;
+};
+
+// Le dernier jour ouvré à cette date ou avant — pour quand on RACCOURCIT une
+// formation en tirant son bord droit sur un samedi.
+export const ouvrePrecedent = (iso) => {
+  let d = String(iso).slice(0, 10);
+  for (let i = 0; i < 30; i++) { if (estOuvre(d)) return d; d = ajouterJours(d, -1); }
+  return d;
+};
+
+// ⚠ UNE FORMATION NE SE COMPTE QU'EN JOURS OU EN SEMAINES, et « mois » a quitté
+// son menu : un mois de formation en jours ouvrés n'a pas de définition qui
+// tienne — 20 jours ? 22 ? celle du mois courant ? Toutes se défendent, donc
+// aucune ne s'impose, et un chiffre arbitraire se serait lu comme une vérité.
+// Quatre semaines le disent sans ambiguïté.
+export const OUVRES_PAR_SEMAINE = 5;
+export const UNITES_FORMATION = ['jours', 'semaines'];
+export const ouvresPour = (nombre, unite) => {
+  const n = Math.max(1, parseInt(nombre, 10) || 1);
+  return unite === 'semaines' ? n * OUVRES_PAR_SEMAINE : n;
+};
+
+// Le dernier jour d'une formation de `nOuvres` jours ouvrés commencée ce
+// jour-là. Le début est reporté au premier jour ouvré : une formation ne
+// commence pas un dimanche, et l'écran le dit avant d'enregistrer.
+export const finOuvree = (debut, nOuvres) => {
+  let d = prochainOuvre(debut);
+  let restants = Math.max(1, nOuvres) - 1;
+  // Borne : 366 jours ouvrés au plus, comme les durées calendaires.
+  for (let i = 0; restants > 0 && i < 700; i++) {
+    d = ajouterJours(d, 1);
+    if (estOuvre(d)) restants--;
+  }
+  return d;
+};
+
+// Combien de jours ouvrés entre ces deux dates, les deux comprises — la lecture
+// inverse, pour quand on tire le bord d'une barre à la souris.
+export const ouvresEntre = (debut, fin) => {
+  let n = 0, d = String(debut).slice(0, 10);
+  const stop = String(fin).slice(0, 10);
+  for (let i = 0; d <= stop && i < 1100; i++) { if (estOuvre(d)) n++; d = ajouterJours(d, 1); }
+  return n;
+};
+
+// La durée CALENDAIRE que `duree_jours` doit porter pour couvrir ces jours
+// ouvrés — le pont entre les deux comptes.
+export const joursPourFormation = (debut, nombre, unite) => {
+  const d = prochainOuvre(debut);
+  const f = finOuvree(d, ouvresPour(nombre, unite));
+  return Math.round((versDate(f) - versDate(debut)) / 86400000) + 1;
+};
+
 // ⚠ LA DURÉE SE SAISIT EN JOURS, SEMAINES OU MOIS (10/11/2026, Élodie), et
 // on garde la saisie (`duree_nombre`, `duree_unite`) pour la réafficher telle
 // quelle. Le calendrier, lui, ne lit que `duree_jours`, calculé ici :
@@ -105,10 +226,20 @@ export function joursPour(debut, nombre, unite) {
 }
 // La durée telle qu'on l'a saisie ; les chantiers d'avant le 10/11 n'ont que
 // des jours.
+//
+// ⚠ UNE FORMATION DIT « OUVRÉS » (11/11/2026). « 4 jours » et « 4 jours
+// ouvrés » ne désignent pas la même fin dès qu'un week-end traverse ; écrire
+// les deux pareil laisserait croire à un chantier de même durée, et au report
+// d'une formation à un défaut. Les semaines n'en ont pas besoin : une semaine
+// de formation, c'est cinq jours, personne n'attend sept.
 export const dureeLue = (c) => {
-  const unite = UNITES[c.duree_unite] ? c.duree_unite : 'jours';
+  const formation = estFormation(c);
+  const dispo = formation ? UNITES_FORMATION : Object.keys(UNITES);
+  const unite = dispo.includes(c.duree_unite) ? c.duree_unite : 'jours';
   const nombre = c.duree_nombre || (unite === 'jours' ? c.duree_jours : 1) || 1;
-  return { nombre, unite, texte: `${nombre} ${nombre > 1 ? UNITES[unite].plusieurs : UNITES[unite].un}` };
+  const mot = nombre > 1 ? UNITES[unite].plusieurs : UNITES[unite].un;
+  const ouvres = formation && unite === 'jours' ? (nombre > 1 ? ' ouvrés' : ' ouvré') : '';
+  return { nombre, unite, texte: `${nombre} ${mot}${ouvres}` };
 };
 
 // ⚠ UN CHANTIER PEUT ÊTRE PARTAGÉ AVEC UN MEMBRE DE L'ÉQUIPE (11/11/2026) :
@@ -139,14 +270,25 @@ export const estFormation = (c) => c?.genre === 'formation';
 
 const propre = (champs) => {
   const formation = champs.genre === 'formation';
-  const unite = UNITES[champs.duree_unite] ? champs.duree_unite : 'jours';
+  // ⚠ UNE FORMATION N'A QUE DEUX UNITÉS, et un `mois` qui arriverait quand même
+  // — un ancien enregistrement, une formation changée en chantier puis
+  // l'inverse — retombe sur « jours » plutôt que de lire `UNITES.mois.max`
+  // pour une durée qui ne veut rien dire ici.
+  const dispo = formation ? UNITES_FORMATION : Object.keys(UNITES);
+  const unite = dispo.includes(champs.duree_unite) ? champs.duree_unite : 'jours';
   const nombre = Math.max(1, Math.min(UNITES[unite].max, parseInt(champs.duree_nombre, 10) || 1));
+  // ⚠ LE DÉBUT D'UNE FORMATION EST REPORTÉ AU PREMIER JOUR OUVRÉ : une
+  // formation ne commence pas un samedi ni un 1er mai. L'écran l'annonce avant
+  // d'enregistrer, il n'y a donc pas de date changée en douce.
+  const debut = formation && champs.date_debut ? prochainOuvre(champs.date_debut) : champs.date_debut;
   return {
   titre: String(champs.titre || '').trim(),
-  date_debut: champs.date_debut,
+  date_debut: debut,
   duree_nombre: nombre,
   duree_unite: unite,
-  duree_jours: champs.date_debut ? Math.min(366, joursPour(champs.date_debut, nombre, unite)) : nombre,
+  duree_jours: !debut ? nombre : Math.min(366, formation
+    ? joursPourFormation(debut, nombre, unite)
+    : joursPour(debut, nombre, unite)),
   genre: formation ? 'formation' : 'chantier',
   fiche_id: formation ? null : champs.fiche_id || null,
   demande_id: formation ? null : champs.demande_id || null,
@@ -180,6 +322,19 @@ export async function majChantier(id, champs) {
 export async function changerFin(c, fin) {
   const jours = Math.round((versDate(fin) - versDate(c.date_debut)) / 86400000) + 1;
   if (jours < 1) throw new Error('La fin ne peut pas précéder le début.');
+  // ⚠ UNE FORMATION NE PEUT PAS FINIR UN SAMEDI (11/11/2026). Lâchée sur un
+  // jour non ouvré, la barre recule au dernier jour ouvré, et la durée
+  // s'enregistre en jours OUVRÉS — sans quoi le geste à la souris rendrait
+  // calendaire ce que la fiche compte en ouvrés, et les deux chemins
+  // d'écriture ne diraient plus la même chose.
+  if (estFormation(c)) {
+    const f = ouvrePrecedent(fin);
+    if (f < c.date_debut) throw new Error('La fin ne peut pas précéder le début.');
+    const ouvres = Math.min(366, Math.max(1, ouvresEntre(c.date_debut, f)));
+    const cal = Math.round((versDate(f) - versDate(c.date_debut)) / 86400000) + 1;
+    return db.update('rgd_planning', c.id,
+      { duree_jours: Math.min(366, cal), duree_nombre: ouvres, duree_unite: 'jours' });
+  }
   const n = Math.min(366, jours);
   return db.update('rgd_planning', c.id, { duree_jours: n, duree_nombre: n, duree_unite: 'jours' });
 }
@@ -188,7 +343,16 @@ export async function changerFin(c, fin) {
 // change : la durée reste celle saisie (3 semaines restent 3 semaines).
 export async function deplacerChantier(c, debut) {
   if (!debut) throw new Error('La date de début manque.');
-  return db.update('rgd_planning', c.id, { date_debut: debut });
+  // ⚠ DÉPLACER UNE FORMATION GARDE SES JOURS OUVRÉS, PAS SA LARGEUR
+  // (11/11/2026). Quatre jours ouvrés posés un lundi tiennent quatre cases ;
+  // les mêmes posés un jeudi en tiennent six. Ne changer que `date_debut`
+  // aurait fait finir la barre un samedi — exactement le défaut signalé.
+  // Et un lâcher sur un week-end ou un férié glisse au premier jour ouvré.
+  if (!estFormation(c)) return db.update('rgd_planning', c.id, { date_debut: debut });
+  const d = prochainOuvre(debut);
+  const { nombre, unite } = dureeLue(c);
+  return db.update('rgd_planning', c.id,
+    { date_debut: d, duree_jours: Math.min(366, joursPourFormation(d, nombre, unite)) });
 }
 
 // Les lignes partent avec le chantier (`on delete cascade` en base) ; en

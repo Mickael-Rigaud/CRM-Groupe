@@ -23,7 +23,8 @@ import { cadre, guard } from './rgd-espace.js';
 import { etapeDeFiche, etapeDeDemande, joursDeVisite } from '../data/rgd-etapes.js';
 import { LISTES, UNITES, joursPour, dureeLue, listesStandard, enregistrerStandard, versDate, versIso, ajouterJours, finDe,
          chantiersPlanifies, lignesDe, resteA, creerChantier, majChantier, supprimerChantier,
-         ajouterLigne, ajouterStandard, majLigne, retirerLigne, changerFin, deplacerChantier, estFormation } from '../data/rgd-planning.js';
+         ajouterLigne, ajouterStandard, majLigne, retirerLigne, changerFin, deplacerChantier, estFormation,
+         UNITES_FORMATION, ouvresPour, prochainOuvre, finOuvree } from '../data/rgd-planning.js';
 
 // ⚠ LE 11/11/2026 : PARTAGE, LECTURE PAR L'ÉQUIPE ET VUE DE L'ANNÉE.
 // · Un chantier peut être partagé avec un membre de l'équipe (`partage_avec`).
@@ -670,8 +671,14 @@ function formulaire(c, defaut = {}) {
       <div class="pl-champ"><span>Durée</span>
         <div class="pl-duree">
           <input type="number" name="duree_nombre" min="1" max="366" required value="${esc(String(duree.nombre))}" aria-label="Nombre">
+          ${'' /* ⚠ UNE FORMATION SE COMPTE EN JOURS OUVRÉS OU EN SEMAINES
+             (11/11/2026, Élodie). « Mois » a quitté son menu : un mois de
+             formation en jours ouvrés n'a pas de définition qui tienne — 20
+             jours ? 22 ? Quatre semaines le disent sans ambiguïté. */}
           <select name="duree_unite" aria-label="Unité">
-            ${Object.entries(UNITES).map(([k, u]) => `<option value="${k}"${duree.unite === k ? ' selected' : ''}>${esc(u.plusieurs)}</option>`).join('')}
+            ${Object.entries(UNITES).filter(([k]) => !formation || UNITES_FORMATION.includes(k))
+              .map(([k, u]) => `<option value="${k}"${duree.unite === k ? ' selected' : ''}>${
+                esc(formation && k === 'jours' ? 'jours ouvrés' : u.plusieurs)}</option>`).join('')}
           </select>
         </div></div>
       <div class="pl-champ"><span>Couleur</span>
@@ -757,28 +764,57 @@ function ouvrirChantier(c, apres, jour = null, genre = 'chantier') {
   if (c && !scope.isDirection) {
     const m = openModal(c.titre, `${resume(c)}
       ${formation ? '' : `<div class="pl-listes">${blocListe(c, 'materiaux')}${blocListe(c, 'outils')}</div>`}
-      <div class="form-actions"><span class="grow"></span><button type="button" class="btn ghost" data-close>Fermer</button></div>`,
+      <div class="form-actions">${formation ? '' : '<button type="button" class="btn ghost" id="pl-cahier">Cahier des charges</button>'}<span class="grow"></span><button type="button" class="btn ghost" data-close>Fermer</button></div>`,
       { wide: true, onClose: apres });
     if (!formation) brancherListesDe(m, c);
+    brancherCahier(m, c, apres);
     return;
   }
   const r = c && rattachementDe(c);
   const corps = () => `
-    ${r ? `<p class="pl-lien">Fiche : <button type="button" class="btn ghost sm" id="pl-fiche">${esc(r.nom)}</button></p>` : ''}
+    ${r || (c && !formation) ? `<p class="pl-lien">${r ? `Fiche : <button type="button" class="btn ghost sm" id="pl-fiche">${esc(r.nom)}</button>` : ''}
+      ${c && !formation ? '<button type="button" class="btn sm pl-btn-cahier" id="pl-cahier">Cahier des charges</button>' : ''}</p>` : ''}
     ${formulaire(c, { date_debut: jour || aujourdhui(), genre })}
     ${formation ? '' : c ? `<div class="pl-listes">${blocListe(c, 'materiaux')}${blocListe(c, 'outils')}</div>`
       : '<p class="muted small pl-apres">Les listes matériaux et outils s’ouvrent une fois le chantier créé.</p>'}`;
   const m = openModal(c ? c.titre : formation ? 'Nouvelle formation' : 'Nouveau chantier', corps(), { wide: true, onClose: apres });
   brancher(m, c, apres);
+  brancherCahier(m, c, apres);
+}
+
+// Le cahier des charges du chantier (11/11/2026) : il s'ouvre à la place de la
+// fiche, et « Retour au chantier » la rouvre. Chargé à la demande : il tire
+// le module des documents imprimés.
+function brancherCahier(m, c, apres) {
+  const b = m.querySelector('#pl-cahier');
+  if (!b || !c) return;
+  b.onclick = async () => {
+    const { ouvrirCahier } = await import('./rgd-cahier.js');
+    const chantier = db.byId('rgd_planning', c.id) || c;
+    ouvrirCahier(chantier, rattachementDe(chantier), () => ouvrirChantier(db.byId('rgd_planning', c.id) || c, apres));
+  };
 }
 
 function brancher(m, c, apres) {
   const form = m.querySelector('#pl-form');
   const fin = m.querySelector('#pl-fin');
+  // ⚠ LA PHRASE DE FIN DIT AUSSI LE REPORT DU DÉBUT (11/11/2026). Une
+  // formation posée un samedi ou un jour férié commence le premier jour ouvré
+  // suivant : la date change, donc elle s'annonce AVANT d'enregistrer. Une
+  // date corrigée en silence se découvre une fois le planning imprimé.
+  const estFormulaireFormation = form.genre.value === 'formation';
   const majFin = () => {
     const d = form.date_debut.value;
-    const n = joursPour(d || aujourdhui(), form.duree_nombre.value, form.duree_unite.value);
-    fin.textContent = d ? `Fin : ${dateLongue(ajouterJours(d, Math.max(1, n) - 1))} · ${n} jour${n > 1 ? 's' : ''} calendaire${n > 1 ? 's' : ''}` : '';
+    if (!d) { fin.textContent = ''; return; }
+    if (!estFormulaireFormation) {
+      const n = joursPour(d, form.duree_nombre.value, form.duree_unite.value);
+      fin.textContent = `Fin : ${dateLongue(ajouterJours(d, Math.max(1, n) - 1))} · ${n} jour${n > 1 ? 's' : ''} calendaire${n > 1 ? 's' : ''}`;
+      return;
+    }
+    const debut = prochainOuvre(d);
+    const n = ouvresPour(form.duree_nombre.value, form.duree_unite.value);
+    const report = debut !== d ? `Début reporté au ${dateLongue(debut)} (le ${dateLongue(d)} n’est pas un jour ouvré). ` : '';
+    fin.textContent = `${report}Fin : ${dateLongue(finOuvree(debut, n))} · ${n} jour${n > 1 ? 's' : ''} ouvré${n > 1 ? 's' : ''}`;
   };
   form.date_debut.oninput = majFin; form.duree_nombre.oninput = majFin; form.duree_unite.onchange = majFin; majFin();
   // Le choix du dossier : un clic le retient, la liste se replie sur lui

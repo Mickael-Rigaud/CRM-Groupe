@@ -98,6 +98,9 @@ export const TABLES = ['profiles', 'organisations', 'contacts', 'deals', 'activi
   // Le planning des chantiers et ses listes matériaux / outils (10/11/2026).
   // Direction seule, nés dans le CRM, jamais relevés.
   'rgd_planning', 'rgd_planning_lignes',
+  // Les cahiers des charges des chantiers (11/11/2026) : direction, et lecture
+  // par la personne avec qui le chantier est partagé.
+  'rgd_cahiers',
   // Les bons d'attachement (02/11/2026). ⚠ TABLE À PART, ET PAS QUATRE
   // COLONNES DE LA FACTURE : un bon peut exister SANS facture, et il ne
   // porte aucun montant — dans la table des factures, il aurait fini un
