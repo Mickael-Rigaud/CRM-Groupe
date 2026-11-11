@@ -185,12 +185,30 @@ function calendrier(annee, mois, chantiers) {
               data-jour="${iso}" title="Planifier un chantier le ${esc(dateLongue(iso))}">
               <span>${d.getDate()}</span></button>`;
           }).join('')}
-          ${morceaux.map(m => `<button type="button" class="pl-barre est-${etatDe(m.c).cle}${m.suite ? ' suite' : ''}${m.continue ? ' continue' : ''}"
-              style="grid-column:${m.col} / ${m.fin_col}; grid-row:${m.couloir}; --pl-c:${couleurDe(m.c, m.i)}; --k:${k++}"
+          ${morceaux.map(m => {
+            // ⚠ L'AVANCÉE JOUR PAR JOUR (11/11/2026, Élodie : « un curseur qui
+            // se remplit jour par jour pour voir l'avancée des travaux »). Chaque
+            // morceau de barre se remplit jusqu'à aujourd'hui inclus : plein =
+            // jours passés, éclairci = jours à venir, un trait blanc marque le
+            // bord. Le morceau qui contient aujourd'hui porte « jour n / total ».
+            const e = etatDe(m.c);
+            const debutSeg = semaine[m.col - 1], finSeg = semaine[m.fin_col - 2];
+            const longueur = m.fin_col - m.col;
+            const faits = auj < debutSeg ? 0 : auj > finSeg ? longueur
+              : Math.round((versDate(auj) - versDate(debutSeg)) / 86400000) + 1;
+            const av = e.cle === 'encours' ? Math.round(faits / longueur * 100) : e.cle === 'passe' ? 100 : 0;
+            const total = Math.max(1, Number(m.c.duree_jours) || 1);
+            const jourN = Math.round((versDate(auj) - versDate(m.c.date_debut)) / 86400000) + 1;
+            const ici = e.cle === 'encours' && auj >= debutSeg && auj <= finSeg;
+            return `<button type="button" class="pl-barre est-${e.cle}${m.suite ? ' suite' : ''}${m.continue ? ' continue' : ''}"
+              style="grid-column:${m.col} / ${m.fin_col}; grid-row:${m.couloir}; --pl-c:${couleurDe(m.c, m.i)}; --k:${k++}; --pl-av:${av}%"
               data-chantier="${esc(m.c.id)}"
-              title="${esc(`${m.c.titre} — du ${dateLongue(m.c.date_debut)} au ${dateLongue(m.fin)}`)}">
+              title="${esc(`${m.c.titre} — du ${dateLongue(m.c.date_debut)} au ${dateLongue(m.fin)}${
+                e.cle === 'encours' ? ` — jour ${jourN} sur ${total} (${Math.round(jourN / total * 100)} %)` : ''}`)}">
               <span class="pl-barre-texte">${m.suite ? '<i>suite</i> ' : ''}${esc(m.c.titre)}</span>${
-              direction && !m.continue ? `<span class="pl-poignee" data-poignee="${esc(m.c.id)}" title="Tirer pour changer la fin"></span>` : ''}</button>`).join('')}
+              ici ? `<em class="pl-barre-jour">J${jourN}/${total}</em>` : ''}${
+              direction && !m.continue ? `<span class="pl-poignee" data-poignee="${esc(m.c.id)}" title="Tirer pour changer la fin"></span>` : ''}</button>`;
+          }).join('')}
         </div>`;
       }).join('')}
     </div>`;

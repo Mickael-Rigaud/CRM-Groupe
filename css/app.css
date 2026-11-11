@@ -8242,3 +8242,15 @@ body.pl-etire, body.pl-etire * { cursor: ew-resize !important; user-select: none
 .deplacee { opacity: .85; filter: saturate(1.2); z-index: 6 !important;
   box-shadow: 0 14px 28px -10px color-mix(in srgb, var(--pl-c) 80%, #000) !important; }
 body.pl-deplace, body.pl-deplace * { cursor: grabbing !important; user-select: none; }
+/* Planning du mois : l'avancée jour par jour d'un chantier en cours
+   (11/11/2026). Plein jusqu'à aujourd'hui, éclairci ensuite, trait blanc au
+   bord du remplissage, et « J10/21 » sur le morceau du jour. */
+.pl-barre.est-encours { overflow: hidden; }
+.pl-barre.est-encours::after { content: ''; position: absolute; top: 0; bottom: 0; left: var(--pl-av); right: 0;
+  background: rgba(255, 255, 255, .45); pointer-events: none; }
+.pl-barre.est-encours::before { content: ''; position: absolute; top: 3px; bottom: 3px; left: var(--pl-av); width: 3px;
+  margin-left: -1.5px; border-radius: 2px; background: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, .12); z-index: 1; pointer-events: none; }
+.pl-barre.est-encours[style*="--pl-av:0%"]::before, .pl-barre.est-encours[style*="--pl-av:100%"]::before { display: none; }
+.pl-barre-texte { position: relative; z-index: 2; }
+.pl-barre-jour { position: relative; z-index: 2; flex: none; font-style: normal; font-size: 10.5px; font-weight: 800;
+  padding: 1px 7px; border-radius: 99px; background: rgba(255, 255, 255, .9); color: color-mix(in srgb, var(--pl-c) 80%, #000); }
