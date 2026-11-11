@@ -555,16 +555,10 @@
   .barre-bas:has(> .bb-lien:nth-child(6)) .bb-lien { font-size: 10px; letter-spacing: 0; }
 }
 
-/* Planning : les boutons « Deplacer » en tete de la fiche chantier
-   (11/11/2026). Sur toutes les largeurs ; ils sont faits pour le doigt. */
-.pl-decaler { display: flex; flex-direction: column; gap: 8px; margin: 0 0 14px; padding: 12px;
-  border: 1px solid var(--line); border-radius: 12px; background: color-mix(in srgb, #fd7a2d 5%, var(--card)); }
-.pl-decaler-titre { font-size: 11.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
-.pl-decaler-btns { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.pl-decaler-btns .btn { min-height: 40px; min-width: 64px; font-weight: 700; }
-.pl-decaler-dates { flex: 1; text-align: center; font-size: 15px; white-space: nowrap; }
-@media screen and (max-width: 820px) {
-  .pl-decaler-btns { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .pl-decaler-btns .btn { min-width: 0; padding-left: 4px; padding-right: 4px; }
-  .pl-decaler-dates { grid-column: 1 / -1; grid-row: 1; padding: 4px 0; font-size: 16px; }
-}
+/* Planning : glisser une barre au doigt (11/11/2026). Ni selection de texte
+   ni menu de l'appui long sur les barres et la grille : l'appui sert a
+   attraper le chantier. La barre attrapee se souleve. */
+.pl-barre, .pl-frise-barre, .pl-sem, .pl-jour, .pl-frise-piste, .pl-frise-nom {
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.pl-barre.attrapee, .pl-frise-barre.attrapee {
+  transform: translateY(-2px) scale(1.04); box-shadow: 0 10px 22px -8px rgba(15, 23, 42, .45); z-index: 6; }
