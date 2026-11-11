@@ -448,6 +448,10 @@ const BAS_STRUCTURE = {
     // monde a désormais les Partenaires ici, qui ouvrent les apporteurs.
     { hash: '#/rgd/apporteurs', icon: 'building', label: 'Partenaires',
       ici: (h) => ['#/rgd/apporteurs', '#/rgd/fournisseurs', '#/rgd/affaires', '#/rgd/partenaires'].some(x => h.startsWith(x)) },
+    // ⚠ CINQ ENTRÉES DEPUIS LE 11/11/2026 (Élodie : « rajoute dans le menu en
+    // bas le planning chantier »), plus « Menu » : six de 65 px sur un
+    // téléphone de 390, chaque intitulé tient. Ne pas en ajouter une septième.
+    { hash: '#/rgd/planning', icon: 'planning', label: 'Planning' },
     { hash: '#/rgd/agenda', icon: 'calendar', label: 'Agenda' },
   ],
   // Les deux métiers du cabinet d'abord — c'est le travail du jour —, puis la

@@ -522,3 +522,35 @@
 @media screen and (max-width: 820px) {
   .rgd-ob-taux { display: none; }
 }
+
+/* ---- Frise du planning chantier, sur telephone ----
+   (11/11/2026, Elodie : « le planning chantier en mode frise ne s'affiche pas
+   bien ».) La colonne des noms, collee a gauche, prenait 240 px sur 320 : les
+   noms etaient coupes et il ne restait que trois semaines de frise. Ici le nom
+   passe AU-DESSUS de sa barre, sur toute la largeur, et la frise prend tout
+   l'ecran. Le nom reste colle a gauche pendant qu'on fait defiler les mois.
+   L'ordinateur garde sa colonne. */
+@media screen and (max-width: 820px) {
+  .pl-frise { --pl-nom: 0px; }
+  .pl-frise-ligne { grid-template-columns: var(--pl-larg); min-height: 0; }
+  .pl-frise-tete .pl-frise-nom { display: none; }
+  .pl-frise-ligne:not(.pl-frise-tete) .pl-frise-nom {
+    width: fit-content; max-width: min(calc(100vw - 76px), var(--pl-larg)); flex-direction: row; align-items: baseline;
+    gap: 8px; margin: 8px 0 0 6px; padding: 3px 8px; border-right: 0; border-radius: 8px;
+    box-shadow: none; background: var(--card); }
+  /* Le nom d'abord : les dates cedent la place avant lui. */
+  .pl-frise-nom b { flex: 0 1 auto; min-width: 0; max-width: 100%; font-size: 14px; }
+  .pl-frise-nom > span { flex: 1 1 0; min-width: 0; font-size: 12px; }
+  .pl-frise-piste { min-height: 40px; }
+  .pl-frise-barre { top: 5px; bottom: 7px; }
+  /* La pastille « Aujourd'hui » cachait le numero de la semaine en cours, sur
+     cette largeur ; la semaine surlignee et le trait rouge disent deja ou
+     l'on est. */
+  .pl-frise-auj-pastille { display: none; }
+  .pl-frise-tete { margin-bottom: 6px; }
+}
+/* Six boutons dans la barre du bas (RGD, depuis le 11/11/2026) : l'intitule
+   le plus long, « Partenaires », tient a cette taille. */
+@media screen and (max-width: 820px) {
+  .barre-bas:has(> .bb-lien:nth-child(6)) .bb-lien { font-size: 10px; letter-spacing: 0; }
+}

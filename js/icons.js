@@ -15,6 +15,8 @@ const P = {
   menu: '<path d="M3.5 5.5h13M3.5 10h13M3.5 14.5h13"/>',
   x: '<path d="m5.5 5.5 9 9M14.5 5.5l-9 9"/>',
   calendar: '<rect x="3" y="4.5" width="14" height="12.5" rx="2"/><path d="M3 8.5h14M7 3v3M13 3v3"/>',
+  // Le planning chantier (11/11/2026) : des barres décalées sur un axe, comme sa frise.
+  planning: '<path d="M3 3.5v13h14"/><rect x="5.5" y="5" width="6" height="2.6" rx="1.3"/><rect x="8.5" y="9" width="7" height="2.6" rx="1.3"/><rect x="6.5" y="13" width="4.5" height="2.2" rx="1.1"/>',
   users: '<circle cx="7.5" cy="7" r="2.8"/><path d="M2.8 16c.4-2.6 2.4-4 4.7-4s4.3 1.4 4.7 4"/><path d="M13.6 5.1a2.6 2.6 0 0 1 0 4.8M14.4 12.4c1.5.5 2.5 1.8 2.8 3.6"/>',
 };
 export const icon = (name, size = 20) => `<svg viewBox="0 0 20 20" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[name] || P.kanban}</svg>`;
