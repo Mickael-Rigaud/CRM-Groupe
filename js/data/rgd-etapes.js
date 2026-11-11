@@ -253,10 +253,30 @@ export function joursDeVisite(agenda) {
 // train de chiffrer. Chaque étape compte donc les devis QUI L'Y ONT MISE — les
 // mêmes que lit `etapeParLesFaits`, sans quoi un dossier serait rangé dans un
 // onglet par un devis et chiffré par un autre.
+//
+// ⚠ À « DEVIS ACCEPTÉ », UN DEVIS DÉJÀ FACTURÉ NE COMPTE PLUS (10/11/2026,
+// Élodie : « les montants de [devis] accepté, mets le montant du dernier devis
+// signé en avant, parce que là ça fait un doublon sur un projet déjà
+// facturé »). C'est la conséquence directe de la règle posée le même jour : un
+// client dont le chantier est fini revient à cette étape quand il rachète des
+// travaux, et il traîne alors TOUS ses devis signés — ceux du chantier
+// terminé comme celui qui arrive. Thibaud Prié affichait 48 985 € à « Devis
+// accepté », dont 26 253 € déjà facturés et déjà comptés dans le chiffre
+// d'affaires. Il en affiche 22 732, le devis qui reste à faire.
+//
+// ⚠ LE CRITÈRE EST LA FACTURE, PAS LA DATE, et c'est sa phrase qui le dit :
+// « un projet déjà facturé ». `facture` est posé par Costructor au départ de la
+// facture. Prendre « le dernier signé » au sens strict aurait donné le même
+// nombre chez elle, mais perdu les TRANCHES : trois devis signés pour un même
+// chantier à venir ne vaudraient plus que le dernier.
+//
+// ⚠ ET LES DEUX ÉTAPES DE CHANTIER GARDENT LEUR TOTAL : là, le montant dit ce
+// que vaut le chantier, facturé ou non. C'est seulement à « Devis accepté »
+// qu'il répond à « qu'est-ce qui reste à faire ».
 const DEVIS_DE_L_ETAPE = {
   devis_encours: (v) => devisOuvert(v) && !devisEnvoye(v),
   devis_envoye: devisEnvoye,
-  devis_accepte: (v) => v.statut === 'signe',
+  devis_accepte: (v) => v.statut === 'signe' && !v.facture,
   chantier_encours: (v) => v.statut === 'signe',
   chantier_termine: (v) => v.statut === 'signe',
 };
@@ -280,6 +300,23 @@ export function montantDevisDe(f, devis, etape) {
 }
 
 /**
+ * Tout ce que cette personne a signé, facturé ou non.
+ *
+ * ⚠ CE N'EST PAS `montantDevisDe(f, devis, 'devis_accepte')`, ET LA NUANCE EST
+ * NÉE LE 10/11/2026 : depuis qu'« accepté » écarte les devis déjà facturés, ce
+ * montant-là répond à « qu'est-ce qui reste à faire ». L'analyse Meta Ads pose
+ * une autre question — « combien ce lead a-t-il rapporté » — et la réponse
+ * inclut ce qui est déjà facturé : un lead converti et payé n'a pas rapporté
+ * zéro. Elle appelait la première faute de seconde ; sans celle-ci, un lead à
+ * trois devis signés et facturés n'aurait plus compté que pour le dernier.
+ */
+export function montantSigneDe(f, devis) {
+  return (devis || [])
+    .filter(v => memeQue(v, f) && v.statut === 'signe')
+    .reduce((t, v) => t + (Number(v.montant_ht) || 0), 0);
+}
+
+/**
  * Les devis de cette personne à cette étape — la sélection, pas la somme.
  *
  * ⚠ SORTIE DE `montantDevisDe` LE 04/11/2026, pour que le pipeline puisse
@@ -291,7 +328,18 @@ export function montantDevisDe(f, devis, etape) {
 export function devisDeLEtape(f, devis, etape) {
   const compte = DEVIS_DE_L_ETAPE[etape];
   if (!compte) return [];
-  return (devis || []).filter(v => memeQue(v, f) && compte(v));
+  const siens = (devis || []).filter(v => memeQue(v, f) && compte(v));
+  if (siens.length || etape !== 'devis_accepte') return siens;
+  // ⚠ LE REPLI EXISTE POUR NE PAS AFFICHER « 0 € » SUR UN DOSSIER QUI VAUT
+  // QUELQUE CHOSE. RGD facture souvent un acompte dès la signature : le devis
+  // porte alors `facture`, le chantier n'a pas commencé, et le dossier reste à
+  // « Devis accepté ». Sans ce repli, sa colonne tomberait à zéro — ce qui se
+  // lirait comme une donnée manquante, pas comme une facture déjà partie.
+  // On reprend alors le DERNIER devis signé, au sens propre de la demande.
+  const signes = (devis || []).filter(v => memeQue(v, f) && v.statut === 'signe');
+  if (!signes.length) return [];
+  const quand = (v) => String(v.date_signature || v.date_envoi || v.date_creation || '');
+  return [signes.reduce((a, b) => (quand(b) >= quand(a) ? b : a))];
 }
 
 

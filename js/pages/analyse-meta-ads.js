@@ -31,7 +31,7 @@
 // Le jour où le Zap transmet la campagne, elle l'emporte et tout devient exact.
 import { db } from '../data/db.js';
 import { scope } from '../data/scope.js';
-import { ORDRE_ETAPES, etapeDeFiche, joursDeVisite, montantDevisDe } from '../data/rgd-etapes.js';
+import { ORDRE_ETAPES, etapeDeFiche, joursDeVisite, montantSigneDe } from '../data/rgd-etapes.js';
 import { logoReseau } from '../data/logos-reseaux.js';
 import { esc } from '../ui.js';
 
@@ -153,7 +153,13 @@ export function blocMetaAds(cle, periode) {
       const j = jourParis(f.meta_received_at);
       const r = rang(etapeDeFiche(f, chantiers, devis, jv));
       return { f, j, r, ...campagneDuLead(f, campagnes, jours),
-        ca: r >= SIGNE ? montantDevisDe(f, devis, 'devis_accepte') : 0 };
+        // ⚠ TOUT LE SIGNÉ, FACTURÉ COMPRIS (10/11/2026) : cette colonne dit ce
+        // qu'un lead a RAPPORTÉ. Elle lisait le montant de l'étape « Devis
+        // accepté », qui depuis ce jour écarte les devis déjà facturés pour
+        // répondre à « qu'est-ce qui reste à faire ». Un lead converti et payé
+        // serait tombé au dernier devis signé, voire à une partie de ce qu'il a
+        // vraiment rapporté.
+        ca: r >= SIGNE ? montantSigneDe(f, devis) : 0 };
     })
     .filter(x => x.j);
   const bilan = (l) => ({ leads: l.length, rdv: l.filter(x => x.r >= RDV).length,
