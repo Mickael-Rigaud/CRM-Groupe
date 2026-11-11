@@ -8260,3 +8260,19 @@ body.pl-deplace, body.pl-deplace * { cursor: grabbing !important; user-select: n
 .pl-barre-texte { position: relative; z-index: 2; }
 .pl-barre-jour { position: relative; z-index: 2; flex: none; font-style: normal; font-size: 10.5px; font-weight: 800;
   padding: 1px 7px; border-radius: 99px; background: rgba(255, 255, 255, .9); color: color-mix(in srgb, var(--pl-c) 80%, #000); }
+/* Planning (11/11/2026, Élodie : « ce qui n'est pas encore passé en termes de
+   date, je veux garder les rayures, pour le mois et la frise ») : dans un
+   chantier EN COURS, la part qui reste à faire est hachurée comme un chantier
+   à venir, au lieu d'être simplement éclaircie. */
+.pl-barre.est-encours::after, .pl-frise-barre.est-encours::after {
+  background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--pl-c) 22%, var(--card)) 0 8px,
+    color-mix(in srgb, var(--pl-c) 12%, var(--card)) 8px 16px);
+  box-shadow: inset 0 2px 0 var(--pl-c), inset 0 -2px 0 var(--pl-c), inset -2px 0 0 var(--pl-c); }
+.pl-barre.est-encours.continue::after { box-shadow: inset 0 2px 0 var(--pl-c), inset 0 -2px 0 var(--pl-c); }
+.pl-frise-barre.est-encours { overflow: hidden; }
+.pl-barre.est-encours .pl-barre-texte, .pl-frise-barre.est-encours .pl-frise-texte { text-shadow: 0 1px 2px rgba(0, 0, 0, .45); }
+.pl-frise-texte { position: relative; z-index: 2; }
+/* Une semaine encore entièrement à venir d'un chantier en cours : texte foncé,
+   comme un chantier à venir, sinon le blanc se perd dans les rayures. */
+.pl-barre.est-encours[style*="--pl-av:0%"] { color: color-mix(in srgb, var(--pl-c) 75%, #000); }
+.pl-barre.est-encours[style*="--pl-av:0%"] .pl-barre-texte { text-shadow: none; }
