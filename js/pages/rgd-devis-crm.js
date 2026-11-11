@@ -368,7 +368,17 @@ export function ouvrirDevisCrm(x, existant = null, retour = null, genreNeuf = 'f
         et sortira des totaux. ${['envoye', 'signe'].includes(existant.statut)
           ? 'Elle est déjà sortie du brouillon : si le client l’a reçue, prévenez-le et remettez-lui la facture annulée.'
           : ''}</p>` : ''}`}
-      ${dev ? '' : `<div class="rdc-statut"><span class="muted small">Règlement</span>
+      ${/* ⚠ LE RÈGLEMENT N'APPARAÎT QU'UNE FOIS LA FACTURE ÉMISE (11/11/2026,
+            Élodie : « au moment où l'on crée la facture, enlève la partie
+            règlement, ça se passe après, sinon ça porte à confusion »). Il
+            s'affichait dès le brouillon : on pouvait marquer réglée une facture
+            qui n'avait ni numéro définitif, ni signature, ni destinataire — et
+            la question « comment a-t-il payé ? » arrivait avant qu'on ait fini
+            d'écrire ce qu'il devait. L'encaissement est la DERNIÈRE étape du
+            parcours, pas la première.
+            ⚠ `signe` COUVRE AUSSI L'ANNULÉE, et c'est voulu : une facture
+            annulée qui avait été encaissée doit pouvoir le montrer. */ ''}
+      ${dev || !signe ? '' : `<div class="rdc-statut"><span class="muted small">Règlement</span>
         ${existant.regle_le
           ? `<span class="chip green">Réglée le ${esc(fmtDate(existant.regle_le))}${existant.regle_par ? ' · ' + esc(MOYENS_PAIEMENT[existant.regle_par] || existant.regle_par) : ''}</span>
              <button type="button" class="btn ghost sm" id="rdc-regl-off">Annuler le règlement</button>`
