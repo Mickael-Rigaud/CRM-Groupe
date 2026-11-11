@@ -7973,6 +7973,23 @@ tr.est-modifie td { background: var(--accent-soft); }
 .renc-date input { padding: 9px 11px; border: 1px solid var(--line); border-radius: 10px;
   background: var(--card); color: inherit; font: inherit; }
 
+/* ⚠ LE CODE EST GRAND ET SUR FOND BLANC FRANC : un QR gris, petit ou
+   encastré dans une carte colorée se scanne mal, et l'échec arrive devant le
+   client. 260 px de côté au minimum, marge blanche comprise. */
+.renc-qr-mot { margin: 0 0 12px; font-size: 13.5px; line-height: 1.45; }
+.renc-qr-cadre { display: grid; place-items: center; padding: 14px; margin-bottom: 12px;
+  background: #fff; border: 1px solid var(--line); border-radius: 14px; }
+.renc-qr-cadre svg { width: min(260px, 70vw); height: auto; display: block; }
+.renc-qr-etat { display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin: 0 0 14px; font-size: 13px; color: var(--muted); }
+.renc-qr-temps { color: var(--muted); font-variant-numeric: tabular-nums; }
+/* Un point qui respire : l'attente se voit sans texte qui clignote. */
+.renc-qr-point { width: 9px; height: 9px; border-radius: 50%; background: var(--accent);
+  animation: renc-attente 1.6s ease-in-out infinite; flex: none; }
+@keyframes renc-attente { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
+@media (prefers-reduced-motion: reduce) { .renc-qr-point { animation: none; } }
+.renc-ouqr { margin: -6px 0 14px; font-size: 12.5px; line-height: 1.45; color: var(--muted); }
+
 .renc-paye { display: flex; align-items: center; gap: 12px; padding: 12px 15px; margin-bottom: 18px;
   border-radius: 14px; border: 1px solid color-mix(in srgb, var(--green) 35%, var(--line));
   background: color-mix(in srgb, var(--green) 8%, transparent); }

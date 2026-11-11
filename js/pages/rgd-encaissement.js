@@ -20,6 +20,8 @@
 // forcer une réponse ferait saisir n'importe quoi pour sortir de l'écran.
 import { esc, eur, toast, openModal, closeModal, fmtDate } from '../ui.js';
 import { MOYENS_PAIEMENT, marquerReglee, annulerReglement } from '../data/rgd-devis-crm.js';
+import { lienDePaiementSumUp, etatPaiementSumUp } from '../data/rgd-sumup.js';
+import { qrSvg } from '../qr.js';
 
 const euros = (n) => eur(n, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const aujourdhui = () => new Date().toISOString().slice(0, 10);
@@ -42,7 +44,7 @@ export const COCHE = ic('<path d="M4 12.5l5 5L20 6.5"/>', true);
 // espèces ensuite, le virement et le chèque après — ceux-là arrivent plus tard
 // et se saisissent au bureau.
 const MOYENS = [
-  { cle: 'carte', aide: 'sur place, au lecteur',
+  { cle: 'carte', aide: 'au lecteur, ou par QR code',
     icone: ic('<rect x="2" y="5" width="20" height="14" rx="2.6"/><path d="M2 10h20"/><path d="M5.5 14.8h3.2"/>') },
   { cle: 'especes', aide: 'de la main à la main',
     icone: ic('<rect x="2" y="6" width="20" height="12" rx="2.2"/><circle cx="12" cy="12" r="2.7"/><path d="M5.6 12h.02M18.4 12h.02"/>') },
@@ -69,8 +71,11 @@ export function ouvrirEncaissement(x, devis, retour = null) {
   let date = devis.regle_le || aujourdhui();
   let courant = devis;
 
+  // ⚠ UNE INTERROGATION EN COURS DOIT MOURIR AVEC LA FENÊTRE : sans ça, elle
+  // continue d'appeler le serveur pour un écran que personne ne regarde.
+  let surFermeture = null;
   const m = openModal(`Encaisser ${devis.numero || 'la facture'}`,
-    '<div id="renc"></div>', { onClose: retour });
+    '<div id="renc"></div>', { onClose: () => { surFermeture?.(); retour?.(); } });
   const hote = m.querySelector('#renc');
 
   const dessine = () => {
@@ -119,13 +124,22 @@ export function ouvrirEncaissement(x, devis, retour = null) {
             elle qui range l'argent dans le mois du CA encaissé — la poser
             d'office au jour de la saisie décalerait un encaissement de fin de
             mois sur le mois suivant. */ ''}
+      ${/* ⚠ LE QR NE S'OFFRE QUE SOUS « CARTE », et il est en premier : c'est
+            le seul des deux gestes qui FAIT payer. « Encaisser », lui,
+            enregistre un paiement déjà reçu — par l'application SumUp, par
+            exemple. Les confondre ferait marquer réglée une facture que
+            personne n'a payée. */ ''}
+      ${moyen === 'carte' ? `<p class="renc-ouqr">Le client paie <b>maintenant</b>, en scannant un code
+        avec son téléphone — ou il a déjà payé (lecteur, application SumUp) et vous l’enregistrez.</p>` : ''}
       <div class="form-actions">
         <button type="button" class="btn ghost" data-close>Plus tard</button>
         ${/* ⚠ LE BOUTON DIT LE MOYEN CHOISI, et change quand on change de
               tuile : c'est la seule confirmation qu'on lit vraiment avant
               d'appuyer, et elle évite d'encaisser en espèces un virement. */ ''}
-        <button type="button" class="btn" id="renc-ok">Encaisser ${euros(courant.montant_ttc)}
+        <button type="button" class="btn ${moyen === 'carte' ? 'ghost' : ''}" id="renc-ok">Encaisser ${euros(courant.montant_ttc)}
           en ${esc(MOYENS_PAIEMENT[moyen] || '')}</button>
+        ${moyen === 'carte'
+          ? '<button type="button" class="btn" id="renc-qr">Faire payer par QR code ▸</button>' : ''}
       </div>`}`;
 
     hote.querySelectorAll('[data-moyen]').forEach(b => b.onclick = () => {
@@ -148,6 +162,18 @@ export function ouvrirEncaissement(x, devis, retour = null) {
       }
     };
 
+    const bQr = hote.querySelector('#renc-qr');
+    if (bQr) bQr.onclick = async () => {
+      bQr.disabled = true; bQr.textContent = 'Préparation…';
+      const r = await lienDePaiementSumUp(courant.id);
+      if (!r.ok) {
+        bQr.disabled = false; bQr.textContent = 'Faire payer par QR code ▸';
+        toast(`Paiement impossible : ${r.motif}`, 'error');
+        return;
+      }
+      dessineQr(r.donnees);
+    };
+
     const off = hote.querySelector('#renc-defaire');
     if (off) off.onclick = async () => {
       try {
@@ -162,6 +188,91 @@ export function ouvrirEncaissement(x, devis, retour = null) {
       } catch (e) { toast(e.message || 'Impossible', 'error'); }
     };
   };
+
+  /**
+   * L'écran du QR : le code, le compte à rebours, et l'attente du paiement.
+   *
+   * ⚠ ON INTERROGE TOUTES LES TROIS SECONDES, ET ON S'ARRÊTE À LA FERMETURE.
+   * Un intervalle laissé derrière soi continue d'appeler le serveur pour une
+   * fenêtre qui n'existe plus — et sur un téléphone, ça se paie en batterie.
+   *
+   * ⚠ ET L'INTERROGATION N'EST PAS CE QUI ENCAISSE. SumUp prévient le serveur
+   * de son côté ; ceci ne sert qu'à ce que l'écran cesse d'attendre. Si le
+   * téléphone de Franck s'éteint pendant que le client paie, la facture est
+   * encaissée quand même.
+   *
+   * ⚠ TRENTE MINUTES, C'EST SUMUP QUI LE DIT. Passé ce délai le client tombe
+   * sur « session expirée » : on l'annonce et on propose d'en refaire un,
+   * plutôt que de laisser deux personnes regarder un code mort.
+   */
+  function dessineQr(p) {
+    const fin = new Date(p.expire_le || Date.now() + 30 * 60000).getTime();
+    let etat = 'attente';
+    let minute = null;
+
+    const peindre = () => {
+      const reste = Math.max(0, Math.round((fin - Date.now()) / 1000));
+      const mm = String(Math.floor(reste / 60)).padStart(2, '0');
+      const ss = String(reste % 60).padStart(2, '0');
+      if (etat === 'paye') {
+        hote.innerHTML = `<div class="renc-somme est-paye">
+            <span class="renc-mot">Encaissé</span>
+            <span class="renc-ttc">${euros(p.montant)}</span>
+            <span class="renc-ht">par carte, à l’instant</span>
+          </div>
+          <div class="renc-paye"><span class="renc-paye-ic">${COCHE}</span>
+            <span class="renc-paye-txt"><b>Le client a payé.</b>
+              <small>La facture ${esc(p.numero || '')} est marquée réglée.</small></span></div>
+          <div class="form-actions"><button type="button" class="btn" data-close>Fermer</button></div>`;
+        return;
+      }
+      hote.innerHTML = `<p class="renc-qr-mot">Faites scanner ce code au client.
+          Il paiera <b>${euros(p.montant)}</b> sur son téléphone — carte, Apple Pay ou Google Pay.</p>
+        <div class="renc-qr-cadre">${qrSvg(p.lien, { titre: 'Code de paiement' })}</div>
+        <p class="renc-qr-etat">${reste > 0
+          ? `<span class="renc-qr-point"></span> En attente du paiement…
+             <span class="renc-qr-temps">valable encore ${mm}:${ss}</span>`
+          : '<b>Ce code a expiré.</b> Refaites-en un : le précédent n’encaissera plus rien.'}</p>
+        <div class="form-actions">
+          <button type="button" class="btn ghost" id="renc-qr-retour">← Retour</button>
+          ${reste > 0
+            ? `<a class="btn ghost" href="${esc(p.lien)}" target="_blank" rel="noopener">Ouvrir la page</a>`
+            : '<button type="button" class="btn" id="renc-qr-refaire">Refaire un code</button>'}
+        </div>`;
+      hote.querySelector('#renc-qr-retour').onclick = () => { arreter(); dessine(); };
+      const refaire = hote.querySelector('#renc-qr-refaire');
+      if (refaire) refaire.onclick = async () => {
+        refaire.disabled = true;
+        const r = await lienDePaiementSumUp(courant.id);
+        if (!r.ok) { refaire.disabled = false; toast(r.motif, 'error'); return; }
+        arreter(); dessineQr(r.donnees);
+      };
+    };
+
+    const arreter = () => { if (minute) { clearInterval(minute); minute = null; } };
+    surFermeture = arreter;
+    // ⚠ DÉCLARÉ AVANT L'INTERVALLE QUI S'EN SERT : plus bas, il tombait dans la
+    // zone morte temporelle du `const`. Ça marchait — le rappel ne court
+    // qu'après — mais la première personne qui déplacerait une ligne aurait eu
+    // une erreur sans rapport apparent.
+    const debutAttente = Date.now();
+
+    minute = setInterval(async () => {
+      peindre();
+      if (etat !== 'attente' || Date.now() > fin) return;
+      // Toutes les trois secondes : le compte à rebours bat à la seconde, pas
+      // l'interrogation du serveur.
+      if (Math.round((Date.now() - debutAttente) / 1000) % 3) return;
+      const r = await etatPaiementSumUp(p.checkout_id);
+      if (r.ok && r.donnees?.statut === 'paye') {
+        etat = 'paye';
+        courant = { ...courant, regle_le: new Date().toISOString().slice(0, 10), regle_par: 'carte' };
+        arreter();
+        peindre();
+      }
+    }, 1000);
+    peindre();
+  }
 
   dessine();
 }

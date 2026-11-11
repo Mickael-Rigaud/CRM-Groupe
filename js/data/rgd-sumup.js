@@ -110,3 +110,33 @@ export async function choisirLecteurSumUp(lecteur) {
     ? db.update('rgd_reglages', CLE_LECTEUR, { valeur })
     : db.insert('rgd_reglages', { cle: CLE_LECTEUR, valeur });
 }
+
+// ------------------------------------------------- payer par QR code
+/**
+ * Fabrique une page de paiement SumUp pour une facture.
+ *
+ * ⚠ ON N'ENVOIE QUE L'IDENTIFIANT DE LA FACTURE, jamais le montant : c'est le
+ * serveur qui le lit en base. Laisser le navigateur dire la somme à encaisser
+ * reviendrait à la laisser dire combien le client doit.
+ *
+ * ⚠ ET LA PAGE NE VIT QUE TRENTE MINUTES. Passé ce délai, le client tombe sur
+ * « session expirée » : l'écran l'annonce et propose d'en refaire une, plutôt
+ * que de laisser croire à une panne.
+ */
+export const lienDePaiementSumUp = (factureId) =>
+  appeler({ action: 'lien', facture_id: factureId });
+
+/**
+ * Où en est un paiement : rend { statut, encaissee }.
+ *
+ * ⚠ C'EST LE SERVEUR QUI DEMANDE À SUMUP, et c'est lui qui marque la facture
+ * réglée. L'écran ne fait que regarder : il ne peut pas déclarer un paiement
+ * reçu, même par erreur de code.
+ *
+ * ⚠ SUMUP PRÉVIENT AUSSI LE CRM DE SON CÔTÉ (le retour webhook). Cette
+ * interrogation ne sert donc qu'À L'ÉCRAN, pour qu'il cesse d'attendre sans
+ * qu'on ait à rafraîchir. Si le navigateur se ferme au mauvais moment,
+ * l'encaissement a lieu quand même.
+ */
+export const etatPaiementSumUp = (checkoutId) =>
+  appeler({ action: 'etat', checkout_id: checkoutId });
