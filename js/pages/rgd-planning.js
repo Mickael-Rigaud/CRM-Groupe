@@ -37,11 +37,16 @@ const MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 
   'septembre', 'octobre', 'novembre', 'décembre'];
 const JOURS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 // Des teintes franches et distinctes, lisibles en texte blanc.
-const COULEURS = ['#fd7a2d', '#0284c7', '#16a34a', '#7c3aed', '#db2777', '#0d9488', '#ca8a04', '#475569'];
-// Une formation sans couleur choisie prend l'indigo, absent de la palette des
-// chantiers : on la distingue d'un coup d'œil.
+// ⚠ LE VIOLET A QUITTÉ LES CHANTIERS (11/11/2026, Élodie : « les formations
+// ont une couleur attitrée, et on supprime cette couleur pour les
+// chantiers ») : il se confondait avec l'indigo des formations.
+const COULEURS = ['#fd7a2d', '#0284c7', '#16a34a', '#db2777', '#0d9488', '#ca8a04', '#475569'];
+// Une formation est TOUJOURS indigo (couleur attitrée, pas de choix) ; un
+// chantier ne prend qu'une couleur de sa palette — une couleur enregistrée
+// hors palette (l'ancien violet) repasse en automatique.
 const COULEUR_FORMATION = '#4f46e5';
-const couleurDe = (c, i = 0) => c.couleur || (estFormation(c) ? COULEUR_FORMATION : COULEURS[i % COULEURS.length]);
+const couleurDe = (c, i = 0) => (estFormation(c) ? COULEUR_FORMATION
+  : COULEURS.includes(c.couleur) ? c.couleur : COULEURS[i % COULEURS.length]);
 // La toque, devant le nom d'une formation (barres, frise, tableau).
 const TOQUE = '<svg class="pl-toque" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 1 9l11 6 9-4.9V17h2V9L12 3zm-6.5 9.6V16c0 1.9 2.9 3.5 6.5 3.5s6.5-1.6 6.5-3.5v-3.4L12 16.2l-6.5-3.6z"/></svg>';
 const marque = (c) => (estFormation(c) ? TOQUE : '');
@@ -645,10 +650,12 @@ function formulaire(c, defaut = {}) {
           </select>
         </div></div>
       <div class="pl-champ"><span>Couleur</span>
+        ${formation ? `<div class="pl-couleurs"><input type="hidden" name="couleur" value="">
+          <span class="pl-pastille"><i style="background:${COULEUR_FORMATION}"></i>Couleur des formations</span></div>` : `
         <div class="pl-couleurs">
-          <label class="pl-pastille auto" title="Automatique"><input type="radio" name="couleur" value=""${!couleur ? ' checked' : ''}><i></i></label>
+          <label class="pl-pastille auto" title="Automatique"><input type="radio" name="couleur" value=""${!COULEURS.includes(couleur) ? ' checked' : ''}><i style="background:conic-gradient(${COULEURS.slice(0, 4).join(', ')}, ${COULEURS[0]})"></i></label>
           ${COULEURS.map(k => `<label class="pl-pastille"><input type="radio" name="couleur" value="${k}"${couleur === k ? ' checked' : ''}><i style="background:${k}"></i></label>`).join('')}
-        </div></div>
+        </div>`}</div>
       <p class="pl-fin" id="pl-fin"></p>
       </div>
       <div class="pl-rang pl-rang-3">

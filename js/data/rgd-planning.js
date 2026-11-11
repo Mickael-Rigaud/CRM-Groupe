@@ -151,7 +151,7 @@ const propre = (champs) => {
   fiche_id: formation ? null : champs.fiche_id || null,
   demande_id: formation ? null : champs.demande_id || null,
   adresse: String(champs.adresse || '').trim() || null,
-  couleur: champs.couleur || null,
+  couleur: formation ? null : champs.couleur || null,   // une formation est toujours indigo
   notes: String(champs.notes || '').trim() || null,
   partage_avec: Array.isArray(champs.partage_avec) ? [...new Set(champs.partage_avec.filter(Boolean))] : [],
   };
