@@ -86,17 +86,61 @@ export function ouvrirBonAttachement(x, { bon = null, devis = null } = {}, retou
   // elle veut une rangée par ligne, large, qu'on touche sans viser, et qui se
   // teinte quand c'est fait. C'est la différence entre une liste de mots et
   // une liste de tâches.
-  const groupe = (nom, { titre: avecTitre = true, liste = false } = {}) => {
+  // ⚠ CE SONT LES CARTES DE LA FACTURE, PAS UNE FORME DE PLUS (11/11/2026,
+  // Élodie, pour la troisième fois : « je voudrais quelque chose de plus
+  // moderne et dynamique quand on remplit le bon d'attachement, COMME LA
+  // FACTURE, là c'est trop fade »). `rdc-presta`, `rdc-presta-tete`,
+  // `rdc-coche` et `rdc-presta-nom` sont les classes de l'écran de facturation :
+  // une rangée qu'on touche, une pastille ronde qui se remplit d'orange, le
+  // libellé qui passe en gras. Rien n'est inventé ici — c'est exactement ce
+  // qu'elle aime déjà, appliqué à un autre formulaire.
+  //
+  // ⚠ ET LA PRÉCISION VIT SOUS SA CARTE, pas à côté : « Résistance de terre »
+  // n'ouvre son champ Ω qu'une fois prise. C'est la mécanique de la facture,
+  // où la quantité n'apparaît que sous une prestation choisie — et c'est elle
+  // qui vide l'écran de tout ce qui ne sert pas encore.
+  //
+  // ⚠ LES CASES EN LIGNE ONT DISPARU. Elles tenaient moins de place, mais sur
+  // un téléphone une case de 13 px au milieu d'une phrase se rate une fois sur
+  // trois, et quarante d'affilée donnent la page « fade » qu'elle décrit.
+  // ⚠ DEUX TAILLES DE CARTE, ET C'EST CE QUI DÉCIDE DE LA LONGUEUR DE L'ÉCRAN.
+  // Tout mettre en rangées pleine largeur donnait, pour le seul premier bloc,
+  // vingt-et-une rangées à faire défiler — plus long qu'avant, alors qu'on
+  // cherchait l'inverse. Vu à l'écran, corrigé :
+  //   • EN PASTILLES ce qui se choisit d'un coup d'œil parmi quatre mots courts
+  //     (type de client, nature du lieu, conditions…) : elles s'alignent et se
+  //     replient, trois rangées au lieu de dix ;
+  //   • EN RANGÉES PLEINES les contrôles, parce qu'Élodie les veut en
+  //     check-list et qu'une vérification se pointe une par une, le téléphone
+  //     dans une main.
+  // Dans les deux cas c'est la même pastille ronde qui se remplit d'orange :
+  // le vocabulaire de la facture, à deux échelles.
+  const EN_LISTE = ['controles'];
+  const groupe = (nom, { titre: avecTitre = true } = {}) => {
     const g = GROUPES[nom];
-    const faites = g.options.filter(o => coche(s, nom, o.c)).length;
-    const option = (o) => `<label class="${liste ? 'rba-tache' : 'check'}${coche(s, nom, o.c) ? ' est-faite' : ''}">
-        <input type="checkbox" data-groupe="${nom}" data-code="${o.c}" ${coche(s, nom, o.c) ? 'checked' : ''}>
-        <span>${esc(o.l)}</span>
-        ${o.aussi ? `<input class="rba-aussi" data-cle="${o.aussi}" value="${esc(s[o.aussi] ?? '')}"
-          placeholder="${esc(o.unite || 'à préciser')}" autocomplete="off">${o.unite ? ` <span class="muted small">${esc(o.unite)}</span>` : ''}` : ''}
-      </label>`;
-    return `<div class="field">${avecTitre ? `<label>${esc(g.titre)}${g.mode === 'plusieurs' ? ' <span class="muted small">(plusieurs possibles)</span>' : ''}</label>` : ''}
-      <div class="${liste ? 'rba-taches' : 'checks'}" data-liste="${nom}">${g.options.map(option).join('')}</div></div>`;
+    const prises = g.options.filter(o => coche(s, nom, o.c)).length;
+    const liste = EN_LISTE.includes(nom);
+    const option = (o) => {
+      const prise = coche(s, nom, o.c);
+      const tete = `<button type="button" class="${liste ? 'rdc-presta-tete' : 'rba-chip'}${
+          !liste && prise ? ' est-choisie' : ''}" data-groupe="${nom}" data-code="${o.c}"
+          aria-pressed="${prise}">
+          <span class="rdc-coche" aria-hidden="true">${prise ? '✓' : '+'}</span>
+          <span class="rdc-presta-nom">${esc(o.l)}</span>
+        </button>`;
+      const precision = prise && o.aussi ? `<div class="rba-precision">
+          <label class="mail-champ">${esc(o.unite ? `Valeur en ${o.unite}` : 'À préciser')}
+            <input class="rba-aussi" data-cle="${o.aussi}" value="${esc(s[o.aussi] ?? '')}"
+              placeholder="${esc(o.unite || 'à préciser')}" autocomplete="off"></label>
+        </div>` : '';
+      return liste
+        ? `<div class="rdc-presta${prise ? ' est-choisie' : ''}">${tete}${precision}</div>`
+        : tete + precision;
+    };
+    return `<div class="rba-groupe">${avecTitre
+      ? `<h5 class="rdc-cat">${esc(g.titre)}${prises
+          ? `<span class="rdc-compte">${prises} choisi${prises > 1 ? 's' : ''}</span>` : ''}</h5>` : ''}
+      <div class="${liste ? '' : 'rba-chips'}" data-liste="${nom}">${g.options.map(option).join('')}</div></div>`;
   };
 
   const rangeeMo = (r, i) => `<div class="rba-rangee">
@@ -134,6 +178,26 @@ export function ouvrirBonAttachement(x, { bon = null, devis = null } = {}, retou
     <button type="button" class="btn ghost sm" data-four-suppr="${i}">Retirer cette fourniture</button>
   </div>`;
 
+  // ⚠ TROIS BLOCS, UN SEUL OUVERT (11/11/2026, Élodie : « il y a beaucoup
+  // d'informations, on s'y perd »). Les huit sections restent TOUTES là — rien
+  // n'est supprimé, ce sont des mentions de sécurité électrique et la pièce
+  // qu'on ressort en cas de litige — mais on n'en voit qu'une à la fois, et
+  // chaque bloc dit en une ligne ce qu'il porte déjà. Ce qu'on cherche en
+  // ouvrant ce formulaire, ce n'est pas « tout », c'est « où j'en suis ».
+  //
+  // ⚠ `<details>` PLUTÔT QU'UN ACCORDÉON ÉCRIT À LA MAIN : le navigateur sait
+  // déjà ouvrir, fermer, et le dire aux lecteurs d'écran. On ne garde que le
+  // nom du bloc ouvert, pour le retrouver après un redessin.
+  let blocOuvert = 'ou';
+  const bloc = (cle, titre, resume, dedans) => `
+    <details class="rba-bloc"${blocOuvert === cle ? ' open' : ''} data-bloc="${cle}">
+      <summary class="rba-bloc-tete">
+        <span class="rba-bloc-titre">${esc(titre)}</span>
+        <span class="rba-bloc-resume">${resume}</span>
+      </summary>
+      <div class="rba-bloc-corps">${dedans}</div>
+    </details>`;
+
   const dessine = () => {
     const heures = totalHeures(s);
     // ⚠ LES DEUX SIGNATURES, PAS UNE : celle de l'intervenant vit dans la
@@ -146,6 +210,25 @@ export function ouvrirBonAttachement(x, { bon = null, devis = null } = {}, retou
     const pretAEnvoyer = manquent.length === 0;
     const manqueSignature = manquent.join(' et ');
     const fournitures = Array.isArray(s.fournitures) ? s.fournitures : [];
+    // Ce que chaque bloc annonce dans son en-tête : du concret, pas un état
+    // d'avancement en pourcentage. « 3 h · 2 fournitures » se vérifie d'un
+    // coup d'œil ; « 60 % rempli » ne se vérifie pas du tout.
+    const motsDe = (nom) => GROUPES[nom].options
+      .filter(o => coche(s, nom, o.c)).map(o => o.l);
+    const bout = (l, n = 2) => (l.length > n ? `${l.slice(0, n).join(', ')} +${l.length - n}` : l.join(', '));
+    const resumeOu = [s.lieu_cp_ville, bout(motsDe('client_type'), 1), bout(motsDe('nature'))]
+      .filter(Boolean).join(' · ') || 'à compléter';
+    const resumeFait = [
+      heures ? `${String(heures).replace('.', ',')} h` : null,
+      fournitures.length ? `${fournitures.length} fourniture${fournitures.length > 1 ? 's' : ''}` : null,
+      coche(s, 'deplacement', 'forfait') ? 'déplacement forfait' : null,
+    ].filter(Boolean).join(' · ') || 'à compléter';
+    const nCtrl = motsDe('controles').length;
+    const resumeFin = [
+      `${nCtrl} contrôle${nCtrl > 1 ? 's' : ''} sur ${GROUPES.controles.options.length}`,
+      pretAEnvoyer ? 'signé des deux côtés' : `il manque ${manqueSignature}`,
+    ].join(' · ');
+
     hote.innerHTML = `
       <p class="rdc-aide">Ce bon constate les <b>temps passés</b> et les <b>fournitures posées</b>.
       ${devis
@@ -153,77 +236,62 @@ export function ouvrirBonAttachement(x, { bon = null, devis = null } = {}, retou
         : '<b>Il n’est rattaché à aucune facture</b> : rien ne le pré-remplit, et il ne porte aucun montant.'}
       Ce qui reste vide reste vide sur le PDF : rien n’est coché à votre place.</p>
 
-      <h4 class="rba-section">Client et lieu d’intervention</h4>
-      <div class="mf-grille">
-        ${devis ? '' : champ('objet', 'Objet de l’intervention', { plein: true, placeholder: 'Dépannage, mise en sécurité…' })}
-        ${champ('lieu_cp_ville', 'Code postal / ville')}
-        ${champ('lieu_batiment', 'Bât. / étage / lot')}
-        ${champ('lieu_acces', 'Accès / code')}
-        ${champ('lieu_contact', 'Contact sur place')}
-      </div>
-      ${groupe('client_type')}
-      ${groupe('lieu_type')}
+      ${bloc('ou', 'Où, chez qui, pour quoi', esc(resumeOu), `
+        <div class="mf-grille">
+          ${devis ? '' : champ('objet', 'Objet de l’intervention', { plein: true, placeholder: 'Dépannage, mise en sécurité…' })}
+          ${champ('lieu_cp_ville', 'Code postal / ville')}
+          ${champ('lieu_batiment', 'Bât. / étage / lot')}
+          ${champ('lieu_acces', 'Accès / code')}
+          ${champ('lieu_contact', 'Contact sur place')}
+        </div>
+        ${groupe('client_type')}
+        ${groupe('lieu_type')}
+        ${groupe('nature')}
+        ${groupe('regime')}`)}
 
-      <h4 class="rba-section">Nature de l’intervention</h4>
-      ${groupe('nature', { titre: false })}
-      ${groupe('regime')}
+      ${bloc('fait', 'Ce qui a été fait', esc(resumeFait), `
+        <div class="mf-grille">
+          ${zone('constat', 'Ce qui a été constaté et fait', { lignes: 4, aide: 'Repris de la facture, une ligne par prestation — corrigez ce qui a changé sur place.' })}
+        </div>
+        <h5 class="rdc-cat">Main-d’œuvre<span class="rdc-compte">total <b id="rba-heures">${
+          esc(String(heures).replace('.', ','))}</b> h</span></h5>
+        <div id="rba-mo">${(s.mo || []).map(rangeeMo).join('')}</div>
+        <button type="button" class="btn ghost sm" id="rba-mo-plus">+ Une rangée d’heures</button>
+        ${groupe('deplacement')}
+        <div class="mf-grille">${champ('deplacement_nb', 'Nombre de déplacements')}</div>
+        <h5 class="rdc-cat">Fournitures posées${fournitures.length
+          ? `<span class="rdc-compte">${fournitures.length}</span>` : ''}</h5>
+        <p class="small muted">${devis
+          ? 'Reprises de la facture, modifiables : c’est ce bon qui dit ce qui a réellement été posé.'
+          : 'Aucune facture ne les donne : elles se saisissent une par une.'}</p>
+        <div id="rba-four">${fournitures.map(rangeeFourniture).join('')}</div>
+        <button type="button" class="btn ghost sm" id="rba-four-plus">+ Une fourniture</button>
+        ${groupe('materiel')}`)}
 
-      <h4 class="rba-section">Constat et travaux réalisés</h4>
-      <div class="mf-grille">
-        ${zone('constat', 'Ce qui a été constaté et fait', { lignes: 4, aide: 'Une ligne par observation : elles s’impriment ligne par ligne.' })}
-      </div>
-
-      ${/* Le total suit la frappe : on tape une durée, il se met à jour sans
-            redessiner la page — sinon le curseur saute hors du champ. */ ''}
-      <h4 class="rba-section">Main-d’œuvre <span class="muted small">— total
-        <b id="rba-heures">${esc(String(heures).replace('.', ','))}</b> h</span></h4>
-      <div id="rba-mo">${(s.mo || []).map(rangeeMo).join('')}</div>
-      <button type="button" class="btn ghost sm" id="rba-mo-plus">+ Une rangée d’heures</button>
-      ${groupe('deplacement')}
-      <div class="mf-grille">${champ('deplacement_nb', 'Nombre de déplacements')}</div>
-
-      <h4 class="rba-section">Fournitures posées</h4>
-      <p class="small muted">${devis
-        ? 'Les désignations et les quantités viennent de la facture ; elles restent modifiables, parce que c’est ce bon qui dit ce qui a réellement été posé.'
-        : 'Aucune facture ne les donne : elles se saisissent une par une.'}</p>
-      <div id="rba-four">${fournitures.map(rangeeFourniture).join('')}</div>
-      <button type="button" class="btn ghost sm" id="rba-four-plus">+ Une fourniture</button>
-      ${groupe('materiel')}
-
-      ${/* ⚠ LE COMPTE EST DANS LE TITRE, et il bouge à chaque coche : sur un
-            téléphone, la liste dépasse l'écran et on ne sait plus où l'on en est
-            sans remonter. Six contrôles, c'est le genre de chose qu'on croit
-            avoir fini. */ ''}
-      <h4 class="rba-section">Contrôles avant remise sous tension
-        <span class="muted small" id="rba-ctrl-compte">— ${
-          GROUPES.controles.options.filter(o => coche(s, 'controles', o.c)).length} sur ${
-          GROUPES.controles.options.length}</span></h4>
-      ${groupe('controles', { titre: false, liste: true })}
-      ${groupe('sous_tension')}
-
-      <h4 class="rba-section">Anomalies et suite à donner</h4>
-      <div class="mf-grille">
-        ${zone('anomalies', 'Anomalies constatées hors intervention', { lignes: 2, aide: 'Ce qui est signalé ici et non traité reste sous la responsabilité du client.' })}
-      </div>
-      ${groupe('suite')}
-      ${groupe('reception')}
-
-      ${pretAEnvoyer ? '' : `<p class="rba-manque">Pour envoyer ce bon au client, il manque
-        <b>${esc(manqueSignature)}</b>. Les deux signatures font la valeur du document.</p>`}
-      <h4 class="rba-section">Signatures</h4>
-      <div class="mf-grille">${champ('intervenant', 'Intervenant RGD Renova', { aide: 'Le nom qui s’imprime sous la signature.' })}</div>
-      <div class="rdc-statut"><span class="muted small">Intervenant</span>
-        ${s.signature_rgd
-          ? `<span class="chip green">Signé</span>
-             <button type="button" class="btn ghost sm" id="rba-sign-off">Retirer la signature</button>`
-          : '<button type="button" class="btn ghost sm" id="rba-signer">Signer</button>'}
-      </div>
-      <div class="rdc-statut"><span class="muted small">Client</span>
-        ${courant?.signature
-          ? `<span class="chip green">Signé${courant.signe_par ? ' par ' + esc(courant.signe_par) : ''}${
-              courant.signe_a ? ' le ' + esc(fmtDate(courant.signe_a)) : ''}</span>`
-          : '<button type="button" class="btn ghost sm" id="rba-signer-client">Faire signer le client</button>'}
-      </div>
+      ${bloc('fin', 'Contrôles, réserves et signatures', esc(resumeFin), `
+        ${groupe('controles')}
+        ${groupe('sous_tension')}
+        <div class="mf-grille">
+          ${zone('anomalies', 'Anomalies constatées hors intervention', { lignes: 2, aide: 'Ce qui est signalé ici et non traité reste sous la responsabilité du client.' })}
+        </div>
+        ${groupe('suite')}
+        ${groupe('reception')}
+        ${pretAEnvoyer ? '' : `<p class="rba-manque">Pour envoyer ce bon au client, il manque
+          <b>${esc(manqueSignature)}</b>. Les deux signatures font la valeur du document.</p>`}
+        <h5 class="rdc-cat">Signatures</h5>
+        <div class="mf-grille">${champ('intervenant', 'Intervenant RGD Renova', { aide: 'Le nom qui s’imprime sous la signature.' })}</div>
+        <div class="rdc-statut"><span class="muted small">Intervenant</span>
+          ${s.signature_rgd
+            ? `<span class="chip green">Signé</span>
+               <button type="button" class="btn ghost sm" id="rba-sign-off">Retirer la signature</button>`
+            : '<button type="button" class="btn ghost sm" id="rba-signer">Signer</button>'}
+        </div>
+        <div class="rdc-statut"><span class="muted small">Client</span>
+          ${courant?.signature
+            ? `<span class="chip green">Signé${courant.signe_par ? ' par ' + esc(courant.signe_par) : ''}${
+                courant.signe_a ? ' le ' + esc(fmtDate(courant.signe_a)) : ''}</span>`
+            : '<button type="button" class="btn ghost sm" id="rba-signer-client">Faire signer le client</button>'}
+        </div>`)}
 
       <div class="form-actions">
         ${courant && !courant.signature
@@ -266,36 +334,39 @@ export function ouvrirBonAttachement(x, { bon = null, devis = null } = {}, retou
       el.oninput = () => { s[el.dataset.cle] = el.value; };
     });
 
-    hote.querySelectorAll('[data-groupe]').forEach(el => {
-      el.onchange = () => {
+    // ⚠ UN BOUTON, PLUS UNE CASE À COCHER (11/11/2026) : la carte EST le
+    // bouton, comme sur la facture. On lit donc l'état dans la saisie, pas
+    // dans un `checked` qui n'existe plus.
+    hote.querySelectorAll('button[data-groupe]').forEach(el => {
+      el.onclick = () => {
         const nom = el.dataset.groupe;
         const code = el.dataset.code;
+        const prise = coche(s, nom, code);
         if (GROUPES[nom].mode === 'une') {
-          // ⚠ ON DÉCOCHE LES AUTRES À LA MAIN. Avec des boutons radio, le
-          // navigateur l'aurait fait — mais on ne pourrait plus revenir à
-          // « rien coché » (voir l'en-tête).
-          s[nom] = el.checked ? code : '';
-          hote.querySelectorAll(`[data-groupe="${nom}"]`).forEach(a => {
-            if (a !== el) a.checked = false;
-          });
+          // ⚠ ON PEUT REVENIR À « RIEN COCHÉ » : toucher la carte déjà prise
+          // la relâche. Des boutons radio l'auraient interdit — voir l'en-tête.
+          s[nom] = prise ? '' : code;
         } else {
           const liste = Array.isArray(s[nom]) ? s[nom].filter(c => c !== code) : [];
-          s[nom] = el.checked ? [...liste, code] : liste;
+          s[nom] = prise ? liste : [...liste, code];
         }
-        // ⚠ ON TEINTE SANS REDESSINER : la page est longue, un redessin la
-        // ramène en haut et fait perdre la ligne qu'on était en train de
-        // pointer. Deux classes et un compteur suffisent.
-        const boite = el.closest('[data-liste]');
-        if (boite) {
-          boite.querySelectorAll('input[data-code]').forEach(c =>
-            c.closest('label')?.classList.toggle('est-faite', c.checked));
-        }
-        const compte = hote.querySelector('#rba-ctrl-compte');
-        if (compte && nom === 'controles') {
-          const n = GROUPES.controles.options.filter(o => coche(s, 'controles', o.c)).length;
-          compte.textContent = `— ${n} sur ${GROUPES.controles.options.length}`;
-        }
+        // ⚠ ON REDESSINE, MAIS SANS BOUGER : une carte prise ouvre son champ de
+        // précision sous elle, et les résumés des blocs changent — ça ne se
+        // bricole pas à la main sur trois classes. `redessiner()` garde la
+        // position de défilement, c'est tout son objet.
+        redessiner();
       };
+    });
+
+    // ⚠ UN SEUL BLOC OUVERT À LA FOIS, et on retient lequel : sans ça, le
+    // premier ajout d'une rangée d'heures refermerait le bloc qu'on remplit.
+    // Le navigateur ouvre tout seul ; nous ne faisons que fermer les autres.
+    hote.querySelectorAll('details[data-bloc]').forEach(d => {
+      d.addEventListener('toggle', () => {
+        if (!d.open) return;
+        blocOuvert = d.dataset.bloc;
+        hote.querySelectorAll('details[data-bloc]').forEach(a => { if (a !== d) a.open = false; });
+      });
     });
 
     const majHeures = () => {

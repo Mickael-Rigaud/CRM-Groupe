@@ -7804,25 +7804,55 @@ tr.est-modifie td { background: var(--accent-soft); }
    là où on va le corriger, pas en bas à côté d'un bouton grisé. */
 .rba-manque { font-size: 13px; background: color-mix(in srgb, var(--amber) 12%, var(--card));
   border-left: 3px solid var(--amber); padding: 8px 12px; border-radius: 6px; margin: 14px 0 0; }
-/* ⚠ UNE CHECK-LIST SE POINTE AVEC LE POUCE : une rangée par ligne, toute la
-   largeur, 44 px de haut — la taille d'une cible qu'on touche sans viser. Les
-   étiquettes en ligne (`checks`) restent pour ce qui se lit d'un coup d'œil ;
-   ceci est pour ce qui se vérifie un par un, sur un chantier. */
-.rba-taches { display: grid; gap: 6px; }
-.rba-tache { display: flex; align-items: center; gap: 10px; min-height: 44px;
-  padding: 7px 12px; border: 1px solid var(--line); border-radius: 10px;
-  background: var(--card); cursor: pointer; transition: background .12s, border-color .12s; }
-.rba-tache:hover { border-color: var(--line-strong); }
-.rba-tache input { width: 20px; height: 20px; flex: none; accent-color: var(--green); }
-/* ⚠ UNE TÂCHE SE LIT COMME UNE PHRASE, PAS COMME UNE ÉTIQUETTE : `.field
-   label` met tout en petites capitales, ce qui va pour un intitulé de champ et
-   pas pour « Essai des différentiels 30 mA », qu'on lit six fois de suite. */
-.rba-tache > span { flex: 1; font-size: 14px; font-weight: 500; color: var(--text);
-  text-transform: none; letter-spacing: 0; }
-.rba-tache.est-faite { background: color-mix(in srgb, var(--green) 9%, var(--card));
-  border-color: color-mix(in srgb, var(--green) 35%, var(--line)); }
-.rba-tache.est-faite > span { color: var(--green); font-weight: 600; }
-.rba-tache .rba-aussi { width: 92px; flex: none; }
+/* ⚠ LE BON PARLE LA LANGUE DE LA FACTURE (11/11/2026, Élodie : « plus moderne
+   et dynamique quand on remplit le bon d'attachement, COMME LA FACTURE, là
+   c'est trop fade »). Les choix sont des `rdc-presta` — les cartes de l'écran
+   de facturation, déjà stylées plus haut. Ce qui suit n'ajoute que le pliage
+   en trois blocs et la place du champ de précision.
+   ⚠ LES CASES EN LIGNE (`rba-tache`) SONT PARTIES AVEC : plus un fichier ne
+   les écrit, vérifié par recherche. */
+.rba-bloc { border: 1px solid var(--line); border-radius: 14px; background: var(--card);
+  margin: 0 0 12px; overflow: hidden; }
+.rba-bloc[open] { border-color: var(--line-strong); box-shadow: 0 2px 12px rgba(20, 20, 40, .06); }
+.rba-bloc-tete { display: flex; align-items: center; gap: 12px; padding: 13px 16px;
+  cursor: pointer; list-style: none; user-select: none; }
+.rba-bloc-tete::-webkit-details-marker { display: none; }
+.rba-bloc-tete::after { content: '›'; margin-left: auto; font-size: 20px; color: var(--muted);
+  transform: rotate(90deg); transition: transform .15s ease; }
+.rba-bloc[open] .rba-bloc-tete::after { transform: rotate(-90deg); }
+.rba-bloc-tete:hover { background: var(--card-2); }
+.rba-bloc-titre { font-family: var(--font-display); font-size: 15px; font-weight: 700; }
+/* Le résumé dit ce que le bloc porte DÉJÀ : on le lit sans l'ouvrir. */
+.rba-bloc-resume { font-size: 12.5px; color: var(--muted); min-width: 0; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; }
+.rba-bloc-corps { padding: 2px 16px 16px; border-top: 1px solid var(--line); }
+.rba-groupe { margin: 14px 0 0; }
+/* ⚠ LA MÊME PASTILLE QUE LA FACTURE, EN PLUS PETIT : ronde, vide, qui se
+   remplit d'orange quand on la prend. Les choix courts s'alignent et se
+   replient — trois rangées au lieu de dix — là où les contrôles gardent
+   leurs rangées pleines, parce qu'on les pointe un par un. */
+.rba-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.rba-chip { display: inline-flex; align-items: center; gap: 8px; min-height: 40px;
+  padding: 6px 14px 6px 8px; border: 1px solid var(--line-strong); border-radius: 999px;
+  background: var(--card); cursor: pointer; font: inherit; color: inherit;
+  transition: border-color .12s, background .12s; }
+.rba-chip:hover { background: var(--card-2); }
+.rba-chip .rdc-coche { width: 20px; height: 20px; font-size: 12px; }
+.rba-chip .rdc-presta-nom { font-size: 13.5px; }
+.rba-chip.est-choisie { border: 2px solid var(--accent); background: var(--accent-soft); padding: 5px 13px 5px 7px; }
+.rba-chip.est-choisie .rdc-coche { border-color: var(--accent); background: var(--accent); color: #fff; }
+.rba-chip.est-choisie .rdc-presta-nom { font-weight: 700; }
+/* Une précision ouverte par une pastille prend sa ligne, sous la rangée. */
+.rba-chips .rba-precision { flex: 1 0 100%; padding: 0 0 2px; }
+/* La précision d'une carte prise vit SOUS elle, comme la quantité d'une
+   prestation choisie sur la facture. */
+.rba-precision { padding: 0 12px 10px 46px; }
+.rba-precision .rba-aussi { width: 140px; }
+@media screen and (max-width: 760px) {
+  .rba-bloc-resume { display: none; }
+  .rba-bloc-corps { padding: 2px 11px 14px; }
+  .rba-precision { padding-left: 12px; }
+}
 .rba .rba-section:first-of-type { margin-top: 12px; }
 .rba .rba-rangee { padding: 10px 12px; margin-bottom: 8px; border: 1px solid var(--line); border-radius: 10px;
   background: var(--card-2); }
