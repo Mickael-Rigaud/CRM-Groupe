@@ -21,6 +21,7 @@
 // le contenu ; la direction doit d'abord la retirer (`retirerSignature`).
 import { db } from './db.js';
 import { scope } from './scope.js';
+import { CONFIG } from '../config.js';
 
 export const cahierDe = (planningId) => db.t('rgd_cahiers').find(x => x.planning_id === planningId) || null;
 export const estSigne = (k) => !!(k && k.signature && k.signe_le);
@@ -91,6 +92,29 @@ export function devisSignesDu(dossier, genre) {
     .map(v => ({ source: 'crm', id: v.id, numero: v.numero || '', montant: v.montant_ht,
       date: v.date_signature || v.date_devis, lignes: Array.isArray(v.lignes) ? v.lignes : [], ligne: v }));
   return [...crm, ...costructor].sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+}
+
+// ⚠ LES LIGNES D'UN DEVIS COSTRUCTOR SE LISENT TOUTES SEULES (11/11/2026,
+// Élodie : « le minimum d'actions de notre part »). L'Edge Function
+// `cahier-devis-costructor` passe par la page client du devis — la seule porte
+// qui rende ses lignes, voir son en-tête — et renvoie des postes SANS PRIX.
+// Le collage à la main reste en secours si Costructor change cette page.
+export async function lireDevisCostructor(devisId) {
+  if (db.demo) return { ok: false, motif: 'Lecture automatique indisponible en mode démo.' };
+  const jeton = await db.accessToken();
+  if (!jeton) return { ok: false, motif: 'Session expirée : reconnectez-vous.' };
+  try {
+    const r = await fetch(`${CONFIG.SUPABASE_URL}/functions/v1/cahier-devis-costructor`, {
+      method: 'POST',
+      headers: { apikey: CONFIG.SUPABASE_ANON_KEY, Authorization: `Bearer ${jeton}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ devis_id: devisId }),
+    });
+    const rep = await r.json().catch(() => ({}));
+    if (!r.ok || rep.ok === false) return { ok: false, motif: rep.erreur || `Erreur ${r.status}` };
+    return { ok: true, postes: rep.postes || [], numero: rep.numero || null };
+  } catch (e) {
+    return { ok: false, motif: String(e.message || e).slice(0, 160) };
+  }
 }
 
 // Les lignes d'un devis du CRM, en postes : la catégorie devient le lot, la

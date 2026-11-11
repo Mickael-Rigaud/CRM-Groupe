@@ -13,7 +13,7 @@ import { esc, toast, openModal, confirm } from '../ui.js';
 import { posePadSignature } from '../pad-signature.js';
 import { COSTRUCTOR_APP } from '../data/rgd-cgv.js';
 import { cahierDe, estSigne, creerCahier, majCahier, signerCahier, retirerSignature,
-         devisSignesDu, postesDuDevisCrm, decouperCollage } from '../data/rgd-cahier.js';
+         devisSignesDu, postesDuDevisCrm, decouperCollage, lireDevisCostructor } from '../data/rgd-cahier.js';
 import { imprimerCahierClient, imprimerCahierOuvriers } from './rgd-cahier-doc.js';
 
 const date = (iso) => (iso ? new Date(iso).toLocaleDateString('fr-FR') : '');
@@ -38,6 +38,8 @@ export function ouvrirCahier(chantier, dossier, retour) {
     precisions: k?.precisions || '',
     collage: false,
     modifie: false,
+    lecture: false,      // lecture du devis Costructor en cours
+    erreur: '',          // ce que la lecture a répondu, si elle a échoué
   };
   // ⚠ `confirm` OUVRE SA PROPRE FENÊTRE ET REMPLACE CELLE-CI : après chaque
   // question on la remonte (`demander`), le brouillon `s` survit dans la
@@ -104,9 +106,17 @@ export function ouvrirCahier(chantier, dossier, retour) {
         ${choisi?.source === 'crm'
           ? `<span>Ce devis a été fait dans le CRM : ses lignes se reprennent directement.</span>
              <button type="button" class="btn sm" id="ca-reprendre">Reprendre ses ${choisi.lignes.length} lignes</button>`
-          : `<span>Ouvrez le devis dans Costructor, sélectionnez ses lignes, copiez (Ctrl + C) et collez-les ici : les prix sont retirés.</span>
-             <a class="btn ghost sm" href="${COSTRUCTOR_APP}" target="_blank" rel="noopener">Ouvrir Costructor</a>
-             <button type="button" class="btn sm" id="ca-coller">${s.collage ? 'Fermer' : 'Coller les lignes du devis'}</button>`}
+          : choisi?.source === 'costructor'
+            ? (s.lecture ? '<span class="ca-lecture">Lecture du devis dans Costructor…</span>'
+              : s.erreur ? `<span><b>Lecture impossible :</b> ${esc(s.erreur)}</span>
+                 <button type="button" class="btn sm" id="ca-relire">Réessayer</button>
+                 <button type="button" class="btn ghost sm" id="ca-coller">${s.collage ? 'Fermer' : 'Coller à la main'}</button>`
+              : `<span>Les postes sont lus automatiquement dans le devis Costructor, sans les prix.</span>
+                 <button type="button" class="btn ghost sm" id="ca-relire">Relire le devis</button>
+                 <button type="button" class="btn ghost sm" id="ca-coller">${s.collage ? 'Fermer' : 'Coller à la main'}</button>`)
+            : `<span>Sans devis signé : collez des lignes, ou ajoutez les postes un à un.</span>
+               <a class="btn ghost sm" href="${COSTRUCTOR_APP}" target="_blank" rel="noopener">Ouvrir Costructor</a>
+               <button type="button" class="btn sm" id="ca-coller">${s.collage ? 'Fermer' : 'Coller des lignes'}</button>`}
       </div>
       ${s.collage ? `<div class="ca-collage">
         <textarea id="ca-collage" rows="7" placeholder="Collez ici les lignes du devis (Ctrl + V)"></textarea>
@@ -118,7 +128,7 @@ export function ouvrirCahier(chantier, dossier, retour) {
       <div class="ca-postes">
         ${s.postes.length ? `<div class="ca-poste ca-poste-tete"><span>Lot</span><span>Travaux</span><span>Qté</span><span>Unité</span><span></span></div>
           ${s.postes.map((p, i) => ligneP(p, i, fige)).join('')}`
-          : '<p class="muted small">Aucun poste : collez les lignes du devis, ou ajoutez-les une à une.</p>'}
+          : `<p class="muted small">${s.lecture ? 'Les postes arrivent…' : 'Aucun poste pour l’instant.'}</p>`}
         ${fige ? '' : '<button type="button" class="btn ghost sm" id="ca-ajouter">+ Ajouter un poste</button>'}
       </div>
       <div class="ca-textes">
@@ -198,7 +208,17 @@ export function ouvrirCahier(chantier, dossier, retour) {
       };
       return;
     }
-    hote.querySelector('#ca-devis').onchange = () => { lire(); dessiner(); };
+    hote.querySelector('#ca-devis').onchange = () => {
+      lire(); s.erreur = '';
+      // Un autre devis, et rien encore dans le cahier : on le lit tout de suite.
+      if (!s.postes.length) remplirDepuisDevis(); else dessiner();
+    };
+    const bRelire = hote.querySelector('#ca-relire');
+    if (bRelire) bRelire.onclick = async () => {
+      lire();
+      if (s.postes.length && !await demander(`Relire le devis remplace les ${s.postes.length} postes actuels. Continuer ?`)) { dessiner(); return; }
+      remplirDepuisDevis();
+    };
     const bColler = hote.querySelector('#ca-coller');
     if (bColler) bColler.onclick = () => { lire(); s.collage = !s.collage; dessiner(); hote.querySelector('#ca-collage')?.focus(); };
     const bDecouper = hote.querySelector('#ca-decouper');
@@ -259,5 +279,35 @@ export function ouvrirCahier(chantier, dossier, retour) {
     };
   }
 
-  dessiner();
+  // ⚠ LE CAHIER SE REMPLIT TOUT SEUL (11/11/2026, Élodie : « que le devis
+  // soit automatiquement lu […] le minimum d'actions de notre part »). À
+  // l'ouverture d'un cahier vide, le devis signé est lu et les postes ENREGISTRÉS
+  // aussitôt : il ne reste qu'à relire, imprimer et faire signer. Un cahier
+  // qui a déjà des postes n'est jamais réécrit sans qu'on le demande.
+  async function remplirDepuisDevis() {
+    const choisi = devisChoisi();
+    if (!choisi || estSigne(k)) { dessiner(); return; }
+    let postes = null;
+    if (choisi.source === 'crm') postes = postesDuDevisCrm(choisi.lignes);
+    else {
+      s.lecture = true; s.erreur = ''; dessiner();
+      const rep = await lireDevisCostructor(choisi.id);
+      s.lecture = false;
+      if (!rep.ok) { s.erreur = rep.motif; dessiner(); return; }
+      postes = rep.postes;
+    }
+    if (!postes.length) { s.erreur = 'le devis ne contient aucune ligne de travaux.'; dessiner(); return; }
+    s.postes = postes;
+    // L'écran d'abord : `enregistrer` relit les champs affichés, et ceux de
+    // l'ancien cahier écraseraient les postes qu'on vient de lire.
+    dessiner();
+    try {
+      await enregistrer();
+      toast(`${postes.length} poste${postes.length > 1 ? 's' : ''} repris du devis ${choisi.numero || ''} — relisez, puis imprimez`.trim());
+    } catch (e) { toast(e.message, 'error'); s.modifie = true; }
+    dessiner();
+  }
+
+  if (direction && !estSigne(k) && !s.postes.length && devisChoisi()) remplirDepuisDevis();
+  else dessiner();
 }

@@ -8581,6 +8581,8 @@ td .pl-toque { color: #4f46e5; }
   background: color-mix(in srgb, #0284c7 7%, var(--card)); border: 1px solid color-mix(in srgb, #0284c7 25%, var(--line)); font-size: 13.5px; }
 .ca-aide > span { flex: 1 1 260px; }
 .ca-collage { display: flex; flex-direction: column; gap: 8px; }
+.ca-lecture { font-weight: 700; color: #0369a1; animation: ca-pouls 1.2s ease-in-out infinite alternate; }
+@keyframes ca-pouls { from { opacity: .55; } to { opacity: 1; } }
 .ca-collage textarea { width: 100%; box-sizing: border-box; border: 1px dashed var(--line); border-radius: 10px; padding: 10px 12px;
   font: 13px/1.5 ui-monospace, Consolas, monospace; background: var(--card); color: var(--text); }
 .ca-collage-actions { display: flex; align-items: center; gap: 8px; }
