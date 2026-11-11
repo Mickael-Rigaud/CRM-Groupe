@@ -727,6 +727,41 @@ function resume(c) {
   </div>`;
 }
 
+// ⚠ DÉCALER AU BOUTON, PAS SEULEMENT AU DOIGT (11/11/2026, Élodie : « le
+// déplacement de chantier sur le téléphone n'est pas simple, facilite ça »).
+// Tirer une barre marche à la souris ; au doigt, le même geste fait défiler la
+// page, et viser un jour dans une case de 45 px est un jeu d'adresse. Ici, en
+// tête de la fiche : la période, et quatre boutons qui la décalent d'un jour
+// ou d'une semaine, durée inchangée. CHAQUE APPUI ENREGISTRE (même
+// `deplacerChantier` que le geste) et met à jour le champ « Début » du
+// formulaire en dessous, sans quoi « Enregistrer » remettrait l'ancienne date.
+function blocDecaler(c) {
+  const bouton = (n, txt, titre) => `<button type="button" class="btn ghost sm" data-decaler="${n}" title="${titre}">${txt}</button>`;
+  return `<div class="pl-decaler">
+    <span class="pl-decaler-titre">Déplacer</span>
+    <div class="pl-decaler-btns">${bouton(-7, '− 1 sem.', 'Une semaine plus tôt')}${bouton(-1, '− 1 j', 'Un jour plus tôt')}
+      <b class="pl-decaler-dates" data-decaler-dates>${esc(dateCourte(c.date_debut))} → ${esc(dateCourte(finDe(c)))}</b>
+      ${bouton(1, '+ 1 j', 'Un jour plus tard')}${bouton(7, '+ 1 sem.', 'Une semaine plus tard')}</div>
+  </div>`;
+}
+
+function brancherDecaler(m, c) {
+  let cour = c;
+  m.querySelectorAll('[data-decaler]').forEach(b => b.onclick = async () => {
+    const debut = ajouterJours(cour.date_debut, Number(b.dataset.decaler));
+    m.querySelectorAll('[data-decaler]').forEach(x => { x.disabled = true; });
+    try {
+      await deplacerChantier(cour, debut);
+      cour = db.byId('rgd_planning', cour.id) || { ...cour, date_debut: debut };
+      m.querySelector('[data-decaler-dates]').textContent = `${dateCourte(cour.date_debut)} → ${dateCourte(finDe(cour))}`;
+      const champ = m.querySelector('#pl-form [name="date_debut"]');
+      if (champ) { champ.value = cour.date_debut; champ.dispatchEvent(new Event('input')); }
+      toast(`« ${cour.titre} » : du ${dateLongue(cour.date_debut)} au ${dateLongue(finDe(cour))}`);
+    } catch (err) { toast(err.message, 'error'); }
+    m.querySelectorAll('[data-decaler]').forEach(x => { x.disabled = false; });
+  });
+}
+
 function ouvrirChantier(c, apres, jour = null, genre = 'chantier') {
   const formation = c ? estFormation(c) : genre === 'formation';
   if (c && !scope.isDirection) {
@@ -739,12 +774,14 @@ function ouvrirChantier(c, apres, jour = null, genre = 'chantier') {
   }
   const r = c && rattachementDe(c);
   const corps = () => `
+    ${c ? blocDecaler(c) : ''}
     ${r ? `<p class="pl-lien">Fiche : <button type="button" class="btn ghost sm" id="pl-fiche">${esc(r.nom)}</button></p>` : ''}
     ${formulaire(c, { date_debut: jour || aujourdhui(), genre })}
     ${formation ? '' : c ? `<div class="pl-listes">${blocListe(c, 'materiaux')}${blocListe(c, 'outils')}</div>`
       : '<p class="muted small pl-apres">Les listes matériaux et outils s’ouvrent une fois le chantier créé.</p>'}`;
   const m = openModal(c ? c.titre : formation ? 'Nouvelle formation' : 'Nouveau chantier', corps(), { wide: true, onClose: apres });
   brancher(m, c, apres);
+  if (c) brancherDecaler(m, c);
 }
 
 function brancher(m, c, apres) {
