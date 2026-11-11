@@ -23,7 +23,9 @@ import { valeursProjet } from '../data/rgd-projet.js';
 import {
   TVA, TVA_DEFAUT, UNITES, PAR_UNITE, nomMetier, tarifsDe, metiersAvecGrille,
   totaux, plancher, ligneDepuisTarif, parCategorie, messageDevisCrm, envoyerDevisCrm, enregistrerDevisCrm, changerStatutDevisCrm, supprimerDevisCrm, signerSurPlace,
-  MOYENS_PAIEMENT, marquerReglee, annulerReglement,
+  // ⚠ `marquerReglee` et `annulerReglement` ont quitté cet écran le 11/11/2026 :
+  // ils vivent dans `rgd-encaissement.js`, qui est désormais la seule porte.
+  MOYENS_PAIEMENT,
   GENRES, genreDe, estDevis, statutsDe, statutDoc, facturerLeDevis, factureDuDevis, devisDeLaFacture,
   estAnnulee, annulerFacture, retablirFacture,
   interventionsEnCours, ETAPES_REPRISE,
@@ -489,12 +491,17 @@ export function ouvrirDevisCrm(x, existant = null, retour = null, genreNeuf = 'f
             parcours, pas la première.
             ⚠ `signe` COUVRE AUSSI L'ANNULÉE, et c'est voulu : une facture
             annulée qui avait été encaissée doit pouvoir le montrer. */ ''}
+      ${/* ⚠ UNE SEULE PORTE VERS L'ENCAISSEMENT DEPUIS LE 11/11/2026. Cette
+            rangée portait un menu déroulant et un bouton « Marquer réglée »,
+            qui écrivaient la date du jour sans la montrer ni permettre de la
+            corriger. Elle ouvre désormais le MÊME écran que la fin du parcours
+            (`rgd-encaissement.js`) : deux endroits où marquer une facture
+            payée auraient fini par ne plus faire la même chose. */ ''}
       ${dev || !signe ? '' : `<div class="rdc-statut"><span class="muted small">Règlement</span>
         ${existant.regle_le
           ? `<span class="chip green">Réglée le ${esc(fmtDate(existant.regle_le))}${existant.regle_par ? ' · ' + esc(MOYENS_PAIEMENT[existant.regle_par] || existant.regle_par) : ''}</span>
-             <button type="button" class="btn ghost sm" id="rdc-regl-off">Annuler le règlement</button>`
-          : `<select id="rdc-regl-moyen">${Object.entries(MOYENS_PAIEMENT).map(([k, v]) => `<option value="${esc(k)}">${esc(v)}</option>`).join('')}</select>
-             <button type="button" class="btn sm" id="rdc-regl-on">Marquer réglée</button>`}
+             <button type="button" class="btn ghost sm" id="rdc-encaisser">Revoir l’encaissement</button>`
+          : `<button type="button" class="btn sm" id="rdc-encaisser">Encaisser ${esc(eur(existant.montant_ttc, { minimumFractionDigits: 2, maximumFractionDigits: 2 }))}</button>`}
       </div>`}
       ${dev ? '' : (() => {
         // ⚠ « FAIRE SIGNER » A QUITTÉ CETTE RANGÉE (02/11/2026). La signature du
@@ -914,32 +921,20 @@ export function ouvrirDevisCrm(x, existant = null, retour = null, genreNeuf = 'f
       existant = d;
       faireSigner();
     };
-    // ⚠ MARQUER RÉGLÉE CHANGE LE DOCUMENT, PAS SEULEMENT UNE ÉTIQUETTE : la
-    // facture perd son échéance et ses pénalités et porte « acquittée ». On
-    // redéploie donc la fenêtre pour que le PDF suivant parte à jour.
-    const bReglOn = hote.querySelector('#rdc-regl-on');
-    if (bReglOn) bReglOn.onclick = async () => {
-      bReglOn.disabled = true;
-      try {
-        existant = await marquerReglee(existant, hote.querySelector('#rdc-regl-moyen').value);
-        toast('Facture marquée réglée');
-        redessiner();
-      } catch (e) {
-        bReglOn.disabled = false;
-        toast(e.message || 'Non enregistré', 'error');
-      }
-    };
-    const bReglOff = hote.querySelector('#rdc-regl-off');
-    if (bReglOff) bReglOff.onclick = async () => {
-      bReglOff.disabled = true;
-      try {
-        existant = await annulerReglement(existant);
-        toast('Règlement annulé — la facture redevient due');
-        redessiner();
-      } catch (e) {
-        bReglOff.disabled = false;
-        toast(e.message || 'Non enregistré', 'error');
-      }
+    // ⚠ ENCAISSER CHANGE LE DOCUMENT, PAS SEULEMENT UNE ÉTIQUETTE : la facture
+    // perd son échéance et ses pénalités et porte « acquittée ». La fenêtre se
+    // redéploie donc au retour, pour que le PDF suivant parte à jour.
+    //
+    // ⚠ ON FERME CELLE-CI AVANT D'OUVRIR L'AUTRE : `openModal` ne superpose
+    // pas, il remplace — ouvrir sans fermer laisserait la facture derrière et
+    // son `onClose` partirait au mauvais moment. `closeModal(true)` ferme sans
+    // déclencher le retour, que l'encaissement reprend à son compte.
+    const bEncaisser = hote.querySelector('#rdc-encaisser');
+    if (bEncaisser) bEncaisser.onclick = async () => {
+      const { ouvrirEncaissement } = await import('./rgd-encaissement.js');
+      const doc = existant;
+      closeModal(true);
+      ouvrirEncaissement(x, doc, () => ouvrirDevisCrm(x, db.byId('rgd_devis_crm', doc.id) || doc, retour));
     };
     const bBonPdf = hote.querySelector('#rdc-bon-pdf');
     // ⚠ ON VERROUILLE LE BOUTON PENDANT L'ATTENTE. Le premier appui charge

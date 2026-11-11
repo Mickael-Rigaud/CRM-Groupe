@@ -593,7 +593,14 @@ export function ouvrirBonAttachement(x, { bon = null, devis = null } = {}, retou
         }, pdf);
         if (!r.ok) throw new Error(r.motif);
         toast(`Bon d’attachement ${numeroBon(courant)} envoyé à ${a}`);
-        closeModal();
+        // ⚠ LE PARCOURS NE S'ARRÊTAIT PAS LÀ, IL S'INTERROMPAIT (11/11/2026,
+        // Élodie : « une fois que le bon d'attachement est envoyé, il se passe
+        // quoi après ??? Il faut l'encaissement »). La fenêtre se fermait sur
+        // une facture encore due, et plus rien ne demandait jamais comment le
+        // client avait payé. On enchaîne donc ici, là où Franck est encore chez
+        // lui — et « Plus tard » reste une réponse.
+        const { proposerEncaissement } = await import('./rgd-encaissement.js');
+        proposerEncaissement(x, devis, retour);
       } catch (e) {
         bouton.disabled = false; bouton.textContent = 'Envoyer';
         toast(`Non envoyé — ${String(e.message || e).slice(0, 140)}`, 'error');

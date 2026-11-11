@@ -433,13 +433,38 @@ function ligneFacture(p, saisis, date) {
   };
 }
 
+/**
+ * Les factures faites DANS le CRM, même population qu'au tableau de bord.
+ *
+ * ⚠ LA RÈGLE EST ÉCRITE DEUX FOIS, ICI ET DANS `rgd-objectifs.js`, et les
+ * deux doivent bouger ensemble : le total du bilan vient des mois, le détail
+ * de cette liste. Qu'elles divergent, et la fenêtre de détail n'additionnerait
+ * plus au chiffre qu'on a cliqué. Voir là-bas pour le pourquoi des trois
+ * exclusions (importées, brouillons, annulées).
+ */
+const facturesDuCrm = () => scope.rgd('rgd_devis_crm')
+  .filter(d => d.genre !== 'devis' && !d.importe && ['envoye', 'signe'].includes(d.statut));
+
+/** Une facture du CRM, à la forme des lignes du bilan. */
+const ligneFactureCrm = (d, date) => ({
+  numero: d.numero || '—', client: nomDe(d), chantier: chantierDe(d),
+  date, montant: Number(d.montant_ht) || 0,
+  // Ni « affaire » ni « saisie » : elle vient du CRM lui-même, son client est
+  // celui de sa fiche. Aucune des deux notes de provenance ne la concerne.
+  venue: 'crm',
+});
+
 /** Les factures d'un exercice : celles que compte le CA (ni annulées, ni avoirs). */
 function facturesCrm(a) {
   const estDans = dansEx(a);
   const saisis = clientsSaisisParDevis();
-  return scope.rgd('rgd_paiements')
-    .filter(p => p.statut !== 'annule' && p.type !== 'remboursement' && estDans(p.date_facturation))
-    .map(p => ligneFacture(p, saisis, p.date_facturation));
+  return [
+    ...scope.rgd('rgd_paiements')
+      .filter(p => p.statut !== 'annule' && p.type !== 'remboursement' && estDans(p.date_facturation))
+      .map(p => ligneFacture(p, saisis, p.date_facturation)),
+    ...facturesDuCrm().filter(d => estDans(d.date_devis))
+      .map(d => ligneFactureCrm(d, d.date_devis)),
+  ];
 }
 
 /**
@@ -457,16 +482,30 @@ function facturesCrm(a) {
 function encaisseesCrm(a) {
   const estDans = dansEx(a);
   const saisis = clientsSaisisParDevis();
-  return scope.rgd('rgd_paiements')
-    .filter(p => p.statut === 'recu' && p.type !== 'remboursement' && estDans(p.date_reception))
-    .map(p => ligneFacture(p, saisis, p.date_reception));
+  return [
+    ...scope.rgd('rgd_paiements')
+      .filter(p => p.statut === 'recu' && p.type !== 'remboursement' && estDans(p.date_reception))
+      .map(p => ligneFacture(p, saisis, p.date_reception)),
+    // Côté CRM, `regle_le` tient le rôle de `date_reception`.
+    ...facturesDuCrm().filter(d => d.regle_le && estDans(d.regle_le))
+      .map(d => ligneFactureCrm(d, d.regle_le)),
+  ];
 }
 
-/** Le premier encaissement que le CRM connaisse (date ISO), ou `null`. */
+/**
+ * Le premier encaissement que le CRM connaisse (date ISO), ou `null`.
+ *
+ * ⚠ IL REGARDE LES DEUX TABLES. Sans les factures du CRM, un exercice où le
+ * seul argent encaissé serait venu d'un dépannage afficherait « inconnu »
+ * — la fonction au-dessus s'en sert pour distinguer un vrai zéro d'un trou
+ * d'historique, et elle aurait pris l'argent pour une absence de mémoire.
+ */
 function premierEncaissement() {
-  return scope.rgd('rgd_paiements')
-    .filter(p => p.statut === 'recu' && p.date_reception)
-    .map(p => p.date_reception).sort()[0] || null;
+  return [
+    ...scope.rgd('rgd_paiements').filter(p => p.statut === 'recu' && p.date_reception)
+      .map(p => p.date_reception),
+    ...facturesDuCrm().filter(d => d.regle_le).map(d => d.regle_le),
+  ].sort()[0] || null;
 }
 
 /**

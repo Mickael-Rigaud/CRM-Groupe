@@ -110,6 +110,29 @@ export function moisObjectifs(aujourdhui = new Date()) {
   const paiements = scope.rgd('rgd_paiements');
   const visites = scope.rgd('rgd_chantiers').filter(estVisiteTechnique);
 
+  // ⚠ LES FACTURES FAITES DANS LE CRM NE COMPTAIENT DANS AUCUN CHIFFRE
+  // D'AFFAIRES jusqu'au 11/11/2026, et personne ne pouvait le voir : les deux
+  // lignes d'argent lisent `rgd_paiements`, qui est le reflet de Costructor.
+  // Les dépannages électriques, eux, naissent ici et ne passent jamais par
+  // Costructor — leur argent était donc invisible. Trouvé en branchant
+  // l'encaissement, qui n'aurait rien fait bouger à l'écran.
+  //
+  // ⚠ DEUX POPULATIONS DISJOINTES, PAS UN DOUBLON : une facture Costructor
+  // n'existe pas dans `rgd_devis_crm`, et l'inverse est vrai. On additionne
+  // deux tables qui ne se recouvrent pas.
+  //
+  // ⚠ SAUF LES IMPORTÉES, et c'est le seul cas douteux : une facture
+  // importée est un PDF fait AILLEURS, déposé dans le CRM. Si ce « ailleurs »
+  // est Costructor, elle est déjà dans `rgd_paiements` et la compter ici la
+  // compterait deux fois. On préfère un euro manquant à un euro doublé : le
+  // premier se cherche, le second se croit.
+  //
+  // ⚠ NI LES BROUILLONS NI LES ANNULÉES : un brouillon n'a pas de numéro et
+  // n'est parti chez personne ; une annulée est de l'argent qui ne viendra
+  // pas. Même exclusion que pour les paiements Costructor.
+  const facturesDuCrm = devisCrm.filter(d => d.genre !== 'devis' && !d.importe
+    && ['envoye', 'signe'].includes(d.statut));
+
   // ⚠ LES VISITES NE REMONTENT PAS LOIN, et un zéro mentirait. `statut_d1`
   // n'est transmis par le relevé Costructor que depuis le 22/09/2026 : avant
   // la première visite connue, le CRM ne sait pas s'il y en a eu, il sait
@@ -235,7 +258,11 @@ export function moisObjectifs(aujourdhui = new Date()) {
       // recommence à s'écarter du bilan sans que personne ne sache pourquoi.
       ca: paiements.filter(p => p.statut !== 'annule' && p.type !== 'remboursement'
           && mois7(p.date_facturation) === cle)
-        .reduce((t, p) => t + (Number(p.montant_ht) || 0), 0),
+        .reduce((t, p) => t + (Number(p.montant_ht) || 0), 0)
+        // ⚠ ET LES FACTURES DU CRM, datées de LEUR date de facture : c'est le
+        // même repère que `date_facturation` côté Costructor.
+        + facturesDuCrm.filter(d => mois7(d.date_devis) === cle)
+          .reduce((t, d) => t + (Number(d.montant_ht) || 0), 0),
       // ⚠ FACTURÉ ET ENCAISSÉ NE SE DATENT PAS PAREIL (10/11/2026, Élodie :
       // « CA encaissé HT »). Le facturé se range à `date_facturation`, l'encaissé
       // à `date_reception` : une facture de juillet encaissée en septembre compte
@@ -250,7 +277,12 @@ export function moisObjectifs(aujourdhui = new Date()) {
       // facture : aucun mois de la fenêtre n'est un trou d'historique.
       encaisse: paiements.filter(p => p.statut === 'recu' && p.type !== 'remboursement'
           && mois7(p.date_reception) === cle)
-        .reduce((t, p) => t + (Number(p.montant_ht) || 0), 0),
+        .reduce((t, p) => t + (Number(p.montant_ht) || 0), 0)
+        // ⚠ CÔTÉ CRM, C'EST `regle_le` QUI DIT « reçu », et il est posé par
+        // l'encaissement. Une facture émise non encaissée compte au facturé et
+        // pas ici, exactement comme une facture Costructor non réglée.
+        + facturesDuCrm.filter(d => d.regle_le && mois7(d.regle_le) === cle)
+          .reduce((t, d) => t + (Number(d.montant_ht) || 0), 0),
     });
   }
   return liste;

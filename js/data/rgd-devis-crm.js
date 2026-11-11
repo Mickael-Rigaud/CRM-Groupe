@@ -342,12 +342,18 @@ export const supprimerDevisCrm = (d) => db.remove('rgd_devis_crm', d.id);
 /**
  * La facture est réglée : elle cesse de réclamer.
  *
- * ⚠ ON DATE DU JOUR, PAS DE LA FACTURE. Le règlement a lieu quand on le
- * constate ; une facture d'hier payée aujourd'hui porte la date d'aujourd'hui,
- * sinon la mention d'acquittement dirait faux.
+ * ⚠ ON DATE DU RÈGLEMENT, PAS DE LA FACTURE. Une facture d'hier payée
+ * aujourd'hui porte la date d'aujourd'hui, sinon la mention d'acquittement
+ * dirait faux.
+ *
+ * ⚠ ET CETTE DATE SE CORRIGE DEPUIS LE 11/11/2026, avec l'écran
+ * d'encaissement. Elle était posée d'office au jour de la SAISIE : un virement
+ * tombé le 30 et constaté le 2 basculait l'argent sur le mois suivant, et le
+ * « CA encaissé » le rangeait là. Le jour reste le défaut, il n'est plus la
+ * seule réponse possible.
  */
-export const marquerReglee = (d, moyen) => db.update('rgd_devis_crm', d.id, {
-  regle_le: new Date().toISOString().slice(0, 10),
+export const marquerReglee = (d, moyen, date = null) => db.update('rgd_devis_crm', d.id, {
+  regle_le: date || new Date().toISOString().slice(0, 10),
   regle_par: moyen || null,
 });
 
