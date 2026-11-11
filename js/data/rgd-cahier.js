@@ -61,16 +61,89 @@ export async function majCahier(k, champs) {
   return db.update('rgd_cahiers', k.id, patch);
 }
 
+// Ce que le client a signé, figé à part (sur place comme à distance) : retirer
+// la signature puis modifier le cahier ne doit pas effacer la preuve.
+const contenuSigne = (k) => ({ objet: k.objet, postes: k.postes, precisions: k.precisions, devis_numero: k.devis_numero });
+
 export async function signerCahier(k, { image, nom }) {
   if (!image) throw new Error('La signature manque.');
   return db.update('rgd_cahiers', k.id, {
     signature: image, signe_par: String(nom || '').trim() || null, signe_le: new Date().toISOString(),
+    signe_mode: 'sur_place', contenu_signe: contenuSigne(k),
   });
 }
 
 export async function retirerSignature(k) {
   if (!scope.isDirection) throw new Error('Seule la direction peut retirer une signature.');
-  return db.update('rgd_cahiers', k.id, { signature: null, signe_par: null, signe_le: null });
+  return db.update('rgd_cahiers', k.id, {
+    signature: null, signe_par: null, signe_le: null, signe_mode: null, signe_ip: null, signe_agent: null,
+  });
+}
+
+// ------------------------------------------------------------ à distance
+// ⚠ LA SIGNATURE À DISTANCE (11/11/2026) : le client reçoit un lien vers la
+// page publique `signature.html?t=<jeton>`, qui ne parle qu'à l'Edge Function
+// `cahier-signature`. Le JETON est la seule clé : 20 octets aléatoires (40
+// caractères), valable 30 jours, tiré ici par
+// le navigateur de la direction. Un jeton encore valable est réutilisé : un
+// second envoi ne rend pas caduc le lien déjà reçu.
+const JOURS_VALIDITE = 30;
+export const lienValable = (k) => !!(k?.jeton && (!k.jeton_expire_le || new Date(k.jeton_expire_le) > new Date(Date.now() + 86400000)));
+
+export async function preparerLien(k) {
+  if (lienValable(k)) return k;
+  const octets = crypto.getRandomValues(new Uint8Array(20));
+  const jeton = [...octets].map(b => b.toString(16).padStart(2, '0')).join('');
+  return db.update('rgd_cahiers', k.id, {
+    jeton, jeton_expire_le: new Date(Date.now() + JOURS_VALIDITE * 86400000).toISOString(),
+  });
+}
+
+// L'adresse de la page, à côté de l'application qui tourne (GitHub Pages en
+// production, le serveur local en démo).
+export const lienSignature = (k) => (k?.jeton ? new URL(`signature.html?t=${k.jeton}`, location.href.split('#')[0]).href : '');
+
+const appel = async (fonction, corps) => {
+  const jeton = await db.accessToken();
+  if (!jeton) throw new Error('Session expirée : reconnectez-vous.');
+  const r = await fetch(`${CONFIG.SUPABASE_URL}/functions/v1/${fonction}`, {
+    method: 'POST',
+    headers: { apikey: CONFIG.SUPABASE_ANON_KEY, Authorization: `Bearer ${jeton}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(corps),
+  });
+  const rep = await r.json().catch(() => ({}));
+  if (!r.ok || rep.ok === false) throw new Error(rep.detail || rep.erreur || `Erreur ${r.status}`);
+  return rep;
+};
+
+// ⚠ LE MAIL N'A PAS DE BOUTON PLEIN : un aplat de couleur fait classer le
+// message en indésirables ou en « Promotions » (mesuré, voir la mémoire du
+// projet). Lien en bouton à contour, enveloppe sobre, réponse vers contact@.
+function mailSignature({ nom, objet, lien }) {
+  const html = `<p>Bonjour${nom ? ` ${nom}` : ''},</p>
+<p>Avant le démarrage de vos travaux, voici le <b>cahier des charges</b>${objet ? ` « ${objet} »` : ''} : la liste des travaux prévus, sans les prix, qui complète votre devis.</p>
+<p>Merci de le relire, puis de le signer en ligne :</p>
+<p style="margin:22px 0;"><a href="${lien}" style="display:inline-block;padding:11px 20px;border:2px solid #FC5D00;border-radius:8px;color:#FC5D00;text-decoration:none;font-weight:700;">Relire et signer le cahier des charges</a></p>
+<p style="color:#6b7280;font-size:13px;">Le lien est valable ${JOURS_VALIDITE} jours. Une question ? Répondez simplement à ce message.</p>`;
+  return html.replace(/\n/g, '');
+}
+// ⚠ PAR MAIL SEULEMENT (11/11/2026, Élodie : « pas par SMS, on fait par mail
+// c'est mieux »). Le SMS avait été proposé puis retiré : lien compris, il
+// coûtait deux SMS (environ 9 crédits Brevo). Pour un client sans e-mail, le
+// bouton « Copier le lien » permet de l'envoyer soi-même.
+export async function envoyerPourSignature(k, { email, nom, objet }) {
+  if (db.demo) throw new Error('Mode démo : aucun message envoyé.');
+  if (!/.+@.+\..+/.test(String(email || ''))) throw new Error('Adresse e-mail manquante ou invalide.');
+  const pret = await preparerLien(k);
+  const lien = lienSignature(pret);
+  await appel('envoyer-email', {
+    to: { email: String(email).trim(), name: String(nom || email).trim() },
+    subject: `Votre cahier des charges${objet ? ` — ${objet}` : ''} à signer`,
+    html: mailSignature({ nom, objet, lien }),
+    sobre: true,
+    replyTo: { email: 'contact@rgdrenova.fr', name: 'RGD Renova' },
+  });
+  return db.update('rgd_cahiers', pret.id, { envoye_le: new Date().toISOString(), envoye_a: String(email).trim() });
 }
 
 // ------------------------------------------------------------ les devis

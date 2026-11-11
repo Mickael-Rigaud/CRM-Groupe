@@ -13,6 +13,7 @@ import { esc, toast, openModal, confirm } from '../ui.js';
 import { posePadSignature } from '../pad-signature.js';
 import { COSTRUCTOR_APP } from '../data/rgd-cgv.js';
 import { cahierDe, estSigne, creerCahier, majCahier, signerCahier, retirerSignature,
+         preparerLien, lienSignature, lienValable, envoyerPourSignature,
          devisSignesDu, postesDuDevisCrm, decouperCollage, lireDevisCostructor } from '../data/rgd-cahier.js';
 import { imprimerCahierClient, imprimerCahierOuvriers } from './rgd-cahier-doc.js';
 
@@ -53,6 +54,13 @@ export function ouvrirCahier(chantier, dossier, retour) {
   const demander = async (question) => { const ok = await confirm(question); monter(); return ok; };
   monter();
   const devisChoisi = () => devis.find(v => `${v.source}:${v.id}` === s.devis) || null;
+  // L'e-mail du client, lus comme le font les documents imprimés.
+  const coordonnees = async () => {
+    if (!dossier) return { nom: '', email: '' };
+    const { donneesDocument } = await import('./rgd-documents.js');
+    const d = donneesDocument(dossier);
+    return { nom: d.nom || dossier.nom || '', email: d.email || '' };
+  };
 
   const lecture = () => {
     const postes = k?.postes || [];
@@ -139,9 +147,12 @@ export function ouvrirCahier(chantier, dossier, retour) {
       </div>
       ${fige ? `<div class="ca-signe">
         <img src="${k.signature}" alt="Signature du client">
-        <div><b>Signé${k.signe_par ? ` par ${esc(k.signe_par)}` : ''}</b><span>le ${esc(new Date(k.signe_le).toLocaleString('fr-FR'))}</span>
+        <div><b>Signé${k.signe_mode === 'a_distance' ? ' à distance' : k.signe_mode === 'sur_place' ? ' sur place' : ''}${k.signe_par ? ` par ${esc(k.signe_par)}` : ''}</b><span>le ${esc(new Date(k.signe_le).toLocaleString('fr-FR'))}</span>
           <small class="muted">Le cahier est figé. Pour le modifier, retirez d’abord la signature : il faudra le faire signer à nouveau.</small></div>
         <button type="button" class="btn ghost sm" id="ca-retirer">Retirer la signature</button>
+      </div>` : k?.envoye_le ? `<div class="ca-envoye">
+        <b>Envoyé pour signature</b> le ${esc(new Date(k.envoye_le).toLocaleString('fr-FR'))}${k.envoye_a ? ` à ${esc(k.envoye_a)}` : ''} — en attente de la signature du client.
+        ${lienValable(k) ? '<button type="button" class="btn ghost sm" id="ca-copier">Copier le lien</button>' : '<span class="muted small">Le lien a expiré : renvoyez-le.</span>'}
       </div>` : ''}
       <div id="ca-pad"></div>
       <div class="form-actions ca-actions">
@@ -149,7 +160,8 @@ export function ouvrirCahier(chantier, dossier, retour) {
         <span class="grow"></span>
         <button type="button" class="btn ghost" id="ca-ouvriers">Imprimer (équipe)</button>
         <button type="button" class="btn ghost" id="ca-client">Imprimer (client)</button>
-        ${fige ? '' : `<button type="button" class="btn ghost" id="ca-signer">Faire signer le client</button>
+        ${fige ? '' : `<button type="button" class="btn ghost" id="ca-distance">${k?.envoye_le ? 'Renvoyer pour signature' : 'Envoyer pour signature'}</button>
+        <button type="button" class="btn ghost" id="ca-signer">Faire signer sur place</button>
         <button type="button" class="btn primary" id="ca-enregistrer">Enregistrer</button>`}
       </div>`;
     brancher(fige);
@@ -198,6 +210,11 @@ export function ouvrirCahier(chantier, dossier, retour) {
       } catch (e) { toast(e.message, 'error'); }
     };
     hote.querySelector('#ca-ouvriers').onclick = () => imprimer('ouvriers');
+    const bCopier = hote.querySelector('#ca-copier');
+    if (bCopier) bCopier.onclick = async () => {
+      try { await navigator.clipboard.writeText(lienSignature(k)); toast('Lien copié : vous pouvez le transmettre au client'); }
+      catch { prompt('Copiez ce lien :', lienSignature(k)); }
+    };
     hote.querySelector('#ca-client').onclick = () => imprimer('client');
     if (fige) {
       hote.querySelector('#ca-retirer').onclick = async () => {
@@ -254,6 +271,44 @@ export function ouvrirCahier(chantier, dossier, retour) {
     hote.querySelector('#ca-enregistrer').onclick = async () => {
       try { await enregistrer(); toast('Cahier des charges enregistré'); dessiner(); }
       catch (e) { toast(e.message, 'error'); }
+    };
+    // ⚠ LA SIGNATURE À DISTANCE (11/11/2026) : on enregistre, puis on envoie
+    // le lien PAR MAIL (le SMS a été écarté par Élodie le même jour). Le client signe sur la page publique ; le
+    // CRM le voit au retour (temps réel) et RGD Renova reçoit un mail.
+    hote.querySelector('#ca-distance').onclick = async () => {
+      try { await enregistrer(); } catch (e) { toast(e.message, 'error'); return; }
+      if (!k.postes?.length) { toast('Ajoutez au moins un poste avant d’envoyer.', 'error'); dessiner(); return; }
+      const coord = await coordonnees();
+      const zone = hote.querySelector('#ca-pad');
+      hote.querySelectorAll('.ca-actions button').forEach(b => { b.disabled = true; });
+      zone.innerHTML = `<div class="ca-envoi">
+        <p class="rdc-aide">Le client reçoit par mail un lien vers son cahier des charges, sans les prix. Il le relit et signe au doigt ;
+          vous recevez un mail sur contact@rgdrenova.fr dès qu’il a signé. Le lien est valable 30 jours.</p>
+        <div class="ca-envoi-grille">
+          <label class="ca-coche" for="ca-email">E-mail du client</label>
+          <input id="ca-email" type="email" value="${esc(coord.email)}" placeholder="adresse@client.fr">
+        </div>
+        <div class="form-actions"><button type="button" class="btn ghost" id="ca-envoi-annuler">Annuler</button>
+          <button type="button" class="btn ghost" id="ca-envoi-copier">Copier le lien seulement</button>
+          <span class="grow"></span><button type="button" class="btn primary" id="ca-envoi-ok">Envoyer</button></div>
+      </div>`;
+      zone.querySelector('#ca-envoi-annuler').onclick = () => dessiner();
+      zone.querySelector('#ca-envoi-copier').onclick = async () => {
+        try { k = await preparerLien(k); k = cahierDe(chantier.id) || k; } catch (e) { toast(e.message, 'error'); return; }
+        try { await navigator.clipboard.writeText(lienSignature(k)); toast('Lien copié'); } catch { prompt('Copiez ce lien :', lienSignature(k)); }
+      };
+      zone.querySelector('#ca-envoi-ok').onclick = async (ev) => {
+        const b = ev.currentTarget; b.disabled = true; b.textContent = 'Envoi…';
+        try {
+          k = await envoyerPourSignature(k, {
+            email: zone.querySelector('#ca-email').value, nom: coord.nom, objet: k.objet || chantier.titre,
+          });
+          k = cahierDe(chantier.id) || k;
+          toast('Cahier des charges envoyé pour signature');
+          dessiner();
+        } catch (e) { toast(e.message, 'error'); b.disabled = false; b.textContent = 'Envoyer'; }
+      };
+      zone.scrollIntoView({ behavior: 'smooth', block: 'center' });
     };
     // ⚠ ON ENREGISTRE AVANT DE TENDRE LE TÉLÉPHONE : le client signe ce qui
     // est écrit, pas une version d'il y a dix minutes (même règle que le bon

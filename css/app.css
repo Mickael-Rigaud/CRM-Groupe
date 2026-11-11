@@ -8622,3 +8622,14 @@ td .pl-toque { color: #4f46e5; }
   .ca-poste > [data-c="lot"], .ca-poste > .ca-poste-texte { grid-column: 1 / -1; }
   .ca-poste-tete { display: none; }
 }
+/* Cahier des charges : la signature à distance (11/11/2026) */
+.ca-envoye { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 12px; border-radius: 10px;
+  border: 1px solid color-mix(in srgb, #0284c7 35%, var(--line)); background: color-mix(in srgb, #0284c7 7%, var(--card)); font-size: 13.5px; }
+.ca-envoi { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; background: var(--card-2); }
+.ca-envoi-grille { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 8px 12px; align-items: center; margin-bottom: 10px; }
+.ca-envoi-grille input[type="email"], .ca-envoi-grille input[type="tel"] { border: 1px solid var(--line); border-radius: 9px;
+  padding: 9px 11px; font: inherit; background: var(--card); color: var(--text); min-width: 0; }
+.ca-coche { display: flex; align-items: center; gap: 8px; font-weight: 600; cursor: pointer; }
+.ca-envoi .form-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.ca-envoi .form-actions .grow { flex: 1; }
+@media screen and (max-width: 560px) { .ca-envoi-grille { grid-template-columns: 1fr; } }
