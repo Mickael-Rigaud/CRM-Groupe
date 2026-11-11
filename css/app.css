@@ -8088,34 +8088,47 @@ tr.est-modifie td { background: var(--accent-soft); }
 .pl-etat.est-passe { background: var(--card-2); color: var(--muted); }
 .pl-etat.est-encours { background: color-mix(in srgb, #fd7a2d 16%, var(--card)); color: #c2410c; }
 .pl-etat.est-futur { background: color-mix(in srgb, #0284c7 12%, var(--card)); color: #075985; }
-/* La frise de l'année : une colonne de noms, puis une piste où chaque barre est
-   placée au jour près. Le trait d'aujourd'hui traverse toutes les lignes. */
-.pl-frise { position: relative; --pl-nom: 230px; }
-.pl-frise-ligne { display: grid; grid-template-columns: var(--pl-nom) minmax(0, 1fr); align-items: center;
-  min-height: 38px; border-bottom: 1px solid var(--line); }
-.pl-frise-nom { padding: 4px 10px 4px 2px; display: flex; flex-direction: column; min-width: 0; }
+/* La frise continue (11/11/2026) : elle défile de gauche à droite, à la
+   souris (glisser), au doigt ou aux flèches. La colonne des noms reste collée
+   à gauche. Chaque barre est placée au jour près (4 px par jour). Le trait
+   rouge marque aujourd'hui, un trait plus marqué chaque mois de janvier. */
+.pl-frise-defile { overflow-x: auto; overflow-y: hidden; cursor: grab; border: 1px solid var(--line);
+  border-radius: 12px; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; }
+.pl-frise-defile.saisie { cursor: grabbing; user-select: none; }
+.pl-frise { position: relative; --pl-nom: 220px; width: calc(var(--pl-nom) + var(--pl-larg)); }
+.pl-frise-ligne { display: grid; grid-template-columns: var(--pl-nom) var(--pl-larg); align-items: stretch;
+  min-height: 42px; border-bottom: 1px solid var(--line); }
+.pl-frise-ligne:last-of-type { border-bottom: 0; }
+.pl-frise-nom { position: sticky; left: 0; z-index: 3; background: var(--card); padding: 5px 10px 5px 12px;
+  display: flex; flex-direction: column; justify-content: center; min-width: 0;
+  border-right: 1px solid var(--line); box-shadow: 4px 0 8px -6px rgba(0, 0, 0, .18); }
 .pl-frise-nom b { font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pl-frise-nom span { font-size: 11.5px; color: var(--muted); }
-.pl-frise-piste { position: relative; height: 100%; min-height: 38px;
-  background: repeating-linear-gradient(90deg, transparent 0 calc(100% / 12 - 1px), var(--line) calc(100% / 12 - 1px) calc(100% / 12)); }
-.pl-frise-tete { min-height: 30px; background: var(--card-2); border-radius: 10px 10px 0 0; }
-.pl-frise-tete .pl-frise-piste { background: none; min-height: 30px; }
-.pl-frise-tete .pl-frise-piste div { position: absolute; top: 0; bottom: 0; display: grid; place-items: center;
-  font-size: 11.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
-.pl-frise-barre { position: absolute; top: 8px; bottom: 8px; min-width: 6px; border: 0; border-radius: 6px;
-  background: var(--pl-c); cursor: pointer; padding: 0; }
-.pl-frise-barre.est-passe { background: #cbd5e1; }
-.pl-frise-barre.est-futur { background: color-mix(in srgb, var(--pl-c) 45%, var(--card)); border: 2px solid var(--pl-c); }
+.pl-frise-piste { position: relative; min-height: 42px; }
+.pl-frise-tete { min-height: 34px; background: var(--card-2); position: sticky; top: 0; z-index: 4; }
+.pl-frise-tete .pl-frise-nom { background: var(--card-2); }
+.pl-frise-mois { position: absolute; top: 0; bottom: 0; display: flex; align-items: center; padding-left: 8px;
+  font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: var(--muted);
+  white-space: nowrap; }
+.pl-frise-mois small { margin-left: 5px; font-weight: 800; color: #c2410c; }
+.pl-frise-barre { position: absolute; top: 8px; bottom: 8px; min-width: 8px; border: 0; border-radius: 7px; z-index: 2;
+  background: var(--pl-c); cursor: pointer; padding: 0 8px; color: #fff; font: inherit; font-size: 12px; font-weight: 700;
+  text-align: left; overflow: hidden; }
+.pl-frise-barre span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pl-frise-barre.est-passe { background: #cbd5e1; color: #475569; }
+.pl-frise-barre.est-futur { background: color-mix(in srgb, var(--pl-c) 35%, var(--card)); border: 2px solid var(--pl-c);
+  color: var(--text); }
 .pl-frise-barre.est-encours { box-shadow: 0 0 0 3px color-mix(in srgb, var(--pl-c) 30%, transparent); }
-.pl-frise-barre.coupe-g { border-top-left-radius: 0; border-bottom-left-radius: 0; }
-.pl-frise-barre.coupe-d { border-top-right-radius: 0; border-bottom-right-radius: 0; }
 .pl-frise-barre:hover { filter: brightness(1.06); }
-.pl-frise-fond { position: absolute; top: 0; bottom: 0; left: var(--pl-nom); right: 0; pointer-events: none; }
-.pl-frise-auj { position: absolute; top: 0; bottom: 0; width: 2px; background: #dc2626; }
-.pl-frise-auj::before { content: 'Aujourd’hui'; position: absolute; top: -2px; left: 4px; font-size: 10px; font-weight: 800;
+.pl-frise-fond { position: absolute; top: 0; bottom: 0; left: var(--pl-nom); width: var(--pl-larg); pointer-events: none; z-index: 1; }
+.pl-frise-fond i { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--line); }
+.pl-frise-fond i.janvier { width: 2px; background: color-mix(in srgb, #c2410c 45%, var(--line)); }
+.pl-frise-auj { position: absolute; top: 0; bottom: 0; width: 2px; background: #dc2626; z-index: 2; }
+.pl-frise-auj::before { content: 'Aujourd’hui'; position: absolute; bottom: 1px; left: 4px; font-size: 10px; font-weight: 800;
   color: #dc2626; white-space: nowrap; background: var(--card); padding: 0 3px; border-radius: 4px; }
 @media screen and (max-width: 760px) {
-  .pl-frise { --pl-nom: 110px; }
+  .pl-frise { --pl-nom: 120px; }
   .pl-frise-nom b { font-size: 12px; }
-  .pl-frise-tete .pl-frise-piste div { font-size: 9px; letter-spacing: 0; }
+  .pl-frise-nom span { font-size: 10.5px; }
 }
+.pl-nav h2.pl-h2-libre { text-transform: none; }

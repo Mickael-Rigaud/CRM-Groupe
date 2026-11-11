@@ -196,42 +196,97 @@ function etatDe(c) {
   return { cle: 'encours', label: 'En cours' };
 }
 
-// ⚠ LA FRISE EST EN JOURS, PAS EN MOIS : une barre commence et finit au jour
-// près, proportionnellement à l'année (365 ou 366 jours). Un chantier qui
-// déborde sur l'année d'avant ou d'après est coupé au bord, et un petit
-// chevron le dit.
-function frise(annee, tous) {
-  const debutAn = `${annee}-01-01`, finAn = `${annee}-12-31`;
-  const nbJours = Math.round((versDate(`${annee + 1}-01-01`) - versDate(debutAn)) / 86400000);
-  const pos = (iso) => Math.round((versDate(iso) - versDate(debutAn)) / 86400000);
-  const lignes = tous.map((c, i) => ({ c, i, fin: finDe(c) }))
-    .filter(x => x.c.date_debut <= finAn && x.fin >= debutAn);
+// ⚠ UNE FRISE CONTINUE QU'ON FAIT GLISSER, PAS UNE ANNÉE (11/11/2026, Élodie :
+// « je voudrais que le calendrier annuel puisse se glisser de la gauche vers
+// la droite, et je ne veux pas classer par année »). La première version
+// montrait janvier → décembre d'une année et changeait d'année aux flèches :
+// refusée, ne pas y revenir.
+//
+// La frise va du mois du plus ancien chantier (au moins 3 mois avant
+// aujourd'hui) au mois du plus lointain (au moins 6 mois après), à largeur
+// fixe par jour : on la fait glisser à la souris, au doigt, ou avec les
+// flèches. Elle s'ouvre centrée sur aujourd'hui. La colonne des noms reste
+// collée à gauche pendant le glissement.
+const PX_JOUR = 4;
+const MOIS_COURTS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];                                      // ≈ 120 px par mois
+const debutDuMois = (iso) => `${iso.slice(0, 7)}-01`;
+function bornesFrise(tous) {
+  const auj = versDate(aujourdhui());
+  let de = versIso(new Date(auj.getFullYear(), auj.getMonth() - 3, 1));
+  let a = versIso(new Date(auj.getFullYear(), auj.getMonth() + 7, 0));
+  for (const c of tous) {
+    if (c.date_debut < de) de = debutDuMois(c.date_debut);
+    const f = finDe(c);
+    if (f > a) { const d = versDate(f); a = versIso(new Date(d.getFullYear(), d.getMonth() + 1, 0)); }
+  }
+  return { de, a };
+}
+
+function frise(tous) {
+  const { de, a } = bornesFrise(tous);
+  const pos = (iso) => Math.round((versDate(iso) - versDate(de)) / 86400000);
+  const largeur = (pos(a) + 1) * PX_JOUR;
+  const mois = [], seps = [];
+  for (let d = versDate(de); versIso(d) <= a; d = new Date(d.getFullYear(), d.getMonth() + 1, 1)) {
+    const x = pos(versIso(d)) * PX_JOUR;
+    const w = (pos(versIso(new Date(d.getFullYear(), d.getMonth() + 1, 1))) - pos(versIso(d))) * PX_JOUR;
+    const janvier = d.getMonth() === 0;
+    seps.push(`<i class="${janvier ? 'janvier' : ''}" style="left:${x}px"></i>`);
+    mois.push(`<div class="pl-frise-mois${janvier ? ' janvier' : ''}" style="left:${x}px; width:${w}px">${
+      esc(MOIS_COURTS[d.getMonth()])}${janvier || mois.length === 0 ? ` <small>${d.getFullYear()}</small>` : ''}</div>`);
+  }
+  // Les chantiers en cours d'abord, puis à venir, puis terminés : c'est
+  // l'ordre dans lequel on les cherche.
+  const rang = { encours: 0, futur: 1, passe: 2 };
+  const lignes = tous.map((c, i) => ({ c, i, fin: finDe(c), e: etatDe(c) }))
+    .sort((x, y) => rang[x.e.cle] - rang[y.e.cle] || String(x.c.date_debut).localeCompare(String(y.c.date_debut)));
   const auj = aujourdhui();
-  const trait = auj >= debutAn && auj <= finAn
-    ? `<div class="pl-frise-auj" style="left:${(pos(auj) + .5) / nbJours * 100}%" title="Aujourd’hui"></div>` : '';
-  const mois = MOIS.map((m, k) => {
-    const de = pos(versIso(new Date(annee, k, 1)));
-    const a = pos(versIso(new Date(annee, k + 1, 1)));
-    return `<div style="left:${de / nbJours * 100}%; width:${(a - de) / nbJours * 100}%">${esc(m.slice(0, 3))}</div>`;
-  }).join('');
   return `
-    <div class="pl-frise">
-      <div class="pl-frise-ligne pl-frise-tete"><div class="pl-frise-nom"></div>
-        <div class="pl-frise-piste">${mois}</div></div>
-      ${lignes.length ? lignes.map(x => {
-        const de = Math.max(0, pos(x.c.date_debut));
-        const a = Math.min(nbJours - 1, pos(x.fin));
-        const e = etatDe(x.c);
-        return `<div class="pl-frise-ligne">
+    <div class="pl-frise-defile" data-auj="${pos(auj) * PX_JOUR}">
+      <div class="pl-frise" style="--pl-larg:${largeur}px">
+        <div class="pl-frise-ligne pl-frise-tete"><div class="pl-frise-nom"></div>
+          <div class="pl-frise-piste">${mois.join('')}</div></div>
+        ${lignes.length ? lignes.map(x => `<div class="pl-frise-ligne">
           <div class="pl-frise-nom"><b>${esc(x.c.titre)}</b><span>${esc(dateCourte(x.c.date_debut))} → ${esc(dateCourte(x.fin))}</span></div>
           <div class="pl-frise-piste">
-            <button type="button" class="pl-frise-barre est-${e.cle}${x.c.date_debut < debutAn ? ' coupe-g' : ''}${x.fin > finAn ? ' coupe-d' : ''}"
-              style="left:${de / nbJours * 100}%; width:${(a - de + 1) / nbJours * 100}%; --pl-c:${couleurDe(x.c, x.i)}"
-              data-chantier="${esc(x.c.id)}" title="${esc(`${x.c.titre} — ${e.label.toLowerCase()} — du ${dateLongue(x.c.date_debut)} au ${dateLongue(x.fin)}`)}"></button>
-          </div></div>`;
-      }).join('') : '<div class="empty">Aucun chantier cette année.</div>'}
-      ${lignes.length ? `<div class="pl-frise-fond">${trait}</div>` : ''}
+            <button type="button" class="pl-frise-barre est-${x.e.cle}"
+              style="left:${pos(x.c.date_debut) * PX_JOUR}px; width:${(pos(x.fin) - pos(x.c.date_debut) + 1) * PX_JOUR}px; --pl-c:${couleurDe(x.c, x.i)}"
+              data-chantier="${esc(x.c.id)}" title="${esc(`${x.c.titre} — ${x.e.label.toLowerCase()} — du ${dateLongue(x.c.date_debut)} au ${dateLongue(x.fin)}`)}">
+              <span>${esc(x.c.titre)}</span></button>
+          </div></div>`).join('')
+          : '<div class="pl-frise-ligne"><div class="pl-frise-nom"><span>Aucun chantier planifié.</span></div><div class="pl-frise-piste"></div></div>'}
+        <div class="pl-frise-fond">${seps.join('')}<div class="pl-frise-auj" style="left:${pos(auj) * PX_JOUR + PX_JOUR / 2}px"></div></div>
+      </div>
     </div>`;
+}
+
+// Le glissement à la souris (au doigt, le navigateur fait défiler tout seul).
+// Un glissement de plus de 5 px n'ouvre pas la barre sur laquelle on a lâché.
+function brancherFrise(root, centrer) {
+  const boite = root.querySelector('.pl-frise-defile');
+  if (!boite) return;
+  if (centrer) boite.scrollLeft = Number(boite.dataset.auj) - boite.clientWidth / 3;
+  let depart = null;
+  boite.addEventListener('pointerdown', (e) => {
+    if (e.pointerType !== 'mouse' || e.button !== 0) return;
+    depart = { x: e.clientX, gauche: boite.scrollLeft, bouge: false };
+    boite.classList.add('saisie');
+  });
+  boite.addEventListener('pointermove', (e) => {
+    if (!depart) return;
+    const dx = e.clientX - depart.x;
+    // La capture n'est prise qu'une fois le glissement commencé : prise dès
+    // l'appui, elle volerait le clic aux barres.
+    if (Math.abs(dx) > 5 && !depart.bouge) { depart.bouge = true; boite.setPointerCapture(e.pointerId); }
+    boite.scrollLeft = depart.gauche - dx;
+  });
+  boite.addEventListener('pointerup', () => {
+    if (!depart) return;
+    if (depart.bouge) boite.dataset.glisse = '1';
+    depart = null;
+    boite.classList.remove('saisie');
+    setTimeout(() => { delete boite.dataset.glisse; }, 0);
+  });
 }
 
 // ------------------------------------------------------------ la fiche chantier
@@ -542,21 +597,27 @@ export const rgdPlanningPage = {
       const direction = scope.isDirection;
       const tous = chantiersPlanifies();
       const enAnnee = state.vue === 'annee';
-      const premier = enAnnee ? `${state.annee}-01-01` : versIso(new Date(state.annee, state.mois, 1));
-      const dernier = enAnnee ? `${state.annee}-12-31` : versIso(new Date(state.annee, state.mois + 1, 0));
-      const periode = tous.filter(c => c.date_debut <= dernier && finDe(c) >= premier);
-      const nomPeriode = enAnnee ? String(state.annee) : `${MOIS[state.mois]} ${state.annee}`;
+      const premier = versIso(new Date(state.annee, state.mois, 1));
+      const dernier = versIso(new Date(state.annee, state.mois + 1, 0));
+      // En frise, le tableau montre TOUS les chantiers (pas d'année) : en
+      // cours, puis à venir, puis terminés.
+      const rangEtat = { encours: 0, futur: 1, passe: 2 };
+      const periode = enAnnee
+        ? tous.slice().sort((x, y) => rangEtat[etatDe(x).cle] - rangEtat[etatDe(y).cle]
+          || String(x.date_debut).localeCompare(String(y.date_debut)))
+        : tous.filter(c => c.date_debut <= dernier && finDe(c) >= premier);
+      const nomPeriode = enAnnee ? 'Tous les chantiers' : `${MOIS[state.mois]} ${state.annee}`;
 
       const corps = `
         <div class="pl-barre-outils">
           <div class="pl-bascule" role="tablist">
             <button type="button" role="tab" data-vue="mois" class="${!enAnnee ? 'on' : ''}">Mois</button>
-            <button type="button" role="tab" data-vue="annee" class="${enAnnee ? 'on' : ''}">Année</button>
+            <button type="button" role="tab" data-vue="annee" class="${enAnnee ? 'on' : ''}">Frise</button>
           </div>
           <div class="pl-nav">
-            <button type="button" class="btn ghost" data-pas="-1" aria-label="${enAnnee ? 'Année' : 'Mois'} précédent${enAnnee ? 'e' : ''}">‹</button>
-            <h2>${esc(nomPeriode)}</h2>
-            <button type="button" class="btn ghost" data-pas="1" aria-label="${enAnnee ? 'Année' : 'Mois'} suivant${enAnnee ? 'e' : ''}">›</button>
+            <button type="button" class="btn ghost" data-pas="-1" aria-label="${enAnnee ? 'Glisser vers le passé' : 'Mois précédent'}">‹</button>
+            <h2${enAnnee ? ' class="pl-h2-libre"' : ''}>${esc(nomPeriode)}</h2>
+            <button type="button" class="btn ghost" data-pas="1" aria-label="${enAnnee ? 'Glisser vers l’avenir' : 'Mois suivant'}">›</button>
             <button type="button" class="btn ghost sm" id="pl-auj">Aujourd’hui</button>
           </div>
           <span class="grow"></span>
@@ -565,14 +626,14 @@ export const rgdPlanningPage = {
         </div>
         ${!direction ? '<p class="muted small">Les chantiers que la direction a partagés avec vous. Vous pouvez cocher leurs listes de matériaux et d’outils.</p>' : ''}
         <section class="card pl-carte">
-          ${enAnnee ? frise(state.annee, tous) : calendrier(state.annee, state.mois, tous)}
+          ${enAnnee ? frise(tous) : calendrier(state.annee, state.mois, tous)}
           <p class="muted small pl-aide">${enAnnee
-            ? 'Grisés : terminés. En couleur vive : en cours. En couleur adoucie : à venir. Cliquez sur une barre pour ouvrir le chantier.'
+            ? 'Faites glisser la frise vers la gauche ou la droite. Grisés : terminés. En couleur vive : en cours. En couleur adoucie : à venir. Cliquez sur une barre pour ouvrir le chantier.'
             : direction ? 'Cliquez sur un jour pour y planifier un chantier, sur une barre pour ouvrir sa fiche.'
             : 'Cliquez sur une barre pour ouvrir le chantier.'}</p>
         </section>
         <section class="card pl-carte">
-          <h3 class="pl-titre">Chantiers ${enAnnee ? 'de ' : 'de '}${esc(nomPeriode)} <span>${periode.length}</span></h3>
+          <h3 class="pl-titre">${enAnnee ? 'Tous les chantiers' : `Chantiers de ${esc(nomPeriode)}`} <span>${periode.length}</span></h3>
           ${periode.length ? `<div class="table-wrap"><table>
             <thead><tr><th>Chantier</th><th>État</th><th>Fiche</th><th>Du</th><th>Au</th><th>Durée</th><th>À trouver</th></tr></thead>
             <tbody>${periode.map(c => {
@@ -584,18 +645,21 @@ export const rgdPlanningPage = {
                 <td><span class="pl-point" style="background:${couleurDe(c, tous.indexOf(c))}"></span><b>${esc(c.titre)}</b></td>
                 <td><span class="pl-etat est-${e.cle}">${esc(e.label)}</span></td>
                 <td>${r ? esc(r.nom) : '<span class="muted">—</span>'}</td>
-                <td>${esc(dateCourte(c.date_debut))}${enAnnee ? '' : ''}</td><td>${esc(dateCourte(finDe(c)))}</td>
+                <td>${esc(enAnnee ? dateLongue(c.date_debut) : dateCourte(c.date_debut))}</td><td>${esc(enAnnee ? dateLongue(finDe(c)) : dateCourte(finDe(c)))}</td>
                 <td>${esc(dureeLue(c).texte)}</td>
                 <td>${!n ? '<span class="muted">Pas de liste</span>'
                   : reste ? `<span class="chip amber">${reste} à trouver</span>` : '<span class="chip green">Tout est prêt</span>'}</td>
               </tr>`;
             }).join('')}</tbody></table></div>`
-            : `<div class="empty">Aucun chantier ${enAnnee ? 'cette année' : 'ce mois-ci'}.</div>`}
+            : `<div class="empty">${enAnnee ? 'Aucun chantier planifié.' : 'Aucun chantier ce mois-ci.'}</div>`}
         </section>`;
 
       root.innerHTML = cadre('#/rgd/planning', 'Planning chantier', corps);
+      const boiteFrise = root.querySelector('.pl-frise-defile');
+      brancherFrise(root, true);
       root.querySelectorAll('[data-pas]').forEach(b => b.onclick = () => {
-        if (state.vue === 'annee') { state.annee += Number(b.dataset.pas); draw(); return; }
+        // En frise, les flèches font glisser de trois mois.
+        if (boiteFrise) { boiteFrise.scrollLeft += Number(b.dataset.pas) * 90 * PX_JOUR; return; }
         const d = new Date(state.annee, state.mois + Number(b.dataset.pas), 1);
         state.annee = d.getFullYear(); state.mois = d.getMonth(); draw();
       });
@@ -604,7 +668,10 @@ export const rgdPlanningPage = {
         try { localStorage.setItem('rgd_planning_vue', state.vue); } catch { /* navigation privée */ }
         draw();
       });
-      root.querySelector('#pl-auj').onclick = () => { state.annee = auj.getFullYear(); state.mois = auj.getMonth(); draw(); };
+      root.querySelector('#pl-auj').onclick = () => {
+        if (boiteFrise) { boiteFrise.scrollLeft = Number(boiteFrise.dataset.auj) - boiteFrise.clientWidth / 3; return; }
+        state.annee = auj.getFullYear(); state.mois = auj.getMonth(); draw();
+      };
       const bNeuf = root.querySelector('#pl-neuf');
       if (bNeuf) bNeuf.onclick = () => ouvrirChantier(null, draw);
       const bStd = root.querySelector('#pl-std');
@@ -612,6 +679,7 @@ export const rgdPlanningPage = {
       if (direction) root.querySelectorAll('[data-jour]').forEach(b => b.onclick = () => ouvrirChantier(null, draw, b.dataset.jour));
       else root.querySelectorAll('[data-jour]').forEach(b => { b.disabled = true; b.removeAttribute('title'); });
       root.querySelectorAll('[data-chantier]').forEach(el => el.onclick = () => {
+        if (boiteFrise?.dataset.glisse) return;              // c'était un glissement
         const c = db.byId('rgd_planning', el.dataset.chantier);
         if (c) ouvrirChantier(c, draw);
       });
