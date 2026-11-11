@@ -162,6 +162,19 @@ export async function majChantier(id, champs) {
   return db.update('rgd_planning', id, ligne);
 }
 
+// ⚠ CHANGER LA FIN À LA SOURIS (11/11/2026, Élodie : « modifier la date de fin
+// et la durée du chantier directement sur le planning avec la souris »). On
+// tire le bord droit d'une barre : le début ne bouge pas, la durée devient le
+// nombre de jours entre le début et la nouvelle fin. Elle est réécrite EN
+// JOURS — « 2 semaines » étiré de trois jours n'est plus un nombre de semaines,
+// et l'afficher en semaines mentirait.
+export async function changerFin(c, fin) {
+  const jours = Math.round((versDate(fin) - versDate(c.date_debut)) / 86400000) + 1;
+  if (jours < 1) throw new Error('La fin ne peut pas précéder le début.');
+  const n = Math.min(366, jours);
+  return db.update('rgd_planning', c.id, { duree_jours: n, duree_nombre: n, duree_unite: 'jours' });
+}
+
 // Les lignes partent avec le chantier (`on delete cascade` en base) ; en
 // démo il n'y a pas de cascade, on les retire à la main.
 export async function supprimerChantier(id) {

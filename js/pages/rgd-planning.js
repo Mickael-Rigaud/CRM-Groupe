@@ -23,7 +23,7 @@ import { cadre, guard } from './rgd-espace.js';
 import { etapeDeFiche, etapeDeDemande, joursDeVisite } from '../data/rgd-etapes.js';
 import { LISTES, UNITES, joursPour, dureeLue, listesStandard, enregistrerStandard, versDate, versIso, ajouterJours, finDe,
          chantiersPlanifies, lignesDe, resteA, creerChantier, majChantier, supprimerChantier,
-         ajouterLigne, ajouterStandard, majLigne, retirerLigne } from '../data/rgd-planning.js';
+         ajouterLigne, ajouterStandard, majLigne, retirerLigne, changerFin } from '../data/rgd-planning.js';
 
 // ⚠ LE 11/11/2026 : PARTAGE, LECTURE PAR L'ÉQUIPE ET VUE DE L'ANNÉE.
 // · Un chantier peut être partagé avec un membre de l'équipe (`partage_avec`).
@@ -160,10 +160,18 @@ function barresDe(semaine, chantiers) {
   return { morceaux, nb: couloirs.length };
 }
 
+// ⚠ LE CALENDRIER DU MOIS A REÇU LE MÊME VISUEL QUE LA FRISE (11/11/2026,
+// Élodie : « pour le planning mois je voudrais aussi que ce soit moderne et
+// dynamique ») : pilules en dégradé qui s'allongent à l'ouverture, terminés
+// en gris, à venir hachurés, jour courant surligné, « + » au survol d'un jour.
+// Et une POIGNÉE au bout droit de chaque barre (direction seule) pour tirer
+// la fin du chantier à la souris.
 function calendrier(annee, mois, chantiers) {
   const auj = aujourdhui();
+  const direction = scope.isDirection;
+  let k = 0;
   return `
-    <div class="pl-cal">
+    <div class="pl-cal pl-entree">
       <div class="pl-cal-tete">${JOURS.map(j => `<div>${j}</div>`).join('')}</div>
       ${semainesDu(annee, mois).map(semaine => {
         const { morceaux, nb } = barresDe(semaine, chantiers);
@@ -177,11 +185,12 @@ function calendrier(annee, mois, chantiers) {
               data-jour="${iso}" title="Planifier un chantier le ${esc(dateLongue(iso))}">
               <span>${d.getDate()}</span></button>`;
           }).join('')}
-          ${morceaux.map(m => `<button type="button" class="pl-barre${m.suite ? ' suite' : ''}${m.continue ? ' continue' : ''}"
-              style="grid-column:${m.col} / ${m.fin_col}; grid-row:${m.couloir}; --pl-c:${couleurDe(m.c, m.i)}"
+          ${morceaux.map(m => `<button type="button" class="pl-barre est-${etatDe(m.c).cle}${m.suite ? ' suite' : ''}${m.continue ? ' continue' : ''}"
+              style="grid-column:${m.col} / ${m.fin_col}; grid-row:${m.couloir}; --pl-c:${couleurDe(m.c, m.i)}; --k:${k++}"
               data-chantier="${esc(m.c.id)}"
               title="${esc(`${m.c.titre} — du ${dateLongue(m.c.date_debut)} au ${dateLongue(m.fin)}`)}">
-              ${m.suite ? '<i>suite</i> ' : ''}${esc(m.c.titre)}</button>`).join('')}
+              <span class="pl-barre-texte">${m.suite ? '<i>suite</i> ' : ''}${esc(m.c.titre)}</span>${
+              direction && !m.continue ? `<span class="pl-poignee" data-poignee="${esc(m.c.id)}" title="Tirer pour changer la fin"></span>` : ''}</button>`).join('')}
         </div>`;
       }).join('')}
     </div>`;
@@ -293,7 +302,8 @@ function frise(tous) {
             <button type="button" class="pl-frise-barre est-${x.e.cle}${w < 70 ? ' etroite' : ''}"
               style="left:${pos(x.c.date_debut) * PX_JOUR}px; width:${w}px; --pl-c:${couleurDe(x.c, x.i)}; --pl-av:${ecoule}%"
               data-chantier="${esc(x.c.id)}" title="${esc(`${x.c.titre} — ${x.e.label.toLowerCase()} — du ${dateLongue(x.c.date_debut)} au ${dateLongue(x.fin)}`)}">
-              <span class="pl-frise-texte">${esc(x.c.titre)}</span>${w >= 160 ? `<em>${esc(etiquette)}</em>` : ''}</button>
+              <span class="pl-frise-texte">${esc(x.c.titre)}</span>${w >= 160 ? `<em>${esc(etiquette)}</em>` : ''}${
+              scope.isDirection ? `<span class="pl-poignee" data-poignee="${esc(x.c.id)}" title="Tirer pour changer la fin"></span>` : ''}</button>
           </div></div>`;
         }).join('')
           : '<div class="pl-frise-ligne"><div class="pl-frise-nom"><span>Aucun chantier planifié.</span></div><div class="pl-frise-piste"></div></div>'}
@@ -311,9 +321,15 @@ function frise(tous) {
 // Le glissement « clic maintenu » reste possible, et au doigt le navigateur
 // fait défiler tout seul. Un glissement de plus de 5 px n'ouvre pas la barre
 // sur laquelle on a lâché.
+// La position de la frise survit au redessin (après un étirement, une
+// modification) : la recentrer sur aujourd'hui ferait perdre l'endroit où
+// l'on travaillait. Elle ne se centre qu'à la première ouverture.
+let friseGauche = null;
 function brancherFrise(root, centrer) {
   const boite = root.querySelector('.pl-frise-defile');
   if (!boite) return;
+  boite.addEventListener('scroll', () => { friseGauche = boite.scrollLeft; }, { passive: true });
+  if (friseGauche !== null && !centrer) boite.scrollLeft = friseGauche;
   const max = () => boite.scrollWidth - boite.clientWidth;
   let cible = boite.scrollLeft, anim = 0;
   const glisserVers = (x) => {
@@ -342,6 +358,7 @@ function brancherFrise(root, centrer) {
   let depart = null;
   boite.addEventListener('pointerdown', (e) => {
     if (e.pointerType !== 'mouse' || e.button !== 0) return;
+    if (e.target.closest('[data-poignee]')) return;      // on étire une barre, on ne fait pas glisser
     cancelAnimationFrame(anim); anim = 0;
     depart = { x: e.clientX, gauche: boite.scrollLeft, bouge: false };
     boite.classList.add('saisie');
@@ -361,6 +378,78 @@ function brancherFrise(root, centrer) {
     depart = null;
     boite.classList.remove('saisie');
     setTimeout(() => { delete boite.dataset.glisse; }, 0);
+  });
+}
+
+// ------------------------------------------------------------ tirer la fin à la souris
+// Un appui sur la poignée, on tire, on lâche : la nouvelle fin s'enregistre.
+// Pendant le geste, une bulle dit la date de fin et la durée, et :
+//   · dans le MOIS, les jours couverts s'éclairent (on vise un jour de la
+//     grille, d'une semaine à l'autre) ;
+//   · dans la FRISE, la barre s'allonge au jour près (6 px par jour).
+// Le clic qui suit un étirement n'ouvre pas la fiche.
+function brancherPoignees(root, apres) {
+  const bulle = document.createElement('div');
+  bulle.className = 'pl-bulle';
+  root.querySelectorAll('[data-poignee]').forEach(h => {
+    h.addEventListener('click', (e) => { e.stopPropagation(); e.preventDefault(); });
+    h.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault(); e.stopPropagation();
+      const c = db.byId('rgd_planning', h.dataset.poignee);
+      if (!c) return;
+      const barre = h.closest('[data-chantier]');
+      const enFrise = !!barre.closest('.pl-frise');
+      const finInitiale = finDe(c);
+      const x0 = e.clientX, largeur0 = barre.offsetWidth;
+      let fin = finInitiale;
+      try { h.setPointerCapture(e.pointerId); } catch { /* pointeur déjà relâché */ }
+      document.body.appendChild(bulle);
+      document.body.classList.add('pl-etire');
+      barre.classList.add('etiree');
+      const jours = () => Math.round((versDate(fin) - versDate(c.date_debut)) / 86400000) + 1;
+      const montrer = (ev) => {
+        const n = jours();
+        bulle.innerHTML = `<b>Fin : ${esc(dateLongue(fin))}</b><span>${n} jour${n > 1 ? 's' : ''}</span>`;
+        bulle.style.left = `${ev.clientX + 14}px`; bulle.style.top = `${ev.clientY + 16}px`;
+      };
+      const eclairer = () => root.querySelectorAll('[data-jour]').forEach(j =>
+        j.classList.toggle('apercu', j.dataset.jour >= c.date_debut && j.dataset.jour <= fin));
+      const bouger = (ev) => {
+        if (enFrise) {
+          const dj = Math.round((ev.clientX - x0) / PX_JOUR);
+          fin = ajouterJours(finInitiale, dj);
+          if (fin < c.date_debut) fin = c.date_debut;
+          barre.style.width = `${Math.max(PX_JOUR, largeur0 + (Math.round((versDate(fin) - versDate(finInitiale)) / 86400000)) * PX_JOUR)}px`;
+        } else {
+          const sous = document.elementsFromPoint(ev.clientX, ev.clientY).find(el => el.dataset && el.dataset.jour);
+          if (sous) fin = sous.dataset.jour < c.date_debut ? c.date_debut : sous.dataset.jour;
+          eclairer();
+        }
+        montrer(ev);
+      };
+      const lacher = async () => {
+        h.removeEventListener('pointermove', bouger);
+        h.removeEventListener('pointerup', lacher);
+        h.removeEventListener('pointercancel', lacher);
+        bulle.remove();
+        document.body.classList.remove('pl-etire');
+        barre.classList.remove('etiree');
+        root.querySelectorAll('.apercu').forEach(j => j.classList.remove('apercu'));
+        if (fin === finInitiale) { if (enFrise) barre.style.width = `${largeur0}px`; return; }
+        try {
+          await changerFin(c, fin);
+          const n = jours();
+          toast(`« ${c.titre} » : fin le ${dateLongue(fin)} (${n} jour${n > 1 ? 's' : ''})`);
+        } catch (err) { toast(err.message, 'error'); }
+        apres();
+      };
+      h.addEventListener('pointermove', bouger);
+      h.addEventListener('pointerup', lacher);
+      h.addEventListener('pointercancel', lacher);
+      montrer(e);
+      if (!enFrise) eclairer();
+    });
   });
 }
 
@@ -731,7 +820,8 @@ export const rgdPlanningPage = {
 
       root.innerHTML = cadre('#/rgd/planning', 'Planning chantier', corps);
       const boiteFrise = root.querySelector('.pl-frise-defile');
-      brancherFrise(root, true);
+      brancherFrise(root, friseGauche === null);
+      if (direction) brancherPoignees(root, draw);
       root.querySelectorAll('[data-pas]').forEach(b => b.onclick = () => {
         // En frise, les flèches font glisser de trois mois.
         if (boiteFrise) { boiteFrise.glisserVers(boiteFrise.scrollLeft + Number(b.dataset.pas) * 90 * PX_JOUR); return; }
