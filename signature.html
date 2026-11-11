@@ -11,6 +11,8 @@
        (11/11/2026). Elle ne charge RIEN du CRM : ni session, ni base, ni
        feuille de style de l'application. Elle ne parle qu'à l'Edge Function
        `cahier-signature`, avec le jeton du lien. Voir js/signature-cahier.js. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Baguet+Script&family=EB+Garamond:wght@400;600&display=swap" rel="stylesheet">
   <style>
     :root { --orange: #FC5D00; --encre: #1A1714; --gris: #6E6760; --filet: #E4DFDA; --fond: #F6F3F0; --vert: #15803d; }
     * { box-sizing: border-box; }
@@ -29,6 +31,13 @@
     .infos div b { font-weight: 600; }
     .infos .large { grid-column: 1 / -1; }
     h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .07em; margin: 0 0 8px; padding-left: 9px; border-left: 4px solid var(--orange); }
+    h1 { font-family: 'EB Garamond', Garamond, Georgia, serif; font-weight: 400; font-size: 32px; }
+    h2.manuscrit { font-family: 'Baguet Script', 'Brush Script MT', cursive; font-weight: 400; font-size: 34px; color: #E48312;
+      text-transform: none; letter-spacing: 0; border: 0; padding: 0; margin: 0 0 6px; line-height: 1.2; }
+    .piece .photos { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-top: 12px; }
+    .piece .photos img { width: 100%; height: 230px; object-fit: cover; display: block;
+      clip-path: polygon(0 0, calc(100% - 28px) 0, 100% 28px, 100% 100%, 28px 100%, 0 calc(100% - 28px)); }
+    img.plan { width: 100%; height: auto; display: block; border-radius: 8px; }
     .lot { margin: 14px 0 4px; font-size: 12.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: #c2410c; }
     .poste { display: flex; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--filet); }
     .poste:last-child { border-bottom: 0; }

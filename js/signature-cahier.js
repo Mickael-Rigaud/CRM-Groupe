@@ -33,21 +33,30 @@ async function appeler(corps) {
 const entete = () => `<header><img src="${LOGO}" alt="RGD Renova"><span>Cahier des charges<br>à valider avant travaux</span></header>`;
 const pied = () => '<footer>RGD Renova · <a href="https://rgdrenova.fr" style="color:inherit">rgdrenova.fr</a></footer>';
 
-function postesHtml(postes) {
-  let lot = null;
-  return postes.map(p => {
-    let t = '';
-    if ((p.lot || '') !== lot) { lot = p.lot || ''; if (lot) t += `<div class="lot">${esc(lot)}</div>`; }
-    return t + `<div class="poste"><div>${esc(p.designation)}${p.detail ? `<small>${esc(p.detail)}</small>` : ''}</div>
-      <em>${esc([p.quantite, p.unite].filter(Boolean).join(' '))}</em></div>`;
+// ⚠ LA MISE EN PAGE DU CAHIER IMPRIMÉ (modèle d'Élodie, 11/11/2026) : une
+// carte par pièce, son nom dans l'écriture manuscrite orange, ses travaux, et
+// ses photos (deux au plus) — le client reconnaît chaque pièce.
+function piecesHtml(c) {
+  const postes = c.postes || [];
+  const pieces = [...new Set(postes.map(p => p.lot || ''))];
+  return pieces.map(lot => {
+    const l = postes.filter(p => (p.lot || '') === lot);
+    const ph = (c.photos || []).filter(x => x.lot === lot).slice(0, 2);
+    return `<section class="carte piece">
+      <h2 class="manuscrit">${esc(lot || 'Travaux')}</h2>
+      ${l.map(p => `<div class="poste"><div>${esc(p.designation)}${p.detail ? `<small>${esc(p.detail)}</small>` : ''}</div>
+        <em>${esc([p.quantite, p.unite].filter(Boolean).join(' '))}</em></div>`).join('')}
+      ${ph.length ? `<div class="photos">${ph.map(x => `<img src="${esc(x.url)}" alt="Photo : ${esc(lot)}" loading="lazy">`).join('')}</div>` : ''}
+    </section>`;
   }).join('');
 }
 
 function dessiner(c, erreur = '') {
   page.innerHTML = `
     ${entete()}
-    <h1>${esc(c.objet || 'Cahier des charges')}</h1>
-    <p class="sous">${c.signe ? 'Cahier des charges signé.' : 'Merci de relire les travaux prévus, puis de signer en bas de page.'}</p>
+    <h1>Cahier des charges</h1>
+    <p class="sous">${esc([c.objet, c.type_bien, c.nature].filter(Boolean).join(' · '))}</p>
+    <p class="sous">${c.signe ? 'Cahier des charges signé.' : 'Merci de relire les travaux prévus, pièce par pièce, puis de signer en bas de page.'}</p>
     <section class="carte infos">
       <div><span>Client</span><b>${esc(c.client) || '—'}</b></div>
       <div><span>Devis</span><b>${esc(c.devis) || '—'}</b></div>
@@ -55,7 +64,8 @@ function dessiner(c, erreur = '') {
       <div><span>Début prévu</span><b>${esc(dateLongue(c.debut))}</b></div>
       <div><span>Fin prévue</span><b>${esc(dateLongue(c.fin))}</b></div>
     </section>
-    <section class="carte"><h2>Travaux prévus</h2>${postesHtml(c.postes || [])}</section>
+    ${c.plan ? `<section class="carte"><h2>Plan</h2><img class="plan" src="${esc(c.plan)}" alt="Plan du logement"></section>` : ''}
+    ${piecesHtml(c)}
     ${c.precisions ? `<section class="carte"><h2>À la charge du client</h2><p class="texte">${esc(c.precisions)}</p></section>` : ''}
     ${erreur ? `<div class="message erreur">${esc(erreur)}</div>` : ''}
     ${c.signe ? `

@@ -14,8 +14,10 @@ import { posePadSignature } from '../pad-signature.js';
 import { COSTRUCTOR_APP } from '../data/rgd-cgv.js';
 import { cahierDe, estSigne, creerCahier, majCahier, signerCahier, retirerSignature,
          preparerLien, lienSignature, lienValable, envoyerPourSignature,
-         devisSignesDu, postesDuDevisCrm, decouperCollage, lireDevisCostructor } from '../data/rgd-cahier.js';
+         devisSignesDu, postesDuDevisCrm, decouperCollage, lireDevisCostructor,
+         ajouterPhotos, retirerPhoto, poserPlan, liensDuCahier, piecesDe } from '../data/rgd-cahier.js';
 import { imprimerCahierClient, imprimerCahierOuvriers } from './rgd-cahier-doc.js';
+import { donneesDocument } from './rgd-documents.js';
 
 const date = (iso) => (iso ? new Date(iso).toLocaleDateString('fr-FR') : '');
 const eurHt = (n) => (n == null ? '' : `${Number(n).toLocaleString('fr-FR')} € HT`);
@@ -37,6 +39,11 @@ export function ouvrirCahier(chantier, dossier, retour) {
     postes: (k?.postes || []).map(p => ({ ...p })),
     consignes: k?.consignes || '',
     precisions: k?.precisions || '',
+    // La page de garde (modèle d'Élodie) : repris du dossier tant qu'on ne
+    // les a pas retouchés.
+    type_bien: k?.type_bien || (dossier ? donneesDocument(dossier).typeBien : '') || '',
+    nature: k?.nature || (dossier ? donneesDocument(dossier).travaux : '') || '',
+    envoiPhoto: '',      // la pièce dont les photos partent en ce moment
     collage: false,
     modifie: false,
     lecture: false,      // lecture du devis Costructor en cours
@@ -74,11 +81,17 @@ export function ouvrirCahier(chantier, dossier, retour) {
       <div class="form-actions">
         <button type="button" class="btn ghost" id="ca-retour">← Retour au chantier</button>
         <span class="grow"></span>
-        ${k ? '<button type="button" class="btn primary" id="ca-ouvriers">Imprimer (équipe)</button>' : ''}
+        ${k ? `<button type="button" class="btn ghost" id="ca-presenter-lect">▶ Présentation</button>
+          <button type="button" class="btn primary" id="ca-ouvriers">PDF équipe</button>` : ''}
       </div>`;
     hote.querySelector('#ca-retour').onclick = () => retour?.();
     const b = hote.querySelector('#ca-ouvriers');
     if (b) b.onclick = () => imprimerCahierOuvriers(chantier, k, dossier);
+    const bp = hote.querySelector('#ca-presenter-lect');
+    if (bp) bp.onclick = async () => {
+      const { ouvrirPresentation } = await import('./rgd-cahier-presentation.js');
+      ouvrirPresentation(chantier, k, dossier, { version: 'equipe' });
+    };
   };
 
   const ligneP = (p, i, fige) => `
@@ -107,6 +120,10 @@ export function ouvrirCahier(chantier, dossier, retour) {
           </select></label>
         <label class="pl-champ ca-objet"><span>Objet des travaux</span>
           <input id="ca-objet" value="${esc(s.objet)}"${fige ? ' disabled' : ''}></label>
+        <label class="pl-champ"><span>Type de bien <em class="muted">(page de garde)</em></span>
+          <input id="ca-type" value="${esc(s.type_bien)}" placeholder="Appartement, maison…"${fige ? ' disabled' : ''}></label>
+        <label class="pl-champ"><span>Nature des travaux <em class="muted">(page de garde)</em></span>
+          <input id="ca-nature" value="${esc(s.nature)}" placeholder="Rénovation, salle de bain…"${fige ? ' disabled' : ''}></label>
       </div>
       ${!dossier ? '<p class="muted small">Rattachez un dossier client au chantier pour retrouver ses devis signés.</p>'
         : !devis.length ? '<p class="muted small">Aucun devis signé pour ce dossier.</p>' : ''}
@@ -139,6 +156,7 @@ export function ouvrirCahier(chantier, dossier, retour) {
           : `<p class="muted small">${s.lecture ? 'Les postes arrivent…' : 'Aucun poste pour l’instant.'}</p>`}
         ${fige ? '' : '<button type="button" class="btn ghost sm" id="ca-ajouter">+ Ajouter un poste</button>'}
       </div>
+      ${blocPhotos(fige)}
       <div class="ca-textes">
         <label class="pl-champ"><span>Consignes pour l’équipe <em>(version équipe seulement)</em></span>
           <textarea id="ca-consignes" rows="3" placeholder="Accès, horaires, protections, points de vigilance…"${fige ? ' disabled' : ''}>${esc(s.consignes)}</textarea></label>
@@ -158,14 +176,93 @@ export function ouvrirCahier(chantier, dossier, retour) {
       <div class="form-actions ca-actions">
         <button type="button" class="btn ghost" id="ca-retour">← Retour au chantier</button>
         <span class="grow"></span>
-        <button type="button" class="btn ghost" id="ca-ouvriers">Imprimer (équipe)</button>
-        <button type="button" class="btn ghost" id="ca-client">Imprimer (client)</button>
+        <button type="button" class="btn ghost ca-presenter" id="ca-presenter">▶ Présentation</button>
+        <button type="button" class="btn ghost" id="ca-ouvriers">PDF équipe</button>
+        <button type="button" class="btn ghost" id="ca-client">PDF client</button>
         ${fige ? '' : `<button type="button" class="btn ghost" id="ca-distance">${k?.envoye_le ? 'Renvoyer pour signature' : 'Envoyer pour signature'}</button>
         <button type="button" class="btn ghost" id="ca-signer">Faire signer sur place</button>
         <button type="button" class="btn primary" id="ca-enregistrer">Enregistrer</button>`}
       </div>`;
     brancher(fige);
+    if (!fige) brancherPhotos();
+    remplirVignettes();
   };
+
+  // ⚠ UNE PAGE PAR PIÈCE AVEC SA PHOTO (modèle d'Élodie, 11/11/2026). Les
+  // pièces sont les lots des postes ; on y attache une ou deux photos (au-delà,
+  // le document n'en imprime que deux). Le plan a sa propre page. Les photos
+  // exigent un cahier enregistré : elles sont rangées sous son chantier.
+  function blocPhotos(fige) {
+    const pieces = piecesDe(s.postes);
+    const photos = k?.photos || [];
+    const vignette = (chemin, retirable) => `<span class="ca-vignette"><img data-chemin="${esc(chemin)}" alt="">${
+      retirable ? `<button type="button" class="ca-vignette-x" data-retirer-photo="${esc(chemin)}" title="Retirer la photo">✕</button>` : ''}</span>`;
+    const ajout = (lot, libelle = '+ Photo') => fige ? '' : `<label class="btn ghost sm ca-ajout-photo">${
+      s.envoiPhoto === lot ? 'Envoi…' : libelle}<input type="file" accept="image/*" multiple hidden data-photo-lot="${esc(lot)}"></label>`;
+    const orphelines = photos.filter(p => !pieces.includes(p.lot || ''));
+    return `<div class="ca-titre"><h4 class="ca-h">Photos des pièces</h4>
+        <span class="muted small">Une page par pièce dans le document, avec ses photos (deux au plus).</span></div>
+      <div class="ca-pieces">
+        ${!pieces.length ? '<p class="muted small">Les pièces apparaissent avec les postes de travaux.</p>'
+          : pieces.map(lot => {
+            const ph = photos.filter(p => (p.lot || '') === lot);
+            return `<div class="ca-piece"><b>${esc(lot || 'Travaux')}</b>
+              <div class="ca-vignettes">${ph.map(p => vignette(p.chemin, !fige)).join('')}${ajout(lot)}</div></div>`;
+          }).join('')}
+        <div class="ca-piece"><b>Plan du logement</b>
+          <div class="ca-vignettes">${k?.plan ? vignette(k.plan, false) : ''}${fige ? '' : `<label class="btn ghost sm ca-ajout-photo">${
+            s.envoiPhoto === '__plan' ? 'Envoi…' : k?.plan ? 'Remplacer' : '+ Plan'}<input type="file" accept="image/*" hidden data-plan></label>${
+            k?.plan ? '<button type="button" class="btn ghost sm" id="ca-plan-retirer">Retirer</button>' : ''}`}</div></div>
+        ${orphelines.length ? `<div class="ca-piece"><b class="muted">Photos d’une pièce renommée</b>
+          <div class="ca-vignettes">${orphelines.map(p => vignette(p.chemin, !fige)).join('')}</div>
+          <small class="muted">Elles ne s’impriment plus : retirez-les et rajoutez-les dans la bonne pièce.</small></div>` : ''}
+      </div>`;
+  }
+
+  async function remplirVignettes() {
+    const imgs = [...hote.querySelectorAll('img[data-chemin]')];
+    if (!imgs.length || !k) return;
+    const urls = await liensDuCahier(k);
+    for (const i of imgs) if (urls[i.dataset.chemin]) i.src = urls[i.dataset.chemin];
+  }
+
+  function brancherPhotos() {
+    hote.querySelectorAll('input[data-photo-lot]').forEach(inp => inp.onchange = async () => {
+      const fichiers = [...inp.files];
+      if (!fichiers.length) return;
+      const lot = inp.dataset.photoLot;
+      try {
+        await enregistrer();
+        s.envoiPhoto = lot; dessiner();
+        k = await ajouterPhotos(k, lot, fichiers); k = cahierDe(chantier.id) || k;
+        toast(`${fichiers.length} photo${fichiers.length > 1 ? 's' : ''} ajoutée${fichiers.length > 1 ? 's' : ''}`);
+      } catch (e) { toast(e.message, 'error'); }
+      s.envoiPhoto = ''; dessiner();
+    });
+    const plan = hote.querySelector('input[data-plan]');
+    if (plan) plan.onchange = async () => {
+      const f = plan.files[0];
+      if (!f) return;
+      try {
+        await enregistrer();
+        s.envoiPhoto = '__plan'; dessiner();
+        k = await poserPlan(k, f); k = cahierDe(chantier.id) || k;
+        toast('Plan ajouté');
+      } catch (e) { toast(e.message, 'error'); }
+      s.envoiPhoto = ''; dessiner();
+    };
+    const bPlanX = hote.querySelector('#ca-plan-retirer');
+    if (bPlanX) bPlanX.onclick = async () => {
+      lire();
+      try { k = await poserPlan(k, null); k = cahierDe(chantier.id) || k; } catch (e) { toast(e.message, 'error'); }
+      dessiner();
+    };
+    hote.querySelectorAll('[data-retirer-photo]').forEach(b => b.onclick = async () => {
+      lire();
+      try { k = await retirerPhoto(k, b.dataset.retirerPhoto); k = cahierDe(chantier.id) || k; } catch (e) { toast(e.message, 'error'); }
+      dessiner();
+    });
+  }
 
   // Ce qui est à l'écran passe dans le brouillon avant tout redessin.
   const lire = () => {
@@ -173,6 +270,7 @@ export function ouvrirCahier(chantier, dossier, retour) {
     const v = (id) => hote.querySelector(id)?.value ?? '';
     s.devis = v('#ca-devis'); s.objet = v('#ca-objet');
     s.consignes = v('#ca-consignes'); s.precisions = v('#ca-precisions');
+    s.type_bien = v('#ca-type'); s.nature = v('#ca-nature');
     hote.querySelectorAll('.ca-poste[data-i]').forEach(r => {
       const p = s.postes[Number(r.dataset.i)];
       r.querySelectorAll('[data-c]').forEach(inp => { p[inp.dataset.c] = inp.value; });
@@ -187,6 +285,7 @@ export function ouvrirCahier(chantier, dossier, retour) {
       devis_crm_id: choisi?.source === 'crm' ? choisi.id : null,
       devis_numero: choisi?.numero || null,
       objet: s.objet, postes: s.postes, consignes: s.consignes, precisions: s.precisions,
+      type_bien: s.type_bien, nature: s.nature,
     };
     k = k ? await majCahier(k, champs) : await creerCahier(chantier.id, champs);
     k = cahierDe(chantier.id) || k;
@@ -210,6 +309,18 @@ export function ouvrirCahier(chantier, dossier, retour) {
       } catch (e) { toast(e.message, 'error'); }
     };
     hote.querySelector('#ca-ouvriers').onclick = () => imprimer('ouvriers');
+    // ⚠ LA PRÉSENTATION PIÈCE PAR PIÈCE (11/11/2026, Élodie : « moderne et
+    // dynamique sur le CRM, exportable en PDF ») : plein écran, par-dessus
+    // cette fenêtre, qu'on retrouve en la fermant.
+    hote.querySelector('#ca-presenter').onclick = async () => {
+      try {
+        if (!fige) await enregistrer();
+        if (!k?.postes?.length) { toast('Ajoutez au moins un poste avant de présenter.', 'error'); dessiner(); return; }
+        const { ouvrirPresentation } = await import('./rgd-cahier-presentation.js');
+        await ouvrirPresentation(chantier, k, dossier, { version: 'client' });
+        dessiner();
+      } catch (e) { toast(e.message, 'error'); }
+    };
     const bCopier = hote.querySelector('#ca-copier');
     if (bCopier) bCopier.onclick = async () => {
       try { await navigator.clipboard.writeText(lienSignature(k)); toast('Lien copié : vous pouvez le transmettre au client'); }

@@ -48,13 +48,15 @@ export async function creerCahier(planningId, champs = {}) {
     postes: propres(champs.postes),
     consignes: champs.consignes || null,
     precisions: champs.precisions || null,
+    type_bien: champs.type_bien || null,
+    nature: champs.nature || null,
   });
 }
 
 export async function majCahier(k, champs) {
   if (estSigne(k)) throw new Error('Le cahier est signé : retirez la signature avant de le modifier.');
   const patch = {};
-  for (const c of ['devis_id', 'devis_crm_id', 'devis_numero', 'objet', 'consignes', 'precisions']) {
+  for (const c of ['devis_id', 'devis_crm_id', 'devis_numero', 'objet', 'consignes', 'precisions', 'type_bien', 'nature']) {
     if (c in champs) patch[c] = (typeof champs[c] === 'string' ? champs[c].trim() : champs[c]) || null;
   }
   if ('postes' in champs) patch.postes = propres(champs.postes);
@@ -63,7 +65,8 @@ export async function majCahier(k, champs) {
 
 // Ce que le client a signé, figé à part (sur place comme à distance) : retirer
 // la signature puis modifier le cahier ne doit pas effacer la preuve.
-const contenuSigne = (k) => ({ objet: k.objet, postes: k.postes, precisions: k.precisions, devis_numero: k.devis_numero });
+const contenuSigne = (k) => ({ objet: k.objet, postes: k.postes, precisions: k.precisions, devis_numero: k.devis_numero,
+  photos: k.photos || [], plan: k.plan || null, type_bien: k.type_bien || null, nature: k.nature || null });
 
 export async function signerCahier(k, { image, nom }) {
   if (!image) throw new Error('La signature manque.');
@@ -79,6 +82,82 @@ export async function retirerSignature(k) {
     signature: null, signe_par: null, signe_le: null, signe_mode: null, signe_ip: null, signe_agent: null,
   });
 }
+
+// ------------------------------------------------------------ les photos
+// ⚠ LA MISE EN PAGE D'ÉLODIE (11/11/2026, modèle « Cahier des charges -
+// JUSTE.pptx ») : une page par pièce, avec la PHOTO de la pièce à côté de la
+// liste des travaux, une page de garde et le plan. Les photos vont dans le
+// seau PRIVÉ `rgd-cahiers`, sous `<chantier>/…` ; le cahier garde
+// `photos = [{ lot, chemin }]` et `plan = chemin`.
+//
+// ⚠ ON RÉDUIT AVANT D'ENVOYER : une photo de téléphone pèse 4 à 8 Mo et le
+// cahier en porte une dizaine. 1600 px de large et un JPEG à 82 % suffisent
+// largement à une page A4, et l'envoi depuis le chantier reste rapide.
+export const SEAU_CAHIERS = 'rgd-cahiers';
+
+async function reduire(fichier, cote = 1600) {
+  if (!/^image\//.test(fichier.type || '')) throw new Error(`${fichier.name} n’est pas une image.`);
+  let img;
+  try { img = await createImageBitmap(fichier, { imageOrientation: 'from-image' }); }
+  catch { return fichier; }                           // format que le navigateur ne lit pas : envoyé tel quel
+  const r = Math.min(1, cote / Math.max(img.width, img.height));
+  const c = document.createElement('canvas');
+  c.width = Math.round(img.width * r); c.height = Math.round(img.height * r);
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+  const blob = await new Promise(ok => c.toBlob(ok, 'image/jpeg', 0.82));
+  return blob ? new File([blob], fichier.name.replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' }) : fichier;
+}
+
+async function deposer(k, fichier) {
+  const f = await reduire(fichier);
+  const chemin = `${k.planning_id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
+  await db.uploadFile(chemin, f, { bucket: SEAU_CAHIERS });
+  return chemin;
+}
+
+export async function ajouterPhotos(k, lot, fichiers) {
+  if (estSigne(k)) throw new Error('Le cahier est signé : retirez la signature avant de le modifier.');
+  const nouvelles = [];
+  for (const f of fichiers) nouvelles.push({ lot: String(lot || ''), chemin: await deposer(k, f) });
+  const a_jour = cahierDe(k.planning_id) || k;
+  return db.update('rgd_cahiers', k.id, { photos: [...(a_jour.photos || []), ...nouvelles] });
+}
+
+export async function retirerPhoto(k, chemin) {
+  if (estSigne(k)) throw new Error('Le cahier est signé : retirez la signature avant de le modifier.');
+  const a_jour = cahierDe(k.planning_id) || k;
+  const ligne = await db.update('rgd_cahiers', k.id, { photos: (a_jour.photos || []).filter(p => p.chemin !== chemin) });
+  try { await db.deleteFile(chemin, { bucket: SEAU_CAHIERS }); } catch { /* déjà absente */ }
+  return ligne;
+}
+
+export async function poserPlan(k, fichier) {
+  if (estSigne(k)) throw new Error('Le cahier est signé : retirez la signature avant de le modifier.');
+  const ancien = k.plan;
+  const ligne = await db.update('rgd_cahiers', k.id, { plan: fichier ? await deposer(k, fichier) : null });
+  if (ancien) { try { await db.deleteFile(ancien, { bucket: SEAU_CAHIERS }); } catch { /* déjà absente */ } }
+  return ligne;
+}
+
+// Liens signés d'une heure, gardés 50 minutes.
+const liens = new Map();
+export async function lienPhoto(chemin) {
+  if (!chemin) return '';
+  const l = liens.get(chemin);
+  if (l && l.fin > Date.now()) return l.url;
+  const url = await db.fileUrl(chemin, { bucket: SEAU_CAHIERS });
+  liens.set(chemin, { url, fin: Date.now() + 50 * 60 * 1000 });
+  return url;
+}
+export async function liensDuCahier(k) {
+  const tous = [...(k?.photos || []).map(p => p.chemin), k?.plan].filter(Boolean);
+  const out = {};
+  await Promise.all(tous.map(async c => { try { out[c] = await lienPhoto(c); } catch { /* photo perdue */ } }));
+  return out;
+}
+
+// Les pièces du cahier, dans l'ordre des postes : ce sont les lots.
+export const piecesDe = (postes) => [...new Set((postes || []).map(p => p.lot || ''))];
 
 // ------------------------------------------------------------ à distance
 // ⚠ LA SIGNATURE À DISTANCE (11/11/2026) : le client reçoit un lien vers la
