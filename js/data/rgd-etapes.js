@@ -48,6 +48,13 @@
 // quatre avaient bien un devis signé et ne bougent pas ; les deux autres
 // passent en « Devis en cours », ce qu'ils sont.
 import { scope } from './scope.js';
+import { db } from './db.js';
+// ⚠ LA FIN D'UN CHANTIER PLANIFIÉ SE CALCULE LÀ-BAS, PAS ICI : `finDe` est la
+// définition du planning (début + durée − 1, un chantier d'un jour finit le jour
+// où il commence). La recopier ferait deux calculs pour une même date, et le
+// jour où l'un changerait, le calendrier et le pipeline ne diraient plus la
+// même chose. C'est la règle de l'en-tête de ce fichier.
+import { finDe } from './rgd-planning.js';
 
 // L'ordre du cycle. « archives » n'y figure pas : on n'y avance pas, on en sort.
 export const ORDRE_ETAPES = ['demande', 'rdv', 'devis_encours', 'devis_envoye',
@@ -522,6 +529,49 @@ export function confirmationSmsDe(visite, envois) {
 // L'étape d'une fiche `rgd_clients`. Les deux tables sont passées en argument
 // pour que l'appelant qui en tient déjà une copie ne la relise pas à chaque
 // ligne — `etapesRgd()` ci-dessous les lit une fois pour toutes.
+// ⚠ LE PLANNING CHANTIER FAIT FOI SUR LES DATES (11/11/2026, Élodie : « je
+// voudrais que les chantiers en cours de la base clients & prospects soient
+// connectés avec le planning chantier. Sur Costructor il y a des dates de
+// chantier mais les dates ne sont pas souvent respectées, je voudrais que ça
+// prenne en compte les dates du planning vu que c'est rattaché à une fiche
+// projet »).
+//
+// ⚠ ET ELLE A RAISON SUR LES DONNÉES : mesuré en base le 10/11/2026, AUCUN
+// chantier ne porte l'état `en_cours`. La colonne « Chantier en cours » du
+// pipeline ne se remplissait donc que par une saisie à la main. Les dates que
+// Costructor transmet sont celles du dernier devis signé : chez Thibaud Prié,
+// `work_end_at` annonçait déjà le 02/12/2026 sur un chantier marqué TERMINÉ.
+//
+// Le planning, lui, est tenu à la main par Élodie, dossier par dossier : c'est
+// la seule source où un report se corrige. Il l'emporte donc, et dans les deux
+// sens :
+//   • une ligne de planning qui couvre aujourd'hui → CHANTIER EN COURS ;
+//   • toutes les lignes passées → CHANTIER TERMINÉ ;
+//   • une ligne à venir ne dit rien : les travaux ne sont pas commencés, ce
+//     sont les devis qui décident, comme avant.
+//
+// ⚠ CE QUE ÇA CHANGE LE JOUR OÙ C'EST ÉCRIT : RIEN. Les deux chantiers
+// planifiés commencent le 16/11 et le 04/01. C'est voulu — la règle n'invente
+// aucun état, elle attend que le calendrier arrive.
+//
+// ⚠ ON LIT LA TABLE ENTIÈRE, PAS `chantiersPlanifies()`, et c'est délibéré :
+// cette fonction-là masque les chantiers qu'on ne nous a pas partagés. À
+// l'étape d'un dossier, ce filtre ferait DEUX VÉRITÉS — la direction verrait
+// « Chantier en cours » et un chargé d'affaires « Devis accepté » sur la même
+// fiche. Le partage décide de ce qu'on peut LIRE du planning, pas de l'état
+// d'une affaire. Et `scope.rgd` filtre déjà les fiches elles-mêmes.
+const aujourdhuiIso = () => new Date().toISOString().slice(0, 10);
+
+export function etapeDuPlanning(x, planning = db.t('rgd_planning')) {
+  const siennes = (planning || []).filter(c =>
+    (c.fiche_id && c.fiche_id === x.id) || (c.demande_id && c.demande_id === x.id));
+  if (!siennes.length) return null;
+  const auj = aujourdhuiIso();
+  if (siennes.some(c => String(c.date_debut) <= auj && finDe(c) >= auj)) return 'chantier_encours';
+  if (siennes.some(c => String(c.date_debut) > auj)) return null;
+  return 'chantier_termine';
+}
+
 // ⚠ DE NOUVEAUX TRAVAUX CHEZ UN CLIENT DONT LE CHANTIER EST FINI (10/11/2026,
 // Élodie : « son chantier est terminé mais il y a eu un nouveau devis entre temps
 // pour faire d'autres travaux sur ce même chantier. Je voudrais que lorsque l'on
@@ -594,6 +644,13 @@ export function etapeDeFiche(f, chantiers, devis, joursVisite) {
   // dossier en tête de liste pour toujours, ce qui est précisément ce que la
   // règle vient corriger.
   if (e === 'devis_accepte' && devisDormant(f, devis)) return 'archives';
+  // ⚠ LE PLANNING PASSE AVANT TOUT CE QUI RESTE, saisie comprise — c'est le
+  // sens de la demande : ses dates font foi. Il ne touche pas aux étapes HORS
+  // CYCLE : un dossier en SAV y reste, et les perdus comme les indésirables
+  // sont sortis plus haut. Il passe aussi avant les travaux neufs ci-dessous :
+  // un client dont le chantier tourne aujourd'hui n'est pas « Devis accepté ».
+  const duPlanning = etapeDuPlanning(f);
+  if (duPlanning && !ETAPES_HORS_CYCLE.includes(e)) return duPlanning;
   // ⚠ LA SECONDE RÈGLE OÙ UN FAIT DÉFAIT UNE SAISIE, et la seule qui fasse
   // RECULER un dossier dans le cycle. Elle ne se déclenche qu'à une étape, la
   // dernière : un client dont tout est fini et qui rachète des travaux. Partout
@@ -632,6 +689,10 @@ export function plusAvancee(saisie, faits) {
 export function etapeDeDemande(d, devis = scope.rgd('rgd_devis')) {
   if (d.statut === 'indesirable') return 'indesirable';
   if (d.statut === 'perdu') return 'archives';
+  // Une demande aussi peut être planifiée (`demande_id`) : même règle, sans
+  // quoi la même affaire se rangerait ailleurs selon qu'elle a une fiche ou non.
+  const duPlanning = etapeDuPlanning(d);
+  if (duPlanning) return duPlanning;
   const siens = (devis || []).filter(v => memeQue(v, d));
   const faits = siens.some(v => v.statut === 'signe') ? 'devis_accepte'
     : siens.some(devisEnvoye) ? 'devis_envoye'
