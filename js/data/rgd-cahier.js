@@ -131,6 +131,22 @@ export async function retirerPhoto(k, chemin) {
   return ligne;
 }
 
+// ⚠ LA RÉSERVE (12/11/2026) : les photos du dossier NAS que l'IA n'a pas
+// retenues arrivent sous cette « pièce » qu'aucun cahier ne contient. Elles
+// ne s'impriment pas et ne se montrent pas au client ; l'écran « Trier les
+// photos » permet d'en affilier une à une pièce. `suggestion` = avis de l'IA.
+export const RESERVE = '__reserve__';
+export const horsReserve = (photos) => (photos || []).filter(p => p.lot !== RESERVE);
+
+// Remplacer toute la liste (le tri : nouvelles pièces, nouvel ordre). Les
+// deux premières photos d'une pièce sont celles qui s'impriment.
+export async function remplacerPhotos(k, photos) {
+  if (estSigne(k)) throw new Error('Le cahier est signé : retirez la signature avant de le modifier.');
+  return db.update('rgd_cahiers', k.id, {
+    photos: (photos || []).map(p => ({ ...p, lot: String(p.lot ?? '') })),
+  });
+}
+
 // Corriger la pièce d'une photo (le tri de l'IA s'est trompé, ou une photo
 // ajoutée dans la mauvaise pièce).
 export async function deplacerPhoto(k, chemin, lot) {

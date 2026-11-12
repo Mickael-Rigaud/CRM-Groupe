@@ -8777,3 +8777,42 @@ td .pl-toque { color: #4f46e5; }
 .ca-vignette.nas { box-shadow: 0 0 0 2px #94a3b8; }
 .ca-vignette-piece { position: absolute; left: 2px; bottom: 2px; width: 26px; height: 20px; padding: 0; border: 0; border-radius: 6px;
   background: rgba(0, 0, 0, .6); color: #fff; font-size: 11px; cursor: pointer; appearance: none; -webkit-appearance: none; text-align: center; }
+/* Cahier des charges : trier les photos par pièce (12/11/2026) */
+.ca-trier { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13.5px; color: var(--muted); }
+.ct-ecran { position: fixed; inset: 0; z-index: 2100; display: flex; flex-direction: column; background: var(--bg, #f6f4f1); color: var(--text); }
+.ct-haut { display: flex; align-items: center; gap: 12px; padding: 12px 18px; border-bottom: 1px solid var(--line); background: var(--card); }
+.ct-haut > div { display: flex; flex-direction: column; min-width: 0; }
+.ct-haut b { font-size: 16px; }
+.ct-haut span { font-size: 13px; color: var(--muted); }
+.ct-haut .grow { flex: 1; }
+.ct-colonnes { flex: 1; min-height: 0; display: flex; gap: 12px; padding: 14px 18px; overflow-x: auto; align-items: stretch; }
+.ct-col { flex: 0 0 250px; display: flex; flex-direction: column; min-height: 0; border: 1px solid var(--line); border-top: 4px solid #FC5D00;
+  border-radius: 12px; background: var(--card); transition: background .15s, box-shadow .15s; }
+.ct-col.reserve { flex-basis: 340px; border-top-color: #94a3b8; background: var(--card-2); }
+.ct-col.cible { cursor: copy; }
+.ct-col.cible:hover, .ct-col.survol { box-shadow: 0 0 0 3px color-mix(in srgb, #FC5D00 45%, transparent); background: color-mix(in srgb, #FC5D00 5%, var(--card)); }
+.ct-col h3 { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0; padding: 10px 12px; font-size: 14.5px; }
+.ct-col h3 em { font-style: normal; font-size: 12px; font-weight: 700; color: var(--muted); }
+.ct-aide { margin: 0 12px 8px; font-size: 12px; color: var(--muted); }
+.ct-liste { flex: 1; min-height: 60px; overflow-y: auto; padding: 0 10px 10px; display: grid; grid-template-columns: 1fr; gap: 8px; align-content: start; }
+.ct-col.reserve .ct-liste { grid-template-columns: 1fr 1fr; }
+.ct-photo { position: relative; aspect-ratio: 4 / 3; border-radius: 9px; overflow: hidden; cursor: pointer; border: 3px solid transparent;
+  background: var(--line); }
+.ct-photo img { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
+.ct-photo.imprimee { border-color: #16a34a; }
+.ct-photo.choisie { border-color: #FC5D00; box-shadow: 0 0 0 3px color-mix(in srgb, #FC5D00 35%, transparent); }
+.ct-photo.glisse { opacity: .4; }
+.ct-badge, .ct-sug { position: absolute; left: 5px; bottom: 5px; font-size: 10.5px; font-weight: 700; border-radius: 5px; padding: 2px 6px; }
+.ct-badge { background: #16a34a; color: #fff; }
+.ct-sug { background: rgba(20, 17, 14, .75); color: #fff; max-width: calc(100% - 10px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ct-actions { position: absolute; top: 4px; right: 4px; display: flex; gap: 4px; }
+.ct-actions button { width: 26px; height: 26px; border: 0; border-radius: 99px; background: rgba(0, 0, 0, .62); color: #fff; font-size: 13px;
+  cursor: pointer; display: grid; place-items: center; padding: 0; }
+.ct-actions button:hover { background: #FC5D00; }
+.ct-vide { margin: 4px 2px; font-size: 12.5px; color: var(--muted); }
+.ct-vide.grand { text-align: center; padding: 40px; }
+@media screen and (max-width: 760px) {
+  .ct-colonnes { padding: 10px; }
+  .ct-col { flex-basis: 78vw; }
+  .ct-col.reserve { flex-basis: 86vw; }
+}

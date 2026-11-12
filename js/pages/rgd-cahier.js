@@ -16,7 +16,8 @@ import { cahierDe, estSigne, creerCahier, majCahier, signerCahier, retirerSignat
          preparerLien, lienSignature, lienValable, envoyerPourSignature,
          devisSignesDu, postesDuDevisCrm, decouperCollage, lireDevisCostructor,
          ajouterPhotos, retirerPhoto, poserPlan, liensDuCahier, piecesDe, renommerPhotos, deplacerPhoto,
-         derniereDemandeNas, dossiersNas, enCoursNas, demanderPhotosNas } from '../data/rgd-cahier.js';
+         derniereDemandeNas, dossiersNas, enCoursNas, demanderPhotosNas, RESERVE } from '../data/rgd-cahier.js';
+import { trierPhotos } from './rgd-cahier-tri.js';
 import { imprimerCahierClient, imprimerCahierOuvriers } from './rgd-cahier-doc.js';
 import { donneesDocument } from './rgd-documents.js';
 
@@ -207,6 +208,10 @@ export function ouvrirCahier(chantier, dossier, retour) {
         <span class="muted small">Aucun prix : ce document va aux ouvriers et au client. Une page par pièce, avec ses photos (deux au plus).</span>
         </div>
       ${fige || !pieces.length ? '' : etatNas(nas)}
+      ${fige || !pieces.length || !photos.length ? '' : `<div class="ca-trier">
+        <span>${photos.filter(p => p.lot !== RESERVE).length} photo(s) dans les pièces${
+          photos.some(p => p.lot === RESERVE) ? ` · ${photos.filter(p => p.lot === RESERVE).length} en réserve` : ''}</span>
+        <button type="button" class="btn sm" id="ca-trier">Trier les photos</button></div>`}
       <div class="ca-salles">
         ${!pieces.length ? `<p class="muted small">${s.lecture ? 'Les postes arrivent…' : 'Aucune pièce pour l’instant.'}</p>` : pieces.map(lot => {
           const lignes = s.postes.map((p, i) => ({ p, i })).filter(x => (x.p.lot || '') === lot);
@@ -295,7 +300,7 @@ export function ouvrirCahier(chantier, dossier, retour) {
     const photos = k?.photos || [];
     const vignette = (chemin, retirable) => `<span class="ca-vignette"><img data-chemin="${esc(chemin)}" alt="">${
       retirable ? `<button type="button" class="ca-vignette-x" data-retirer-photo="${esc(chemin)}" title="Retirer la photo">✕</button>` : ''}</span>`;
-    const orphelines = photos.filter(p => !pieces.includes(p.lot || ''));
+    const orphelines = photos.filter(p => p.lot !== RESERVE && !pieces.includes(p.lot || ''));
     return `<div class="ca-pieces">
         <div class="ca-piece"><b>Plan du logement</b>
           <div class="ca-vignettes">${k?.plan ? vignette(k.plan, false) : ''}${fige ? '' : `<label class="btn ghost sm ca-ajout-photo">${
@@ -484,6 +489,15 @@ export function ouvrirCahier(chantier, dossier, retour) {
       const bloc = [...hote.querySelectorAll('.ca-salle')].find(x => x.dataset.piece === lot);
       [...(bloc?.querySelectorAll('[data-c="designation"]') || [])].pop()?.focus();
     });
+    // ⚠ TRIER LES PHOTOS (12/11/2026) : l'écran plein cadre pour changer une
+    // photo de pièce, puiser dans la réserve, choisir les deux imprimées.
+    const bTrier = hote.querySelector('#ca-trier');
+    if (bTrier) bTrier.onclick = async () => {
+      try {
+        await enregistrer();
+        await trierPhotos(chantier, k, piecesEcran(), () => { k = cahierDe(chantier.id) || k; dessiner(); });
+      } catch (e) { toast(e.message, 'error'); }
+    };
     // Les photos du NAS : relancer, ou imposer le dossier du client.
     const bRelancer = hote.querySelector('#ca-nas-relancer');
     if (bRelancer) bRelancer.onclick = async () => {

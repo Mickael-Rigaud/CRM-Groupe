@@ -67,7 +67,8 @@ export function diapos(chantier, k, dossier, version, urls) {
   const postes = Array.isArray(k.postes) ? k.postes : [];
   const pieces = piecesDe(postes);
   const photosDe = (lot) => (k.photos || []).filter(p => (p.lot || '') === lot).map(p => urls[p.chemin]).filter(Boolean);
-  const premiere = (k.photos || []).map(p => urls[p.chemin]).find(Boolean) || null;
+  // La réserve (photos du NAS non retenues) ne sert jamais de photo de couverture.
+  const premiere = (k.photos || []).filter(p => p.lot !== '__reserve__').map(p => urls[p.chemin]).find(Boolean) || null;
   const sur = [k.objet || chantier.titre, d.adresse].filter(Boolean).join(' · ');
   const liste = [];
 
