@@ -126,7 +126,7 @@ export const homePage = {
       root.innerHTML = `
         ${db.demo ? '<div class="demo-banner"><b>Mode démo</b> — données d\'exemple stockées dans ce navigateur.</div>' : ''}
 
-        ${/* ⚠ LE FOND QUI DÉRIVE VIT DANS L'ÉCRAN, PAS DANS LA PAGE (13/11/2026,
+        ${/* ⚠ LE FOND QUI DÉRIVE VIT DANS L'ÉCRAN, PAS DANS LA PAGE (12/11/2026,
               Élodie : « ça c'est super, branche-la »). Il est posé ici et non
               dans `index.html` pour qu'il disparaisse avec le tableau de bord :
               trois halos flous en `position:fixed` derrière TOUTES les pages
@@ -224,7 +224,7 @@ export const homePage = {
                 : 'taux de transformation indisponible sur cette période'}</span>
             </div>
             ${/* ⚠ CES DEUX TAUX ÉTAIENT DEUX TUILES DU BANDEAU, et ils ont failli
-                  disparaître en passant de six indicateurs à quatre (13/11/2026).
+                  disparaître en passant de six indicateurs à quatre (12/11/2026).
                   L'entonnoir au-dessus montre bien le passage d'une étape à
                   l'autre, mais PAS son évolution : « 100 % » ne dit pas si c'était
                   60 % le mois dernier. C'est cette comparaison-là qu'on reperd en
@@ -328,7 +328,7 @@ export const homePage = {
     // ---------- indicateurs ----------
     // `sous` peut contenir du balisage (les pastilles de structure) : il est
     // composé ici, jamais saisi par quelqu'un.
-    // ⚠ UNE TUILE DE BENTO, PAS UNE CASE DE BANDEAU (13/11/2026). La micro-courbe
+    // ⚠ UNE TUILE DE BENTO, PAS UNE CASE DE BANDEAU (12/11/2026). La micro-courbe
     // revient sur fond clair : elle reprend donc les couleurs d'encre du thème,
     // et non les teintes pâles qu'il fallait sur le bandeau sombre.
     const kpi = (libelle, valeur, d, serie, sous, points = false, titre = '', vers = '') => `
@@ -882,7 +882,7 @@ const depuisQuand = (iso) => {
  * « Le chemin de l'argent » — la grande tuile du bento.
  *
  * ⚠ TROIS BARREAUX, PAS QUATRE. « Reste dû » a quitté cette carte le
- * 13/11/2026 pour la tuile rouge : les trois qui restent sont des FLUX de la
+ * 12/11/2026 pour la tuile rouge : les trois qui restent sont des FLUX de la
  * période choisie, le quatrième était un STOCK d'aujourd'hui. Alignés, on les
  * soustrayait de tête alors qu'ils ne parlent pas du même intervalle.
  *
@@ -992,7 +992,7 @@ function tuileEnvois(cles) {
 }
 
 /* ==========================================================================
-   LE BENTO ANIMÉ (13/11/2026) — Élodie, après une maquette vivante :
+   LE BENTO ANIMÉ (12/11/2026) — Élodie, après une maquette vivante :
    « ça c'est super, branche-la sur la vraie base ».
 
    Ce qui a été refusé avant, et pourquoi c'est noté : trois directions, un

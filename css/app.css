@@ -69,7 +69,7 @@ input, select, textarea { font: inherit; }
 
 .subnav { display: flex; align-items: center; gap: 12px; }
 
-/* ---- La barre du haut, repensée (13/11/2026) -----------------------------
+/* ---- La barre du haut, repensée (12/11/2026) -----------------------------
    Élodie : « je voudrais aussi changer le design de ce menu, quelque chose de
    plus moderne et dynamique ». La bande pleine couleur qui barrait le haut de
    chaque écran devient une barre flottante en verre dépoli, posée sur la page.
@@ -3527,7 +3527,7 @@ body.impression #print-root { display: block; }
   .tb-pat { grid-template-columns: minmax(0, 1fr); }
 }
 
-/* ---- Le tableau de bord en bento animé (13/11/2026) ---------------------
+/* ---- Le tableau de bord en bento animé (12/11/2026) ---------------------
    Élodie : « ça c'est super, branche-la sur la vraie base », après qu'une
    maquette vivante a emporté la décision. Ce qui avait été refusé avant —
    trois directions, un mélange, trois palettes — l'avait été pour une raison
