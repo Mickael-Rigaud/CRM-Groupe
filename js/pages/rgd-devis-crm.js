@@ -1309,7 +1309,11 @@ export function ouvrirDevisCrm(x, existant = null, retour = null, genreNeuf = 'f
           <button type="button" class="btn" id="rdc-envoyer">Envoyer</button>
         </div>
       </div>`;
-    hote.querySelector('#rdc-a').focus();
+    // ⚠ PAS DE CURSEUR D'OFFICE AU DOIGT (12/11/2026, Élodie : « quand on va pour
+    // envoyer, je ne veux pas que le clavier apparaisse, sinon on ne voit pas
+    // les boutons retour et envoyer »). L'adresse est déjà remplie ; on touche
+    // le champ si on veut la changer. À la souris, le curseur y va toujours.
+    if (!matchMedia('(pointer: coarse)').matches) hote.querySelector('#rdc-a').focus();
     hote.querySelector('#rdc-retour').onclick = () => { closeModal(true); ouvrirDevisCrm(x, d, retour); };
     const bouton = hote.querySelector('#rdc-envoyer');
     bouton.onclick = async () => {

@@ -576,7 +576,11 @@ export function ouvrirBonAttachement(x, { bon = null, devis = null } = {}, retou
         <button type="button" class="btn ghost" id="rba-retour">← Retour au bon</button>
         <button type="button" class="btn" id="rba-envoyer">Envoyer</button>
       </div>`;
-    hote.querySelector('#rba-a').focus();
+    // ⚠ PAS DE CURSEUR D'OFFICE AU DOIGT (12/11/2026, Élodie : « quand on va pour
+    // envoyer, je ne veux pas que le clavier apparaisse, sinon on ne voit pas
+    // les boutons retour et envoyer »). L'adresse est déjà remplie ; on touche
+    // le champ si on veut la changer. À la souris, le curseur y va toujours.
+    if (!matchMedia('(pointer: coarse)').matches) hote.querySelector('#rba-a').focus();
     hote.querySelector('#rba-retour').onclick = () => redessiner();
     const bouton = hote.querySelector('#rba-envoyer');
     bouton.onclick = async () => {
