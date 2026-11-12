@@ -13,13 +13,23 @@
 // Chaque geste est enregistré aussitôt : il n'y a pas de bouton « valider »
 // à oublier en partant.
 import { esc, toast } from '../ui.js';
-import { cahierDe, liensDuCahier, remplacerPhotos, retirerPhoto, RESERVE } from '../data/rgd-cahier.js';
+import { cahierDe, liensDuCahier, remplacerPhotos, retirerPhoto, ajouterPhotos, RESERVE } from '../data/rgd-cahier.js';
 
 const PAR_PAGE = 2;                               // photos imprimées par pièce
 
-export async function trierPhotos(chantier, k, pieces, apres) {
+// ⚠ AJOUTER DES PHOTOS ET DES PIÈCES D'ICI (12/11/2026, Élodie : « quand on
+// fait trier photos je voudrais avoir accès directement au dossier sur le NAS
+// pour ajouter des photos si je le souhaite et des pièces si je le souhaite
+// aussi »). Tout le dossier NAS arrive en Réserve (voir crm-photos-nas) ;
+// « + Photos » sur une pièce ouvre en plus le sélecteur de fichiers du PC —
+// sur un PC du bureau, le lecteur R: du NAS y est. « + Ajouter une pièce »
+// crée une colonne ; `ajouterPiece` la transmet au cahier (pièce sans poste :
+// elle s'imprime dès qu'on lui donne un travail).
+export async function trierPhotos(chantier, k, pieces, apres, { ajouterPiece } = {}) {
   let photos = (k.photos || []).map(p => ({ ...p }));
-  const urls = await liensDuCahier(k);
+  let urls = await liensDuCahier(k);
+  pieces = [...pieces];
+  let envoi = '';                                  // la pièce dont les photos partent
   let choisie = null;                              // chemin de la photo sélectionnée
   let enCours = false;
 
@@ -27,7 +37,7 @@ export async function trierPhotos(chantier, k, pieces, apres) {
   ecran.className = 'ct-ecran';
   document.body.appendChild(ecran);
   document.body.classList.add('no-scroll');
-  const colonnes = [...pieces, RESERVE];
+  const colonnes = () => [...pieces, RESERVE];
   const nom = (lot) => (lot === RESERVE ? 'Réserve' : (lot || 'Travaux'));
 
   const fermer = () => {
@@ -98,13 +108,15 @@ export async function trierPhotos(chantier, k, pieces, apres) {
           <span>${choisie ? 'Cliquez maintenant la pièce où va la photo (Échap pour annuler).'
             : 'Cliquez une photo, puis sa pièce — ou faites-la glisser. Les 2 premières de chaque pièce s’impriment ; ★ met une photo en tête.'}</span></div>
         <span class="grow"></span>
+        <button type="button" class="btn ghost" id="ct-piece">+ Ajouter une pièce</button>
         <button type="button" class="btn primary" id="ct-fermer">Terminé</button>
       </header>
-      <div class="ct-colonnes">${colonnes.map(lot => {
+      <div class="ct-colonnes">${colonnes().map(lot => {
         const l = photos.filter(p => (p.lot || '') === lot);
         return `<section class="ct-col${lot === RESERVE ? ' reserve' : ''}${choisie ? ' cible' : ''}" data-lot="${esc(lot)}">
           <h3><span>${esc(nom(lot))}</span><em>${l.length}</em></h3>
-          ${lot === RESERVE ? `<p class="ct-aide">Photos du dossier NAS non retenues. Elles ne s’impriment pas.</p>` : ''}
+          ${lot === RESERVE ? `<p class="ct-aide">Tout le dossier du NAS, sauf ce qui est déjà dans les pièces. Rien ici ne s’imprime.</p>`
+            : `<label class="btn ghost sm ct-ajout">${envoi === lot ? 'Envoi…' : '+ Photos'}<input type="file" accept="image/*" multiple hidden data-ajout="${esc(lot)}"></label>`}
           <div class="ct-liste">${l.map((p, i) => carte(p, i)).join('') || `<p class="ct-vide">${lot === RESERVE ? 'Aucune photo en réserve.' : 'Aucune photo : cliquez une photo puis ici.'}</p>`}</div>
         </section>`;
       }).join('')}</div>
@@ -114,6 +126,29 @@ export async function trierPhotos(chantier, k, pieces, apres) {
 
   function brancher() {
     ecran.querySelector('#ct-fermer').onclick = fermer;
+    ecran.querySelector('#ct-piece').onclick = () => {
+      const n = (prompt('Nom de la nouvelle pièce (par exemple « Cellier ») :') || '').trim();
+      if (!n) return;
+      if (pieces.includes(n)) { toast('Cette pièce existe déjà.', 'error'); return; }
+      pieces.push(n);
+      ajouterPiece?.(n);
+      dessiner();
+      ecran.querySelector('.ct-colonnes').scrollLeft = 1e6;
+    };
+    ecran.querySelectorAll('input[data-ajout]').forEach(inp => inp.onchange = async () => {
+      const fichiers = [...inp.files];
+      const lot = inp.dataset.ajout;
+      if (!fichiers.length || enCours) return;
+      enCours = true; envoi = lot; dessiner();
+      try {
+        k = await ajouterPhotos(k, lot, fichiers);
+        k = cahierDe(chantier.id) || k;
+        photos = (k.photos || []).map(x => ({ ...x }));
+        urls = await liensDuCahier(k);
+        toast(`${fichiers.length} photo${fichiers.length > 1 ? 's' : ''} ajoutée${fichiers.length > 1 ? 's' : ''}`);
+      } catch (e) { toast(e.message, 'error'); }
+      finally { enCours = false; envoi = ''; dessiner(); }
+    });
     ecran.querySelectorAll('.ct-photo').forEach(el => {
       const chemin = el.dataset.chemin;
       el.onclick = (e) => {

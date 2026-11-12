@@ -495,7 +495,16 @@ export function ouvrirCahier(chantier, dossier, retour) {
     if (bTrier) bTrier.onclick = async () => {
       try {
         await enregistrer();
-        await trierPhotos(chantier, k, piecesEcran(), () => { k = cahierDe(chantier.id) || k; dessiner(); });
+        // ⚠ AU RETOUR, LA FENÊTRE DU CAHIER EST REMONTÉE SI ELLE A DISPARU
+        // (12/11/2026, Élodie : « quand je fais Terminé, j'apparais dans
+        // Clients & prospects »). Pendant le tri, une autre fenêtre a pu
+        // remplacer celle du cahier ; on la rouvre au lieu de laisser voir la
+        // page du dessous.
+        await trierPhotos(chantier, k, piecesEcran(), () => {
+          k = cahierDe(chantier.id) || k;
+          if (!hote?.isConnected) monter();
+          dessiner();
+        }, { ajouterPiece: (n) => { if (!piecesEcran().includes(n)) s.piecesVides.push(n); } });
       } catch (e) { toast(e.message, 'error'); }
     };
     // Les photos du NAS : relancer, ou imposer le dossier du client.

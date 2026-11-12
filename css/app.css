@@ -8816,3 +8816,4 @@ td .pl-toque { color: #4f46e5; }
   .ct-col { flex-basis: 78vw; }
   .ct-col.reserve { flex-basis: 86vw; }
 }
+.ct-ajout { margin: 0 12px 8px; align-self: flex-start; cursor: pointer; }
