@@ -54,7 +54,7 @@ import { db } from './db.js';
 // où il commence). La recopier ferait deux calculs pour une même date, et le
 // jour où l'un changerait, le calendrier et le pipeline ne diraient plus la
 // même chose. C'est la règle de l'en-tête de ce fichier.
-import { finDe } from './rgd-planning.js';
+import { finAuJour } from './rgd-planning.js';
 
 // L'ordre du cycle. « archives » n'y figure pas : on n'y avance pas, on en sort.
 export const ORDRE_ETAPES = ['demande', 'rdv', 'devis_encours', 'devis_envoye',
@@ -650,7 +650,12 @@ export function etapeDuPlanning(x, planning = db.t('rgd_planning')) {
   if (!siennes.length) return null;
   const auj = aujourdhuiIso();
   const vivantes = siennes.filter(c => !c.fin_reelle);
-  if (vivantes.some(c => String(c.date_debut) <= auj && finDe(c) >= auj)) return 'chantier_encours';
+  // ⚠ `finAuJour` ET NON `finDe` (12/11/2026) : un chantier dont la durée
+  // prévue est passée mais dont personne n'a déclaré la fin est TOUJOURS en
+  // cours. Avec `finDe`, le dossier serait repassé à « chantier terminé » tout
+  // seul au lendemain de la date prévue — sans que rien ne se soit passé sur
+  // le chantier.
+  if (vivantes.some(c => String(c.date_debut) <= auj && finAuJour(c) >= auj)) return 'chantier_encours';
   if (vivantes.some(c => String(c.date_debut) > auj)) return null;
   return 'chantier_termine';
 }

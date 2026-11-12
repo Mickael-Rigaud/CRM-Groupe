@@ -85,8 +85,46 @@ export const ajouterJours = (iso, n) => {
 // exprès — écraser la durée au moment de déclarer la fin effacerait l'écart
 // entre le prévu et le réel, qui est la seule chose permettant de dire un jour
 // « nos chantiers débordent de trois jours en moyenne ».
-export const finDe = (c) => c?.fin_reelle
-  || ajouterJours(c.date_debut, Math.max(1, Number(c.duree_jours) || 1) - 1);
+export const finPrevue = (c) =>
+  ajouterJours(c.date_debut, Math.max(1, Number(c.duree_jours) || 1) - 1);
+
+// ⚠ UNE FIN NE PRÉCÈDE JAMAIS UN DÉBUT, ET LA GARDE N'EST PAS THÉORIQUE
+// (12/11/2026, Élodie : « j'ai mis deux chantiers au même moment pour un test
+// et je n'en vois qu'un »). Le chantier manquant commençait le 17/11 et
+// portait une fin déclarée le 12/11 — déclarée terminée AVANT de reculer sa
+// date de départ. Sa barre allait alors de la droite vers la gauche : aucune
+// semaine du calendrier ne pouvait la contenir, et elle avait purement disparu
+// de l'écran. Un jour de barre vaut mieux qu'une ligne invisible.
+export const finDe = (c) => {
+  const f = c?.fin_reelle || finPrevue(c);
+  return f < c.date_debut ? c.date_debut : f;
+};
+
+// ⚠ TANT QU'UN CHANTIER N'EST PAS DÉCLARÉ TERMINÉ, IL COURT JUSQU'À AUJOURD'HUI
+// (12/11/2026, Élodie : « tant qu'un chantier n'est pas déclaré terminé je veux
+// qu'il continue au jour le jour par rapport à la date du jour »). La durée
+// saisie est une PRÉVISION ; seule la déclaration de fin arrête la barre. Un
+// chantier de six jours commencé il y a dix en occupe dix, et en occupera onze
+// demain.
+//
+// ⚠ UNE FORMATION NE DÉBORDE PAS : ses dates sont celles d'un organisme, pas
+// d'un chantier qui prend du retard. Elle garde donc sa fin prévue et passe en
+// gris le lendemain, comme avant.
+//
+// ⚠ ET `finDe` N'A PAS CHANGÉ DE SENS : elle dit toujours ce qui était PRÉVU
+// (ou ce qui a été déclaré). Les deux coexistent exprès — c'est l'écart entre
+// les deux qui permet de dire « ce chantier déborde de quatre jours », et
+// confondre les deux l'effacerait.
+export const finAuJour = (c) => {
+  const f = finDe(c);
+  if (estTermine(c) || estFormation(c)) return f;
+  const auj = aujourdhuiIso();
+  return f < auj ? auj : f;
+};
+
+// Les jours courus au-delà du prévu — 0 quand le chantier est dans les temps.
+export const joursEnPlus = (c) =>
+  Math.round((versDate(finAuJour(c)) - versDate(finDe(c))) / 86400000);
 
 // Un chantier dont la fin a été déclarée. Le planning le grise, la fiche
 // propose de le rouvrir, et l'étape du dossier passe à « Chantier terminé ».

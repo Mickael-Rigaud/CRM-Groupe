@@ -25,7 +25,8 @@ import { LISTES, UNITES, joursPour, dureeLue, listesStandard, enregistrerStandar
          chantiersPlanifies, lignesDe, resteA, creerChantier, majChantier, supprimerChantier,
          ajouterLigne, ajouterStandard, majLigne, retirerLigne, changerFin, deplacerChantier, estFormation,
          UNITES_FORMATION, ouvresPour, prochainOuvre, finOuvree, plagesOuvrees,
-         estTermine, declarerFin, rouvrirChantier, aujourdhuiIso } from '../data/rgd-planning.js';
+         estTermine, declarerFin, rouvrirChantier, aujourdhuiIso,
+         finAuJour, joursEnPlus } from '../data/rgd-planning.js';
 
 // ⚠ LE 11/11/2026 : PARTAGE, LECTURE PAR L'ÉQUIPE ET VUE DE L'ANNÉE.
 // · Un chantier peut être partagé avec un membre de l'équipe (`partage_avec`).
@@ -168,7 +169,9 @@ const tronconsDe = (c, de, a) => {
 function barresDe(semaine, chantiers) {
   const [lundi, dimanche] = [semaine[0], semaine[6]];
   const morceaux = chantiers
-    .map((c, i) => ({ c, i, fin: finDe(c) }))
+    // ⚠ `finAuJour` : la barre s'arrête à la fin DÉCLARÉE, sinon à aujourd'hui
+    // si le prévu est dépassé (12/11/2026). Voir `finAuJour` dans les données.
+    .map((c, i) => ({ c, i, fin: finAuJour(c) }))
     .filter(x => x.c.date_debut <= dimanche && x.fin >= lundi)
     // ⚠ UNE FORMATION SE COUPE SUR LES JOURS NON OUVRÉS (11/11/2026, Élodie :
     // « si la formation dure 4 jours du jeudi au mardi enlève la barre de
@@ -247,6 +250,15 @@ function calendrier(annee, mois, chantiers) {
             const e = etatDe(m.c);
             const debutSeg = semaine[m.col - 1], finSeg = semaine[m.fin_col - 2];
             const longueur = m.fin_col - m.col;
+            // ⚠ LA PART EN TROP SE HACHURE (12/11/2026). Au-delà du dernier
+            // jour prévu, la barre continue mais change d'aspect : sans ce
+            // trait, une barre allongée se lirait comme une durée saisie plus
+            // longue, et le retard deviendrait invisible le jour où il compte.
+            const prevu = finDe(m.c);
+            const rab = prevu < finSeg
+              ? Math.max(0, Math.round((versDate(ajouterJours(prevu, 1)) - versDate(debutSeg)) / 86400000) / longueur * 100)
+              : null;
+            const enPlus = joursEnPlus(m.c);
             const faits = auj < debutSeg ? 0 : auj > finSeg ? longueur
               : Math.round((versDate(auj) - versDate(debutSeg)) / 86400000) + 1;
             const av = e.cle === 'encours' ? Math.round(faits / longueur * 100) : e.cle === 'passe' ? 100 : 0;
@@ -256,10 +268,12 @@ function calendrier(annee, mois, chantiers) {
             return `<button type="button" class="pl-barre est-${e.cle}${estFormation(m.c) ? ' formation' : ''}${m.suite ? ' suite' : ''}${m.continue ? ' continue' : ''}"
               style="grid-column:${m.col} / ${m.fin_col}; grid-row:${m.couloir}; --pl-c:${couleurDe(m.c, m.i)}; --k:${k++}; --pl-av:${av}%"
               data-chantier="${esc(m.c.id)}"
-              title="${esc(`${m.c.titre} — du ${dateLongue(m.c.date_debut)} au ${dateLongue(m.fin)}${
-                e.cle === 'encours' ? ` — jour ${jourN} sur ${total} (${Math.round(jourN / total * 100)} %)` : ''}`)}">
-              <span class="pl-barre-texte">${m.suite ? '<i>suite</i> ' : ''}${marque(m.c)}${esc(m.c.titre)}</span>${
-              ici ? `<em class="pl-barre-jour">J${jourN}/${total}</em>` : ''}${
+              title="${esc(`${m.c.titre} — du ${dateLongue(m.c.date_debut)}, fin prévue le ${dateLongue(prevu)}${
+                enPlus ? ` — dépasse de ${enPlus} jour${enPlus > 1 ? 's' : ''}, non déclaré terminé` : ''}${
+                e.cle === 'encours' && !enPlus ? ` — jour ${jourN} sur ${total} (${Math.round(jourN / total * 100)} %)` : ''}`)}">
+              ${rab !== null ? `<i class="pl-rab" style="left:${rab}%"></i>` : ''}<span class="pl-barre-texte">${
+              m.suite ? '<i>suite</i> ' : ''}${marque(m.c)}${esc(m.c.titre)}</span>${
+              ici ? `<em class="pl-barre-jour${enPlus ? ' deborde' : ''}">J${jourN}/${total}</em>` : ''}${
               direction && !m.continue ? `<span class="pl-poignee" data-poignee="${esc(m.c.id)}" title="Tirer pour changer la fin"></span>` : ''}</button>`;
           }).join('')}
         </div>`;
@@ -269,10 +283,15 @@ function calendrier(annee, mois, chantiers) {
 
 // ------------------------------------------------------------ la vue de l'année
 // Passé, en cours, à venir : lu sur les dates, au jour près.
+// ⚠ SEULE UNE FIN DÉCLARÉE GRISE UN CHANTIER (12/11/2026, Élodie). Avant, la
+// date prévue suffisait : le lendemain du dernier jour saisi, le chantier
+// passait « Terminé » tout seul, alors que les ouvriers y étaient encore. Une
+// formation, elle, se lit toujours sur ses dates — elle ne déborde pas.
 function etatDe(c) {
   const auj = aujourdhui();
-  if (finDe(c) < auj) return { cle: 'passe', label: 'Terminé' };
+  if (estTermine(c)) return { cle: 'passe', label: 'Terminé' };
   if (c.date_debut > auj) return { cle: 'futur', label: 'À venir' };
+  if (estFormation(c) && finDe(c) < auj) return { cle: 'passe', label: 'Terminé' };
   return { cle: 'encours', label: 'En cours' };
 }
 
@@ -333,7 +352,7 @@ function frise(tous) {
   // Les chantiers en cours d'abord, puis à venir, puis terminés : c'est
   // l'ordre dans lequel on les cherche.
   const rang = { encours: 0, futur: 1, passe: 2 };
-  const lignes = tous.map((c, i) => ({ c, i, fin: finDe(c), e: etatDe(c) }))
+  const lignes = tous.map((c, i) => ({ c, i, fin: finAuJour(c), prevu: finDe(c), plus: joursEnPlus(c), e: etatDe(c) }))
     .sort((x, y) => rang[x.e.cle] - rang[y.e.cle] || String(x.c.date_debut).localeCompare(String(y.c.date_debut)));
   const xAuj = pos(auj) * PX_JOUR + PX_JOUR / 2;
   // ⚠ LA FRISE S'OUVRE TROIS SEMAINES AVANT LA SEMAINE EN COURS (11/11/2026,
@@ -372,7 +391,8 @@ function frise(tous) {
           const w = jours * PX_JOUR;
           // En cours : la part déjà écoulée se lit dans la barre.
           const ecoule = x.e.cle === 'encours' ? Math.min(100, Math.round((pos(auj) - pos(x.c.date_debut) + 1) / jours * 100)) : 0;
-          const etiquette = x.e.cle === 'encours' ? `${ecoule} %` : x.e.cle === 'futur'
+          // Un chantier qui déborde ne dit plus « 100 % » mais de combien.
+          const etiquette = x.plus ? `+${x.plus} j` : x.e.cle === 'encours' ? `${ecoule} %` : x.e.cle === 'futur'
             ? `dans ${pos(x.c.date_debut) - pos(auj)} j` : 'terminé';
           // ⚠ UNE FORMATION EST DESSINÉE EN UNE PILULE PAR PLAGE DE JOURS
           // OUVRÉS (11/11/2026, Élodie). Le week-end n'est plus barré : on voit
@@ -385,7 +405,8 @@ function frise(tous) {
             (pos(p[1]) - pos(p[0])) > (pos(plages[meilleur][1]) - pos(plages[meilleur][0])) ? n : meilleur, 0);
           return `<div class="pl-frise-ligne" style="--k:${k}">
           <div class="pl-frise-nom"><b><i class="pl-frise-puce est-${x.e.cle}" style="--pl-c:${couleurDe(x.c, x.i)}"></i>${marque(x.c)}${esc(x.c.titre)}</b>
-            <span>${esc(dateCourte(x.c.date_debut))} → ${esc(dateCourte(x.fin))} · ${esc(dureeLue(x.c).texte)}</span></div>
+            <span>${esc(dateCourte(x.c.date_debut))} → ${esc(dateCourte(x.prevu))} · ${esc(dureeLue(x.c).texte)}${
+              x.plus ? ` <em class="pl-retard">+${x.plus} j</em>` : ''}</span></div>
           <div class="pl-frise-piste">
             ${plages.map(([p0, p1], n) => {
               const jp = pos(p1) - pos(p0) + 1;
@@ -399,10 +420,15 @@ function frise(tous) {
               // formation, tirer aurait changé la fin sans qu'on voie quel
               // bord on tenait.
               const derniere = n === plages.length - 1;
+              // La part en trop se hachure ici aussi.
+              const rab = x.prevu < p1
+                ? Math.max(0, (pos(ajouterJours(x.prevu, 1)) - pos(p0)) / jp * 100) : null;
               return `<button type="button" class="pl-frise-barre est-${x.e.cle}${estFormation(x.c) ? ' formation' : ''}${wp < 70 || !porteNom ? ' etroite' : ''}"
               style="left:${pos(p0) * PX_JOUR}px; width:${wp}px; --pl-c:${couleurDe(x.c, x.i)}; --pl-av:${av}%"
-              data-chantier="${esc(x.c.id)}" title="${esc(`${x.c.titre} — ${x.e.label.toLowerCase()} — du ${dateLongue(x.c.date_debut)} au ${dateLongue(x.fin)}`)}">
-              ${porteNom ? `<span class="pl-frise-texte">${marque(x.c)}${esc(x.c.titre)}</span>` : ''}${
+              data-chantier="${esc(x.c.id)}" title="${esc(`${x.c.titre} — ${x.e.label.toLowerCase()} — du ${dateLongue(x.c.date_debut)}, fin prévue le ${dateLongue(x.prevu)}${
+                x.plus ? ` — dépasse de ${x.plus} jour${x.plus > 1 ? 's' : ''}` : ''}`)}">
+              ${rab !== null ? `<i class="pl-rab" style="left:${rab}%"></i>` : ''}${
+              porteNom ? `<span class="pl-frise-texte">${marque(x.c)}${esc(x.c.titre)}</span>` : ''}${
               porteNom && wp >= 160 ? `<em>${esc(etiquette)}</em>` : ''}${
               scope.isDirection && derniere ? `<span class="pl-poignee" data-poignee="${esc(x.c.id)}" title="Tirer pour changer la fin"></span>` : ''}</button>`;
             }).join('')}
@@ -503,7 +529,12 @@ function brancherPoignees(root, apres) {
       if (!c) return;
       const barre = h.closest('[data-chantier]');
       const enFrise = !!barre.closest('.pl-frise');
-      const finInitiale = finDe(c);
+      // ⚠ LE BOUT DE LA BARRE, PAS LA FIN PRÉVUE (12/11/2026) : sur un
+      // chantier qui déborde, la poignée est à AUJOURD'HUI. Partir de la fin
+      // prévue aurait fait reculer la barre de plusieurs jours au premier
+      // pixel de glissement dans la frise, qui compte en écart depuis ce
+      // point — on tirait vers la droite et le chantier raccourcissait.
+      const finInitiale = finAuJour(c);
       const x0 = e.clientX, largeur0 = barre.offsetWidth;
       let fin = finInitiale;
       try { h.setPointerCapture(e.pointerId); } catch { /* pointeur déjà relâché */ }
@@ -817,7 +848,8 @@ function resume(c) {
     .filter(Boolean).map(u => u.full_name || u.email).join(', ') : '';
   return `<div class="pl-resume">
     ${formation ? '' : ligne('Dossier', r?.nom)}
-    ${ligne('Du', dateLongue(c.date_debut))}${ligne('Au', dateLongue(finDe(c)))}
+    ${ligne('Du', dateLongue(c.date_debut))}${ligne(estTermine(c) ? 'Terminé le' : 'Fin prévue', dateLongue(finDe(c)))}${
+    joursEnPlus(c) ? ligne('En cours depuis', `${joursEnPlus(c)} jour${joursEnPlus(c) > 1 ? 's' : ''} de plus que prévu`) : ''}
     ${ligne('Durée', dureeLue(c).texte)}${ligne(formation ? 'Organisme / lieu' : 'Adresse', c.adresse)}${
     ligne('Participants', qui)}${ligne('Notes', c.notes)}
   </div>`;
@@ -1258,7 +1290,7 @@ export const rgdPlanningPage = {
       const periode = enAnnee
         ? tous.slice().sort((x, y) => rangEtat[etatDe(x).cle] - rangEtat[etatDe(y).cle]
           || String(x.date_debut).localeCompare(String(y.date_debut)))
-        : tous.filter(c => c.date_debut <= dernier && finDe(c) >= premier);
+        : tous.filter(c => c.date_debut <= dernier && finAuJour(c) >= premier);
       const nomPeriode = enAnnee ? 'Tous les chantiers' : `${MOIS[state.mois]} ${state.annee}`;
 
       const corps = `
@@ -1301,7 +1333,9 @@ export const rgdPlanningPage = {
                 <td><span class="pl-etat est-${e.cle}">${esc(e.label)}</span></td>
                 <td>${f ? `<span class="pl-etiquette-formation">Formation</span>${c.adresse ? ` <span class="muted small">${esc(c.adresse)}</span>` : ''}`
                   : r ? esc(r.nom) : '<span class="muted">—</span>'}</td>
-                <td>${esc(enAnnee ? dateLongue(c.date_debut) : dateCourte(c.date_debut))}</td><td>${esc(enAnnee ? dateLongue(finDe(c)) : dateCourte(finDe(c)))}</td>
+                <td>${esc(enAnnee ? dateLongue(c.date_debut) : dateCourte(c.date_debut))}</td>
+                <td>${esc(enAnnee ? dateLongue(finDe(c)) : dateCourte(finDe(c)))}${
+                  joursEnPlus(c) ? ` <span class="pl-retard">+${joursEnPlus(c)} j</span>` : ''}</td>
                 <td>${esc(dureeLue(c).texte)}</td>
                 <td>${f ? '<span class="muted">—</span>' : !n ? '<span class="muted">Pas de liste</span>'
                   : reste ? `<span class="chip amber">${reste} à trouver</span>` : '<span class="chip green">Tout est prêt</span>'}</td>
