@@ -429,8 +429,16 @@
 }
 
 /* Installée sur l'écran d'accueil d'un iPhone, l'application passe SOUS la
-   barre d'état (`black-translucent`) : la barre du haut s'écarte d'autant. */
-.topnav { padding-top: env(safe-area-inset-top, 0px); background: var(--accent); }
+   barre d'état (`black-translucent`) : la barre du haut s'écarte d'autant.
+
+   ⚠ LE FOND A QUITTÉ CETTE RÈGLE LE 13/11/2026, et c'est ici qu'il faut le
+   savoir : elle posait `var(--accent)` pour que l'encoche de l'iPhone soit de
+   la couleur de la bande pleine. La bande est devenue une barre flottante
+   claire ; la règle peignait donc un bandeau orange tout autour. Le fond est
+   désormais écrit une seule fois, dans `app.css` (`.topnav`), et il vaut la
+   couleur de la page — trouvé en mesurant le fond calculé, pas en relisant
+   `app.css`, où rien ne clochait. */
+.topnav { padding-top: env(safe-area-inset-top, 0px); }
 
 @media print { .barre-bas { display: none !important; } }
 

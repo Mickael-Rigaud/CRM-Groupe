@@ -10,7 +10,13 @@ import {
   chiffres, total, entonnoir, entonnoirParCohorte, structuresHorsEntonnoir, caMois, leadsMois, derniersMois, moisCle, moisPrecedent,
   objectifs, objectif, objectifAnnuel, enregistrerObjectifs, ecoule, anneeEnCours, CLES_VISIBLES,
   rdvMois, signeesMois, periodePrecedente, moisEnCours, externe, exerciceDe,
+  // Les quatre cartes ajoutées le 12/11/2026. Elles rendent `null` quand la
+  // structure filtrée ne porte pas la donnée : l'écran masque la carte.
+  cheminArgent, chantiersResume, publicite, envoisAuto, argentConnu,
 } from '../data/chiffres.js';
+// `finDe` tient compte de la fin déclarée à la main et des jours ouvrés d'une
+// formation : refaire ce calcul ici donnerait une date différente du planning.
+import { finDe } from '../data/rgd-planning.js';
 import {
   esc, eur, daysSince, periodRange, inRange, isoDay, userName,
   openModal, closeModal, renderForm, readForm, toast,
@@ -80,6 +86,7 @@ const evolution = (avant, apres) => {
 export const homePage = {
   title: () => 'Tableau de bord',
   render(root) {
+    root.classList.add('ecran-tb');
     let chart = null;
     const state = {
       periode: 'mois',
@@ -119,24 +126,47 @@ export const homePage = {
       root.innerHTML = `
         ${db.demo ? '<div class="demo-banner"><b>Mode démo</b> — données d\'exemple stockées dans ce navigateur.</div>' : ''}
 
-        <div class="tb-filtres">
-          <span class="tb-flabel">Filtrer par entité</span>
-          <div class="tb-chips">
-            <button class="tb-chip" data-f="groupe" aria-pressed="${state.filtre === 'groupe'}">
-              <span class="tb-glyph">G</span><span>Groupe</span></button>
-            ${visibles.map(k => `<button class="tb-chip" data-f="${k}" aria-pressed="${state.filtre === k}" style="--marque:${ACTIVITIES[k].color}">
-              <img class="tb-logo" src="assets/logos/${k}.png" alt="" data-cle="${k}"><span>${esc(ACTIVITIES[k].label)}</span></button>`).join('')}
-          </div>
-          <div class="tb-periodes">
-            <div class="seg tb-periode">${PERIODES_TB.map(([k, l]) => `<button data-p="${k}" class="${state.periode === k ? 'active' : ''}"${k === 'year' && cles.length === 1 && exerciceDe(cles[0]).label.includes('–') ? ` title="Exercice ${exerciceDe(cles[0]).label} : du 1er octobre au 30 septembre"` : ''}>${k === 'year' && cles.length === 1 && exerciceDe(cles[0]).label.includes('–') ? 'Exercice ' + exerciceDe(cles[0]).label : l}</button>`).join('')}</div>
-            ${state.periode === 'mois' ? `<select class="tb-mois" id="tb-mois" aria-label="Choisir le mois">${derniersMois(24, new Date()).reverse().map(m => {
-              const nom = new Date(m.cle + '-01T00:00:00').toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
-              return `<option value="${m.cle}"${m.cle === state.mois ? ' selected' : ''}>${esc(nom)}${m.cle === moisCle() ? ' (en cours)' : m.cle === moisDernier() ? ' (mois dernier)' : ''}</option>`;
-            }).join('')}</select>` : ''}
-          </div>
-        </div>
+        ${/* ⚠ LE FOND QUI DÉRIVE VIT DANS L'ÉCRAN, PAS DANS LA PAGE (13/11/2026,
+              Élodie : « ça c'est super, branche-la »). Il est posé ici et non
+              dans `index.html` pour qu'il disparaisse avec le tableau de bord :
+              trois halos flous en `position:fixed` derrière TOUTES les pages
+              coûteraient cher sur téléphone pour un écran qu'on ne regarde
+              pas. `aria-hidden` parce qu'il ne dit rien. */ ''}
+        <div class="tb-fond" aria-hidden="true"><span class="tb-tache t1"></span><span class="tb-tache t2"></span><span class="tb-tache t3"></span></div>
 
-        <section class="tb-kpis">
+        <header class="tb-hero">
+          <div class="tb-salut">
+            <h1>${prenomDe(scope.user)}<span>${esc(phraseHero(state, cles))}</span></h1>
+            <p><span class="tb-vivant"></span>${state.filtre === 'groupe'
+              ? `les ${visibles.length} structures` : esc(ACTIVITIES[state.filtre].label)} · ${esc(periodeAffichee(state, cles))}</p>
+          </div>
+          <div class="tb-bfiltres">
+            <div class="tb-chips">
+              <button class="tb-chip" data-f="groupe" aria-pressed="${state.filtre === 'groupe'}">
+                <span class="tb-glyph">G</span><span>Groupe</span></button>
+              ${visibles.map(k => `<button class="tb-chip" data-f="${k}" aria-pressed="${state.filtre === k}" style="--marque:${ACTIVITIES[k].color}">
+                <img class="tb-logo" src="assets/logos/${k}.png" alt="" data-cle="${k}"><span>${esc(ACTIVITIES[k].label)}</span></button>`).join('')}
+            </div>
+            <div class="tb-periodes">
+              <div class="seg tb-periode">${PERIODES_TB.map(([k, l]) => `<button data-p="${k}" class="${state.periode === k ? 'active' : ''}"${k === 'year' && cles.length === 1 && exerciceDe(cles[0]).label.includes('–') ? ` title="Exercice ${exerciceDe(cles[0]).label} : du 1er octobre au 30 septembre"` : ''}>${k === 'year' && cles.length === 1 && exerciceDe(cles[0]).label.includes('–') ? 'Exercice ' + exerciceDe(cles[0]).label : l}</button>`).join('')}</div>
+              ${state.periode === 'mois' ? `<select class="tb-mois" id="tb-mois" aria-label="Choisir le mois">${derniersMois(24, new Date()).reverse().map(m => {
+                const nom = new Date(m.cle + '-01T00:00:00').toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+                return `<option value="${m.cle}"${m.cle === state.mois ? ' selected' : ''}>${esc(nom)}${m.cle === moisCle() ? ' (en cours)' : m.cle === moisDernier() ? ' (mois dernier)' : ''}</option>`;
+              }).join('')}</select>` : ''}
+            </div>
+          </div>
+        </header>
+
+        ${/* ⚠ DES TUILES DE TAILLES INÉGALES, ET CHACUNE PREND SA HAUTEUR. C'est
+              ce qui distingue le bento du tableau de cartes d'avant : les deux
+              colonnes figées ont disparu, « Ma journée » et « À traiter »
+              descendent avec le reste au lieu de former une colonne qui
+              s'allongeait toute seule. */ ''}
+        <div class="tb-bento">
+
+          ${taille(carteArgent(cles, r, state), 'tb-x7')}
+          ${scope.canPilotage ? taille(carteObjectifs(cles, deals), 'tb-x5') : ''}
+
           ${kpi('Leads', t.leadsNonDates ? t.leads : t.leadsPeriode,
             // Sans date d'arrivée, aucune évolution n'est calculable : mieux vaut
             // ne rien afficher qu'un pourcentage qui ne compare pas ce qu'il dit.
@@ -151,99 +181,91 @@ export const homePage = {
           ${kpi('Affaires signées', t.signees ?? '—', evolution(avant?.signees, t.signees), serieDe(cle => cles.reduce((s, k) => s + signeesMois(k, cle, deals), 0)), t.panier ? `panier ${eur(t.panier)}` : 'panier moyen indisponible')}
           ${kpi('CA HT', eur(t.ca), evolution(avant?.ca, t.ca), serieDe(caDu),
             obj ? `objectif ${eur(obj)}` : scope.canPilotage ? 'aucun objectif fixé' : 'sur vos affaires')}
-          ${kpi('Lead → RDV', tauxRdv === null ? '—' : pct(tauxRdv) + ' %', ecart(entAvant?.tauxRdv, tauxRdv), [],
-            tauxRdv === null ? (recus === 0 ? 'aucun lead sur la période' : 'étape non comptée') : `${avecRdv} RDV sur ${recus} lead${recus > 1 ? 's' : ''} reçu${recus > 1 ? 's' : ''}`, true)}
-          ${kpi('RDV → devis signé', tauxVente === null ? '—' : pct(tauxVente) + ' %', ecart(entAvant?.tauxVente, tauxVente), [],
-            tauxVente === null ? (avecRdv === 0 ? 'aucun RDV sur la période' : 'étape non comptée') : `${conclus} signé${conclus > 1 ? 's' : ''} sur ${avecRdv} RDV`, true)}
-        </section>
 
-        <div class="tb-grid">
-          <div class="tb-col">
+          <section class="card tb-x7">
+            <div class="card-head"><h2>Pipeline &amp; conversion</h2>
+              <span class="muted small">${parCohorte ? 'prospects arrivés sur la période, suivis jusqu\'à aujourd\'hui'
+                : cles.every(k => externe(k)?.direct) ? 'demandes, rendez-vous, devis envoyés et signés de la période'
+                : 'affaires créées sur la période'} · taux de passage</span></div>
+            ${!parCohorte && ent.some((s, i) => i && s.n > ent[i - 1].n) ? `<p class="muted small tb-hors">
+              <span class="ag-abs">Une étape dépasse la précédente : ces affaires sont arrivées avant la période. Un entonnoir ne se lit bien que sur une période assez longue.</span></p>` : ''}
+            ${horsEntonnoir.length ? `<p class="muted small tb-hors">${horsEntonnoir.map(k =>
+              `<span class="ag-src"><span class="dot" style="background:${ACTIVITIES[k].color}"></span>${esc(ACTIVITIES[k].label)}</span>`).join('')}
+              ${horsEntonnoir.length > 1 ? "n'apparaissent pas ici : leurs outils envoient" : "n'apparaît pas ici : son outil envoie"} des totaux, pas le détail des étapes.</p>` : ''}
+            ${/* ⚠ LES ÉTAPES SONT DES LIGNES, PAS DES BARRES PLEINES (05/11/2026,
+                  Élodie : « mettre le même tableau que l'on retrouve dans vue
+                  d'ensemble du tableau de bord RGD Renova »). Le nombre reste
+                  HORS de la barre : dans la barre, « Signés : 0 » n'aurait plus
+                  de place où s'écrire, et c'est justement la ligne qu'on regarde.
 
-            <section class="card">
-              <div class="card-head"><h2>Pipeline &amp; conversion</h2>
-                <span class="muted small">${parCohorte ? 'prospects arrivés sur la période, suivis jusqu\'à aujourd\'hui'
-                  : cles.every(k => externe(k)?.direct) ? 'demandes, rendez-vous, devis envoyés et signés de la période'
-                  : 'affaires créées sur la période'} · taux de passage</span></div>
-              ${!parCohorte && ent.some((s, i) => i && s.n > ent[i - 1].n) ? `<p class="muted small tb-hors">
-                <span class="ag-abs">Une étape dépasse la précédente : ces affaires sont arrivées avant la période. Un entonnoir ne se lit bien que sur une période assez longue.</span></p>` : ''}
-              ${horsEntonnoir.length ? `<p class="muted small tb-hors">${horsEntonnoir.map(k =>
-                `<span class="ag-src"><span class="dot" style="background:${ACTIVITIES[k].color}"></span>${esc(ACTIVITIES[k].label)}</span>`).join('')}
-                ${horsEntonnoir.length > 1 ? "n'apparaissent pas ici : leurs outils envoient" : "n'apparaît pas ici : son outil envoie"} des totaux, pas le détail des étapes.</p>` : ''}
-              ${/* ⚠ DES RANGÉES DE TABLEAU, PAS DES BARRES PLEINES (05/11/2026,
-                    Élodie : « mettre le même tableau que l'on retrouve dans vue
-                    d'ensemble du tableau de bord RGD Renova »). C'est la forme de
-                    « Objectifs du mois » : le nom de l'étape, une piste grise, le
-                    nombre HORS de la barre, la part à droite. Les barres pleines
-                    d'avant portaient leur nombre À L'INTÉRIEUR : il disparaît sur
-                    les étapes basses, qui sont justement celles qu'on regarde —
-                    « Signés : 0 » n'avait plus de barre où l'écrire.
+                  ⚠ LA BARRE SE MESURE SUR L'ÉTAPE LA PLUS HAUTE, pas sur la
+                  précédente : c'est elle qui donne la forme de l'entonnoir. */ ''}
+            <div class="tb-etapes">
+              ${ent.map((s, i) => {
+                const prev = i ? ent[i - 1].n : null;
+                const haut = Math.max(...ent.map(x => x.n)) || 1;
+                const large = Math.min(100, s.n / haut * 100);
+                const fin = i === ent.length - 1;
+                const taux = prev ? Math.round(s.n / prev * 100) : null;
+                return `<div class="tb-et">
+                  <div class="h"><b>${s.nom}</b>${taux === null ? (prev === null ? '' : '<span>—</span>') : taux > 100
+                    ? `<span title="Plus d'affaires à cette étape qu'à la précédente : elles viennent de mois antérieurs.">↑ ${taux} %</span>`
+                    : `<span>↓ ${taux} %</span>`}${s.partiel ? '<span title="Toutes les structures ne comptent pas cette étape.">partiel</span>' : ''}
+                    <em>${s.n}</em></div>
+                  <div class="tb-piste"><i data-large="${Math.max(large, s.n ? 4 : 0).toFixed(1)}"
+                    style="background:${degradeEtape(i, ent.length, fin)}"></i></div>
+                </div>`;
+              }).join('')}
+            </div>
+            <div class="tb-funnel-out">
+              <b>${recus && conclus !== null ? pct(conclus / recus) + ' %' : '—'}</b>
+              <span class="muted small">${recus && conclus !== null
+                ? `des leads reçus sur la période sont déjà signés${conclus ? ` · ${conclus} affaire${conclus > 1 ? 's' : ''}` : ''}`
+                : 'taux de transformation indisponible sur cette période'}</span>
+            </div>
+            ${/* ⚠ CES DEUX TAUX ÉTAIENT DEUX TUILES DU BANDEAU, et ils ont failli
+                  disparaître en passant de six indicateurs à quatre (13/11/2026).
+                  L'entonnoir au-dessus montre bien le passage d'une étape à
+                  l'autre, mais PAS son évolution : « 100 % » ne dit pas si c'était
+                  60 % le mois dernier. C'est cette comparaison-là qu'on reperd en
+                  supprimant une tuile, et elle revient ici — à sa place, sous
+                  l'entonnoir qu'elle commente.
 
-                    ⚠ LE VOCABULAIRE EST EMPRUNTÉ, PAS INVENTÉ : `rgd-pipe-table`
-                    et `rgd-ob-table` sont déjà dans la feuille de style, et le
-                    repli sur téléphone — la barre passe sous sa ligne — vient
-                    avec. Aucune ligne de style n'est ajoutée.
+                  ⚠ EN POINTS, PAS EN POURCENTAGE : un taux qui passe de 40 % à
+                  60 % gagne 20 points, pas 50 %. */ ''}
+            <div class="tb-taux">
+              <div><span>Lead → RDV</span><b>${tauxRdv === null ? '—' : pct(tauxRdv) + ' %'}</b>${delta(ecart(entAvant?.tauxRdv, tauxRdv), true)}
+                <em>${tauxRdv === null ? (recus === 0 ? 'aucun lead sur la période' : 'étape non comptée')
+                  : `${avecRdv} RDV sur ${recus} lead${recus > 1 ? 's' : ''}`}</em></div>
+              <div><span>RDV → devis signé</span><b>${tauxVente === null ? '—' : pct(tauxVente) + ' %'}</b>${delta(ecart(entAvant?.tauxVente, tauxVente), true)}
+                <em>${tauxVente === null ? (avecRdv === 0 ? 'aucun RDV sur la période' : 'étape non comptée')
+                  : `${conclus} signé${conclus > 1 ? 's' : ''} sur ${avecRdv} RDV`}</em></div>
+            </div>
+          </section>
 
-                    ⚠ LA BARRE SE MESURE SUR L'ÉTAPE LA PLUS HAUTE, pas sur la
-                    précédente : c'est elle qui donne la forme de l'entonnoir. Le
-                    taux de passage garde donc sa flèche dans sa colonne, sans
-                    quoi on le lirait comme le remplissage de la barre. */ ''}
-              <table class="rgd-pipe-table rgd-ob-table"><tbody>
-                ${ent.map((s, i) => {
-                  const prev = i ? ent[i - 1].n : null;
-                  const haut = Math.max(...ent.map(x => x.n)) || 1;
-                  const large = Math.min(100, s.n / haut * 100);
-                  const fin = i === ent.length - 1;
-                  const couleur = fin ? 'var(--green)' : 'var(--accent)';
-                  const taux = prev ? Math.round(s.n / prev * 100) : null;
-                  return `<tr>
-                    <th scope="row">${s.nom}</th>
-                    <td class="rgd-pipe-barre"><div class="rgd-pipe-piste"><i
-                      style="width:${Math.max(large, s.n ? 4 : 0)}%;background:${couleur}${fin ? '' : `;opacity:${(1 - i * 0.13).toFixed(2)}`}"></i></div></td>
-                    ${/* ⚠ PAS DE BASE QUAND L'ÉTAPE DU DESSUS EST À ZÉRO, et c'est le
-                          rendu qui l'a montré : RGD seule, en octobre, affichait
-                          « Devis / propositions · 1 sur 0 ». Vrai au mot près, illisible
-                          à l'œil — on dirait une panne. Zéro n'est pas une base : on
-                          n'en annonce pas, le taux garde son tiret, et le bandeau
-                          au-dessus dit déjà d'où viennent ces affaires. */ ''}
-                    <td class="rgd-pipe-n"><b style="color:${couleur}">${s.n}</b>${prev
-                      ? `<span class="rgd-ob-sur">sur ${prev}</span>` : ''}</td>
-                    <td class="rgd-ob-pct">${s.partiel ? '<span class="rgd-ob-sur" title="Toutes les structures ne comptent pas cette étape.">partiel</span> ' : ''}${taux === null ? (prev === null ? '' : '—') : taux > 100
-                      ? `<span title="Plus d'affaires à cette étape qu'à la précédente : elles viennent de mois antérieurs.">↑ ${taux} %</span>`
-                      : '↓ ' + taux + ' %'}</td>
-                  </tr>`;
-                }).join('')}
-              </tbody></table>
-              <div class="tb-funnel-out">
-                <b>${recus && conclus !== null ? pct(conclus / recus) + ' %' : '—'}</b>
-                <span class="muted small">${recus && conclus !== null
-                  ? `des leads reçus sur la période sont déjà signés${conclus ? ` · ${conclus} affaire${conclus > 1 ? 's' : ''}` : ''}`
-                  : 'taux de transformation indisponible sur cette période'}</span>
+          ${carteDette(cles, r)}
+
+          ${taille(tuileChantiers(cles, r), 'tb-x4')}
+          ${taille(tuilePublicite(cles), 'tb-x4')}
+          ${taille(tuileEnvois(cles), 'tb-x4')}
+
+          <section class="card tb-x7">
+            <div class="card-head"><h2>Évolution du chiffre d'affaires</h2>
+              <span class="muted small">CA HT · 12 derniers mois</span></div>
+            <div class="tb-chartwrap">
+              <div class="chart-box tb-chart"><canvas id="tb-canvas"></canvas></div>
+              <div class="tb-totals">
+                <h3>${esc(moisSerie[moisSerie.length - 1].label)}</h3>
+                ${cles.map(k => `<div class="tb-trow"><span class="dot" style="background:${ACTIVITIES[k].color}"></span>
+                  <span class="tb-tnm">${esc(ACTIVITIES[k].label)}</span><b>${eur(caMois(k, moisCle(), deals))}</b></div>`).join('')}
               </div>
-            </section>
+            </div>
+          </section>
 
-            ${scope.canPilotage ? carteObjectifs(cles, deals) : ''}
+          ${taille(carteJournee(visibles), 'tb-x5')}
+          ${taille(carteTaches(), 'tb-x6')}
+          ${taille(cartePatrimoine(), 'tb-x6')}
 
-            <section class="card">
-              <div class="card-head"><h2>Évolution du chiffre d'affaires</h2>
-                <span class="muted small">CA HT · 12 derniers mois</span></div>
-              <div class="tb-chartwrap">
-                <div class="chart-box tb-chart"><canvas id="tb-canvas"></canvas></div>
-                <div class="tb-totals">
-                  <h3>${esc(moisSerie[moisSerie.length - 1].label)}</h3>
-                  ${cles.map(k => `<div class="tb-trow"><span class="dot" style="background:${ACTIVITIES[k].color}"></span>
-                    <span class="tb-tnm">${esc(ACTIVITIES[k].label)}</span><b>${eur(caMois(k, moisCle(), deals))}</b></div>`).join('')}
-                </div>
-              </div>
-            </section>
-
-          </div>
-
-          <div class="tb-col">
-            ${carteJournee(visibles)}
-            ${carteTaches()}
-            ${cartePatrimoine()}
-          </div>
         </div>
 
         ${sources.length ? `<p class="muted small tb-source">${sources.map(x => externe(x.cle)?.direct
@@ -300,17 +322,20 @@ export const homePage = {
       });
 
       dessineCourbe(cles, moisSerie, deals);
+      animerTableau(root);
     };
 
     // ---------- indicateurs ----------
     // `sous` peut contenir du balisage (les pastilles de structure) : il est
     // composé ici, jamais saisi par quelqu'un.
+    // ⚠ UNE TUILE DE BENTO, PAS UNE CASE DE BANDEAU (13/11/2026). La micro-courbe
+    // revient sur fond clair : elle reprend donc les couleurs d'encre du thème,
+    // et non les teintes pâles qu'il fallait sur le bandeau sombre.
     const kpi = (libelle, valeur, d, serie, sous, points = false, titre = '', vers = '') => `
-      <article class="tb-kpi${vers ? ' click' : ''}"${vers ? ` data-go="${vers}"` : ''}${titre ? ` title="${esc(titre)}"` : ''}>
-        <span class="tb-lbl">${libelle}</span>
-        <span class="tb-val">${valeur}</span>
-        <span class="tb-sub">${delta(d, points)}<span class="muted">${comparaisonLabel(state.periode)}</span></span>
-        <span class="tb-sub muted">${sous}</span>
+      <article class="card tb-x3 tb-k${vers ? ' click' : ''}"${vers ? ` data-go="${vers}"` : ''}${titre ? ` title="${esc(titre)}"` : ''}>
+        <h2>${libelle}</h2>
+        <div class="tb-ind"><b>${valeur}</b>${delta(d, points)}<span class="tb-vs">${comparaisonLabel(state.periode)}</span></div>
+        <span class="tb-sous">${sous}</span>
         ${spark(serie, d === null || d >= 0 ? 'var(--green)' : 'var(--red)')}
       </article>`;
 
@@ -358,7 +383,7 @@ export const homePage = {
     };
 
     draw();
-    return { refresh: draw, destroy: () => chart?.destroy() };
+    return { refresh: draw, destroy: () => { chart?.destroy(); root.classList.remove('ecran-tb'); } };
   },
 };
 
@@ -434,11 +459,29 @@ function carteObjectifs(cles, deals) {
   const blocs = avecObjectif.map(k => blocObjectif([k], ACTIVITIES[k].color, deals,
     `<img src="assets/logos/${k}-complet.png" alt="${esc(ACTIVITIES[k].label)}" data-cle="${k}" data-nom="${esc(ACTIVITIES[k].label)}">`,
     `data-go="${lienStructure(k)}"`));
-  if (avecObjectif.length > 1) {
-    blocs.push(blocObjectif(avecObjectif, 'var(--accent)', deals, '<span class="ob-groupe">Groupe</span>', ''));
+  // ⚠ LE TOTAL « GROUPE » N'ADDITIONNE QUE CE QU'ON SAIT MESURER (12/11/2026).
+  // Y laisser l'objectif d'une structure dont aucun euro ne passe par le CRM
+  // fabriquait un retard permanent et inrattrapable : un objectif en face
+  // d'un réalisé qui restera nul par construction. On les sort du calcul
+  // et on dit lesquels — les retirer en silence ferait croire à une erreur de
+  // saisie la prochaine fois que quelqu'un additionnera les lignes.
+  const mesurables = avecObjectif.filter(k => argentConnu(k, deals));
+  const horsMesure = avecObjectif.filter(k => !argentConnu(k, deals));
+  if (mesurables.length > 1) {
+    blocs.push(blocObjectif(mesurables, 'var(--accent)', deals, '<span class="ob-groupe">Groupe</span>', ''));
   }
   return `<section class="card">${entete}<div class="ob-liste">${blocs.join('')}</div>
-    <p class="muted small tb-legend"><i></i> Le trait marque où il faudrait être aujourd'hui pour tenir l'objectif.</p></section>`;
+    <p class="muted small tb-legend"><i></i> Le trait marque où il faudrait être aujourd'hui pour tenir l'objectif.</p>
+    ${/* ⚠ LE RETRAIT SE DIT, IL NE SE DEVINE PAS. Sans cette phrase, quelqu'un
+          qui additionne les objectifs affichés ne retombe pas sur le total et
+          croit à une erreur de saisie. Elle n'apparaît que s'il reste quelque
+          chose à quoi comparer : seule, la carte « sans donnée » se suffit. */ ''}
+    ${horsMesure.length && mesurables.length ? `<p class="muted small" style="margin:6px 0 0">
+      ${esc(horsMesure.map(k => ACTIVITIES[k].label).join(' et '))}
+      (${eur(horsMesure.reduce((s, k) => s + objectifAnnuel(k), 0))} d'objectif)
+      ${horsMesure.length > 1 ? "n'entrent" : "n'entre"} dans aucun total :
+      ${horsMesure.length > 1 ? 'leurs chiffres ne passent pas' : 'ses chiffres ne passent pas'} par le CRM,
+      et les additionner créerait un retard que rien ne pourrait combler.</p>` : ''}</section>`;
 }
 const lienStructure = (k) => (k === 'rgd' ? '#/rgd' : k === 'btp' ? '#/btp' : k === 'courtage' ? '#/courtage' : '#/pipeline/' + k);
 
@@ -480,6 +523,24 @@ function blocObjectif(cles, couleur, deals, titre, attrs) {
       </div>
       <span class="ob-col-nom">${esc(c.label)}</span></div>`;
   }).join('')}</div>`;
+
+  // ⚠ UNE STRUCTURE DONT LE CRM N'A JAMAIS VU UN EURO N'EST PAS « EN RETARD »
+  // (12/11/2026, demandé par Élodie). BTP Expertise et La Référence Courtage
+  // portent un objectif annuel ; ni l'une ni l'autre ne facture dans le
+  // CRM. L'écran leur annonçait « 0 % · en retard sur le rythme »,
+  // ce qui désigne un manque de travail là où il n'y a qu'un manque de mesure.
+  // On garde l'objectif affiché — il a été fixé, il existe — et on remplace le
+  // verdict par ce qu'on sait vraiment.
+  const connu = cles.some(k => argentConnu(k, deals));
+  if (!connu) {
+    return `<article class="ob-bloc ob-muet${attrs ? ' click' : ''}" style="--c:${couleur}" ${attrs}>
+      <header class="ob-tete"><span class="tb-struct">${titre}</span>
+        <span class="muted small">objectif annuel <b>${eur(objAn)}</b></span></header>
+      <p class="ob-sansdonnee"><b>Aucun chiffre d'affaires dans le CRM</b> pour cette structure :
+        sa facturation ne passe pas par ici. L'objectif est affiché pour mémoire — l'avancement
+        ne peut pas être calculé, et un « 0 % » dirait autre chose que la vérité.</p>
+    </article>`;
+  }
 
   return `<article class="ob-bloc${attrs ? ' click' : ''}" style="--c:${couleur}" ${attrs}>
     <header class="ob-tete"><span class="tb-struct">${titre}</span>
@@ -777,4 +838,317 @@ function cartePatrimoine() {
     <div class="tb-pat">${cellules.map(c => `<div class="tb-pcell click" data-go="${c.go}">
       <span class="lbl">${c.l}</span><span class="v ${c.cls || ''}">${c.v}</span><span class="s">${c.s}</span></div>`).join('')}</div>
   </section>`;
+}
+
+/* ==========================================================================
+   AJOUTÉ LE 12/11/2026 — ce que le tableau de bord ne montrait pas encore.
+   Le chemin de l'argent, les chantiers, la publicité, les envois automatiques.
+   Les quatre lisent `js/data/chiffres.js` : aucune définition n'est écrite ici.
+   ========================================================================== */
+
+// Le nom de la période affichée, pour le bandeau. ⚠ Il dit l'EXERCICE quand la
+// structure en a un : « année 2026 » sur RGD Renova serait faux de trois mois.
+function periodeAffichee(state, cles) {
+  if (state.periode === 'mois') {
+    return new Date(state.mois + '-01T00:00:00').toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+  }
+  if (state.periode === 'quarter') return 'trimestre en cours';
+  const ex = cles.length === 1 ? exerciceDe(cles[0]) : null;
+  return ex && ex.label.includes('–') ? `exercice ${ex.label}` : `année ${new Date().getFullYear()}`;
+}
+
+const jourCourt = (iso) => (iso
+  ? new Date(String(iso).slice(0, 10) + 'T00:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })
+  : '');
+// L'âge d'une échéance dépassée, en mots. ⚠ C'est lui qui fait agir, pas le
+// montant : un total en attente se regarde, « due il y a plus d'un an » se traite.
+const depuisQuand = (iso) => {
+  const j = Math.round((Date.now() - new Date(String(iso).slice(0, 10) + 'T00:00:00')) / 86400000);
+  if (j < 31) return `il y a ${j} jour${j > 1 ? 's' : ''}`;
+  const m = Math.round(j / 30.4);
+  return m < 12 ? `il y a ${m} mois` : `il y a plus de ${Math.floor(m / 12)} an${m >= 24 ? 's' : ''}`;
+};
+
+/**
+ * « Le chemin de l'argent » : signé → facturé → encaissé → reste dû.
+ *
+ * ⚠ LE QUATRIÈME BARREAU N'EST PAS DE LA MÊME NATURE QUE LES TROIS AUTRES, et
+ * l'écran doit le dire au lieu de le laisser deviner : les trois premiers
+ * concernent la période choisie, le dernier est ce qu'on attend aujourd'hui,
+ * toutes dates confondues. Sans cette mention, on soustrait de tête des nombres
+ * qui ne parlent pas du même intervalle.
+ */
+/**
+ * « Le chemin de l'argent » — la grande tuile du bento.
+ *
+ * ⚠ TROIS BARREAUX, PAS QUATRE. « Reste dû » a quitté cette carte le
+ * 13/11/2026 pour la tuile rouge : les trois qui restent sont des FLUX de la
+ * période choisie, le quatrième était un STOCK d'aujourd'hui. Alignés, on les
+ * soustrayait de tête alors qu'ils ne parlent pas du même intervalle.
+ *
+ * ⚠ LES BARRES SE MESURENT SUR LE SIGNÉ, et c'est tout le propos : voir que
+ * le facturé ne représente qu'un dixième de ce qui a été vendu. Mesurer
+ * chacune sur elle-même les remplirait toutes et ne dirait plus rien.
+ */
+function carteArgent(cles, r, state) {
+  const a = cheminArgent(cles, r);
+  if (!a) return '';
+  const haut = Math.max(a.signe, a.facture, a.encaisse, 1);
+  const part = (v) => Math.max(v > 0 ? 3 : 0, Math.min(100, v / haut * 100)).toFixed(1);
+  const barreaux = [
+    { lb: 'Sign\u00e9', v: a.signe, ss: 'devis sign\u00e9s' },
+    { lb: 'Factur\u00e9', v: a.facture, ss: 'factures \u00e9mises' },
+    { lb: 'Encaiss\u00e9', v: a.encaisse, ss: 'r\u00e8glements re\u00e7us' },
+  ];
+  return `<section class="card tb-argent">
+    <h2>Le chemin de l'argent</h2>
+    <span class="tb-sous">du devis sign\u00e9 au compte en banque \u00b7 ${esc(periodeAffichee(state, cles))}</span>
+    <div class="tb-gros"><span class="tb-nb" data-n="${a.signe}" data-eur="1">${eur(a.signe)}</span></div>
+    <span class="tb-sous">sign\u00e9s sur la p\u00e9riode</span>
+    <div class="tb-flux">
+      ${barreaux.map(b => `<div class="tb-fx">
+        <span class="lb">${b.lb}</span>
+        <b class="tb-nb" data-n="${b.v}" data-eur="1">${eur(b.v)}</b>
+        <span class="ss">${esc(b.ss)}</span>
+        <div class="tb-piste"><i data-large="${part(b.v)}"></i></div></div>`).join('')}
+    </div>
+  </section>`;
+}
+
+const duo = (a, b) => `<div class="tb-duo">
+  <div class="tb-du"><b>${a.v}</b><span>${a.l}</span></div>
+  <div class="tb-du${b.ton ? ' ' + b.ton : ''}"><b>${b.v}</b><span>${b.l}</span></div></div>`;
+
+function tuileChantiers(cles, r) {
+  const c = chantiersResume(cles, r);
+  if (!c) return '';
+  // ⚠ UN CHANTIER « OUBLIÉ » EST LE SEUL QUI DEMANDE QUELQUE CHOSE : commencé,
+  // sa date de fin passée, et personne n'a appuyé sur « Chantier terminé ».
+  // Les autres n'ont besoin de rien, ils tournent. Il passe donc en tête.
+  // ⚠ `oublies` EST UN SOUS-ENSEMBLE DE `enCours` : sans ce retrait, un
+  // chantier qui a dépassé sa date apparaîtrait deux fois dans la même liste.
+  const aClore = new Set(c.oublies.map(x => x.id));
+  const lignes = [
+    ...c.oublies.map(x => ({ x, ton: 'red', etat: 'à clôturer' })),
+    ...c.enCours.filter(x => !aClore.has(x.id)).map(x => ({ x, ton: '', etat: 'en cours' })),
+    ...c.aVenir.map(x => ({ x, ton: 'muet', etat: 'à venir' })),
+  ].slice(0, 4);
+  const couleur = (ton) => (ton === 'red' ? 'var(--red)' : ton === 'muet' ? 'var(--muted-2)' : ACTIVITIES.rgd.color);
+  return `<section class="card tb-tuile">
+    <div class="card-head"><h2>Chantiers</h2>
+      <a class="muted small" href="#/rgd/planning">planning →</a></div>
+    ${duo({ v: c.enCours.length, l: 'en cours' }, { v: c.termines.length, l: 'terminés sur la période' })}
+    ${c.oublies.length ? `<p class="tb-alerte">
+      <b>${c.oublies.length} chantier${c.oublies.length > 1 ? 's' : ''} ${c.oublies.length > 1 ? 'ont' : 'a'} dépassé sa date de fin</b>
+      sans être clôturé${c.oublies.length > 1 ? 's' : ''} : la demande d'avis Google ne part pas tant que le bouton n'est pas appuyé.</p>` : ''}
+    ${lignes.length ? `<div class="tb-liste">${lignes.map(({ x, ton, etat }) => `<div class="tb-lg">
+      <i style="background:${couleur(ton)}"></i>
+      <span class="tx">${esc(x.titre || 'Chantier')}<em>jusqu’au ${jourCourt(finDe(x))}</em></span>
+      <b${ton === 'red' ? ' style="color:var(--red)"' : ''}>${etat}</b></div>`).join('')}</div>`
+      : '<p class="muted small" style="margin-top:10px">Aucun chantier au planning.</p>'}
+    ${c.avisDemandes ? `<p class="muted small" style="margin-top:9px">${c.avisDemandes} demande${c.avisDemandes > 1 ? 's' : ''} d'avis Google partie${c.avisDemandes > 1 ? 's' : ''} sur la période.</p>` : ''}
+  </section>`;
+}
+
+function tuilePublicite(cles) {
+  const p = publicite(cles);
+  if (!p) return '';
+  const virgule = (n) => String(Math.round(n * 10) / 10).replace('.', ',');
+  return `<section class="card tb-tuile">
+    <div class="card-head"><h2>Publicité Meta</h2>
+      <a class="muted small" href="#/rgd/analyse">30 jours →</a></div>
+    ${duo({ v: eur(p.depense), l: 'dépensé' },
+      { v: p.coutParLead == null ? '—' : eur(p.coutParLead), l: 'par lead' })}
+    <div class="tb-liste">
+      <div class="tb-lg"><i style="background:var(--accent)"></i>
+        <span class="tx">${p.leads} lead${p.leads > 1 ? 's' : ''} reçu${p.leads > 1 ? 's' : ''}<em>${p.clics} clic${p.clics > 1 ? 's' : ''} · ${p.campagnes} campagne${p.campagnes > 1 ? 's' : ''}</em></span>
+        <b>${p.tauxLead == null ? '—' : virgule(p.tauxLead * 100) + ' %'}</b></div>
+    </div>
+  </section>`;
+}
+
+function tuileEnvois(cles) {
+  const e = envoisAuto(cles);
+  if (!e) return '';
+  const l = [
+    { n: e.relances, lb: 'Relances de devis', s: 'J+3, J+8, J+15', c: 'var(--accent)' },
+    { n: e.confirmations, lb: 'Confirmations de RDV', s: 'la veille, par SMS', c: 'var(--blue)' },
+    { n: e.avis, lb: 'Avis Google', s: 'au clic sur « Chantier terminé »', c: 'var(--green)' },
+  ].filter(x => x.n);
+  // ⚠ LES ÉCHECS SONT LE SUJET. Un envoi qui part n'a besoin de personne ; un
+  // envoi qui échoue n'a prévenu personne. On nomme les destinataires : sans
+  // eux, « 4 échecs » ne se répare pas.
+  return `<section class="card tb-tuile">
+    <div class="card-head"><h2>Ce qui part tout seul</h2>
+      <span class="muted small">${e.jours} derniers jours</span></div>
+    ${duo({ v: e.partis, l: 'partis' },
+      { v: e.echecs.length, l: 'en échec', ton: e.echecs.length ? 'rouge' : '' })}
+    ${l.length ? `<div class="tb-liste">${l.map(x => `<div class="tb-lg">
+      <i style="background:${x.c}"></i><span class="tx">${x.lb}<em>${x.s}</em></span><b>${x.n}</b></div>`).join('')}</div>` : ''}
+    ${e.echecs.length ? `<p class="tb-alerte">
+      <b>${e.echecs.length} envoi${e.echecs.length > 1 ? 's' : ''} n’${e.echecs.length > 1 ? 'ont' : 'a'} pas pu partir.</b>
+      ${esc(e.echecs.slice(0, 2).map(x => x.destinataire || 'destinataire absent').join(', '))}${e.echecs.length > 2 ? '…' : ''}</p>` : ''}
+  </section>`;
+}
+
+/* ==========================================================================
+   LE BENTO ANIMÉ (13/11/2026) — Élodie, après une maquette vivante :
+   « ça c'est super, branche-la sur la vraie base ».
+
+   Ce qui a été refusé avant, et pourquoi c'est noté : trois directions, un
+   mélange, trois palettes et trois menus. Le verdict était « on dirait un
+   vieux CRM ». Le défaut n'était pas la couleur : c'était que TOUT ÉTAIT
+   FIGÉ, et qu'une grille de cartes rectangulaires identiques reste une
+   grille de cartes rectangulaires identiques, quelle que soit sa teinte.
+   ========================================================================== */
+
+/**
+ * Pose la taille d'une tuile sur la carte elle-même.
+ *
+ * ⚠ PAS D'EMBALLAGE AUTOUR : un enfant de grille supplémentaire recevrait la
+ * largeur, et la carte flotterait dedans sans la remplir. Les cartes
+ * existantes sortent toutes de leur fonction en `<section class="card">` ; si
+ * l'une changeait de forme, on retombe sur l'emballage plutôt que de la
+ * perdre — un bento dépareillé vaut mieux qu'une carte disparue.
+ */
+function taille(html, cls) {
+  const t = String(html || '').trim();
+  if (!t) return '';
+  const m = '<section class="card';
+  return t.startsWith(m) ? t.replace(m, `<section class="card ${cls}`) : `<div class="${cls}">${t}</div>`;
+}
+
+const prenomDe = (u) => {
+  const p = String(u?.full_name || '').trim().split(/\s+/)[0];
+  return p ? `Bonjour ${esc(p)}, ` : 'Tableau de bord ';
+};
+
+// La phrase qui suit le bonjour. ⚠ Elle dit l'EXERCICE quand la structure en a
+// un : « voici l'année 2026 » sur RGD Renova serait faux de trois mois.
+function phraseHero(state, cles) {
+  if (state.periode === 'mois') {
+    return 'voici ' + new Date(state.mois + '-01T00:00:00')
+      .toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }) + '.';
+  }
+  if (state.periode === 'quarter') return 'voici le trimestre.';
+  const ex = cles.length === 1 ? exerciceDe(cles[0]) : null;
+  return ex && ex.label.includes('–') ? `voici l'exercice ${ex.label}.` : `voici l'année ${new Date().getFullYear()}.`;
+}
+
+// L'entonnoir descend de l'indigo vers l'orange, en passant par le rose : la
+// couleur fait la pente, pas seulement la longueur des barres.
+const PENTE = ['#5B52F0', '#6B63F2', '#8B5BF0', '#C65AC8', '#FF4D8D', '#FF7A2D'];
+function degradeEtape(i, n, fin) {
+  const a = PENTE[Math.min(i, PENTE.length - 1)];
+  const b = PENTE[Math.min(i + 1, PENTE.length - 1)];
+  return fin && n <= PENTE.length ? `linear-gradient(90deg,${PENTE[PENTE.length - 1]},#FFB15C)`
+    : `linear-gradient(90deg,${a},${b})`;
+}
+
+/**
+ * « Ce qui dort » — la tuile rouge : ce qui est facturé et pas rentré.
+ *
+ * ⚠ ELLE EST SORTIE DE LA CARTE DE L'ARGENT, et ce n'est pas qu'une question
+ * de place. Les trois premiers barreaux sont des FLUX de la période ; celui-ci
+ * est un STOCK d'aujourd'hui, toutes dates confondues. Côte à côte dans la
+ * même carte, on les soustrayait mentalement les uns aux autres. Séparés, et
+ * d'une couleur qui n'existe nulle part ailleurs sur l'écran, la question
+ * qu'ils posent est différente — et c'est la bonne.
+ */
+function carteDette(cles, r) {
+  const a = cheminArgent(cles, r);
+  if (!a || a.resteDu == null || !a.nbDues) return '';
+  const nb = (n, mot) => `${n} ${mot}${n > 1 ? 's' : ''}`;
+  const lignes = [];
+  if (a.nbEchues) {
+    lignes.push(`<b>${a.nbEchues === a.nbDues ? `Les ${a.nbDues} factures en attente ont toutes dépassé leur échéance.`
+      : `${nb(a.nbEchues, 'facture')} ${a.nbEchues > 1 ? 'ont' : 'a'} dépassé son échéance.`}</b>
+      ${eur(a.montantEchu)}${a.plusAncienne ? ` — la plus ancienne était due le <b>${jourCourt(a.plusAncienne)}</b>, ${depuisQuand(a.plusAncienne)}` : ''}.`);
+  }
+  if (a.nbDuCrm) {
+    lignes.push(`Dont <b>${nb(a.nbDuCrm, 'facture')} faite${a.nbDuCrm > 1 ? 's' : ''} dans le CRM</b>
+      (${eur(a.montantDuCrm)}) qui ne figure${a.nbDuCrm > 1 ? 'nt' : ''} dans aucune liste d'impayés :
+      l'écran Encaissements ne lit que Costructor.`);
+  }
+  return `<section class="card tb-x5 tb-dette">
+    <h2>Ce qui dort</h2>
+    <div class="tb-gros"><span class="tb-nb" data-n="${a.resteDu}" data-eur="1">${eur(a.resteDu)}</span></div>
+    <span class="tb-sous">${nb(a.nbDues, 'facture')} émise${a.nbDues > 1 ? 's' : ''} et pas encore réglée${a.nbDues > 1 ? 's' : ''}</span>
+    ${lignes.map(l => `<p>${l}</p>`).join('')}
+  </section>`;
+}
+
+/* ---------------------------------------------------------------------------
+   L'ANIMATION
+
+   ⚠ TROIS GARDE-FOUS, CHACUN POUR UNE PANNE CONSTATÉE :
+
+   1. On compte des PAS, pas des millisecondes. La première version lisait
+      `performance.now()` ; hors écran elle rendait un instant antérieur au
+      départ, la progression passait en négatif et le compteur affichait
+      un montant NÉGATIF. Borner la progression l'a figée à zéro — le défaut avait
+      seulement changé de visage.
+   2. `prefers-reduced-motion` coupe tout : les chiffres sont posés d'emblée.
+      Un tableau de bord qu'on ouvre vingt fois par jour ne doit pas imposer
+      son petit spectacle à qui ne le supporte pas.
+   3. Un filet de sécurité pose l'état final au bout d'une seconde et demie,
+      au cas où l'observateur ne se déclenche pas (aperçu figé, onglet caché).
+      Une carte invisible parce que son animation n'est jamais partie serait
+      une carte perdue.
+--------------------------------------------------------------------------- */
+const SANS_MOUVEMENT = () => {
+  try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; }
+};
+
+function compteur(el) {
+  const fin = Number(el.dataset.n);
+  if (!isFinite(fin)) return;
+  const dec = Number(el.dataset.dec || 0), unite = el.dataset.eur ? ' €' : '';
+  const ecrire = (v) => {
+    el.textContent = el.dataset.eur ? eur(v) : v.toLocaleString('fr-FR',
+      { minimumFractionDigits: dec, maximumFractionDigits: dec }) + unite;
+  };
+  if (SANS_MOUVEMENT()) return ecrire(fin);
+  const total = 34;
+  let i = 0;
+  const pas = () => {
+    i++;
+    const p = i / total;
+    ecrire(fin * (1 - Math.pow(1 - p, 3)));     // on ralentit en arrivant
+    if (i < total) setTimeout(pas, 28); else ecrire(fin);
+  };
+  pas();
+}
+
+export function animerTableau(root) {
+  const bento = root.querySelector('.tb-bento');
+  if (!bento) return;
+  const cartes = [...bento.children];
+  const doux = !SANS_MOUVEMENT();
+  // ⚠ C'EST LE SCRIPT QUI ARME L'ENTRÉE, et seulement une fois qu'il est sûr
+  // de pouvoir la jouer : la feuille de style ne cache rien de son côté. Sans
+  // cette ligne, l'écran s'affiche d'un bloc — sans animation, mais entier.
+  if (doux) bento.classList.add('anime');
+  const animer = (c) => {
+    if (c.dataset.vu) return;
+    c.dataset.vu = '1';
+    c.classList.add('tb-vu');
+    const poser = (f) => (doux ? setTimeout(f, 200) : f());
+    c.querySelectorAll('[data-large]').forEach(b => poser(() => { b.style.width = b.dataset.large + '%'; }));
+    c.querySelectorAll('[data-arc]').forEach(a => poser(() => {
+      const c2 = Number(a.dataset.circ || 339);
+      a.style.strokeDashoffset = c2 - c2 * Math.min(1, Number(a.dataset.arc) / 100);
+    }));
+    c.querySelectorAll('.tb-nb').forEach(n => compteur(n));
+  };
+  if (!doux) return cartes.forEach(animer);
+  const obs = new IntersectionObserver((lot) => {
+    lot.forEach(e => {
+      if (!e.isIntersecting) return;
+      setTimeout(() => animer(e.target), (cartes.indexOf(e.target) % 4) * 80);
+      obs.unobserve(e.target);
+    });
+  }, { threshold: 0.12 });
+  cartes.forEach(c => obs.observe(c));
+  setTimeout(() => cartes.forEach(animer), 1500);
 }

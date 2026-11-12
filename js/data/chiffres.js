@@ -10,6 +10,10 @@ import { db } from './db.js';
 import { scope } from './scope.js';
 import { ACTIVITIES, ACTIVITY_KEYS, aAtteint, missionDe, reachedRdv, stageIndex, stageOf } from './schema.js';
 import { moisObjectifs } from './rgd-objectifs.js';
+// Le planning sait déjà dire quand un chantier finit — y compris la fin
+// déclarée à la main et les jours ouvrés d'une formation. Refaire ce calcul
+// ici donnerait deux écrans qui ne sont pas d'accord sur la même barre.
+import { aujourdhuiIso, estFormation, finDe } from './rgd-planning.js';
 import { inRange, isoDay } from '../ui.js';
 
 // ---------- Mois ----------
@@ -73,6 +77,16 @@ function statsRgd() {
   const revenue = mois.map(m => ({
     month: m.cle, amount: m.ca, deals: m.devisSignes, quotes: m.devisEnvoyes,
     leads: m.demandes, rdv: m.rdv,
+    // ⚠ LE MONTANT SIGNÉ MANQUAIT, ET LE PANIER MOYEN MENTAIT EN SILENCE
+    // (12/11/2026). `total()` calcule `panier: montantSigne ?? ca` : faute de
+    // montant signé, RGD divisait ses FACTURES du mois par ses SIGNATURES du
+    // mois — le commentaire de `montantSigne` dit lui-même que ça « ne donne le
+    // prix d'aucune affaire ». La clé existait, personne ne la posait.
+    signedAmount: m.montantSigne,
+    // Le deuxième et le troisième barreau du chemin de l'argent. `amount` est
+    // déjà le facturé ; on le redonne sous son vrai nom pour que l'écran ne
+    // demande pas « amount » quand il veut dire « facturé ».
+    facture: m.ca, encaisse: m.encaisse,
     // Les clients derrière ces nombres, quand le module les donne : de quoi
     // compter UNE FOIS sur un trimestre le client qui signe en octobre puis
     // en novembre (voir `compte`).
@@ -527,3 +541,192 @@ export function ecoule(r) {
 
 export const CLES_VISIBLES = () => ACTIVITY_KEYS.filter(k => scope.activityKeys.includes(k));
 export { ACTIVITIES, ACTIVITY_KEYS, isoDay };
+
+/* ==========================================================================
+   LES QUATRE CARTES AJOUTÉES AU TABLEAU DE BORD LE 12/11/2026
+   (Élodie : « mettre à jour les informations du tableau de bord »).
+
+   L'écran en était resté aux leads, RDV, devis et CA — c'est-à-dire à ce que
+   le CRM savait faire en septembre. Depuis, le planning chantier, les
+   encaissements, la publicité Meta et les envois automatiques sont entrés
+   dans l'outil et n'étaient visibles nulle part ici.
+
+   ⚠ CHACUNE REND `null` PLUTÔT QU'UN ZÉRO quand la structure filtrée ne porte
+   pas la donnée. Un zéro se lit « il ne s'est rien passé » ; l'absence se lit
+   « cet outil ne compte pas ça ». L'écran masque la carte, il n'affiche pas
+   une carte vide — c'est la même règle que `structuresHorsEntonnoir`.
+   ========================================================================== */
+
+/**
+ * Le CRM a-t-il jamais vu un euro passer par cette structure ?
+ *
+ * ⚠ CE N'EST PAS « A-T-ELLE FAIT ZÉRO », C'EST « EN SAIT-ON QUELQUE CHOSE »
+ * (12/11/2026). Trois des quatre structures ont un objectif annuel, et deux
+ * d'entre elles n'ont jamais eu un euro dans le CRM : leur facturation ne
+ * passe pas par là. L'écran leur annonçait « 0 % · en retard sur le rythme »,
+ * ce qui est faux au sens propre — on ne constate pas un retard sur une
+ * activité qu'on ne mesure pas. Un zéro affirme, une absence interroge.
+ *
+ * ⚠ ON REGARDE TOUTE L'HISTOIRE, PAS LA PÉRIODE : une structure qui a facturé
+ * l'an dernier et rien ce mois-ci est bien en retard, elle. Seule celle qui
+ * n'a JAMAIS rien montré est « sans donnée ».
+ */
+export function argentConnu(k, deals = scope.deals()) {
+  const e = externe(k);
+  if (e && (e.revenue || []).some(m => Number(m.amount) > 0)) return true;
+  return deals.some(d => d.activity === k && d.status === 'won' && Number(d.amount) > 0);
+}
+
+const sommeHt = (l) => l.reduce((t, x) => t + (Number(x.montant_ht) || 0), 0);
+// ⚠ PAS `moisDe` : ce nom est déjà pris plus haut, et il compte le NOMBRE de
+// mois d'une période. Celui-ci rend les lignes mensuelles d'une structure.
+const moisDansPeriode = (k, r) => (externe(k)?.revenue || []).filter(m => inRange(m.month + '-01', r));
+
+/**
+ * Le chemin de l'argent : signé → facturé → encaissé, puis ce qui reste dû.
+ *
+ * ⚠ LES TROIS PREMIERS SONT DES FLUX, LE QUATRIÈME EST UN STOCK, et c'est la
+ * seule chose à comprendre pour le lire. « Signé », « facturé » et « encaissé »
+ * se rapportent à la période choisie ; « reste dû » est ce qu'on attend
+ * AUJOURD'HUI, toutes dates confondues — une facture d'il y a plus d'un an jamais
+ * réglée en fait partie, alors qu'elle n'est dans aucun des trois autres.
+ * L'écran doit le dire, sans quoi on soustrait mentalement des nombres qui ne
+ * parlent pas de la même chose.
+ *
+ * ⚠ MÊME POPULATION POUR LES QUATRE BARREAUX. `ca` et `encaisse` de
+ * `moisObjectifs` comptent les factures Costructor ET celles faites dans le
+ * CRM ; le reste dû doit donc compter les deux aussi. L'écran Encaissements,
+ * lui, ne connaît que Costructor : ses 4 factures CRM non réglées
+ * n'apparaissent dans AUCUNE liste d'impayés. C'est
+ * un trou réel, pas un écart de méthode — et c'est pour ça qu'on compte large
+ * ici et qu'on dit combien viennent du CRM.
+ */
+export function cheminArgent(cles, r) {
+  const avec = cles.filter(k => (externe(k)?.revenue || []).some(m => m.facture != null));
+  if (!avec.length) return null;
+  const cumul = (champ) => avec.reduce((s, k) =>
+    s + moisDansPeriode(k, r).reduce((t, m) => t + (Number(m[champ]) || 0), 0), 0);
+  return {
+    structures: avec,
+    signe: cumul('signedAmount'),
+    facture: cumul('facture'),
+    encaisse: cumul('encaisse'),
+    ...resteDu(avec),
+  };
+}
+
+// Ce qui est facturé et pas encore rentré, à la seconde où on regarde.
+// ⚠ LES MÊMES FILTRES QUE L'ÉCRAN ENCAISSEMENTS (`rgd-facturation.js`) : statut
+// `facture`, et JAMAIS un remboursement — un montant négatif glissé dans un
+// total d'argent attendu ne se voit pas, il se soustrait en silence.
+function resteDu(cles) {
+  if (!cles.includes('rgd') || !scope.canRgd) return { resteDu: null };
+  const jour = isoDay();
+  const attendues = scope.rgd('rgd_paiements')
+    .filter(p => p.statut === 'facture' && p.type !== 'remboursement');
+  // ⚠ UNE FACTURE IMPORTÉE EST UN PDF FAIT AILLEURS : même exclusion que dans
+  // `moisObjectifs`, sinon elle compte deux fois (elle est déjà chez Costructor).
+  const duCrm = scope.rgd('rgd_devis_crm').filter(d => d.genre !== 'devis' && !d.importe
+    && ['envoye', 'signe'].includes(d.statut) && !d.regle_le);
+  const echues = attendues.filter(p => p.date_echeance && p.date_echeance < jour);
+  return {
+    resteDu: sommeHt(attendues) + sommeHt(duCrm),
+    nbDues: attendues.length + duCrm.length,
+    nbEchues: echues.length,
+    montantEchu: sommeHt(echues),
+    // La plus vieille échéance dépassée : « il y a plus d'un an » dit ce qu'un
+    // montant ne dit pas.
+    plusAncienne: echues.map(p => p.date_echeance).sort()[0] || null,
+    nbDuCrm: duCrm.length,
+    montantDuCrm: sommeHt(duCrm),
+  };
+}
+
+/**
+ * Les chantiers du planning : ce qui tourne aujourd'hui, ce qui vient, ce qui
+ * s'est terminé sur la période.
+ *
+ * ⚠ « EN COURS » = COMMENCÉ ET PAS DÉCLARÉ TERMINÉ, et surtout PAS « dont la
+ * date de fin n'est pas passée ». C'est la règle du planning lui-même
+ * (`finAuJour`, posée le 12/11/2026 : « tant qu'un chantier n'est pas déclaré
+ * terminé je veux qu'il continue au jour le jour »). Compter la date prévue
+ * ici aurait donné deux écrans en désaccord : le planning montrant trois
+ * barres qui courent, le tableau de bord annonçant « 2 en cours ».
+ *
+ * ⚠ CEUX QUI ONT DÉPASSÉ LEUR DATE PRÉVUE SONT UN SOUS-ENSEMBLE, pas une
+ * catégorie à part : ils sont en cours ET ils demandent quelque chose. La
+ * tuile les montre en tête sans les retirer du compte.
+ *
+ * ⚠ LES FORMATIONS NE SONT PAS DES CHANTIERS : elles partagent le planning
+ * depuis le 11/11 mais ne se comptent pas avec, sinon « 2 chantiers en cours »
+ * voudrait dire « un chantier et une formation ».
+ */
+export function chantiersResume(cles, r) {
+  if (!cles.includes('rgd') || !scope.canRgd) return null;
+  const jour = aujourdhuiIso();
+  const tous = scope.rgd('rgd_planning').filter(c => !estFormation(c));
+  if (!tous.length) return null;
+  const vivants = tous.filter(c => !c.fin_reelle);
+  const enCours = vivants.filter(c => c.date_debut <= jour);
+  return {
+    enCours,
+    aVenir: vivants.filter(c => c.date_debut > jour),
+    // Commencés, non clôturés, et dont la date de fin PRÉVUE est passée.
+    oublies: enCours.filter(c => finDe(c) < jour),
+    termines: tous.filter(c => c.fin_reelle && inRange(c.fin_reelle, r)),
+    // Un chantier terminé dont l'avis Google est parti : c'est ce que le
+    // bouton du planning déclenche, et la seule trace qu'il a servi.
+    avisDemandes: tous.filter(c => c.fin_reelle && c.avis_demande && inRange(c.fin_reelle, r)).length,
+  };
+}
+
+/**
+ * La publicité Meta des trente derniers jours.
+ *
+ * ⚠ ON SOMME LES CAMPAGNES, IL N'Y A PAS DE LIGNE DE TOTAL. Vérifié en base le
+ * 12/11/2026 : `meta_ads_periode` ne porte que des lignes par campagne
+ * (`campagne_id` jamais nul). Le jour où une ligne de total apparaîtrait, ce
+ * calcul doublerait tout — c'est le genre d'erreur qui ne se voit pas, puisque
+ * les nombres restent plausibles.
+ *
+ * ⚠ LE COÛT PAR LEAD NE SE MOYENNE PAS : on divise la dépense totale par les
+ * leads totaux. Moyenner les coûts par lead des sept campagnes donnerait le
+ * même poids à celle qui a coûté le moins qu'à celle qui a coûté le plus.
+ */
+export function publicite(cles) {
+  const lignes = db.t('meta_ads_periode').filter(x => Number(x.periode) === 30 && cles.includes(x.activity));
+  if (!lignes.length) return null;
+  const n = (champ) => lignes.reduce((s, x) => s + (Number(x[champ]) || 0), 0);
+  const depense = n('depense'), leads = n('leads'), clics = n('clics');
+  return {
+    depense, leads, clics, campagnes: lignes.length,
+    coutParLead: leads ? depense / leads : null,
+    // Un clic qui ne laisse pas de coordonnées a coûté quand même.
+    tauxLead: clics ? leads / clics : null,
+  };
+}
+
+/**
+ * Ce que le CRM envoie tout seul : relances de devis, confirmations de
+ * rendez-vous, demandes d'avis Google.
+ *
+ * ⚠ LES ÉCHECS SONT LE SUJET, PAS UNE NOTE DE BAS DE PAGE. Un envoi automatique
+ * qui part n'a besoin de personne ; un envoi qui échoue n'a prévenu personne.
+ * Au 12/11/2026, quatre relances sur treize n'ont pas pu partir et rien à
+ * l'écran ne le disait.
+ */
+export function envoisAuto(cles, jours = 30) {
+  if (!cles.includes('rgd') || !scope.canRgd) return null;
+  const depuis = new Date(Date.now() - jours * 86400000).toISOString();
+  const l = scope.rgd('rgd_envois_auto').filter(e => String(e.envoye_le || '') >= depuis);
+  if (!l.length) return null;
+  const par = (nature) => l.filter(e => e.nature === nature && e.statut !== 'echec').length;
+  return {
+    jours,
+    partis: l.filter(e => e.statut !== 'echec').length,
+    echecs: l.filter(e => e.statut === 'echec'),
+    relances: par('relance_devis'),
+    confirmations: par('confirmation_rdv'),
+    avis: par('avis_google'),
+  };
+}

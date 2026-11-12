@@ -238,6 +238,17 @@ export function moisObjectifs(aujourdhui = new Date()) {
       // (data/chiffres.js) les lit.
       nbDevisSignes: listeSignes.length,
       nbDevisEnvoyes: listeEnvoyes.length,
+      // ⚠ LE MONTANT SIGNÉ EST LE PREMIER BARREAU DU « CHEMIN DE L'ARGENT »
+      // (12/11/2026, tableau de bord du groupe : signé → facturé → encaissé).
+      // Il se calcule ICI et pas dans l'écran, pour la même raison que tout le
+      // reste de ce fichier : `rgd-bilan.js` a déjà son `montantSigne` (somme
+      // HT des devis signés de l'exercice, sans dédoublonner par client), et
+      // deux écrans qui montrent « signé » ne peuvent pas compter autrement.
+      //
+      // ⚠ ON SOMME `listeSignes`, PAS `signes` : `signes` est dédoublonné par
+      // CLIENT pour compter des chantiers. Un client qui signe deux devis a
+      // bien signé les deux montants — dédoublonner ici effacerait de l'argent.
+      montantSigne: listeSignes.reduce((t, d) => t + (Number(d.montant_ht) || 0), 0),
       chantiers: signes.length,
       // ⚠ LE CA NE DÉDUIT PAS LES AVOIRS, et c'est ce qui le réconcilie avec
       // le bilan comptable d'Élodie (05/11/2026). Il les déduisait : sur
