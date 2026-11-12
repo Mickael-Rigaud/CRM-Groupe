@@ -998,9 +998,11 @@ function brancherFin(m, c, apres) {
     // pèse le plus lourd dans le compte des SMS, le masquer rendait le coût
     // affiché incompréhensible. Apostrophe DROITE, comme ce que le serveur
     // enverra après conversion en GSM-7.
-    const apercu = `Bonjour${prenom ? ' ' + prenom : ''}, votre chantier est terminé `
-      + "et on espère qu'il vous plait. Votre avis nous aide beaucoup : "
-      + `${lienAvisReel()} Merci ! Mickael, RGD Renova`;
+    // ⚠ MÊME TEXTE QUE `rgd-envois-auto` (choisi par Élodie le 12/11/2026) :
+    // les changer ensemble, sinon l'aperçu montrerait un SMS qui ne part pas.
+    const apercu = 'Merci pour votre confiance ! Ce fut un plaisir de réaliser '
+      + 'vos travaux. Votre avis sur Google nous ferait très plaisir : '
+      + `${lienAvisReel()} Mickael, RGD Renova`;
     const cout = coutSms(apercu);
     // ⚠ CE QUI MANQUE SE DIT ICI, PAS APRÈS L'ENVOI : sans dossier rattaché ou
     // sans mobile, le SMS ne partira jamais. Le découvrir dans un bilan après
