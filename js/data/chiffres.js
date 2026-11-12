@@ -83,6 +83,14 @@ function statsRgd() {
     // mois — le commentaire de `montantSigne` dit lui-même que ça « ne donne le
     // prix d'aucune affaire ». La clé existait, personne ne la posait.
     signedAmount: m.montantSigne,
+    // ⚠ DEUX COMPTES POUR LES DEVIS, ET LES DEUX SONT NÉCESSAIRES (12/11/2026,
+    // Élodie : « je veux que les informations soient SYNCHRONISÉES en permanence »).
+    // `deals` et `quotes` comptent des CLIENTS distincts — c'est ce que la vue
+    // d'ensemble RGD appelle « Chantiers ». Elle affiche AUSSI « Devis signés »,
+    // qui compte des DEVIS : un client qui signe deux devis vaut 1 chantier et
+    // 2 devis. Sans ces deux lignes, le tableau de bord ne pouvait pas montrer
+    // le même nombre que l'écran d'à côté, quel que soit le mot employé.
+    devisSignes: m.nbDevisSignes, devisEnvoyes: m.nbDevisEnvoyes,
     // Le deuxième et le troisième barreau du chemin de l'argent. `amount` est
     // déjà le facturé ; on le redonne sous son vrai nom pour que l'écran ne
     // demande pas « amount » quand il veut dire « facturé ».
@@ -575,6 +583,22 @@ export function argentConnu(k, deals = scope.deals()) {
   const e = externe(k);
   if (e && (e.revenue || []).some(m => Number(m.amount) > 0)) return true;
   return deals.some(d => d.activity === k && d.status === 'won' && Number(d.amount) > 0);
+}
+
+/**
+ * Le compte PAR DEVIS d'une période (`devisSignes` ou `devisEnvoyes`), quand
+ * la structure le fournit — `null` sinon.
+ *
+ * ⚠ IL NE REMPLACE PAS LE COMPTE PAR CLIENT, il le complète. La vue
+ * d'ensemble RGD montre les deux côte à côte ; le tableau de bord doit
+ * pouvoir en faire autant, sinon « 2 » ici et « 3 » là passent pour une
+ * erreur alors que ce sont deux questions différentes.
+ */
+export function parDevis(cles, r, champ) {
+  const avec = cles.filter(k => (externe(k)?.revenue || []).some(m => m[champ] != null));
+  if (!avec.length) return null;
+  return avec.reduce((s, k) => s + moisDansPeriode(k, r)
+    .reduce((t, m) => t + (Number(m[champ]) || 0), 0), 0);
 }
 
 const sommeHt = (l) => l.reduce((t, x) => t + (Number(x.montant_ht) || 0), 0);

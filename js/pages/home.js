@@ -12,7 +12,7 @@ import {
   rdvMois, signeesMois, periodePrecedente, moisEnCours, externe, exerciceDe,
   // Les quatre cartes ajoutées le 12/11/2026. Elles rendent `null` quand la
   // structure filtrée ne porte pas la donnée : l'écran masque la carte.
-  cheminArgent, chantiersResume, publicite, envoisAuto, argentConnu,
+  cheminArgent, chantiersResume, publicite, envoisAuto, argentConnu, parDevis,
 } from '../data/chiffres.js';
 // `finDe` tient compte de la fin déclarée à la main et des jours ouvrés d'une
 // formation : refaire ce calcul ici donnerait une date différente du planning.
@@ -39,9 +39,19 @@ const BASE_PROSPECTS = {
 // Les périodes du tableau de bord (04/11/2026, demandé par Élodie : « le mois
 // dernier », et « la possibilité de voir sur l'année ou le trimestre, c'est
 // tout »), puis « pouvoir sélectionner une période mensuelle aussi ».
-// « Mois » ouvre sur le mois DERNIER : c'est un mois CLOS, ses chiffres ne
-// bougent plus — le mois en cours se lit dans « Objectifs & performance » —,
-// et la liste à côté permet d'en choisir un autre.
+//
+// ⚠ « MOIS » OUVRE SUR LE MOIS EN COURS DEPUIS LE 12/11/2026, et ce
+// commentaire garde la trace du revirement parce qu'il annule une demande
+// précédente de la même personne. Le choix initial — le mois DERNIER, clos,
+// dont les chiffres ne bougent plus — se défendait seul. Mais la vue
+// d'ensemble RGD (`pages/rgd-pilotage.js`) ouvre, elle, sur le mois EN COURS :
+// le même mot désignait donc deux mois différents d'un écran à l'autre, et pas
+// un seul des sept indicateurs ne coïncidait alors que les calculs sont les
+// mêmes. Élodie a tranché pour le mois en cours.
+//
+// ⚠ NE PAS REVENIR EN ARRIÈRE SANS TOUCHER L'AUTRE ÉCRAN : remettre le mois
+// dernier ici recréerait le désaccord. Les deux écrans ouvrent ensemble ou
+// changent ensemble. Le mois dernier reste à un clic, dans la liste.
 const PERIODES_TB = [['mois', 'Mois'], ['quarter', 'Trimestre'], ['year', 'Année']];
 const moisDernier = () => { const d = new Date(); return moisCle(new Date(d.getFullYear(), d.getMonth() - 1, 1)); };
 // La période affichée. Un mois choisi se lit comme n'importe quelle période.
@@ -90,7 +100,16 @@ export const homePage = {
     let chart = null;
     const state = {
       periode: 'mois',
-      mois: moisDernier(),
+      // ⚠ LE MOIS EN COURS, ET C'EST UN REVIREMENT ASSUMÉ (12/11/2026). Cet
+      // écran ouvrait sur le mois DERNIER depuis le 04/11, à la demande
+      // d'Élodie : un mois clos ne bouge plus. Mais la vue d'ensemble RGD, elle,
+      // ouvre sur le mois EN COURS — et le même mot « Mois » désignait donc
+      // deux mois différents d'un écran à l'autre. Pas un seul des sept
+      // indicateurs ne coïncidait, alors que les calculs sont identiques :
+      // « tu ne reprends pas du tout les informations qu'il y a dans le CRM de
+      // RGD Renova, je veux qu'elles soient SYNCHRONISÉES ». Elle a tranché
+      // pour le mois en cours. Le mois dernier reste à un clic, dans la liste.
+      mois: moisCle(),
       filtre: (() => { try { return localStorage.getItem(LS_FILTRE) || 'groupe'; } catch { return 'groupe'; } })(),
     };
 
@@ -167,7 +186,12 @@ export const homePage = {
           ${taille(carteArgent(cles, r, state), 'tb-x7')}
           ${scope.canPilotage ? taille(carteObjectifs(cles, deals), 'tb-x5') : ''}
 
-          ${kpi('Leads', t.leadsNonDates ? t.leads : t.leadsPeriode,
+          ${/* ⚠ LES MOTS SONT CEUX DE LA VUE D'ENSEMBLE RGD, pas les miens
+                (12/11/2026). « Leads » et « Demandes » désignaient le même
+                nombre, « RDV » et « Rendez-vous » aussi : deux écrans qui
+                nomment différemment la même chose se lisent comme deux chiffres
+                différents. Un seul vocabulaire, celui de l'écran métier. */ ''}
+          ${kpi('Demandes', t.leadsNonDates ? t.leads : t.leadsPeriode,
             // Sans date d'arrivée, aucune évolution n'est calculable : mieux vaut
             // ne rien afficher qu'un pourcentage qui ne compare pas ce qu'il dit.
             t.leadsNonDates ? null : evolution(avant?.leadsPeriode, t.leadsPeriode),
@@ -176,10 +200,21 @@ export const homePage = {
             false,
             t.leadsNonDates ? 'Total en base : ces outils ne datent pas l\'arrivée des prospects.' : '',
             cles.length === 1 ? BASE_PROSPECTS[cles[0]] : '')}
-          ${kpi('RDV', t.rdv, evolution(avant?.rdv, t.rdv), serieDe(cle => cles.reduce((s, k) => s + rdvMois(k, cle, deals), 0)),
-            'rendez-vous tenus sur la période')}
-          ${kpi('Affaires signées', t.signees ?? '—', evolution(avant?.signees, t.signees), serieDe(cle => cles.reduce((s, k) => s + signeesMois(k, cle, deals), 0)), t.panier ? `panier ${eur(t.panier)}` : 'panier moyen indisponible')}
-          ${kpi('CA HT', eur(t.ca), evolution(avant?.ca, t.ca), serieDe(caDu),
+          ${kpi('Rendez-vous', t.rdv, evolution(avant?.rdv, t.rdv), serieDe(cle => cles.reduce((s, k) => s + rdvMois(k, cle, deals), 0)),
+            'visites techniques tenues sur la période')}
+          ${/* ⚠ CE NOMBRE COMPTE DES CLIENTS, PAS DES DEVIS, et c'est précisément
+                ce que la vue d'ensemble RGD appelle « Chantiers » — un client qui
+                signe deux devis fait UN chantier. Le mot « Affaires signées »
+                laissait croire à un compte de devis, et l'écart avec « Devis
+                signés » passait pour une erreur. On prend son mot quand la
+                structure a un espace à elle ; ailleurs, « affaires » reste le
+                terme générique du groupe. Et le compte par devis est dit juste
+                en dessous : les deux nombres de l'autre écran sont là. */ ''}
+          ${kpi(cles.length === 1 && cles[0] === 'rgd' ? 'Chantiers' : 'Affaires signées',
+            t.signees ?? '—', evolution(avant?.signees, t.signees),
+            serieDe(cle => cles.reduce((s, k) => s + signeesMois(k, cle, deals), 0)),
+            sousChantiers(cles, r, t))}
+          ${kpi('CA facturé HT', eur(t.ca), evolution(avant?.ca, t.ca), serieDe(caDu),
             obj ? `objectif ${eur(obj)}` : scope.canPilotage ? 'aucun objectif fixé' : 'sur vos affaires')}
 
           <section class="card tb-x7">
@@ -1025,6 +1060,17 @@ function taille(html, cls) {
   if (!t) return '';
   const m = '<section class="card';
   return t.startsWith(m) ? t.replace(m, `<section class="card ${cls}`) : `<div class="${cls}">${t}</div>`;
+}
+
+// Sous la tuile des chantiers : le compte PAR DEVIS, puis le panier. C'est la
+// ligne qui réconcilie les deux écrans — « 2 chantiers · 3 devis signés » dit
+// d'un trait pourquoi la vue d'ensemble RGD affiche 3 et celle-ci 2.
+function sousChantiers(cles, r, t) {
+  const n = parDevis(cles, r, 'devisSignes');
+  const bouts = [];
+  if (n != null && n !== t.signees) bouts.push(`${n} devis signé${n > 1 ? 's' : ''}`);
+  bouts.push(t.panier ? `panier ${eur(t.panier)}` : 'panier moyen indisponible');
+  return bouts.join(' · ');
 }
 
 const prenomDe = (u) => {
