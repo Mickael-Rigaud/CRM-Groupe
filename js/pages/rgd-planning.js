@@ -872,6 +872,49 @@ function ouvrirChantier(c, apres, jour = null, genre = 'chantier') {
   brancherFin(m, c, apres);
 }
 
+// ⚠ UN PRÉNOM TROP LONG EST ÉCARTÉ DU MESSAGE (12/11/2026). Relevé en base :
+// le champ « prénom » contient parfois le nom entier — « VIZZOTTO STEFANI
+// Vinicius », « DE LA BATIE Roland ». Le SMS aurait écrit « Bonjour VIZZOTTO
+// STEFANI Vinicius, ». Au-delà de la limite, il commence par « Bonjour, » :
+// moins personnel, mais correct. Et c'est aussi ce qui garantit UN SEUL
+// segment — 15 lettres est le plus long prénom qui tienne dans 160 caractères
+// avec le texte et le lien courts.
+//
+// ⚠ CE TEST EXISTE EN DEUX EXEMPLAIRES, ici et dans la fonction serveur
+// `rgd-envois-auto` (`prenomUtilisable`, même nom, même limite), parce
+// qu'aucun des deux ne peut importer l'autre. Les changer ENSEMBLE : sinon
+// l'aperçu montrerait un prénom que le SMS n'utiliserait pas, ou l'inverse.
+const PRENOM_MAX = 15;
+const prenomUtilisable = (brut) => {
+  const p = String(brut ?? '').trim();
+  return p && p.length <= PRENOM_MAX ? p : '';
+};
+
+// Le lien d'avis tel qu'il partira, lu dans les réglages — pas écrit en dur.
+// ⚠ LA VALEUR EST STOCKÉE AVEC SES GUILLEMETS (`"https://…"`) : les laisser
+// ajouterait deux caractères au compte et fausserait le nombre de segments.
+const lienAvisReel = () => String(
+  (db.t('settings') || []).find(s => s.key === 'rgd_avis_google_lien')?.value || '',
+).replace(/^"|"$/g, '');
+
+// ⚠ « 2 SMS » DANS LA FENÊTRE A FAIT CROIRE À DEUX MESSAGES (12/11/2026,
+// Élodie : « pourquoi 2 sms ?? »). Le client n'en reçoit qu'UN : l'opérateur
+// découpe au-delà de 160 caractères et facture chaque morceau, mais le
+// téléphone les recolle. On dit donc « 1 message », et le nombre de SMS
+// facturés entre parenthèses.
+//
+// ⚠ CE COMPTE EST UNE ESTIMATION, ET LE SERVEUR FAIT FOI : lui convertit le
+// texte en GSM-7 avant de mesurer (`gsmSur`). Ici on compte les caractères
+// bruts. L'écart ne peut venir que d'un signe hors GSM-7 dans un prénom, et il
+// se verrait sur le coût, jamais sur le contenu du message.
+const coutSms = (texte) => {
+  const n = [...texte].length;
+  const segments = n <= 160 ? 1 : Math.ceil(n / 153);
+  // 0,045 € le segment. Le zéro final est retiré : « 0,09 » et non « 0,090 ».
+  const euros = (segments * 4.5 * 0.01).toFixed(3).replace(/0$/, '').replace('.', ',');
+  return { n, segments, euros };
+};
+
 // ⚠ DÉCLARER LA FIN OUVRE UNE FENÊTRE, PAS UN `confirm()` (12/11/2026). Ce
 // geste fait DEUX choses d'un coup — il ferme le chantier ET écrit à un client
 // — et la seconde ne se rattrape pas. On montre donc le jour, le destinataire
@@ -910,10 +953,15 @@ function brancherFin(m, c, apres) {
     const ct = f?.contact_id ? db.byId('contacts', f.contact_id) : null;
     const og = f?.organisation_id ? db.byId('organisations', f.organisation_id) : null;
     const tel = ct?.phone || og?.phone || f?.telephone || '';
-    const prenom = String(ct?.first_name || f?.prenom || '').trim();
+    const prenom = prenomUtilisable(ct?.first_name || f?.prenom);
+    // ⚠ L'APERÇU PORTE LE VRAI LIEN, pas « <lien Google> » : c'est lui qui
+    // pèse le plus lourd dans le compte des SMS, le masquer rendait le coût
+    // affiché incompréhensible. Apostrophe DROITE, comme ce que le serveur
+    // enverra après conversion en GSM-7.
     const apercu = `Bonjour${prenom ? ' ' + prenom : ''}, votre chantier est terminé `
-      + 'et on espère que le résultat vous plait. Votre avis compte beaucoup pour nous : '
-      + '<lien Google> Merci ! Mickael, RGD Renova';
+      + "et on espère qu'il vous plait. Votre avis nous aide beaucoup : "
+      + `${lienAvisReel()} Merci ! Mickael, RGD Renova`;
+    const cout = coutSms(apercu);
     // ⚠ CE QUI MANQUE SE DIT ICI, PAS APRÈS L'ENVOI : sans dossier rattaché ou
     // sans mobile, le SMS ne partira jamais. Le découvrir dans un bilan après
     // coup ferait croire à une panne.
@@ -935,8 +983,10 @@ function brancherFin(m, c, apres) {
              Le chantier sera simplement clos.</p>`
           : `<label class="pl-membre"><input type="checkbox" id="pf-avis" checked>
                <span>Demander l’avis Google par SMS au client</span></label>
-             <p class="muted small">Au <b>${esc(tel)}</b> — 2 SMS, 0,09 €. Entre 9 h et 19 h il part
-               tout de suite ; sinon il partira demain à 11 h.</p>
+             <p class="muted small">Au <b>${esc(tel)}</b> — <b>1 message</b>${
+               cout.segments > 1 ? `, facturé ${cout.segments} SMS` : ''} · ${esc(cout.euros)} €
+               (${cout.n} caractères). Entre 9 h et 19 h il part tout de suite ; sinon il
+               partira demain à 11 h.</p>
              <p class="muted small">« ${esc(apercu)} »</p>
              <p class="muted small">Le serveur peut encore l’écarter : facture impayée, dossier SAV
                ouvert, ou client déjà sollicité. Il dira lequel.</p>`}
