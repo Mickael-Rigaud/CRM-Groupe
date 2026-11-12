@@ -1002,7 +1002,7 @@ function brancherFin(m, c, apres) {
     // les changer ensemble, sinon l'aperçu montrerait un SMS qui ne part pas.
     const apercu = 'Merci pour votre confiance ! Ce fut un plaisir de réaliser '
       + 'vos travaux. Votre avis sur Google nous ferait très plaisir : '
-      + `${lienAvisReel()} Mickael, RGD Renova`;
+      + `${lienAvisReel()}\nMickael, RGD Renova`;
     const cout = coutSms(apercu);
     // ⚠ CE QUI MANQUE SE DIT ICI, PAS APRÈS L'ENVOI : sans dossier rattaché ou
     // sans mobile, le SMS ne partira jamais. Le découvrir dans un bilan après
@@ -1030,7 +1030,7 @@ function brancherFin(m, c, apres) {
                cout.segments > 1 ? `, facturé ${cout.segments} SMS` : ''} · ${esc(cout.euros)} €
                (${cout.n} caractères). Entre 9 h et 19 h il part tout de suite ; sinon il
                partira demain à 11 h.</p>
-             <p class="muted small">« ${esc(apercu)} »</p>
+             <p class="muted small" style="white-space:pre-line">« ${esc(apercu)} »</p>
              <p class="muted small">Le serveur peut encore l’écarter : facture impayée, dossier SAV
                ouvert, ou client déjà sollicité. Il dira lequel.</p>`}
         <div class="form-actions"><span class="grow"></span>
