@@ -50,10 +50,17 @@ import { db } from './db.js';
 import { CONFIG } from '../config.js';
 import { scope } from './scope.js';
 import { aiguillagePour } from './rgd-metiers.js';
-import { texteTravaux } from './rgd-formulaire.js';
+// ⚠ `CHANTIERS` SERT À ÉCARTER LES RÉNOVATIONS, pas à les décrire : voir
+// `estDepannageElectrique`. C'est la même liste que celle des puces du
+// formulaire, et elle doit le rester.
+import { texteTravaux, CHANTIERS } from './rgd-formulaire.js';
 import { COLONNE_NOTE } from './rgd-clients.js';
 import { creerEvenement, finApres } from './evenements.js';
 import { DUREES } from './rgd-creneaux.js';
+// ⚠ LE TAUX DE TVA NE SE REDIT PAS ICI : c'est celui des devis et factures
+// du CRM (10 %, « Franck d'abord » dans l'en-tête de `rgd-devis-crm.js`). Le
+// recopier ferait annoncer au client un TTC que la facture démentirait.
+import { TVA_DEFAUT } from './rgd-devis-crm.js';
 
 const echec = (e) => ({ ok: false, motif: String(e.message || e).slice(0, 160) });
 const txt = (v) => { const t = String(v ?? '').trim(); return t === '' ? null : t; };
@@ -625,6 +632,197 @@ export function descriptionRendezVous(v) {
   return l.join('\n');
 }
 
+// ------------------------------------------- LE DÉPANNAGE ÉLECTRIQUE
+// ⚠ UN SEUL MAIL, QUI CONFIRME ET ANNONCE LES PRIX (12/11/2026, Élodie :
+// « pour les dépannages électriques je veux un mail de confirmation du
+// rendez-vous qui annonce en même temps les prix minimum »). Sa demande du
+// matin disait « un mail de confirmation ET un mail indiquant les prix », et
+// deux messages ont été écrits avant qu'elle ne tranche en les voyant : c'est
+// elle qui a décidé de les fondre, pas une simplification en passant.
+//
+// ⚠ LES PRIX SONT DONC UN BLOC, PAS UN MESSAGE (`blocPrixElec`). Un client qui
+// retrouve son rendez-vous retrouve les prix avec, dans le même fil — et il ne
+// reçoit pas deux messages à la même seconde, ce qui se lit comme un doublon.
+//
+// ⚠ ET CELA REVIENT SUR UNE DÉCISION DU 22/10/2026 — « confirmation de RDV →
+// SMS seulement, jamais de mail », en tête de la fonction `rgd-envois-auto`.
+// Elle tenait, et tient toujours, pour la VISITE TECHNIQUE confirmée 24 h
+// avant. Ici le mail part à l'instant où le rendez-vous est pris, et il porte
+// des PRIX : un SMS d'un seul segment ne peut pas les contenir (160 caractères,
+// 70 dès le premier accent circonflexe). Les deux coexistent sans se croiser.
+//
+// ⚠ LE TITRE DE L'ÉVÉNEMENT GOOGLE RESTE « Visite technique : … », même pour un
+// dépannage, et ce n'est pas un oubli : `rendezVousDeLaFiche` (voir
+// `rgd-rdv.js`) retrouve les rendez-vous d'une fiche née de l'agenda en
+// cherchant « visite technique » dans le titre, et le volet SMS de
+// `rgd-envois-auto` lit `statut_d1 = visite_technique`. Le renommer ici
+// détacherait les rendez-vous de leurs fiches, en silence. Le client, lui, ne
+// voit jamais ce titre : il n'est pas invité à l'événement (voir plus haut).
+const METIER_ELEC = 'Électricité';
+
+/**
+ * Ce rendez-vous est-il un DÉPANNAGE électrique ?
+ *
+ * ⚠ « ÉLECTRICITÉ » NE SUFFIT PAS, ET LA NUANCE VIENT D'ÉLODIE (12/11/2026 :
+ * « on est d'accord que ce mail n'est que pour les dépannages électriques ? »).
+ * « Électricité » est un corps de métier : un prospect qui refait sa cuisine le
+ * coche AUSSI, et il aurait reçu un tarif de recherche de panne à la place de
+ * la visite technique qu'il attend. Dès qu'un CHANTIER de rénovation est coché
+ * (rénovation complète, salle de bain, cuisine, aménagement, extension), ce
+ * n'est plus un dépannage : le mail de la visite technique repart, inchangé.
+ *
+ * ⚠ ON LIT LA SAISIE, PAS QUI SAISIT. Le métier vit dans `types_travaux` —
+ * posé d'office par l'écran de l'ouvrier à la création (voir `valeursProjet`),
+ * ou coché par la direction. Se fier au compte connecté ferait partir le
+ * mauvais mail dès que Mickael prend le rendez-vous à la place de Franck — ce
+ * qui est le cas courant, c'est tout le propos de `aiguillagePour`.
+ *
+ * ⚠ ET `intervention_electrique` COMPTE AUSSI : ce champ n'existe que sur le
+ * formulaire de l'électricien. Rempli, il dit le métier aussi sûrement que la
+ * puce — et il reste rempli sur une fiche ancienne dont le vocabulaire des
+ * travaux a bougé. Lui non plus ne passe pas outre un chantier coché.
+ */
+export function estDepannageElectrique(v) {
+  const t = Array.isArray(v?.types_travaux) ? v.types_travaux
+    : String(v?.types_travaux || '').split(',').map(x => x.trim());
+  const elec = t.includes(METIER_ELEC) || !!txt(v?.intervention_electrique);
+  return elec && !t.some(x => CHANTIERS.includes(x));
+}
+
+// Les deux lignes que le mail annonce, dans cet ordre.
+//
+// ⚠ LA MAIN-D'ŒUVRE N'Y EST PAS, ET C'EST UNE DEMANDE (12/11/2026, Élodie :
+// « je ne veux que le déplacement et la diagnostic / recherche de panne
+// électrique pas de main d'oeuvre »). Elle y avait été ajoutée d'office parce
+// que la précision de la recherche de panne la nomme ; c'est à l'entreprise de
+// dire ce qu'elle annonce, pas au code de compléter.
+//
+// ⚠ LES PRIX SE LISENT EN BASE, JAMAIS ÉCRITS ICI. Ce sont les codes de
+// `rgd_tarifs` (écran Réglages → Tarifs) : changer un prix là-bas change le
+// mail du lendemain, sans déploiement. Les écrire dans ce fichier ferait
+// annoncer au client un prix et lui facturer un autre, et personne ne le
+// verrait avant la première réclamation.
+const CODES_MINIMUM = ['deplacement', 'diagnostic'];
+const PAR_UNITE = { heure: ' / heure', m2: ' / m²', ml: ' / ml' };
+
+/** Les lignes de la grille électricité qui portent les prix minimum. */
+export function tarifsMinimumElec() {
+  const grille = db.t('rgd_tarifs').filter(t => t.metier === 'electricite' && t.actif !== false);
+  return CODES_MINIMUM.map(c => grille.find(t => t.code === c)).filter(Boolean);
+}
+
+const euros = (n) => `${Number(n || 0).toLocaleString('fr-FR',
+  { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
+
+/**
+ * Le mail du rendez-vous de dépannage : la confirmation ET les prix minimum.
+ *
+ * ⚠ IL NE DIT PAS « VISITE TECHNIQUE » ET NE PROMET PAS DE CHIFFRAGE : une
+ * visite technique précède un devis de rénovation, un dépannage se répare sur
+ * place. Le texte de la visite, envoyé à quelqu'un qui attend un électricien,
+ * annoncerait une étude à qui veut la lumière.
+ *
+ * ⚠ LES PRIX VIENNENT APRÈS LE RENDEZ-VOUS, JAMAIS AVANT. Ce que la personne
+ * ouvre ce message pour vérifier, c'est le jour et l'heure ; un tableau de
+ * tarifs en tête ferait de la confirmation un devis.
+ *
+ * ⚠ ET LE MAIL PART MÊME SI LA GRILLE EST MUETTE : `blocPrixElec` rend une
+ * chaîne vide plutôt que de tout annuler. Un rendez-vous non confirmé coûte
+ * plus cher qu'un rendez-vous confirmé sans les prix.
+ */
+export function corpsConfirmationElec(v, { jour, heure, duree, lieu }) {
+  const e = (t) => String(t ?? '').replace(/[&<>"]/g,
+    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const prenom = txt(v.prenom) || nomComplet(v);
+  const quand = `${jourEnToutesLettres(jour)} à ${heure.replace(':', ' h ')}`;
+  const combien = duree >= 120 ? '2 heures' : (duree >= 90 ? '1 h 30' : 'une heure');
+  return `
+    <p>Bonjour ${e(prenom)},</p>
+    <p>Nous vous confirmons votre rendez-vous pour votre
+       <strong>intervention électrique</strong>.</p>
+    <p style="margin:18px 0;padding:14px 16px;border-left:3px solid #FD7A2D;background:#FFF5EE">
+      <strong style="font-size:16px">${e(quand)}</strong><br>
+      ${lieu ? e(lieu) + '<br>' : ''}
+      <span style="color:#666">Comptez environ ${e(combien)} sur place.</span>
+    </p>
+    <p>Un électricien de RGD Renova se présentera à cette adresse. Pensez à
+       libérer l’accès au tableau électrique et, si vous le pouvez, notez ce que
+       vous avez observé : ce qui ne fonctionne plus, depuis quand, ce qui a
+       été fait avant notre appel.</p>
+    ${blocPrixElec()}
+    <p>Si vous devez décaler ce rendez-vous, répondez simplement à ce
+       message.</p>
+    <p>À très bientôt,<br><strong>RGD Renova</strong></p>`;
+}
+
+/**
+ * Le bloc des prix minimum, posé dans le mail de confirmation.
+ *
+ * ⚠ LE TTC EST AFFICHÉ À CÔTÉ DU HT, PAS À LA PLACE : un particulier
+ * n'achète pas du HT, et un prix nu en HT lui ferait découvrir dix pour cent
+ * de plus sur la facture. Le taux, lui, vient de `TVA_DEFAUT` : la même
+ * valeur que celle dont la facture se servira.
+ *
+ * ⚠ ET LA CONDITION DU TAUX EST ÉCRITE. 10 % ne s'applique qu'à un logement
+ * achevé depuis plus de deux ans ; ailleurs c'est 20 %. Annoncer le TTC sans
+ * la phrase ferait de ce mail un prix ferme pour un logement neuf, où il est
+ * faux.
+ *
+ * ⚠ IL N'INVENTE AUCUNE RÈGLE COMMERCIALE. Ce que porte chaque ligne vient de
+ * la grille : son libellé, son prix, son unité, son « à partir de » et sa
+ * précision. Écrire ici « le déplacement est dû même si rien n'est réparé »
+ * serait engager l'entreprise sur une phrase que personne n'a validée.
+ *
+ * Rend une chaîne VIDE quand la grille ne porte aucune des lignes attendues :
+ * un tableau de prix vide, dans un mail qui l'annonce, se lit comme une panne.
+ * Le rendez-vous, lui, est confirmé quand même.
+ */
+export function blocPrixElec() {
+  const lignes = tarifsMinimumElec();
+  if (!lignes.length) return '';
+  const e = (t) => String(t ?? '').replace(/[&<>"]/g,
+    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const taux = Number(TVA_DEFAUT) || 10;
+
+  // ⚠ UN `<table>` ET DES STYLES EN LIGNE : les clients mail ignorent les
+  // feuilles de style, et Outlook ne tient aucune grille moderne. Même
+  // contrainte que le bouton de la facture (`boutonFacture`).
+  const rangs = lignes.map((t) => {
+    const unite = PAR_UNITE[t.unite] || '';
+    // ⚠ « À PARTIR DE » VA SUR LE MONTANT QUE L'ŒIL LIT, c'est-à-dire le TTC en
+    // gras. Posé sur le seul HT, en petit et en dessous, il faisait annoncer la
+    // recherche de panne comme un prix FERME de 110 € — exactement ce que la
+    // grille dit qu'elle n'est pas.
+    const ht = `${euros(t.prix_ht)} HT${unite}`;
+    const ttc = `${t.a_partir_de ? 'à partir de ' : ''}`
+      + `${euros(Number(t.prix_ht || 0) * (1 + taux / 100))} TTC${unite}`;
+    return `<tr>
+      <td style="padding:10px 0;border-bottom:1px solid #EEE;font-family:Arial,Helvetica,sans-serif;font-size:14px">
+        ${e(t.libelle)}${t.precision
+          ? `<br><span style="color:#888;font-size:12px">${e(t.precision)}</span>` : ''}
+      </td>
+      <td style="padding:10px 0 10px 18px;border-bottom:1px solid #EEE;text-align:right;white-space:nowrap;font-family:Arial,Helvetica,sans-serif;font-size:14px">
+        <strong>${e(ttc)}</strong><br><span style="color:#888;font-size:12px">${e(ht)}</span>
+      </td></tr>`;
+  }).join('');
+
+  // ⚠ UN FILET AU-DESSUS DU TITRE, PAS UN ENCADRÉ COLORÉ : un aplat de couleur
+  // dans un mail le fait partir en indésirables — mesuré sur les envois de RGD,
+  // voir `boutonFacture` dans `rgd-devis-crm.js`. Le bloc doit se distinguer du
+  // texte sans devenir une réclame.
+  return `
+    <h3 style="margin:26px 0 0;padding-top:16px;border-top:2px solid #FD7A2D;
+      font-size:15px;color:#1f2937">Nos tarifs de dépannage</h3>
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0"
+      style="width:100%;margin:12px 0 0;border-collapse:collapse">${rangs}</table>
+    <p style="color:#666;font-size:12.5px">Montants TTC calculés avec une TVA de
+       ${e(String(taux).replace('.', ','))} %, applicable aux logements achevés
+       depuis plus de deux ans. Dans les autres cas, la TVA est de 20 %.</p>
+    <p>Les réparations et les fournitures vous sont annoncées sur place : rien
+       n’est engagé sans votre accord, et vous recevez votre facture à la fin
+       de l’intervention.</p>`;
+}
+
 /**
  * Le mail de confirmation, dans l'identité de RGD Renova.
  *
@@ -656,9 +854,18 @@ function corpsConfirmation(v, { jour, heure, duree, lieu }) {
     <p>À très bientôt,<br><strong>RGD Renova</strong></p>`;
 }
 
-async function envoyerConfirmation(v, quand) {
+/**
+ * Une seule porte pour tous les messages du rendez-vous.
+ *
+ * ⚠ FACTORISÉE LE 12/11/2026, quand un deuxième mail est arrivé. Deux copies
+ * de cet appel auraient fini par ne plus porter le même `replyTo` : la réponse
+ * d'un client serait partie chez l'expéditeur technique, c'est-à-dire nulle
+ * part.
+ */
+async function envoyerMail(v, { subject, html }) {
   const email = txt(v.email);
   if (!email) return { ok: false, motif: 'aucune adresse e-mail' };
+  if (!html) return { ok: false, motif: 'message vide' };
   if (db.demo) return { ok: false, motif: 'mode démo : aucun message envoyé' };
   const jeton = await db.accessToken();
   if (!jeton) return { ok: false, motif: 'session expirée' };
@@ -672,8 +879,8 @@ async function envoyerConfirmation(v, quand) {
       },
       body: JSON.stringify({
         to: { email, name: nomComplet(v) || email },
-        subject: `Votre visite technique — ${jourEnToutesLettres(quand.jour)}`,
-        html: corpsConfirmation(v, quand),
+        subject,
+        html,
         // La réponse du client doit arriver dans la boîte de l'entreprise, pas
         // dans celle de l'expéditeur technique.
         replyTo: { email: 'contact@rgdrenova.fr', name: 'RGD Renova' },
@@ -688,6 +895,15 @@ async function envoyerConfirmation(v, quand) {
     return { ok: false, motif: String(e.message || e).slice(0, 120) };
   }
 }
+
+// La confirmation : le texte du dépannage ou celui de la visite technique.
+const envoyerConfirmation = (v, quand) => envoyerMail(v, estDepannageElectrique(v)
+  ? { subject: `Votre rendez-vous — ${jourEnToutesLettres(quand.jour)}`,
+      html: corpsConfirmationElec(v, quand) }
+  : { subject: `Votre visite technique — ${jourEnToutesLettres(quand.jour)}`,
+      html: corpsConfirmation(v, quand) });
+
+
 
 /**
  * Pose la visite : l'événement chez Google, le chantier dans le CRM, le mail au
@@ -782,6 +998,8 @@ export async function poserRendezVous(v, { contactId, organisationId }) {
   }
 
   // 3. Le mail. Son échec ne remet rien en cause.
+  // ⚠ UN SEUL ENVOI, MÊME POUR UN DÉPANNAGE : les prix voyagent DANS la
+  // confirmation depuis le 12/11/2026, ils n'ont pas de message à eux.
   const mail = await envoyerConfirmation(v, { jour, heure, duree, lieu });
   if (!mail.ok) manques.push(`le client n’a pas reçu la confirmation (${mail.motif})`);
 
