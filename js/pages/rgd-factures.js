@@ -39,7 +39,8 @@ import { esc, eur, fmtDate, terms, hit, searchInput, bindSearch, restoreFocus, t
 import { poserEspace, kpiEspace } from './espace.js';
 import { cadre, guard } from './rgd-espace.js';
 import { statutsDe, statutDoc, estDevis, nomMetier,
-  corbeilleFactures, reprendreFacture, purgerFactureJetee } from '../data/rgd-devis-crm.js';
+  corbeilleFactures, reprendreFacture, purgerFactureJetee,
+  jeterFacture, supprimerDevisCrm } from '../data/rgd-devis-crm.js';
 import { ouvrirDevisCrm } from './rgd-devis-crm.js';
 import { ouvrirPdfImporte } from './rgd-facture-import.js';
 import { demandeDe, ficheDe } from './rgd-clients.js';
@@ -296,8 +297,14 @@ export const rgdFacturesPage = {
 
         <section class="card table-wrap">
           <table>
+            ${'' /* ⚠ UNE COLONNE D'ACTION DEPUIS LE 12/11/2026 (Élodie :
+               « oui ajoute-le dans la liste aussi »). Le bouton existait
+               depuis la veille, mais SEULEMENT dans la fiche : il fallait
+               ouvrir chaque facture pour le trouver, et elle a redemandé la
+               fonctionnalité en croyant qu'elle manquait. Un geste qu'on ne
+               trouve pas n'existe pas. */}
             <thead><tr><th>Numéro</th><th>Date</th><th>Client</th><th>Objet</th>
-              <th>Responsable</th><th class="num">Montant TTC</th><th>Statut</th></tr></thead>
+              <th>Responsable</th><th class="num">Montant TTC</th><th>Statut</th><th></th></tr></thead>
             <tbody>${vues.map(d => {
               const e = statutDoc(d);
               const qui = d.owner_id ? scope.users().find(u => u.id === d.owner_id) : null;
@@ -311,8 +318,17 @@ export const rgdFacturesPage = {
                 <td>${qui ? esc(qui.full_name) : '<span class="muted small">—</span>'}</td>
                 <td class="num">${euros(d.montant_ttc)}</td>
                 <td><span class="chip ${e.ton}">${esc(e.label)}</span></td>
+                ${'' /* ⚠ LA MÊME RÈGLE QUE DANS LA FICHE, PAS UNE AUTRE : un
+                   brouillon s'efface pour de bon (pas de numéro, personne ne
+                   l'a vu), un document numéroté part à la corbeille. Et cet
+                   écran est déjà réservé à la direction, donc rien à ajouter
+                   sur le droit — c'est la même main qui jette et qui reprend. */}
+                <td class="rgdf-fin"><button type="button" class="btn ghost sm rfa-jeter"
+                  data-jeter="${esc(String(d.id))}"
+                  title="${d.statut === 'brouillon' ? 'Supprimer ce brouillon'
+                    : 'Mettre à la corbeille'}">Supprimer</button></td>
               </tr>`;
-            }).join('') || `<tr><td colspan="7"><div class="empty">${toutes.length
+            }).join('') || `<tr><td colspan="8"><div class="empty">${toutes.length
               ? `Aucun${dev ? '' : 'e'} ${dev ? 'devis' : 'facture'} ne correspond.`
               : `Aucun${dev ? '' : 'e'} ${dev ? 'devis' : 'facture'} pour l’instant. On en fait un depuis la fiche d’un client, bouton « + Facture ou devis ».`}</div></td></tr>`}</tbody>
           </table>
@@ -359,6 +375,48 @@ export const rgdFacturesPage = {
       root.querySelectorAll('.rfa-ligne').forEach(tr => {
         tr.onclick = () => ouvrir(tr);
         tr.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ouvrir(tr); } };
+      });
+
+      // ⚠ LE BOUTON ARRÊTE LE CLIC DE LA LIGNE : sans `stopPropagation`, le
+      // même geste supprimerait la facture ET ouvrirait son éditeur derrière
+      // la demande de confirmation. On ne voit pas le défaut, on voit une
+      // fenêtre inattendue.
+      root.querySelectorAll('[data-jeter]').forEach(b => {
+        b.onclick = async (ev) => {
+          ev.stopPropagation();
+          const d = db.byId('rgd_devis_crm', b.dataset.jeter);
+          if (!d) return;
+          const quoi = estDevis(d) ? 'le devis' : 'la facture';
+          const nom = d.numero ? ` ${d.numero}` : '';
+          // ⚠ DEUX GESTES SOUS UN MÊME BOUTON, COMME DANS LA FICHE. Un
+          // BROUILLON s'efface pour de bon : pas de numéro, personne ne l'a
+          // vu, une copie gardée n'aurait rien à reprendre. Un document
+          // NUMÉROTÉ part à la corbeille — lui, on peut regretter.
+          // La phrase de confirmation dit lequel des deux va se produire.
+          const message = d.statut === 'brouillon'
+            ? `Supprimer ce brouillon ? C’est définitif, il n’ira pas à la corbeille.`
+            : `Mettre ${quoi}${nom} à la corbeille ? Elle se remet de là, et son numéro `
+              + `revient à la suite.`;
+          if (!await confirm(message)) return;
+          try {
+            if (d.statut === 'brouillon') {
+              await supprimerDevisCrm(d);
+              toast('Brouillon supprimé');
+            } else {
+              const r = await jeterFacture(d);
+              if (!r.ok) { toast(`Suppression impossible : ${r.motif}`, 'error'); return; }
+              // ⚠ LA FONCTION DE BASE ÉCRIT HORS DU CACHE : sans ces
+              // rechargements, la liste continuerait d'afficher une facture
+              // que la base ne connaît plus, et la corbeille serait vide.
+              await db.recharger('rgd_devis_crm');
+              await db.recharger('rgd_bons').catch(() => {});
+              await db.recharger('rgd_factures_corbeille').catch(() => {});
+              toast(`${d.numero || 'Document'} à la corbeille${
+                r.donnees?.numero_rendu ? ' — son numéro revient à la suite' : ''}`);
+            }
+            draw();
+          } catch (e) { toast(e.message || 'Suppression impossible', 'error'); }
+        };
       });
     };
 
