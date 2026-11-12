@@ -683,23 +683,46 @@ export function chantiersResume(cles, r) {
 /**
  * La publicité Meta des trente derniers jours.
  *
- * ⚠ ON SOMME LES CAMPAGNES, IL N'Y A PAS DE LIGNE DE TOTAL. Vérifié en base le
- * 12/11/2026 : `meta_ads_periode` ne porte que des lignes par campagne
- * (`campagne_id` jamais nul). Le jour où une ligne de total apparaîtrait, ce
- * calcul doublerait tout — c'est le genre d'erreur qui ne se voit pas, puisque
- * les nombres restent plausibles.
+ * ⚠ IL Y A UNE LIGNE DE TOTAL, ET ELLE A DOUBLÉ TOUS LES CHIFFRES PENDANT UNE
+ * JOURNéE (12/11/2026). `meta_ads_periode` porte, à côté des campagnes, une
+ * ligne récapitulative dont le `campagne_id` vaut **`'*'`** — pas `NULL`. Le
+ * contrôle cherchait `campagne_id is null`, n'a rien trouvé, et j'en ai conclu
+ * qu'il n'y avait pas de total : la somme additionnait donc le total AUX
+ * campagnes. Dépense et leads affichés exactement au double, et rien ne le
+ * signalait puisque les nombres restaient plausibles.
+ *
+ * ⚠ ON LIT LA LIGNE DE TOTAL, ON NE LA RECALCULE PAS : c'est ce que fait déjà
+ * l'écran Analyse (`analyse-meta-ads.js`, `campagne_id === '*'`). Deux écrans
+ * qui annoncent la dépense publicitaire ne peuvent pas la compter autrement.
+ * La somme des campagnes ne sert que de repli, si le total manque.
  *
  * ⚠ LE COÛT PAR LEAD NE SE MOYENNE PAS : on divise la dépense totale par les
  * leads totaux. Moyenner les coûts par lead des sept campagnes donnerait le
  * même poids à celle qui a coûté le moins qu'à celle qui a coûté le plus.
  */
-export function publicite(cles) {
-  const lignes = db.t('meta_ads_periode').filter(x => Number(x.periode) === 30 && cles.includes(x.activity));
-  if (!lignes.length) return null;
-  const n = (champ) => lignes.reduce((s, x) => s + (Number(x[champ]) || 0), 0);
+export const TOTAL_META = '*';
+// ⚠ `periode = 0` VEUT DIRE « DEPUIS LE DÉBUT », pas « zéro jour ». C'est la
+// convention de `meta_ads_periode` : 7, 14 et 30 sont des fenêtres glissantes,
+// 0 est le cumul. La tuile montre le cumul depuis le 12/11/2026, demandé par
+// Élodie — une dépense publicitaire se juge sur ce qu'elle a coûté en tout,
+// pas sur les trente derniers jours.
+export const DEPUIS_LE_DEBUT = 0;
+export function publicite(cles, periode = DEPUIS_LE_DEBUT) {
+  const toutes = db.t('meta_ads_periode').filter(x => Number(x.periode) === Number(periode) && cles.includes(x.activity));
+  if (!toutes.length) return null;
+  const campagnes = toutes.filter(x => x.campagne_id !== TOTAL_META);
+  const totaux = toutes.filter(x => x.campagne_id === TOTAL_META);
+  const source = totaux.length ? totaux : campagnes;
+  const n = (champ) => source.reduce((s, x) => s + (Number(x[champ]) || 0), 0);
   const depense = n('depense'), leads = n('leads'), clics = n('clics');
   return {
-    depense, leads, clics, campagnes: lignes.length,
+    periode, depense, leads, clics,
+    // Les bornes réellement relevées : « depuis le 28 juillet » vaut mieux que
+    // « depuis le début », qui ne dit pas quand le début a eu lieu.
+    du: source[0]?.du || null, au: source[0]?.au || null,
+    // Les campagnes qui ont vraiment tourné : une campagne à zéro euro est une
+    // campagne à l'arrêt, l'annoncer gonflerait le compte.
+    campagnes: campagnes.filter(x => Number(x.depense) > 0).length,
     coutParLead: leads ? depense / leads : null,
     // Un clic qui ne laisse pas de coordonnées a coûté quand même.
     tauxLead: clics ? leads / clics : null,

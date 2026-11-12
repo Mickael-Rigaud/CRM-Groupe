@@ -950,18 +950,27 @@ function tuileChantiers(cles, r) {
   </section>`;
 }
 
+/**
+ * La publicité Meta — le CUMUL, pas les trente derniers jours (12/11/2026,
+ * Élodie : « mets le montant total dépensé, le nombre de lead reçu et le coût
+ * par lead », en donnant les valeurs qu'elle attendait — le dépôt est public,
+ * elles ne sont pas recopiées ici).
+ *
+ * ⚠ ET LE COÛT PAR LEAD EST À DEUX DÉCIMALES. C'est le chiffre qu'elle
+ * compare à ce que Meta lui annonce ; arrondi à l'euro, il ne se retrouve plus.
+ */
 function tuilePublicite(cles) {
   const p = publicite(cles);
   if (!p) return '';
-  const virgule = (n) => String(Math.round(n * 10) / 10).replace('.', ',');
+  const virgule = (n, d = 1) => n.toLocaleString('fr-FR', { minimumFractionDigits: d, maximumFractionDigits: d });
   return `<section class="card tb-tuile">
     <div class="card-head"><h2>Publicité Meta</h2>
-      <a class="muted small" href="#/rgd/analyse">30 jours →</a></div>
-    ${duo({ v: eur(p.depense), l: 'dépensé' },
-      { v: p.coutParLead == null ? '—' : eur(p.coutParLead), l: 'par lead' })}
+      <a class="muted small" href="#/rgd/analyse">${p.du ? 'depuis le ' + jourCourt(p.du) : 'depuis le début'} →</a></div>
+    ${duo({ v: eur(p.depense), l: 'dépensé en tout' },
+      { v: p.coutParLead == null ? '—' : eur(p.coutParLead, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), l: 'par lead' })}
     <div class="tb-liste">
       <div class="tb-lg"><i style="background:var(--accent)"></i>
-        <span class="tx">${p.leads} lead${p.leads > 1 ? 's' : ''} reçu${p.leads > 1 ? 's' : ''}<em>${p.clics} clic${p.clics > 1 ? 's' : ''} · ${p.campagnes} campagne${p.campagnes > 1 ? 's' : ''}</em></span>
+        <span class="tx">${p.leads} lead${p.leads > 1 ? 's' : ''} reçu${p.leads > 1 ? 's' : ''}<em>${p.clics} clic${p.clics > 1 ? 's' : ''} · ${p.campagnes} campagne${p.campagnes > 1 ? 's' : ''} qui ${p.campagnes > 1 ? 'ont' : 'a'} tourné</em></span>
         <b>${p.tauxLead == null ? '—' : virgule(p.tauxLead * 100) + ' %'}</b></div>
     </div>
   </section>`;
