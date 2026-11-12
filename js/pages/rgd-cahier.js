@@ -15,12 +15,10 @@ import { COSTRUCTOR_APP } from '../data/rgd-cgv.js';
 import { cahierDe, estSigne, creerCahier, majCahier, signerCahier, retirerSignature,
          preparerLien, lienSignature, lienValable, envoyerPourSignature,
          devisSignesDu, postesDuDevisCrm, decouperCollage, lireDevisCostructor,
-         ajouterPhotos, retirerPhoto, poserPlan, liensDuCahier, piecesDe, renommerPhotos } from '../data/rgd-cahier.js';
+         ajouterPhotos, retirerPhoto, poserPlan, liensDuCahier, piecesDe, renommerPhotos, deplacerPhoto,
+         derniereDemandeNas, dossiersNas, enCoursNas, demanderPhotosNas } from '../data/rgd-cahier.js';
 import { imprimerCahierClient, imprimerCahierOuvriers } from './rgd-cahier-doc.js';
 import { donneesDocument } from './rgd-documents.js';
-// Importé d'avance, pas à la demande : le sélecteur de dossier ne s'ouvre
-// qu'en réponse IMMÉDIATE au clic, et un `import()` attendu le ferait refuser.
-import { importerDepuisNas } from './rgd-cahier-nas.js';
 
 const date = (iso) => (iso ? new Date(iso).toLocaleDateString('fr-FR') : '');
 const eurHt = (n) => (n == null ? '' : `${Number(n).toLocaleString('fr-FR')} € HT`);
@@ -198,12 +196,17 @@ export function ouvrirCahier(chantier, dossier, retour) {
   function blocSalles(fige) {
     const pieces = piecesEcran();
     const photos = k?.photos || [];
-    const vignette = (chemin, retirable) => `<span class="ca-vignette"><img data-chemin="${esc(chemin)}" alt="">${
-      retirable ? `<button type="button" class="ca-vignette-x" data-retirer-photo="${esc(chemin)}" title="Retirer la photo">✕</button>` : ''}</span>`;
+    // Une vignette : la photo, une croix pour la retirer, et un menu pour la
+    // changer de pièce (« tu corriges d'un clic si l'IA se trompe »).
+    const vignette = (x, retirable) => `<span class="ca-vignette${x.source === 'nas' ? ' nas' : ''}"><img data-chemin="${esc(x.chemin)}" alt="">${
+      retirable ? `<button type="button" class="ca-vignette-x" data-retirer-photo="${esc(x.chemin)}" title="Retirer la photo">✕</button>
+        ${pieces.length > 1 ? `<select class="ca-vignette-piece" data-photo-piece="${esc(x.chemin)}" title="Changer de pièce" aria-label="Changer la photo de pièce">
+          <option value="__">⇄</option>${pieces.filter(l => l !== (x.lot || '')).map(l => `<option value="${esc(l)}">${esc(l || 'Travaux')}</option>`).join('')}</select>` : ''}` : ''}</span>`;
+    const nas = derniereDemandeNas(k);
     return `<div class="ca-titre"><h4 class="ca-h">Travaux par pièce <span>${pieces.length} pièce${pieces.length > 1 ? 's' : ''} · ${s.postes.length} poste${s.postes.length > 1 ? 's' : ''}</span></h4>
         <span class="muted small">Aucun prix : ce document va aux ouvriers et au client. Une page par pièce, avec ses photos (deux au plus).</span>
-        ${fige || !pieces.length ? '' : `<span class="grow"></span><button type="button" class="btn ghost sm ca-nas" id="ca-nas"
-          title="Choisir le dossier du client sur le NAS (lecteur R:) et répartir ses photos dans les pièces">Importer les photos du NAS</button>`}</div>
+        </div>
+      ${fige || !pieces.length ? '' : etatNas(nas)}
       <div class="ca-salles">
         ${!pieces.length ? `<p class="muted small">${s.lecture ? 'Les postes arrivent…' : 'Aucune pièce pour l’instant.'}</p>` : pieces.map(lot => {
           const lignes = s.postes.map((p, i) => ({ p, i })).filter(x => (x.p.lot || '') === lot);
@@ -214,7 +217,7 @@ export function ouvrirCahier(chantier, dossier, retour) {
               <span class="muted small">${lignes.length} poste${lignes.length > 1 ? 's' : ''}</span>
               ${fige || lignes.length ? '' : '<button type="button" class="btn ghost sm" data-retirer-piece>Retirer la pièce</button>'}
             </div>
-            <div class="ca-vignettes">${ph.map(x => vignette(x.chemin, !fige)).join('')}${fige ? '' : `<label class="btn ghost sm ca-ajout-photo">${
+            <div class="ca-vignettes">${ph.map(x => vignette(x, !fige)).join('')}${fige ? '' : `<label class="btn ghost sm ca-ajout-photo">${
               s.envoiPhoto === lot ? 'Envoi…' : '+ Photo'}<input type="file" accept="image/*" multiple hidden data-photo-lot="${esc(lot)}"></label>`}</div>
             <div class="ca-postes">${lignes.map(x => ligneP(x.p, x.i, fige, pieces)).join('')}</div>
             ${fige ? '' : '<button type="button" class="btn ghost sm" data-ajouter-poste>+ Ajouter un poste</button>'}
@@ -223,6 +226,67 @@ export function ouvrirCahier(chantier, dossier, retour) {
         ${fige ? '' : '<button type="button" class="btn sm ca-ajouter-piece" id="ca-ajouter-piece">+ Ajouter une pièce</button>'}
       </div>
       ${blocPlan(fige)}`;
+  }
+
+  // ⚠ LES PHOTOS DU NAS (12/11/2026) : l'état de la dernière demande, et de quoi
+  // choisir le dossier quand le NAS ne l'a pas trouvé ou s'est trompé.
+  function etatNas(d) {
+    const liste = dossiersNas();
+    const choixDossier = (proposes) => {
+      const vus = new Set();
+      const options = [...(proposes || []), ...liste].filter(x => x && !vus.has(x.chemin) && vus.add(x.chemin));
+      return options.length ? `<select id="ca-nas-dossier" aria-label="Dossier du client sur le NAS">
+          <option value="">Choisir le dossier du client…</option>
+          ${options.map(x => `<option value="${esc(x.chemin)}"${x.chemin === (d?.dossier || k?.nas_dossier) ? ' selected' : ''}>${
+            esc(`${x.nom}${x.etat ? ` — ${x.etat}` : ''}${x.nb_photos != null ? ` (${x.nb_photos} photos)` : ''}`)}</option>`).join('')}
+        </select><button type="button" class="btn sm" id="ca-nas-prendre">Prendre ce dossier</button>` : '';
+    };
+    if (!d) {
+      return `<div class="ca-nas"><span class="ca-nas-ico">NAS</span><span>Les photos du projet seront cherchées sur le NAS dès que le cahier est enregistré.</span>
+        <span class="grow"></span><button type="button" class="btn ghost sm" id="ca-nas-relancer">Chercher maintenant</button></div>`;
+    }
+    if (enCoursNas(d)) {
+      return `<div class="ca-nas en-cours"><span class="ca-nas-ico">NAS</span><span class="ca-lecture">${
+        d.statut === 'en_cours' ? 'Le NAS trie les photos du projet par pièce…' : 'Demande envoyée au NAS — il passe toutes les minutes…'}</span></div>`;
+    }
+    if (d.statut === 'fait') {
+      return `<div class="ca-nas fait"><span class="ca-nas-ico">NAS</span><span>${esc(d.message || 'Photos rangées.')}</span>
+        <span class="grow"></span><button type="button" class="btn ghost sm" id="ca-nas-relancer">Relancer</button>
+        <details class="ca-nas-autre"><summary>Pas le bon dossier ?</summary>${choixDossier(d.candidats)}</details></div>`;
+    }
+    return `<div class="ca-nas alerte"><span class="ca-nas-ico">NAS</span><span>${esc(d.message || 'Le NAS n’a pas pu traiter la demande.')}</span>
+      <span class="grow"></span>${d.statut === 'erreur' ? '<button type="button" class="btn ghost sm" id="ca-nas-relancer">Réessayer</button>' : ''}
+      <div class="ca-nas-choix">${choixDossier(d.candidats)}</div></div>`;
+  }
+
+  // Déposer une demande au NAS (le cahier doit exister et avoir des pièces).
+  async function demanderNas(dossier_force = null) {
+    if (!k || estSigne(k) || !piecesDe(k.postes).length) return;
+    const c = dossier ? donneesDocument(dossier) : {};
+    await demanderPhotosNas(k, {
+      client_nom: c.nom || dossier?.nom || chantier.titre, ville: c.villeChantier || '', adresse: chantier.adresse || c.adresseChantier || '',
+      pieces: piecesDe(k.postes), dossier_force,
+    });
+  }
+
+  // Tant qu'une demande est en cours, on regarde toutes les 4 secondes si le
+  // NAS a répondu (le temps réel met la base à jour ; ceci redessine l'écran).
+  let veille = null;
+  function surveiller() {
+    clearInterval(veille);
+    const d = derniereDemandeNas(k);
+    if (!enCoursNas(d)) return;
+    veille = setInterval(() => {
+      if (!hote?.isConnected) { clearInterval(veille); return; }
+      const n = derniereDemandeNas(k);
+      if (!enCoursNas(n)) {
+        clearInterval(veille);
+        lire();
+        k = cahierDe(chantier.id) || k;
+        if (n?.statut === 'fait') toast('Photos du NAS rangées par pièce');
+        dessiner();
+      }
+    }, 4000);
   }
 
   // Le plan, et les photos dont la pièce a disparu.
@@ -312,7 +376,7 @@ export function ouvrirCahier(chantier, dossier, retour) {
     });
   };
 
-  const enregistrer = async () => {
+  let enregistrer = async () => {
     lire();
     const choisi = devisChoisi();
     const champs = {
@@ -420,21 +484,26 @@ export function ouvrirCahier(chantier, dossier, retour) {
       const bloc = [...hote.querySelectorAll('.ca-salle')].find(x => x.dataset.piece === lot);
       [...(bloc?.querySelectorAll('[data-c="designation"]') || [])].pop()?.focus();
     });
-    // ⚠ IMPORTER DEPUIS LE NAS (12/11/2026) : le dossier du client, choisi sur
-    // le lecteur R: du PC, s'ouvre en galerie ; on répartit ses photos dans les
-    // pièces. Le cahier est enregistré avant le premier envoi.
-    const bNas = hote.querySelector('#ca-nas');
-    if (bNas) bNas.onclick = () => {
-      lire();
-      let pret = false;
-      const assurer = async () => { if (!pret) { await enregistrer(); pret = true; } };
-      importerDepuisNas({
-        pieces: piecesEcran(),
-        envoyer: async (lot, fichiers) => { await assurer(); k = await ajouterPhotos(k, lot, fichiers); k = cahierDe(chantier.id) || k; },
-        poserPlan: async (f) => { await assurer(); k = await poserPlan(k, f); k = cahierDe(chantier.id) || k; },
-        apres: () => dessiner(),
-      });
+    // Les photos du NAS : relancer, ou imposer le dossier du client.
+    const bRelancer = hote.querySelector('#ca-nas-relancer');
+    if (bRelancer) bRelancer.onclick = async () => {
+      try { await enregistrer(); await demanderNas(k.nas_dossier || null); dessiner(); surveiller(); }
+      catch (e) { toast(e.message, 'error'); }
     };
+    const bPrendre = hote.querySelector('#ca-nas-prendre');
+    if (bPrendre) bPrendre.onclick = async () => {
+      const chemin = hote.querySelector('#ca-nas-dossier')?.value;
+      if (!chemin) { toast('Choisissez le dossier du client dans la liste.', 'error'); return; }
+      try { await enregistrer(); await demanderNas(chemin); dessiner(); surveiller(); }
+      catch (e) { toast(e.message, 'error'); }
+    };
+    hote.querySelectorAll('[data-photo-piece]').forEach(sel => sel.onchange = async () => {
+      if (sel.value === '__') return;
+      lire();
+      try { k = await deplacerPhoto(k, sel.dataset.photoPiece, sel.value); k = cahierDe(chantier.id) || k; }
+      catch (e) { toast(e.message, 'error'); }
+      dessiner();
+    });
     hote.querySelector('#ca-ajouter-piece').onclick = () => {
       lire();
       const deja = piecesEcran();
@@ -565,6 +634,18 @@ export function ouvrirCahier(chantier, dossier, retour) {
     dessiner();
   }
 
+  // ⚠ LA DEMANDE AU NAS PART TOUTE SEULE : dès qu'un cahier a des pièces et
+  // qu'aucune demande n'a encore été faite pour lui. Elle n'est jamais refaite
+  // d'office ensuite (« Relancer » est là pour ça) : rouvrir le cahier ne doit
+  // pas re-trier et remplacer des photos déjà corrigées à la main.
+  async function demandeInitiale() {
+    if (!direction || !k || estSigne(k) || derniereDemandeNas(k) || !piecesDe(k.postes).length) { surveiller(); return; }
+    try { await demanderNas(k.nas_dossier || null); dessiner(); } catch (e) { console.warn('[NAS]', e.message); }
+    surveiller();
+  }
+  const enregistrerSansNas = enregistrer;
+  enregistrer = async () => { const r = await enregistrerSansNas(); await demandeInitiale(); return r; };
+
   if (direction && !estSigne(k) && !s.postes.length && devisChoisi()) remplirDepuisDevis();
-  else dessiner();
+  else { dessiner(); demandeInitiale(); }
 }

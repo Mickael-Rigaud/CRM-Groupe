@@ -131,6 +131,44 @@ export async function retirerPhoto(k, chemin) {
   return ligne;
 }
 
+// Corriger la pièce d'une photo (le tri de l'IA s'est trompé, ou une photo
+// ajoutée dans la mauvaise pièce).
+export async function deplacerPhoto(k, chemin, lot) {
+  if (estSigne(k)) throw new Error('Le cahier est signé : retirez la signature avant de le modifier.');
+  const a_jour = cahierDe(k.planning_id) || k;
+  return db.update('rgd_cahiers', k.id, {
+    photos: (a_jour.photos || []).map(p => (p.chemin === chemin ? { ...p, lot: String(lot || '') } : p)),
+  });
+}
+
+// ------------------------------------------------------------ les photos du NAS
+// ⚠ ELLES ARRIVENT TOUTES SEULES (12/11/2026, Élodie : « récupérer
+// automatiquement les photos du projet sur le NAS quand on veut générer un
+// cahier des charges »). Le CRM ne voit pas le NAS : il dépose une DEMANDE
+// (`rgd_nas_photos`), et le programme `crm-photos-nas` du NAS, qui passe toutes
+// les 45 secondes, retrouve le dossier du client, fait trier les photos par
+// pièce par Claude, et les inscrit dans le cahier (`source: 'nas'`). Voir
+// docker/crm-photos-nas dans le dépôt Backend.
+export const demandesNas = (k) => db.t('rgd_nas_photos').filter(d => d.cahier_id === k?.id)
+  .sort((a, b) => String(b.demande_le || '').localeCompare(String(a.demande_le || '')));
+export const derniereDemandeNas = (k) => demandesNas(k)[0] || null;
+export const dossiersNas = () => db.t('rgd_nas_dossiers').slice()
+  .sort((a, b) => String(a.etat || '').localeCompare(String(b.etat || '')) || String(a.nom).localeCompare(String(b.nom), 'fr'));
+export const enCoursNas = (d) => !!d && (d.statut === 'attente' || d.statut === 'en_cours');
+
+export async function demanderPhotosNas(k, { client_nom, ville, adresse, pieces, dossier_force = null }) {
+  if (estSigne(k)) throw new Error('Le cahier est signé : retirez la signature pour reprendre les photos.');
+  const deja = derniereDemandeNas(k);
+  if (enCoursNas(deja) && !dossier_force) return deja;
+  return db.insert('rgd_nas_photos', {
+    cahier_id: k.id, client_nom: client_nom || null, ville: ville || null, adresse: adresse || null,
+    pieces: (pieces || []).filter(Boolean), dossier_force: dossier_force || k.nas_dossier || null,
+    // Écrits ici et pas laissés aux valeurs par défaut de la base : l'écran
+    // range les demandes par date et lit leur état aussitôt après l'envoi.
+    statut: 'attente', demande_le: new Date().toISOString(),
+  });
+}
+
 // Une pièce renommée emmène ses photos : sans ça, elles resteraient
 // rattachées à l'ancien nom et ne s'imprimeraient plus.
 export async function renommerPhotos(k, renommes) {
