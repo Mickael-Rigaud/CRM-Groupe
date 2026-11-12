@@ -7780,15 +7780,53 @@ tr.est-retire td { opacity: .6; }
 tr.est-retire .rtf-actions { opacity: 1; }
 tr.est-modifie td { background: var(--accent-soft); }
 .rtf-nouvelle { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
-@media screen and (max-width: 720px) {
+/* ⚠ TÉLÉPHONE : UNE CARTE PAR PRESTATION (12/11/2026, Élodie : « revois la
+   mise en page sur le téléphone parce que ce n'est pas top »). Avant, chaque
+   champ prenait sa ligne pleine largeur, sans intitulé : sept lignes empilées
+   par prestation, et un prix qu'on ne savait pas lire. Désormais : le nom en
+   haut, l'unité et le prix CÔTE À CÔTE avec leur intitulé, puis « Dès » et le
+   bouton sur la même ligne. Avec des variantes, le prix reprend toute la
+   largeur — chaque variante a son nom et son montant. Seuil 820 px, celui de
+   l'application téléphone (`css/mobile.css`). */
+@media screen and (max-width: 820px) {
+  .rtf-table { overflow: visible; background: none; border: 0; box-shadow: none; padding: 0; }
+  /* Le grand cadre rend sa marge aux cartes : c'est elles qu'on lit. */
+  .card:has(> .rtf-table) { padding: 16px 12px; }
+  .card:has(> .rtf-table) > .card-head { margin-bottom: 0; flex-wrap: wrap; gap: 4px 10px; }
+  .rtf-table table, .rtf-table tbody { display: block; width: 100%; }
   .rtf-table thead { display: none; }
   .rtf-table tr.rtf-cat { display: block; padding: 0; border: 0; }
-  .rtf-table tr.rtf-cat th { display: block; padding: 14px 0 6px !important; }
-  .rtf-table tr:not(.rtf-cat) { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 12px 0; border-bottom: 1px solid var(--line); }
-  .rtf-table td { padding: 0 !important; border: 0 !important; }
-  .rtf-table td.rtf-presta, .rtf-table td.rtf-prix, .rtf-table td.rtf-actions { grid-column: 1 / -1; min-width: 0; }
-  .rtf-table td.rtf-actions { text-align: left; }
-  .rtf-table :is(input, select) { font-size: 16px; }
+  .rtf-table tr.rtf-cat th { display: block; padding: 18px 2px 6px !important; border-bottom: 0; }
+  .rtf-table tr[data-tarif] {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas: "presta presta" "unite prix" "des actions";
+    gap: 12px 10px; margin: 0 0 10px; padding: 14px;
+    border: 1px solid var(--line); border-radius: 12px; background: var(--card);
+  }
+  .rtf-table tr[data-tarif]:has(.rtf-variantes) { grid-template-areas: "presta presta" "unite unite" "prix prix" "des actions"; }
+  .rtf-table td { display: block; padding: 0 !important; border: 0 !important; min-width: 0; background: none !important; }
+  .rtf-table tr.est-modifie { background: var(--accent-soft); border-color: var(--accent); }
+  .rtf-table td.rtf-presta { grid-area: presta; min-width: 0; }
+  .rtf-table td.rtf-unite { grid-area: unite; }
+  .rtf-table td.rtf-prix { grid-area: prix; min-width: 0; }
+  .rtf-table td.rtf-des { grid-area: des; align-self: center; }
+  .rtf-table td.rtf-actions { grid-area: actions; align-self: center; text-align: right; white-space: normal; }
+  .rtf-table td.rtf-actions .btn { margin: 2px 0 2px 6px; }
+  .rtf-table :is(td.rtf-unite, td.rtf-prix)::before {
+    display: block; margin-bottom: 4px; color: var(--muted); font-size: 12px; font-weight: 600;
+  }
+  .rtf-table td.rtf-unite::before { content: 'Unité'; }
+  .rtf-table td.rtf-prix::before { content: 'Prix HT'; }
+  .rtf-table .rtf-unite select { min-width: 0; }
+  .rtf-table .rtf-euro { display: flex; width: 100%; }
+  .rtf-table .rtf-euro input { flex: 1; width: auto !important; min-width: 0; }
+  .rtf-table .rtf-variante { grid-template-columns: minmax(0, 1fr) 112px auto; }
+  .rtf-table .rtf-variante .rtf-euro input { width: 100% !important; }
+  .rtf-table .rtf-ajout-variante { display: inline-block; margin-top: 8px; font-size: 14px; }
+  .rtf-table .rtf-categorie { font-size: 13px; }
+  .rtf-table .rtf-categorie input { font-size: 16px !important; }
+  .rtf-table td.rtf-des .check { font-size: 15px; }
+  .rtf-table :is(input, select), .rtf-table td.rtf-presta input { font-size: 16px !important; }
 }
 
 /* ------------------------------------------------- bon d'attachement (02/11/2026)
