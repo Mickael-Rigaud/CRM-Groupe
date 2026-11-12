@@ -38,8 +38,8 @@ const MAX_MO = 12;
 const MAX_FOURNITURES = 30;
 
 /** Le bon d'une facture : on le retrouve, ou on l'ouvre neuf. */
-export function ouvrirBonDeLaFacture(x, devis, retour = null) {
-  ouvrirBonAttachement(x, { bon: bonDuDevis(devis), devis }, retour);
+export function ouvrirBonDeLaFacture(x, devis, retour = null, options = {}) {
+  ouvrirBonAttachement(x, { bon: bonDuDevis(devis), devis }, retour, options);
 }
 
 /** Un bon sans facture, créé depuis la fiche. */
@@ -47,7 +47,23 @@ export function ouvrirBonNeuf(x, retour = null) {
   ouvrirBonAttachement(x, { bon: null, devis: null }, retour);
 }
 
-export function ouvrirBonAttachement(x, { bon = null, devis = null } = {}, retour = null) {
+/**
+ * `versEnvoi` ouvre directement l'ÉCRAN D'ENVOI quand le bon est déjà signé.
+ *
+ * ⚠ SANS LUI, « ENVOYER LE BON » ROUVRAIT LE FORMULAIRE (12/11/2026, Élodie,
+ * deux fois dans la journée : « quand on veut l'envoyer je revois la facture »,
+ * puis « quand le bon d'attachement est signé j'ai encore l'aperçu de la
+ * facture »). L'étape de la frise s'appelle « Envoyer le bon » et redonnait
+ * trente champs à relire, avec le bouton d'envoi tout en bas : on refermait, et
+ * la fermeture rouvrait la facture. Le bouton fait maintenant ce qu'il dit.
+ *
+ * ⚠ ET SEULEMENT SI LE BON EST SIGNÉ : un bon non signé ne s'envoie pas (la
+ * règle est d'Élodie, 02/11), donc l'ouvrir sur l'envoi n'aurait montré qu'un
+ * bouton désactivé. Dans ce cas on reste sur le formulaire, qui dit ce qui
+ * manque.
+ */
+export function ouvrirBonAttachement(x, { bon = null, devis = null } = {}, retour = null,
+  { versEnvoi = false } = {}) {
   let courant = bon;
   let s = null;        // la saisie en cours, jamais écrite tant qu'on n'enregistre pas
   // ⚠ PAS DE `confirm()` : il ouvre sa propre fenêtre et ferme celle du bon,
@@ -697,6 +713,7 @@ export function ouvrirBonAttachement(x, { bon = null, devis = null } = {}, retou
   charger().then((mod) => {
     s = saisieDepart({ bon: courant, devis, d: mod.donneesDocument(x) });
     dessine();
+    if (versEnvoi && courant?.signature) ouvrirEnvoi();
   }).catch((e) => {
     hote.innerHTML = `<p class="empty">Bon d’attachement indisponible — ${esc(String(e.message || e))}</p>`;
   });

@@ -1096,7 +1096,14 @@ export function ouvrirDevisCrm(x, existant = null, retour = null, genreNeuf = 'f
         const { ouvrirBonDeLaFacture } = await import('./rgd-bon-attachement.js');
         const doc = existant;
         closeModal(true);
-        ouvrirBonDeLaFacture(x, doc, () => ouvrirDevisCrm(x, db.byId('rgd_devis_crm', doc.id) || doc, retour));
+        // ⚠ « ENVOYER LE BON » OUVRE L'ENVOI, PAS LE FORMULAIRE (12/11/2026).
+        // Les deux étapes ouvraient la même fenêtre au même endroit : celle qui
+        // dit « envoyer » redonnait trente champs à relire, avec le bouton
+        // d'envoi tout en bas. On refermait, et la fermeture rouvrait la
+        // facture — déjà envoyée.
+        ouvrirBonDeLaFacture(x, doc,
+          () => ouvrirDevisCrm(x, db.byId('rgd_devis_crm', doc.id) || doc, retour),
+          { versEnvoi: quoi === 'bonEnvoi' });
         return;
       }
       if (quoi === 'signature') {
