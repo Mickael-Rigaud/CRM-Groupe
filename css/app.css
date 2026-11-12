@@ -7973,6 +7973,30 @@ tr.est-modifie td { background: var(--accent-soft); }
 .renc-date input { padding: 9px 11px; border: 1px solid var(--line); border-radius: 10px;
   background: var(--card); color: inherit; font: inherit; }
 
+/* Les deux façons de faire payer : deux tuiles, comme les moyens de paiement
+   au-dessus — même grammaire, même hauteur de frappe au doigt. ⚠ ELLES NE
+   SONT PAS « CHOISIES » comme les moyens : ce sont des GESTES, chacune ouvre
+   un écran. D'où le chevron plutôt qu'une coche, et le contour accentué. */
+.renc-faire { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 14px 0 16px; }
+@media screen and (max-width: 520px) { .renc-faire { grid-template-columns: 1fr; } }
+.renc-faire-b { display: flex; align-items: center; gap: 12px; text-align: left; padding: 12px 14px;
+  border: 1.5px solid var(--accent); border-radius: 14px; background: var(--card); color: var(--text);
+  font: inherit; cursor: pointer; transition: transform .12s, box-shadow .12s, background .12s; }
+.renc-faire-b:hover { background: color-mix(in srgb, var(--accent) 7%, var(--card));
+  transform: translateY(-1px); box-shadow: 0 6px 16px rgba(0,0,0,.08); }
+.renc-faire-b:active { transform: translateY(0); }
+.renc-faire-b .renc-ic { flex: none; width: 34px; height: 34px; color: var(--accent); }
+.renc-faire-b .renc-ic svg { width: 100%; height: 100%; }
+.renc-faire-b .renc-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.renc-faire-b .renc-txt b { font-size: 14.5px; }
+.renc-faire-b .renc-txt small { color: var(--muted); font-size: 12px; line-height: 1.35; }
+/* Le lien qui ouvre l'application SumUp : un bouton plein, c'est LE geste de
+   l'écran. */
+.renc-nfc-ouvrir { display: inline-block; text-decoration: none; }
+.renc-nfc-ecart { margin: 0 0 14px; padding: 12px 14px; border-radius: 12px; font-size: 13.5px;
+  line-height: 1.45; background: color-mix(in srgb, #D92D20 10%, var(--card));
+  border: 1px solid color-mix(in srgb, #D92D20 35%, var(--card)); }
+
 /* ⚠ LE CODE EST GRAND ET SUR FOND BLANC FRANC : un QR gris, petit ou
    encastré dans une carte colorée se scanne mal, et l'échec arrive devant le
    client. 260 px de côté au minimum, marge blanche comprise. */

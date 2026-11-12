@@ -542,9 +542,84 @@ export function ouvrirBonAttachement(x, { bon = null, devis = null } = {}, retou
         if (!await enregistrer()) return;
         courant = await signerBonAttachement(courant, { signature: image, nom });
         toast('Bon d’attachement signé');
-        redessiner();
+        // ⚠ ON NE RETOMBE PLUS SUR LE FORMULAIRE (12/11/2026, Élodie : « je veux
+        // donc "bon d'attachement signé" et un bouton "envoyer le bon
+        // d'attachement" »). Le formulaire porte bien un bouton « Envoyer par
+        // mail », mais discret, en bas d'une page de trente champs : on fermait
+        // la fenêtre, et le retour rouvrait LA FACTURE, déjà envoyée. L'étape
+        // s'annonce maintenant comme celles de la facture.
+        annoncerSigne();
       },
     });
+  }
+
+  /**
+   * « Bon d'attachement signé », et le bouton qui l'envoie.
+   *
+   * ⚠ C'EST UNE ÉTAPE, PAS UN TOAST. Les deux signatures viennent d'être
+   * posées, le client est encore là : c'est le moment de lui envoyer son
+   * exemplaire, et c'est le seul écran où le geste se voit.
+   *
+   * ⚠ « PLUS TARD » REVIENT AU FORMULAIRE, PAS À LA FACTURE. Le bon peut avoir
+   * encore besoin d'une correction — une heure oubliée, une fourniture — et
+   * rouvrir la facture à ce moment-là oblige à refaire tout le chemin.
+   */
+  function annoncerSigne() {
+    // ⚠ UN BON PEUT N'AVOIR PAS ENCORE DE NUMÉRO (il naît à l'enregistrement) :
+    // collé tel quel, il laissait « Bon  signé », deux espaces, vu à l'écran.
+    const n = numeroBon(courant);
+    const num = n ? ` ${n}` : '';
+    m.querySelector('.modal-head h2').textContent = `Bon${num} signé`;
+    hote.innerHTML = `
+      <div class="rdc-apres">
+        <p class="rdc-apres-titre">✓ Bon d’attachement${esc(num)} signé</p>
+        <p class="rdc-aide">Il porte vos deux signatures. Envoyez-lui son exemplaire
+        maintenant : c’est la pièce qu’on ressort si les heures ou les fournitures
+        sont un jour contestées.</p>
+        <div class="form-actions">
+          <button type="button" class="btn ghost" id="rba-apres-tard">Plus tard</button>
+          <button type="button" class="btn" id="rba-apres-envoi">Envoyer le bon d’attachement ▸</button>
+        </div>
+      </div>`;
+    hote.querySelector('#rba-apres-tard').onclick = () => redessiner();
+    hote.querySelector('#rba-apres-envoi').onclick = () => ouvrirEnvoi();
+  }
+
+  /**
+   * « Bon d'attachement envoyé », et le passage à l'encaissement.
+   *
+   * ⚠ ON DIT OÙ IL EST PARTI. « Envoyé » tout court laisse se demander à
+   * quelle adresse — et c'est la question qu'on se pose trois jours plus tard,
+   * quand le client dit n'avoir rien reçu.
+   *
+   * ⚠ ET L'ENCAISSEMENT NE S'OUVRE PLUS TOUT SEUL : il se propose. Sur une
+   * facture déjà réglée, ou sur un bon sans facture, il n'y a rien à encaisser
+   * et le bouton n'existe pas.
+   */
+  function annoncerEnvoye(adresse) {
+    const aEncaisser = !!devis && !devis.regle_le;
+    const n = numeroBon(courant);
+    const num = n ? ` ${n}` : '';
+    m.querySelector('.modal-head h2').textContent = `Bon${num} envoyé`;
+    hote.innerHTML = `
+      <div class="rdc-apres">
+        <p class="rdc-apres-titre">✓ Bon d’attachement${esc(num)} envoyé</p>
+        <p class="rdc-aide">Parti à <b>${esc(adresse)}</b>, en pièce jointe PDF.${aEncaisser
+          ? ' Reste le règlement : le client est encore là.' : ''}</p>
+        <div class="form-actions">
+          <button type="button" class="btn ${aEncaisser ? 'ghost' : ''}" id="rba-fin">${
+            aEncaisser ? 'Plus tard' : 'Fermer'}</button>
+          ${aEncaisser
+            ? '<button type="button" class="btn" id="rba-encaisser">Encaisser la facture ▸</button>'
+            : ''}
+        </div>
+      </div>`;
+    hote.querySelector('#rba-fin').onclick = () => closeModal();
+    const bEnc = hote.querySelector('#rba-encaisser');
+    if (bEnc) bEnc.onclick = async () => {
+      const { proposerEncaissement } = await import('./rgd-encaissement.js');
+      proposerEncaissement(x, devis, retour);
+    };
   }
 
   /**
@@ -603,8 +678,13 @@ export function ouvrirBonAttachement(x, { bon = null, devis = null } = {}, retou
         // une facture encore due, et plus rien ne demandait jamais comment le
         // client avait payé. On enchaîne donc ici, là où Franck est encore chez
         // lui — et « Plus tard » reste une réponse.
-        const { proposerEncaissement } = await import('./rgd-encaissement.js');
-        proposerEncaissement(x, devis, retour);
+        //
+        // ⚠ MAIS ON L'ANNONCE AVANT DE L'OUVRIR (12/11/2026, Élodie : « et
+        // après "bon d'attachement envoyé" avant de passer à l'encaissement »).
+        // L'écran d'encaissement s'ouvrait d'autorité sur un envoi dont rien
+        // n'avait dit qu'il avait réussi, et le toast passe — surtout au doigt,
+        // surtout chez un client.
+        annoncerEnvoye(a);
       } catch (e) {
         bouton.disabled = false; bouton.textContent = 'Envoyer';
         toast(`Non envoyé — ${String(e.message || e).slice(0, 140)}`, 'error');

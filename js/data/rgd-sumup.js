@@ -140,3 +140,40 @@ export const lienDePaiementSumUp = (factureId) =>
  */
 export const etatPaiementSumUp = (checkoutId) =>
   appeler({ action: 'etat', checkout_id: checkoutId });
+
+// -------------------------------------- payer sans contact, dans l'application
+/**
+ * Le lien qui passe la main à l'application SumUp du téléphone.
+ *
+ * Élodie, le 12/11/2026 : « pour l'encaissement si on sélectionne carte
+ * bancaire je voudrais avoir le choix de choisir entre le qr code et la
+ * fonction nfc si franck veut passer sur l'application sumup de son
+ * téléphone ».
+ *
+ * ⚠ LE CRM N'ENCAISSE PAS EN SANS CONTACT, IL PASSE LA MAIN. « Tap to Pay »
+ * existe chez SumUp, en France, mais uniquement par SDK natif iOS ou Android :
+ * une page web ne peut pas s'en servir. Le lien `sumupmerchant://pay/1.0`,
+ * documenté par SumUp pour le web mobile, ouvre l'application avec le montant
+ * déjà posé — et c'est elle qui encaisse, sans contact ou au lecteur.
+ *
+ * ⚠ ET LE LIEN SE FABRIQUE AU SERVEUR, comme la page de paiement : il porte
+ * la clé d'affiliation, qui n'a rien à faire dans un dépôt public, et le
+ * montant, qui ne se lit qu'en base.
+ */
+export const lienSansContactSumUp = (factureId) =>
+  appeler({ action: 'lien_app', facture_id: factureId });
+
+/**
+ * Où en est ce paiement-là : rend { statut, encaissee, montant_recu }.
+ *
+ * ⚠ RIEN NE REVIENT DE L'APPLICATION SUMUP — aucun webhook, aucun retour. Le
+ * serveur va donc DEMANDER à SumUp si la transaction existe, par l'identifiant
+ * que nous avons glissé dans le lien. Tant que la carte n'est pas passée, elle
+ * n'existe pas : c'est l'attente, pas une panne.
+ *
+ * ⚠ ET LE STATUT « montant_different » EXISTE parce que l'application laisse
+ * modifier la somme : un paiement de 50 € sur une facture de 500 ne la solde
+ * pas, et l'écran doit le dire plutôt que de marquer réglé.
+ */
+export const etatSansContactSumUp = (foreignTxId) =>
+  appeler({ action: 'etat_app', foreign_tx_id: foreignTxId });
