@@ -18,6 +18,9 @@ import { cahierDe, estSigne, creerCahier, majCahier, signerCahier, retirerSignat
          ajouterPhotos, retirerPhoto, poserPlan, liensDuCahier, piecesDe, renommerPhotos } from '../data/rgd-cahier.js';
 import { imprimerCahierClient, imprimerCahierOuvriers } from './rgd-cahier-doc.js';
 import { donneesDocument } from './rgd-documents.js';
+// Importé d'avance, pas à la demande : le sélecteur de dossier ne s'ouvre
+// qu'en réponse IMMÉDIATE au clic, et un `import()` attendu le ferait refuser.
+import { importerDepuisNas } from './rgd-cahier-nas.js';
 
 const date = (iso) => (iso ? new Date(iso).toLocaleDateString('fr-FR') : '');
 const eurHt = (n) => (n == null ? '' : `${Number(n).toLocaleString('fr-FR')} € HT`);
@@ -198,7 +201,9 @@ export function ouvrirCahier(chantier, dossier, retour) {
     const vignette = (chemin, retirable) => `<span class="ca-vignette"><img data-chemin="${esc(chemin)}" alt="">${
       retirable ? `<button type="button" class="ca-vignette-x" data-retirer-photo="${esc(chemin)}" title="Retirer la photo">✕</button>` : ''}</span>`;
     return `<div class="ca-titre"><h4 class="ca-h">Travaux par pièce <span>${pieces.length} pièce${pieces.length > 1 ? 's' : ''} · ${s.postes.length} poste${s.postes.length > 1 ? 's' : ''}</span></h4>
-        <span class="muted small">Aucun prix : ce document va aux ouvriers et au client. Une page par pièce, avec ses photos (deux au plus).</span></div>
+        <span class="muted small">Aucun prix : ce document va aux ouvriers et au client. Une page par pièce, avec ses photos (deux au plus).</span>
+        ${fige || !pieces.length ? '' : `<span class="grow"></span><button type="button" class="btn ghost sm ca-nas" id="ca-nas"
+          title="Choisir le dossier du client sur le NAS (lecteur R:) et répartir ses photos dans les pièces">Importer les photos du NAS</button>`}</div>
       <div class="ca-salles">
         ${!pieces.length ? `<p class="muted small">${s.lecture ? 'Les postes arrivent…' : 'Aucune pièce pour l’instant.'}</p>` : pieces.map(lot => {
           const lignes = s.postes.map((p, i) => ({ p, i })).filter(x => (x.p.lot || '') === lot);
@@ -415,6 +420,21 @@ export function ouvrirCahier(chantier, dossier, retour) {
       const bloc = [...hote.querySelectorAll('.ca-salle')].find(x => x.dataset.piece === lot);
       [...(bloc?.querySelectorAll('[data-c="designation"]') || [])].pop()?.focus();
     });
+    // ⚠ IMPORTER DEPUIS LE NAS (12/11/2026) : le dossier du client, choisi sur
+    // le lecteur R: du PC, s'ouvre en galerie ; on répartit ses photos dans les
+    // pièces. Le cahier est enregistré avant le premier envoi.
+    const bNas = hote.querySelector('#ca-nas');
+    if (bNas) bNas.onclick = () => {
+      lire();
+      let pret = false;
+      const assurer = async () => { if (!pret) { await enregistrer(); pret = true; } };
+      importerDepuisNas({
+        pieces: piecesEcran(),
+        envoyer: async (lot, fichiers) => { await assurer(); k = await ajouterPhotos(k, lot, fichiers); k = cahierDe(chantier.id) || k; },
+        poserPlan: async (f) => { await assurer(); k = await poserPlan(k, f); k = cahierDe(chantier.id) || k; },
+        apres: () => dessiner(),
+      });
+    };
     hote.querySelector('#ca-ajouter-piece').onclick = () => {
       lire();
       const deja = piecesEcran();
