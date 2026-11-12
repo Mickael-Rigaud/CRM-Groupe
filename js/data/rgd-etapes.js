@@ -591,13 +591,20 @@ export function confirmationSmsDe(visite, envois) {
 // d'une affaire. Et `scope.rgd` filtre déjà les fiches elles-mêmes.
 const aujourdhuiIso = () => new Date().toISOString().slice(0, 10);
 
+// ⚠ UNE FIN DÉCLARÉE L'EMPORTE SUR LES DATES (12/11/2026, Élodie : « un bouton
+// pour déclarer la fin du chantier »). Déclarer la fin AUJOURD'HUI doit faire
+// passer le dossier à « Chantier terminé » TOUT DE SUITE : sans ce test, la
+// ligne couvrirait encore la journée en cours (`finDe` rend alors le jour
+// même, donc `>= auj`), et le dossier serait resté « en cours » jusqu'à
+// minuit — un clic sans effet visible, qu'on reclique.
 export function etapeDuPlanning(x, planning = db.t('rgd_planning')) {
   const siennes = (planning || []).filter(c =>
     (c.fiche_id && c.fiche_id === x.id) || (c.demande_id && c.demande_id === x.id));
   if (!siennes.length) return null;
   const auj = aujourdhuiIso();
-  if (siennes.some(c => String(c.date_debut) <= auj && finDe(c) >= auj)) return 'chantier_encours';
-  if (siennes.some(c => String(c.date_debut) > auj)) return null;
+  const vivantes = siennes.filter(c => !c.fin_reelle);
+  if (vivantes.some(c => String(c.date_debut) <= auj && finDe(c) >= auj)) return 'chantier_encours';
+  if (vivantes.some(c => String(c.date_debut) > auj)) return null;
   return 'chantier_termine';
 }
 

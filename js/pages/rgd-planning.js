@@ -24,7 +24,8 @@ import { etapeDeFiche, etapeDeDemande, joursDeVisite } from '../data/rgd-etapes.
 import { LISTES, UNITES, joursPour, dureeLue, listesStandard, enregistrerStandard, versDate, versIso, ajouterJours, finDe,
          chantiersPlanifies, lignesDe, resteA, creerChantier, majChantier, supprimerChantier,
          ajouterLigne, ajouterStandard, majLigne, retirerLigne, changerFin, deplacerChantier, estFormation,
-         UNITES_FORMATION, ouvresPour, prochainOuvre, finOuvree, plagesOuvrees } from '../data/rgd-planning.js';
+         UNITES_FORMATION, ouvresPour, prochainOuvre, finOuvree, plagesOuvrees,
+         estTermine, declarerFin, rouvrirChantier, aujourdhuiIso } from '../data/rgd-planning.js';
 
 // ⚠ LE 11/11/2026 : PARTAGE, LECTURE PAR L'ÉQUIPE ET VUE DE L'ANNÉE.
 // · Un chantier peut être partagé avec un membre de l'équipe (`partage_avec`).
@@ -834,15 +835,141 @@ function ouvrirChantier(c, apres, jour = null, genre = 'chantier') {
     return;
   }
   const r = c && rattachementDe(c);
+  // ⚠ « CHANTIER TERMINÉ » EST UNE ACTION, PAS UN CHAMP (12/11/2026, Élodie :
+  // « un bouton pour déclarer la fin du chantier et déclencher le SMS des avis
+  // google »). Il vit donc dans le bandeau du haut, avec le cahier des
+  // charges, et non parmi les cases du formulaire : une case à cocher
+  // « terminé » se serait enregistrée avec le reste, en silence, alors que ce
+  // geste envoie un SMS chez un client.
+  //
+  // ⚠ DIRECTION SEULEMENT, comme les dates : un chargé d'affaires voit le
+  // chantier partagé, il ne décide pas qu'il est fini ni n'écrit au client.
+  // ⚠ ET PAS SUR UNE FORMATION : on ne demande pas d'avis Google à un
+  // organisme de formation.
+  const finissable = c && !formation && scope.isDirection;
   const corps = () => `
     ${r || (c && !formation) ? `<p class="pl-lien">${r ? `Fiche : <button type="button" class="btn ghost sm" id="pl-fiche">${esc(r.nom)}</button>` : ''}
-      ${c && !formation ? '<button type="button" class="btn sm pl-btn-cahier" id="pl-cahier">Cahier des charges</button>' : ''}</p>` : ''}
+      ${c && !formation ? '<button type="button" class="btn sm pl-btn-cahier" id="pl-cahier">Cahier des charges</button>' : ''}
+      ${finissable ? (estTermine(c)
+        ? `<span class="muted small">Terminé le ${esc(dateCourte(c.fin_reelle))}${
+            c.avis_demande ? ' · avis demandé' : ''}</span>
+           <button type="button" class="btn ghost sm" id="pl-rouvrir">Rouvrir</button>`
+        : '<button type="button" class="btn sm" id="pl-fini">Chantier terminé</button>') : ''}</p>` : ''}
     ${formulaire(c, { date_debut: jour || aujourdhui(), genre })}
     ${formation ? '' : c ? `<div class="pl-listes">${blocListe(c, 'materiaux')}${blocListe(c, 'outils')}</div>`
       : '<p class="muted small pl-apres">Les listes matériaux et outils s’ouvrent une fois le chantier créé.</p>'}`;
   const m = openModal(c ? c.titre : formation ? 'Nouvelle formation' : 'Nouveau chantier', corps(), { wide: true, onClose: apres });
   brancher(m, c, apres);
   brancherCahier(m, c, apres);
+  brancherFin(m, c, apres);
+}
+
+// ⚠ DÉCLARER LA FIN OUVRE UNE FENÊTRE, PAS UN `confirm()` (12/11/2026). Ce
+// geste fait DEUX choses d'un coup — il ferme le chantier ET écrit à un client
+// — et la seconde ne se rattrape pas. On montre donc le jour, le destinataire
+// et le texte exact avant, pas un « Êtes-vous sûr ? ».
+//
+// ⚠ LA CASE EST COCHÉE PAR DÉFAUT MAIS ELLE SE DÉCOCHE, et c'est le point :
+// un chantier peut se terminer mal, ou chez un client qu'on ne veut pas
+// solliciter. Sans elle, il faudrait choisir entre ne pas clore le chantier et
+// envoyer un SMS qu'on regrette.
+function brancherFin(m, c, apres) {
+  const rouvrir = m.querySelector('#pl-rouvrir');
+  if (rouvrir) {
+    rouvrir.onclick = async () => {
+      if (!await confirm(`Rouvrir « ${c.titre} » ? Le chantier redevient en cours. `
+        + 'Un SMS déjà parti ne se rappelle pas.')) return;
+      try { await rouvrirChantier(c); toast('Chantier rouvert'); closeModal(); apres?.(); }
+      catch (e) { toast(e.message || 'Impossible de rouvrir', 'erreur'); }
+    };
+  }
+  const b = m.querySelector('#pl-fini');
+  if (!b || !c) return;
+  b.onclick = () => {
+    const r = rattachementDe(c);
+    // ⚠ LE TÉLÉPHONE SE LIT COMME LE SERVEUR LE LIRA : le contact d'abord,
+    // l'organisation ensuite — un professionnel n'a que la seconde. Montrer
+    // ici un numéro que la fonction ne trouverait pas ferait promettre un SMS
+    // qui ne partirait jamais.
+    const f = r?.genre === 'fiche' ? r.ligne : null;
+    const ct = f?.contact_id ? db.byId('contacts', f.contact_id) : null;
+    const og = f?.organisation_id ? db.byId('organisations', f.organisation_id) : null;
+    const tel = ct?.phone || og?.phone || '';
+    const prenom = String(ct?.first_name || '').trim();
+    const apercu = `Bonjour${prenom ? ' ' + prenom : ''}, votre chantier est terminé `
+      + 'et on espère que le résultat vous plait. Votre avis compte beaucoup pour nous : '
+      + '<lien Google> Merci ! Mickael, RGD Renova';
+    // ⚠ CE QUI MANQUE SE DIT ICI, PAS APRÈS L'ENVOI : sans dossier rattaché ou
+    // sans mobile, le SMS ne partira jamais. Le découvrir dans un bilan après
+    // coup ferait croire à une panne.
+    // ⚠ UNE DEMANDE DU SITE N'EST PAS UNE FICHE CLIENT, et le serveur ne lit
+    // que `fiche_id` : un chantier rattaché à une demande serait écarté par la
+    // fonction avec « aucune fiche client rattachée ». On le dit AVANT.
+    const empeche = !f ? (r ? 'ce chantier est rattaché à une demande du site, pas à une fiche client'
+                            : 'ce chantier n’est rattaché à aucun dossier client')
+      : !tel ? 'aucun téléphone sur la fiche du client' : null;
+    const fen = openModal('Chantier terminé', `
+      <div class="ca">
+        <p>Déclarer la fin de <b>${esc(c.titre)}</b>${r ? ` — ${esc(r.nom)}` : ''}.</p>
+        <label class="pl-champ"><span>Dernier jour du chantier</span>
+          <input type="date" id="pf-jour" value="${esc(aujourdhuiIso())}" max="${esc(aujourdhuiIso())}"></label>
+        ${empeche
+          ? `<p class="muted small">Pas de demande d’avis possible : ${esc(empeche)}.
+             Le chantier sera simplement clos.</p>`
+          : `<label class="pl-membre"><input type="checkbox" id="pf-avis" checked>
+               <span>Demander l’avis Google par SMS au client</span></label>
+             <p class="muted small">Au <b>${esc(tel)}</b> — 2 SMS, 0,09 €. Entre 9 h et 19 h il part
+               tout de suite ; sinon il partira demain à 11 h.</p>
+             <p class="muted small">« ${esc(apercu)} »</p>
+             <p class="muted small">Le serveur peut encore l’écarter : facture impayée, dossier SAV
+               ouvert, ou client déjà sollicité. Il dira lequel.</p>`}
+        <div class="form-actions"><span class="grow"></span>
+          <button type="button" class="btn ghost" data-close>Annuler</button>
+          <button type="button" class="btn primary" id="pf-ok">Déclarer la fin</button></div>
+      </div>`, { wide: true });
+    fen.querySelector('#pf-ok').onclick = async () => {
+      const jour = fen.querySelector('#pf-jour').value || aujourdhuiIso();
+      const avis = !empeche && fen.querySelector('#pf-avis')?.checked;
+      const bouton = fen.querySelector('#pf-ok');
+      bouton.disabled = true;                    // deux clics = deux SMS
+      try {
+        const res = await declarerFin(c, { avis, jour });
+        closeModal();
+        toast(messageDeFin(res));
+        apres?.();
+      } catch (e) {
+        bouton.disabled = false;
+        toast(e.message || 'Impossible de déclarer la fin', 'erreur');
+      }
+    };
+  };
+}
+
+// Ce qu'on dit à Élodie après le clic. ⚠ ON NE DIT JAMAIS « SMS envoyé » SANS
+// L'AVOIR LU DANS LA RÉPONSE : le serveur peut avoir mis la demande en file
+// (soirée) ou l'avoir écartée (facture impayée), et annoncer un envoi qui n'a
+// pas eu lieu est pire que de ne rien annoncer.
+function messageDeFin(res) {
+  if (!res.sms) return 'Chantier terminé';
+  if (!res.sms.ok) {
+    return res.sms.rattrapable
+      ? 'Chantier terminé · demande enregistrée, le SMS partira à 11 h'
+      : `Chantier terminé · ${res.sms.motif}`;
+  }
+  // ⚠ LA RÉPONSE EST CELLE DE LA TÂCHE, PAS UN « ok » : le volet `avis` porte
+  // un bilan et un `detail` d'une ligne par chantier, chacune avec `ecarte` et
+  // son motif, ou `envoye` vrai/faux. On lit cette ligne-là plutôt que de
+  // déduire d'un code HTTP 200 que le SMS est parti — il vaut « la tâche a
+  // tourné », pas « le client a reçu ».
+  const a = res.sms.rep?.avis || {};
+  if (a.en_file) return 'Chantier terminé · le SMS partira demain à 11 h';
+  if (a.actif === false) return `Chantier terminé · pas de SMS : ${a.motif || 'envoi inactif'}`;
+  const ligne = (a.detail || [])[0];
+  if (!ligne) return 'Chantier terminé · demande enregistrée, le SMS partira à 11 h';
+  if (ligne.ecarte) return `Chantier terminé · pas de SMS : ${ligne.motif}`;
+  if (ligne.envoye === true) return 'Chantier terminé · demande d’avis envoyée';
+  if (ligne.envoye === false) return 'Chantier terminé · l’envoi a échoué, nouvel essai demain à 11 h';
+  return 'Chantier terminé · demande enregistrée';
 }
 
 // Le cahier des charges du chantier (11/11/2026) : il s'ouvre à la place de la

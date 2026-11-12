@@ -19,6 +19,10 @@
 // l'écran.
 import { db } from './db.js';
 import { scope } from './scope.js';
+// ⚠ POUR APPELER LA FONCTION SERVEUR, PAS POUR LIRE LA BASE : `db` passe déjà
+// par Supabase. `CONFIG` ne sert qu'à `demanderAvis`, qui frappe une Edge
+// Function avec le jeton de la session.
+import { CONFIG } from '../config.js';
 
 export const LISTES = {
   materiaux: { label: 'Matériaux', court: 'matériau' },
@@ -74,7 +78,23 @@ export const ajouterJours = (iso, n) => {
   return versIso(d);
 };
 // Le dernier jour du chantier : un chantier d'un jour finit le jour où il commence.
-export const finDe = (c) => ajouterJours(c.date_debut, Math.max(1, Number(c.duree_jours) || 1) - 1);
+//
+// ⚠ UNE FIN DÉCLARÉE L'EMPORTE SUR LA PRÉVISION (12/11/2026, Élodie : « un
+// bouton pour déclarer la fin du chantier »). `date_debut + duree_jours` est ce
+// qu'on avait prévu ; `fin_reelle` est ce qui s'est passé. Les deux coexistent
+// exprès — écraser la durée au moment de déclarer la fin effacerait l'écart
+// entre le prévu et le réel, qui est la seule chose permettant de dire un jour
+// « nos chantiers débordent de trois jours en moyenne ».
+export const finDe = (c) => c?.fin_reelle
+  || ajouterJours(c.date_debut, Math.max(1, Number(c.duree_jours) || 1) - 1);
+
+// Un chantier dont la fin a été déclarée. Le planning le grise, la fiche
+// propose de le rouvrir, et l'étape du dossier passe à « Chantier terminé ».
+export const estTermine = (c) => !!c?.fin_reelle;
+
+// Le jour, en heure LOCALE : `toISOString()` rendrait de l'UTC, et déclarer la
+// fin d'un chantier à 23 h la daterait du lendemain.
+export const aujourdhuiIso = () => versIso(new Date());
 
 // ------------------------------------------------- les jours ouvrés (formations)
 // ⚠ UNE FORMATION SE COMPTE EN JOURS OUVRÉS, PAS EN JOURS CALENDAIRES
@@ -374,6 +394,65 @@ export async function deplacerChantier(c, debut) {
   const { nombre, unite } = dureeLue(c);
   return db.update('rgd_planning', c.id,
     { date_debut: d, duree_jours: Math.min(366, joursPourFormation(d, nombre, unite)) });
+}
+
+// ⚠ DÉCLARER LA FIN D'UN CHANTIER (12/11/2026, Élodie : « je ne veux plus que
+// le SMS parte 5 jours après la fin du chantier sur le planning chantier. Je
+// voudrais sur le planning chantier un bouton pour déclarer la fin du chantier
+// et déclencher le SMS des avis google »).
+//
+// ⚠ ON ÉCRIT EN BASE D'ABORD, ON APPELLE LE SERVEUR ENSUITE, ET L'ORDRE EST LA
+// GARANTIE : `avis_demande` posé, la demande existe. Si l'appel échoue — réseau
+// coupé, fonction en cours de déploiement, clic à 22 h — la tâche de 11 h la
+// trouvera demain. L'inverse (appeler puis écrire) perdrait la demande au
+// premier pépin, sans que personne ne s'en aperçoive.
+//
+// ⚠ ET LE SERVEUR GARDE LE DERNIER MOT SUR L'ENVOI : facture impayée, SAV
+// ouvert, client déjà sollicité, pas de mobile. Le bouton demande, il
+// n'ordonne pas. Ce qu'il rend dit lequel de ces cas s'est présenté.
+export async function declarerFin(c, { avis = false, jour = null } = {}) {
+  const fin = jour || aujourdhuiIso();
+  await db.update('rgd_planning', c.id, {
+    fin_reelle: fin,
+    avis_demande: !!avis,
+    fin_declaree_par: scope.user?.id || null,
+    fin_declaree_le: new Date().toISOString(),
+  });
+  if (!avis) return { ok: true, fin, sms: null };
+  return { ok: true, fin, sms: await demanderAvis(c.id) };
+}
+
+// ⚠ ROUVRIR EXISTE PARCE QU'UN BOUTON QUI NE SE DÉFAIT PAS EST UN PIÈGE : un
+// clic de trop sur la mauvaise ligne, et le chantier est « terminé » sans
+// retour. Rouvrir efface le constat, PAS le journal des envois : un SMS déjà
+// parti ne se rappelle pas, et le client ne sera pas sollicité deux fois.
+export async function rouvrirChantier(c) {
+  return db.update('rgd_planning', c.id, {
+    fin_reelle: null, avis_demande: false,
+    fin_declaree_par: null, fin_declaree_le: null,
+  });
+}
+
+// Demande au serveur de traiter TOUT DE SUITE la demande d'avis de cette ligne.
+// Rend ce qui s'est passé, pour que l'écran le dise au lieu de laisser croire
+// que le SMS est parti.
+async function demanderAvis(planningId) {
+  if (db.demo) return { ok: false, motif: 'Mode démonstration : aucun SMS n’est envoyé.' };
+  const jeton = await db.accessToken();
+  if (!jeton) return { ok: false, motif: 'Session expirée : reconnectez-vous.' };
+  try {
+    const r = await fetch(
+      `${CONFIG.SUPABASE_URL}/functions/v1/rgd-envois-auto`
+      + `?avis_planning=${encodeURIComponent(planningId)}`,
+      { method: 'POST',
+        headers: { apikey: CONFIG.SUPABASE_ANON_KEY, Authorization: `Bearer ${jeton}` } });
+    const rep = await r.json().catch(() => ({}));
+    if (!r.ok) return { ok: false, motif: rep.erreur || `Erreur ${r.status}` };
+    return { ok: true, rep };
+  } catch (e) {
+    // ⚠ UN ÉCHEC ICI N'EST PAS UNE PERTE : la demande est déjà en base.
+    return { ok: false, motif: String(e.message || e).slice(0, 160), rattrapable: true };
+  }
 }
 
 // Les lignes partent avec le chantier (`on delete cascade` en base) ; en
