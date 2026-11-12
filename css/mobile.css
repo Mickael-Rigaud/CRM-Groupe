@@ -554,6 +554,30 @@
 @media screen and (max-width: 820px) {
   .barre-bas:has(> .bb-lien:nth-child(6)) .bb-lien { font-size: 10px; letter-spacing: 0; }
 }
+/* Sous-menu d'une entree de la barre du bas (Partenaires RGD, 12/11/2026) :
+   une carte pleine largeur posee juste au-dessus de la barre, sous le pouce.
+   Le bouton garde sa case de la grille, comme un lien. */
+@media screen and (max-width: 820px) {
+  /* Menu ouvert : la barre passe devant la bulle des messages et la pastille
+     des rappels, qui flottent au meme endroit et couvraient deux lignes. */
+  .barre-bas:has(.bb-sous) { z-index: 1500; }
+  .bb-groupe { display: grid; min-width: 0; }
+  .bb-groupe > .bb-lien { width: 100%; }
+  .bb-sous {
+    position: fixed; left: 12px; right: 12px; bottom: calc(var(--h-barre-bas) + 8px); z-index: 46;
+    display: flex; flex-direction: column; padding: 6px;
+    background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    box-shadow: 0 12px 32px -10px rgba(17, 21, 28, .35);
+  }
+  .bb-sous-lien {
+    display: block; padding: 13px 14px; border-radius: 10px;
+    color: var(--text); font-size: 15px; font-weight: 600; text-decoration: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .bb-sous-lien + .bb-sous-lien { border-top: 1px solid var(--line); }
+  .bb-sous-lien.on { background: var(--card-2); color: var(--accent-ink, var(--accent)); }
+  .bb-sous-lien:active { background: var(--card-2); }
+}
 
 /* Planning : glisser une barre au doigt (11/11/2026). Ni selection de texte
    ni menu de l'appui long sur les barres et la grille : l'appui sert a

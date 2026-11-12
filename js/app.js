@@ -186,7 +186,7 @@ function renderLayout() {
   });
   // Capture : la barre est réécrite à chaque rendu, la cible d'un clic « bulle » n'y est plus rattachée
   document.addEventListener('click', e => {
-    if (navState.open && !e.target.closest('#acct, #u-struct')) closeMenu();
+    if (navState.open && !e.target.closest('#acct, #u-struct, .bb-groupe')) closeMenu();
   }, { capture: true });
   renderNav();
   suivreBarre();
@@ -446,8 +446,20 @@ const BAS_STRUCTURE = {
     { hash: '#/rgd/clients', icon: 'users', label: 'Clients' },
     // ⚠ LE PIPELINE EST PARTI LE 10/11/2026 (retiré de l'espace) : tout le
     // monde a désormais les Partenaires ici, qui ouvrent les apporteurs.
+    // ⚠ UN SOUS-MENU DEPUIS LE 12/11/2026 (Élodie : « quand on clique sur
+    // partenaire je voudrais un sous menu pour choisir entre apporteurs
+    // d'affaires, fournisseurs, affaires, sous-traitants et vivier
+    // sous-traitants »). Les mêmes cinq écrans que le groupe « Partenaires B to
+    // B » du menu de l'espace ; le vivier reste réservé à la direction.
     { hash: '#/rgd/apporteurs', icon: 'building', label: 'Partenaires',
-      ici: (h) => ['#/rgd/apporteurs', '#/rgd/fournisseurs', '#/rgd/affaires', '#/rgd/partenaires'].some(x => h.startsWith(x)) },
+      sous: [
+        { hash: '#/rgd/apporteurs', label: 'Apporteurs d’affaires' },
+        { hash: '#/rgd/fournisseurs', label: 'Fournisseurs' },
+        { hash: '#/rgd/affaires', label: 'Affaires' },
+        { hash: '#/rgd/soustraitants', label: 'Sous-traitants' },
+        { hash: '#/rgd/prospection', label: 'Vivier sous-traitants', direction: true },
+      ],
+      ici: (h) => ['#/rgd/apporteurs', '#/rgd/fournisseurs', '#/rgd/affaires', '#/rgd/partenaires', '#/rgd/soustraitants', '#/rgd/prospection'].some(x => h.startsWith(x)) },
     // ⚠ CINQ ENTRÉES DEPUIS LE 11/11/2026 (Élodie : « rajoute dans le menu en
     // bas le planning chantier »), plus « Menu » : six de 65 px sur un
     // téléphone de 390, chaque intitulé tient. Ne pas en ajouter une septième.
@@ -579,13 +591,27 @@ function renderBarreBas(gs, here, hash) {
       if (!g || (e.hash && !pourOuvrier(e.hash))) return null;
       return { ...e, hash: e.hash || g.hash || itemsOf(g)[0].hash, on: here?.key === e.cle };
     }).filter(Boolean);
-  hote.innerHTML = entrees.map(e => {
+  hote.innerHTML = entrees.map((e, i) => {
     const n = e.count ? e.count() : 0;
-    return `<a href="${e.hash}" class="bb-lien ${e.on ? 'on' : ''}" ${e.on ? 'aria-current="page"' : ''}>
-      <span class="bb-ico">${icon(e.icon, 22)}${n ? `<i>${n > 99 ? '99+' : n}</i>` : ''}</span><span>${esc(e.label)}</span></a>`;
+    const ico = `<span class="bb-ico">${icon(e.icon, 22)}${n ? `<i>${n > 99 ? '99+' : n}</i>` : ''}</span><span>${esc(e.label)}</span>`;
+    // Une entrée à sous-menu est un bouton : le toucher déroule ses écrans
+    // au-dessus de la barre, et c'est le choix d'un écran qui navigue.
+    const sous = (e.sous || []).filter(s => (!s.direction || scope.isDirection) && pourOuvrier(s.hash));
+    if (sous.length < 2) return `<a href="${sous[0]?.hash || e.hash}" class="bb-lien ${e.on ? 'on' : ''}" ${e.on ? 'aria-current="page"' : ''}>${ico}</a>`;
+    const cleMenu = '__bb' + i;
+    const ouvert = navState.open === cleMenu;
+    return `<div class="bb-groupe">
+      <button type="button" class="bb-lien ${e.on ? 'on' : ''}" data-bb-sous="${cleMenu}" aria-haspopup="true" aria-expanded="${ouvert}">${ico}</button>
+      ${ouvert ? `<div class="bb-sous" role="menu">${sous.map(s => `<a href="${s.hash}" role="menuitem" class="bb-sous-lien ${hash.startsWith(s.hash) ? 'on' : ''}">${esc(s.label)}</a>`).join('')}</div>` : ''}
+    </div>`;
   }).join('') + `<button type="button" class="bb-lien ${navState.tiroir ? 'on' : ''}" id="bb-menu" aria-expanded="${navState.tiroir}">
       <span class="bb-ico">${icon('menu', 22)}</span><span>Menu</span></button>`;
   hote.querySelector('#bb-menu').onclick = () => { navState.tiroir = !navState.tiroir; navState.open = null; renderNav(); };
+  hote.querySelectorAll('[data-bb-sous]').forEach(b => b.onclick = () => {
+    navState.tiroir = false; navState.open = navState.open === b.dataset.bbSous ? null : b.dataset.bbSous; renderNav();
+  });
+  // Après la navigation : l'écran déjà ouvert ne change pas d'adresse, le menu doit quand même se fermer.
+  hote.querySelectorAll('.bb-sous-lien').forEach(a => a.addEventListener('click', () => setTimeout(closeMenu)));
   // Toucher l'écran où l'on est déjà ramène en haut de page, comme partout ailleurs.
   hote.querySelectorAll('a.bb-lien.on').forEach(a => a.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' })));
   document.body.classList.toggle('appli-structure', !!cle);
