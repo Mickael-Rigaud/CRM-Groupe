@@ -172,6 +172,53 @@ export const statutsDeLEtape = (etape) =>
 
 const JAMAIS_RENSEIGNE = ['nouveau_prospect', '', null, undefined];
 
+// ⚠ « NOUVEAU PROSPECT » CHOISI N'EST PAS « NOUVEAU PROSPECT » PAR DÉFAUT
+// (12/11/2026, Élodie : « si un client est dans chantier terminé et que je
+// modifie le statut en mettant nouveau prospect il ne retourne pas dans
+// nouvelle demande »).
+//
+// Elle a raison, et ce n'était pas un oubli : `nouveau_prospect` est traité
+// comme une ABSENCE de statut — « personne n'a rien renseigné » — et c'est
+// cette absence qui laisse les devis et les chantiers décider. Le menu
+// paraissait donc sans effet sur ces dossiers-là.
+//
+// ⚠ ON NE POUVAIT PAS SIMPLEMENT RETIRER LA RÈGLE. Mesuré en base le
+// 12/11/2026 : sur 170 fiches à « nouveau prospect », 23 n'ont jamais été
+// renseignées mais portent des devis ou des chantiers, dont 21 un chantier
+// TERMINÉ. Les faire toutes retomber en « Nouvelle demande » aurait été un
+// défaut bien pire que celui qu'on corrige.
+//
+// Ce qui manquait, c'est la trace du GESTE : `statut_suivi_le` dit quand
+// quelqu'un a posé la valeur. Posée, elle cesse d'être une absence.
+//
+// ⚠ ET UN FAIT POSTÉRIEUR REPREND LA MAIN, c'est la seconde moitié de la
+// règle : un devis créé APRÈS la remise à zéro doit refaire avancer la fiche,
+// sinon on casse la règle du 13/10 (« quand un brouillon se crée sur
+// Costructor, je voudrais que la fiche passe à devis en cours »). On compare
+// donc la date de saisie à celle du fait le plus récent.
+//
+// ⚠ LA DATE DU FAIT EST SA CRÉATION, PAS SA MISE À JOUR. `updated_at` bouge à
+// chaque synchronisation Costructor : la saisie aurait perdu presque toujours,
+// et la correction n'aurait rien corrigé.
+const dateDeFait = (x) => String(x?.created_at || x?.date_creation || '');
+const dernierFaitLe = (f, chantiers, devis) => {
+  let d = '';
+  for (const x of [...(chantiers || []), ...(devis || [])]) {
+    if (!memeQue(x, f)) continue;
+    const q = dateDeFait(x);
+    if (q > d) d = q;
+  }
+  return d;
+};
+
+// Le statut a-t-il été POSÉ, et après le dernier fait connu ? Alors c'est une
+// décision, et elle l'emporte — y compris pour faire reculer le dossier.
+const remiseAZeroChoisie = (f, chantiers, devis) => {
+  const le = String(f?.statut_suivi_le || f?.statut_le || '');
+  if (!le) return false;                       // jamais saisi : règle d'avant
+  return le >= dernierFaitLe(f, chantiers, devis);
+};
+
 // ⚠ UN DEVIS ACCEPTÉ QUI NE DÉMARRE PAS FINIT PAR NE PLUS EN ÊTRE UN.
 // Règle posée par Mickael le 24/09/2026 : passé six mois sans que les travaux
 // commencent, le dossier part en « Archivés ». Il ne disparaît pas — il quitte
@@ -662,6 +709,13 @@ export function etapeDeFiche(f, chantiers, devis, joursVisite) {
   // Lu, pas brut : « rejetee » se lit « nouveau_prospect », donc il passe par
   // `etapeParLesFaits` comme lui au lieu de tomber dans le repli « demande ».
   const brut = statutSuiviLu(f.statut_suivi);
+  // ⚠ UNE REMISE À « NOUVEAU PROSPECT » CHOISIE SORT ICI, AVANT TOUT LE RESTE
+  // — avant les faits, avant les devis dormants, et avant le planning. C'est
+  // ce qui la rend visible : passer après le planning l'aurait annulée sur
+  // tout dossier qui porte un chantier, c'est-à-dire exactement ceux qu'on
+  // veut pouvoir remettre au début. C'est la troisième exception à « les faits
+  // font avancer, jamais reculer », et la seule que l'utilisateur déclenche.
+  if (brut === 'nouveau_prospect' && remiseAZeroChoisie(f, chantiers, devis)) return 'demande';
   const faits = etapeParLesFaits(f, chantiers, devis, joursVisite);
   // ⚠ LES FAITS FONT AVANCER UNE ÉTAPE SAISIE À LA MAIN, JAMAIS RECULER
   // (13/10/2026, Élodie : « quand un brouillon se crée sur Costructor, je
@@ -725,6 +779,12 @@ export function plusAvancee(saisie, faits) {
 export function etapeDeDemande(d, devis = scope.rgd('rgd_devis')) {
   if (d.statut === 'indesirable') return 'indesirable';
   if (d.statut === 'perdu') return 'archives';
+  // ⚠ MÊME RÈGLE QUE POUR UNE FICHE (12/11/2026) : une remise à « nouveau
+  // prospect » choisie l'emporte, avant le planning comme avant les devis.
+  // Une demande n'a pas de chantiers à elle — le planning s'y rattache par
+  // `demande_id`, pas `rgd_chantiers` — d'où la liste vide.
+  if (statutSuiviLu(d.statut) === 'nouveau_prospect'
+      && remiseAZeroChoisie(d, [], devis)) return 'demande';
   // Une demande aussi peut être planifiée (`demande_id`) : même règle, sans
   // quoi la même affaire se rangerait ailleurs selon qu'elle a une fiche ou non.
   const duPlanning = etapeDuPlanning(d);
@@ -753,9 +813,19 @@ export function etapeDeDemande(d, devis = scope.rgd('rgd_devis')) {
 // Ce garde protège des fiches QUI N'ONT JAMAIS ÉTÉ DES DEMANDES — l'annuaire
 // Costructor repris en bloc. Il n'a jamais eu pour but d'écarter une personne
 // dont on a noté le rendez-vous.
+//
+// ⚠ ET UN STATUT POSÉ À LA MAIN SUFFIT, DEPUIS LE 12/11/2026. Mesuré à
+// l'écran avant de livrer : une fiche Costructor remise à « nouveau prospect »
+// QUITTAIT « Chantier terminé » sans arriver dans « Nouvelle demande » — ce
+// garde l'écartait. Élodie aurait vu la ligne s'évanouir, exactement comme
+// Mickael le 24/09. Le défaut aurait été pire que celui qu'on corrigeait.
+//
+// Quelqu'un qui pose un statut sur une fiche s'en occupe : elle entre dans la
+// frise, quelle que soit son origine. Les 147 fiches Costructor qui dorment
+// n'ont, elles, jamais été touchées — elles restent dehors.
 export const estProspectParSource = (f) => !!f.apporteur_id || f.source === 'meta_ads'
   || f.source === 'Formulaire site' || f.source === 'manuel'
-  || f.source === 'google_calendar';
+  || f.source === 'google_calendar' || !!f.statut_suivi_le;
 
 // Les sept étapes avec leur compte, sur la même population que l'écran
 // « Clients & prospects ». C'est ce que lit le pipeline de la vue d'ensemble.
@@ -918,7 +988,19 @@ export async function ecrireStatut({ uuid, cible, statut }) {
   const { db } = await import('./db.js');
   const table = cible === 'demande' ? 'rgd_demandes' : 'rgd_clients';
   const champ = cible === 'demande' ? 'statut' : 'statut_suivi';
-  const patch = { [champ]: statut };
+  // ⚠ ON DATE CHAQUE SAISIE, PAS SEULEMENT « nouveau prospect » (12/11/2026).
+  // Seule cette valeur-là en a besoin aujourd'hui, mais la dater à part aurait
+  // laissé une date périmée derrière elle : poser « RDV planifié » puis
+  // revenir à « nouveau prospect » aurait comparé le dernier fait à la date
+  // d'une saisie bien plus ancienne. Une colonne qui dit « la dernière fois
+  // qu'on a touché au statut » ne ment dans aucun cas.
+  //
+  // ⚠ C'EST LA PORTE UNIQUE, et c'est ce qui rend la règle tenable : la fiche,
+  // le tableau et les flèches d'étape passent tous par ici. Un second chemin
+  // d'écriture poserait le statut sans la date, et le dossier se remettrait à
+  // obéir aux faits sans que rien ne le dise.
+  const patch = { [champ]: statut, [cible === 'demande' ? 'statut_le' : 'statut_suivi_le']:
+    new Date().toISOString() };
 
   const champDate = CHAMP_RELANCE[statut];
   if (champDate) {
