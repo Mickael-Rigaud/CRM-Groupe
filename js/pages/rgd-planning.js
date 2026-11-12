@@ -850,11 +850,19 @@ function ouvrirChantier(c, apres, jour = null, genre = 'chantier') {
   const corps = () => `
     ${r || (c && !formation) ? `<p class="pl-lien">${r ? `Fiche : <button type="button" class="btn ghost sm" id="pl-fiche">${esc(r.nom)}</button>` : ''}
       ${c && !formation ? '<button type="button" class="btn sm pl-btn-cahier" id="pl-cahier">Cahier des charges</button>' : ''}
-      ${finissable ? (estTermine(c)
+      ${'' /* ⚠ « Chantier terminé » EST POUSSÉ À DROITE ET IL EST VERT
+         (12/11/2026, Élodie : « je voudrais qu'il soit en haut à droite et
+         d'un design qui se distingue des autres boutons »). Il n'ouvre pas un
+         écran de plus comme ses voisins : il CLÔT le chantier et écrit à un
+         client. Le ranger à côté d'eux, dans la même teinte, le faisait lire
+         comme un onglet. Le vert plutôt que l'orange, déjà pris par les
+         actions de création, et plutôt que le rouge, qui annoncerait un
+         danger là où il n'y a qu'une fin. */}
+      ${finissable ? `<span class="pl-pousse"></span>${estTermine(c)
         ? `<span class="muted small">Terminé le ${esc(dateCourte(c.fin_reelle))}${
             c.avis_demande ? ' · avis demandé' : ''}</span>
            <button type="button" class="btn ghost sm" id="pl-rouvrir">Rouvrir</button>`
-        : '<button type="button" class="btn sm" id="pl-fini">Chantier terminé</button>') : ''}</p>` : ''}
+        : '<button type="button" class="btn sm green pl-btn-fini" id="pl-fini">✓ Chantier terminé</button>'}` : ''}</p>` : ''}
     ${formulaire(c, { date_debut: jour || aujourdhui(), genre })}
     ${formation ? '' : c ? `<div class="pl-listes">${blocListe(c, 'materiaux')}${blocListe(c, 'outils')}</div>`
       : '<p class="muted small pl-apres">Les listes matériaux et outils s’ouvrent une fois le chantier créé.</p>'}`;
@@ -888,26 +896,35 @@ function brancherFin(m, c, apres) {
   b.onclick = () => {
     const r = rattachementDe(c);
     // ⚠ LE TÉLÉPHONE SE LIT COMME LE SERVEUR LE LIRA : le contact d'abord,
-    // l'organisation ensuite — un professionnel n'a que la seconde. Montrer
-    // ici un numéro que la fonction ne trouverait pas ferait promettre un SMS
-    // qui ne partirait jamais.
-    const f = r?.genre === 'fiche' ? r.ligne : null;
+    // l'organisation ensuite, le numéro saisi sur la demande en dernier — la
+    // fiche est tenue à jour, la demande est un instantané du formulaire.
+    // Montrer ici un numéro que la fonction ne trouverait pas ferait promettre
+    // un SMS qui ne partirait jamais.
+    //
+    // ⚠ UNE DEMANDE DU SITE EST UN DOSSIER COMME UN AUTRE (12/11/2026, corrigé
+    // après l'essai d'Élodie : son chantier de test, rattaché à une demande,
+    // s'entendait répondre « pas de demande d'avis possible »). Le sélecteur du
+    // planning propose les deux ; n'en accepter qu'un condamnait au silence une
+    // partie des dossiers sans l'annoncer au moment de les rattacher.
+    const f = r?.ligne || null;
     const ct = f?.contact_id ? db.byId('contacts', f.contact_id) : null;
     const og = f?.organisation_id ? db.byId('organisations', f.organisation_id) : null;
-    const tel = ct?.phone || og?.phone || '';
-    const prenom = String(ct?.first_name || '').trim();
+    const tel = ct?.phone || og?.phone || f?.telephone || '';
+    const prenom = String(ct?.first_name || f?.prenom || '').trim();
     const apercu = `Bonjour${prenom ? ' ' + prenom : ''}, votre chantier est terminé `
       + 'et on espère que le résultat vous plait. Votre avis compte beaucoup pour nous : '
       + '<lien Google> Merci ! Mickael, RGD Renova';
     // ⚠ CE QUI MANQUE SE DIT ICI, PAS APRÈS L'ENVOI : sans dossier rattaché ou
     // sans mobile, le SMS ne partira jamais. Le découvrir dans un bilan après
     // coup ferait croire à une panne.
-    // ⚠ UNE DEMANDE DU SITE N'EST PAS UNE FICHE CLIENT, et le serveur ne lit
-    // que `fiche_id` : un chantier rattaché à une demande serait écarté par la
-    // fonction avec « aucune fiche client rattachée ». On le dit AVANT.
-    const empeche = !f ? (r ? 'ce chantier est rattaché à une demande du site, pas à une fiche client'
-                            : 'ce chantier n’est rattaché à aucun dossier client')
-      : !tel ? 'aucun téléphone sur la fiche du client' : null;
+    // ⚠ CE QUI MANQUE SE DIT ICI, AVEC LE GESTE QUI LE RÉPARE. Un motif qui
+    // nomme seulement le défaut (« aucun téléphone ») laisse chercher où le
+    // saisir ; les trois cas possibles sont donc dits en toutes lettres.
+    const empeche = !f ? 'ce chantier n’est rattaché à aucun dossier'
+      : !(f.contact_id || f.organisation_id)
+        ? 'ce dossier n’a ni contact ni entreprise — le client ne peut pas être identifié'
+      : !tel ? 'aucun numéro de mobile sur ce dossier — ajoutez-le sur la fiche du contact'
+      : null;
     const fen = openModal('Chantier terminé', `
       <div class="ca">
         <p>Déclarer la fin de <b>${esc(c.titre)}</b>${r ? ` — ${esc(r.nom)}` : ''}.</p>

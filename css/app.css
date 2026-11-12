@@ -8272,7 +8272,12 @@ tr.est-modifie td { background: var(--accent-soft); }
 .pl-pastille input:checked + i { border-color: var(--card); box-shadow: 0 0 0 2px var(--text); }
 .pl-form .form-actions { display: flex; gap: 8px; align-items: center; }
 .pl-form .form-actions .grow { flex: 1; }
-.pl-lien { margin: 0 0 12px; font-size: 13.5px; }
+/* ⚠ LE BANDEAU DE LA FICHE CHANTIER EST EN FLEX DEPUIS LE 12/11/2026 (Élodie : « je voudrais qu'il soit en haut à droite »). `.pl-pousse` mange l'espace restant, ce qui envoie « Chantier terminé » à droite sans rien positionner en absolu — une marge gauche automatique aurait fait la même chose, mais elle se serait annulée le jour où un bouton s'ajoute après lui. */
+.pl-lien { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; font-size: 13.5px; }
+.pl-pousse { flex: 1 1 auto; }
+/* ⚠ VERT PLEIN, PAS LA TEINTE DES VOISINS : ce bouton clôt un chantier et écrit à un client, il ne doit pas se lire comme un onglet de plus. */
+.btn.green.pl-btn-fini { border-color: var(--green); color: #fff; }
+.btn.green.pl-btn-fini:hover { filter: brightness(1.07); }
 .pl-apres { margin-top: 14px; }
 .pl-listes { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 18px;
   padding-top: 16px; border-top: 1px solid var(--line); }
