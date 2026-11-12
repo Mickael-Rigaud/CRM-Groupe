@@ -906,8 +906,16 @@ export function ouvrirDevisCrm(x, existant = null, retour = null, genreNeuf = 'f
   const viser = (i) => {
     const champ = hote.querySelector(`.rdc-saisie[data-i="${i}"] [data-champ="${etat.lignes[i]?.code ? 'quantite' : 'libelle'}"]`);
     if (!champ) return;
-    champ.focus({ preventScroll: true });
-    if (champ.select) champ.select();
+    // ⚠ PAS AU DOIGT (12/11/2026, Élodie : « quand on sélectionne les
+    // éléments, je ne veux pas que le clavier s'affiche — c'est seulement quand
+    // on veut changer la quantité qu'on cliquera sur le champ »). Sur un écran
+    // tactile, donner le focus ouvre le clavier, qui couvre la moitié de la
+    // liste qu'on est en train de parcourir. La rangée reste montrée, le champ
+    // attend qu'on le touche. À la souris, le curseur va toujours dans la quantité.
+    if (!matchMedia('(pointer: coarse)').matches) {
+      champ.focus({ preventScroll: true });
+      if (champ.select) champ.select();
+    }
     // ⚠ PAS DE `scrollIntoView` : il ignore le pied collant, et la rangée
     // ouverte finissait dessous (mesuré : 85 px masqués). On fait défiler la
     // fenêtre juste de quoi la montrer au-dessus du pied.
