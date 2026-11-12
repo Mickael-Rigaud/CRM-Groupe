@@ -969,6 +969,14 @@ function brancherFin(m, c, apres) {
   const b = m.querySelector('#pl-fini');
   if (!b || !c) return;
   b.onclick = () => {
+    // ⚠ UN CHANTIER QUI N'A PAS COMMENCÉ NE SE TERMINE PAS (12/11/2026). Sans
+    // ce premier mot, le clic ouvrait une fenêtre qui parle d'un SMS d'avis
+    // Google pour un chantier à venir, avec un champ de date impossible à
+    // remplir — son minimum (le début) tombant après son maximum (aujourd'hui).
+    if (c.date_debut > aujourdhuiIso()) {
+      toast(`« ${c.titre} » commence le ${dateCourte(c.date_debut)} : il ne peut pas être terminé.`, 'erreur');
+      return;
+    }
     const r = rattachementDe(c);
     // ⚠ LE TÉLÉPHONE SE LIT COMME LE SERVEUR LE LIRA : le contact d'abord,
     // l'organisation ensuite, le numéro saisi sur la demande en dernier — la
@@ -1009,7 +1017,8 @@ function brancherFin(m, c, apres) {
       <div class="ca">
         <p>Déclarer la fin de <b>${esc(c.titre)}</b>${r ? ` — ${esc(r.nom)}` : ''}.</p>
         <label class="pl-champ"><span>Dernier jour du chantier</span>
-          <input type="date" id="pf-jour" value="${esc(aujourdhuiIso())}" max="${esc(aujourdhuiIso())}"></label>
+          <input type="date" id="pf-jour" value="${esc(aujourdhuiIso())}"
+            min="${esc(c.date_debut)}" max="${esc(aujourdhuiIso())}"></label>
         ${empeche
           ? `<p class="muted small">Pas de demande d’avis possible : ${esc(empeche)}.
              Le chantier sera simplement clos.</p>`
@@ -1092,18 +1101,31 @@ function brancher(m, c, apres) {
   // suivant : la date change, donc elle s'annonce AVANT d'enregistrer. Une
   // date corrigée en silence se découvre une fois le planning imprimé.
   const estFormulaireFormation = form.genre.value === 'formation';
+  // ⚠ « FIN » VOULAIT DIRE DEUX CHOSES, ET LA FICHE N'EN DISAIT QU'UNE
+  // (12/11/2026, Élodie : « le chantier test dure 3 jours et est en rose mais
+  // ce n'est pas ce que je retrouve dans le planning mensuel »). Son chantier
+  // était déclaré terminé le 12/11 ; la fiche annonçait « Fin : 19 novembre »,
+  // qui n'est que la prévision, et le planning dessinait la fin déclarée. Les
+  // deux disaient vrai et se contredisaient. La fiche nomme désormais celle
+  // qu'elle annonce.
+  const declaree = c && estTermine(c)
+    ? `Terminé le ${dateLongue(c.fin_reelle)} — c’est cette date que montre le planning. `
+    : '';
+  const dit = (texte, report = '') => {
+    fin.textContent = declaree ? `${declaree}${report}Prévu : ${texte}` : `${report}Fin : ${texte}`;
+  };
   const majFin = () => {
     const d = form.date_debut.value;
     if (!d) { fin.textContent = ''; return; }
     if (!estFormulaireFormation) {
       const n = joursPour(d, form.duree_nombre.value, form.duree_unite.value);
-      fin.textContent = `Fin : ${dateLongue(ajouterJours(d, Math.max(1, n) - 1))} · ${n} jour${n > 1 ? 's' : ''} calendaire${n > 1 ? 's' : ''}`;
+      dit(`${dateLongue(ajouterJours(d, Math.max(1, n) - 1))} · ${n} jour${n > 1 ? 's' : ''} calendaire${n > 1 ? 's' : ''}`);
       return;
     }
     const debut = prochainOuvre(d);
     const n = ouvresPour(form.duree_nombre.value, form.duree_unite.value);
     const report = debut !== d ? `Début reporté au ${dateLongue(debut)} (le ${dateLongue(d)} n’est pas un jour ouvré). ` : '';
-    fin.textContent = `${report}Fin : ${dateLongue(finOuvree(debut, n))} · ${n} jour${n > 1 ? 's' : ''} ouvré${n > 1 ? 's' : ''}`;
+    dit(`${dateLongue(finOuvree(debut, n))} · ${n} jour${n > 1 ? 's' : ''} ouvré${n > 1 ? 's' : ''}`, report);
   };
   form.date_debut.oninput = majFin; form.duree_nombre.oninput = majFin; form.duree_unite.onchange = majFin; majFin();
   // Le choix du dossier : un clic le retient, la liste se replie sur lui

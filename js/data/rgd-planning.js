@@ -385,10 +385,37 @@ export async function creerChantier(champs) {
   return db.insert('rgd_planning', ligne);
 }
 
+// ⚠ UNE FIN DÉCLARÉE EST UN CONSTAT, ET UN CONSTAT NE SE DÉPLACE PAS TOUT SEUL
+// (12/11/2026, Élodie : « le chantier test dure 3 jours et est en rose mais ce
+// n'est pas ce que je retrouve dans le planning mensuel »). Son chantier avait
+// été déclaré terminé le 12/11 à 10 h 43, puis déplacé au 17/11 à 13 h 48 : la
+// fin tombait AVANT le début, la fiche annonçait trois jours en rose et le
+// planning dessinait un jour en gris. Rien n'avait empêché cette saisie, et
+// rien ne l'avait dite.
+//
+// ⚠ ON REFUSE PLUTÔT QU'ON NE RATTRAPE : décaler la fin réelle avec le début
+// reviendrait à réécrire un constat — le chantier se serait terminé un jour où
+// il ne s'est rien passé. « Rouvrir » est à un clic, et c'est le bon geste :
+// on rouvre un chantier avant d'en rebouger les dates.
+const jj = (iso) => `${String(iso).slice(8, 10)}/${String(iso).slice(5, 7)}`;
+const gardeFinDeclaree = (c, debut) => {
+  if (!c?.fin_reelle || !debut) return;
+  // ⚠ ON NE GARDE QUE LE CHANGEMENT, PAS L'ÉTAT : une ligne déjà incohérente
+  // (il en existe une, celle du test d'Élodie) doit rester MODIFIABLE, sinon
+  // la garde empêcherait justement de la réparer — on ne pourrait plus rien
+  // enregistrer sur cette fiche, pas même une note.
+  if (String(debut) === String(c.date_debut)) return;
+  if (String(debut) > String(c.fin_reelle)) {
+    throw new Error(`Ce chantier est déclaré terminé le ${jj(c.fin_reelle)}. `
+      + 'Rouvrez-le avant de poser un début après cette date.');
+  }
+};
+
 export async function majChantier(id, champs) {
   const ligne = propre(champs);
   if (!ligne.titre) throw new Error(ligne.genre === 'formation' ? 'Donnez un nom à la formation.' : 'Donnez un nom au chantier.');
   if (!ligne.date_debut) throw new Error('La date de début manque.');
+  gardeFinDeclaree(db.byId('rgd_planning', id), ligne.date_debut);
   return db.update('rgd_planning', id, ligne);
 }
 
@@ -422,6 +449,7 @@ export async function changerFin(c, fin) {
 // change : la durée reste celle saisie (3 semaines restent 3 semaines).
 export async function deplacerChantier(c, debut) {
   if (!debut) throw new Error('La date de début manque.');
+  gardeFinDeclaree(c, debut);
   // ⚠ DÉPLACER UNE FORMATION GARDE SES JOURS OUVRÉS, PAS SA LARGEUR
   // (11/11/2026). Quatre jours ouvrés posés un lundi tiennent quatre cases ;
   // les mêmes posés un jeudi en tiennent six. Ne changer que `date_debut`
@@ -450,6 +478,12 @@ export async function deplacerChantier(c, debut) {
 // n'ordonne pas. Ce qu'il rend dit lequel de ces cas s'est présenté.
 export async function declarerFin(c, { avis = false, jour = null } = {}) {
   const fin = jour || aujourdhuiIso();
+  // ⚠ ET DANS L'AUTRE SENS : on ne finit pas un chantier avant de l'avoir
+  // commencé. Le champ portait un maximum (aujourd'hui), aucun minimum.
+  if (String(fin) < String(c.date_debut)) {
+    throw new Error(`Ce chantier commence le ${jj(c.date_debut)} : `
+      + 'sa fin ne peut pas être antérieure.');
+  }
   await db.update('rgd_planning', c.id, {
     fin_reelle: fin,
     avis_demande: !!avis,
