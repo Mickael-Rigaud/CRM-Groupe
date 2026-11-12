@@ -36,11 +36,36 @@ export function donnees(chantier, cahier, dossier) {
   };
 }
 
+// ⚠ LA DIAPOSITIVE ÉPOUSE LA ZONE IMPRIMABLE, ELLE NE LA SUPPOSE PAS
+// (12/11/2026, Élodie : « pour les cahiers des charges des clients et ouvriers
+// en pdf revois la taille des page parce qu'il y a un décalage tout le temps »,
+// capture à l'appui : la ligne des dates, en bas de la couverture, était rejetée
+// en haut de la page 2).
+//
+// ⚠ LA CAUSE N'EST PAS DANS LE DOCUMENT, ELLE EST DANS LA BOÎTE D'IMPRESSION.
+// `.page` mesurait 297 × 210 mm en dur, la taille d'une A4 à l'italienne. Mais
+// la zone réellement imprimable est plus petite dès que le réglage « Marges »
+// n'est pas « Aucune », ou que la destination est une imprimante physique (qui
+// a toujours un bord non imprimable) : ces deux-là ÉCRASENT le `@page margin`
+// du document. Une page trop haute d'un millimètre ne se contente pas de
+// déborder : Chrome la coupe en DEUX pages. Mesuré avant de corriger, sur son
+// cahier réel (30 postes, 8 pièces) imprimé en PDF :
+//     marge 0    → 11 pages, chaque diapositive entière
+//     marge 10mm → 22 pages, chaque diapositive coupée en deux
+// Et même à marge nulle il restait 0,11 mm de trop : Chrome rend une page de
+// 209,89 mm, pas de 210.
+//
+// ⚠ `100vh` EST LA HAUTEUR DE LA PAGE À L'IMPRESSION, pas celle de l'écran : la
+// diapositive remplit exactement ce qui est imprimable, quels que soient les
+// réglages. `max-height` la plafonne à une A4 si jamais un navigateur rendait
+// une autre valeur, et les tailles en `cqw` suivent la largeur d'elles-mêmes.
+// Vérifié à 0, 10 et 15 mm de marge : 11 pages dans les trois cas.
 const STYLE_PAGE = `
   @page { size: A4 landscape; margin: 0; }
   * { box-sizing: border-box; }
   html, body { margin: 0; background: #14110E; }
-  .page { position: relative; width: 297mm; height: 210mm; overflow: hidden; container-type: inline-size;
+  .page { position: relative; width: 100%; height: 100vh; max-height: 210mm;
+    overflow: hidden; container-type: inline-size;
     break-after: page; page-break-after: always; }
   .page:last-child { break-after: auto; page-break-after: auto; }
   .cd-tuile { cursor: default; }
