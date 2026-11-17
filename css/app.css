@@ -9997,3 +9997,20 @@ td .pl-toque { color: #4f46e5; }
   .ct-baie { height: 92px; }
   .ct-soleil { width: 150px; height: 150px; top: -50px; right: 6%; }
 }
+
+/* ---- Base de données : le statut du dossier en pastilles (17/11/2026) ----
+   L'étape (avec le feu du simulateur) et l'origine de la demande, qui
+   remplacent les sous-onglets « Prospect site / partenaire / Meta / Autre ». */
+.ct-statut { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
+.ct-etape-pastille, .ct-orig { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 999px;
+  font-size: 11.5px; font-weight: 700; white-space: nowrap; }
+.ct-etape-pastille { background: var(--card-2); border: 1px solid var(--line); color: var(--text); }
+.ct-etape-pastille .cts-feu { width: 8px; height: 8px; }
+.ct-etape-pastille .cts-feu.est-vert { --f: #2E8B57; }
+.ct-etape-pastille .cts-feu.est-orange { --f: #E38A12; }
+.ct-etape-pastille .cts-feu.est-rouge { --f: #D9483B; }
+.ct-orig { background: #EEF1F4; color: #4A6579; }
+.ct-orig.est-simulateur { background: #FFEAD1; color: #B4560A; }
+.ct-orig.est-site { background: #D8F1F8; color: #0A6F86; }
+.ct-orig.est-partenaires { background: #E3F1E6; color: #2E6B41; }
+.ct-orig.est-meta { background: #E8E9FD; color: #4A43B8; }
