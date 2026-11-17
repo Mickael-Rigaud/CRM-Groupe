@@ -9424,3 +9424,108 @@ td .pl-toque { color: #4f46e5; }
   .ecran-todo .kb-carte.est-recente, .ecran-todo .kb-carte.est-recente .kb-case input,
   .ecran-todo .kb-quand::before { animation: none; }
 }
+
+/* ==========================================================================
+   Formulaire de tâche — le langage du tableau de bord (17/11/2026, Élodie :
+   « le formulaire de la nouvelle tâche, je veux que ce soit plus moderne et
+   dynamique »). En-tête en dégradé, champs arrondis, pastilles de structure à
+   leur couleur, raccourcis d'échéance, entrée en cascade à l'ouverture.
+   ⚠ SOUS `.taf-modal`, posée par `activityForm` : les autres fenêtres du CRM
+   ne changent pas.
+   -------------------------------------------------------------------------- */
+.taf-modal { --tf-indigo: #5B52F0; --tf-rose: #FF4D8D; --tf-orange: #FF7A2D;
+  border: 0; border-radius: 26px; overflow: hidden;
+  box-shadow: 0 40px 90px -40px rgba(21,22,42,.65), 0 0 0 1px rgba(255,255,255,.6);
+  animation: tfOuvre .42s cubic-bezier(.2,.8,.2,1); }
+@keyframes tfOuvre { from { opacity: 0; transform: translateY(26px) scale(.97) } to { opacity: 1; transform: none } }
+.taf-modal .modal-head { position: relative; border-bottom: 0; padding: 22px 26px 20px; overflow: hidden;
+  background: linear-gradient(110deg, var(--tf-indigo), var(--tf-rose) 62%, var(--tf-orange)); }
+.taf-modal .modal-head::after { content: ""; position: absolute; inset: -60% -20%; pointer-events: none;
+  background: radial-gradient(closest-side, rgba(255,255,255,.28), transparent 70%);
+  transform: translateX(-60%); animation: tfReflet 7s ease-in-out infinite; }
+@keyframes tfReflet { 0%,100% { transform: translateX(-60%) } 50% { transform: translateX(55%) } }
+.taf-modal .modal-head h2 { position: relative; z-index: 1; color: #fff; font-family: var(--font-display);
+  font-size: 22px; font-weight: 800; letter-spacing: -.03em; }
+.taf-modal .modal-head .icon-btn { position: relative; z-index: 1; color: #fff; background: rgba(255,255,255,.18);
+  border-radius: 50%; width: 34px; height: 34px; transition: background .2s ease, transform .25s ease; }
+.taf-modal .modal-head .icon-btn:hover { background: rgba(255,255,255,.32); transform: rotate(90deg); }
+
+/* Le titre : grand, et un trait en dégradé qui se déploie au focus. */
+.taf-modal .taf-titre { font-family: var(--font-display); font-size: 24px; font-weight: 800; letter-spacing: -.03em;
+  padding: 8px 2px 12px; border-bottom: 2px solid var(--line);
+  background: linear-gradient(90deg, var(--tf-indigo), var(--tf-rose), var(--tf-orange)) left bottom / 0 3px no-repeat;
+  transition: background-size .45s cubic-bezier(.2,.8,.2,1); }
+.taf-modal .taf-titre:focus { border-bottom-color: transparent; background-size: 100% 3px; }
+
+/* Les lignes : une pastille d'icône dans un rond teinté. */
+.taf-modal .taf-ligne { padding: 9px 0; align-items: flex-start; }
+.taf-modal .taf-ico { flex: 0 0 38px; height: 38px; line-height: 38px; border-radius: 13px; opacity: 1; font-size: 16px;
+  background: linear-gradient(135deg, rgba(91,82,240,.12), rgba(255,77,141,.12)); margin-top: 2px; }
+.taf-modal .taf-lab { margin-bottom: 6px; color: var(--muted-2); letter-spacing: .08em; }
+.taf-modal .taf-champ select, .taf-modal .taf-champ input:not([type="hidden"]):not(.taf-titre) {
+  border-radius: 14px; border: 1px solid var(--line); background: var(--card-2); padding: 10px 13px; min-height: 42px;
+  transition: border-color .2s ease, box-shadow .2s ease, background .2s ease; }
+.taf-modal .taf-champ select:hover, .taf-modal .taf-champ input:not([type="hidden"]):hover { background: var(--card); }
+.taf-modal .taf-champ select:focus, .taf-modal .taf-champ input:not([type="hidden"]):focus {
+  outline: none; background: var(--card); border-color: color-mix(in srgb, var(--tf-indigo) 55%, var(--line));
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--tf-indigo) 14%, transparent); }
+
+/* Les pastilles : arrondies, qui rebondissent, colorées une fois choisies. */
+.taf-modal .taf-chip { padding: 8px 15px; border-radius: 999px; font-weight: 700; background: var(--card);
+  transition: transform .25s cubic-bezier(.2,.8,.2,1), background .2s ease, color .2s ease, border-color .2s ease, box-shadow .2s ease; }
+.taf-modal .taf-chip:hover { transform: translateY(-2px); }
+.taf-modal .taf-chip:active { transform: scale(.95); }
+.taf-modal .taf-chip.on { border-color: transparent; color: #fff; animation: tfChoix .35s cubic-bezier(.2,.8,.2,1);
+  background: linear-gradient(110deg, var(--tf-indigo), #8B7BFF); box-shadow: 0 10px 22px -12px var(--tf-indigo); }
+.taf-modal .taf-chip.p-urgent.on { background: linear-gradient(110deg, #E5484D, #FF7A2D); box-shadow: 0 10px 22px -12px #E5484D; }
+.taf-modal .taf-chip.p-retard.on { background: linear-gradient(110deg, #E07A12, #FFB15C); box-shadow: 0 10px 22px -12px #E07A12; }
+@keyframes tfChoix { 0% { transform: scale(.9) } 60% { transform: scale(1.07) } 100% { transform: scale(1) } }
+
+.taf-modal .taf-struct { display: inline-flex; align-items: center; gap: 8px; }
+.taf-modal .taf-struct i { width: 10px; height: 10px; border-radius: 50%; background: var(--c); flex: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 18%, transparent); transition: background .2s ease, box-shadow .2s ease; }
+.taf-modal .taf-struct:hover { border-color: var(--c); color: var(--c); }
+.taf-modal .taf-struct.on { background: linear-gradient(110deg, var(--c), color-mix(in srgb, var(--c) 72%, #fff));
+  box-shadow: 0 10px 22px -12px var(--c); color: #fff; }
+.taf-modal .taf-struct.on i { background: #fff; box-shadow: 0 0 0 3px rgba(255,255,255,.35); }
+
+.taf-modal .taf-dates { margin-bottom: 8px; }
+.taf-modal .taf-date { padding: 6px 12px; font-size: 12.5px; }
+.taf-modal .taf-date.on { background: linear-gradient(110deg, var(--tf-rose), var(--tf-orange)); box-shadow: 0 10px 22px -12px var(--tf-rose); }
+
+/* Le contexte, les sous-tâches et les pièces : des cartes douces. */
+.taf-modal .taf-ctx { border: 0; border-radius: 18px; background: linear-gradient(135deg, rgba(91,82,240,.07), rgba(255,77,141,.07)); }
+.taf-modal .tel-bloc { border: 1px solid color-mix(in srgb, var(--line) 70%, transparent); border-radius: 18px; background: var(--card-2); }
+.taf-modal .tel-ajout input { border-radius: 12px; padding: 9px 12px; }
+.taf-modal .tel-depot { border-radius: 14px; padding: 12px; transition: border-color .2s, color .2s, background .2s; }
+.taf-modal .tel-depot:hover { border-color: var(--tf-rose); color: var(--tf-rose); background: color-mix(in srgb, var(--tf-rose) 6%, var(--card)); }
+.taf-modal .taf-apres { border-radius: 14px; }
+
+/* Le pied : collé en bas, l'enregistrement en dégradé. */
+.taf-modal .form-actions { position: sticky; bottom: -1px; z-index: 2; margin: 14px -24px -22px; padding: 14px 24px 18px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--card) 0%, transparent), var(--card) 28%); }
+.taf-modal .form-actions .btn { border-radius: 999px; padding-left: 20px; padding-right: 20px; }
+.taf-modal .form-actions .btn[type="submit"] { border: 0; color: #fff;
+  background: linear-gradient(110deg, var(--tf-indigo), var(--tf-rose) 70%, var(--tf-orange));
+  box-shadow: 0 14px 28px -14px rgba(255,77,141,.85); transition: transform .2s ease, box-shadow .2s ease; }
+.taf-modal .form-actions .btn[type="submit"]:hover { transform: translateY(-2px); box-shadow: 0 18px 32px -12px rgba(255,77,141,.9); }
+
+/* L'entrée en cascade des lignes, à l'ouverture. */
+.taf-modal .taf > * { animation: tfLigne .5s cubic-bezier(.2,.8,.2,1) both; }
+.taf-modal .taf > :nth-child(2) { animation-delay: .04s } .taf-modal .taf > :nth-child(3) { animation-delay: .08s }
+.taf-modal .taf > :nth-child(4) { animation-delay: .12s } .taf-modal .taf > :nth-child(5) { animation-delay: .16s }
+.taf-modal .taf > :nth-child(6) { animation-delay: .2s } .taf-modal .taf > :nth-child(7) { animation-delay: .24s }
+.taf-modal .taf > :nth-child(n+8) { animation-delay: .28s }
+@keyframes tfLigne { from { opacity: 0; transform: translateY(12px) } to { opacity: 1; transform: none } }
+.taf-modal .form-actions { animation: none; }
+
+@media screen and (max-width: 560px) {
+  .taf-modal { border-radius: 22px 22px 0 0; }
+  .taf-modal .modal-head { padding: 18px 20px 16px; }
+  .taf-modal .taf-ico { flex-basis: 32px; height: 32px; line-height: 32px; border-radius: 11px; font-size: 14px; }
+  .taf-modal .taf-titre { font-size: 21px; }
+  .taf-modal .form-actions { bottom: -20px; margin: 12px -16px -20px; padding: 12px 16px 16px; box-shadow: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .taf-modal, .taf-modal .taf > *, .taf-modal .modal-head::after, .taf-modal .taf-chip.on { animation: none; }
+}

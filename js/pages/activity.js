@@ -238,6 +238,30 @@ export function activityForm(link = {}, existing = null, onSaved, onClose = null
         x.key === 'afaire' ? 'est-hors-liste' : ''}" data-prio="${esc(x.key)}">${esc(x.icon)} ${esc(x.label)}</button>`).join('')}
     </div>`;
 
+  // ⚠ LA STRUCTURE EST EN PASTILLES DE SA COULEUR depuis le 17/11/2026
+  // (Élodie : « le formulaire de la nouvelle tâche, je veux que ce soit plus
+  // moderne et dynamique »). Même principe que le degré : un champ caché porte
+  // la valeur, `readForm` ne voit aucune différence avec l'ancien `select`.
+  // Rappuyer sur la pastille choisie la retire (tâche sans structure).
+  // ⚠ UNE STRUCTURE DÉJÀ POSÉE HORS DE MES STRUCTURES RESTE PROPOSÉE, marquée :
+  // on n'efface pas en silence ce que quelqu'un a choisi.
+  const struct0 = val('activity');
+  const mesStructs = structuresDeLUtilisateur();
+  const autres = struct0 && !mesStructs.some(x => x.key === struct0)
+    ? [{ key: struct0, label: (STRUCTURES_TACHE[struct0]?.label || struct0), color: STRUCTURES_TACHE[struct0]?.color || '#8a8fa3', horsListe: true }] : [];
+  const pastillesStruct = `<input type="hidden" name="activity" value="${esc(struct0)}">
+    <div class="taf-chips taf-structs" id="taf-struct">
+      ${[...mesStructs, ...autres].map(x => `<button type="button" class="taf-chip taf-struct ${struct0 === x.key ? 'on' : ''} ${
+        x.horsListe ? 'est-hors-liste' : ''}" data-struct="${esc(x.key)}" style="--c:${esc(x.color || '#8a8fa3')}"><i></i>${esc(x.label)}</button>`).join('')}
+    </div>`;
+  // Les raccourcis d'échéance : un geste au lieu d'un calendrier. Ils ne
+  // posent une date que si on les touche — l'échéance naît toujours vide.
+  const jourIso = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return d.toLocaleDateString('sv-SE'); };
+  const lundi = (() => { const d = new Date(); const k = ((8 - d.getDay()) % 7) || 7; return k; })();
+  const raccourcis = [["Aujourd’hui", 0], ['Demain', 1], ['Lundi', lundi], ['Dans 1 semaine', 7]];
+  const datesRapides = `<div class="taf-chips taf-dates" id="taf-dates">${raccourcis.map(([l, n]) =>
+    `<button type="button" class="taf-chip taf-date" data-jour="${jourIso(n)}">${esc(l)}</button>`).join('')}</div>`;
+
   // ⚠ IL S'AFFICHE AU-DESSUS DU TITRE, pas en bas : on ouvre une tâche de
   // rappel pour savoir QUI rappeler, pas pour relire son intitulé.
   const ctx = existing ? contexteTache(existing) : null;
@@ -270,11 +294,11 @@ export function activityForm(link = {}, existing = null, onSaved, onClose = null
       <select name="assignee_id" required title="Responsable"><option value="">—</option>${selOptions('assignee_id')}</select>
       <select name="shared_with" title="Partagée avec"><option value="">Pas de partage</option>${selOptions('shared_with')}</select>
     </span>`, 'Le partage donne à voir et à modifier la tâche, pas à la supprimer. Elle reste comptée chez le responsable.')}
-    ${ligne('📅', 'Échéance', `<span class="taf-duo">
+    ${ligne('📅', 'Échéance', `${datesRapides}<span class="taf-duo">
       <input type="date" name="due_date" value="${esc(val('due_date'))}" title="Échéance (facultative)">
       <input type="time" name="due_time" value="${esc(val('due_time'))}" title="Heure (optionnel)">
     </span>`)}
-    ${ligne('🏢', 'Structure', `<select name="activity"><option value="">—</option>${selOptions('activity')}</select>`,
+    ${ligne('🏢', 'Structure', pastillesStruct,
       'À quelle activité du groupe cette tâche appartient. C’est elle qui décide de sa colonne.')}
     <div id="taf-elements" class="taf-elements"></div>
     ${existing ? '' : '<p class="taf-aide taf-apres">Les commentaires s’ouvrent une fois la tâche créée.</p>'}`;
@@ -282,6 +306,20 @@ export function activityForm(link = {}, existing = null, onSaved, onClose = null
   const m = openModal(existing ? 'Modifier la tâche' : 'Nouvelle tâche', `<form class="form taf" id="act-form">${corpsForm}
     <div class="form-actions">${existing && peutSupprimer ? '<button type="button" class="btn danger left" id="act-del" data-arme="0">Supprimer</button>' : ''}<button type="button" class="btn ghost" data-close>Annuler</button><button class="btn" type="submit">Enregistrer</button></div></form>`, { onClose });
   const form = m.querySelector('#act-form');
+  m.classList.add('taf-modal');
+  form.querySelectorAll('#taf-struct [data-struct]').forEach(b => b.onclick = () => {
+    const champ = form.querySelector('[name="activity"]');
+    champ.value = champ.value === b.dataset.struct ? '' : b.dataset.struct;
+    form.querySelectorAll('#taf-struct [data-struct]').forEach(x => x.classList.toggle('on', x.dataset.struct === champ.value));
+  });
+  const champDate = form.querySelector('[name="due_date"]');
+  const marquerDate = () => form.querySelectorAll('#taf-dates [data-jour]').forEach(x => x.classList.toggle('on', x.dataset.jour === champDate.value));
+  form.querySelectorAll('#taf-dates [data-jour]').forEach(b => b.onclick = () => {
+    champDate.value = champDate.value === b.dataset.jour ? '' : b.dataset.jour;
+    marquerDate();
+  });
+  champDate.addEventListener('input', marquerDate);
+  marquerDate();
   // Les pastilles écrivent dans le champ caché : une seule valeur lue, celle
   // que `readForm` ira chercher.
   form.querySelectorAll('#taf-prio [data-prio]').forEach(b => b.onclick = () => {

@@ -147,7 +147,11 @@ const ONGLETS = [
 // ce qui entre.
 const ONGLET_KANBAN = { key: 'structures', label: 'Mes tâches par structure',
   garde: (a, moi) => ONGLETS[0].garde(a, moi) };
-const ongletsDe = (direction) => (direction ? [ONGLET_KANBAN, ONGLETS[1]] : ONGLETS);
+// ⚠ L'ONGLET « Envoyées » A ÉTÉ RETIRÉ LE 17/11/2026 (Élodie : « on n'envoie
+// jamais de tâche à qui que ce soit »). La définition reste dans `ONGLETS` —
+// une tâche confiée à quelqu'un d'autre existe toujours chez son responsable,
+// c'est seulement l'écran qui ne la montre plus à celui qui l'a écrite.
+const ongletsDe = (direction) => (direction ? [ONGLET_KANBAN] : ONGLETS);
 
 export const todayPage = {
   title: () => 'To do list',
@@ -279,7 +283,7 @@ export const todayPage = {
             </div>
           </div>
         </header>
-        <div class="pill-tabs todo-onglets">
+        <div class="pill-tabs todo-onglets" ${onglets.length < 2 ? 'hidden' : ''}>
           ${onglets.map(o => `<button type="button" data-onglet="${o.key}" class="${state.onglet === o.key ? 'on' : ''}">${esc(o.label)}<span>${compte(o)}</span></button>`).join('')}
         </div>
 
@@ -295,8 +299,7 @@ export const todayPage = {
           <span class="grow"></span>
           <label class="check"><input type="checkbox" id="t-done" ${state.showDone ? 'checked' : ''}> Ce qui est fait${
             faitesAujourdhui ? ` <b>(${faitesAujourdhui})</b>` : ''}</label>
-          <button class="btn ghost" id="t-new">+ Tâche</button>
-          <button class="btn" id="t-send">Envoyer une tâche</button>
+          <button class="btn" id="t-send">Nouvelle tâche</button>
         </div>
 
         ${sansProchaine.length ? `<div class="alert"><b>${sansProchaine.length}</b><div><b>affaire${sansProchaine.length > 1 ? 's' : ''} sans prochaine action</b> — ${sansProchaine.slice(0, 6).map(d => `<a href="#" data-open-deal="${d.id}">${esc(d.title)}</a>`).join(', ')}${sansProchaine.length > 6 ? '…' : ''}</div></div>` : ''}
@@ -311,7 +314,7 @@ export const todayPage = {
           ${groupes.map(gr => `<div class="todo-groupe ${gr.key}">${gr.titre}<i>${gr.l.filter(a => !a.done).length}</i></div>${tri(gr.l).map(a => carte(a, pour)).join('')}`).join('')}
           ${!retenues.length && !faites.length && !dossiers.length ? `<div class="empty">${onglet.key === 'mienne'
             ? 'Rien à faire — tout est à jour.'
-            : 'Aucune tâche envoyée. Le bouton « Envoyer une tâche » sert à en confier une.'}</div>` : ''}
+            : 'Aucune tâche envoyée. Le bouton « Nouvelle tâche » sert à en confier une.'}</div>` : ''}
         </section>`}
         </div>`;
 
@@ -334,13 +337,11 @@ export const todayPage = {
       // Une tâche créée ici hérite de ce qui est à l'écran : la structure ouverte,
       // et le responsable — moi dans ma liste, à choisir dans « Envoyées ».
       const structureOuverte = () => (state.structure && state.structure !== '—' ? { activity: state.structure } : {});
-      // « + Tâche » : pour moi. « Envoyer une tâche » : pour quelqu'un d'autre —
-      // le responsable est laissé vide, c'est le choix qu'on vient faire, et on
-      // bascule sur l'onglet « Envoyées » pour voir le résultat.
-      root.querySelector('#t-new').onclick = () => activityForm({ assignee_id: moi, ...structureOuverte() }, null, draw);
-      root.querySelector('#t-send').onclick = () => activityForm({ assignee_id: '', ...structureOuverte() }, null, () => {
-        state.onglet = 'envoyees'; draw();
-      });
+      // ⚠ UN SEUL BOUTON DEPUIS LE 17/11/2026 (Élodie : « garde un seul bouton
+      // Nouvelle tâche ») : « + Tâche » et « Nouvelle tâche » se ressemblaient
+      // trop. Le responsable est proposé à moi — on le change dans le
+      // formulaire si besoin.
+      root.querySelector('#t-send').onclick = () => activityForm({ assignee_id: moi, ...structureOuverte() }, null, draw);
       root.querySelectorAll('[data-open-deal]').forEach(a => a.onclick = e => { e.preventDefault(); openDeal(a.dataset.openDeal, draw); });
       // ⚠ UNE CARTE S'OUVRE EN ENTIER, pas seulement par un crayon : sur un
       // tableau on clique la carte. La case à cocher et ses boutons gardent
