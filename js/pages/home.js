@@ -175,6 +175,13 @@ export const homePage = {
       // faire enjamber et les deux sont déjà collées. Dans ces deux cas
       // « Ma journée » reprend les 12 colonnes.
       const journeeCollee = !!argent && scope.canPilotage;
+      const objectifs = scope.canPilotage ? carteObjectifs(cles, deals, journeeCollee) : '';
+      // ⚠ ON NE S'ÉTIRE QUE S'IL Y A UNE FRISE À NOURRIR. Sans objectif fixé,
+      // la carte n'affiche qu'une phrase — étirée sur la hauteur des deux
+      // rangées, elle devenait un rectangle blanc de 670 px. Vu en démo, où
+      // aucun objectif n'est saisi. La frise des douze mois est le seul élément
+      // qui sache absorber de la hauteur : sa présence EST la condition.
+      const etire = journeeCollee && objectifs.includes('ob-frise');
       const reseau = enFiltre ? carteReseau(cles) : '';
       // ⚠ ET L'ENTONNOIR NE SE CALCULE MÊME PLUS EN VUE GROUPE : `entonnoir` et
       // `comparaisonEntonnoir` relisent toutes les affaires, deux fois, et la
@@ -256,7 +263,7 @@ export const homePage = {
                 Fixer les objectifs à 5 colonnes laisserait alors un trou de 7.
                 Vu en démo, où aucun devis n'est signé dans le mois. */ ''}
           ${taille(argent, 'tb-x7')
-              + (scope.canPilotage ? taille(carteObjectifs(cles, deals), argent ? 'tb-x5' : 'tb-x12',
+              + (scope.canPilotage ? taille(objectifs, argent ? 'tb-x5' : 'tb-x12',
                   // ⚠ LES OBJECTIFS ENJAMBENT DEUX RANGÉES POUR QUE « MA JOURNÉE »
                   // VIENNE SE COLLER SOUS LE CHEMIN DE L'ARGENT (17/11/2026, Élodie :
                   // « je veux que ce soit collé le chemin de l'argent et ma journée »).
@@ -273,7 +280,16 @@ export const homePage = {
                   // remontait — les trois autres laissaient un trou sur la rangée
                   // d'après. Les objectifs occupent maintenant ces 5 colonnes : les
                   // encadrés repartent proprement d'une rangée neuve.
-                  journeeCollee ? 'style="grid-row:span 2"' : '') : '')}
+                  //
+                  // ⚠ ET `align-self: stretch` AVEC, depuis le 17/11/2026 : la
+                  // grille pose `align-items: start`, donc la carte s'arrêtait à la
+                  // hauteur de son contenu et la colonne de droite se terminait bien
+                  // avant la gauche. Les deux vont ensemble — enjamber sans s'étirer
+                  // ne fait que réserver de la place vide.
+                  journeeCollee
+                    ? `style="grid-row:span 2${etire
+                        ? ';align-self:stretch;display:flex;flex-direction:column' : ''}"`
+                    : '') : '')}
 
           ${/* ⚠ « MA JOURNÉE » EST REMONTÉE ICI LE 17/11/2026, sous le chemin de
                 l'argent. Élodie : « je pense qu'il a plus sa place juste en
@@ -715,7 +731,26 @@ const montantCohorte = (cles, r, deals) => deals
  * mois, 12 % de l'objectif n'est pas un retard. Le repère vertical marque où il
  * faudrait être aujourd'hui ; l'écart en euros dit de combien on s'en écarte.
  */
-function carteObjectifs(cles, deals) {
+/**
+ * ⚠ `grand` FAIT REMPLIR À LA CARTE LA HAUTEUR QU'ELLE OCCUPE DÉJÀ
+ * (17/11/2026). Élodie : « si ça peut prendre un peu plus de place en hauteur
+ * ce serait mieux pour rattraper un peu le décalage avec l'encadré ma
+ * journée ». La carte enjambe deux rangées depuis le matin, mais s'arrêtait à
+ * la hauteur de son contenu : la colonne de droite se terminait bien avant la
+ * gauche. Elle s'étire maintenant, et c'est la FRISE DES DOUZE MOIS qui prend
+ * la place — des barres de 56 px qui en font le double se lisent mieux.
+ *
+ * ⚠ `flex: 1 1 auto`, PAS `flex: 1`. Avec une base à zéro, la frise
+ * s'effondrerait quand il n'y a pas de place en trop ; avec `auto`, elle part
+ * de sa hauteur naturelle et ne fait que grandir.
+ *
+ * ⚠ ET RIEN POUR UN BLOC « SANS DONNÉE » : il n'a pas de frise, lui donner
+ * la place en ferait du blanc. BTP Expertise et La Référence Courtage sont
+ * dans ce cas.
+ *
+ * ⚠ TOUT EN STYLE EN LIGNE : app.css est le fichier d'une autre session.
+ */
+function carteObjectifs(cles, deals, grand = false) {
   const mois = moisEnCours();
   const avecObjectif = cles.filter(k => objectifAnnuel(k) > 0);
   const nomMois = mois.start.toLocaleDateString('fr-FR', { month: 'long' });
@@ -728,7 +763,7 @@ function carteObjectifs(cles, deals) {
   }
   const blocs = avecObjectif.map(k => blocObjectif([k], ACTIVITIES[k].color, deals,
     `<img src="assets/logos/${k}-complet.png" alt="${esc(ACTIVITIES[k].label)}" data-cle="${k}" data-nom="${esc(ACTIVITIES[k].label)}">`,
-    `data-go="${lienStructure(k)}"`));
+    `data-go="${lienStructure(k)}"`, grand));
   // ⚠ LE TOTAL « GROUPE » N'ADDITIONNE QUE CE QU'ON SAIT MESURER (12/11/2026).
   // Y laisser l'objectif d'une structure dont aucun euro ne passe par le CRM
   // fabriquait un retard permanent et inrattrapable : un objectif en face
@@ -738,9 +773,9 @@ function carteObjectifs(cles, deals) {
   const mesurables = avecObjectif.filter(k => argentConnu(k, deals));
   const horsMesure = avecObjectif.filter(k => !argentConnu(k, deals));
   if (mesurables.length > 1) {
-    blocs.push(blocObjectif(mesurables, 'var(--accent)', deals, '<span class="ob-groupe">Groupe</span>', ''));
+    blocs.push(blocObjectif(mesurables, 'var(--accent)', deals, '<span class="ob-groupe">Groupe</span>', '', grand));
   }
-  return `<section class="card">${entete}<div class="ob-liste">${blocs.join('')}</div>
+  return `<section class="card">${entete}<div class="ob-liste"${grand ? ' style="flex:1 1 auto"' : ''}>${blocs.join('')}</div>
     <p class="muted small tb-legend"><i></i> Le trait marque où il faudrait être aujourd'hui pour tenir l'objectif.</p>
     ${/* ⚠ LE RETRAIT SE DIT, IL NE SE DEVINE PAS. Sans cette phrase, quelqu'un
           qui additionne les objectifs affichés ne retombe pas sur le total et
@@ -755,7 +790,7 @@ function carteObjectifs(cles, deals) {
 }
 const lienStructure = (k) => (k === 'rgd' ? '#/rgd' : k === 'btp' ? '#/btp' : k === 'courtage' ? '#/courtage' : '#/pipeline/' + k);
 
-function blocObjectif(cles, couleur, deals, titre, attrs) {
+function blocObjectif(cles, couleur, deals, titre, attrs, grand = false) {
   const mois = moisEnCours();
   const somme = (f) => cles.reduce((s, k) => s + f(k), 0);
   const caDe = (r) => somme(k => chiffres(k, r, deals).ca);
@@ -782,12 +817,12 @@ function blocObjectif(cles, couleur, deals, titre, attrs) {
     };
   });
   const haut = Math.max(1, ...colonnes.map(c => Math.max(c.o, c.v || 0)));
-  const frise = !colonnes.length ? '' : `<div class="ob-frise" aria-label="CA mois par mois">${colonnes.map(c => {
+  const frise = !colonnes.length ? '' : `<div class="ob-frise" aria-label="CA mois par mois"${grand ? ' style="flex:1 1 auto"' : ''}>${colonnes.map(c => {
     const futur = c.v === null, courant = c.cle === cleMoisCourant;
     const atteint = !futur && c.o > 0 && c.v >= c.o;
     return `<div class="ob-col${futur ? ' futur' : ''}${courant ? ' courant' : ''}"
         title="${esc(c.label)} : ${futur ? 'à venir' : eur(c.v)} · objectif ${eur(c.o)}">
-      <div class="ob-col-zone">
+      <div class="ob-col-zone"${grand ? ' style="flex:1 1 auto"' : ''}>
         ${futur ? '' : `<span class="ob-col-val${atteint ? ' ok' : ''}" style="height:${Math.max(c.v > 0 ? 3 : 0, c.v / haut * 100).toFixed(1)}%"></span>`}
         <span class="ob-col-obj" style="bottom:${(c.o / haut * 100).toFixed(1)}%"></span>
       </div>
@@ -812,7 +847,8 @@ function blocObjectif(cles, couleur, deals, titre, attrs) {
     </article>`;
   }
 
-  return `<article class="ob-bloc${attrs ? ' click' : ''}" style="--c:${couleur}" ${attrs}>
+  return `<article class="ob-bloc${attrs ? ' click' : ''}" style="--c:${couleur}${
+    grand && frise ? ';flex:1 1 auto;display:flex;flex-direction:column' : ''}" ${attrs}>
     <header class="ob-tete"><span class="tb-struct">${titre}</span>
       <span class="muted small">objectif annuel <b>${eur(objAn)}</b></span></header>
     <div class="ob-jauges">
@@ -850,15 +886,28 @@ function jaugeObjectif(libelle, realise, vise, r, unite, partForcee = null) {
     }
   }
   const etat = p >= 1 || ecart >= 0 ? 'ok' : 'ko';
-  const verdict = p >= 1 ? `Objectif atteint${realise > vise ? `, dépassé de ${eur(realise - vise)}` : ''}`
-    : ecart >= 0 ? `En avance de ${eur(ecart)} sur le rythme`
-    : `En retard de ${eur(-ecart)} sur le rythme`;
+  // ⚠ PLUS DE VERDICT DE RYTHME (17/11/2026). Élodie : « enlève les "en
+  // retard de … sur le rythme", ça porte à confusion ». Ce nombre comparait le
+  // réalisé à un prorata LINÉAIRE du temps écoulé — en novembre, sur un
+  // exercice ouvert en octobre, il annonçait 156 916 € de retard sur 180 000 €
+  // d'objectif. Le chantier ne se facture pas au douzième près, et la phrase
+  // se lisait comme un jugement là où il n'y avait qu'une règle de trois.
+  //
+  // ⚠ « OBJECTIF ATTEINT » RESTE : c'est un fait, pas une comparaison au
+  // calendrier. Ce qui part, ce sont les deux variantes de rythme — « en
+  // avance » autant qu'« en retard » : n'en garder qu'une donnerait une carte
+  // qui ne commente que les bonnes nouvelles.
+  //
+  // ⚠ LE REPÈRE SUR LA BARRE RESTE AUSSI, lui, avec sa légende : il montre
+  // où l'on devrait être sans mettre un euro sur l'écart. C'est le même calcul,
+  // dit sans le chiffrer, et `ecart` continue de colorer le pourcentage.
+  const verdict = p >= 1 ? `Objectif atteint${realise > vise ? `, dépassé de ${eur(realise - vise)}` : ''}` : '';
   return `<div class="ob-jauge">
     <div class="ob-ligne"><span class="ob-lbl">${esc(libelle)}</span><span class="ob-pct ${etat}">${pct(p)} %</span></div>
     <div class="ob-montants"><b>${eur(realise)}</b><span class="muted"> sur ${eur(vise)}</span></div>
     <div class="ob-barre"><span class="ob-rempli" style="width:${Math.min(100, p * 100).toFixed(1)}%"></span>
       ${part > 0 && part < 1 ? `<span class="ob-repere" style="left:${(part * 100).toFixed(1)}%" title="Où il faudrait être aujourd'hui"></span>` : ''}</div>
-    <p class="ob-verdict ${etat}">${verdict}</p>
+    ${verdict ? `<p class="ob-verdict ${etat}">${verdict}</p>` : ''}
     <p class="muted small">${reste ? `Reste ${eur(reste)}${rythme}` : 'Plus rien à faire sur cette période.'}</p>
   </div>`;
 }
