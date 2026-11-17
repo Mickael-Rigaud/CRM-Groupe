@@ -294,12 +294,47 @@ export function pointsDuDetail(detail) {
 const CLE_BIBLIO = 'cahier_biblio_elements';
 
 const BIBLIO_DE_DEPART = {
+  // ⚠ CES PHRASES SONT TIRÉES D'UN VRAI DEVIS, PAS INVENTÉES (17/11/2026).
+  // Élodie : « je ne sais vraiment pas ce que l'on pourrait mettre mais je veux
+  // des éléments pré-remplis ». Le devis D202600192 porte **12 conditions**
+  // (« si », « recommandé », « sous réserve », « adapté ») et **5 exclusions**
+  // (« Hors… ») : chacune dépend d'un CONSTAT fait pendant la visite, et aucune
+  // n'est écrite nulle part dans le CRM. Ce sont elles qui font les phrases
+  // ci-dessous, dans le vocabulaire de l'entreprise.
+  //
+  // ⚠ « TECHNIQUE » N'EST PAS LE DESCRIPTIF DU DEVIS, qui est déjà repris sous
+  // chaque travail : c'est ce que la visite a vu DANS CE LOGEMENT-LÀ et que le
+  // devis ne dit pas. Le découvrir sur le chantier coûte une demi-journée ou
+  // un supplément à négocier.
+  //
+  // Elles ne sont qu'un point de départ : chaque phrase écrite à la main entre
+  // dans la bibliothèque, et « Modifier la bibliothèque » permet de faire le
+  // ménage. Au bout de quelques chantiers, la liste sera faite de leurs mots.
   technique: [
-    'Support plâtre ancien : ratissage nécessaire avant peinture',
-    'Cloisons en BA13 : finition B, sans saignée',
-    'Installation électrique existante conservée, mise à la terre vérifiée',
-    'Tableau électrique non modifié dans le cadre de ce chantier',
+    // Ce que la préparation des murs réserve — le devis prévoit le cas, encore
+    // faut-il l'avoir constaté.
+    'Murs très fissurés : toile à enduire nécessaire (supplément au devis)',
+    'Supports très dégradés : préparation importante, hors devis',
+    'Ancienne peinture glycéro : ponçage et sous-couche d’accrochage',
+    'Papier peint en place : dépose avant préparation',
+    'Cloisons neuves sans saignée : finition B en direct',
+    'Teinte foncée ou peu couvrante : couches supplémentaires à prévoir',
+    'Pièce humide : peinture hydrofuge',
+    // L'électricité : ce qui passe, ce qui ne passe pas.
+    'Support béton : saignée nécessaire pour le passage des câbles',
+    'Béton très dur : percements et saignées plus lents que prévu',
+    'Circuit existant suffisant : pas de reprise du tableau',
+    'Tableau électrique à reprendre : hors devis, à chiffrer à part',
+    'Câblage existant à modifier : hors devis, à chiffrer à part',
+    'Boîtes d’encastrement existantes réutilisables',
+    // Le chauffage.
+    'Radiateur déposable sans vidange complète du réseau',
+    'Radiateur non déposable : peinture en place',
+    'Traces d’oxydation sur radiateur : traitement ponctuel avant peinture',
+    // Le bâti et ce qu'on garde.
     'Hauteur sous plafond supérieure à 2,50 m : échafaudage nécessaire',
+    'Murs non d’équerre : reprises à prévoir sur les angles',
+    'Plancher bois : protection renforcée, points de fixation à vérifier',
     'Sol conservé : protection intégrale pendant toute la durée',
     'Menuiseries conservées : masquage et protection',
   ],
