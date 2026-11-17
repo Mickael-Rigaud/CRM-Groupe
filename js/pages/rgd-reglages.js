@@ -48,7 +48,7 @@ import { poserEspace } from './espace.js';
 import { cadre, guard } from './rgd-espace.js';
 import { db } from '../data/db.js';
 import { lienAvis, lienAvisValide, enregistrerLienAvis } from '../data/rgd-avis.js';
-import { objectifsMensuels, OBJECTIFS_DEFAUT } from '../data/rgd-objectifs.js';
+import { objectifsMensuels, OBJECTIFS_DEFAUT, enregistrerObjectifsMensuels } from '../data/rgd-objectifs.js';
 import { signatureRgd, enregistrerSignatureRgd, retirerSignatureRgd } from '../data/rgd-devis-crm.js';
 import { posePadSignature } from '../pad-signature.js';
 import { lireCompteSumUp, appairerLecteurSumUp, estPilotable,
@@ -505,14 +505,10 @@ export const rgdReglagesPage = {
         boutonObj.disabled = true;
         etat.textContent = 'Enregistrement…';
         try {
-          const valeur = JSON.stringify(neuf);
-          const ligne = scope.rgd('rgd_reglages').find(x => x.cle === 'objectifs_mensuels');
-          if (ligne) {
-            const maj = await db.update('rgd_reglages', 'objectifs_mensuels', { valeur });
-            ligne.valeur = maj?.valeur ?? valeur;
-          } else {
-            scope.rgd('rgd_reglages').push(await db.insert('rgd_reglages', { cle: 'objectifs_mensuels', valeur }));
-          }
+          // ⚠ L'ÉCRITURE EST PARTIE DANS `data/rgd-objectifs.js` (17/11/2026) :
+          // le formulaire du tableau de bord écrit la même clé, et deux
+          // écritures d'un même JSON à deux endroits finissent par diverger.
+          await enregistrerObjectifsMensuels(neuf);
           toast('Objectifs enregistrés');
           draw();
         } catch (e) {

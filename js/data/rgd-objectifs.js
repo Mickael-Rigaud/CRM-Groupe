@@ -102,6 +102,33 @@ const uniques = (liste) => [...new Set(liste.map(cleClient).filter(Boolean))];
  * lit sur les douze derniers mois, qu'un changement d'exercice ne remet pas à
  * zéro.
  */
+/**
+ * Écrit les objectifs mensuels de RGD Renova.
+ *
+ * ⚠ UN SEUL ÉCRIVAIN POUR CETTE CLÉ, et c'est la raison d'être de cette
+ * fonction (17/11/2026). L'écran Réglages RGD écrivait `rgd_reglages` en
+ * direct ; le formulaire du tableau de bord allait en faire autant. Deux
+ * écritures de la même clé à deux endroits finissent toujours par diverger —
+ * l'une oublie une valeur par défaut, l'autre n'écrase pas le même champ. Les
+ * deux écrans passent désormais par ici.
+ *
+ * ⚠ ON ÉCRIT L'OBJET COMPLET, PAS UN CHAMP : la clé porte un JSON unique.
+ * Fusionner avec l'existant évite qu'un formulaire qui ne connaît que trois
+ * des cinq valeurs n'efface les deux autres.
+ */
+export async function enregistrerObjectifsMensuels(valeurs) {
+  const neuf = { ...OBJECTIFS_DEFAUT, ...objectifsMensuels(), ...valeurs };
+  const valeur = JSON.stringify(neuf);
+  const ligne = db.t('rgd_reglages').find(x => x.cle === 'objectifs_mensuels');
+  if (ligne) {
+    const maj = await db.update('rgd_reglages', 'objectifs_mensuels', { valeur });
+    ligne.valeur = maj?.valeur ?? valeur;
+  } else {
+    db.t('rgd_reglages').push(await db.insert('rgd_reglages', { cle: 'objectifs_mensuels', valeur }));
+  }
+  return neuf;
+}
+
 export function moisObjectifs(aujourdhui = new Date()) {
   const demandes = scope.rgd('rgd_demandes');
   const clients = scope.rgd('rgd_clients');

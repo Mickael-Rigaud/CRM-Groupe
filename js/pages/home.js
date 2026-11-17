@@ -12,14 +12,16 @@ import {
   rdvMois, signeesMois, periodePrecedente, moisEnCours, externe, exerciceDe,
   // Les quatre cartes ajoutées le 12/11/2026. Elles rendent `null` quand la
   // structure filtrée ne porte pas la donnée : l'écran masque la carte.
-  cheminArgent, chantiersResume, publicite, envoisAuto, argentConnu, parDevis,
+  cheminArgent, chantiersResume, publicite, envoisAuto, argentConnu, parDevis, detailsPeriode,
 } from '../data/chiffres.js';
 // `finDe` tient compte de la fin déclarée à la main et des jours ouvrés d'une
 // formation : refaire ce calcul ici donnerait une date différente du planning.
 import { finDe } from '../data/rgd-planning.js';
+// Les objectifs de volume de RGD : un seul écrivain, partagé avec Réglages RGD.
+import { objectifsMensuels, enregistrerObjectifsMensuels } from '../data/rgd-objectifs.js';
 import {
   esc, eur, daysSince, periodRange, inRange, isoDay, userName,
-  openModal, closeModal, renderForm, readForm, toast,
+  openModal, closeModal, toast,
 } from '../ui.js';
 import { activeInMonth, rowOf, dueOf, receivedOf, balanceOf } from './locatif.js';
 import {
@@ -70,12 +72,12 @@ const eur2 = (n) => eur(n, { maximumFractionDigits: 2 });
 
 // Micro-courbe des douze derniers mois, posée au fond d'un indicateur : le chiffre
 // du mois ne dit pas s'il s'agit d'une tendance ou d'un accident.
-function spark(serie, couleur) {
+function spark(serie, couleur, cls = 'tb-spark') {
   if (!serie.some(v => v)) return '';
   const w = 200, h = 34, mn = Math.min(...serie), mx = Math.max(...serie), sp = (mx - mn) || 1;
   const pts = serie.map((v, i) => [i / (serie.length - 1) * w, h - 2 - ((v - mn) / sp) * (h - 9)]);
   const d = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ');
-  return `<svg class="tb-spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true">
+  return `<svg class="${cls}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true">
     <path d="${d} L${w} ${h} L0 ${h} Z" fill="${couleur}" opacity=".11"></path>
     <path d="${d}" fill="none" stroke="${couleur}" stroke-width="1.6" stroke-linejoin="round"
       stroke-linecap="round" vector-effect="non-scaling-stroke"></path></svg>`;
@@ -199,9 +201,11 @@ export const homePage = {
             repartitionLeads(t, cles),
             false,
             t.leadsNonDates ? 'Total en base : ces outils ne datent pas l\'arrivée des prospects.' : '',
-            cles.length === 1 ? BASE_PROSPECTS[cles[0]] : '')}
+            cles.length === 1 ? BASE_PROSPECTS[cles[0]] : '',
+            detailsPeriode(cles, r, 'demandes'))}
           ${kpi('Rendez-vous', t.rdv, evolution(avant?.rdv, t.rdv), serieDe(cle => cles.reduce((s, k) => s + rdvMois(k, cle, deals), 0)),
-            'visites techniques tenues sur la période')}
+            'visites techniques tenues sur la période', false, '', '',
+            detailsPeriode(cles, r, 'rdv'))}
           ${/* ⚠ CE NOMBRE COMPTE DES CLIENTS, PAS DES DEVIS, et c'est précisément
                 ce que la vue d'ensemble RGD appelle « Chantiers » — un client qui
                 signe deux devis fait UN chantier. Le mot « Affaires signées »
@@ -213,9 +217,11 @@ export const homePage = {
           ${kpi(cles.length === 1 && cles[0] === 'rgd' ? 'Chantiers' : 'Affaires signées',
             t.signees ?? '—', evolution(avant?.signees, t.signees),
             serieDe(cle => cles.reduce((s, k) => s + signeesMois(k, cle, deals), 0)),
-            sousChantiers(cles, r, t))}
+            sousChantiers(cles, r, t), false, '', '',
+            detailsPeriode(cles, r, 'chantiers'))}
           ${kpi('CA facturé HT', eur(t.ca), evolution(avant?.ca, t.ca), serieDe(caDu),
-            obj ? `objectif ${eur(obj)}` : scope.canPilotage ? 'aucun objectif fixé' : 'sur vos affaires')}
+            obj ? `objectif ${eur(obj)}` : scope.canPilotage ? 'aucun objectif fixé' : 'sur vos affaires', false, '', '',
+            detailsPeriode(cles, r, 'ca'))}
 
           <section class="card tb-x7">
             <div class="card-head"><h2>Pipeline &amp; conversion</h2>
@@ -331,7 +337,7 @@ export const homePage = {
         p.textContent = ACTIVITIES[im.dataset.cle].short.slice(0, 2).toUpperCase();
         im.replaceWith(p);
       });
-      root.querySelector('#tb-obj')?.addEventListener('click', () => formObjectifs(draw));
+      root.querySelector('#tb-obj')?.addEventListener('click', () => formObjectifs(draw, cles));
       root.querySelector('#tb-ag')?.addEventListener('click', () => formAgendas(visibles, draw));
 
       /* ⚠ LE RETOUR S'ÉCRIT DANS UN BLOC, PAS DANS UN `toast` : il porte
@@ -366,12 +372,18 @@ export const homePage = {
     // ⚠ UNE TUILE DE BENTO, PAS UNE CASE DE BANDEAU (12/11/2026). La micro-courbe
     // revient sur fond clair : elle reprend donc les couleurs d'encre du thème,
     // et non les teintes pâles qu'il fallait sur le bandeau sombre.
-    const kpi = (libelle, valeur, d, serie, sous, points = false, titre = '', vers = '') => `
+    // ⚠ LA COURBE EST PASSÉE EN VIGNETTE, À CÔTÉ DU CHIFFRE (17/11/2026). Elle
+    // occupait le bas de la tuile, qui revient au détail demandé par Élodie —
+    // les noms derrière le nombre. Garder les deux l'un sur l'autre rendait la
+    // liste illisible ; la supprimer aurait retiré la tendance sans qu'on l'ait
+    // demandé. Elle rétrécit, elle ne disparaît pas.
+    const kpi = (libelle, valeur, d, serie, sous, points = false, titre = '', vers = '', lignes = null) => `
       <article class="card tb-x3 tb-k${vers ? ' click' : ''}"${vers ? ` data-go="${vers}"` : ''}${titre ? ` title="${esc(titre)}"` : ''}>
         <h2>${libelle}</h2>
-        <div class="tb-ind"><b>${valeur}</b>${delta(d, points)}<span class="tb-vs">${comparaisonLabel(state.periode)}</span></div>
+        <div class="tb-ind"><b>${valeur}</b>${delta(d, points)}<span class="tb-vs">${comparaisonLabel(state.periode)}</span>
+          ${spark(serie, d === null || d >= 0 ? 'var(--green)' : 'var(--red)', 'tb-mini')}</div>
         <span class="tb-sous">${sous}</span>
-        ${spark(serie, d === null || d >= 0 ? 'var(--green)' : 'var(--red)')}
+        ${listeDetail(lignes)}
       </article>`;
 
     // ---------- courbe ----------
@@ -627,22 +639,96 @@ function jaugeObjectif(libelle, realise, vise, r, unite, partForcee = null) {
     <p class="muted small">${reste ? `Reste ${eur(reste)}${rythme}` : 'Plus rien à faire sur cette période.'}</p>
   </div>`;
 }
-function formObjectifs(onSaved) {
-  const valeurs = Object.fromEntries(ACTIVITY_KEYS.map(k => [k, objectifAnnuel(k) || '']));
-  const spec = ACTIVITY_KEYS.map(k => ({
-    key: k, label: ACTIVITIES[k].label, type: 'number',
-    hint: k === ACTIVITY_KEYS[0] ? 'Objectif de CA HT sur l\'année. Le mois et le trimestre en prennent leur part : un objectif de 480 000 € vaut 40 000 € par mois.' : '',
-  }));
-  openModal('Objectifs annuels de chiffre d\'affaires',
-    `<form id="f-obj" class="form">${renderForm(spec, valeurs)}</form>
+/**
+ * « Fixer les objectifs » — refait le 17/11/2026 (Élodie : « je voudrais que le
+ * formulaire soit plus moderne et complet et que l'on ne voie que RGD Renova,
+ * je ne veux pas voir les autres structures »).
+ *
+ * ⚠ IL SUIT LE FILTRE DE L'ÉCRAN. Quand une structure est sélectionnée, le
+ * formulaire ne parle que d'elle : afficher les quatre quand on en regarde une
+ * oblige à chercher sa ligne, et invite à modifier celle du voisin par
+ * mégarde. En vue Groupe, les quatre reviennent — c'est là qu'on arbitre.
+ *
+ * ⚠ « COMPLET » VEUT DIRE LES OBJECTIFS DE VOLUME, PAS SEULEMENT LE CA. RGD
+ * Renova en a cinq (demandes, rendez-vous, devis envoyés, chantiers, CA) et ce
+ * sont eux que la vue d'ensemble affiche en anneaux. Ils n'étaient saisissables
+ * que dans Réglages RGD, un écran qu'on n'ouvre pas pour fixer un objectif.
+ *
+ * ⚠ ET ON SAISIT AU MOIS, EN ÉCRIVANT L'ANNÉE. C'est la convention déjà posée
+ * pour BTP Expertise : « vingt demandes par mois » se pense, « deux cent
+ * quarante par an » non. Le CA mensuel saisi ici écrit son douze-fois dans
+ * l'objectif annuel partagé — une seule vérité stockée, deux lectures.
+ */
+function formObjectifs(onSaved, cles = []) {
+  const seule = cles.length === 1 ? cles[0] : null;
+  const visees = seule ? [seule] : ACTIVITY_KEYS.filter(k => CLES_VISIBLES().includes(k));
+  // Les objectifs de volume n'existent que pour RGD Renova : c'est la seule
+  // structure dont le CRM suit le parcours mois par mois.
+  const volumes = seule === 'rgd' ? objectifsMensuels() : null;
+
+  const ligne = (id, libelle, valeur, unite, aide) => `
+    <label class="ob-f-ligne">
+      <span class="ob-f-nom">${esc(libelle)}${aide ? `<em>${esc(aide)}</em>` : ''}</span>
+      <span class="ob-f-saisie"><input id="${id}" type="number" min="0" step="${unite === '€' ? '100' : '1'}"
+        inputmode="numeric" value="${valeur == null ? '' : valeur}"><i>${unite}</i></span>
+    </label>`;
+
+  const corps = volumes ? `
+    <p class="ob-f-chapeau">Les objectifs de <b>${esc(ACTIVITIES.rgd.label)}</b>, par mois.
+      Ce sont eux que la vue d'ensemble affiche en anneaux.</p>
+    <div class="ob-f-grille">
+      ${ligne('ob-dem', 'Demandes', volumes.demandes, '/ mois', 'site, téléphone et publicité')}
+      ${ligne('ob-rdv', 'Rendez-vous', volumes.rdv, '/ mois', 'visites techniques tenues')}
+      ${ligne('ob-env', 'Devis envoyés', volumes.envoyes, '/ mois', '')}
+      ${ligne('ob-dev', 'Chantiers', volumes.devis, '/ mois', 'clients qui signent')}
+      ${ligne('ob-ca', 'Chiffre d\'affaires HT', volumes.ca, '€ / mois', 'facturé dans le mois')}
+    </div>
+    <p class="ob-f-total" id="ob-total"></p>`
+    : `
+    <p class="ob-f-chapeau">Objectif de chiffre d'affaires <b>HT sur l'année</b>.
+      Le mois et le trimestre en prennent leur part.</p>
+    <div class="ob-f-grille">
+      ${visees.map(k => ligne('ob-ca-' + k, ACTIVITIES[k].label, objectifAnnuel(k) || '', '€ / an', '')).join('')}
+    </div>`;
+
+  openModal(seule ? `Objectifs — ${ACTIVITIES[seule].label}` : 'Objectifs de chiffre d\'affaires',
+    `<div class="ob-f">${corps}</div>
      <div class="form-actions"><button class="btn ghost" id="obj-x">Annuler</button><button class="btn" id="obj-ok">Enregistrer</button></div>`,
     { onOpen: (m) => {
+      const lu = (id) => Number(m.querySelector('#' + id)?.value);
+      // Le rappel à l'année se met à jour pendant la saisie : on saisit un mois,
+      // on veut voir tout de suite ce que ça fait sur l'exercice.
+      const totalAnnuel = () => {
+        const t = m.querySelector('#ob-total');
+        if (!t) return;
+        const ca = lu('ob-ca');
+        t.innerHTML = Number.isFinite(ca) && ca > 0
+          ? `Soit <b>${eur(ca * 12)}</b> sur l'exercice ${exerciceDe('rgd').label}.`
+          : '<span class="muted">Saisir un chiffre d\'affaires mensuel pour voir l\'objectif de l\'exercice.</span>';
+      };
+      m.querySelectorAll('.ob-f input').forEach(i => i.addEventListener('input', totalAnnuel));
+      totalAnnuel();
       m.querySelector('#obj-x').onclick = () => closeModal();
       m.querySelector('#obj-ok').onclick = async () => {
-        const v = readForm(m.querySelector('#f-obj'), spec);
-        const valeurs = Object.fromEntries(ACTIVITY_KEYS.map(k => [k, Number(v[k]) || 0]));
-        try { await enregistrerObjectifs(valeurs); closeModal(true); toast('Objectifs enregistrés'); onSaved(); }
-        catch (e) { toast(e.message, 'err'); }
+        try {
+          if (volumes) {
+            const neuf = { demandes: lu('ob-dem'), rdv: lu('ob-rdv'), envoyes: lu('ob-env'),
+                           devis: lu('ob-dev'), ca: lu('ob-ca') };
+            if (Object.values(neuf).some(v => !Number.isFinite(v) || v <= 0)) {
+              toast('Un objectif n\'est pas un nombre positif', 'err'); return;
+            }
+            await enregistrerObjectifsMensuels(neuf);
+            // ⚠ ET L'OBJECTIF ANNUEL SUIT, sinon le tableau de bord et la vue
+            // d'ensemble repartiraient sur deux chiffres de CA différents.
+            const base = Object.fromEntries(ACTIVITY_KEYS.map(k => [k, objectifAnnuel(k) || 0]));
+            await enregistrerObjectifs({ ...base, rgd: neuf.ca * 12 });
+          } else {
+            const base = Object.fromEntries(ACTIVITY_KEYS.map(k => [k, objectifAnnuel(k) || 0]));
+            for (const k of visees) base[k] = Math.max(0, lu('ob-ca-' + k) || 0);
+            await enregistrerObjectifs(base);
+          }
+          closeModal(true); toast('Objectifs enregistrés'); onSaved();
+        } catch (e) { toast(e.message, 'err'); }
       };
     } });
 }
@@ -1071,6 +1157,27 @@ function sousChantiers(cles, r, t) {
   if (n != null && n !== t.signees) bouts.push(`${n} devis signé${n > 1 ? 's' : ''}`);
   bouts.push(t.panier ? `panier ${eur(t.panier)}` : 'panier moyen indisponible');
   return bouts.join(' · ');
+}
+
+/**
+ * Les deux ou trois dernières lignes derrière un chiffre.
+ *
+ * ⚠ LE NOM D'ABORD, LE RESTE EN GRIS. C'est le nom qu'on cherche — « qui a
+ * demandé », « quel chantier » — pas la référence ni la date. Le détail et
+ * le jour suivent, plus petits, sur la même ligne.
+ */
+function listeDetail(d) {
+  if (!d?.lignes?.length) return '';
+  const jour = (v) => (v ? new Date(String(v).slice(0, 10) + 'T00:00:00')
+    .toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }).replace('.', '') : '');
+  return `<div class="tb-detail">
+    ${d.lignes.map(l => `<div class="tb-dl">
+      <span class="n">${esc(l.client || '\u2014')}</span>
+      ${l.detail ? `<span class="d">${esc(l.detail)}</span>` : ''}
+      <span class="j">${esc(jour(l.date))}</span>
+    </div>`).join('')}
+    ${d.reste ? `<div class="tb-dr">+ ${d.reste} autre${d.reste > 1 ? 's' : ''}</div>` : ''}
+  </div>`;
 }
 
 const prenomDe = (u) => {

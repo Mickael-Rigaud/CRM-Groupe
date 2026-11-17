@@ -9,7 +9,7 @@
 import { db } from './db.js';
 import { scope } from './scope.js';
 import { ACTIVITIES, ACTIVITY_KEYS, aAtteint, missionDe, reachedRdv, stageIndex, stageOf } from './schema.js';
-import { moisObjectifs } from './rgd-objectifs.js';
+import { moisObjectifs, detailMoisObjectif } from './rgd-objectifs.js';
 // Le planning sait déjà dire quand un chantier finit — y compris la fin
 // déclarée à la main et les jours ouvrés d'une formation. Refaire ce calcul
 // ici donnerait deux écrans qui ne sont pas d'accord sur la même barre.
@@ -599,6 +599,40 @@ export function parDevis(cles, r, champ) {
   if (!avec.length) return null;
   return avec.reduce((s, k) => s + moisDansPeriode(k, r)
     .reduce((t, m) => t + (Number(m[champ]) || 0), 0), 0);
+}
+
+/**
+ * Ce qu'il y a DERRIÈRE un chiffre : les dernières lignes qui le composent
+ * (17/11/2026, Élodie : « je voudrais quelques détails de chaque encadré en
+ * dessous des chiffres, par exemple le nom des prospects des dernières
+ * demandes »).
+ *
+ * ⚠ ON NE RÉÉCRIT PAS LA LISTE, ON REPREND CELLE DE LA VUE D'ENSEMBLE.
+ * `detailMoisObjectif` (data/rgd-objectifs.js) la construit déjà, avec les
+ * filtres de `moisObjectifs` recopiés à l'identique — c'est ce qui garantit
+ * que le détail retombe sur le nombre affiché. En écrire une seconde version
+ * ici, c'était se donner rendez-vous avec deux listes qui divergent.
+ *
+ * ⚠ ELLE TRAVAILLE PAR MOIS, LA PÉRIODE PEUT EN COUVRIR DOUZE : on appelle
+ * mois par mois et on recolle. Trier le tout par date décroissante donne bien
+ * « les dernières », quel que soit le découpage.
+ *
+ * ⚠ RGD RENOVA SEULEMENT. Les autres structures n'ont pas ce détail — leur
+ * parcours ne passe pas par le CRM. On rend `null`, et la tuile n'affiche rien
+ * plutôt qu'une liste vide qui ferait croire à une panne.
+ */
+export function detailsPeriode(cles, r, mesure, max = 3) {
+  if (!cles.includes('rgd') || !scope.canRgd) return null;
+  const lignes = [];
+  const d = new Date(r.start);
+  // Garde-fou : une période « Tout » ne doit pas parcourir cent mois.
+  for (let i = 0; i < 24 && d < r.end; i++) {
+    lignes.push(...(detailMoisObjectif(moisCle(d), mesure)?.lignes || []));
+    d.setMonth(d.getMonth() + 1);
+  }
+  if (!lignes.length) return null;
+  lignes.sort((a, b) => String(b.date).localeCompare(String(a.date)));
+  return { lignes: lignes.slice(0, max), reste: Math.max(0, lignes.length - max) };
 }
 
 const sommeHt = (l) => l.reduce((t, x) => t + (Number(x.montant_ht) || 0), 0);
