@@ -291,11 +291,14 @@ export const homePage = {
             </div>
           </section>
 
-          ${carteDette(cles, r)}
+          ${carteMeta(cles)}
 
-          ${taille(tuileChantiers(cles, r), 'tb-x4')}
-          ${taille(tuilePublicite(cles), 'tb-x4')}
-          ${taille(tuileEnvois(cles), 'tb-x4')}
+          ${/* ⚠ LA PUBLICITÉ A QUITTÉ CETTE RANGÉE (17/11/2026) pour la grande
+                carte chaude : la laisser ici l'aurait affichée deux fois. Les
+                deux tuiles restantes prennent la largeur libérée plutôt que
+                de laisser un trou d'un tiers. */ ''}
+          ${taille(tuileChantiers(cles, r), 'tb-x6')}
+          ${taille(tuileEnvois(cles), 'tb-x6')}
 
           <section class="card tb-x7">
             <div class="card-head"><h2>Évolution du chiffre d'affaires</h2>
@@ -1078,31 +1081,6 @@ function tuileChantiers(cles, r) {
   </section>`;
 }
 
-/**
- * La publicité Meta — le CUMUL, pas les trente derniers jours (12/11/2026,
- * Élodie : « mets le montant total dépensé, le nombre de lead reçu et le coût
- * par lead », en donnant les valeurs qu'elle attendait — le dépôt est public,
- * elles ne sont pas recopiées ici).
- *
- * ⚠ ET LE COÛT PAR LEAD EST À DEUX DÉCIMALES. C'est le chiffre qu'elle
- * compare à ce que Meta lui annonce ; arrondi à l'euro, il ne se retrouve plus.
- */
-function tuilePublicite(cles) {
-  const p = publicite(cles);
-  if (!p) return '';
-  const virgule = (n, d = 1) => n.toLocaleString('fr-FR', { minimumFractionDigits: d, maximumFractionDigits: d });
-  return `<section class="card tb-tuile">
-    <div class="card-head"><h2>Publicité Meta</h2>
-      <a class="muted small" href="#/rgd/analyse">${p.du ? 'depuis le ' + jourCourt(p.du) : 'depuis le début'} →</a></div>
-    ${duo({ v: eur(p.depense), l: 'dépensé en tout' },
-      { v: p.coutParLead == null ? '—' : eur(p.coutParLead, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), l: 'par lead' })}
-    <div class="tb-liste">
-      <div class="tb-lg"><i style="background:var(--accent)"></i>
-        <span class="tx">${p.leads} lead${p.leads > 1 ? 's' : ''} reçu${p.leads > 1 ? 's' : ''}<em>${p.clics} clic${p.clics > 1 ? 's' : ''} · ${p.campagnes} campagne${p.campagnes > 1 ? 's' : ''} qui ${p.campagnes > 1 ? 'ont' : 'a'} tourné</em></span>
-        <b>${p.tauxLead == null ? '—' : virgule(p.tauxLead * 100) + ' %'}</b></div>
-    </div>
-  </section>`;
-}
 
 function tuileEnvois(cles) {
   const e = envoisAuto(cles);
@@ -1225,35 +1203,37 @@ function degradeEtape(i, n, fin) {
 }
 
 /**
- * « Ce qui dort » — la tuile rouge : ce qui est facturé et pas rentré.
+ * La grande carte chaude — la publicité Meta (17/11/2026, Élodie : « l'encadré
+ * "ce qui dort" je voudrais le remplacer par les données de la publicité meta
+ * en conservant les couleurs de cet encadré »).
  *
- * ⚠ ELLE EST SORTIE DE LA CARTE DE L'ARGENT, et ce n'est pas qu'une question
- * de place. Les trois premiers barreaux sont des FLUX de la période ; celui-ci
- * est un STOCK d'aujourd'hui, toutes dates confondues. Côte à côte dans la
- * même carte, on les soustrayait mentalement les uns aux autres. Séparés, et
- * d'une couleur qui n'existe nulle part ailleurs sur l'écran, la question
- * qu'ils posent est différente — et c'est la bonne.
+ * ⚠ CE QUI PARTAIT AVEC ELLE : les factures émises et non réglées. Elles ne
+ * sont plus nulle part sur le tableau de bord — elles se lisent dans l'écran
+ * Encaissements. C'était un choix d'Élodie, pas un oubli.
+ *
+ * ⚠ LES TROIS CHIFFRES SONT CEUX QU'ELLE A DEMANDÉS le 12/11 : le montant total
+ * dépensé, les leads reçus, et le coût par lead — ce dernier au CENTIME,
+ * parce que c'est celui qu'elle compare à ce que Meta lui annonce.
  */
-function carteDette(cles, r) {
-  const a = cheminArgent(cles, r);
-  if (!a || a.resteDu == null || !a.nbDues) return '';
-  const nb = (n, mot) => `${n} ${mot}${n > 1 ? 's' : ''}`;
-  const lignes = [];
-  if (a.nbEchues) {
-    lignes.push(`<b>${a.nbEchues === a.nbDues ? `Les ${a.nbDues} factures en attente ont toutes dépassé leur échéance.`
-      : `${nb(a.nbEchues, 'facture')} ${a.nbEchues > 1 ? 'ont' : 'a'} dépassé son échéance.`}</b>
-      ${eur(a.montantEchu)}${a.plusAncienne ? ` — la plus ancienne était due le <b>${jourCourt(a.plusAncienne)}</b>, ${depuisQuand(a.plusAncienne)}` : ''}.`);
-  }
-  if (a.nbDuCrm) {
-    lignes.push(`Dont <b>${nb(a.nbDuCrm, 'facture')} faite${a.nbDuCrm > 1 ? 's' : ''} dans le CRM</b>
-      (${eur(a.montantDuCrm)}) qui ne figure${a.nbDuCrm > 1 ? 'nt' : ''} dans aucune liste d'impayés :
-      l'écran Encaissements ne lit que Costructor.`);
-  }
-  return `<section class="card tb-x5 tb-dette">
-    <h2>Ce qui dort</h2>
-    <div class="tb-gros"><span class="tb-nb" data-n="${a.resteDu}" data-eur="1">${eur(a.resteDu)}</span></div>
-    <span class="tb-sous">${nb(a.nbDues, 'facture')} émise${a.nbDues > 1 ? 's' : ''} et pas encore réglée${a.nbDues > 1 ? 's' : ''}</span>
-    ${lignes.map(l => `<p>${l}</p>`).join('')}
+function carteMeta(cles) {
+  const p = publicite(cles);
+  if (!p) return '';
+  const virgule = (n, d = 1) => n.toLocaleString('fr-FR', { minimumFractionDigits: d, maximumFractionDigits: d });
+  const bloc = (lb, val, ss) => `<div class="tb-fx"><span class="lb">${lb}</span>
+    <b>${val}</b><span class="ss">${esc(ss)}</span></div>`;
+  return `<section class="card tb-x5 tb-chaud">
+    <h2>Publicité Meta</h2>
+    <span class="tb-sous">${p.du ? 'depuis le ' + jourCourt(p.du) : 'depuis le d\u00e9but'}${p.au ? ', relev\u00e9 le ' + jourCourt(p.au) : ''}</span>
+    <div class="tb-gros"><span class="tb-nb" data-n="${p.depense}" data-eur="1">${eur(p.depense)}</span></div>
+    <span class="tb-sous">d\u00e9pens\u00e9s en tout</span>
+    <div class="tb-flux">
+      ${bloc('Leads', `<span class="tb-nb" data-n="${p.leads}">${p.leads}</span>`, 'coordonn\u00e9es re\u00e7ues')}
+      ${bloc('Par lead', p.coutParLead == null ? '\u2014'
+        : eur(p.coutParLead, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), 'd\u00e9pense \u00f7 leads')}
+      ${bloc('Clics', `<span class="tb-nb" data-n="${p.clics}">${p.clics}</span>`,
+        `${p.campagnes} campagne${p.campagnes > 1 ? 's' : ''}`)}
+    </div>
+    ${p.tauxLead != null ? `<p><b>${virgule(p.tauxLead * 100)} %</b> des clics laissent leurs coordonn\u00e9es.</p>` : ''}
   </section>`;
 }
 

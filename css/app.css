@@ -3655,12 +3655,17 @@ body.impression #print-root { display: block; }
 .tb-fx .tb-piste { background: rgba(255,255,255,.22); height: 5px; margin-top: 9px; }
 .tb-fx .tb-piste i { background: #fff; }
 
-/* ---- la tuile rouge ---- */
-.tb-dette { color: #fff; border: 0 !important;
+/* ---- la tuile chaude ----
+   ⚠ ELLE S'APPELAIT `.tb-dette` JUSQU'AU 17/11/2026, parce qu'elle portait les
+   factures impayées. Élodie l'a rendue à la publicité Meta en demandant d'en
+   garder les couleurs : le nom décrit donc désormais l'habillage, pas le
+   contenu. Une classe nommée d'après ce qu'elle affichait un jour donné ment
+   au premier changement d'avis. */
+.tb-chaud { color: #fff; border: 0 !important;
   background: linear-gradient(130deg, #FF5A4D, #FF8A5C) !important; }
-.tb-dette h2 { color: rgba(255,255,255,.76) !important; }
-.tb-dette .tb-sous { color: rgba(255,255,255,.86); }
-.tb-dette p { font-size: 12.5px; line-height: 1.55; margin-top: 11px; color: rgba(255,255,255,.94); }
+.tb-chaud h2 { color: rgba(255,255,255,.76) !important; }
+.tb-chaud .tb-sous { color: rgba(255,255,255,.86); }
+.tb-chaud p { font-size: 12.5px; line-height: 1.55; margin-top: 11px; color: rgba(255,255,255,.94); }
 
 /* ---- l'entonnoir ---- */
 .tb-etapes { margin-top: 12px; }
