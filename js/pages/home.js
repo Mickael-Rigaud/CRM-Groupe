@@ -154,15 +154,28 @@ export const homePage = {
       // ⚠ CALCULÉ ICI, PAS DANS LE GABARIT : le gabarit en a besoin deux
       // fois (choisir, puis afficher), et l'appeler deux fois relirait les
       // deux tables pour rien.
-      const reseau = state.filtre === 'groupe' ? '' : carteReseau(cles);
-      const ent = entonnoir(cles, r, deals);
+      // ⚠ `enFiltre` COMMANDE TOUTE LA MOITIÉ HAUTE DE L'ÉCRAN (17/11/2026).
+      // Élodie : « supprime pipeline & conversion, publicité meta et les
+      // encadrés demandes, rendez-vous, affaires signées et ca facturé ht ».
+      // C'est la VUE GROUPE qu'elle vide, pas les vues filtrées : dans l'espace
+      // RGD ces quatre nombres sont le résumé du mois, et la pub Meta y est la
+      // seule trace des campagnes. Un seul booléen pour les cinq blocs, parce
+      // qu'ils partent et reviennent ensemble.
+      const enFiltre = state.filtre !== 'groupe';
+      const reseau = enFiltre ? carteReseau(cles) : '';
+      // ⚠ ET L'ENTONNOIR NE SE CALCULE MÊME PLUS EN VUE GROUPE : `entonnoir` et
+      // `comparaisonEntonnoir` relisent toutes les affaires, deux fois, et la
+      // vue groupe en porte le plus. Les valeurs de repli ci-dessous ne sont
+      // jamais lues — le gabarit n'évalue pas la branche — elles évitent
+      // seulement qu'une relecture distraite croie à un plantage.
+      const ent = enFiltre ? entonnoir(cles, r, deals) : [];
       const jalon = (champ) => ent.find(x => x.champ === champ)?.n ?? null;
       const recus = jalon('leads'), avecRdv = jalon('rdv'), conclus = jalon('signed');
       const tauxRdv = recus && avecRdv !== null ? avecRdv / recus : null;
       const tauxVente = avecRdv && conclus !== null ? conclus / avecRdv : null;
-      const entAvant = comparaisonEntonnoir(cles, r, deals);
-      const horsEntonnoir = structuresHorsEntonnoir(cles);
-      const parCohorte = entonnoirParCohorte(cles);
+      const entAvant = enFiltre ? comparaisonEntonnoir(cles, r, deals) : null;
+      const horsEntonnoir = enFiltre ? structuresHorsEntonnoir(cles) : [];
+      const parCohorte = enFiltre && entonnoirParCohorte(cles);
       const obj = cles.reduce((s, k) => s + objectif(k, r), 0);
       const sources = cles.map(k => chiffres(k, r, deals)).filter(x => x.source);
 
@@ -235,58 +248,75 @@ export const homePage = {
               + (scope.canPilotage ? taille(carteObjectifs(cles, deals), argent ? 'tb-x5' : 'tb-x12') : '');
           })()}
 
-          ${/* ⚠ LES MOTS SONT CEUX DE LA VUE D'ENSEMBLE RGD, pas les miens
-                (12/11/2026). « Leads » et « Demandes » désignaient le même
-                nombre, « RDV » et « Rendez-vous » aussi : deux écrans qui
-                nomment différemment la même chose se lisent comme deux chiffres
-                différents. Un seul vocabulaire, celui de l'écran métier. */ ''}
-          ${kpi('Demandes', t.leadsNonDates ? t.leads : t.leadsPeriode,
-            // Sans date d'arrivée, aucune évolution n'est calculable : mieux vaut
-            // ne rien afficher qu'un pourcentage qui ne compare pas ce qu'il dit.
-            t.leadsNonDates ? null : evolution(avant?.leadsPeriode, t.leadsPeriode),
-            serieDe(cle => cles.reduce((s, k) => s + leadsMois(k, cle, deals), 0)),
-            repartitionLeads(t, cles),
-            false,
-            t.leadsNonDates ? 'Total en base : ces outils ne datent pas l\'arrivée des prospects.' : '',
-            cles.length === 1 ? BASE_PROSPECTS[cles[0]] : '',
-            detailsPeriode(cles, r, 'demandes'))}
-          ${kpi('Rendez-vous', t.rdv, evolution(avant?.rdv, t.rdv), serieDe(cle => cles.reduce((s, k) => s + rdvMois(k, cle, deals), 0)),
-            'visites techniques tenues sur la période', false, '', '',
-            detailsPeriode(cles, r, 'rdv'))}
-          ${/* ⚠ CE NOMBRE COMPTE DES CLIENTS, PAS DES DEVIS, et c'est précisément
-                ce que la vue d'ensemble RGD appelle « Chantiers » — un client qui
-                signe deux devis fait UN chantier. Le mot « Affaires signées »
-                laissait croire à un compte de devis, et l'écart avec « Devis
-                signés » passait pour une erreur. On prend son mot quand la
-                structure a un espace à elle ; ailleurs, « affaires » reste le
-                terme générique du groupe. Et le compte par devis est dit juste
-                en dessous : les deux nombres de l'autre écran sont là. */ ''}
-          ${/* ⚠ POUR RGD, CE N'EST PLUS LE COMPTE DES SIGNATURES (17/11/2026) :
-                c'est celui du PLANNING. Un devis signé en novembre dont le
-                chantier démarre en janvier n'est pas un chantier de novembre.
-                `t.signees` reste ce qu'il est — des clients qui ont signé — et
-                continue de nourrir l'entonnoir, le panier et le taux de
-                transformation, qui parlent bien de signatures. */ ''}
-          ${kpi(cles.length === 1 && cles[0] === 'rgd' ? 'Chantiers' : 'Affaires signées',
-            chantiersDuMois(cles, r, t) ?? '—',
-            evolution(chantiersDuMois(cles, periodePrecedente(r), t), chantiersDuMois(cles, r, t)),
-            serieDe(cle => cles.reduce((s, k) => s + signeesMois(k, cle, deals), 0)),
-            sousChantiers(cles, r, t), false, '', '',
-            detailsPeriode(cles, r, 'chantiers'))}
-          ${kpi('CA facturé HT', eur(t.ca), evolution(avant?.ca, t.ca), serieDe(caDu),
-            obj ? `objectif ${eur(obj)}` : scope.canPilotage ? 'aucun objectif fixé' : 'sur vos affaires', false, '', '',
-            detailsPeriode(cles, r, 'ca'))}
+          ${/* ⚠ LES QUATRE ENCADRÉS NE SORTENT PLUS EN VUE GROUPE (17/11/2026).
+                Ils donnaient le CUMUL des structures : quatre nombres du groupe
+                qu'aucune décision ne suit, puisqu'on ne pilote pas « le groupe »,
+                on pilote RGD, BTP ou Courtage. La carte « Qui tire le groupe »,
+                plus bas, dit le même chiffre d'affaires RÉPARTI — c'est la
+                lecture que la vue groupe peut avoir et que les autres non.
+                Filtré sur une structure, ils reviennent intacts. */ ''}
+          ${enFiltre ? `
+            ${/* ⚠ LES MOTS SONT CEUX DE LA VUE D'ENSEMBLE RGD, pas les miens
+                  (12/11/2026). « Leads » et « Demandes » désignaient le même
+                  nombre, « RDV » et « Rendez-vous » aussi : deux écrans qui
+                  nomment différemment la même chose se lisent comme deux chiffres
+                  différents. Un seul vocabulaire, celui de l'écran métier. */ ''}
+            ${kpi('Demandes', t.leadsNonDates ? t.leads : t.leadsPeriode,
+              // Sans date d'arrivée, aucune évolution n'est calculable : mieux vaut
+              // ne rien afficher qu'un pourcentage qui ne compare pas ce qu'il dit.
+              t.leadsNonDates ? null : evolution(avant?.leadsPeriode, t.leadsPeriode),
+              serieDe(cle => cles.reduce((s, k) => s + leadsMois(k, cle, deals), 0)),
+              repartitionLeads(t, cles),
+              false,
+              t.leadsNonDates ? 'Total en base : ces outils ne datent pas l\'arrivée des prospects.' : '',
+              cles.length === 1 ? BASE_PROSPECTS[cles[0]] : '',
+              detailsPeriode(cles, r, 'demandes'))}
+            ${kpi('Rendez-vous', t.rdv, evolution(avant?.rdv, t.rdv), serieDe(cle => cles.reduce((s, k) => s + rdvMois(k, cle, deals), 0)),
+              'visites techniques tenues sur la période', false, '', '',
+              detailsPeriode(cles, r, 'rdv'))}
+            ${/* ⚠ CE NOMBRE COMPTE DES CLIENTS, PAS DES DEVIS, et c'est précisément
+                  ce que la vue d'ensemble RGD appelle « Chantiers » — un client qui
+                  signe deux devis fait UN chantier. Le mot « Affaires signées »
+                  laissait croire à un compte de devis, et l'écart avec « Devis
+                  signés » passait pour une erreur. On prend son mot quand la
+                  structure a un espace à elle ; ailleurs, « affaires » reste le
+                  terme générique du groupe. Et le compte par devis est dit juste
+                  en dessous : les deux nombres de l'autre écran sont là. */ ''}
+            ${/* ⚠ POUR RGD, CE N'EST PLUS LE COMPTE DES SIGNATURES (17/11/2026) :
+                  c'est celui du PLANNING. Un devis signé en novembre dont le
+                  chantier démarre en janvier n'est pas un chantier de novembre.
+                  `t.signees` reste ce qu'il est — des clients qui ont signé — et
+                  continue de nourrir l'entonnoir, le panier et le taux de
+                  transformation, qui parlent bien de signatures. */ ''}
+            ${kpi(cles.length === 1 && cles[0] === 'rgd' ? 'Chantiers' : 'Affaires signées',
+              chantiersDuMois(cles, r, t) ?? '—',
+              evolution(chantiersDuMois(cles, periodePrecedente(r), t), chantiersDuMois(cles, r, t)),
+              serieDe(cle => cles.reduce((s, k) => s + signeesMois(k, cle, deals), 0)),
+              sousChantiers(cles, r, t), false, '', '',
+              detailsPeriode(cles, r, 'chantiers'))}
+            ${kpi('CA facturé HT', eur(t.ca), evolution(avant?.ca, t.ca), serieDe(caDu),
+              obj ? `objectif ${eur(obj)}` : scope.canPilotage ? 'aucun objectif fixé' : 'sur vos affaires', false, '', '',
+              detailsPeriode(cles, r, 'ca'))}
+          ` : ''}
 
-          ${/* ⚠ EN VUE FILTRÉE, LE RÉSEAU PREND LA PLACE DE L'ENTONNOIR
-                (17/11/2026). Élodie : « j'ai l'impression que pipeline &
-                conversion répète vraiment les données que l'on retrouve juste
-                au-dessus ». En vue GROUPE l'entonnoir reste : c'est le cumul
-                des structures, que l'écran RGD ne peut pas donner.
+          ${/* ⚠ CE BLOC NE SORT PLUS QU'EN VUE FILTRÉE (17/11/2026), ET IL A
+                CHANGÉ DEUX FOIS LE MÊME JOUR — ce commentaire a dit l'inverse
+                pendant quelques heures, le relire évite de le recroire :
 
-                ⚠ ET IL REVIENT SI LE RÉSEAU N'A RIEN À DIRE : `carteReseau`
-                rend '' hors RGD, et sans ce repli, filtrer sur BTP ou Courtage
-                laisserait un trou de 7 colonnes dans la rangée. */ ''}
-          ${reseau ? taille(reseau, 'tb-x7') : `
+                1. Le matin, le RÉSEAU D'APPORTEURS a pris la place de
+                   l'entonnoir dans les vues filtrées. Élodie : « j'ai
+                   l'impression que pipeline & conversion répète vraiment les
+                   données que l'on retrouve juste au-dessus ». L'entonnoir
+                   restait alors en vue groupe, comme cumul des structures.
+                2. L'après-midi, il en est parti aussi : « supprime pipeline &
+                   conversion ». La vue groupe n'a donc plus NI entonnoir NI
+                   réseau — « Qui tire le groupe » occupe la rangée.
+
+                ⚠ ET L'ENTONNOIR REVIENT SI LE RÉSEAU N'A RIEN À DIRE :
+                `carteReseau` rend '' hors RGD, et sans ce repli, filtrer sur
+                BTP ou Courtage laisserait un trou de 7 colonnes. C'est pour ce
+                cas-là seulement qu'il est encore écrit ici. */ ''}
+          ${!enFiltre ? '' : reseau ? taille(reseau, 'tb-x7') : `
           <section class="card tb-x7">
             <div class="card-head"><h2>Pipeline &amp; conversion</h2>
               <span class="muted small">${parCohorte ? 'prospects arrivés sur la période, suivis jusqu\'à aujourd\'hui'
@@ -348,7 +378,12 @@ export const homePage = {
             </div>
           </section>`}
 
-          ${carteMeta(cles)}
+          ${/* ⚠ LA PUB META RESTE DANS LES VUES FILTRÉES SEULEMENT. En vue
+                groupe elle n'avait de toute façon qu'un compte : RGD est la
+                seule structure qui achète de la publicité. Elle y occupait 5
+                colonnes à côté de l'entonnoir ; les deux partent ensemble, et
+                la rangée se referme toute seule. */ ''}
+          ${enFiltre ? carteMeta(cles) : ''}
 
           ${/* ⚠ LA RANGÉE DU BAS A ÉTÉ VIDÉE LE 17/11/2026, en trois temps.
                 « Publicité Meta » est montée dans la grande carte chaude ;
@@ -363,33 +398,48 @@ export const homePage = {
                 ses contrôles ; il n'a simplement plus de lecteur. Le jour où
                 l'on voudra ce signal, il est prêt — ne pas le réécrire. */ ''}
 
-          ${/* ⚠ SEULEMENT EN VUE GROUPE (17/11/2026). Élodie : « mets-le que dans
-                "groupe" pour voir tous les chiffres d'affaires de toutes les
-                structures ». Filtré sur une seule structure, la courbe n'avait
-                plus qu'une ligne et le CA du mois était déjà dit deux fois —
-                par l'encadré « CA facturé HT » et par « Objectifs & performance ».
-                En vue groupe elle montre ce qu'aucun autre écran ne montre :
-                les structures côte à côte sur douze mois.
+          ${/* ⚠ LES DEUX CARTES DE CETTE RANGÉE NE SORTENT QU'EN VUE GROUPE, et
+                elles y sont CÔTE À CÔTE depuis le 17/11/2026 (Élodie : « et si
+                on met l'évolution du chiffre d'affaires et les ca des
+                structures sur la même ligne »). Elles racontent la même chose
+                dans les deux dimensions : la courbe donne le temps — douze mois
+                quoi qu'on choisisse — et « Qui tire le groupe » donne le
+                partage, sur la période choisie en haut d'écran.
+
+                ⚠ LA COURBE RESTE RÉSERVÉE AU GROUPE. Filtrée sur une seule
+                structure elle n'avait plus qu'une ligne, et le CA du mois était
+                déjà dit deux fois — par l'encadré « CA facturé HT » et par
+                « Objectifs & performance ».
+
+                ⚠ 7 + 5 = 12, ET LA RANGÉE DOIT SE REFERMER. La courbe prend la
+                largeur parce que `.tb-chart` réclame 360 px avant de se replier,
+                et douze étiquettes de mois en dessous. Si l'une des deux cartes
+                venait à disparaître, l'autre ne rattraperait PAS la largeur
+                perdue : `carteGroupe` se tait quand il n'y a qu'une structure,
+                et c'est justement le cas où la courbe n'a qu'une ligne à tracer
+                — les deux s'en vont ensemble.
 
                 ⚠ `dessineCourbe` SUPPORTE L'ABSENCE : `if (!canvas) return;`.
                 Ne pas retirer cette garde en croyant la carte toujours là.
 
-                ⚠ ET ELLE PREND LES 12 COLONNES, pas 7. La rangee doit se
-                refermer : « Ma journée » est passée de 5 à 6 colonnes quand
-                « À traiter » a été retiré, et 7 + 6 = 13 débordait. */ ''}
+                ⚠ LE PANNEAU DES TOTAUX A QUITTÉ LA COURBE LE MÊME JOUR. Il
+                listait les quatre structures avec leur CA DU DERNIER MOIS. Posé
+                à côté d'une carte qui liste les quatre mêmes structures avec
+                leur CA DE LA PÉRIODE, il offrait deux colonnes de nombres
+                voisines, aux mêmes noms, qui ne disent pas la même chose — on
+                ne peut pas demander à quelqu'un de ne pas les comparer. Le
+                total sur douze mois de chaque structure reste écrit dans la
+                légende de la courbe, et le détail d'un mois s'obtient en
+                survolant le point. */ ''}
           ${state.filtre === 'groupe' ? `
-          <section class="card tb-x12">
+          <section class="card tb-x7">
             <div class="card-head"><h2>Évolution du chiffre d'affaires</h2>
               <span class="muted small">CA HT · 12 derniers mois · toutes les structures</span></div>
             <div class="tb-chartwrap">
               <div class="chart-box tb-chart"><canvas id="tb-canvas"></canvas></div>
-              <div class="tb-totals">
-                <h3>${esc(moisSerie[moisSerie.length - 1].label)}</h3>
-                ${cles.map(k => `<div class="tb-trow"><span class="dot" style="background:${ACTIVITIES[k].color}"></span>
-                  <span class="tb-tnm">${esc(ACTIVITIES[k].label)}</span><b>${eur(caMois(k, moisCle(), deals))}</b></div>`).join('')}
-              </div>
             </div>
           </section>` : ''}
+          ${enFiltre ? '' : taille(carteGroupe(cles, r, deals, state), 'tb-x5')}
 
           ${/* ⚠ « À TRAITER » A ÉTÉ RETIRÉ LE 17/11/2026. Élodie : « il ne sert à
                 rien je trouve » — et elle a raison : « Ma journée » affiche déjà
@@ -1365,6 +1415,68 @@ function carteReseau(cles) {
         e.dormants.length > 1 ? 's' : ''} n'${e.dormants.length > 1 ? 'ont' : 'a'} encore rien amené :
       ${esc(e.dormants.slice(0, 3).join(', '))}${e.dormants.length > 3
         ? ` et ${e.dormants.length - 3} autre${e.dormants.length - 3 > 1 ? 's' : ''}` : ''}.</p>` : ''}
+  </section>`;
+}
+
+/**
+ * « Qui tire le groupe » — la carte chaude de la vue groupe (17/11/2026).
+ *
+ * Élodie : « je veux un encadré de la même couleur que publicité meta mais je
+ * ne sais pas quoi mettre dedans ». Elle a choisi celle-ci parmi quatre.
+ *
+ * ⚠ ELLE REMPLACE QUATRE NOMBRES CUMULÉS PAR LE MÊME, RÉPARTI. C'est tout
+ * l'intérêt : « CA facturé HT : 18 400 € » ne dit pas d'où il vient, et aucun
+ * autre écran ne met les structures côte à côte sur la période choisie. La
+ * courbe du bas les compare sur douze mois, pas sur le trimestre en cours.
+ *
+ * ⚠ RIEN À DIRE À UNE SEULE STRUCTURE : un compte qui ne voit qu'un espace
+ * verrait « 100 % du groupe vient de RGD Renova ». La carte se tait alors, et
+ * la rangée disparaît avec elle — elle est seule sur douze colonnes, donc
+ * aucun trou à reboucher.
+ *
+ * ⚠ `tb-chaud`, PAS UNE NOUVELLE COULEUR : la classe porte l'habillage orange
+ * que la pub Meta occupait, et son commentaire dans app.css dit déjà pourquoi
+ * elle n'est plus nommée d'après son contenu. Rien à ajouter à la feuille de
+ * style, où travaille une autre session.
+ *
+ * ⚠ LES COLONNES S'ADAPTENT AU NOMBRE DE STRUCTURES : `auto-fit` plutôt que
+ * `repeat(4)`, sinon quatre tuiles de 90 px sur un téléphone. L'inline passe
+ * devant la règle mobile de `.tb-flux`, qui force une seule colonne.
+ */
+function carteGroupe(cles, r, deals, state) {
+  if (cles.length < 2) return '';
+  const l = cles
+    .map(k => ({ ...chiffres(k, r, deals), label: ACTIVITIES[k].label }))
+    .sort((a, b) => (b.ca || 0) - (a.ca || 0));
+  const caTotal = l.reduce((s, x) => s + (x.ca || 0), 0);
+  const part = (x) => caTotal ? Math.round((x.ca || 0) / caTotal * 100) : null;
+  const tete = l[0];
+  return `<section class="card tb-chaud">
+    <h2>Qui tire le groupe</h2>
+    <span class="tb-sous">chiffre d'affaires facturé HT, structure par structure · ${esc(periodeAffichee(state, cles))}</span>
+    <div class="tb-gros">${caTotal ? `<span class="tb-nb" data-n="${part(tete)}">${part(tete)}</span> %` : '—'}</div>
+    <span class="tb-sous">${caTotal
+      ? `du chiffre d'affaires du groupe vient de ${esc(tete.label)}`
+      : 'aucune facture sur la période, toutes structures confondues'}</span>
+    ${/* ⚠ 190 px, PAS 150 : la carte n'occupe plus que 5 colonnes depuis
+          qu'elle est à côté de la courbe. À 150, quatre structures se
+          rangeaient 3 + 1, avec une tuile orpheline sur la seconde ligne. */ ''}
+    <div class="tb-flux" style="grid-template-columns:repeat(auto-fit,minmax(190px,1fr))">
+      ${l.map(x => `<div class="tb-fx">
+        <span class="lb">${esc(x.label)}</span>
+        <b class="tb-nb" data-n="${x.ca || 0}" data-eur="1">${eur(x.ca || 0)}</b>
+        ${/* ⚠ « affaires non comptées » N'EST PAS « 0 affaire » : `signees` est
+              nul quand l'outil d'une structure n'envoie qu'un total de chiffre
+              d'affaires. Écrire 0 accuserait une structure qui vend. */ ''}
+        ${/* ⚠ PAS DE PART QUAND IL N'Y A RIEN À PARTAGER : sans facture sur la
+              période, « part du groupe indisponible » s'écrivait quatre fois de
+              suite et donnait à lire une panne là où il n'y a qu'un mois calme. */ ''}
+        <span class="ss">${part(x) === null ? '' : part(x) + '\u00a0% du groupe · '}${
+          x.signees === null ? 'affaires non comptées'
+            : `${x.signees} affaire${x.signees > 1 ? 's' : ''} signée${x.signees > 1 ? 's' : ''}`}</span>
+        <div class="tb-piste"><i data-large="${caTotal ? ((x.ca || 0) / caTotal * 100).toFixed(1) : '0'}"></i></div>
+      </div>`).join('')}
+    </div>
   </section>`;
 }
 
