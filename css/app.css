@@ -9318,10 +9318,15 @@ td .pl-toque { color: #4f46e5; }
 .td-tuile.retard { --t: #E5484D; background: linear-gradient(135deg, rgba(255,90,77,.10), rgba(255,138,92,.14)), var(--td-verre); }
 .td-tuile.jour { --t: #E07A12; background: linear-gradient(135deg, rgba(255,177,92,.14), rgba(255,122,45,.10)), var(--td-verre); }
 .td-tuile.avenir { --t: var(--td-indigo); background: linear-gradient(135deg, rgba(139,123,255,.14), rgba(91,82,240,.08)), var(--td-verre); }
-.td-tuile.fait { --t: var(--td-rose); grid-template-columns: auto auto 1fr; padding-right: 20px; }
+.td-tuile.fait { --t: var(--td-rose); grid-template-columns: auto 1fr; padding-right: 20px; align-items: center; }
+.td-tuile.fait > span:not(.td-rond) { align-self: end; }
+.td-tuile.fait > em { align-self: start; }
+.td-rond { position: relative; grid-row: span 2; width: 54px; height: 54px; display: grid; place-items: center; }
+.td-rond .td-anneau { position: absolute; inset: 0; width: 100%; height: 100%; }
+.td-tuile .td-rond b { grid-row: auto; position: relative; font-size: 22px; }
 .td-tuile.fait::before { background: linear-gradient(180deg, var(--td-indigo), var(--td-rose), var(--td-orange)); }
 .td-tuile.fait b { background: linear-gradient(100deg, var(--td-indigo), var(--td-rose)); -webkit-background-clip: text; background-clip: text; color: transparent; }
-.td-anneau { grid-row: span 2; width: 44px; height: 44px; transform: rotate(-90deg); align-self: center; }
+.td-anneau { transform: rotate(-90deg); }
 .td-anneau circle { fill: none; stroke-width: 5; }
 .td-anneau .fond { stroke: color-mix(in srgb, var(--td-indigo) 14%, transparent); }
 .td-anneau .plein { stroke: url(#td-grad); stroke-linecap: round; stroke-dasharray: 113.1;
@@ -9418,6 +9423,9 @@ td .pl-toque { color: #4f46e5; }
   .td-tuile b { grid-row: auto; font-size: 26px; }
   .td-tuile span { font-size: 11px; line-height: 1.15; margin-top: 3px; }
   .td-tuile em, .td-anneau { display: none; }
+  .td-tuile.fait { grid-template-columns: 1fr; }
+  .td-rond { width: auto; height: auto; grid-row: auto; }
+  .td-tuile .td-rond b { font-size: 26px; }
   .ecran-todo .kb-onglet { border-radius: 999px; }
 }
 @media (prefers-reduced-motion: reduce) {

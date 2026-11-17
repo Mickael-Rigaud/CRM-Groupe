@@ -276,10 +276,13 @@ export const todayPage = {
             ${tuile('jour', nJour, 'aujourd’hui', 'à faire avant ce soir')}
             ${tuile('avenir', nAvenir, 'à venir', 'les jours suivants')}
             <div class="td-tuile fait">
-              <svg class="td-anneau" viewBox="0 0 44 44" aria-hidden="true"><defs><linearGradient id="td-grad" x1="0" y1="0" x2="1" y2="1">
+              ${'' /* ⚠ LE CHIFFRE EST DANS L'ANNEAU (17/11/2026, Élodie : « il y a toujours un
+                 beug ici ») : posés côte à côte, l'anneau vide et le « 0 » se lisaient
+                 comme deux ronds, « OO ». */}
+              <span class="td-rond"><svg class="td-anneau" viewBox="0 0 44 44" aria-hidden="true"><defs><linearGradient id="td-grad" x1="0" y1="0" x2="1" y2="1">
                 <stop offset="0" stop-color="#5B52F0"/><stop offset=".6" stop-color="#FF4D8D"/><stop offset="1" stop-color="#FF7A2D"/></linearGradient></defs>
                 <circle cx="22" cy="22" r="18" class="fond"/><circle cx="22" cy="22" r="18" class="plein" style="--p:${part}"/></svg>
-              <b data-compte="${nFait}">${nFait}</b><span>fait${nFait > 1 ? 'es' : 'e'} aujourd’hui</span><em>${sousFait}</em>
+                <b data-compte="${nFait}">${nFait}</b></span><span>fait${nFait > 1 ? 'es' : 'e'} aujourd’hui</span><em>${sousFait}</em>
             </div>
           </div>
         </header>
