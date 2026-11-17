@@ -9542,3 +9542,110 @@ td .pl-toque { color: #4f46e5; }
 @media (prefers-reduced-motion: reduce) {
   .taf-modal, .taf-modal .taf > *, .taf-modal .modal-head::after, .taf-modal .taf-chip.on { animation: none; }
 }
+
+/* ==========================================================================
+   Messagerie — le langage du tableau de bord (17/11/2026, Élodie : « moderniser
+   et dynamiser la partie messagerie avec les mêmes couleurs »). Mes messages en
+   dégradé indigo → rose → orange, les autres en cartes blanches, liste et
+   saisie arrondies, panneau flottant à en-tête dégradé.
+   ⚠ SOUS `:is(.msg-app, .msg-panneau)` : l'écran Messagerie et le panneau de la
+   pastille partagent le même fil, et rien d'autre ne change.
+   -------------------------------------------------------------------------- */
+:is(.msg-app, .msg-panneau) { --mg-indigo: #5B52F0; --mg-rose: #FF4D8D; --mg-orange: #FF7A2D;
+  --mg-degrade: linear-gradient(120deg, #5B52F0, #FF4D8D 72%, #FF7A2D); }
+
+/* ---- la liste des conversations ---- */
+.msg-app .msg-cote { background:
+  radial-gradient(120% 60% at 0% 0%, rgba(139,123,255,.16), transparent 60%),
+  radial-gradient(90% 50% at 100% 100%, rgba(255,177,92,.14), transparent 60%), var(--card-2); }
+:is(.msg-app, .msg-panneau) .msg-cote-tete { border-bottom: 0; }
+:is(.msg-app, .msg-panneau) .msg-cote-tete input { border-radius: 999px; padding: 10px 16px; border-color: color-mix(in srgb, var(--line-strong) 70%, transparent);
+  background: color-mix(in srgb, var(--card) 85%, transparent); transition: border-color .2s, box-shadow .2s; }
+:is(.msg-app, .msg-panneau) .msg-cote-tete input:focus { border-color: color-mix(in srgb, var(--mg-indigo) 55%, var(--line));
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--mg-indigo) 14%, transparent); }
+:is(.msg-app, .msg-panneau) .msg-item { border-radius: 16px; padding: 10px 11px;
+  transition: background .2s ease, transform .25s cubic-bezier(.2,.8,.2,1), box-shadow .25s ease; }
+:is(.msg-app, .msg-panneau) .msg-item:hover { background: color-mix(in srgb, var(--card) 80%, transparent); transform: translateX(3px); }
+:is(.msg-app, .msg-panneau) .msg-item.on { background: var(--card); transform: none;
+  box-shadow: 0 14px 30px -20px rgba(91,82,240,.55), inset 0 0 0 1px color-mix(in srgb, var(--mg-indigo) 14%, transparent); }
+:is(.msg-app, .msg-panneau) .msg-item.on::before, :is(.msg-app, .msg-panneau) .msg-item.canal.on::before {
+  content: ""; position: absolute; left: 0; top: 10px; bottom: 10px; width: 4px; border-radius: 0 4px 4px 0; background: var(--mg-degrade); }
+:is(.msg-app, .msg-panneau) .msg-item .msg-cnt, .msg-app .msg-sujet .msg-cnt { background: var(--mg-degrade);
+  box-shadow: 0 6px 12px -6px rgba(255,77,141,.8); animation: mgPouls 2.4s ease-in-out infinite; }
+@keyframes mgPouls { 0%,100% { transform: scale(1) } 50% { transform: scale(1.12) } }
+:is(.msg-app, .msg-panneau) .msg-ecu { border-radius: 12px; }
+:is(.msg-app, .msg-panneau) .avatar { box-shadow: 0 0 0 2px var(--card); }
+
+/* ---- l'en-tête de la conversation et les sujets ---- */
+.msg-app .msg-tete { position: relative; border-bottom: 0; background: color-mix(in srgb, var(--card) 92%, transparent); }
+.msg-app .msg-tete::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: var(--mg-degrade); opacity: .85; }
+.msg-app .msg-tete h2 { font-family: var(--font-display); font-weight: 800; letter-spacing: -.02em; }
+:is(.msg-app, .msg-panneau) .msg-sujet, :is(.msg-app, .msg-panneau) .msg-sujet-ajout { border-radius: 999px; padding: 6px 13px;
+  transition: transform .25s cubic-bezier(.2,.8,.2,1), box-shadow .2s ease; }
+:is(.msg-app, .msg-panneau) .msg-sujet:hover { transform: translateY(-2px); }
+:is(.msg-app, .msg-panneau) .msg-sujet.on { background: var(--mg-degrade); border-color: transparent; box-shadow: 0 10px 20px -12px rgba(255,77,141,.85); }
+
+/* ---- le fil ---- */
+.msg-app .msg-fil { background:
+  radial-gradient(60% 40% at 100% 0%, rgba(255,77,141,.06), transparent 70%),
+  radial-gradient(60% 45% at 0% 100%, rgba(91,82,240,.07), transparent 70%); }
+:is(.msg-app, .msg-panneau) .msg-jour::before, :is(.msg-app, .msg-panneau) .msg-jour::after { background: linear-gradient(90deg, transparent, var(--line)); }
+:is(.msg-app, .msg-panneau) .msg-jour::after { background: linear-gradient(90deg, var(--line), transparent); }
+:is(.msg-app, .msg-panneau) .msg-jour { letter-spacing: .04em; }
+
+/* Les messages des autres : des cartes blanches, coin du bas arrondi moins. */
+:is(.msg-app, .msg-panneau) .msg-bulle { background: var(--card); border-radius: 18px 18px 18px 6px; padding: 9px 14px;
+  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent); box-shadow: 0 8px 22px -18px rgba(21,22,42,.6); }
+/* Les miens : le dégradé, texte blanc. */
+:is(.msg-app, .msg-panneau) .msg-ligne.moi .msg-bulle { background: var(--mg-degrade); color: #fff; border: 0; padding: 10px 15px;
+  border-radius: 18px 18px 6px 18px; box-shadow: 0 12px 26px -16px rgba(255,77,141,.75); }
+:is(.msg-app, .msg-panneau) .msg-ligne.moi :is(.msg-qui b, .msg-corps) { color: #fff; }
+:is(.msg-app, .msg-panneau) .msg-ligne.moi :is(.msg-qui time, .msg-qui em, .msg-modifie) { color: rgba(255,255,255,.78); }
+:is(.msg-app, .msg-panneau) .msg-ligne.moi .msg-corps a { color: #fff; text-decoration: underline; }
+:is(.msg-app, .msg-panneau) .msg-ligne.moi .msg-actions .icon-btn { color: #fff; }
+:is(.msg-app, .msg-panneau) .msg-ligne.moi .msg-actions .icon-btn:hover { background: rgba(255,255,255,.2); }
+:is(.msg-app, .msg-panneau) .msg-ligne.moi .msg-edition { background: #fff; color: var(--text); border-color: #fff; }
+:is(.msg-app, .msg-panneau) .msg-ligne.moi .msg-renvoi { color: var(--text); }
+/* L'arrivée d'un message : il glisse depuis son côté. */
+:is(.msg-app, .msg-panneau) .msg-ligne { animation: mgEntre .38s cubic-bezier(.2,.8,.2,1) both; }
+:is(.msg-app, .msg-panneau) .msg-ligne.moi { animation-name: mgEntreMoi; }
+@keyframes mgEntre { from { opacity: 0; transform: translateX(-14px) scale(.98) } to { opacity: 1; transform: none } }
+@keyframes mgEntreMoi { from { opacity: 0; transform: translateX(14px) scale(.98) } to { opacity: 1; transform: none } }
+:is(.msg-app, .msg-panneau) .msg-photo, :is(.msg-app, .msg-panneau) .msg-fichier { border-radius: 14px; }
+
+/* ---- la saisie ---- */
+:is(.msg-app, .msg-panneau) .msg-ecrire { border-top: 0; background: color-mix(in srgb, var(--card) 92%, transparent);
+  box-shadow: 0 -12px 24px -22px rgba(21,22,42,.5); }
+:is(.msg-app, .msg-panneau) .msg-saisie { align-items: center; }
+:is(.msg-app, .msg-panneau) .msg-saisie textarea { border-radius: 22px; padding: 11px 16px; background: var(--card-2);
+  border-color: color-mix(in srgb, var(--line-strong) 70%, transparent); transition: border-color .2s, box-shadow .2s, background .2s; }
+:is(.msg-app, .msg-panneau) .msg-saisie textarea:focus { background: var(--card); border-color: color-mix(in srgb, var(--mg-indigo) 55%, var(--line));
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--mg-indigo) 14%, transparent); }
+:is(.msg-app, .msg-panneau) .msg-trombone { border-radius: 50%; width: 42px; height: 42px;
+  transition: transform .25s cubic-bezier(.2,.8,.2,1), color .2s, border-color .2s, background .2s; }
+:is(.msg-app, .msg-panneau) .msg-trombone:hover { transform: rotate(-20deg); color: var(--mg-rose); border-color: var(--mg-rose);
+  background: color-mix(in srgb, var(--mg-rose) 8%, var(--card)); }
+:is(.msg-app, .msg-panneau) .msg-envoi { background: var(--mg-degrade); border: 0; color: #fff; border-radius: 999px; min-height: 42px;
+  box-shadow: 0 12px 24px -12px rgba(255,77,141,.85); transition: transform .2s cubic-bezier(.2,.8,.2,1), box-shadow .2s ease; }
+:is(.msg-app, .msg-panneau) .msg-envoi:hover { transform: translateY(-2px); box-shadow: 0 16px 28px -12px rgba(255,77,141,.9); }
+:is(.msg-app, .msg-panneau) .msg-envoi:active { transform: scale(.94); }
+:is(.msg-app, .msg-panneau) .msg-envoi svg { transition: transform .25s cubic-bezier(.2,.8,.2,1); }
+:is(.msg-app, .msg-panneau) .msg-envoi:hover svg { transform: translate(2px, -2px) rotate(-8deg); }
+:is(.msg-app, .msg-panneau) .msg-apropos { border-radius: 999px; background: linear-gradient(120deg, rgba(91,82,240,.12), rgba(255,77,141,.12)); }
+
+/* ---- le panneau de la pastille ---- */
+.msg-panneau { border: 0; border-radius: 24px; box-shadow: 0 40px 80px -36px rgba(21,22,42,.6), 0 0 0 1px rgba(255,255,255,.6);
+  animation: mgOuvre .32s cubic-bezier(.2,.8,.2,1) both; }
+@keyframes mgOuvre { from { opacity: 0; transform: translateY(18px) scale(.95) } to { opacity: 1; transform: none } }
+.msg-panneau .msg-panneau-tete { border-bottom: 0; background: var(--mg-degrade); color: #fff; padding: 12px 12px 12px 16px; }
+.msg-panneau .msg-panneau-titre b { color: #fff; }
+.msg-panneau .msg-panneau-titre small { color: rgba(255,255,255,.8); }
+.msg-panneau .msg-panneau-tete .icon-btn { color: #fff; background: rgba(255,255,255,.16); border-radius: 50%; }
+.msg-panneau .msg-panneau-tete .icon-btn:hover { background: rgba(255,255,255,.3); color: #fff; }
+.msg-panneau .msg-panneau-titre .msg-ecu { box-shadow: 0 0 0 2px rgba(255,255,255,.6); }
+.msg-panneau .msg-cote-tete, .msg-panneau .msg-liste { background:
+  radial-gradient(120% 60% at 0% 0%, rgba(139,123,255,.12), transparent 60%), var(--card-2); }
+
+@media (prefers-reduced-motion: reduce) {
+  :is(.msg-app, .msg-panneau) .msg-ligne, .msg-panneau, :is(.msg-app, .msg-panneau) .msg-cnt { animation: none; }
+}
