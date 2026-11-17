@@ -290,12 +290,25 @@ const devisEnvoye = (v) => ['envoye', 'vu'].includes(v.statut);
 // l'autre fait remonter des visites que l'écran ne reconnaît pas, ou l'inverse
 // — et dans les deux cas le défaut est SILENCIEUX. Les changer ensemble.
 const VISITE = /^\s*visite\s+technique/i;
+// ⚠ LE SET PORTE AUSSI L'HEURE DU DERNIER RELEVÉ (`releveLe`), et c'est ce qui
+// empêche de lire « absent de l'agenda » là où il faut lire « pas encore
+// relevé ». Voir `visiteEnCours`. On le pose SUR le Set plutôt que de rendre
+// une paire : six écrans passent déjà ce Set, et changer leur appel pour un
+// renseignement dont un seul se sert coûterait plus que ça ne rapporte.
+//
+// ⚠ ON PREND LE MAXIMUM SUR TOUT L'AGENDA RGD, pas sur les seules visites : un
+// relevé qui n'a rien rapporté n'écrit aucune visite, mais il a bien eu lieu.
 export function joursDeVisite(agenda) {
   const jours = new Set();
+  let releveLe = '';
   for (const e of agenda || []) {
-    if (e.activity !== 'rgd' || !e.day) continue;
+    if (e.activity !== 'rgd') continue;
+    const q = String(e.synced_at || '');
+    if (q > releveLe) releveLe = q;
+    if (!e.day) continue;
     if (VISITE.test(String(e.title || ''))) jours.add(String(e.day).slice(0, 10));
   }
+  jours.releveLe = releveLe;
   return jours;
 }
 
@@ -542,12 +555,25 @@ const decalerDeJours = (n) =>
 // Une visite passée reste comptée tant que l'agenda la porte — Google garde les
 // événements passés, donc environ une semaine. C'est la fenêtre pendant
 // laquelle on a encore le rendez-vous en tête et un devis à envoyer.
+//
+// ⚠ ET UN RENDEZ-VOUS PLUS RÉCENT QUE LE DERNIER RELEVÉ N'EST PAS ABSENT : il
+// n'a pas encore eu l'occasion d'arriver (17/11/2026). Poser une visite depuis
+// le CRM écrit l'événement chez Google et le chantier dans Supabase, mais c'est
+// le relevé qui remplit `agenda_events` — mesuré sur le rendez-vous de Thomas
+// Mogne, 11 h 51 pour la pose, 11 h 55 pour le relevé. Pendant ces quatre
+// minutes, l'absence se lisait « annulé », et le dossier ne montait pas dans
+// l'onglet « RDV » : exactement ce qu'on vient d'essayer de faire, et qui
+// semble n'avoir servi à rien. La règle de l'agenda reprend la main au relevé
+// suivant, donc l'erreur possible — un rendez-vous supprimé dans Google dans
+// l'intervalle — ne dure jamais plus que lui.
 function visiteEnCours(c, joursVisite) {
   const jour = String(c.date_debut_prevue || c.work_start_at || '').slice(0, 10);
   if (!jour) return false;
   if (joursVisite) {
     if (joursVisite.has(jour)) return true;
-    if (jour >= decalerDeJours(-FENETRE_RELEVEE.avant)
+    const avantLeReleve = String(c.created_at || '') <= String(joursVisite.releveLe || '');
+    if (avantLeReleve
+      && jour >= decalerDeJours(-FENETRE_RELEVEE.avant)
       && jour <= decalerDeJours(FENETRE_RELEVEE.apres)) return false;
   }
   return jour >= decalerDeJours(0);
@@ -780,16 +806,43 @@ export function plusAvancee(saisie, faits) {
 //
 // ⚠ LES DEVIS SONT LUS ICI PAR DÉFAUT, pas exigés de l'appelant : la to do
 // list et la fiche ouvrent une demande sans avoir la table sous la main, et un
-// écran qui oublierait de la passer rangerait la même demande ailleurs.
-export function etapeDeDemande(d, devis = scope.rgd('rgd_devis')) {
+// écran qui oublierait de la passer rangerait la même demande ailleurs. Les
+// chantiers et l'agenda suivent la même règle, pour la même raison.
+//
+// ⚠ ET UNE VISITE TECHNIQUE COMPTE ICI AUSSI (17/11/2026, Élodie : « on a fait
+// nouvelle demande et on a calé un rendez-vous mais la fiche projet ne se
+// trouve pas dans rdv […] ça doit se mettre automatiquement »).
+//
+// Une demande saisie dans le CRM N'A PAS de ligne `rgd_clients` : elle vit dans
+// `rgd_demandes` seule. Poser un rendez-vous depuis sa fiche écrit l'événement
+// Google et un chantier « visite technique » rattaché au même CONTACT (voir
+// `poserRendezVous` dans `rgd-projet.js`) — mais rien n'écrit son statut, et
+// cette fonction ne lisait que les devis. Le dossier restait donc à « Nouvelle
+// demande » avec un rendez-vous dans trois jours, alors que la MÊME affaire
+// portée par une fiche `rgd_clients` passait bien à « RDV » : `etapeParLesFaits`
+// y lit la visite depuis le 23/09. Deux chemins, deux rangements — exactement
+// ce que l'en-tête de ce fichier interdit.
+//
+// ⚠ LA VISITE VIENT APRÈS LES DEVIS, comme dans `etapeParLesFaits` : quelqu'un
+// chez qui on a déjà chiffré n'est plus « en rendez-vous », même si une visite
+// reste au calendrier. Et comme là-bas, c'est l'AGENDA qui dit si le
+// rendez-vous tient encore (`visiteEnCours`) — un rendez-vous annulé dans
+// Google fait ressortir la demande de l'onglet, sans geste.
+//
+// ⚠ LES CHANTIERS VONT AUSSI À `remiseAZeroChoisie`, et ce n'est pas un détail :
+// sans eux, une remise à « nouveau prospect » faite hier l'emporterait sur un
+// rendez-vous pris aujourd'hui. C'est la seconde moitié de la règle du
+// 12/11/2026 — « un fait postérieur reprend la main ».
+export function etapeDeDemande(d, devis = scope.rgd('rgd_devis'),
+  chantiers = scope.rgd('rgd_chantiers'),
+  joursVisite = joursDeVisite(scope.rgd('agenda_events'))) {
   if (d.statut === 'indesirable') return 'indesirable';
   if (d.statut === 'perdu') return 'archives';
+  const siennes = (chantiers || []).filter(c => memeQue(c, d) && estVisiteTechnique(c));
   // ⚠ MÊME RÈGLE QUE POUR UNE FICHE (12/11/2026) : une remise à « nouveau
   // prospect » choisie l'emporte, avant le planning comme avant les devis.
-  // Une demande n'a pas de chantiers à elle — le planning s'y rattache par
-  // `demande_id`, pas `rgd_chantiers` — d'où la liste vide.
   if (statutSuiviLu(d.statut) === 'nouveau_prospect'
-      && remiseAZeroChoisie(d, [], devis)) return 'demande';
+      && remiseAZeroChoisie(d, siennes, devis)) return 'demande';
   // Une demande aussi peut être planifiée (`demande_id`) : même règle, sans
   // quoi la même affaire se rangerait ailleurs selon qu'elle a une fiche ou non.
   const duPlanning = etapeDuPlanning(d);
@@ -797,7 +850,8 @@ export function etapeDeDemande(d, devis = scope.rgd('rgd_devis')) {
   const siens = (devis || []).filter(v => memeQue(v, d));
   const faits = siens.some(v => v.statut === 'signe') ? 'devis_accepte'
     : siens.some(devisEnvoye) ? 'devis_envoye'
-    : siens.some(devisOuvert) ? 'devis_encours' : null;
+    : siens.some(devisOuvert) ? 'devis_encours'
+    : siennes.some(c => visiteEnCours(c, joursVisite)) ? 'rdv' : null;
   return plusAvancee(ETAPE_DU_STATUT[d.statut] || 'demande', faits);
 }
 
@@ -878,7 +932,9 @@ export function etapesRgd() {
     montants[e] += siens.reduce((t, v) => t + (Number(v.montant_ht) || 0), 0);
   };
 
-  for (const d of demandes) ranger(d, etapeDeDemande(d));
+  // ⚠ LES QUATRE TABLES SONT PASSÉES, PAS RELUES PAR LIGNE : `etapeDeDemande`
+  // sait les lire seule, et le ferait deux cents fois pour le même résultat.
+  for (const d of demandes) ranger(d, etapeDeDemande(d, devis, chantiers, joursVisite));
   for (const f of fiches) {
     const e = etapeDeFiche(f, chantiers, devis, joursVisite);
     if (e === 'demande' && !estProspectParSource(f)) continue;

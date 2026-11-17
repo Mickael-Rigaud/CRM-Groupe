@@ -249,7 +249,7 @@ function dossiersRgd() {
     cartes.push({ id: f.id, genre: 'client', etape: 'devis_encours', nom: nomDeFiche(f), libelle: 'Devis en cours', couleur });
   }
   for (const d of scope.rgd('rgd_demandes')) {
-    if (etapeDeDemande(d) !== 'devis_encours') continue;
+    if (etapeDeDemande(d, devis, chantiers, jours) !== 'devis_encours') continue;
     cartes.push({ id: d.id, genre: 'demande', etape: 'devis_encours', nom: nomDeFiche(d), libelle: 'Devis en cours', couleur });
   }
   return cartes;

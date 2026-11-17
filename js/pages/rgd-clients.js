@@ -623,19 +623,38 @@ const provenanceDemande = (d) => d.apporteur_id ? 'partenaire'
  * la main. Une seconde copie aurait fini par décrire la demande autrement que
  * la liste qui la range.
  */
-export function demandeDe(d) {
+// ⚠ LES TABLES SE PASSENT, ELLES NE SE DEVINENT PAS. `etapeDeDemande` sait les
+// lire seule — c'est ce qui permet d'ouvrir une demande depuis la to do list —
+// mais une liste de deux cents lignes les relirait deux cents fois, l'agenda
+// compris. Le tableau les a déjà sous la main : il les donne.
+//
+// ⚠ ET ON NE PASSE PLUS `demandeDe` À `.map` TEL QUEL : `map` lui donnerait
+// l'INDEX comme second argument, c'est-à-dire un nombre à la place des devis.
+export function demandeDe(d, tables = {}) {
+  const { devis, chantiers, joursVisite } = tables;
+  const etape = devis ? etapeDeDemande(d, devis, chantiers, joursVisite) : etapeDeDemande(d);
   return {
     genre: 'demande', ligne: d, cible: 'demande',
     provenance: provenanceDemande(d),
     provenanceLabel: ditProvenance(provenanceDemande(d)).label,
-    etape: etapeDeDemande(d),
+    etape,
     statutBrut: d.statut || 'nouveau_prospect',
     recu: d.date_demande || '', nom: `${d.prenom || ''} ${d.nom || ''}`.trim(), type: null,
     email: d.email, tel: d.telephone,
     ville: d.ville, adresse: [d.adresse, [d.code_postal, d.ville].filter(Boolean).join(' ')]
       .filter(Boolean).join(' '),
     projet: travauxDe(d) || d.projet_description || d.type_projet, budget: d.budget,
-    statut: statutSuiviLu(d.statut) || 'nouveau_prospect',
+    // ⚠ LE STATUT AFFICHÉ EST CELUI DE L'ÉTAPE, la même règle que `ficheDe` —
+    // et elle manquait ici (17/11/2026). Une demande dont le rendez-vous est
+    // pris arrive dans l'onglet « RDV » par les faits ; son menu de statut
+    // aurait continué d'afficher « Nouveau prospect », c'est-à-dire l'onglet
+    // d'où elle vient de sortir.
+    //
+    // ⚠ « NOUVELLE DEMANDE » N'A PAS DE STATUT UNIQUE — cinq y mènent —, donc
+    // `STATUT_DE_L_ETAPE` n'en donne aucun et la valeur brute reprend la main.
+    // C'est ce qui garde les trois relances visibles sur l'onglet où elles
+    // servent, et le filtre de statut avec elles.
+    statut: STATUT_DE_L_ETAPE[etape] || statutSuiviLu(d.statut) || 'nouveau_prospect',
   };
 }
 
@@ -854,7 +873,7 @@ export const rgdClientsPage = {
       // côté semblait porter sur l'achat de la maison. Les travaux d'abord,
       // la description ensuite, le bien en dernier recours.
       const prospects = [
-        ...demandes.map(demandeDe),
+        ...demandes.map(d => demandeDe(d, { devis, chantiers, joursVisite })),
         ...fiches
           .filter(f => {
             const e = etapeDe(f);
@@ -1032,8 +1051,12 @@ export const rgdClientsPage = {
       // `visiteDeLaFiche` parcourt tous les chantiers, et un `sort` l'appelle
       // n·log(n) fois là où une table n'en demande que n.
       if (state.vue === 'rdv') {
+        // ⚠ LES DEMANDES AUSSI (17/11/2026) : elles entrent dans cet onglet par
+        // leur visite technique, exactement comme une fiche, et la colonne de
+        // droite affiche déjà leur date (`celluleRdv`). Les laisser sans jour
+        // les renvoyait toutes en bas de la liste — une date à l'écran, aucune
+        // dans le tri, c'est-à-dire un tableau qui contredit sa propre colonne.
         const jourDeVisite = (x) => {
-          if (x.cible === 'demande') return '';
           const vis = visiteDeLaFiche(x.ligne, chantiers, joursVisite);
           return vis ? String(vis.date_debut_prevue || vis.work_start_at || '').slice(0, 10) : '';
         };

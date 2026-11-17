@@ -118,7 +118,7 @@ function rattachements(actuel = '') {
     ...db.t('rgd_clients').map(f => ({ cle: `fiche:${f.id}`, nom: nomFiche(f), adresse: adresseFiche(f),
       projet: projetFiche(f), etape: etapeDeFiche(f, chantiers, devis, jours) })),
     ...db.t('rgd_demandes').map(d => ({ cle: `demande:${d.id}`, nom: nomDemande(d), adresse: adresseDemande(d),
-      projet: projetDemande(d), etape: etapeDeDemande(d, devis) })),
+      projet: projetDemande(d), etape: etapeDeDemande(d, devis, chantiers, jours) })),
   ];
   const parNom = (a, b) => a.nom.localeCompare(b.nom, 'fr');
   const groupes = ETAPES_PROPOSEES.map(([k, label]) => ({ label, dossiers: tous.filter(x => x.etape === k).sort(parNom) }));
