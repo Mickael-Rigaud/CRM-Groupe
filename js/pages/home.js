@@ -16,7 +16,7 @@ import {
   // lecteur, la tuile « Ce qui part tout seul », a été retiré. La fonction
   // reste dans chiffres.js avec ses contrôles — la retirer d'ici évite de
   // croire que le tableau de bord surveille encore les envois.
-  cheminArgent, publicite, argentConnu, cumulMensuel, detailsPeriode,
+  cheminArgent, publicite, argentConnu, cumulMensuel, detailsPeriode, reseauApporteurs,
 } from '../data/chiffres.js';
 // `finDe` tient compte de la fin déclarée à la main et des jours ouvrés d'une
 // formation : refaire ce calcul ici donnerait une date différente du planning.
@@ -137,6 +137,10 @@ export const homePage = {
       // Les deux taux se lisent sur l'entonnoir, c'est-à-dire sur les affaires nées
       // pendant la période. Les calculer sur des populations différentes (RDV du mois
       // ÷ leads du mois) donnerait des taux que l'entonnoir juste en dessous contredit.
+      // ⚠ CALCULÉ ICI, PAS DANS LE GABARIT : le gabarit en a besoin deux
+      // fois (choisir, puis afficher), et l'appeler deux fois relirait les
+      // deux tables pour rien.
+      const reseau = state.filtre === 'groupe' ? '' : carteReseau(cles);
       const ent = entonnoir(cles, r, deals);
       const jalon = (champ) => ent.find(x => x.champ === champ)?.n ?? null;
       const recus = jalon('leads'), avecRdv = jalon('rdv'), conclus = jalon('signed');
@@ -234,6 +238,16 @@ export const homePage = {
             obj ? `objectif ${eur(obj)}` : scope.canPilotage ? 'aucun objectif fixé' : 'sur vos affaires', false, '', '',
             detailsPeriode(cles, r, 'ca'))}
 
+          ${/* ⚠ EN VUE FILTRÉE, LE RÉSEAU PREND LA PLACE DE L'ENTONNOIR
+                (17/11/2026). Élodie : « j'ai l'impression que pipeline &
+                conversion répète vraiment les données que l'on retrouve juste
+                au-dessus ». En vue GROUPE l'entonnoir reste : c'est le cumul
+                des structures, que l'écran RGD ne peut pas donner.
+
+                ⚠ ET IL REVIENT SI LE RÉSEAU N'A RIEN À DIRE : `carteReseau`
+                rend '' hors RGD, et sans ce repli, filtrer sur BTP ou Courtage
+                laisserait un trou de 7 colonnes dans la rangée. */ ''}
+          ${reseau ? taille(reseau, 'tb-x7') : `
           <section class="card tb-x7">
             <div class="card-head"><h2>Pipeline &amp; conversion</h2>
               <span class="muted small">${parCohorte ? 'prospects arrivés sur la période, suivis jusqu\'à aujourd\'hui'
@@ -293,7 +307,7 @@ export const homePage = {
                 <em>${tauxVente === null ? (avecRdv === 0 ? 'aucun RDV sur la période' : 'étape non comptée')
                   : `${conclus} signé${conclus > 1 ? 's' : ''} sur ${avecRdv} RDV`}</em></div>
             </div>
-          </section>
+          </section>`}
 
           ${carteMeta(cles)}
 
@@ -1154,6 +1168,67 @@ function degradeEtape(i, n, fin) {
  * dépensé, les leads reçus, et le coût par lead — ce dernier au CENTIME,
  * parce que c'est celui qu'elle compare à ce que Meta lui annonce.
  */
+/**
+ * Ce que le réseau d'apporteurs rapporte (17/11/2026).
+ *
+ * Élodie, de l'entonnoir en vue RGD : « j'ai l'impression que ça répète
+ * vraiment les données que l'on retrouve juste au-dessus » — et c'était vrai :
+ * ses deux premières étapes sont les encadrés « Demandes » et
+ * « Rendez-vous », et « devis signés » est déjà écrit sous « Chantiers ».
+ * Cette carte prend sa place, et ne répète rien : le tableau de bord ne
+ * parlait nulle part des apporteurs.
+ *
+ * ⚠ ELLE REND '' SI LE RÉSEAU N'A RIEN APPORTÉ, et le gabarit remet alors
+ * l'entonnoir. Sans ça, filtrer sur BTP ou Courtage ferait disparaître les
+ * deux cartes et laisserait un trou de 7 colonnes.
+ *
+ * ⚠ LE MONTANT ANNONCÉ EST CELUI DES DEVIS GAGNÉS, pas du CA encaissé :
+ * `rgd_apports` porte le montant du devis au moment de l'apport. Dire
+ * « de chiffre d'affaires » promettrait un rapprochement avec la facturation
+ * que ces lignes ne permettent pas.
+ */
+function carteReseau(cles) {
+  const e = reseauApporteurs(cles);
+  if (!e) return '';
+  const date = (d) => d ? new Date(d + 'T00:00:00').toLocaleDateString('fr-FR',
+    { day: 'numeric', month: 'short', year: '2-digit' }) : '';
+  const decides = e.gagnes + e.perdus;
+  return `<section class="card">
+    <div class="card-head"><h2>Ce que le réseau rapporte</h2>
+      <span class="muted small">apporteurs d'affaires · depuis le début</span></div>
+    <div class="tb-gros"><span class="tb-nb" data-n="${e.ca}" data-eur="1">${eur(e.ca)}</span></div>
+    <span class="tb-sous">de devis gagnés grâce au réseau${e.commissions
+      ? ` · ${eur(e.commissions)} de commissions` : ''}</span>
+    <div class="tb-duo">
+      <div class="tb-du"><b>${e.gagnes}<small style="font-size:15px;opacity:.5"> / ${decides}</small></b>
+        <span>affaires gagnées</span></div>
+      <div class="tb-du"><b>${e.taux === null ? '\u2014' : Math.round(e.taux * 100) + '\u00a0%'}</b>
+        <span>des affaires tranchées</span></div>
+    </div>
+    ${/* ⚠ LE TAUX SE LIT SUR LES AFFAIRES TRANCHÉES, et le libellé le dit.
+          Une affaire encore ouverte n'est pas une affaire perdue ; la compter
+          au dénominateur ferait baisser le taux à chaque nouvel apport. */ ''}
+    ${e.enCours ? `<p class="muted small" style="margin:8px 0 0">${e.enCours} affaire${
+      e.enCours > 1 ? 's' : ''} encore sans issue, hors du taux.</p>` : ''}
+    <div class="tb-liste">
+      ${e.parApporteur.slice(0, 4).map(a => `<div class="tb-lg click" data-go="#/rgd/apporteurs">
+        <i style="background:var(--accent)"></i>
+        <span class="tx">${esc(a.nom)}<em>${a.apports} apport${a.apports > 1 ? 's' : ''} · ${
+          a.gagnes} gagné${a.gagnes > 1 ? 's' : ''}${a.dernier ? ` · dernier le ${date(a.dernier)}` : ''}</em></span>
+        <b>${eur(a.ca)}</b></div>`).join('')}
+    </div>
+    ${/* ⚠ LA SEULE LIGNE SUR LAQUELLE ON PEUT AGIR, et le seul endroit où le
+          mot « apporteur » compte au sens strict : `type_partenaire`. Compter
+          les fournisseurs ici annoncerait quinze personnes à réactiver qui
+          n'ont jamais eu à apporter quoi que ce soit. */ ''}
+    ${e.dormants.length ? `<p class="muted small" style="margin:10px 0 0">
+      ${e.dormants.length} apporteur${e.dormants.length > 1 ? 's' : ''} déclaré${
+        e.dormants.length > 1 ? 's' : ''} n'${e.dormants.length > 1 ? 'ont' : 'a'} encore rien amené :
+      ${esc(e.dormants.slice(0, 3).join(', '))}${e.dormants.length > 3
+        ? ` et ${e.dormants.length - 3} autre${e.dormants.length - 3 > 1 ? 's' : ''}` : ''}.</p>` : ''}
+  </section>`;
+}
+
 function carteMeta(cles) {
   const p = publicite(cles);
   if (!p) return '';

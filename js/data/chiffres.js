@@ -742,6 +742,81 @@ export function chantiersResume(cles, r) {
 }
 
 /**
+ * Ce que le réseau d'apporteurs rapporte.
+ *
+ * ⚠ UN PARTENAIRE N'EST PAS UN APPORTEUR. `rgd_apporteurs` porte les deux :
+ * `type_partenaire` vaut `apporteur` ou `fournisseur`. Les compter ensemble
+ * annonce 18 apporteurs quand il y en a 5 — je l'ai fait le 17/11/2026, et
+ * « une quinzaine à réactiver » désignait treize fournisseurs qui n'ont
+ * jamais eu à apporter quoi que ce soit. Le compte des apporteurs ne retient
+ * donc que ce type ; les apports, eux, sont pris tels qu'ils sont, parce qu'un
+ * fournisseur qui amène une affaire reste une affaire amenée.
+ *
+ * ⚠ LE TAUX SE CALCULE SUR LES AFFAIRES DÉCIDÉES, pas sur le total : un
+ * apport sans issue n'est pas un échec, il n'est pas encore tranché. Le
+ * diviser par le total ferait baisser le taux à chaque nouvelle affaire
+ * amenée, c'est-à-dire à chaque bonne nouvelle.
+ *
+ * ⚠ `db.t`, PAS `scope.rgd`, POUR LES APPORTS. `rgd_apports` est filtrée par
+ * `scope` à travers son apporteur (règle `apporteur` dans `scope.js`) : relier
+ * les deux tables par `scope.rgd` rendrait zéro sans rien dire dès qu'un
+ * apport pointe un apporteur hors périmètre. C'est aussi ce que fait
+ * `apportsDe` dans `rgd-partenaires.js`, l'écran qui affiche déjà ces lignes
+ * — deux écrans qui annoncent le même réseau ne peuvent pas le compter
+ * autrement. Les APPORTEURS, eux, passent par `scope.rgd` : chacun ne voit que
+ * les siens, et c'est la règle de l'écran Partenaires.
+ *
+ * ⚠ LE MONTANT N'EXISTE QUE SUR LES AFFAIRES GAGNÉES : `montant_devis` est
+ * nul sur les perdues. Sommer sans filtrer ne plante pas, il annonce
+ * simplement le CA des gagnées sous le libellé de toutes.
+ */
+export function reseauApporteurs(cles) {
+  if (!cles.includes('rgd') || !scope.canRgd) return null;
+  const fiches = scope.rgd('rgd_apporteurs');
+  const miens = new Set(fiches.map(f => String(f.id)));
+  const apports = db.t('rgd_apports').filter(a => miens.has(String(a.apporteur_id)));
+  if (!apports.length) return null;
+
+  const nomDe = (f) => [f.prenom, f.nom].filter(Boolean).join(' ').trim()
+    || f.raison_sociale || f.societe || '(sans nom)';
+  const somme = (l, champ) => l.reduce((s, a) => s + (Number(a[champ]) || 0), 0);
+  const gagnes = apports.filter(a => a.issue === 'gagne');
+  const perdus = apports.filter(a => a.issue === 'perdu');
+  const decides = gagnes.length + perdus.length;
+
+  // Les apporteurs déclarés comme tels, et ceux qui n'ont rien amené : c'est
+  // la seule ligne de cette carte sur laquelle on peut AGIR.
+  const declares = fiches.filter(f => f.type_partenaire === 'apporteur');
+  const ontApporte = new Set(apports.map(a => String(a.apporteur_id)));
+  const dormants = declares.filter(f => !ontApporte.has(String(f.id)) && f.actif !== false);
+
+  const parApporteur = [...ontApporte].map((id) => {
+    const f = fiches.find(x => String(x.id) === id);
+    const l = apports.filter(a => String(a.apporteur_id) === id);
+    return {
+      nom: f ? nomDe(f) : '(fiche supprimée)',
+      apports: l.length,
+      gagnes: l.filter(a => a.issue === 'gagne').length,
+      ca: somme(l.filter(a => a.issue === 'gagne'), 'montant_devis'),
+      dernier: l.map(a => a.date_apport).filter(Boolean).sort().pop() || null,
+    };
+  }).sort((a, b) => b.ca - a.ca || b.apports - a.apports);
+
+  return {
+    apports: apports.length,
+    gagnes: gagnes.length,
+    perdus: perdus.length,
+    enCours: apports.length - decides,
+    taux: decides ? gagnes.length / decides : null,
+    ca: somme(gagnes, 'montant_devis'),
+    commissions: somme(gagnes, 'montant_commission'),
+    declares: declares.length,
+    dormants: dormants.map(nomDe),
+    parApporteur,
+  };
+}
+
+/**
  * La publicité Meta des trente derniers jours.
  *
  * ⚠ IL Y A UNE LIGNE DE TOTAL, ET ELLE A DOUBLÉ TOUS LES CHIFFRES PENDANT UNE
