@@ -36,6 +36,14 @@ import { evenementsEnregistres, derniereSync, agendasDe } from '../agenda-sync.j
 import { creerAgendaPersonnel } from '../comptes.js';
 
 const LS_FILTRE = 'crm_home_filtre';
+// ⚠ « PATRIMOINE » N'EST PAS UNE STRUCTURE (17/11/2026, Élodie : « ça doit
+// être une nouvelle vue, ne mélange pas les structures »). Les biens, les prêts
+// et les baux ne portent AUCUNE activité : `cartePatrimoine()` ne recevait
+// même pas la structure filtrée, et s'affichait donc à l'identique dans RGD
+// Renova, BTP Expertise, La Référence Courtage et Propulsion — donnant à lire
+// comme patrimoine d'entreprise ce qui est celui de Mickael.
+const VUE_PATRIMOINE = 'patrimoine';
+const peutPatrimoine = () => scope.canPatrimony || scope.canRental;
 const BASE_PROSPECTS = {
   rgd: '#/rgd/clients',         // Clients & prospects → l'écran Clients du CRM (repris de l'application)
   btp: '#/btp/base',
@@ -121,8 +129,14 @@ export const homePage = {
 
     const draw = () => {
       const visibles = CLES_VISIBLES();
-      if (state.filtre !== 'groupe' && !visibles.includes(state.filtre)) state.filtre = 'groupe';
-      const cles = state.filtre === 'groupe' ? visibles : [state.filtre];
+      // ⚠ LE FILTRE SURVIT DANS `localStorage`, ET IL SURVIT AU COMPTE : une
+      // clé « patrimoine » posée par Mickael sur un navigateur partagé, ou un
+      // accès retiré depuis, doit retomber sur « Groupe » plutôt qu'ouvrir une
+      // vue vide. On vérifie le DROIT, pas seulement la valeur.
+      const vueP = state.filtre === VUE_PATRIMOINE && peutPatrimoine();
+      if (state.filtre === VUE_PATRIMOINE && !vueP) state.filtre = 'groupe';
+      if (!vueP && state.filtre !== 'groupe' && !visibles.includes(state.filtre)) state.filtre = 'groupe';
+      const cles = state.filtre === 'groupe' || vueP ? visibles : [state.filtre];
       const r = plageDe(state, cles);
       const deals = scope.deals();
       const t = total(cles, r, deals);
@@ -165,9 +179,15 @@ export const homePage = {
 
         <header class="tb-hero">
           <div class="tb-salut">
-            <h1>${prenomDe(scope.user)}<span>${esc(phraseHero(state, cles))}</span></h1>
-            <p><span class="tb-vivant"></span>${state.filtre === 'groupe'
-              ? `les ${visibles.length} structures` : esc(ACTIVITIES[state.filtre].label)} · ${esc(periodeAffichee(state, cles))}</p>
+            <h1>${prenomDe(scope.user)}<span>${vueP ? 'voici ce que vous d\u00e9tenez.' : esc(phraseHero(state, cles))}</span></h1>
+            ${/* ⚠ PAS DE PÉRIODE DANS CETTE VUE : un patrimoine est un ÉTAT, pas
+                  un flux. La valeur du parc et le capital restant dû se lisent à
+                  la seconde où l'on regarde, et les loyers sont ceux du mois en
+                  cours quoi qu'on choisisse. Afficher « novembre 2026 » au-dessus
+                  promettrait un filtre qui n'existe pas. */ ''}
+            <p><span class="tb-vivant"></span>${vueP ? 'patrimoine et gestion locative · aujourd\'hui'
+              : `${state.filtre === 'groupe'
+              ? `les ${visibles.length} structures` : esc(ACTIVITIES[state.filtre].label)} · ${esc(periodeAffichee(state, cles))}`}</p>
           </div>
           <div class="tb-bfiltres">
             <div class="tb-chips">
@@ -175,14 +195,20 @@ export const homePage = {
                 <span class="tb-glyph">G</span><span>Groupe</span></button>
               ${visibles.map(k => `<button class="tb-chip" data-f="${k}" aria-pressed="${state.filtre === k}" style="--marque:${ACTIVITIES[k].color}">
                 <img class="tb-logo" src="assets/logos/${k}.png" alt="" data-cle="${k}"><span>${esc(ACTIVITIES[k].label)}</span></button>`).join('')}
+              ${/* ⚠ LA PUCE N'APPARAÎT QUE POUR QUI A L'ACCÈS, et c'est déjà la
+                    règle des sections « Patrimoine » et « Gestion locative » du
+                    menu. Elle n'a pas de logo : ce n'est pas une marque. */ ''}
+              ${peutPatrimoine() ? `<button class="tb-chip" data-f="${VUE_PATRIMOINE}" aria-pressed="${vueP}" style="--marque:#6366F1">
+                <span class="tb-glyph">P</span><span>Patrimoine</span></button>` : ''}
             </div>
+            ${vueP ? '' : `
             <div class="tb-periodes">
               <div class="seg tb-periode">${PERIODES_TB.map(([k, l]) => `<button data-p="${k}" class="${state.periode === k ? 'active' : ''}"${k === 'year' && cles.length === 1 && exerciceDe(cles[0]).label.includes('–') ? ` title="Exercice ${exerciceDe(cles[0]).label} : du 1er octobre au 30 septembre"` : ''}>${k === 'year' && cles.length === 1 && exerciceDe(cles[0]).label.includes('–') ? 'Exercice ' + exerciceDe(cles[0]).label : l}</button>`).join('')}</div>
               ${state.periode === 'mois' ? `<select class="tb-mois" id="tb-mois" aria-label="Choisir le mois">${derniersMois(24, new Date()).reverse().map(m => {
                 const nom = new Date(m.cle + '-01T00:00:00').toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
                 return `<option value="${m.cle}"${m.cle === state.mois ? ' selected' : ''}>${esc(nom)}${m.cle === moisCle() ? ' (en cours)' : m.cle === moisDernier() ? ' (mois dernier)' : ''}</option>`;
               }).join('')}</select>` : ''}
-            </div>
+            </div>`}
           </div>
         </header>
 
@@ -192,7 +218,12 @@ export const homePage = {
               descendent avec le reste au lieu de former une colonne qui
               s'allongeait toute seule. */ ''}
         <div class="tb-bento">
-
+          ${vueP ? taille(cartePatrimoine(), 'tb-x12') + `
+          <section class="card tb-x12">
+            <p class="muted small" style="margin:0">Le détail est dans
+              <a href="#/patrimoine">Patrimoine</a> (biens, prêts, charges) et dans
+              <a href="#/locatif">Gestion locative</a> (baux, loyers, impayés).</p>
+          </section>` : `
           ${taille(carteArgent(cles, r, state), 'tb-x7')}
           ${scope.canPilotage ? taille(carteObjectifs(cles, deals), 'tb-x5') : ''}
 
@@ -358,19 +389,20 @@ export const homePage = {
                 que « En retard » et « Cette semaine », que l'écran #/today
                 donne en entier.
 
-                ⚠ LA LARGEUR DE « MA JOURNÉE » EST CALCULÉE, pas fixée : la
-                grille fait 12 colonnes et « Patrimoine » rend '' quand la
-                structure filtrée n'a ni patrimoine ni locatif (RGD). Fixée à
-                6, elle laisserait alors une demi-ligne vide. */ ''}
-          ${(() => {
-            const patrimoine = cartePatrimoine();
-            return taille(carteJournee(visibles), patrimoine ? 'tb-x6' : 'tb-x12')
-              + taille(patrimoine, 'tb-x6');
-          })()}
+                ⚠ « MA JOURNÉE » EST SEULE SUR SA RANGÉE depuis que
+                « Patrimoine » a sa propre vue (17/11/2026) : elle prend donc les
+                12 colonnes. Lui en donner 6 laisserait une demi-rangée vide,
+                et il n'y a plus rien pour la combler. */ ''}
+          ${taille(carteJournee(visibles), 'tb-x12')}`}
 
         </div>
 
-        ${sources.length ? `<p class="muted small tb-source">${sources.map(x => externe(x.cle)?.direct
+        ${/* ⚠ PAS DE PIED DE PAGE DANS LA VUE PATRIMOINE. Cette phrase nomme les
+              outils d'où viennent les chiffres des STRUCTURES ; sous un parc
+              immobilier, « RGD Renova : chiffres lus en direct… » rattache à
+              l'entreprise un patrimoine qui est celui de Mickael. C'est
+              exactement le mélange que cette vue existe pour défaire. */ ''}
+        ${!vueP && sources.length ? `<p class="muted small tb-source">${sources.map(x => externe(x.cle)?.direct
           ? `${esc(ACTIVITIES[x.cle].label)} : chiffres lus en direct dans ${esc(x.source)} (demandes reçues, rendez-vous, devis envoyés et signés, CA facturé)`
           : `${esc(ACTIVITIES[x.cle].label)} : chiffres déposés par ${esc(x.source)}, mis à jour le ${new Date(x.maj).toLocaleDateString('fr-FR')}`).join(' · ')}
           — chaque outil applique ses propres définitions : un CA peut être facturé chez l'un et signé chez l'autre.</p>` : ''}`;
