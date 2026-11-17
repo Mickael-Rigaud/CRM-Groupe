@@ -9649,3 +9649,9 @@ td .pl-toque { color: #4f46e5; }
 @media (prefers-reduced-motion: reduce) {
   :is(.msg-app, .msg-panneau) .msg-ligne, .msg-panneau, :is(.msg-app, .msg-panneau) .msg-cnt { animation: none; }
 }
+
+/* ⚠ PIÈCES JOINTES ET RENVOIS DANS MES MESSAGES (17/11/2026, Élodie : « les
+   pièces jointes ne s'affichent plus ») : ils héritaient du blanc de la bulle
+   en dégradé, écrits blanc sur leur carte blanche. Ils gardent l'encre normale. */
+:is(.msg-app, .msg-panneau) .msg-ligne.moi :is(.msg-fichier, .msg-photo, .msg-corps a.msg-renvoi) { color: var(--text); text-decoration: none; }
+:is(.msg-app, .msg-panneau) .msg-ligne.moi .msg-fichier-nom small, :is(.msg-app, .msg-panneau) .msg-ligne.moi .msg-photo span { color: var(--muted); }
