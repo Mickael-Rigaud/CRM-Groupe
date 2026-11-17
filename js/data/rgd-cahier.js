@@ -50,6 +50,7 @@ export async function creerCahier(planningId, champs = {}) {
     precisions: champs.precisions || null,
     type_bien: champs.type_bien || null,
     nature: champs.nature || null,
+    elements: elementsDe({ elements: champs.elements }),
   });
 }
 
@@ -60,6 +61,7 @@ export async function majCahier(k, champs) {
     if (c in champs) patch[c] = (typeof champs[c] === 'string' ? champs[c].trim() : champs[c]) || null;
   }
   if ('postes' in champs) patch.postes = propres(champs.postes);
+  if ('elements' in champs) patch.elements = elementsDe({ elements: champs.elements });
   return db.update('rgd_cahiers', k.id, patch);
 }
 
@@ -265,6 +267,126 @@ export function pointsDuDetail(detail) {
     .map(l => l.replace(PUCE, '').trim()).filter(Boolean)
     .flatMap(couperPhrases)
     .filter(Boolean);
+}
+
+
+// ====================================================================
+// LES ÉLÉMENTS TECHNIQUES ET LES CONTRAINTES (17/11/2026)
+//
+// Élodie : « je voudrais apporter des éléments techniques et des contraintes.
+// Mais nous ne pouvons pas automatiser cette fonction ni le deviner nous-même,
+// il faudrait donc mettre en place un système pour faciliter cette partie et
+// permettre à Mickael de déposer tous ces éléments de la manière la plus
+// simple ».
+//
+// ⚠ UN FORMULAIRE VIERGE NE SERAIT PAS REMPLI : Mickael prépare les cahiers
+// entre deux chantiers. On reprend donc le geste qui marche déjà ailleurs dans
+// le CRM — les « listes standard » du planning (matériaux, outils) : une
+// bibliothèque de phrases toutes faites qu'on COCHE, et qui s'enrichit de ce
+// qu'on écrit à la main. Au troisième chantier, il ne fait pratiquement plus
+// que cocher.
+//
+// ⚠ CHAQUE ÉLÉMENT PORTE UNE CASE « VISIBLE PAR LE CLIENT », décochée par
+// défaut (choix d'Élodie, 17/11). Une contrainte comme « présence d'amiante »
+// ou « voisin difficile » est utile à l'équipe et n'a pas à être mise sous les
+// yeux du client. Le cahier de l'ÉQUIPE montre tout ; celui du CLIENT ne
+// montre que ce qui est coché.
+const CLE_BIBLIO = 'cahier_biblio_elements';
+
+const BIBLIO_DE_DEPART = {
+  technique: [
+    'Support plâtre ancien : ratissage nécessaire avant peinture',
+    'Cloisons en BA13 : finition B, sans saignée',
+    'Installation électrique existante conservée, mise à la terre vérifiée',
+    'Tableau électrique non modifié dans le cadre de ce chantier',
+    'Hauteur sous plafond supérieure à 2,50 m : échafaudage nécessaire',
+    'Sol conservé : protection intégrale pendant toute la durée',
+    'Menuiseries conservées : masquage et protection',
+  ],
+  contrainte: [
+    'Ascenseur indisponible : manutention par les escaliers',
+    'Stationnement difficile : prévoir une autorisation de voirie',
+    'Horaires d’immeuble à respecter (8 h – 18 h, pas le week-end)',
+    'Coupure d’eau nécessaire : à prévoir avec le client',
+    'Coupure d’électricité nécessaire : à prévoir avec le client',
+    'Logement occupé pendant les travaux',
+    'Présence d’animaux dans le logement',
+    'Amiante : diagnostic fourni, intervention sans perforation',
+    'Accès par digicode : code à demander avant chaque passage',
+  ],
+};
+
+export const FAMILLES = {
+  technique: { label: 'Points techniques', court: 'Technique' },
+  contrainte: { label: 'Contraintes', court: 'Contrainte' },
+};
+
+/** La bibliothèque, ou le modèle de départ si personne ne l'a encore touchée. */
+export function biblioElements() {
+  const l = db.t('rgd_reglages').find(x => x.cle === CLE_BIBLIO);
+  try {
+    const v = l ? JSON.parse(l.valeur) : null;
+    if (v && Array.isArray(v.technique) && Array.isArray(v.contrainte)) return v;
+  } catch { /* réglage illisible : on repart du modèle */ }
+  return { technique: [...BIBLIO_DE_DEPART.technique], contrainte: [...BIBLIO_DE_DEPART.contrainte] };
+}
+
+export async function enregistrerBiblio(b) {
+  const propre = (l) => [...new Set((l || []).map(x => String(x).trim()).filter(Boolean))];
+  const valeur = JSON.stringify({ technique: propre(b.technique), contrainte: propre(b.contrainte) });
+  const existe = db.t('rgd_reglages').some(x => x.cle === CLE_BIBLIO);
+  return existe
+    ? db.update('rgd_reglages', CLE_BIBLIO, { valeur })
+    : db.insert('rgd_reglages', { cle: CLE_BIBLIO, valeur });
+}
+
+/** Ajoute une phrase à la bibliothèque si elle n'y est pas déjà. */
+export async function garderDansBiblio(famille, texte) {
+  const t = String(texte || '').trim();
+  if (!t || !FAMILLES[famille]) return false;
+  const b = biblioElements();
+  if (b[famille].some(x => x.trim().toLowerCase() === t.toLowerCase())) return false;
+  b[famille] = [...b[famille], t];
+  await enregistrerBiblio(b);
+  return true;
+}
+
+// ------------------------------------------------- les éléments d'un cahier
+const elementPropre = (e) => ({
+  texte: String(e?.texte || '').trim(),
+  famille: FAMILLES[e?.famille] ? e.famille : 'contrainte',
+  client: !!e?.client,
+});
+
+/** Les éléments d'un cahier, toujours à la bonne forme. */
+export function elementsDe(k) {
+  const e = k?.elements;
+  const brut = (e && typeof e === 'object' && !Array.isArray(e)) ? e : {};
+  const liste = (l) => (Array.isArray(l) ? l : []).map(elementPropre).filter(x => x.texte);
+  const pieces = {};
+  for (const [lot, l] of Object.entries(brut.pieces || {})) {
+    const p = liste(l);
+    if (p.length) pieces[lot] = p;
+  }
+  return { chantier: liste(brut.chantier), pieces };
+}
+
+/** Ceux d'une pièce, ou ceux du chantier entier si `lot` est absent. */
+export const elementsDeLaPiece = (k, lot) => elementsDe(k).pieces[lot] || [];
+
+/**
+ * ⚠ UN RENOMMAGE DE PIÈCE EMPORTE SES ÉLÉMENTS, comme il emporte déjà ses
+ * photos : sans ça, les contraintes de la « Chambre 1 » resteraient attachées
+ * à un nom qui n'existe plus, et disparaîtraient du document sans un mot.
+ */
+export function renommerElements(elements, renommes) {
+  const e = elementsDe({ elements });
+  for (const [ancien, neuf] of Object.entries(renommes || {})) {
+    if (ancien === neuf || !e.pieces[ancien]) continue;
+    e.pieces[neuf] = [...(e.pieces[neuf] || []), ...e.pieces[ancien]];
+    delete e.pieces[ancien];
+  }
+  return e;
 }
 
 // Les pièces du cahier, dans l'ordre des postes : ce sont les lots.

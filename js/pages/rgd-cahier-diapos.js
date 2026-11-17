@@ -24,7 +24,7 @@
 // « suite », plutôt que de déborder.
 import { esc } from '../ui.js';
 import { finDe, dureeLue, versDate, lignesDe } from '../data/rgd-planning.js';
-import { piecesDe, pointsDuDetail } from '../data/rgd-cahier.js';
+import { piecesDe, pointsDuDetail, elementsDe, FAMILLES } from '../data/rgd-cahier.js';
 import { donnees } from './rgd-cahier-doc.js';
 
 const LOGO_CLAIR = new URL('../../assets/logos/rgd-complet-clair.png', import.meta.url).href;
@@ -106,6 +106,15 @@ export function diapos(chantier, k, dossier, version, urls) {
   // La réserve (photos du NAS non retenues) ne sert jamais de photo de couverture.
   const premiere = (k.photos || []).filter(p => p.lot !== '__reserve__').map(p => urls[p.chemin]).find(Boolean) || null;
   const sur = [k.objet || chantier.titre, d.adresse].filter(Boolean).join(' · ');
+  // ⚠ LE CLIENT NE VOIT QUE CE QUI EST COCHÉ « CLIENT », L'ÉQUIPE VOIT TOUT
+  // (17/11/2026, Élodie). Une contrainte comme « présence d'amiante » ou
+  // « voisin difficile » est utile à l'équipe et n'a pas à être mise sous les
+  // yeux du client : la case est décochée par défaut, donc le document du
+  // client ne dit rien par accident.
+  const elems = elementsDe(k);
+  const visibles = (l) => (l || []).filter(e => equipe || e.client);
+  const listeElements = (l) => `<ul class="cd-elements">${l.map((e, i) =>
+    `<li style="--i:${i}" class="fam-${esc(e.famille)}"><em>${esc(FAMILLES[e.famille].court)}</em>${esc(e.texte)}</li>`).join('')}</ul>`;
   const liste = [];
 
   liste.push({ nom: 'Couverture', vignette: premiere, html: `
@@ -166,6 +175,19 @@ export function diapos(chantier, k, dossier, version, urls) {
       </div>` });
   }
 
+  const elChantier = visibles(elems.chantier);
+  if (elChantier.length) {
+    liste.push({ nom: 'Technique et contraintes', vignette: null, html: `
+      <div class="cd cd-resume">${fond(null)}
+        <div class="cd-in">
+          <div class="cd-sur"><i></i>${esc(sur)}</div>
+          <h2 class="cd-titre moyen">Technique et contraintes</h2>
+          <p class="cd-sous">Ce qui encadre le chantier, et ce dont il faut tenir compte.</p>
+          <div class="cd-panneau large">${listeElements(elChantier)}</div>
+        </div>
+      </div>` });
+  }
+
   if (k.plan && urls[k.plan]) {
     liste.push({ nom: 'Plan', vignette: urls[k.plan], html: `
       <div class="cd cd-plan">${fond(null)}
@@ -191,6 +213,9 @@ export function diapos(chantier, k, dossier, version, urls) {
             <div class="cd-panneau${l.length > 6 ? ' serre' : ''}"><ul class="cd-travaux${equipe ? ' cases' : ''}">${l.map((p, i) => `
               <li style="--i:${i}"><div><b>${esc(p.designation)}</b>${detailEnPoints(p.detail)}</div>${
                 qte(p) ? `<span>${esc(qte(p))}</span>` : ''}</li>`).join('')}</ul></div>
+            ${(() => { const le = visibles(elems.pieces[lot]);
+              return morceau === groupes.length - 1 && le.length
+                ? `<div class="cd-panneau large cd-el-piece">${listeElements(le)}</div>` : ''; })()}
             ${barres(n, pieces.length)}
           </div>
           ${vignette2 ? `<div class="cd-vignette"><img src="${esc(vignette2)}" alt=""></div>` : ''}
@@ -322,6 +347,16 @@ ul.cd-travaux li small { display: block; font-size: .82em; color: #BDB4AB; margi
 /* Le descriptif du devis, un point par ligne (17/11/2026) : en pavé il était
    illisible, et les puces que Costructor écrit en « - » se retrouvaient au
    milieu des phrases. */
+/* Les éléments techniques et les contraintes (17/11/2026). */
+ul.cd-elements { list-style: none; margin: 0; padding: 0; }
+ul.cd-elements li { position: relative; padding: .62cqw 0; font-size: 1.28cqw; line-height: 1.4;
+  border-bottom: .08cqw solid rgba(255,255,255,.1); }
+ul.cd-elements li:last-child { border-bottom: 0; }
+ul.cd-elements em { font-style: normal; font-weight: 800; font-size: .72em; letter-spacing: .08em;
+  text-transform: uppercase; color: #F6C08A; margin-right: 1.2cqw; }
+ul.cd-elements li.fam-technique em { color: #8FC7E8; }
+.cd-el-piece { margin-top: 1.4cqw; }
+
 /* Les photos d'une pièce, à plat et sans voile (17/11/2026). La grille suit le
    nombre de photos : une seule occupe le cadre, quatre se rangent en deux
    rangées. Les images sont recadrées (object-fit: cover) pour que la grille

@@ -30,7 +30,7 @@
 import { esc } from '../ui.js';
 import { lignesDe, versDate } from '../data/rgd-planning.js';
 import { finDe, dureeLue } from '../data/rgd-planning.js';
-import { piecesDe, pointsDuDetail } from '../data/rgd-cahier.js';
+import { piecesDe, pointsDuDetail, elementsDe, FAMILLES } from '../data/rgd-cahier.js';
 import { donnees } from './rgd-cahier-doc.js';
 import { POLICES } from './rgd-cahier-diapos.js';
 
@@ -170,6 +170,14 @@ export const STYLE_OUVRIERS = `
     justify-content: space-between; gap: 6mm; }
   .co-marque b { color: #5A524B; font-weight: 700; }
 
+  /* Technique et contraintes (17/11/2026) : l'équipe voit tout. */
+  ul.co-el { list-style: none; margin: 1.5mm 0 0; padding: 0; }
+  ul.co-el li { position: relative; padding: 1mm 0; font-size: 8.6pt; line-height: 1.35;
+    border-top: .2mm solid #EDE9E4; }
+  ul.co-el em { font-style: normal; font-weight: 800; font-size: 7pt; letter-spacing: .08em;
+    text-transform: uppercase; color: #B45309; margin-right: 2.5mm; }
+  .co-el-piece { padding: 0 4.5mm; }
+
   .co-pied { border-top: .3mm solid #E4DFD9; margin-top: 6mm; padding-top: 2.5mm;
     font-size: 8.5pt; color: #6B625B; display: flex; justify-content: space-between; gap: 6mm; }
   .co-pied b { color: #14110E; }
@@ -197,6 +205,12 @@ export function corpsOuvriers(chantier, k, dossier) {
   const d = donnees(chantier, k, dossier);
   const postes = Array.isArray(k.postes) ? k.postes : [];
   const pieces = piecesDe(postes);
+  // ⚠ L'ÉQUIPE VOIT TOUT, y compris ce qui n'est pas coché « client » : c'est
+  // pour elle que la distinction existe.
+  const elems = elementsDe(k);
+  const blocEl = (l) => (l && l.length ? `<ul class="co-el">${l.map(e =>
+    `<li><em>${esc(FAMILLES[e.famille].court)}</em>${esc(e.texte)}</li>`).join('')}</ul>` : '');
+
   const materiaux = lignesDe(chantier.id, 'materiaux');
   const outils = lignesDe(chantier.id, 'outils');
   const dates = [chantier.date_debut ? `${dateLongue(chantier.date_debut)} → ${dateLongue(finDe(chantier))}` : '',
@@ -224,10 +238,11 @@ export function corpsOuvriers(chantier, k, dossier) {
           <span>${postes.filter(p => (p.lot || '') === lot).length} trav.</span></div>`).join('')}</div>
     </div>`;
 
-  const avant = textes.length ? `
+  const avant = (textes.length || elems.chantier.length) ? `
     <div class="co-bloc">
       <h2>À savoir avant de commencer</h2>
       ${textes.map(([t, v]) => `<p class="co-libre"><b>${esc(t)} :</b> ${esc(v)}</p>`).join('')}
+      ${blocEl(elems.chantier)}
     </div>` : '';
 
   // Une pièce = un tableau compact. Le `<thead>` se répète en haut de la page
@@ -252,6 +267,7 @@ export function corpsOuvriers(chantier, k, dossier) {
         : '<tr><td colspan="3" class="co-vide">Rien de prévu dans cette pièce.</td></tr>'}
       </tbody>
       <tfoot><tr><td colspan="3">
+        ${blocEl(elems.pieces[lot]) ? `<div class="co-el-piece">${blocEl(elems.pieces[lot])}</div>` : ''}
         <div class="co-notes"><span>Observations</span><i></i><i></i></div>
         <p class="co-marque"><span><b>Document interne</b> — ne pas remettre au client.</span>
           <span>${esc(lot || 'Travaux')}${k.devis_numero ? ` · devis ${esc(k.devis_numero)}` : ''}</span></p>

@@ -9,13 +9,14 @@
 // Membre de l'équipe avec qui le chantier est partagé : lecture, et la
 // version « équipe » à imprimer.
 import { scope } from '../data/scope.js';
-import { esc, toast, openModal, confirm } from '../ui.js';
+import { esc, toast, openModal, closeModal, confirm } from '../ui.js';
 import { posePadSignature } from '../pad-signature.js';
 import { COSTRUCTOR_APP } from '../data/rgd-cgv.js';
 import { cahierDe, estSigne, creerCahier, majCahier, signerCahier, retirerSignature,
          preparerLien, lienSignature, lienValable, envoyerPourSignature,
          devisSignesDu, postesDuDevisCrm, decouperCollage, lireDevisCostructor,
          ajouterPhotos, retirerPhoto, poserPlan, liensDuCahier, piecesDe, renommerPhotos, deplacerPhoto,
+         FAMILLES, biblioElements, enregistrerBiblio, garderDansBiblio, elementsDe, renommerElements,
          derniereDemandeNas, dossiersNas, enCoursNas, demanderPhotosNas, RESERVE } from '../data/rgd-cahier.js';
 import { trierPhotos } from './rgd-cahier-tri.js';
 import { imprimerCahierClient, imprimerCahierOuvriers } from './rgd-cahier-doc.js';
@@ -41,6 +42,10 @@ export function ouvrirCahier(chantier, dossier, retour) {
     postes: (k?.postes || []).map(p => ({ ...p })),
     consignes: k?.consignes || '',
     precisions: k?.precisions || '',
+    // ⚠ LES ÉLÉMENTS VIVENT DANS L'ÉTAT COMME LES POSTES : on les retouche
+    // plusieurs fois avant d'enregistrer, et un aller-retour en base à chaque
+    // case cochée aurait rendu l'écran poussif.
+    elements: elementsDe(k),
     // La page de garde (modèle d'Élodie) : repris du dossier tant qu'on ne
     // les a pas retouchés.
     type_bien: k?.type_bien || (dossier ? donneesDocument(dossier).typeBien : '') || '',
@@ -98,11 +103,21 @@ export function ouvrirCahier(chantier, dossier, retour) {
     };
   };
 
+  // La hauteur du champ de détail : une ligne par ligne du descriptif, six au
+  // plus — au-delà on fait défiler plutôt que d'étirer la pièce sur un écran.
+  const lignesDuDetail = (t) => Math.min(6, Math.max(1, String(t || '').split('\n').length));
   const ligneP = (p, i, fige, pieces) => `
     <div class="ca-poste" data-i="${i}">
       <div class="ca-poste-texte">
         <input data-c="designation" value="${esc(p.designation)}" placeholder="Travaux" aria-label="Désignation"${fige ? ' disabled' : ''}>
-        <input data-c="detail" value="${esc(p.detail)}" placeholder="Précision (facultatif)" aria-label="Détail" class="ca-detail"${fige ? ' disabled' : ''}>
+        ${'' /* ⚠ UN TEXTAREA, PLUS UN INPUT (17/11/2026). Depuis que le devis est
+             lu en entier, un descriptif porte jusqu'à dix lignes : dans un champ
+             d'une seule ligne, les retours disparaissaient à l'affichage et on
+             lisait « ouvrages conservésApprovisionnement ». Et surtout, un
+             input AURAIT ÉCRASÉ ces retours au premier enregistrement — le
+             texte serait revenu en pavé dans les deux documents. */}
+        <textarea data-c="detail" rows="${lignesDuDetail(p.detail)}"
+          placeholder="Précision (facultatif)" aria-label="Détail" class="ca-detail"${fige ? ' disabled' : ''}>${esc(p.detail)}</textarea>
       </div>
       <input data-c="quantite" value="${esc(p.quantite)}" placeholder="Qté" aria-label="Quantité" class="ca-qte"${fige ? ' disabled' : ''}>
       <input data-c="unite" value="${esc(p.unite)}" placeholder="Unité" aria-label="Unité" class="ca-unite"${fige ? ' disabled' : ''}>
@@ -160,6 +175,8 @@ export function ouvrirCahier(chantier, dossier, retour) {
         <label class="pl-champ"><span>Précisions pour le client <em>(les deux versions)</em></span>
           <textarea id="ca-precisions" rows="3" placeholder="Ce qui reste à la charge du client, pièces à vider, accès à l’eau et l’électricité…"${fige ? ' disabled' : ''}>${esc(s.precisions)}</textarea></label>
       </div>
+      ${blocElements(null, fige)}
+      ${datalistBiblio()}
       ${fige ? `<div class="ca-signe">
         <img src="${k.signature}" alt="Signature du client">
         <div><b>Signé${k.signe_mode === 'a_distance' ? ' à distance' : k.signe_mode === 'sur_place' ? ' sur place' : ''}${k.signe_par ? ` par ${esc(k.signe_par)}` : ''}</b><span>le ${esc(new Date(k.signe_le).toLocaleString('fr-FR'))}</span>
@@ -226,11 +243,48 @@ export function ouvrirCahier(chantier, dossier, retour) {
               s.envoiPhoto === lot ? 'Envoi…' : '+ Photo'}<input type="file" accept="image/*" multiple hidden data-photo-lot="${esc(lot)}"></label>`}</div>
             <div class="ca-postes">${lignes.map(x => ligneP(x.p, x.i, fige, pieces)).join('')}</div>
             ${fige ? '' : '<button type="button" class="btn ghost sm" data-ajouter-poste>+ Ajouter un poste</button>'}
+            ${blocElements(lot, fige)}
           </section>`;
         }).join('')}
         ${fige ? '' : '<button type="button" class="btn sm ca-ajouter-piece" id="ca-ajouter-piece">+ Ajouter une pièce</button>'}
       </div>
       ${blocPlan(fige)}`;
+  }
+
+  // ⚠ LE MÊME BLOC SERT AU CHANTIER ET À CHAQUE PIÈCE (17/11/2026). `ou` vaut
+  // `null` pour le chantier entier, ou le nom du lot. Les éléments retenus se
+  // listent, chacun avec sa case « vu par le client » ; on en ajoute depuis la
+  // bibliothèque (un clic) ou à la main (et on peut alors le garder).
+  function blocElements(ou, fige) {
+    const l = ou === null ? s.elements.chantier : (s.elements.pieces[ou] || []);
+    const cle = ou === null ? '__chantier' : ou;
+    return `<div class="ca-elements" data-elements="${esc(cle)}">
+      <div class="ca-el-tete"><h5>${ou === null ? 'Technique et contraintes du chantier' : 'Technique et contraintes de la pièce'}</h5>
+        ${fige ? '' : `<button type="button" class="btn ghost sm" data-el-biblio="${esc(cle)}">+ Bibliothèque</button>`}</div>
+      ${l.length ? `<ul class="ca-el-liste">${l.map((e, i) => `
+        <li class="ca-el fam-${esc(e.famille)}">
+          <span class="ca-el-fam">${esc(FAMILLES[e.famille].court)}</span>
+          <span class="ca-el-texte">${esc(e.texte)}</span>
+          <label class="ca-el-client" title="Si la case est cochée, cette ligne apparaît aussi dans le cahier du client">
+            <input type="checkbox" data-el-client="${esc(cle)}" data-i="${i}"${e.client ? ' checked' : ''}${fige ? ' disabled' : ''}>
+            <span>client</span></label>
+          ${fige ? '' : `<button type="button" class="ca-el-x" data-el-retirer="${esc(cle)}" data-i="${i}" title="Retirer">✕</button>`}
+        </li>`).join('')}</ul>`
+        : '<p class="muted small">Rien pour l’instant.</p>'}
+      ${fige ? '' : `<div class="ca-el-ajout">
+        <select data-el-fam="${esc(cle)}" aria-label="Famille">
+          ${Object.entries(FAMILLES).map(([k2, f]) => `<option value="${esc(k2)}">${esc(f.court)}</option>`).join('')}</select>
+        <input type="text" data-el-texte="${esc(cle)}" list="ca-biblio-liste" placeholder="À la main, ou choisir dans la bibliothèque…">
+        <button type="button" class="btn sm" data-el-ajouter="${esc(cle)}">Ajouter</button>
+      </div>`}
+    </div>`;
+  }
+
+  // La liste d'aide à la saisie : toute la bibliothèque, les deux familles.
+  function datalistBiblio() {
+    const b = biblioElements();
+    return `<datalist id="ca-biblio-liste">${[...b.technique, ...b.contrainte]
+      .map(x => `<option value="${esc(x)}"></option>`).join('')}</datalist>`;
   }
 
   // ⚠ LES PHOTOS DU NAS (12/11/2026) : l'état de la dernière demande, et de quoi
@@ -370,6 +424,9 @@ export function ouvrirCahier(chantier, dossier, retour) {
       const nom = (bloc.querySelector('[data-piece-nom]')?.value || '').trim();
       if (nom !== ancien) {
         s.renommes[ancien] = nom;
+        // ⚠ LES ÉLÉMENTS SUIVENT LA PIÈCE, comme les photos : sans ça, les
+        // contraintes resteraient attachées à un nom qui n'existe plus.
+        s.elements = renommerElements(s.elements, { [ancien]: nom });
         s.piecesVides = s.piecesVides.map(v => (v === ancien ? nom : v));
         bloc.dataset.piece = nom;
       }
@@ -389,7 +446,7 @@ export function ouvrirCahier(chantier, dossier, retour) {
       devis_crm_id: choisi?.source === 'crm' ? choisi.id : null,
       devis_numero: choisi?.numero || null,
       objet: s.objet, postes: s.postes, consignes: s.consignes, precisions: s.precisions,
-      type_bien: s.type_bien, nature: s.nature,
+      type_bien: s.type_bien, nature: s.nature, elements: s.elements,
     };
     k = k ? await majCahier(k, champs) : await creerCahier(chantier.id, champs);
     k = cahierDe(chantier.id) || k;
@@ -403,6 +460,64 @@ export function ouvrirCahier(chantier, dossier, retour) {
     s.modifie = false;
     return k;
   };
+
+  // ⚠ LA BIBLIOTHÈQUE S'OUVRE EN FENÊTRE, pas dans l'écran : dépliée sous
+  // chaque pièce, elle aurait noyé le cahier sous des dizaines de cases. On
+  // coche, on valide, et seules les lignes retenues restent à l'écran.
+  function ouvrirBiblio(cle) {
+    const b = biblioElements();
+    const deja = new Set((cle === '__chantier' ? s.elements.chantier : (s.elements.pieces[cle] || []))
+      .map(e => e.texte.trim().toLowerCase()));
+    const ou = cle === '__chantier' ? 'le chantier' : `« ${cle || 'Travaux'} »`;
+    const m = openModal('Bibliothèque', `
+      <p class="muted small">Cochez ce qui s’applique à ${esc(ou)}. Les lignes déjà retenues
+        sont grisées. Une ligne n’apparaît dans le cahier du CLIENT que si vous cochez
+        « client » ensuite ; sinon elle ne sort que sur celui de l’équipe.</p>
+      <div class="ca-biblio">${Object.entries(FAMILLES).map(([f, info]) => `
+        <div class="ca-biblio-col"><h5>${esc(info.label)}</h5>
+          ${b[f].length ? b[f].map((t, i) => {
+            const pris = deja.has(t.trim().toLowerCase());
+            return `<label class="ca-biblio-l${pris ? ' pris' : ''}">
+              <input type="checkbox" data-f="${esc(f)}" data-t="${esc(t)}"${pris ? ' disabled' : ''}>
+              <span>${esc(t)}</span></label>`;
+          }).join('') : '<p class="muted small">Vide pour l’instant.</p>'}
+        </div>`).join('')}</div>
+      <div class="form-actions"><button type="button" class="btn ghost" id="ca-biblio-tenir">Modifier la bibliothèque</button>
+        <span class="grow"></span><button type="button" class="btn ghost" data-close>Annuler</button>
+        <button type="button" class="btn primary" id="ca-biblio-ok">Ajouter</button></div>`, { wide: true });
+    m.querySelector('#ca-biblio-ok').onclick = () => {
+      const liste = cle === '__chantier' ? s.elements.chantier
+        : (s.elements.pieces[cle] = s.elements.pieces[cle] || []);
+      m.querySelectorAll('input[data-t]:checked').forEach(c => {
+        liste.push({ texte: c.dataset.t, famille: c.dataset.f, client: false });
+      });
+      closeModal(); s.modifie = true; dessiner();
+    };
+    m.querySelector('#ca-biblio-tenir').onclick = () => { closeModal(); ouvrirBiblioTenir(cle); };
+  }
+
+  // Tenir la bibliothèque : une ligne par phrase, comme les listes standard du
+  // planning — même geste, même endroit dans la tête de celui qui s'en sert.
+  function ouvrirBiblioTenir(retour) {
+    const b = biblioElements();
+    const m = openModal('Modifier la bibliothèque', `
+      <p class="muted small">Une ligne par phrase. Ce que vous écrivez à la main dans un cahier
+        s’ajoute ici tout seul. Modifier la bibliothèque ne change pas les cahiers déjà préparés.</p>
+      <div class="pl-std">${Object.entries(FAMILLES).map(([f, info]) => `
+        <label class="pl-champ"><span>${esc(info.label)}</span>
+          <textarea name="${esc(f)}" rows="12">${esc(b[f].join('\n'))}</textarea></label>`).join('')}</div>
+      <div class="form-actions"><button type="button" class="btn ghost" data-close>Annuler</button>
+        <button type="button" class="btn primary" id="ca-biblio-save">Enregistrer</button></div>`, { wide: true });
+    m.querySelector('#ca-biblio-save').onclick = async () => {
+      const lire2 = (f) => m.querySelector(`textarea[name="${f}"]`).value.split('\n');
+      try {
+        await enregistrerBiblio({ technique: lire2('technique'), contrainte: lire2('contrainte') });
+        closeModal();
+        toast('Bibliothèque enregistrée');
+        if (retour) ouvrirBiblio(retour);
+      } catch (e) { toast(e.message || 'Enregistrement impossible', 'erreur'); }
+    };
+  }
 
   function brancher(fige) {
     hote.querySelector('#ca-retour').onclick = async () => {
@@ -537,6 +652,45 @@ export function ouvrirCahier(chantier, dossier, retour) {
       const champ = bloc?.querySelector('[data-piece-nom]');
       if (champ) { champ.focus(); champ.select(); bloc.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
     };
+    // ---------------------------------------- technique et contraintes
+    // Le tableau visé par un bloc : celui du chantier, ou celui d'une pièce
+    // (créé à la volée la première fois qu'on y met quelque chose).
+    const listeDe = (cle) => {
+      if (cle === '__chantier') return s.elements.chantier;
+      if (!s.elements.pieces[cle]) s.elements.pieces[cle] = [];
+      return s.elements.pieces[cle];
+    };
+    hote.querySelectorAll('[data-el-ajouter]').forEach(b => b.onclick = async () => {
+      const cle = b.dataset.elAjouter;
+      const bloc = b.closest('.ca-elements');
+      const champ = bloc.querySelector('[data-el-texte]');
+      const texte = champ.value.trim();
+      if (!texte) { champ.focus(); return; }
+      const famille = bloc.querySelector('[data-el-fam]').value;
+      lire();
+      listeDe(cle).push({ texte, famille, client: false });
+      // ⚠ CE QU'ON ÉCRIT À LA MAIN ENTRE DANS LA BIBLIOTHÈQUE : c'est ce qui la
+      // fait grossir toute seule, sans séance de paramétrage. Un doublon est
+      // ignoré sans bruit.
+      try { await garderDansBiblio(famille, texte); } catch { /* bibliothèque en lecture seule */ }
+      s.modifie = true; dessiner();
+    });
+    hote.querySelectorAll('[data-el-retirer]').forEach(b => b.onclick = () => {
+      lire();
+      const l = listeDe(b.dataset.elRetirer);
+      l.splice(Number(b.dataset.i), 1);
+      s.modifie = true; dessiner();
+    });
+    hote.querySelectorAll('[data-el-client]').forEach(c => c.onchange = () => {
+      const l = listeDe(c.dataset.elClient);
+      const e = l[Number(c.dataset.i)];
+      if (e) { e.client = c.checked; s.modifie = true; }
+    });
+    hote.querySelectorAll('[data-el-biblio]').forEach(b => b.onclick = () => {
+      lire();
+      ouvrirBiblio(b.dataset.elBiblio);
+    });
+
     hote.querySelectorAll('[data-retirer-piece]').forEach(b => b.onclick = () => {
       lire();
       const lot = b.closest('.ca-salle').dataset.piece;
