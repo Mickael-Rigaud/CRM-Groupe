@@ -18,6 +18,10 @@
 import { db } from './db.js';
 import { scope } from './scope.js';
 import { estVisiteTechnique } from './rgd-etapes.js';
+// Le planning dit QUAND un chantier a lieu — c'est lui qui porte les dates
+// corrigées à la main. `estFormation` vient de là pour qu'une formation ne
+// soit jamais comptée comme un chantier, ici comme à l'écran.
+import { estFormation, finDe } from './rgd-planning.js';
 
 // Les objectifs, fixés par Élodie le 04/11/2026.
 //
@@ -136,6 +140,7 @@ export function moisObjectifs(aujourdhui = new Date()) {
   const devisCrm = scope.rgd('rgd_devis_crm');
   const paiements = scope.rgd('rgd_paiements');
   const visites = scope.rgd('rgd_chantiers').filter(estVisiteTechnique);
+  const planning = scope.rgd('rgd_planning').filter(c => !estFormation(c));
 
   // ⚠ LES FACTURES FAITES DANS LE CRM NE COMPTAIENT DANS AUCUN CHIFFRE
   // D'AFFAIRES jusqu'au 11/11/2026, et personne ne pouvait le voir : les deux
@@ -276,7 +281,25 @@ export function moisObjectifs(aujourdhui = new Date()) {
       // CLIENT pour compter des chantiers. Un client qui signe deux devis a
       // bien signé les deux montants — dédoublonner ici effacerait de l'argent.
       montantSigne: listeSignes.reduce((t, d) => t + (Number(d.montant_ht) || 0), 0),
-      chantiers: signes.length,
+      // ⚠ UN CHANTIER SE COMPTE SUR LE PLANNING, PAS SUR LES SIGNATURES
+      // (17/11/2026, Élodie : « un devis signé ne veut pas forcément dire
+      // chantier, le chantier peut avoir lieu plus tard »). Il comptait les
+      // CLIENTS distincts ayant signé dans le mois — novembre affichait 2 pour
+      // deux devis signés dont l'un démarre en janvier.
+      //
+      // ⚠ C'EST LA DATE DE DÉBUT QUI RANGE LE CHANTIER DANS SON MOIS, et c'est
+      // la seule lecture compatible avec un objectif mensuel : « cinq chantiers
+      // par mois » veut dire cinq chantiers LANCÉS. Compter ceux qui tournent
+      // ferait compter cinq fois un chantier de cinq mois.
+      //
+      // ⚠ ET LE PLANNING EST LA VÉRITÉ SUR LES DATES : il corrige Costructor,
+      // qui garde la date d'origine. En contrepartie il ne contient que ce
+      // qu'on y pose — un chantier absent du planning ne compte nulle part.
+      // C'est le choix d'Élodie, assumé : « le planning, et je le remplis ».
+      chantiers: planning.filter(c => mois7(c.date_debut) === cle).length,
+      // ⚠ `clientsSignes` (plus bas) PORTE DÉJÀ LES CLIENTS QUI ONT SIGNÉ :
+      // l'entonnoir, le panier et le taux de transformation le lisent, et ils
+      // parlent bien de SIGNATURES — ils ne suivent pas ce changement.
       // ⚠ LE CA NE DÉDUIT PAS LES AVOIRS, et c'est ce qui le réconcilie avec
       // le bilan comptable d'Élodie (05/11/2026). Il les déduisait : sur
       // l'exercice 2024/2025, 16 remboursements à −144 653 € ramenaient
@@ -383,6 +406,8 @@ const nomPersonne = (r) => {
   return o?.name || '—';
 };
 const lieu = (...v) => v.filter(Boolean).join(' ').trim();
+const jourFr = (iso) => (iso ? new Date(String(iso).slice(0, 10) + 'T00:00:00')
+  .toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }).replace('.', '') : '');
 
 /**
  * Les lignes d'un mois pour une mesure : `{ lignes: [{ date, client, detail,
@@ -433,10 +458,21 @@ export function detailMoisObjectif(cle, mesure) {
     }
     return { lignes: L.sort((a, b) => String(b.date).localeCompare(String(a.date))), nb: L.length };
   }
-  // ⚠ « Devis signés » ET « Chantiers » PARTAGENT LEUR LISTE : ce sont les
-  // mêmes devis, comptés autrement. Seule la note du bas change — elle dit
-  // combien de clients ces devis représentent.
-  if (mesure === 'devisSignes' || mesure === 'nbDevisSignes' || mesure === 'chantiers') {
+  // ⚠ « CHANTIERS » A SA PROPRE LISTE DEPUIS LE 17/11/2026 : celle du planning,
+  // avec le nom de chaque chantier et ses dates. Elle ne partage plus rien avec
+  // « Devis signés », qui reste une liste de devis.
+  if (mesure === 'chantiers') {
+    for (const c of scope.rgd('rgd_planning').filter(c => !estFormation(c))
+      .filter(c => mois7(c.date_debut) === cle)) {
+      const fin = finDe(c);
+      L.push({ date: c.date_debut, client: c.titre || 'Chantier',
+        detail: fin && fin !== c.date_debut ? `du ${jourFr(c.date_debut)} au ${jourFr(fin)}` : jourFr(c.date_debut) });
+    }
+    return { lignes: L.sort((a, b) => String(b.date).localeCompare(String(a.date))), nb: L.length };
+  }
+  // ⚠ « Devis signés » GARDE SA LISTE DE DEVIS. La note du bas dit combien de
+  // clients ils représentent — ce n'est plus le compte des chantiers.
+  if (mesure === 'devisSignes' || mesure === 'nbDevisSignes') {
     const devis = [
       ...scope.rgd('rgd_devis').filter(d => mois7(d.date_signature) === cle)
         .map(d => ({ d, date: d.date_signature })),
@@ -449,7 +485,11 @@ export function detailMoisObjectif(cle, mesure) {
     const clients = new Set(L.map(l => l.cle)).size;
     return { lignes: L.sort((a, b) => String(b.date).localeCompare(String(a.date))),
       nb: mesure === 'nbDevisSignes' ? L.length : clients,
-      note: L.length !== clients ? `${L.length} devis signés pour ${clients} client${clients > 1 ? 's' : ''} : un client qui signe deux devis fait UN chantier.` : null };
+      // ⚠ CETTE NOTE DISAIT « un client qui signe deux devis fait UN chantier ».
+      // C’était vrai tant que les chantiers se comptaient sur les signatures ;
+      // ils se comptent sur le PLANNING depuis le 17/11/2026, et le nombre de
+      // devis d’un client ne dit plus rien du nombre de chantiers.
+      note: L.length !== clients ? `${L.length} devis signés pour ${clients} client${clients > 1 ? 's' : ''} : un même client peut en signer plusieurs.` : null };
   }
   if (mesure === 'ca') {
     for (const p of scope.rgd('rgd_paiements').filter(p => p.statut !== 'annule' && p.type !== 'remboursement'

@@ -91,6 +91,9 @@ function statsRgd() {
     // 2 devis. Sans ces deux lignes, le tableau de bord ne pouvait pas montrer
     // le même nombre que l'écran d'à côté, quel que soit le mot employé.
     devisSignes: m.nbDevisSignes, devisEnvoyes: m.nbDevisEnvoyes,
+    // Les chantiers du PLANNING : le tableau de bord doit afficher le même
+    // nombre que la vue d'ensemble, et c'est devenu un compte à part entière.
+    chantiers: m.chantiers,
     // Le deuxième et le troisième barreau du chemin de l'argent. `amount` est
     // déjà le facturé ; on le redonne sous son vrai nom pour que l'écran ne
     // demande pas « amount » quand il veut dire « facturé ».
@@ -586,15 +589,15 @@ export function argentConnu(k, deals = scope.deals()) {
 }
 
 /**
- * Le compte PAR DEVIS d'une période (`devisSignes` ou `devisEnvoyes`), quand
- * la structure le fournit — `null` sinon.
+ * Le cumul d'un compteur mensuel sur une période (`devisSignes`,
+ * `devisEnvoyes`, `chantiers`…), quand la structure le fournit — `null` sinon.
  *
  * ⚠ IL NE REMPLACE PAS LE COMPTE PAR CLIENT, il le complète. La vue
  * d'ensemble RGD montre les deux côte à côte ; le tableau de bord doit
  * pouvoir en faire autant, sinon « 2 » ici et « 3 » là passent pour une
  * erreur alors que ce sont deux questions différentes.
  */
-export function parDevis(cles, r, champ) {
+export function cumulMensuel(cles, r, champ) {
   const avec = cles.filter(k => (externe(k)?.revenue || []).some(m => m[champ] != null));
   if (!avec.length) return null;
   return avec.reduce((s, k) => s + moisDansPeriode(k, r)

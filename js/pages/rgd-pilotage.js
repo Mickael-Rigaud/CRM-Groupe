@@ -541,8 +541,12 @@ function carteObjectifs(mois, obj) {
   // ⚠ ET UN MOIS INCONNU N'EST PAS UN ZÉRO : si aucun mois de l'exercice ne
   // porte la donnée, le cumul vaut `null` et la tuile affiche « — ». Les
   // demandes ne sont suivies que depuis mars 2026, les visites depuis août.
+  // ⚠ LES CHANTIERS S'ADDITIONNENT DEPUIS LE 17/11/2026. Tant qu'ils se
+  // comptaient en CLIENTS ayant signé, il fallait faire l'union des clés : le
+  // même client signé deux mois de suite restait un chantier. Ils se comptent
+  // désormais sur le PLANNING, où chaque chantier a une date de début et une
+  // seule — deux lignes sont deux chantiers, la somme est juste.
   const cumul = (champ) => {
-    if (champ === 'chantiers') return new Set(dansEx.flatMap(m => m.clientsSignes || [])).size;
     const connus = dansEx.map(m => m[champ]).filter(v => v !== null && v !== undefined);
     return connus.length ? connus.reduce((a, b) => a + b, 0) : null;
   };

@@ -12,7 +12,7 @@ import {
   rdvMois, signeesMois, periodePrecedente, moisEnCours, externe, exerciceDe,
   // Les quatre cartes ajoutées le 12/11/2026. Elles rendent `null` quand la
   // structure filtrée ne porte pas la donnée : l'écran masque la carte.
-  cheminArgent, chantiersResume, publicite, envoisAuto, argentConnu, parDevis, detailsPeriode,
+  cheminArgent, chantiersResume, publicite, envoisAuto, argentConnu, cumulMensuel, detailsPeriode,
 } from '../data/chiffres.js';
 // `finDe` tient compte de la fin déclarée à la main et des jours ouvrés d'une
 // formation : refaire ce calcul ici donnerait une date différente du planning.
@@ -214,8 +214,15 @@ export const homePage = {
                 structure a un espace à elle ; ailleurs, « affaires » reste le
                 terme générique du groupe. Et le compte par devis est dit juste
                 en dessous : les deux nombres de l'autre écran sont là. */ ''}
+          ${/* ⚠ POUR RGD, CE N'EST PLUS LE COMPTE DES SIGNATURES (17/11/2026) :
+                c'est celui du PLANNING. Un devis signé en novembre dont le
+                chantier démarre en janvier n'est pas un chantier de novembre.
+                `t.signees` reste ce qu'il est — des clients qui ont signé — et
+                continue de nourrir l'entonnoir, le panier et le taux de
+                transformation, qui parlent bien de signatures. */ ''}
           ${kpi(cles.length === 1 && cles[0] === 'rgd' ? 'Chantiers' : 'Affaires signées',
-            t.signees ?? '—', evolution(avant?.signees, t.signees),
+            chantiersDuMois(cles, r, t) ?? '—',
+            evolution(chantiersDuMois(cles, periodePrecedente(r), t), chantiersDuMois(cles, r, t)),
             serieDe(cle => cles.reduce((s, k) => s + signeesMois(k, cle, deals), 0)),
             sousChantiers(cles, r, t), false, '', '',
             detailsPeriode(cles, r, 'chantiers'))}
@@ -1151,10 +1158,20 @@ function taille(html, cls) {
 // Sous la tuile des chantiers : le compte PAR DEVIS, puis le panier. C'est la
 // ligne qui réconcilie les deux écrans — « 2 chantiers · 3 devis signés » dit
 // d'un trait pourquoi la vue d'ensemble RGD affiche 3 et celle-ci 2.
+// Le nombre affiché par la tuile : les chantiers du planning quand la
+// structure les tient (RGD), sinon les affaires gagnées du CRM.
+function chantiersDuMois(cles, r, t) {
+  const n = cumulMensuel(cles, r, 'chantiers');
+  return n == null ? (t.signees ?? null) : n;
+}
+
+// ⚠ LA LIGNE QUI RÉCONCILIE. « 1 chantier · 2 devis signés » dit d'un trait
+// pourquoi les deux nombres diffèrent : les devis se signent ce mois-ci, les
+// chantiers démarrent quand ils démarrent.
 function sousChantiers(cles, r, t) {
-  const n = parDevis(cles, r, 'devisSignes');
+  const n = cumulMensuel(cles, r, 'devisSignes');
   const bouts = [];
-  if (n != null && n !== t.signees) bouts.push(`${n} devis signé${n > 1 ? 's' : ''}`);
+  if (n != null) bouts.push(`${n} devis signé${n > 1 ? 's' : ''} sur la période`);
   bouts.push(t.panier ? `panier ${eur(t.panier)}` : 'panier moyen indisponible');
   return bouts.join(' · ');
 }
