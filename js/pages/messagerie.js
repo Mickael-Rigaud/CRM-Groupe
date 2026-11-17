@@ -422,8 +422,16 @@ function vueConversation(hote, fil, { contexte = null, apresEnvoi = null, surRen
 
     brancherFil();
     chargerImages();
-    if (bas) zoneFil.scrollTop = zoneFil.scrollHeight;
+    collerEnBas();
+    requestAnimationFrame(collerEnBas);
   };
+
+  // ⚠ LE FIL SE RECOLLE EN BAS AUSSI APRÈS COUP (17/11/2026, Élodie : « pour
+  // les longues conversations je voudrais voir les derniers messages ») : une
+  // photo qui arrive après le rendu allonge le fil, et la dernière ligne
+  // repassait sous le pli. Seulement si on était en bas : on n'arrache pas la
+  // lecture de quelqu'un qui remonte l'historique.
+  function collerEnBas() { if (bas) zoneFil.scrollTop = zoneFil.scrollHeight; }
 
   // Les vignettes demandent un lien signé ; on ne le demande qu'une fois par fichier.
   async function chargerImages() {
@@ -432,6 +440,7 @@ function vueConversation(hote, fil, { contexte = null, apresEnvoi = null, surRen
       delete im.dataset.src;
       try {
         if (!liens.has(chemin)) liens.set(chemin, await db.fileUrl(chemin));
+        im.onload = collerEnBas;
         im.src = liens.get(chemin);
       } catch { im.closest('.msg-photo')?.classList.add('absente'); }
     }

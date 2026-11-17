@@ -9655,3 +9655,17 @@ td .pl-toque { color: #4f46e5; }
    en dégradé, écrits blanc sur leur carte blanche. Ils gardent l'encre normale. */
 :is(.msg-app, .msg-panneau) .msg-ligne.moi :is(.msg-fichier, .msg-photo, .msg-corps a.msg-renvoi) { color: var(--text); text-decoration: none; }
 :is(.msg-app, .msg-panneau) .msg-ligne.moi .msg-fichier-nom small, :is(.msg-app, .msg-panneau) .msg-ligne.moi .msg-photo span { color: var(--muted); }
+
+/* ⚠ SUR ORDINATEUR, L'ÉCRAN MESSAGERIE TIENT DANS LA FENÊTRE (17/11/2026,
+   Élodie : « pour les longues conversations je voudrais voir les derniers
+   messages »). Rien ne bornait sa hauteur : le fil s'allongeait avec la page,
+   ne défilait jamais lui-même, et la conversation s'ouvrait EN HAUT — le
+   « recoller en bas » de messagerie.js n'avait rien à faire défiler. Mesuré :
+   fil de 5 340 px de haut pour 5 340 px de contenu. Même hauteur que sur
+   téléphone : la fenêtre moins l'en-tête (`--msg-haut`, mesuré au rendu). */
+@media screen and (min-width: 821px) {
+  /* `max-height` et pas seulement `height` : `.esp-app` porte `flex: 1` dans un
+     conteneur en colonne, et la flexbox l'emportait sur la hauteur. */
+  .msg-app { height: calc(100dvh - var(--msg-haut, 80px)); max-height: calc(100dvh - var(--msg-haut, 80px)); min-height: 420px; }
+  .msg-app :is(.msg-cote, .msg-vue, .msg-hote, .msg-fil) { min-height: 0; }
+}
