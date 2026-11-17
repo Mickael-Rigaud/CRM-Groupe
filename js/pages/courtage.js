@@ -16,6 +16,7 @@ import { orgForm, openOrg } from './organisations.js';
 import { activityRowHtml, bindActivityRows, nextActivity } from './activity.js';
 import { coquilleEspace, poserEspace, kpiEspace, archiverFiche, supprimerDefinitivement, estActive } from './espace.js';
 import { vivierPage } from './vivier.js';
+import { estSimulation, feuDe, carteSimulation, estNouvelle } from './courtage-simulateur.js';
 
 const KEY = 'courtage';
 const act = () => ACTIVITIES[KEY];
@@ -91,63 +92,139 @@ export const courtageHomePage = {
       const retard = ouvertes.filter(x => daysSince(x.due_date) > 0).sort((x, y) => x.due_date.localeCompare(y.due_date));
       const jour = ouvertes.filter(x => daysSince(x.due_date) === 0);
 
+      // ⚠ L'ACCUEIL A PRIS LA LIGNE DU TABLEAU DE BORD (17/11/2026, Élodie : « quelque
+      // chose de plus moderne et dynamique, et que les demandes du simulateur arrivent
+      // directement dans le CRM »). Mêmes ingrédients que la To do : fond qui dérive,
+      // cartes en verre, compteurs qui comptent, entrée en cascade — tout sous
+      // `.ct-accueil`, rien ne bouge dans les espaces RGD et BTP qui partagent la coquille.
+      // Les demandes du simulateur passent EN TÊTE : ce sont elles qu'on rappelle le jour même.
+      const prenom = String(scope.user?.full_name || '').trim().split(/\s+/)[0];
+      const simus = all.filter(estSimulation)
+        .sort((x, y) => String(y.created_at || '').localeCompare(String(x.created_at || '')));
+      const simusOuvertes = simus.filter(d => d.status === 'open');
+      const neuves = simus.filter(estNouvelle);
+      const parFeu = (f) => simusOuvertes.filter(d => feuDe(d) === f).length;
+      const semaine = simus.filter(d => (Date.now() - Date.parse(d.created_at || 0)) < 7 * 86400000).length;
+      const phrase = neuves.length
+        ? `${neuves.length} demande${neuves.length > 1 ? 's' : ''} à rappeler.`
+        : nouveaux.length ? `${nouveaux.length} lead${nouveaux.length > 1 ? 's' : ''} à qualifier.` : 'tout est à jour.';
+      const tuile = (cle, n, libelle, sous, href) => `<a class="ct-tuile ${cle}" href="${href}"><b data-compte="${n}">${n}</b><span>${libelle}</span><em>${sous}</em></a>`;
+      const contactDe = (d) => (d.contact_id ? db.byId('contacts', d.contact_id) : null);
+      const plusGrosse = Math.max(1, ...colonnes.map(c => c.cartes.length));
+
       root.innerHTML = cadre('#/courtage', "Vue d'ensemble", `
-        <div class="esp-kpis">
-          ${kpiEspace({ label: 'Nouveaux leads', valeur: nouveaux.length, sous: 'à qualifier et à appeler', icone: '📨', ton: 'accent', href: '#/pipeline/courtage' })}
-          ${kpiEspace({ label: 'Dossiers ouverts', valeur: open.length, sous: `${eur(pondere)} de commissions pondérées`, icone: '📂', ton: 'green', href: '#/pipeline/courtage' })}
-          ${kpiEspace({ label: 'En banque', valeur: banque.length, sous: 'transmis et offres éditées', icone: '🏦', ton: 'amber', href: '#/pipeline/courtage' })}
-          ${kpiEspace({ label: 'Sans prochaine action', valeur: sansSuite.length, sous: 'dossiers à relancer', icone: '⚠', ton: 'red', href: '#/pipeline/courtage' })}
+        <div class="ct-accueil">
+        <div class="tb-fond" aria-hidden="true"><span class="tb-tache t1"></span><span class="tb-tache t2"></span><span class="tb-tache t3"></span></div>
+        <header class="ct-hero">
+          <div>
+            <h1>${prenom ? `Bonjour ${esc(prenom)}, ` : ''}<span>${esc(phrase)}</span></h1>
+            <p><i class="tb-vivant"></i>${semaine
+              ? `${semaine} simulation${semaine > 1 ? 's' : ''} reçue${semaine > 1 ? 's' : ''} cette semaine`
+              : 'Les simulations du site arrivent ici en direct'}</p>
+          </div>
+          <div class="ct-tuiles">
+            ${tuile('leads', nouveaux.length, 'nouveaux leads', 'à qualifier et à appeler', '#/pipeline/courtage')}
+            ${tuile('ouverts', open.length, 'dossiers ouverts', `${eur(pondere)} pondérés`, '#/pipeline/courtage')}
+            ${tuile('banque', banque.length, 'en banque', 'transmis et offres', '#/pipeline/courtage')}
+            ${tuile('relance', sansSuite.length, 'sans action', 'à relancer', '#/pipeline/courtage')}
+          </div>
+        </header>
+
+        <div class="ct-duo">
+          <section class="ct-panneau ct-simu">
+            <div class="ct-panneau-tete">
+              <h2>Demandes du simulateur</h2>
+              <div class="ct-feux">
+                <span class="est-vert" title="Feu vert : projet faisable"><i></i>${parFeu('vert')}</span>
+                <span class="est-orange" title="Feu orange : projet à optimiser"><i></i>${parFeu('orange')}</span>
+                <span class="est-rouge" title="Feu rouge : projet à étudier"><i></i>${parFeu('rouge')}</span>
+              </div>
+            </div>
+            <div class="cts-liste">${simusOuvertes.slice(0, 6).map(d => carteSimulation(d, contactDe(d))).join('')
+              || `<div class="ct-vide"><b>Aucune demande pour l’instant.</b>
+                  <span>Chaque simulation faite sur lareferencecourtage.fr arrivera ici avec son verdict, ses chiffres et une tâche de rappel.</span></div>`}</div>
+            ${simusOuvertes.length > 6 ? `<a class="ct-plus" href="#/pipeline/courtage">Voir les ${simusOuvertes.length} demandes →</a>` : ''}
+          </section>
+
+          <section class="ct-panneau ct-afaire">
+            <div class="ct-panneau-tete"><h2>À faire</h2>
+              <span class="ct-compte ${retard.length ? 'est-retard' : ''}">${retard.length} en retard · ${jour.length} aujourd’hui</span></div>
+            ${[...retard, ...jour].slice(0, 8).map(x => activityRowHtml(x, { showContext: true })).join('')
+              || '<div class="ct-vide"><b>Rien d’échu.</b><span>Les prochaines actions sont plus loin dans le temps.</span></div>'}
+          </section>
         </div>
 
-        <div class="card">
-          <div class="card-head"><h2>Pipeline dossiers</h2>
-            <span class="muted small">${eur(open.reduce((s, d) => s + (Number(d.amount) || 0), 0))} de commissions estimées</span>
-            <span class="grow"></span>
-            <a class="btn ghost sm" href="#/pipeline/courtage">Voir la page complète →</a>
+        <section class="ct-panneau ct-pipe">
+          <div class="ct-panneau-tete"><h2>Pipeline dossiers</h2>
+            <span class="ct-compte">${eur(open.reduce((s, d) => s + (Number(d.amount) || 0), 0))} de commissions estimées</span>
+            <a class="ct-lien" href="#/pipeline/courtage">Page complète →</a>
           </div>
-          <div class="esp-kanban">${colonnes.map(({ s, cartes, somme }) => `
-            <div class="esp-col">
-              <div class="esp-col-head"><b>${esc(s.label)}</b><span>${cartes.length}</span></div>
-              <div class="esp-col-sum">${somme ? eur(somme) : '—'}</div>
-              <div class="esp-col-body">${cartes.map(d => `
-                <button type="button" class="esp-card-deal" data-deal="${d.id}">
-                  <b>${esc(d.title)}</b>
-                  <span class="muted">${esc(dealParty(d))}</span>
-                  ${d.amount ? `<span class="esp-card-amount">${eur(d.amount)}</span>` : ''}
-                </button>`).join('') || '<div class="esp-col-vide">—</div>'}</div>
+          <div class="ct-etapes">${colonnes.map(({ s, cartes, somme }, n) => `
+            <div class="ct-etape" style="--n:${n}">
+              <div class="ct-etape-tete"><b>${esc(s.label)}</b><span>${cartes.length}</span></div>
+              <div class="ct-jauge"><i style="width:${Math.round((cartes.length / plusGrosse) * 100)}%"></i></div>
+              <div class="ct-etape-somme">${somme ? eur(somme) : '—'}</div>
+              <div class="ct-etape-corps">${cartes.map(d => `
+                <button type="button" class="ct-dossier ${feuDe(d) ? 'cts-' + feuDe(d) : ''}" data-deal="${d.id}">
+                  <b>${esc(estSimulation(d) ? (contactDe(d) ? [contactDe(d).first_name, contactDe(d).last_name].filter(Boolean).join(' ') : d.title.split(' — ').pop()) : d.title)}</b>
+                  <span>${esc(estSimulation(d) ? (d.fields?.projet || 'Simulateur') : dealParty(d))}</span>
+                  ${d.amount ? `<em>${eur(d.amount)}</em>` : ''}
+                </button>`).join('') || '<div class="ct-etape-vide">—</div>'}</div>
             </div>`).join('')}</div>
-        </div>
+        </section>
 
-        <div class="card">
-          <div class="card-head"><h2>Recrutement</h2>
-            <span class="muted small">${viv.length} profil${viv.length > 1 ? 's' : ''} au vivier</span>
-            <span class="grow"></span>
-            <a class="btn ghost sm" href="#/courtage/vivier">Ouvrir le vivier →</a>
+        <section class="ct-panneau ct-recrut">
+          <div class="ct-panneau-tete"><h2>Recrutement</h2>
+            <span class="ct-compte">${viv.length} profil${viv.length > 1 ? 's' : ''} au vivier</span>
+            <a class="ct-lien" href="#/courtage/vivier">Ouvrir le vivier →</a>
           </div>
-          <div class="esp-kpis">
-            ${kpiEspace({ label: 'À contacter', valeur: aContacter, sous: 'jamais approchés', icone: '📞', ton: 'accent', href: '#/courtage/vivier' })}
-            ${kpiEspace({ label: 'En cours', valeur: enCours, sous: 'contactés, RDV pris', icone: '🤝', ton: 'amber', href: '#/courtage/vivier' })}
-            ${kpiEspace({ label: 'Recrutés', valeur: recrutes, sous: 'entrés dans la structure', icone: '✓', ton: 'green', href: '#/courtage/vivier' })}
-            ${kpiEspace({ label: 'Mandataires & indépendants', valeur: viv.filter(r => ['1', '3'].includes(r.prio)).length, sous: `cible directe · ${viv.filter(r => r.prio === '3').length} à vérifier`, icone: '🎯', ton: 'accent', href: '#/courtage/vivier' })}
+          <div class="ct-mini-tuiles">
+            ${tuile('leads', aContacter, 'à contacter', 'jamais approchés', '#/courtage/vivier')}
+            ${tuile('banque', enCours, 'en cours', 'contactés, RDV pris', '#/courtage/vivier')}
+            ${tuile('ouverts', recrutes, 'recrutés', 'entrés dans la structure', '#/courtage/vivier')}
+            ${tuile('cible', viv.filter(r => ['1', '3'].includes(r.prio)).length, 'mandataires & indép.', `cible directe · ${viv.filter(r => r.prio === '3').length} à vérifier`, '#/courtage/vivier')}
           </div>
-        </div>
+        </section>
+        </div>`);
 
-        ${ouvertes.length ? `<div class="card">
-          <div class="card-head"><h2>À faire sur les dossiers</h2>
-            <span class="muted small">${retard.length} en retard · ${jour.length} aujourd&rsquo;hui</span>
-          </div>
-          ${[...retard, ...jour].slice(0, 12).map(x => activityRowHtml(x, { showContext: true })).join('')
-            || '<div class="empty">Rien d&rsquo;échu : les prochaines actions sont plus loin dans le temps.</div>'}
-        </div>` : ''}`);
-
-      root.querySelectorAll('[data-deal]').forEach(el => el.onclick = () => openDeal(el.dataset.deal, draw));
+      root.querySelectorAll('[data-deal]').forEach(el => {
+        el.onclick = (e) => { if (e.target.closest('[data-tel]')) return; openDeal(el.dataset.deal, draw); };
+        if (el.tagName !== 'BUTTON') el.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDeal(el.dataset.deal, draw); } };
+      });
       bindActivityRows(root, draw);
+      if (premiere) { premiere = false; animerAccueil(root); }
     };
 
+    let premiere = true;
     draw();
     return { refresh: draw, destroy: coquille.retirer };
   },
 };
+
+// L'entrée de l'accueil : cascade des cartes et compteurs qui comptent.
+// ⚠ VISIBLE PAR DÉFAUT, comme la To do : ce script pose `.anime` puis la retire.
+// S'il ne part pas, tout est simplement là. Et rien pour qui demande moins d'animations.
+function animerAccueil(root) {
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+  const page = root.querySelector('.ct-accueil');
+  if (!page) return;
+  const morceaux = [...page.querySelectorAll('.ct-tuile, .ct-panneau, .cts-carte, .ct-etape')];
+  morceaux.forEach((el, i) => el.style.setProperty('--i', Math.min(i, 24)));
+  page.classList.add('anime');
+  requestAnimationFrame(() => requestAnimationFrame(() => page.classList.add('vu')));
+  setTimeout(() => { page.classList.remove('anime', 'vu'); morceaux.forEach(el => el.style.removeProperty('--i')); }, 1700);
+  page.querySelectorAll('[data-compte]').forEach(b => {
+    const finale = Number(b.dataset.compte) || 0;
+    if (finale < 2) return;
+    const t0 = performance.now();
+    const pas = (t) => {
+      const k = Math.min(1, (t - t0) / 700);
+      b.textContent = Math.round(finale * (1 - Math.pow(1 - k, 3)));
+      if (k < 1) requestAnimationFrame(pas);
+    };
+    requestAnimationFrame(pas);
+  });
+}
 
 // ---------------------------------------------------------------- Base de données
 // Le répertoire du cabinet en trois familles : les particuliers (clients et prospects)

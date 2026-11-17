@@ -11,6 +11,7 @@ import { estAmoHenrri, blocHenrri, lierHenrri, etatHenrri } from '../henrri.js';
 // vivent dans `rgd-fiche.js` et servent aux trois fiches du CRM : trois
 // présentations qui se ressemblent s'apprennent une fois.
 import { initiales, tuile, info } from './rgd-fiche.js';
+import { blocSimulateurFiche } from './courtage-simulateur.js';
 // Ce que la fiche projet enregistre en plus des champs structurés, et où le
 // ranger. Voir l'en-tête du module : la copie porte la plus grande partie de
 // ce qui a été saisi, et rien ne l'affichait.
@@ -686,6 +687,12 @@ export function openDeal(id, onChange) {
             ${info('personne', 'Apporteur', refOrg ? esc(refOrg.name) : refC ? esc(contactName(refC)) : '', 'est-vert')}
             ${info('personne', 'Responsable', marqueResponsable(d.owner_id), 'est-gris')}
             ${champsDe('prospect')}`, 'Aucune coordonnée renseignée.')}
+
+          <!-- ⚠ LE VERDICT DU SIMULATEUR (17/11/2026) : feu, chiffres, blocages et
+               leviers d'une demande venue de lareferencecourtage.fr. Rangés dans
+               fields sous des clés que act.fields ne déclare pas, ils ne
+               s'affichaient nulle part. Rien pour une affaire qui n'en vient pas. -->
+          ${blocSimulateurFiche(d)}
 
           ${blocSi('Le projet',
             info('regle', 'Motifs de la demande', esc(d.fields?.problematique || ''), 'est-gris')
