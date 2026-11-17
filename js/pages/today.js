@@ -248,7 +248,11 @@ export const todayPage = {
       const nAvenir = ouvOnglet.length - nRetard - nJour;
       const nFait = toutes.filter(a => a.done && onglet.garde(a, moi) && a.done_at && daysSince(a.done_at) === 0).length;
       const aTraiter = nRetard + nJour;
-      const part = aTraiter + nFait ? Math.round((nFait / (aTraiter + nFait)) * 100) : 100;
+      // ⚠ RIEN DE PRÉVU NI DE FAIT N'EST PAS « 100 % » (17/11/2026, Élodie : la
+      // tuile affichait « 0 faite aujourd'hui · 100 % de la journée », anneau
+      // plein) : sans tâche du jour, il n'y a pas de part à montrer.
+      const part = aTraiter + nFait ? Math.round((nFait / (aTraiter + nFait)) * 100) : 0;
+      const sousFait = aTraiter + nFait ? `${part} % de la journée` : 'rien de prévu aujourd’hui';
       const prenom = String(scope.user?.full_name || '').trim().split(/\s+/)[0];
       const phrase = onglet.key === 'envoyees'
         ? (ouvOnglet.length ? `${ouvOnglet.length} tâche${ouvOnglet.length > 1 ? 's' : ''} confiée${ouvOnglet.length > 1 ? 's' : ''} en cours.` : 'rien en attente chez les autres.')
@@ -271,7 +275,7 @@ export const todayPage = {
               <svg class="td-anneau" viewBox="0 0 44 44" aria-hidden="true"><defs><linearGradient id="td-grad" x1="0" y1="0" x2="1" y2="1">
                 <stop offset="0" stop-color="#5B52F0"/><stop offset=".6" stop-color="#FF4D8D"/><stop offset="1" stop-color="#FF7A2D"/></linearGradient></defs>
                 <circle cx="22" cy="22" r="18" class="fond"/><circle cx="22" cy="22" r="18" class="plein" style="--p:${part}"/></svg>
-              <b data-compte="${nFait}">${nFait}</b><span>fait${nFait > 1 ? 'es' : 'e'} aujourd’hui</span><em>${part} % de la journée</em>
+              <b data-compte="${nFait}">${nFait}</b><span>fait${nFait > 1 ? 'es' : 'e'} aujourd’hui</span><em>${sousFait}</em>
             </div>
           </div>
         </header>
