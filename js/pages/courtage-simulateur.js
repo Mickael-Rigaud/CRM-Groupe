@@ -61,7 +61,7 @@ export const chiffresDe = (d) => {
   return [
     { k: 'Budget', v: f.budget || euros(f.montant_projet) },
     { k: 'Capacité', v: euros(f.capacite) },
-    { k: 'À financer', v: euros(f.emprunt) },
+    { k: 'Prêt', v: euros(f.emprunt) },
     { k: 'Endettement', v: pourcent(f.endettement) },
   ].filter(c => c.v);
 };

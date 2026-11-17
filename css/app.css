@@ -9807,9 +9807,9 @@ td .pl-toque { color: #4f46e5; }
   padding: 2px 8px; border-radius: 999px; background: var(--ct-degrade, linear-gradient(110deg,#5B52F0,#FF4D8D 70%,#FF7A2D)); }
 .cts-ou { margin: 0; font-size: 12.5px; color: var(--muted); }
 .cts-mini { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
-.cts-mini span { display: flex; flex-direction: column; min-width: 0; padding: 6px 8px; border-radius: 10px; background: rgba(255,255,255,.85);
-  border: 1px solid var(--line); font-size: 12.5px; font-weight: 800; white-space: nowrap; }
-.cts-mini em { font-style: normal; font-size: 10.5px; font-weight: 650; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.cts-mini span { display: flex; flex-direction: column; min-width: 0; padding: 6px 7px; border-radius: 10px; background: rgba(255,255,255,.85);
+  border: 1px solid var(--line); font-size: 12px; font-weight: 800; white-space: nowrap; overflow: hidden; }
+.cts-mini em { font-style: normal; font-size: 10px; font-weight: 650; color: var(--muted); text-transform: uppercase; letter-spacing: .01em; overflow: hidden; text-overflow: ellipsis; }
 .cts-carte-pied { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
 .cts-avis { font-size: 12px; font-weight: 750; color: color-mix(in srgb, var(--f, #666) 80%, #000); }
 .cts-appel { margin-left: auto; padding: 6px 13px; border-radius: 999px; font-size: 12px; font-weight: 800; text-decoration: none; color: #fff;
@@ -9875,4 +9875,125 @@ td .pl-toque { color: #4f46e5; }
 }
 @media (prefers-reduced-motion: reduce) {
   .cts-carte > .cts-feu { animation: none; }
+}
+
+/* --------------------------------------------------------------------------
+   ⚠ LA CHARTE DE LAREFERENCECOURTAGE.FR DANS L'ESPACE COURTAGE (17/11/2026,
+   Élodie : « je voudrais retrouver sur le CRM de La Référence Courtage toute la
+   charte graphique de la marque »). Relevée dans la source du site
+   (dépôt site-mickael-rigaud, `:root` de index.html) et non devinée :
+     Fraunces pour les titres, Inter pour le texte ;
+     encre #15384E / #4A6579, fonds sable #FFFCF6 / #FFF3E2, filets #F2E3CE ;
+     orange #F4801C → #FFA43D (boutons en dégradé), azur #0FA3C4 / #0A6F86 ;
+     ciel en dégradé, soleil, panorama de la Baie des Anges.
+   Ce bloc passe APRÈS celui de la modernisation et en redéfinit les jetons : la
+   mise en page reste, les couleurs et les lettres deviennent celles de la marque.
+
+   ⚠ SEULEMENT DANS L'ESPACE. La couleur de la structure dans les vues
+   communes (onglet du haut, colonne de la To do, graphiques du pilotage) reste
+   #1D5B78 : l'orange de la marque s'y confondrait avec celui de RGD Renova.
+   -------------------------------------------------------------------------- */
+.esp-app[data-espace="courtage"] {
+  --lrc-encre: #15384E; --lrc-encre-2: #4A6579; --lrc-gris: #8CA2B3;
+  --lrc-sable: #FFFCF6; --lrc-sable-2: #FFF3E2; --lrc-filet: #F2E3CE; --lrc-filet-fort: #E3CDAF;
+  --lrc-orange: #F4801C; --lrc-orange-2: #FFA43D; --lrc-orange-doux: #FFEAD1;
+  --lrc-azur: #0FA3C4; --lrc-azur-doux: #D8F1F8; --lrc-azur-encre: #0A6F86;
+  --lrc-serif: 'Fraunces', 'Iowan Old Style', Georgia, 'Times New Roman', serif;
+  /* les jetons du CRM, aux couleurs de la marque */
+  --text: var(--lrc-encre); --muted: var(--lrc-encre-2); --muted-2: var(--lrc-gris);
+  --bg: var(--lrc-sable); --card: #FFFFFF; --card-2: var(--lrc-sable-2);
+  --line: var(--lrc-filet); --line-strong: var(--lrc-filet-fort);
+  --accent: var(--lrc-orange); --accent-2: #DB6E10; --accent-soft: var(--lrc-orange-doux);
+  --accent-ink: var(--lrc-encre); --on-accent: #FFFFFF;
+  /* les jetons de l'accueil modernisé */
+  --ct-degrade: linear-gradient(135deg, var(--lrc-orange-2), var(--lrc-orange));
+  --ct-indigo: var(--lrc-azur-encre); --ct-rose: var(--lrc-orange); --ct-orange: var(--lrc-orange);
+  --ct-vert: #2E8B57; --ct-ambre: #E38A12; --ct-rouge: #D9483B;
+  --ct-verre: color-mix(in srgb, #FFFFFF 88%, transparent);
+  --ct-ombre: 0 18px 40px -30px rgba(21,56,78,.42);
+  background: var(--lrc-sable);
+  color: var(--lrc-encre);
+}
+
+/* ---- les lettres ---- */
+.esp-app[data-espace="courtage"] :is(.esp-head h1, .ct-hero h1, .ct-panneau-tete h2, .card-head h2, .cts-fiche h3) {
+  font-family: var(--lrc-serif); font-weight: 600; letter-spacing: -.012em; color: var(--lrc-encre); }
+.esp-app[data-espace="courtage"] .esp-head h1 { font-size: 26px; }
+.esp-app[data-espace="courtage"] .ct-panneau-tete h2 { font-size: 20px; }
+
+/* ---- le menu : l'encre marine, l'orange pour l'écran ouvert ---- */
+.esp-app[data-espace="courtage"] .esp-side { background: linear-gradient(180deg, #15384E 0%, #102D40 100%); }
+.esp-app[data-espace="courtage"] .esp-side-brand b { font-family: var(--lrc-serif); font-weight: 600; letter-spacing: 0; }
+.esp-app[data-espace="courtage"] .esp-side-brand em { color: var(--lrc-orange-2); }
+.esp-app[data-espace="courtage"] .esp-side-nav a.on { background: var(--ct-degrade); color: #fff;
+  box-shadow: 0 10px 24px -12px rgba(244,128,28,.85); }
+.esp-app[data-espace="courtage"] .esp-side-titre { color: #FFC98F; }
+
+/* ---- l'en-tête de l'écran ---- */
+.esp-app[data-espace="courtage"] .esp-head { background: color-mix(in srgb, var(--lrc-sable) 82%, transparent); border-bottom-color: var(--lrc-filet); }
+.esp-app[data-espace="courtage"] .datepill { border-color: var(--lrc-filet); background: #fff; color: var(--lrc-encre); }
+.esp-app[data-espace="courtage"] .datepill > span { background: var(--lrc-azur-encre); }
+
+/* ---- le fond : la lumière de la Côte plutôt que les taches violettes ---- */
+.esp-app[data-espace="courtage"] .tb-tache { opacity: .28; }
+.esp-app[data-espace="courtage"] .tb-tache.t1 { background: radial-gradient(circle, #9ED8EE, transparent 68%); }
+.esp-app[data-espace="courtage"] .tb-tache.t2 { background: radial-gradient(circle, #FFC27A, transparent 68%); }
+.esp-app[data-espace="courtage"] .tb-tache.t3 { background: radial-gradient(circle, #FFE1B8, transparent 68%); }
+
+/* ---- le ciel de l'accueil : celui du haut du site ---- */
+.esp-app[data-espace="courtage"] .ct-hero { position: relative; overflow: hidden; align-items: flex-start;
+  padding: 26px 28px 132px; border-radius: 26px; border: 1px solid rgba(255,255,255,.9);
+  background: linear-gradient(180deg, #BEE4F6 0%, #DDF0FA 30%, #FBF8F0 68%, #FFE9D2 100%);
+  box-shadow: var(--ct-ombre); }
+.ct-soleil { position: absolute; top: -70px; right: 12%; width: 210px; height: 210px; border-radius: 50%; pointer-events: none;
+  background: radial-gradient(circle, #FFF6D8 0 34%, rgba(255,214,140,.75) 46%, rgba(255,190,110,0) 70%); }
+.ct-baie { position: absolute; left: 0; right: 0; bottom: 0; width: 100%; height: 118px; object-fit: cover; object-position: center bottom; pointer-events: none; }
+.ct-hero-txt { position: relative; }
+.ct-sourcil { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 12px; padding: 5px 12px; border-radius: 999px;
+  background: rgba(255,255,255,.82); border: 1px solid var(--lrc-filet); font-size: 12px; font-weight: 600; color: var(--lrc-encre-2); }
+.ct-sourcil i { width: 7px; height: 7px; border-radius: 50%; background: var(--lrc-orange); }
+.esp-app[data-espace="courtage"] .ct-hero h1 { font-size: 36px; line-height: 1.1; }
+/* L'accent du titre est l'orange PLEIN du site (« proche de vous à Nice ») et non
+   un dégradé de texte : le site n'en emploie aucun. */
+.esp-app[data-espace="courtage"] .ct-hero h1 span { background: none; -webkit-background-clip: border-box; background-clip: border-box; color: var(--lrc-orange); }
+.esp-app[data-espace="courtage"] .ct-hero p { color: var(--lrc-encre-2); }
+.esp-app[data-espace="courtage"] .ct-hero .ct-tuiles { position: relative; align-self: flex-end; }
+
+/* ---- tuiles et panneaux : des cartes blanches sur filet sable ---- */
+.esp-app[data-espace="courtage"] :is(.ct-tuile, .ct-panneau) { background: rgba(255,255,255,.9); border-color: var(--lrc-filet); }
+.esp-app[data-espace="courtage"] .ct-tuile b { font-family: var(--lrc-serif); font-weight: 600; letter-spacing: -.02em; }
+.esp-app[data-espace="courtage"] .ct-tuile.leads { --t: var(--lrc-azur-encre); }
+.esp-app[data-espace="courtage"] .ct-tuile.ouverts { --t: #2E8B57; }
+.esp-app[data-espace="courtage"] .ct-tuile.banque { --t: var(--lrc-orange); }
+.esp-app[data-espace="courtage"] .ct-tuile.relance { --t: #D9483B; }
+.esp-app[data-espace="courtage"] .ct-tuile.cible { --t: #BE8A00; }
+.esp-app[data-espace="courtage"] .ct-tuile:hover { box-shadow: 0 26px 48px -30px rgba(244,128,28,.55); }
+.esp-app[data-espace="courtage"] :is(.ct-lien, .ct-plus) { background: none; color: var(--lrc-orange); }
+.esp-app[data-espace="courtage"] .ct-vide { border-color: var(--lrc-filet-fort); }
+.esp-app[data-espace="courtage"] .ct-etape { background: var(--lrc-sable); border-color: var(--lrc-filet); }
+.esp-app[data-espace="courtage"] .ct-etape-tete span { background: var(--lrc-azur-doux); color: var(--lrc-azur-encre); }
+.esp-app[data-espace="courtage"] .ct-jauge { background: var(--lrc-sable-2); }
+.esp-app[data-espace="courtage"] .ct-dossier { --f: var(--lrc-azur); }
+.esp-app[data-espace="courtage"] .cts-carte { background: linear-gradient(135deg, color-mix(in srgb, var(--f) 10%, transparent), transparent 60%), #fff;
+  border-color: var(--lrc-filet); }
+.esp-app[data-espace="courtage"] .cts-mini span { background: var(--lrc-sable); border-color: var(--lrc-filet); }
+.esp-app[data-espace="courtage"] .ct-feux span { background: #fff; border-color: var(--lrc-filet); }
+
+/* ---- boutons : la pilule orange du site ---- */
+.esp-app[data-espace="courtage"] .btn { border-radius: 999px; }
+.esp-app[data-espace="courtage"] .btn:not(.ghost):not(.danger) { background: var(--ct-degrade); color: #fff; border-color: transparent;
+  box-shadow: 0 10px 24px -12px rgba(244,128,28,.7); }
+.esp-app[data-espace="courtage"] .btn.ghost { background: #fff; border-color: var(--lrc-filet-fort); color: var(--lrc-encre); }
+.esp-app[data-espace="courtage"] :is(input, select, textarea) { border-color: var(--lrc-filet-fort); }
+.esp-app[data-espace="courtage"] :is(input, select, textarea):focus { outline-color: var(--lrc-azur); border-color: var(--lrc-azur); }
+.esp-app[data-espace="courtage"] .card { border-color: var(--lrc-filet); }
+.esp-app[data-espace="courtage"] thead th { color: var(--lrc-encre-2); background: var(--lrc-sable-2); }
+.esp-app[data-espace="courtage"] tbody tr.click:hover td { background: var(--lrc-sable); }
+.esp-app[data-espace="courtage"] td a { color: var(--lrc-azur-encre); }
+
+@media screen and (max-width: 820px) {
+  .esp-app[data-espace="courtage"] .ct-hero { padding: 20px 16px 104px; border-radius: 22px; }
+  .esp-app[data-espace="courtage"] .ct-hero h1 { font-size: 27px; }
+  .ct-baie { height: 92px; }
+  .ct-soleil { width: 150px; height: 150px; top: -50px; right: 6%; }
 }

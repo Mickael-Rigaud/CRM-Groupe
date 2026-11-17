@@ -115,8 +115,15 @@ export const courtageHomePage = {
       root.innerHTML = cadre('#/courtage', "Vue d'ensemble", `
         <div class="ct-accueil">
         <div class="tb-fond" aria-hidden="true"><span class="tb-tache t1"></span><span class="tb-tache t2"></span><span class="tb-tache t3"></span></div>
+        <!-- ⚠ LE CIEL DU SITE (17/11/2026, Élodie : « retrouver sur le CRM toute la
+             charte graphique de lareferencecourtage.fr ») : même dégradé de ciel, même
+             soleil, et le panorama de la Baie des Anges du haut de la page d'accueil,
+             repris tel quel du site (assets/courtage/baie.svg). -->
         <header class="ct-hero">
-          <div>
+          <span class="ct-soleil" aria-hidden="true"></span>
+          <img class="ct-baie" src="assets/courtage/baie.svg" alt="" aria-hidden="true">
+          <div class="ct-hero-txt">
+            <span class="ct-sourcil"><i></i>Agence de courtage indépendante</span>
             <h1>${prenom ? `Bonjour ${esc(prenom)}, ` : ''}<span>${esc(phrase)}</span></h1>
             <p><i class="tb-vivant"></i>${semaine
               ? `${semaine} simulation${semaine > 1 ? 's' : ''} reçue${semaine > 1 ? 's' : ''} cette semaine`
