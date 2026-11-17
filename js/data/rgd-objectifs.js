@@ -399,7 +399,10 @@ export function tauxPeriode(mois) {
 // de `moisObjectifs`, recopiés à l'identique : si l'un change là-haut, il change
 // ici aussi, sinon la fenêtre ne retombe plus sur le chiffre de la rangée.
 
-const nomPersonne = (r) => {
+// ⚠ EXPORTÉ DEPUIS LE 17/11/2026 pour `cheminDesSignes` (data/chiffres.js).
+// Écrire un second nommage là-bas aurait donné deux écrans qui n'appellent pas
+// le même client pareil — l'un par son contact, l'autre par son organisation.
+export const nomPersonne = (r) => {
   const c = r?.contact_id && db.byId('contacts', r.contact_id);
   if (c) return [c.first_name, c.last_name].filter(Boolean).join(' ').trim() || '—';
   const o = r?.organisation_id && db.byId('organisations', r.organisation_id);

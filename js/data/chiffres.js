@@ -9,7 +9,7 @@
 import { db } from './db.js';
 import { scope } from './scope.js';
 import { ACTIVITIES, ACTIVITY_KEYS, aAtteint, missionDe, reachedRdv, stageIndex, stageOf } from './schema.js';
-import { moisObjectifs, detailMoisObjectif } from './rgd-objectifs.js';
+import { moisObjectifs, detailMoisObjectif, nomPersonne } from './rgd-objectifs.js';
 // Le planning sait déjà dire quand un chantier finit — y compris la fin
 // déclarée à la main et les jours ouvrés d'une formation. Refaire ce calcul
 // ici donnerait deux écrans qui ne sont pas d'accord sur la même barre.
@@ -662,6 +662,13 @@ const moisDansPeriode = (k, r) => (externe(k)?.revenue || []).filter(m => inRang
  * un trou réel, pas un écart de méthode — et c'est pour ça qu'on compte large
  * ici et qu'on dit combien viennent du CRM.
  */
+// ⚠ PLUS AUCUN LECTEUR DEPUIS LE 17/11/2026. La carte « Le chemin de l'argent »
+// est passée à `cheminDesSignes`, qui suit les mêmes euros au lieu de comparer
+// trois cohortes. Cette fonction reste pour `resteDu`, qu'elle porte et que le
+// banc d'essai vérifie encore (reste dû, factures échues, part venue du CRM) :
+// cette mesure est juste, elle n'est simplement affichée nulle part — Élodie a
+// écarté une carte sur l'argent non rentré le même jour. Ne pas la réécrire le
+// jour où l'on en voudra une.
 export function cheminArgent(cles, r) {
   const avec = cles.filter(k => (externe(k)?.revenue || []).some(m => m.facture != null));
   if (!avec.length) return null;
@@ -738,6 +745,94 @@ export function chantiersResume(cles, r) {
     // Un chantier terminé dont l'avis Google est parti : c'est ce que le
     // bouton du planning déclenche, et la seule trace qu'il a servi.
     avisDemandes: tous.filter(c => c.fin_reelle && c.avis_demande && inRange(c.fin_reelle, r)).length,
+  };
+}
+
+/**
+ * Le chemin de l'argent : les chantiers SIGNÉS sur la période, suivis
+ * jusqu'à leur facturation et leur encaissement.
+ *
+ * ⚠ CETTE CARTE COMPARAIT TROIS POPULATIONS D'EUROS DIFFÉRENTES, et c'est
+ * pour ça qu'elle a été refaite le 17/11/2026 (Élodie : « ça ne va pas du
+ * tout »). Elle sommait, sur une même fenêtre, le signé D'UN CÔTÉ, le
+ * facturé DE L'AUTRE et l'encaissé D'UN TROISIÈME — trois cohortes qui
+ * tombent dans le même mois sans avoir rien à voir. Le mot « chemin »
+ * promet qu'un même euro avance de l'un à l'autre : c'était faux.
+ *
+ * Mesuré avant de corriger, et c'est ce qui a tranché :
+ *   novembre 2026 : signé 133 346 €, facturé 12 253 € — lu comme un
+ *     effondrement, alors qu'un chantier signé en novembre se facture après.
+ *   septembre 2026 : signé 0 €, facturé 16 479 € — la barre de référence
+ *     valait zéro.
+ *   sur 12 mois : signé 268 802 €, facturé 348 515 € — TOUJOURS inversé.
+ * ⚠ AUCUNE PÉRIODE NE RÉPARE ÇA : ce n'était pas une fenêtre trop courte,
+ * c'était trois horloges différentes. Ne pas « réessayer sur l'exercice ».
+ *
+ * ⚠ ON PART DES DEVIS SIGNÉS ET ON REGARDE VERS L'AVANT, jamais l'inverse.
+ * Le lien tient par le numéro de devis que porte chaque règlement
+ * (`costructor_quote_number`). Mesuré le 17/11/2026 : il résout 19 des 21
+ * devis signés sur douze mois, mais seulement **70 % des euros facturés de
+ * tout l'historique**. Partir des factures pour remonter aux devis perdrait
+ * donc 30 % de l'argent en silence ; partir des devis ne perd rien, parce
+ * qu'un devis sans facture est justement ce qu'on veut voir.
+ *
+ * ⚠ CÔTÉ CRM, LE LIEN N'EST PAS LE MÊME : une facture du CRM pend de son
+ * devis par `issu_de`, pas par un numéro recopié. Deux sources, deux liens.
+ */
+export function cheminDesSignes(cles, r) {
+  if (!cles.includes('rgd') || !scope.canRgd) return null;
+  const signes = [
+    ...scope.rgd('rgd_devis')
+      .filter(d => d.date_signature && inRange(d.date_signature, r))
+      .map(d => ({ id: d.id, numero: d.numero || '', date: d.date_signature,
+        montant: Number(d.montant_ht) || 0, client: nomPersonne(d), crm: false })),
+    ...scope.rgd('rgd_devis_crm')
+      .filter(d => d.genre === 'devis' && d.statut === 'signe'
+        && inRange(d.date_signature || d.date_devis, r))
+      .map(d => ({ id: d.id, numero: d.numero || '', date: d.date_signature || d.date_devis,
+        montant: Number(d.montant_ht) || 0, client: nomPersonne(d), crm: true })),
+  ];
+  if (!signes.length) return null;
+
+  // ⚠ MÊMES EXCLUSIONS QUE LE CA FACTURÉ : ni annulées, ni remboursements.
+  // Sans quoi la part facturée d'un chantier comparerait deux populations.
+  const paiements = scope.rgd('rgd_paiements')
+    .filter(p => p.statut !== 'annule' && p.type !== 'remboursement');
+  const facturesCrm = scope.rgd('rgd_devis_crm').filter(d => d.genre !== 'devis' && !d.importe
+    && ['envoye', 'signe'].includes(d.statut));
+
+  const jours = (iso) => Math.round(
+    (Date.now() - new Date(String(iso).slice(0, 10) + 'T00:00:00').getTime()) / 86400000);
+
+  const lignes = signes.map((s) => {
+    const liees = s.crm
+      ? facturesCrm.filter(f => String(f.issu_de) === String(s.id))
+      : (s.numero ? paiements.filter(p => p.costructor_quote_number === s.numero) : []);
+    const somme = (l) => l.reduce((t, x) => t + (Number(x.montant_ht) || 0), 0);
+    const facture = somme(liees);
+    const encaisse = somme(liees.filter(x => (s.crm ? !!x.regle_le : x.statut === 'recu')));
+    return {
+      ...s, facture, encaisse,
+      // ⚠ PLANCHER À ZÉRO : un avenant peut faire facturé > signé, et un
+      // « reste à facturer » négatif se soustrairait du total sans se voir.
+      reste: Math.max(0, s.montant - facture),
+      aucune: !liees.length,
+      jours: jours(s.date),
+    };
+  }).sort((a, b) => b.reste - a.reste || b.montant - a.montant);
+
+  const t = (f) => lignes.reduce((s, l) => s + f(l), 0);
+  return {
+    nb: lignes.length,
+    signe: t(l => l.montant),
+    facture: t(l => l.facture),
+    encaisse: t(l => l.encaisse),
+    reste: t(l => l.reste),
+    lignes,
+    // ⚠ DEUX MOIS, PAS ZÉRO JOUR : un chantier signé la semaine dernière et
+    // pas encore facturé est normal, et le signaler apprendrait à ignorer le
+    // signal. Au-delà, ça mérite un regard — sans dire que c'est une faute.
+    oublies: lignes.filter(l => l.aucune && l.jours > 60),
   };
 }
 

@@ -16,7 +16,7 @@ import {
   // lecteur, la tuile « Ce qui part tout seul », a été retiré. La fonction
   // reste dans chiffres.js avec ses contrôles — la retirer d'ici évite de
   // croire que le tableau de bord surveille encore les envois.
-  cheminArgent, publicite, argentConnu, cumulMensuel, detailsPeriode, reseauApporteurs,
+  cheminDesSignes, publicite, argentConnu, cumulMensuel, detailsPeriode, reseauApporteurs,
 } from '../data/chiffres.js';
 // `finDe` tient compte de la fin déclarée à la main et des jours ouvrés d'une
 // formation : refaire ce calcul ici donnerait une date différente du planning.
@@ -224,8 +224,16 @@ export const homePage = {
               <a href="#/patrimoine">Patrimoine</a> (biens, prêts, charges) et dans
               <a href="#/locatif">Gestion locative</a> (baux, loyers, impayés).</p>
           </section>` : `
-          ${taille(carteArgent(cles, r, state), 'tb-x7')}
-          ${scope.canPilotage ? taille(carteObjectifs(cles, deals), 'tb-x5') : ''}
+          ${/* ⚠ LA RANGÉE S'ADAPTE, parce que « Le chemin de l'argent » peut être
+                ABSENT : il part des chantiers signés sur la période, et un mois
+                sans signature n'en a aucun — septembre 2026 était dans ce cas.
+                Fixer les objectifs à 5 colonnes laisserait alors un trou de 7.
+                Vu en démo, où aucun devis n'est signé dans le mois. */ ''}
+          ${(() => {
+            const argent = carteArgent(cles, r, state);
+            return taille(argent, 'tb-x7')
+              + (scope.canPilotage ? taille(carteObjectifs(cles, deals), argent ? 'tb-x5' : 'tb-x12') : '');
+          })()}
 
           ${/* ⚠ LES MOTS SONT CEUX DE LA VUE D'ENSEMBLE RGD, pas les miens
                 (12/11/2026). « Leads » et « Demandes » désignaient le même
@@ -1073,39 +1081,65 @@ const jourCourt = (iso) => (iso
 // L'âge d'une échéance dépassée, en mots. ⚠ C'est lui qui fait agir, pas le
 
 /**
- * « Le chemin de l'argent » — la grande tuile du bento.
+ * Le chemin de l'argent — refait le 17/11/2026 (Élodie : « ça ne va pas du
+ * tout là »).
  *
- * ⚠ TROIS BARREAUX, PAS QUATRE. « Reste dû » a quitté cette carte le
- * 12/11/2026 pour la tuile rouge : les trois qui restent sont des FLUX de la
- * période choisie, le quatrième était un STOCK d'aujourd'hui. Alignés, on les
- * soustrayait de tête alors qu'ils ne parlent pas du même intervalle.
+ * ⚠ CE N'EST PLUS LA MÊME QUESTION. Avant : « combien a-t-on signé, facturé
+ * et encaissé ce mois-ci » — trois cohortes d'euros sans rapport, qui
+ * donnaient un mois à 133 346 € signés pour 12 253 € facturés, lu comme un
+ * effondrement alors qu'un chantier signé en novembre se facture après.
+ * Maintenant : « les chantiers signés sur la période, où en est leur
+ * facturation » — les MÊMES euros, suivis. Voir `cheminDesSignes`.
  *
- * ⚠ LES BARRES SE MESURENT SUR LE SIGNÉ, et c'est tout le propos : voir que
- * le facturé ne représente qu'un dixième de ce qui a été vendu. Mesurer
- * chacune sur elle-même les remplirait toutes et ne dirait plus rien.
+ * ⚠ LES TROIS TUILES SE MESURENT SUR LE SIGNÉ, et c'est désormais légitime :
+ * facturé et encaissé sont des PARTS de ce signé-là, plus des totaux
+ * étrangers. « Reste à facturer » complète « Facturé » jusqu'à 100 %.
+ *
+ * ⚠ « RESTE À FACTURER » N'EST PAS UN IMPAYÉ. C'est du chantier en cours, et
+ * le libellé doit l'empêcher de se lire comme de l'argent en retard — Élodie
+ * a écarté une carte sur l'argent non rentré le même jour.
  */
 function carteArgent(cles, r, state) {
-  const a = cheminArgent(cles, r);
+  const a = cheminDesSignes(cles, r);
   if (!a) return '';
-  const haut = Math.max(a.signe, a.facture, a.encaisse, 1);
-  const part = (v) => Math.max(v > 0 ? 3 : 0, Math.min(100, v / haut * 100)).toFixed(1);
-  const barreaux = [
-    { lb: 'Sign\u00e9', v: a.signe, ss: 'devis sign\u00e9s' },
-    { lb: 'Factur\u00e9', v: a.facture, ss: 'factures \u00e9mises' },
-    { lb: 'Encaiss\u00e9', v: a.encaisse, ss: 'r\u00e8glements re\u00e7us' },
+  const part = (v) => Math.max(v > 0 ? 3 : 0, Math.min(100, a.signe ? v / a.signe * 100 : 0)).toFixed(1);
+  const tuiles = [
+    { lb: 'Factur\u00e9', v: a.facture, ss: 'sur ces chantiers' },
+    { lb: 'Encaiss\u00e9', v: a.encaisse, ss: 'd\u00e9j\u00e0 r\u00e9gl\u00e9' },
+    { lb: 'Reste \u00e0 facturer', v: a.reste, ss: 'travaux en cours' },
   ];
+  const pct = (l) => (l.montant ? Math.round(l.facture / l.montant * 100) : 0);
   return `<section class="card tb-argent">
     <h2>Le chemin de l'argent</h2>
-    <span class="tb-sous">du devis sign\u00e9 au compte en banque \u00b7 ${esc(periodeAffichee(state, cles))}</span>
+    <span class="tb-sous">les chantiers sign\u00e9s \u00b7 ${esc(periodeAffichee(state, cles))} \u00b7 suivis jusqu'\u00e0 leur facturation</span>
     <div class="tb-gros"><span class="tb-nb" data-n="${a.signe}" data-eur="1">${eur(a.signe)}</span></div>
-    <span class="tb-sous">sign\u00e9s sur la p\u00e9riode</span>
+    <span class="tb-sous">sign\u00e9s sur la p\u00e9riode \u00b7 ${a.nb} chantier${a.nb > 1 ? 's' : ''}</span>
     <div class="tb-flux">
-      ${barreaux.map(b => `<div class="tb-fx">
+      ${tuiles.map(b => `<div class="tb-fx">
         <span class="lb">${b.lb}</span>
         <b class="tb-nb" data-n="${b.v}" data-eur="1">${eur(b.v)}</b>
         <span class="ss">${esc(b.ss)}</span>
         <div class="tb-piste"><i data-large="${part(b.v)}"></i></div></div>`).join('')}
     </div>
+    ${/* ⚠ LE DÉTAIL EST STYLÉ EN LIGNE : `tb-detail` est dessiné pour les
+          cartes claires (trait `--line`, texte `--muted-2`) et disparaîtrait
+          sur le dégradé. Et app.css porte le travail d'une autre session. */ ''}
+    ${a.lignes.length ? `<div style="margin-top:16px;border-top:1px solid rgba(255,255,255,.22);padding-top:6px">
+      <span class="tb-sous" style="display:block;margin-bottom:2px">reste \u00e0 facturer, chantier par chantier</span>
+      ${a.lignes.slice(0, 3).map(l => `<div style="display:flex;align-items:baseline;gap:10px;padding:6px 0;font-size:12.5px">
+        <span style="font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:42%">${esc(l.client)}</span>
+        <span style="opacity:.8;font-size:11.5px">${eur(l.montant)} sign\u00e9s \u00b7 ${pct(l)}\u00a0% factur\u00e9</span>
+        <b style="margin-left:auto;font-variant-numeric:tabular-nums">${l.reste ? eur(l.reste) : 'sold\u00e9'}</b>
+      </div>`).join('')}
+      ${a.lignes.length > 3 ? `<div style="font-size:11.5px;opacity:.78;padding-top:2px">+ ${a.lignes.length - 3} autre${a.lignes.length - 3 > 1 ? 's' : ''}</div>` : ''}
+    </div>` : ''}
+    ${/* ⚠ CE SIGNAL N'EXISTAIT NULLE PART : un chantier signé depuis plus de
+          deux mois dont AUCUNE facture ne pend. Deux mois, pas zéro jour —
+          signaler un chantier signé la semaine dernière apprendrait à ignorer
+          le signal. */ ''}
+    ${a.oublies.length ? `<p class="tb-sous" style="margin:10px 0 0">${a.oublies.length === 1
+      ? `${esc(a.oublies[0].client)} a sign\u00e9 il y a ${Math.round(a.oublies[0].jours / 30)} mois (${eur(a.oublies[0].montant)}) et aucune facture n'y est rattach\u00e9e.`
+      : `${a.oublies.length} chantiers sign\u00e9s depuis plus de deux mois n'ont aucune facture rattach\u00e9e.`}</p>` : ''}
   </section>`;
 }
 
