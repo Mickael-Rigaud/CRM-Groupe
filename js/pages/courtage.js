@@ -17,6 +17,7 @@ import { activityRowHtml, bindActivityRows, nextActivity } from './activity.js';
 import { coquilleEspace, poserEspace, kpiEspace, archiverFiche, supprimerDefinitivement, estActive } from './espace.js';
 import { vivierPage } from './vivier.js';
 import { estSimulation, feuDe, carteSimulation, estNouvelle } from './courtage-simulateur.js';
+import { nouveauProspectCourtage } from './courtage-nouveau.js';
 
 const KEY = 'courtage';
 const act = () => ACTIVITIES[KEY];
@@ -141,6 +142,7 @@ export const courtageHomePage = {
           <section class="ct-panneau ct-simu">
             <div class="ct-panneau-tete">
               <h2>Demandes du simulateur</h2>
+              <button type="button" class="ct-nouveau" id="ct-nouveau">+ Prospect</button>
               <div class="ct-feux">
                 <span class="est-vert" title="Feu vert : projet faisable"><i></i>${parFeu('vert')}</span>
                 <span class="est-orange" title="Feu orange : projet à optimiser"><i></i>${parFeu('orange')}</span>
@@ -199,6 +201,7 @@ export const courtageHomePage = {
         if (el.tagName !== 'BUTTON') el.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDeal(el.dataset.deal, draw); } };
       });
       bindActivityRows(root, draw);
+      root.querySelector('#ct-nouveau')?.addEventListener('click', () => nouveauProspectCourtage(draw));
       if (premiere) { premiere = false; animerAccueil(root); }
     };
 
@@ -306,6 +309,10 @@ export const courtageBasePage = {
     // Créer depuis cet écran, c'est créer pour La Référence Courtage : l'activité est
     // cochée d'avance et le type suit la vue ouverte, sinon la fiche n'apparaîtrait pas ici.
     const nouveau = () => {
+      // ⚠ UN PROSPECT SE SAISIT PAR LE FORMULAIRE EN ÉTAPES (17/11/2026) : projet,
+      // chiffres, prospect, rendez-vous — il crée le contact ET son dossier. Les
+      // clients, apporteurs et banques gardent la fiche simple.
+      if (state.vue === 'prospects') { nouveauProspectCourtage(draw); return; }
       const surOrg = ['apporteurs', 'banques'].includes(state.vue);
       if (surOrg) orgForm(null, draw, null, state.vue === 'banques' ? 'Banque' : 'Partenaire');
       else contactForm(null, draw);

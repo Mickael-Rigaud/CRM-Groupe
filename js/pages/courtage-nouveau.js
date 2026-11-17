@@ -1,0 +1,324 @@
+// « + Prospect » de La Référence Courtage : la saisie d'une demande, pas à pas.
+//
+// ⚠ DEUX MODÈLES, ET AUCUN N'EST RECOPIÉ (17/11/2026, Élodie : « pour le
+// formulaire + Prospect, inspire-toi de la base de données de RGD Renova avec
+// les différentes étapes, et du nouveau simulateur de lareferencecourtage.fr ») :
+//  - de RGD (`rgd-projet.js`), le déroulé en étapes numérotées, plusieurs
+//    questions par écran pour aller vite, et « Créer » possible à toute étape ;
+//  - du simulateur, l'habit : les étapes en colonne à gauche, une grande carte,
+//    la rubrique en pastille, la question en Fraunces, des tuiles à pictogramme
+//    orange.
+// Les questions sont celles d'un courtier qui décroche son téléphone, pas les
+// vingt et un écrans du simulateur : ce qui qualifie un dossier, sans plus.
+//
+// ⚠ PAS D'AGENDA GOOGLE POUR LE COURTAGE (vérifié le 17/11 : ni
+// `courtage_calendar_id` dans settings, ni agenda personnel « courtage »). Le
+// rendez-vous est donc une ACTION du CRM datée et rattachée au dossier : elle
+// sonne dans les échéances et s'affiche dans « À faire ». Le jour où un agenda
+// sera raccordé, `creer-evenement` sait déjà viser `activite: 'courtage'`.
+//
+// Ce qui naît : un contact « Prospect » rattaché au courtage (ou le contact
+// existant s'il a le même e-mail ou le même téléphone), une affaire « Nouveau
+// lead », et l'action de premier contact si on en a choisi une.
+import { db } from '../data/db.js';
+import { scope } from '../data/scope.js';
+import { ACTIVITIES } from '../data/schema.js';
+import { esc, eur, openModal, closeModal, toast, contactName } from '../ui.js';
+
+const KEY = 'courtage';
+
+// Pictogrammes au trait, dans l'esprit de ceux du simulateur.
+const I = {
+  maison: '<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M10 21v-6h4v6"/>',
+  couches: '<path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="m3 13 9 5 9-5"/>',
+  bouclier: '<path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6l-8-3Z"/><path d="m9 12 2 2 4-4"/>',
+  mallette: '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/><path d="M3 13h18"/>',
+  globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18"/>',
+  cible: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/>',
+  poignee: '<path d="m11 17 2 2a1.4 1.4 0 0 0 2-2"/><path d="m14 14 2.5 2.5a1.4 1.4 0 0 0 2-2l-3.9-3.9a2 2 0 0 0-2.8 0l-.9.9a1.4 1.4 0 0 1-2-2l2.8-2.8a4 4 0 0 1 4.7-.6l.4.2a3 3 0 0 0 2 .3L21 6"/><path d="m3 6 2.6.6a3 3 0 0 0 2-.3"/><path d="M3 13l6 6a1.4 1.4 0 0 0 2-2"/>',
+  coeur: '<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10Z"/>',
+  megaphone: '<path d="M3 11v2a1 1 0 0 0 1 1h3l6 4V6L7 10H4a1 1 0 0 0-1 1Z"/><path d="M17 9a4 4 0 0 1 0 6"/>',
+  telephone: '<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/>',
+  visio: '<rect x="3" y="6" width="13" height="12" rx="2"/><path d="m16 10 5-3v10l-5-3"/>',
+  agence: '<path d="M4 21V8l8-5 8 5v13"/><path d="M9 21v-6h6v6"/>',
+  rappel: '<path d="M12 7v5l3 2"/><circle cx="12" cy="12" r="9"/>',
+  rien: '<path d="M6 12h12"/>',
+};
+const ico = (n) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${I[n] || ''}</svg>`;
+
+const FINANCEMENTS = [
+  ['Crédit immobilier', 'maison', 'Achat, construction, rachat'],
+  ['Regroupement de crédits', 'couches', 'Une seule mensualité'],
+  ['Assurance emprunteur', 'bouclier', 'Changer ou souscrire'],
+  // ⚠ « Crédit professionnel » est la valeur du schéma (filtres, listes) ; le
+  // site dit « Financement professionnel » — on affiche le second, on garde le premier.
+  ['Crédit professionnel', 'mallette', 'Création, reprise, matériel', 'Financement professionnel'],
+];
+const OBJECTIFS = () => ACTIVITIES[KEY].fields.find(f => f.key === 'objectif')?.options || [];
+const AVANCEMENTS = ['Se renseigne', 'Cherche activement', 'Offre faite', 'Offre acceptée', 'Compromis signé'];
+const DUREES = ['15 ans', '20 ans', '25 ans'];
+const EMPRUNTEURS = ['Seul', 'À deux'];
+// La provenance : le libellé dit à l'écran, puis le canal du CRM qu'il range.
+const ORIGINES = [
+  ['Site internet', 'globe', 'Site internet direct'],
+  ['Simulateur', 'cible', 'Simulateur du site'],
+  ['Partenaire', 'poignee', 'Partenaire / apporteur'],
+  ['Recommandation', 'coeur', 'Recommandation client'],
+  ['Meta Ads', 'megaphone', 'Meta Ads'],
+  ['Téléphone / autre', 'telephone', 'Téléphone / autre'],
+];
+const CONTACTS = [
+  ['rappel', 'Le rappeler', 'rappel', 'appel'],
+  ['tel', 'RDV téléphone', 'telephone', 'rdv'],
+  ['visio', 'RDV visio', 'visio', 'rdv'],
+  ['agence', 'RDV à l’agence', 'agence', 'rdv'],
+  ['rien', 'Rien pour l’instant', 'rien', null],
+];
+const HEURES = ['09:00', '10:00', '11:00', '14:00', '15:00', '16:00', '17:00'];
+
+const ETAPES = [
+  { cle: 'projet', titre: 'Le projet', question: 'Quel est son projet ?', aide: 'Ce qu’il veut financer, et où il en est.' },
+  { cle: 'chiffres', titre: 'Les chiffres', question: 'Les grandes lignes du budget', aide: 'Des ordres de grandeur suffisent : le dossier les précisera.' },
+  { cle: 'prospect', titre: 'Le prospect', question: 'Qui est-ce ?', aide: 'Un téléphone ou un e-mail au moins, pour pouvoir le recontacter.' },
+  { cle: 'rdv', titre: 'Le rendez-vous', question: 'Et ensuite ?', aide: 'Le premier contact devient une action datée dans le CRM.' },
+];
+
+const jourLocal = (d) => d.toLocaleDateString('sv-SE');
+const nombre = (v) => { const n = Number(String(v ?? '').replace(/\s/g, '').replace(',', '.')); return Number.isFinite(n) && n > 0 ? n : null; };
+const telNet = (t) => String(t || '').replace(/\D/g, '').replace(/^33/, '0');
+
+export function nouveauProspectCourtage(apres) {
+  const moi = scope.user?.id || null;
+  const v = {
+    type_financement: '', objectif: '', avancement: '',
+    montant_projet: '', apport: '', montant_financement: '', financement_saisi: false,
+    duree: '', emprunteurs: '', revenus_foyer: '', ville_projet: '',
+    first_name: '', last_name: '', phone: '', email: '', city: '', canal: '', apporteur: '', message: '',
+    contact: 'rappel', jour: jourLocal(new Date(Date.now() + 86400000)), heure: '10:00', responsable: moi,
+  };
+  let etape = 0;
+  let enCours = false;
+
+  const m = openModal('Nouveau prospect', '<div class="lrc-form" id="lrc-form"></div>', { wide: true });
+  // `openModal` rend la boîte `.modal` elle-même, pas son fond.
+  m.classList.add('lrc-modal');
+  const hote = m.querySelector('#lrc-form');
+
+  const apporteurs = () => scope.orgs()
+    .filter(o => (o.activities || []).includes(KEY) && o.type !== 'Banque' && o.partner_job !== 'Banque')
+    .sort((a, b) => String(a.name).localeCompare(String(b.name)));
+
+  // Le même e-mail ou le même téléphone : c'est la même personne.
+  const doublon = () => {
+    const e = v.email.trim().toLowerCase();
+    const t = telNet(v.phone);
+    if (!e && t.length < 9) return null;
+    return scope.contacts().find(c => (e && String(c.email || '').trim().toLowerCase() === e)
+      || (t.length >= 9 && telNet(c.phone) === t)) || null;
+  };
+  const reponses = (i) => {
+    const k = [['type_financement', 'objectif', 'avancement'],
+      ['montant_projet', 'apport', 'duree', 'emprunteurs', 'revenus_foyer'],
+      ['first_name', 'last_name', 'phone', 'email', 'canal'],
+      ['contact']][i];
+    return k.filter(x => String(v[x] || '').trim()).length + '/' + k.length;
+  };
+
+  const tuiles = (nom, liste, actif) => `<div class="lrc-tuiles">${liste.map(([val, icone, sous, affiche]) => `
+    <button type="button" class="lrc-tuile ${actif === val ? 'on' : ''}" data-choix="${nom}" data-val="${esc(val)}">
+      <span class="lrc-ico">${ico(icone)}</span><b>${esc(affiche || val)}</b>${sous ? `<em>${esc(sous)}</em>` : ''}</button>`).join('')}</div>`;
+  const puces = (nom, liste, actif) => `<div class="lrc-puces">${liste.map(val => `
+    <button type="button" class="lrc-puce ${actif === val ? 'on' : ''}" data-choix="${nom}" data-val="${esc(val)}">${esc(val)}</button>`).join('')}</div>`;
+  const champ = (nom, label, { type = 'text', ph = '', suffixe = '', large = false } = {}) => `
+    <label class="lrc-champ ${large ? 'large' : ''}"><span>${esc(label)}</span>
+      <span class="lrc-saisie"><input name="${nom}" type="${type}" value="${esc(v[nom])}" placeholder="${esc(ph)}"
+        ${type === 'number' ? 'inputmode="numeric" min="0" step="1000"' : ''} autocomplete="off">${suffixe ? `<i>${esc(suffixe)}</i>` : ''}</span></label>`;
+
+  const corps = () => {
+    if (etape === 0) return `
+      <h4>Le financement</h4>${tuiles('type_financement', FINANCEMENTS, v.type_financement)}
+      <h4>Pour quel projet ?</h4>${puces('objectif', OBJECTIFS(), v.objectif)}
+      <h4>Où en est-il ?</h4>${puces('avancement', AVANCEMENTS, v.avancement)}`;
+    if (etape === 1) {
+      const calc = nombre(v.montant_projet) && (nombre(v.montant_projet) - (nombre(v.apport) || 0));
+      return `
+      <div class="lrc-grille">
+        ${champ('montant_projet', 'Montant du projet', { type: 'number', ph: '300 000', suffixe: '€' })}
+        ${champ('apport', 'Apport', { type: 'number', ph: '30 000', suffixe: '€' })}
+        ${champ('montant_financement', 'Montant à financer', { type: 'number', ph: calc ? String(calc) : '270 000', suffixe: '€' })}
+        ${champ('revenus_foyer', 'Revenus nets du foyer', { type: 'number', ph: '4 500', suffixe: '€ / mois' })}
+      </div>
+      ${calc && !v.financement_saisi ? `<p class="lrc-note">Montant à financer calculé : <b>${esc(eur(calc))}</b> (projet moins apport).</p>` : ''}
+      <h4>Durée souhaitée</h4>${puces('duree', DUREES, v.duree)}
+      <h4>Emprunteurs</h4>${puces('emprunteurs', EMPRUNTEURS, v.emprunteurs)}
+      <div class="lrc-grille">${champ('ville_projet', 'Ville du projet', { ph: 'Nice' })}</div>`;
+    }
+    if (etape === 2) {
+      const d = doublon();
+      return `
+      <div class="lrc-grille">
+        ${champ('first_name', 'Prénom')}${champ('last_name', 'Nom')}
+        ${champ('phone', 'Téléphone', { type: 'tel', ph: '06 12 34 56 78' })}${champ('email', 'E-mail', { type: 'email', ph: 'nom@exemple.fr' })}
+        ${champ('city', 'Ville de résidence', { ph: 'Nice' })}
+      </div>
+      ${d ? `<p class="lrc-note est-doublon">Déjà dans le CRM : <b>${esc(contactName(d))}</b>. La demande sera rattachée à sa fiche, rien ne sera créé en double.</p>` : ''}
+      <h4>Comment nous a-t-il connus ?</h4>${tuiles('canal', ORIGINES.map(([l, i, c]) => [c, i, '', l]), v.canal)}
+      ${v.canal === 'Partenaire / apporteur' ? `<label class="lrc-champ large"><span>Apporteur d’affaires</span>
+        <select name="apporteur"><option value="">— Choisir —</option>${apporteurs().map(o => `<option value="${esc(o.id)}" ${v.apporteur === o.id ? 'selected' : ''}>${esc(o.name)}</option>`).join('')}</select></label>` : ''}
+      <label class="lrc-champ large"><span>Ce qu’il a dit</span><textarea name="message" rows="3" placeholder="Sa situation, ses délais, ce qui l’inquiète…">${esc(v.message)}</textarea></label>`;
+    }
+    const c = CONTACTS.find(x => x[0] === v.contact);
+    const dates = [['Aujourd’hui', 0], ['Demain', 1], ['Dans 2 jours', 2], ['Dans 1 semaine', 7]];
+    const collegues = scope.collegues?.() || [];
+    return `
+      ${tuiles('contact', CONTACTS.map(([k, l, i]) => [k, i, '', l]), v.contact)}
+      ${c && c[3] ? `
+        <h4>Quand ?</h4>
+        <div class="lrc-puces">${dates.map(([l, n]) => { const j = jourLocal(new Date(Date.now() + n * 86400000)); return `<button type="button" class="lrc-puce ${v.jour === j ? 'on' : ''}" data-jour="${j}">${l}</button>`; }).join('')}
+          <input type="date" name="jour" value="${esc(v.jour)}" class="lrc-date"></div>
+        <h4>À quelle heure ?</h4>
+        <div class="lrc-puces">${HEURES.map(h => `<button type="button" class="lrc-puce ${v.heure === h ? 'on' : ''}" data-heure="${h}">${h}</button>`).join('')}
+          <input type="time" name="heure" value="${esc(v.heure)}" class="lrc-date"></div>
+        ${collegues.length > 1 ? `<label class="lrc-champ"><span>Qui s’en charge ?</span><select name="responsable">${collegues.map(u => `<option value="${esc(u.id)}" ${v.responsable === u.id ? 'selected' : ''}>${esc(u.full_name)}</option>`).join('')}</select></label>` : ''}` : ''}
+      <div class="lrc-recap">${recap()}</div>`;
+  };
+
+  const nomComplet = () => [v.first_name.trim(), v.last_name.trim()].filter(Boolean).join(' ');
+  const libelleAction = () => {
+    const c = CONTACTS.find(x => x[0] === v.contact);
+    if (!c || !c[3]) return '';
+    return c[0] === 'rappel' ? `Rappeler ${nomComplet() || 'le prospect'}` : `${c[1]} — ${nomComplet() || 'prospect'}`;
+  };
+  function recap() {
+    const fin = FINANCEMENTS.find(f => f[0] === v.type_financement);
+    const montant = nombre(v.montant_financement) || (nombre(v.montant_projet) && nombre(v.montant_projet) - (nombre(v.apport) || 0));
+    const action = libelleAction();
+    return `<b>Ce qui sera créé</b>
+      <span>Le prospect <b>${esc(nomComplet() || '—')}</b>${doublon() ? ' (fiche existante)' : ''}</span>
+      <span>Le dossier <b>${esc([fin ? (fin[3] || fin[0]) : 'Courtage', v.objectif].filter(Boolean).join(' · '))}</b>${montant ? ` — ${esc(eur(montant))} à financer` : ''}, en « Nouveau lead »</span>
+      ${action ? `<span>L’action <b>${esc(action)}</b> le ${esc(new Date(v.jour + 'T12:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }))} à ${esc(v.heure)}</span>` : '<span>Aucune action programmée</span>'}`;
+  }
+
+  const draw = () => {
+    const e = ETAPES[etape];
+    hote.innerHTML = `
+      <aside class="lrc-etapes">${ETAPES.map((x, i) => `
+        <button type="button" class="lrc-etape ${i === etape ? 'on' : ''} ${i < etape ? 'fait' : ''}" data-aller="${i}">
+          <span class="lrc-num">${i + 1}</span><span><b>${esc(x.titre)}</b>${i === etape ? `<em>${reponses(i)} réponses</em>` : ''}</span></button>`).join('')}
+        <div class="lrc-astuce"><span class="lrc-ico">${ico('cible')}</span><b>Créer à tout moment</b><em>Seuls un nom et un moyen de contact sont indispensables.</em></div>
+      </aside>
+      <section class="lrc-carte">
+        <div class="lrc-carte-tete"><span class="lrc-rubrique">${esc(e.titre)}</span><span class="lrc-compteur">${etape + 1} / ${ETAPES.length}</span></div>
+        ${etape ? '<button type="button" class="lrc-retour" data-retour>← Retour</button>' : ''}
+        <h3>${esc(e.question)}</h3>
+        <p class="lrc-aide">${esc(e.aide)}</p>
+        <div class="lrc-corps">${corps()}</div>
+        <div class="lrc-pied">
+          <button type="button" class="lrc-annuler" data-annuler>Annuler</button>
+          <span class="lrc-erreur" id="lrc-erreur"></span>
+          ${etape < ETAPES.length - 1 ? '<button type="button" class="lrc-btn est-second" data-suivant>Suivant →</button>' : ''}
+          <button type="button" class="lrc-btn" data-creer>Créer le prospect</button>
+        </div>
+      </section>`;
+    brancher();
+  };
+
+  // Les saisies au clavier vivent dans `v` sans redessiner (on perdrait le curseur) ;
+  // seuls les choix par tuile ou par puce redessinent.
+  function lireChamps() {
+    hote.querySelectorAll('input[name], select[name], textarea[name]').forEach(el => {
+      if (el.name in v) v[el.name] = el.value;
+    });
+  }
+  function brancher() {
+    hote.querySelectorAll('[data-choix]').forEach(b => b.onclick = () => {
+      lireChamps();
+      const k = b.dataset.choix;
+      v[k] = (v[k] === b.dataset.val && k !== 'contact') ? '' : b.dataset.val;
+      if (k === 'canal' && v.canal !== 'Partenaire / apporteur') v.apporteur = '';
+      draw();
+    });
+    hote.querySelectorAll('[data-jour]').forEach(b => b.onclick = () => { lireChamps(); v.jour = b.dataset.jour; draw(); });
+    hote.querySelectorAll('[data-heure]').forEach(b => b.onclick = () => { lireChamps(); v.heure = b.dataset.heure; draw(); });
+    hote.querySelectorAll('[data-aller]').forEach(b => b.onclick = () => { lireChamps(); etape = Number(b.dataset.aller); draw(); });
+    hote.querySelector('[data-retour]')?.addEventListener('click', () => { lireChamps(); etape = Math.max(0, etape - 1); draw(); });
+    hote.querySelector('[data-suivant]')?.addEventListener('click', () => { lireChamps(); etape = Math.min(ETAPES.length - 1, etape + 1); draw(); });
+    hote.querySelector('[data-annuler]').onclick = () => closeModal();
+    hote.querySelector('[data-creer]').onclick = creer;
+    hote.querySelectorAll('input[name], textarea[name], select[name]').forEach(el => {
+      el.addEventListener('input', () => {
+        v[el.name] = el.value;
+        if (el.name === 'montant_financement') v.financement_saisi = !!el.value;
+        const r = hote.querySelector('.lrc-recap'); if (r) r.innerHTML = recap();
+      });
+      // Le doublon se vérifie en quittant le champ : pendant la frappe, il clignoterait.
+      if (['email', 'phone'].includes(el.name)) el.addEventListener('change', () => { lireChamps(); draw(); hote.querySelector(`[name="${el.name}"]`)?.focus(); });
+      if (el.type === 'date' || el.type === 'time' || el.tagName === 'SELECT') el.addEventListener('change', () => { lireChamps(); draw(); });
+    });
+    hote.querySelector('.lrc-corps input[name]:not([type="date"]):not([type="time"])')?.focus();
+  }
+
+  async function creer() {
+    if (enCours) return;
+    lireChamps();
+    const err = hote.querySelector('#lrc-erreur');
+    const t = telNet(v.phone);
+    if (!v.first_name.trim() && !v.last_name.trim()) { etape = 2; draw(); hote.querySelector('#lrc-erreur').textContent = 'Il faut au moins un nom.'; return; }
+    if (t.length < 9 && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v.email.trim())) {
+      etape = 2; draw(); hote.querySelector('#lrc-erreur').textContent = 'Il faut un téléphone ou un e-mail valable.'; return;
+    }
+    enCours = true;
+    hote.querySelector('[data-creer]').disabled = true;
+    try {
+      // 1. Le contact : l'existant s'il y en a un, rattaché au courtage au besoin.
+      let c = doublon();
+      if (c) {
+        if (!(c.activities || []).includes(KEY)) await db.update('contacts', c.id, { activities: [...(c.activities || []), KEY] });
+      } else {
+        c = await db.insert('contacts', {
+          first_name: v.first_name.trim(), last_name: v.last_name.trim() || '—',
+          phone: v.phone.trim() || null, email: v.email.trim() || null, city: v.city.trim() || null,
+          type: 'Prospect', activities: [KEY], channel: v.canal || null, owner_id: v.responsable || moi,
+        });
+      }
+      // 2. Le dossier. Les champs du schéma d'abord (ils nourrissent les filtres et
+      //    la fiche), puis ce que la fiche « Le projet en détail » sait lire.
+      const calc = nombre(v.montant_projet) && (nombre(v.montant_projet) - (nombre(v.apport) || 0));
+      const fields = Object.fromEntries(Object.entries({
+        type_financement: v.type_financement, objectif: v.objectif, projet: v.objectif,
+        montant_projet: nombre(v.montant_projet), apport: nombre(v.apport),
+        montant_financement: nombre(v.montant_financement) || calc || null,
+        avancement: v.avancement, duree: v.duree, emprunteurs: v.emprunteurs,
+        revenus_foyer: nombre(v.revenus_foyer), ville: v.ville_projet.trim(), message: v.message.trim(),
+        source: 'Saisie CRM',
+      }).filter(([, x]) => x !== '' && x !== null && x !== undefined));
+      const fin = FINANCEMENTS.find(f => f[0] === v.type_financement);
+      const titre = `${fin ? (fin[3] || fin[0]) : 'Courtage'} — ${nomComplet() || contactName(c)}`;
+      const maintenant = new Date().toISOString();
+      const d = await db.insert('deals', {
+        activity: KEY, title: titre, contact_id: c.id, owner_id: v.responsable || moi,
+        channel: v.canal || null, referrer_org_id: v.apporteur || null,
+        stage: 'lead', status: 'open', fields,
+        stage_history: [{ stage: 'lead', at: maintenant }], stage_changed_at: maintenant,
+      });
+      // 3. Le premier contact.
+      const ch = CONTACTS.find(x => x[0] === v.contact);
+      if (ch && ch[3]) {
+        await db.insert('activities', {
+          type: ch[3], title: libelleAction(), deal_id: d.id, contact_id: c.id, activity: KEY,
+          due_date: v.jour || null, due_time: v.heure || null,
+          assignee_id: v.responsable || moi, done: false, created_by: moi,
+        });
+      }
+      closeModal(true);
+      toast(ch && ch[3] ? 'Prospect créé, premier contact programmé' : 'Prospect créé');
+      apres?.(d.id);
+    } catch (e) {
+      enCours = false;
+      const b = hote.querySelector('[data-creer]'); if (b) b.disabled = false;
+      if (err) err.textContent = `Enregistrement impossible : ${String(e.message || e).slice(0, 140)}`;
+    }
+  }
+
+  draw();
+}

@@ -10014,3 +10014,124 @@ td .pl-toque { color: #4f46e5; }
 .ct-orig.est-site { background: #D8F1F8; color: #0A6F86; }
 .ct-orig.est-partenaires { background: #E3F1E6; color: #2E6B41; }
 .ct-orig.est-meta { background: #E8E9FD; color: #4A43B8; }
+
+/* --------------------------------------------------------------------------
+   « + Prospect » de La Référence Courtage (17/11/2026) : le déroulé en étapes
+   de RGD, l'habit du simulateur de lareferencecourtage.fr — étapes en colonne,
+   grande carte blanche, rubrique en pastille azur, question en Fraunces,
+   tuiles à pictogramme orange, fond de ciel.
+   ⚠ La fenêtre est posée sur <body>, HORS de `.esp-app` : les jetons de la
+   charte sont donc redéclarés ici, sur `.lrc-modal`.
+   -------------------------------------------------------------------------- */
+.modal.lrc-modal {
+  --lrc-encre: #15384E; --lrc-encre-2: #4A6579; --lrc-gris: #8CA2B3;
+  --lrc-sable: #FFFCF6; --lrc-sable-2: #FFF3E2; --lrc-filet: #F2E3CE; --lrc-filet-fort: #E3CDAF;
+  --lrc-orange: #F4801C; --lrc-orange-2: #FFA43D; --lrc-orange-doux: #FFEAD1;
+  --lrc-azur: #0FA3C4; --lrc-azur-doux: #D8F1F8; --lrc-azur-encre: #0A6F86;
+  --lrc-serif: 'Fraunces', 'Iowan Old Style', Georgia, serif;
+  max-width: 1080px; width: calc(100vw - 32px); color: var(--lrc-encre); border-radius: 26px; overflow: hidden;
+  background: linear-gradient(180deg, #CFEAF7 0%, #E6F4FB 26%, #FBF8F0 62%, #FFEBD6 100%);
+}
+.modal.lrc-modal .modal-head { background: transparent; border-bottom: 1px solid rgba(255,255,255,.6); }
+.modal.lrc-modal .modal-head h2 { font-family: var(--lrc-serif); font-weight: 600; color: var(--lrc-encre); }
+
+.lrc-form { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 22px; align-items: start; }
+
+/* ---- la colonne des étapes ---- */
+.lrc-etapes { position: relative; display: flex; flex-direction: column; gap: 4px; padding-top: 4px; }
+.lrc-etapes::before { content: ""; position: absolute; left: 21px; top: 22px; bottom: 120px; width: 1.5px; background: var(--lrc-filet-fort); }
+.lrc-etape { position: relative; display: flex; align-items: center; gap: 12px; padding: 9px 12px; border: 0; border-radius: 14px;
+  background: transparent; text-align: left; font: inherit; color: var(--lrc-gris); cursor: pointer; transition: background .2s, box-shadow .2s; }
+.lrc-etape b { display: block; font-size: 13.5px; font-weight: 650; }
+.lrc-etape em { font-style: normal; font-size: 11.5px; color: var(--lrc-gris); }
+.lrc-num { position: relative; z-index: 1; display: grid; place-items: center; width: 20px; height: 20px; flex: none; border-radius: 50%;
+  background: #fff; border: 1.5px solid var(--lrc-filet-fort); font-size: 10.5px; font-weight: 800; color: var(--lrc-gris); }
+.lrc-etape.on { background: #fff; color: var(--lrc-encre); box-shadow: 0 14px 30px -22px rgba(21,56,78,.55); }
+.lrc-etape.on .lrc-num { width: 26px; height: 26px; margin-left: -3px; background: var(--lrc-azur-encre); border-color: var(--lrc-azur-encre); color: #fff;
+  box-shadow: 0 0 0 4px var(--lrc-azur-doux); }
+.lrc-etape.fait { color: var(--lrc-encre-2); }
+.lrc-etape.fait .lrc-num { background: var(--lrc-orange); border-color: var(--lrc-orange); color: #fff; }
+.lrc-etape:hover:not(.on) { background: rgba(255,255,255,.55); }
+.lrc-astuce { display: flex; flex-direction: column; align-items: center; gap: 4px; margin-top: 14px; padding: 16px 14px; text-align: center;
+  border-radius: 16px; background: rgba(255,255,255,.7); border: 1px solid var(--lrc-filet); }
+.lrc-astuce b { font-size: 12.5px; } .lrc-astuce em { font-style: normal; font-size: 11.5px; color: var(--lrc-encre-2); }
+.lrc-astuce .lrc-ico { width: 30px; height: 30px; border-radius: 50%; }
+
+/* ---- la carte ---- */
+.lrc-carte { padding: 24px 28px 20px; border-radius: 24px; background: #fff; border: 1px solid rgba(255,255,255,.9);
+  box-shadow: 0 30px 60px -40px rgba(21,56,78,.5); animation: lrcEntre .35s cubic-bezier(.2,.8,.2,1); }
+@keyframes lrcEntre { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.lrc-carte-tete { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.lrc-rubrique { padding: 5px 12px; border-radius: 999px; background: var(--lrc-azur-doux); color: var(--lrc-azur-encre);
+  font-size: 11px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+.lrc-compteur { font-size: 13px; font-weight: 700; color: var(--lrc-gris); }
+.lrc-retour { border: 0; background: none; padding: 0; margin: 4px 0 2px; font: inherit; font-size: 13px; font-weight: 650; color: var(--lrc-encre-2); cursor: pointer; }
+.lrc-retour:hover { color: var(--lrc-orange); }
+.lrc-carte h3 { text-transform: none; margin: 4px 0 4px; font-family: var(--lrc-serif); font-size: 30px; font-weight: 600; letter-spacing: -.015em; line-height: 1.15; color: var(--lrc-encre); }
+.lrc-aide { margin: 0 0 14px; font-size: 14px; color: var(--lrc-encre-2); }
+.lrc-corps h4 { margin: 18px 0 8px; font-size: 11.5px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--lrc-encre-2); }
+.lrc-corps > h4:first-child { margin-top: 4px; }
+
+/* ---- tuiles et puces ---- */
+.lrc-tuiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
+.lrc-tuile { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; padding: 14px 16px; border-radius: 16px; cursor: pointer;
+  background: #fff; border: 1.5px solid var(--lrc-filet); font: inherit; text-align: left; color: var(--lrc-encre);
+  transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease, background .2s ease; }
+.lrc-tuile b { margin-top: 8px; font-size: 14px; font-weight: 750; }
+.lrc-tuile em { font-style: normal; font-size: 12.5px; color: var(--lrc-encre-2); }
+.lrc-tuile:hover { transform: translateY(-2px); border-color: var(--lrc-orange-2); box-shadow: 0 16px 28px -22px rgba(244,128,28,.7); }
+.lrc-tuile.on { border-color: var(--lrc-orange); background: linear-gradient(160deg, #FFF6EC, #fff 70%); box-shadow: 0 0 0 3px var(--lrc-orange-doux); }
+.lrc-ico { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; background: var(--lrc-orange-doux); color: var(--lrc-orange); }
+.lrc-ico svg { width: 21px; height: 21px; }
+.lrc-tuile.on .lrc-ico { background: linear-gradient(135deg, var(--lrc-orange-2), var(--lrc-orange)); color: #fff; }
+
+.lrc-puces { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.lrc-puce { padding: 8px 14px; border-radius: 999px; border: 1.5px solid var(--lrc-filet); background: #fff; cursor: pointer;
+  font: inherit; font-size: 13px; font-weight: 650; color: var(--lrc-encre); transition: border-color .15s, background .15s; }
+.lrc-puce:hover { border-color: var(--lrc-orange-2); }
+.lrc-puce.on { background: linear-gradient(135deg, var(--lrc-orange-2), var(--lrc-orange)); border-color: transparent; color: #fff;
+  box-shadow: 0 8px 18px -10px rgba(244,128,28,.8); }
+
+/* ---- champs ---- */
+.lrc-grille { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 14px; margin-top: 4px; }
+.lrc-champ { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+.lrc-champ.large { grid-column: 1 / -1; margin-top: 14px; }
+.lrc-champ > span:first-child { font-size: 11.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--lrc-encre-2); }
+.lrc-saisie { position: relative; display: flex; align-items: center; }
+.lrc-saisie i { position: absolute; right: 14px; font-style: normal; font-size: 13px; font-weight: 700; color: var(--lrc-gris); pointer-events: none; }
+.lrc-form :is(input, select, textarea) { width: 100%; padding: 11px 14px; border-radius: 12px; border: 1.5px solid var(--lrc-filet-fort);
+  background: var(--lrc-sable); font: inherit; font-size: 14px; color: var(--lrc-encre); }
+.lrc-form :is(input, select, textarea):focus { outline: none; border-color: var(--lrc-azur); background: #fff; box-shadow: 0 0 0 3px var(--lrc-azur-doux); }
+.lrc-form .lrc-date { width: auto; padding: 7px 10px; }
+.lrc-note { margin: 12px 0 0; padding: 10px 14px; border-radius: 12px; background: var(--lrc-azur-doux); color: var(--lrc-azur-encre); font-size: 13px; }
+.lrc-note.est-doublon { background: var(--lrc-orange-doux); color: #9A4A08; }
+.lrc-recap { display: flex; flex-direction: column; gap: 4px; margin-top: 18px; padding: 14px 16px; border-radius: 14px;
+  background: var(--lrc-sable-2); border: 1px dashed var(--lrc-filet-fort); font-size: 13px; color: var(--lrc-encre-2); }
+.lrc-recap > b { color: var(--lrc-encre); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; }
+.lrc-recap span b { color: var(--lrc-encre); }
+
+/* ---- le pied ---- */
+.lrc-pied { display: flex; align-items: center; gap: 10px; margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--lrc-filet); }
+.lrc-annuler { border: 0; background: none; font: inherit; font-size: 13.5px; font-weight: 650; color: var(--lrc-encre-2); cursor: pointer; padding: 8px 4px; }
+.lrc-erreur { flex: 1; font-size: 12.5px; font-weight: 650; color: #C8483C; }
+.lrc-btn { padding: 11px 20px; border-radius: 999px; border: 0; cursor: pointer; font: inherit; font-size: 14px; font-weight: 750; color: #fff;
+  background: linear-gradient(135deg, var(--lrc-orange-2), var(--lrc-orange)); box-shadow: 0 12px 24px -12px rgba(244,128,28,.85); }
+.lrc-btn.est-second { background: #fff; color: var(--lrc-encre); border: 1.5px solid var(--lrc-filet-fort); box-shadow: none; }
+.lrc-btn:disabled { opacity: .6; cursor: wait; }
+
+/* Le bouton « + Prospect » de l'accueil */
+.ct-nouveau { margin-left: 4px; padding: 6px 14px; border-radius: 999px; border: 0; cursor: pointer; font: inherit; font-size: 12.5px; font-weight: 750; color: #fff;
+  background: var(--ct-degrade); box-shadow: 0 8px 18px -10px rgba(244,128,28,.8); }
+
+@media screen and (max-width: 820px) {
+  .lrc-form { grid-template-columns: 1fr; gap: 12px; }
+  .lrc-etapes { flex-direction: row; overflow-x: auto; gap: 4px; }
+  .lrc-etapes::before, .lrc-astuce { display: none; }
+  .lrc-etape { flex: none; padding: 7px 10px; }
+  .lrc-etape:not(.on) b { display: none; }
+  .lrc-carte { padding: 18px 16px 16px; border-radius: 20px; }
+  .lrc-carte h3 { font-size: 24px; }
+  .lrc-grille { grid-template-columns: 1fr; }
+  .lrc-tuiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .lrc-pied { flex-wrap: wrap; }
+}

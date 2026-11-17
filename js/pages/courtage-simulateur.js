@@ -69,7 +69,7 @@ export const chiffresDe = (d) => {
 // ---------------------------------------------------------------- la fiche
 // Le bloc « Le simulateur » de la fiche d'une affaire. Rien si l'affaire n'en vient pas.
 export function blocSimulateurFiche(d) {
-  if (!estSimulation(d)) return '';
+  if (!estSimulation(d)) return blocProjetSaisi(d);
   const f = d.fields || {};
   const feu = feuDe(d);
   const F = FEUX[feu];
@@ -141,4 +141,25 @@ export function carteSimulation(d, contact) {
         ${tel ? `<a class="cts-appel" href="tel:${esc(tel)}" data-tel>Appeler</a>` : ''}
       </div>
     </article>`;
+}
+
+// ---------------------------------------------------------------- saisie à la main
+// Les réponses du formulaire « + Prospect » (courtage-nouveau.js) que le schéma
+// ne déclare pas : sans ce bloc, elles seraient enregistrées et invisibles.
+// (Le financement, l'objectif, les montants sont des champs du schéma : la fiche
+// les montre déjà dans « Le projet ».)
+export function blocProjetSaisi(d) {
+  if (!d || d.activity !== 'courtage') return '';
+  const f = d.fields || {};
+  const lignes = [
+    ['Où en est-il', f.avancement], ['Durée souhaitée', f.duree], ['Emprunteurs', f.emprunteurs],
+    ['Revenus nets du foyer', euros(f.revenus_foyer) ? `${euros(f.revenus_foyer)} / mois` : ''],
+    ['Ville du projet', f.ville], ['Ce qu’il a dit', f.message],
+  ].filter(([, v]) => v);
+  if (!lignes.length) return '';
+  return `
+    <section class="rgdf-bloc cts-fiche">
+      <h3>Le projet en détail</h3>
+      <div class="cts-lignes">${lignes.map(([k, v]) => `<div class="cts-ligne"><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join('')}</div>
+    </section>`;
 }
