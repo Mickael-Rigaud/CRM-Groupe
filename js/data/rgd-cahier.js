@@ -221,6 +221,52 @@ export async function liensDuCahier(k) {
   return out;
 }
 
+// ⚠ LE DÉTAIL D'UN POSTE SE LIT EN POINTS, PAS EN PAVÉ (12/11/2026, Élodie :
+// « je voudrais que le cahier des charges reprenne les grandes lignes et les
+// sous-lignes du devis » — « le détail ligne par ligne »). Sur le papier de
+// l'équipe, une description de 367 caractères d'un seul tenant ne se lit pas :
+// l'ouvrier cherche l'étape qu'il fait.
+//
+// ⚠ ET LE DÉCOUPAGE DU DEVIS EST DÉJÀ PERDU À CE STADE : mesuré dans sa base le
+// 12/11/2026, AUCUN des 7 détails du cahier de Gouvieux ne porte de retour à la
+// ligne — Costructor rend ces descriptions en un seul paragraphe. On les
+// recoupe donc sur les frontières de PHRASE, en se gardant de deux pièges : un
+// fragment trop court n'est pas une phrase (« M. », « 2. »), et une
+// abréviation connue ne termine pas une phrase (« n° », « cf. », « env. »).
+// Les retours à la ligne et les puces, quand il y en a, font foi avant tout.
+const ABREV = /(?:^|[\s(])(?:n°|cf|ex|env|art|réf|ref|M|Mme|Mlle|MM|etc|p|pp|cm|mm|ml|kg|h|min|qté|sect|chap|fig|al)\.$/i;
+const PUCE = /^[-–—•*·]\s*/;
+
+function couperPhrases(ligne) {
+  const out = [];
+  let debut = 0;
+  // Deux frontières, et la nuance compte :
+  //  · devant une MAJUSCULE, l'espace est facultatif — le devis d'Élodie
+  //    écrit « fissures importantes.Toile à enduire » sans espace ;
+  //  · devant un CHIFFRE, l'espace est obligatoire, sinon « DTU 25.41 » et
+  //    « NF C 15.100 » se coupaient en deux (vu à l'essai, 12/11/2026).
+  const re = /([.;!])(\s*)(?=[A-ZÀ-ÖØ-Þ])|([.;!])(\s+)(?=[0-9])/g;
+  let m;
+  while ((m = re.exec(ligne)) !== null) {
+    const fin = m.index + 1;
+    const bout = ligne.slice(debut, fin).trim();
+    if (bout.length < 18 || ABREV.test(bout)) continue;   // pas une phrase : on passe
+    out.push(bout);
+    debut = fin + (m[2] ?? m[4] ?? '').length;
+  }
+  const reste = ligne.slice(debut).trim();
+  if (reste) out.push(reste);
+  return out;
+}
+
+/** Le détail d'un poste, découpé en points lisibles. */
+export function pointsDuDetail(detail) {
+  return String(detail || '').split(/\r?\n/)
+    .map(l => l.replace(PUCE, '').trim()).filter(Boolean)
+    .flatMap(couperPhrases)
+    .filter(Boolean);
+}
+
 // Les pièces du cahier, dans l'ordre des postes : ce sont les lots.
 export const piecesDe = (postes) => [...new Set((postes || []).map(p => p.lot || ''))];
 

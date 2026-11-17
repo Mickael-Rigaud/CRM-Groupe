@@ -109,7 +109,13 @@ export async function imprimerCahierClient(chantier, cahier, dossier) {
   const { titre, html } = await cahierHtml(chantier, cahier, dossier, 'client');
   await imprimer(html, titre);
 }
+// ⚠ L'ÉQUIPE N'IMPRIME PLUS LES DIAPOSITIVES (12/11/2026, Élodie : « pour les
+// ouvriers on va alléger le visuel, puisque le but c'est de l'imprimer »). Son
+// cahier part maintenant sur un gabarit à lui — A4 portrait, papier blanc,
+// aucune photo, une page par pièce — dans `rgd-cahier-ouvriers.js`. La
+// version CLIENT, elle, reste la présentation en diapositives.
 export async function imprimerCahierOuvriers(chantier, cahier, dossier) {
-  const { titre, html } = await cahierHtml(chantier, cahier, dossier, 'equipe');
-  await imprimer(html, titre);
+  const { htmlOuvriers } = await import('./rgd-cahier-ouvriers.js');
+  const titre = titreFichier('Cahier des charges équipe', donnees(chantier, cahier, dossier));
+  await imprimer(htmlOuvriers(chantier, cahier, dossier, titre), titre);
 }
