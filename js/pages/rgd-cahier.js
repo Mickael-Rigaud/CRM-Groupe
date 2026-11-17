@@ -176,7 +176,6 @@ export function ouvrirCahier(chantier, dossier, retour) {
           <textarea id="ca-precisions" rows="3" placeholder="Ce qui reste à la charge du client, pièces à vider, accès à l’eau et l’électricité…"${fige ? ' disabled' : ''}>${esc(s.precisions)}</textarea></label>
       </div>
       ${blocElements(null, fige)}
-      ${datalistBiblio()}
       ${fige ? `<div class="ca-signe">
         <img src="${k.signature}" alt="Signature du client">
         <div><b>Signé${k.signe_mode === 'a_distance' ? ' à distance' : k.signe_mode === 'sur_place' ? ' sur place' : ''}${k.signe_par ? ` par ${esc(k.signe_par)}` : ''}</b><span>le ${esc(new Date(k.signe_le).toLocaleString('fr-FR'))}</span>
@@ -255,36 +254,41 @@ export function ouvrirCahier(chantier, dossier, retour) {
   // `null` pour le chantier entier, ou le nom du lot. Les éléments retenus se
   // listent, chacun avec sa case « vu par le client » ; on en ajoute depuis la
   // bibliothèque (un clic) ou à la main (et on peut alors le garder).
+  // ⚠ UN SEUL CHAMP, ET LA BIBLIOTHÈQUE SE FILTRE SOUS LES DOIGTS (17/11/2026,
+  // Élodie : « la bibliothèque n'est pas très claire […] on se perd trop dans
+  // les informations »). La première version demandait CINQ gestes pour une
+  // phrase : une liste, un menu de famille, un champ, un bouton « Ajouter » et
+  // un bouton qui ouvrait encore une fenêtre à deux colonnes.
+  //
+  // Deux maquettes vivantes lui ont été soumises (A : on écrit, ça propose ;
+  // B : tout est affiché, on coche). Elle a choisi A — ne pas revenir à B ni
+  // à la fenêtre de cases.
+  //
+  // ⚠ LA FAMILLE N'EST PLUS UN MENU : elle est portée par la phrase de la
+  // bibliothèque. Pour une phrase neuve, deux pastilles de création — un clic,
+  // pas un menu à dérouler puis un bouton à viser.
   function blocElements(ou, fige) {
     const l = ou === null ? s.elements.chantier : (s.elements.pieces[ou] || []);
     const cle = ou === null ? '__chantier' : ou;
     return `<div class="ca-elements" data-elements="${esc(cle)}">
-      <div class="ca-el-tete"><h5>${ou === null ? 'Technique et contraintes du chantier' : 'Technique et contraintes de la pièce'}</h5>
-        ${fige ? '' : `<button type="button" class="btn ghost sm" data-el-biblio="${esc(cle)}">+ Bibliothèque</button>`}</div>
-      ${l.length ? `<ul class="ca-el-liste">${l.map((e, i) => `
-        <li class="ca-el fam-${esc(e.famille)}">
-          <span class="ca-el-fam">${esc(FAMILLES[e.famille].court)}</span>
+      <div class="ca-el-tete"><h5>Technique et contraintes${ou === null ? ' du chantier' : ''}</h5>
+        ${fige || ou !== null ? '' : '<button type="button" class="ca-el-tenir" id="ca-el-tenir">Modifier la bibliothèque</button>'}</div>
+      <div class="ca-el-puces">${l.length ? l.map((e, i) => `
+        <span class="ca-el-puce fam-${esc(e.famille)}">
           <span class="ca-el-texte">${esc(e.texte)}</span>
-          <label class="ca-el-client" title="Si la case est cochée, cette ligne apparaît aussi dans le cahier du client">
-            <input type="checkbox" data-el-client="${esc(cle)}" data-i="${i}"${e.client ? ' checked' : ''}${fige ? ' disabled' : ''}>
-            <span>client</span></label>
-          ${fige ? '' : `<button type="button" class="ca-el-x" data-el-retirer="${esc(cle)}" data-i="${i}" title="Retirer">✕</button>`}
-        </li>`).join('')}</ul>`
-        : '<p class="muted small">Rien pour l’instant.</p>'}
-      ${fige ? '' : `<div class="ca-el-ajout">
-        <select data-el-fam="${esc(cle)}" aria-label="Famille">
-          ${Object.entries(FAMILLES).map(([k2, f]) => `<option value="${esc(k2)}">${esc(f.court)}</option>`).join('')}</select>
-        <input type="text" data-el-texte="${esc(cle)}" list="ca-biblio-liste" placeholder="À la main, ou choisir dans la bibliothèque…">
-        <button type="button" class="btn sm" data-el-ajouter="${esc(cle)}">Ajouter</button>
+          ${fige ? (e.client ? '<span class="ca-el-oeil on">client</span>' : '')
+            : `<button type="button" class="ca-el-oeil${e.client ? ' on' : ''}" data-el-client="${esc(cle)}" data-i="${i}"
+                title="${e.client ? 'Visible par le client — cliquer pour la garder à l’équipe'
+                  : 'Équipe seulement — cliquer pour la montrer au client'}">client</button>
+               <button type="button" class="ca-el-x" data-el-retirer="${esc(cle)}" data-i="${i}" title="Retirer">✕</button>`}
+        </span>`).join('')
+        : '<span class="ca-el-vide">Rien pour l’instant.</span>'}</div>
+      ${fige ? '' : `<div class="ca-el-chercher">
+        <input type="text" data-el-q="${esc(cle)}" autocomplete="off"
+          placeholder="Ajouter : tape un mot — ascenseur, amiante, plâtre, horaires…">
+        <div class="ca-el-sug" data-el-sug="${esc(cle)}"></div>
       </div>`}
     </div>`;
-  }
-
-  // La liste d'aide à la saisie : toute la bibliothèque, les deux familles.
-  function datalistBiblio() {
-    const b = biblioElements();
-    return `<datalist id="ca-biblio-liste">${[...b.technique, ...b.contrainte]
-      .map(x => `<option value="${esc(x)}"></option>`).join('')}</datalist>`;
   }
 
   // ⚠ LES PHOTOS DU NAS (12/11/2026) : l'état de la dernière demande, et de quoi
@@ -461,44 +465,9 @@ export function ouvrirCahier(chantier, dossier, retour) {
     return k;
   };
 
-  // ⚠ LA BIBLIOTHÈQUE S'OUVRE EN FENÊTRE, pas dans l'écran : dépliée sous
-  // chaque pièce, elle aurait noyé le cahier sous des dizaines de cases. On
-  // coche, on valide, et seules les lignes retenues restent à l'écran.
-  function ouvrirBiblio(cle) {
-    const b = biblioElements();
-    const deja = new Set((cle === '__chantier' ? s.elements.chantier : (s.elements.pieces[cle] || []))
-      .map(e => e.texte.trim().toLowerCase()));
-    const ou = cle === '__chantier' ? 'le chantier' : `« ${cle || 'Travaux'} »`;
-    const m = openModal('Bibliothèque', `
-      <p class="muted small">Cochez ce qui s’applique à ${esc(ou)}. Les lignes déjà retenues
-        sont grisées. Une ligne n’apparaît dans le cahier du CLIENT que si vous cochez
-        « client » ensuite ; sinon elle ne sort que sur celui de l’équipe.</p>
-      <div class="ca-biblio">${Object.entries(FAMILLES).map(([f, info]) => `
-        <div class="ca-biblio-col"><h5>${esc(info.label)}</h5>
-          ${b[f].length ? b[f].map((t, i) => {
-            const pris = deja.has(t.trim().toLowerCase());
-            return `<label class="ca-biblio-l${pris ? ' pris' : ''}">
-              <input type="checkbox" data-f="${esc(f)}" data-t="${esc(t)}"${pris ? ' disabled' : ''}>
-              <span>${esc(t)}</span></label>`;
-          }).join('') : '<p class="muted small">Vide pour l’instant.</p>'}
-        </div>`).join('')}</div>
-      <div class="form-actions"><button type="button" class="btn ghost" id="ca-biblio-tenir">Modifier la bibliothèque</button>
-        <span class="grow"></span><button type="button" class="btn ghost" data-close>Annuler</button>
-        <button type="button" class="btn primary" id="ca-biblio-ok">Ajouter</button></div>`, { wide: true });
-    m.querySelector('#ca-biblio-ok').onclick = () => {
-      const liste = cle === '__chantier' ? s.elements.chantier
-        : (s.elements.pieces[cle] = s.elements.pieces[cle] || []);
-      m.querySelectorAll('input[data-t]:checked').forEach(c => {
-        liste.push({ texte: c.dataset.t, famille: c.dataset.f, client: false });
-      });
-      closeModal(); s.modifie = true; dessiner();
-    };
-    m.querySelector('#ca-biblio-tenir').onclick = () => { closeModal(); ouvrirBiblioTenir(cle); };
-  }
-
   // Tenir la bibliothèque : une ligne par phrase, comme les listes standard du
   // planning — même geste, même endroit dans la tête de celui qui s'en sert.
-  function ouvrirBiblioTenir(retour) {
+  function ouvrirBiblioTenir() {
     const b = biblioElements();
     const m = openModal('Modifier la bibliothèque', `
       <p class="muted small">Une ligne par phrase. Ce que vous écrivez à la main dans un cahier
@@ -514,7 +483,7 @@ export function ouvrirCahier(chantier, dossier, retour) {
         await enregistrerBiblio({ technique: lire2('technique'), contrainte: lire2('contrainte') });
         closeModal();
         toast('Bibliothèque enregistrée');
-        if (retour) ouvrirBiblio(retour);
+        dessiner();                       // les suggestions suivent la bibliothèque
       } catch (e) { toast(e.message || 'Enregistrement impossible', 'erreur'); }
     };
   }
@@ -660,20 +629,61 @@ export function ouvrirCahier(chantier, dossier, retour) {
       if (!s.elements.pieces[cle]) s.elements.pieces[cle] = [];
       return s.elements.pieces[cle];
     };
-    hote.querySelectorAll('[data-el-ajouter]').forEach(b => b.onclick = async () => {
-      const cle = b.dataset.elAjouter;
-      const bloc = b.closest('.ca-elements');
-      const champ = bloc.querySelector('[data-el-texte]');
-      const texte = champ.value.trim();
-      if (!texte) { champ.focus(); return; }
-      const famille = bloc.querySelector('[data-el-fam]').value;
+    // ⚠ ON NE REDESSINE PAS L'ÉCRAN À CHAQUE FRAPPE : seule la bande de
+    // suggestions se refait, sinon le champ perdrait le focus à la première
+    // lettre. L'écran entier n'est redessiné qu'à l'ajout ou au retrait.
+    const sansAccent = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    const ajouter = async (cle, famille, texte, garder) => {
       lire();
       listeDe(cle).push({ texte, famille, client: false });
       // ⚠ CE QU'ON ÉCRIT À LA MAIN ENTRE DANS LA BIBLIOTHÈQUE : c'est ce qui la
       // fait grossir toute seule, sans séance de paramétrage. Un doublon est
       // ignoré sans bruit.
-      try { await garderDansBiblio(famille, texte); } catch { /* bibliothèque en lecture seule */ }
-      s.modifie = true; dessiner();
+      if (garder) { try { await garderDansBiblio(famille, texte); } catch { /* lecture seule */ } }
+      s.modifie = true;
+      dessiner();
+      // On rend la main dans le champ de ce bloc : on en ajoute souvent deux
+      // ou trois d'affilée.
+      hote.querySelector(`[data-el-q="${CSS.escape(cle)}"]`)?.focus();
+    };
+    const suggerer = (cle) => {
+      const zone = hote.querySelector(`[data-el-sug="${CSS.escape(cle)}"]`);
+      const champ = hote.querySelector(`[data-el-q="${CSS.escape(cle)}"]`);
+      if (!zone || !champ) return;
+      const q = sansAccent(champ.value.trim());
+      const pris = new Set(listeDe(cle).map(e => sansAccent(e.texte)));
+      const b = biblioElements();
+      const toutes = [...b.contrainte.map(t => ['contrainte', t]), ...b.technique.map(t => ['technique', t])];
+      const trouves = toutes.filter(([, t]) => !pris.has(sansAccent(t)) && (!q || sansAccent(t).includes(q))).slice(0, 8);
+      const connue = toutes.some(([, t]) => sansAccent(t) === q);
+      const brut = champ.value.trim();
+      // ⚠ LA BIBLIOTHÈQUE D'ABORD, LA CRÉATION ENSUITE, et pas avant quatre
+      // lettres. Dans l'autre ordre, taper « digicode » proposait d'abord de
+      // CRÉER une phrase « digicode » — et c'est elle que prenaient le premier
+      // clic et la touche Entrée, à la place de la phrase déjà écrite dans la
+      // bibliothèque (vu à l'essai, 17/11/2026).
+      const creer = brut.length >= 4 && !connue;
+      zone.innerHTML = [
+        ...trouves.map(([f, t], i) =>
+          `<button type="button" class="ca-sug fam-${esc(f)}" style="--i:${i}" data-f="${esc(f)}" data-t="${esc(t)}">
+            <small>${esc(FAMILLES[f].court)}</small>${esc(t)}</button>`),
+        ...(creer ? Object.entries(FAMILLES).map(([f, info], i) =>
+          `<button type="button" class="ca-sug neuf" style="--i:${trouves.length + i}"
+            data-f="${esc(f)}" data-t="${esc(brut)}" data-neuf="1">
+            <small>Créer · ${esc(info.court)}</small>${esc(brut)}</button>`) : []),
+      ].join('') || '<span class="ca-el-vide">Rien d’autre dans la bibliothèque.</span>';
+      zone.querySelectorAll('.ca-sug').forEach(b2 => b2.onclick = () =>
+        ajouter(cle, b2.dataset.f, b2.dataset.t, b2.dataset.neuf === '1'));
+    };
+    hote.querySelectorAll('[data-el-q]').forEach(champ => {
+      const cle = champ.dataset.elQ;
+      champ.oninput = () => suggerer(cle);
+      champ.onkeydown = (ev) => {
+        if (ev.key !== 'Enter') return;
+        ev.preventDefault();
+        hote.querySelector(`[data-el-sug="${CSS.escape(cle)}"] .ca-sug`)?.click();
+      };
+      suggerer(cle);
     });
     hote.querySelectorAll('[data-el-retirer]').forEach(b => b.onclick = () => {
       lire();
@@ -686,10 +696,8 @@ export function ouvrirCahier(chantier, dossier, retour) {
       const e = l[Number(c.dataset.i)];
       if (e) { e.client = c.checked; s.modifie = true; }
     });
-    hote.querySelectorAll('[data-el-biblio]').forEach(b => b.onclick = () => {
-      lire();
-      ouvrirBiblio(b.dataset.elBiblio);
-    });
+    const bTenir = hote.querySelector('#ca-el-tenir');
+    if (bTenir) bTenir.onclick = () => { lire(); ouvrirBiblioTenir(null); };
 
     hote.querySelectorAll('[data-retirer-piece]').forEach(b => b.onclick = () => {
       lire();

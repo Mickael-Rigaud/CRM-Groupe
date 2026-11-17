@@ -9225,35 +9225,54 @@ td .pl-toque { color: #4f46e5; }
 .ct-ajout { margin: 0 12px 8px; align-self: flex-start; cursor: pointer; }
 
 /* Les éléments techniques et les contraintes d'un cahier (17/11/2026, Élodie).
-   Le même bloc sert au chantier et à chaque pièce : une ligne par élément, sa
-   famille, et la case « client » qui décide s'il sort aussi sur le cahier
-   remis au client. */
-.ca-elements { margin-top: 10px; border-top: 1px dashed var(--line); padding-top: 8px; }
-.ca-el-tete { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
-.ca-el-tete h5 { margin: 0; font-size: 12px; font-weight: 800; letter-spacing: .04em;
+   ⚠ PISTE A, CHOISIE SUR MAQUETTE VIVANTE : un seul champ, la bibliothèque se
+   filtre sous les doigts, un clic ajoute. La première version demandait cinq
+   gestes (liste, menu de famille, champ, bouton, fenêtre à deux colonnes) —
+   « on se perd trop dans les informations ». Ne pas y revenir. */
+.ca-elements { margin-top: 12px; border-top: 1px dashed var(--line); padding-top: 10px; }
+.ca-el-tete { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px; }
+.ca-el-tete h5 { margin: 0; font-size: 11.5px; font-weight: 800; letter-spacing: .08em;
   text-transform: uppercase; color: var(--muted); flex: 1; }
-.ca-el-liste { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 4px; }
-.ca-el { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 8px;
-  background: var(--card-2); font-size: 13px; }
-.ca-el-fam { flex: none; font-size: 10.5px; font-weight: 800; letter-spacing: .04em;
-  text-transform: uppercase; padding: 1px 7px; border-radius: 999px;
-  background: color-mix(in srgb, #E48312 18%, transparent); color: #9A5B06; }
-.ca-el.fam-technique .ca-el-fam { background: color-mix(in srgb, #0284c7 16%, transparent); color: #075985; }
-.ca-el-texte { flex: 1; min-width: 0; }
-.ca-el-client { flex: none; display: flex; align-items: center; gap: 4px; font-size: 11.5px; color: var(--muted); }
-.ca-el-x { flex: none; border: 0; background: none; cursor: pointer; color: var(--muted);
-  font-size: 13px; line-height: 1; padding: 2px 4px; }
-.ca-el-x:hover { color: #b91c1c; }
-.ca-el-ajout { display: flex; gap: 6px; flex-wrap: wrap; }
-.ca-el-ajout select { flex: none; }
-.ca-el-ajout input { flex: 1; min-width: 160px; }
+.ca-el-tenir { border: 0; background: none; cursor: pointer; font: 600 12px inherit;
+  color: var(--muted); text-decoration: underline; text-underline-offset: 2px; padding: 0; }
+.ca-el-tenir:hover { color: var(--text); }
+.ca-el-vide { color: var(--muted); font-size: 13px; font-style: italic; }
 
-/* La fenêtre de la bibliothèque : deux colonnes de cases. */
-.ca-biblio { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-.ca-biblio-col h5 { margin: 0 0 6px; font-size: 12px; font-weight: 800; letter-spacing: .04em;
-  text-transform: uppercase; color: var(--muted); }
-.ca-biblio-l { display: flex; align-items: flex-start; gap: 8px; padding: 5px 7px; border-radius: 8px;
-  font-size: 13px; cursor: pointer; }
-.ca-biblio-l:hover { background: var(--card-2); }
-.ca-biblio-l.pris { opacity: .45; cursor: default; }
-@media screen and (max-width: 760px) { .ca-biblio { grid-template-columns: 1fr; } }
+/* Ce qui est retenu : des pastilles. */
+.ca-el-puces { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 10px; }
+.ca-el-puce { display: inline-flex; align-items: center; gap: 7px; border-radius: 999px;
+  padding: 6px 7px 6px 13px; font-size: 13px; font-weight: 600; border: 1.5px solid;
+  background: var(--card); animation: ca-el-entre .22s cubic-bezier(.2, .8, .2, 1); }
+@keyframes ca-el-entre { from { opacity: 0; transform: translateY(-4px) scale(.96); } }
+.ca-el-puce.fam-contrainte { border-color: color-mix(in srgb, #E48312 55%, transparent);
+  background: color-mix(in srgb, #E48312 10%, var(--card)); }
+.ca-el-puce.fam-technique { border-color: color-mix(in srgb, #0284c7 45%, transparent);
+  background: color-mix(in srgb, #0284c7 8%, var(--card)); }
+.ca-el-oeil { border: 0; cursor: pointer; border-radius: 999px; padding: 4px 9px;
+  font: 800 10px/1 inherit; letter-spacing: .06em; text-transform: uppercase;
+  background: color-mix(in srgb, var(--text) 8%, transparent); color: var(--muted);
+  transition: background .15s, color .15s; }
+.ca-el-oeil.on { background: var(--text); color: var(--card); }
+.ca-el-x { border: 0; background: none; cursor: pointer; color: var(--muted);
+  font-size: 14px; line-height: 1; padding: 0 3px; }
+.ca-el-x:hover { color: #b91c1c; }
+
+/* Le champ, et les suggestions qui se filtrent à la frappe. */
+.ca-el-chercher input { width: 100%; border: 1.5px solid var(--line); border-radius: 11px;
+  padding: 10px 13px; font: inherit; background: var(--card-2);
+  transition: border-color .15s, background .15s; }
+.ca-el-chercher input:focus { outline: 0; border-color: #FC5D00; background: var(--card); }
+.ca-el-sug { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+.ca-sug { border: 1.5px dashed var(--line); background: var(--card); border-radius: 999px;
+  padding: 6px 12px; font: 600 12.5px/1.3 inherit; color: var(--text); cursor: pointer;
+  text-align: left; transition: transform .12s, border-color .15s, background .15s;
+  animation: ca-el-entre .18s ease-out backwards; animation-delay: calc(var(--i, 0) * 18ms); }
+.ca-sug:hover { border-color: #FC5D00; transform: translateY(-1px);
+  background: color-mix(in srgb, #E48312 9%, var(--card)); }
+.ca-sug small { display: block; font-size: 9.5px; font-weight: 800; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--muted); margin-bottom: 1px; }
+.ca-sug.fam-technique small { color: #0369a1; }
+.ca-sug.fam-contrainte small { color: #9A5B06; }
+.ca-sug.neuf { border-style: solid; border-color: #FC5D00;
+  background: color-mix(in srgb, #E48312 14%, var(--card)); }
+@media (prefers-reduced-motion: reduce) { .ca-el-puce, .ca-sug { animation: none; } }
