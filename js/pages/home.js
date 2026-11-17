@@ -12,7 +12,11 @@ import {
   rdvMois, signeesMois, periodePrecedente, moisEnCours, externe, exerciceDe,
   // Les quatre cartes ajoutées le 12/11/2026. Elles rendent `null` quand la
   // structure filtrée ne porte pas la donnée : l'écran masque la carte.
-  cheminArgent, chantiersResume, publicite, envoisAuto, argentConnu, cumulMensuel, detailsPeriode,
+  // ⚠ `envoisAuto` N'EST PLUS IMPORTÉ depuis le 17/11/2026 : son unique
+  // lecteur, la tuile « Ce qui part tout seul », a été retiré. La fonction
+  // reste dans chiffres.js avec ses contrôles — la retirer d'ici évite de
+  // croire que le tableau de bord surveille encore les envois.
+  cheminArgent, publicite, argentConnu, cumulMensuel, detailsPeriode,
 } from '../data/chiffres.js';
 // `finDe` tient compte de la fin déclarée à la main et des jours ouvrés d'une
 // formation : refaire ce calcul ici donnerait une date différente du planning.
@@ -293,12 +297,18 @@ export const homePage = {
 
           ${carteMeta(cles)}
 
-          ${/* ⚠ LA PUBLICITÉ A QUITTÉ CETTE RANGÉE (17/11/2026) pour la grande
-                carte chaude : la laisser ici l'aurait affichée deux fois. Les
-                deux tuiles restantes prennent la largeur libérée plutôt que
-                de laisser un trou d'un tiers. */ ''}
-          ${taille(tuileChantiers(cles, r), 'tb-x6')}
-          ${taille(tuileEnvois(cles), 'tb-x6')}
+          ${/* ⚠ LA RANGÉE DU BAS A ÉTÉ VIDÉE LE 17/11/2026, en trois temps.
+                « Publicité Meta » est montée dans la grande carte chaude ;
+                « Chantiers » répétait l'encadré du haut, qui porte le même
+                nombre ET la même liste ; « Ce qui part tout seul » est parti
+                avec — Élodie : « je veux supprimer ces deux éléments, qui ne
+                servent à rien ».
+
+                ⚠ CE QU'ON NE VOIT PLUS NULLE PART : un envoi automatique
+                DÉFINITIVEMENT perdu. `envoisAuto` (data/chiffres.js) sait le
+                distinguer d'une tentative rattrapée, et il reste en place avec
+                ses contrôles ; il n'a simplement plus de lecteur. Le jour où
+                l'on voudra ce signal, il est prêt — ne pas le réécrire. */ ''}
 
           <section class="card tb-x7">
             <div class="card-head"><h2>Évolution du chiffre d'affaires</h2>
@@ -992,23 +1002,7 @@ const jourCourt = (iso) => (iso
   ? new Date(String(iso).slice(0, 10) + 'T00:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })
   : '');
 // L'âge d'une échéance dépassée, en mots. ⚠ C'est lui qui fait agir, pas le
-// montant : un total en attente se regarde, « due il y a plus d'un an » se traite.
-const depuisQuand = (iso) => {
-  const j = Math.round((Date.now() - new Date(String(iso).slice(0, 10) + 'T00:00:00')) / 86400000);
-  if (j < 31) return `il y a ${j} jour${j > 1 ? 's' : ''}`;
-  const m = Math.round(j / 30.4);
-  return m < 12 ? `il y a ${m} mois` : `il y a plus de ${Math.floor(m / 12)} an${m >= 24 ? 's' : ''}`;
-};
 
-/**
- * « Le chemin de l'argent » : signé → facturé → encaissé → reste dû.
- *
- * ⚠ LE QUATRIÈME BARREAU N'EST PAS DE LA MÊME NATURE QUE LES TROIS AUTRES, et
- * l'écran doit le dire au lieu de le laisser deviner : les trois premiers
- * concernent la période choisie, le dernier est ce qu'on attend aujourd'hui,
- * toutes dates confondues. Sans cette mention, on soustrait de tête des nombres
- * qui ne parlent pas du même intervalle.
- */
 /**
  * « Le chemin de l'argent » — la grande tuile du bento.
  *
@@ -1043,66 +1037,6 @@ function carteArgent(cles, r, state) {
         <span class="ss">${esc(b.ss)}</span>
         <div class="tb-piste"><i data-large="${part(b.v)}"></i></div></div>`).join('')}
     </div>
-  </section>`;
-}
-
-const duo = (a, b) => `<div class="tb-duo">
-  <div class="tb-du"><b>${a.v}</b><span>${a.l}</span></div>
-  <div class="tb-du${b.ton ? ' ' + b.ton : ''}"><b>${b.v}</b><span>${b.l}</span></div></div>`;
-
-function tuileChantiers(cles, r) {
-  const c = chantiersResume(cles, r);
-  if (!c) return '';
-  // ⚠ UN CHANTIER « OUBLIÉ » EST LE SEUL QUI DEMANDE QUELQUE CHOSE : commencé,
-  // sa date de fin passée, et personne n'a appuyé sur « Chantier terminé ».
-  // Les autres n'ont besoin de rien, ils tournent. Il passe donc en tête.
-  // ⚠ `oublies` EST UN SOUS-ENSEMBLE DE `enCours` : sans ce retrait, un
-  // chantier qui a dépassé sa date apparaîtrait deux fois dans la même liste.
-  const aClore = new Set(c.oublies.map(x => x.id));
-  const lignes = [
-    ...c.oublies.map(x => ({ x, ton: 'red', etat: 'à clôturer' })),
-    ...c.enCours.filter(x => !aClore.has(x.id)).map(x => ({ x, ton: '', etat: 'en cours' })),
-    ...c.aVenir.map(x => ({ x, ton: 'muet', etat: 'à venir' })),
-  ].slice(0, 4);
-  const couleur = (ton) => (ton === 'red' ? 'var(--red)' : ton === 'muet' ? 'var(--muted-2)' : ACTIVITIES.rgd.color);
-  return `<section class="card tb-tuile">
-    <div class="card-head"><h2>Chantiers</h2>
-      <a class="muted small" href="#/rgd/planning">planning →</a></div>
-    ${duo({ v: c.enCours.length, l: 'en cours' }, { v: c.termines.length, l: 'terminés sur la période' })}
-    ${c.oublies.length ? `<p class="tb-alerte">
-      <b>${c.oublies.length} chantier${c.oublies.length > 1 ? 's' : ''} ${c.oublies.length > 1 ? 'ont' : 'a'} dépassé sa date de fin</b>
-      sans être clôturé${c.oublies.length > 1 ? 's' : ''} : la demande d'avis Google ne part pas tant que le bouton n'est pas appuyé.</p>` : ''}
-    ${lignes.length ? `<div class="tb-liste">${lignes.map(({ x, ton, etat }) => `<div class="tb-lg">
-      <i style="background:${couleur(ton)}"></i>
-      <span class="tx">${esc(x.titre || 'Chantier')}<em>jusqu’au ${jourCourt(finDe(x))}</em></span>
-      <b${ton === 'red' ? ' style="color:var(--red)"' : ''}>${etat}</b></div>`).join('')}</div>`
-      : '<p class="muted small" style="margin-top:10px">Aucun chantier au planning.</p>'}
-    ${c.avisDemandes ? `<p class="muted small" style="margin-top:9px">${c.avisDemandes} demande${c.avisDemandes > 1 ? 's' : ''} d'avis Google partie${c.avisDemandes > 1 ? 's' : ''} sur la période.</p>` : ''}
-  </section>`;
-}
-
-
-function tuileEnvois(cles) {
-  const e = envoisAuto(cles);
-  if (!e) return '';
-  const l = [
-    { n: e.relances, lb: 'Relances de devis', s: 'J+3, J+8, J+15', c: 'var(--accent)' },
-    { n: e.confirmations, lb: 'Confirmations de RDV', s: 'la veille, par SMS', c: 'var(--blue)' },
-    { n: e.avis, lb: 'Avis Google', s: 'au clic sur « Chantier terminé »', c: 'var(--green)' },
-  ].filter(x => x.n);
-  // ⚠ LES ÉCHECS SONT LE SUJET. Un envoi qui part n'a besoin de personne ; un
-  // envoi qui échoue n'a prévenu personne. On nomme les destinataires : sans
-  // eux, « 4 échecs » ne se répare pas.
-  return `<section class="card tb-tuile">
-    <div class="card-head"><h2>Ce qui part tout seul</h2>
-      <span class="muted small">${e.jours} derniers jours</span></div>
-    ${duo({ v: e.partis, l: 'partis' },
-      { v: e.echecs.length, l: 'en échec', ton: e.echecs.length ? 'rouge' : '' })}
-    ${l.length ? `<div class="tb-liste">${l.map(x => `<div class="tb-lg">
-      <i style="background:${x.c}"></i><span class="tx">${x.lb}<em>${x.s}</em></span><b>${x.n}</b></div>`).join('')}</div>` : ''}
-    ${e.echecs.length ? `<p class="tb-alerte">
-      <b>${e.echecs.length} envoi${e.echecs.length > 1 ? 's' : ''} n’${e.echecs.length > 1 ? 'ont' : 'a'} pas pu partir.</b>
-      ${esc(e.echecs.slice(0, 2).map(x => x.destinataire || 'destinataire absent').join(', '))}${e.echecs.length > 2 ? '…' : ''}</p>` : ''}
   </section>`;
 }
 

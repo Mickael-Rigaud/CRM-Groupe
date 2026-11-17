@@ -796,19 +796,40 @@ export function publicite(cles, periode = DEPUIS_LE_DEBUT) {
  *
  * ⚠ LES ÉCHECS SONT LE SUJET, PAS UNE NOTE DE BAS DE PAGE. Un envoi automatique
  * qui part n'a besoin de personne ; un envoi qui échoue n'a prévenu personne.
- * Au 12/11/2026, quatre relances sur treize n'ont pas pu partir et rien à
- * l'écran ne le disait.
+ *
+ * ⚠ MAIS UNE TENTATIVE RATTÉE N'EST PAS UN ÉCHEC, et la première version comptait
+ * les deux pareil (17/11/2026, Élodie : « j'ai 4 échecs, je ne le savais pas,
+ * pourquoi ? »). Les quatre étaient DEUX relances refusées par Costructor deux
+ * matins de suite, puis **parties le troisième** : les clients ont bien reçu
+ * leurs trois relances. La tâche retente chaque matin tant que le rang n'est
+ * pas parti — un échec suivi d'un succès pour le même envoi est donc une
+ * péripétie, pas une perte. L'annoncer comme un échec, c'est alarmer pour rien
+ * et user l'attention qu'on voudra le jour où un envoi se perd vraiment.
+ *
+ * ⚠ LA CLÉ D'UN MÊME ENVOI : sa nature, son rang et l'objet qu'il concerne. Deux
+ * relances de rang 3 sur deux devis différents ne se rattrapent pas l'une
+ * l'autre.
  */
+const cleEnvoi = (e) => [e.nature, e.rang ?? '', e.devis_id || e.chantier_id || e.planning_id || e.contact_id || ''].join('|');
+
 export function envoisAuto(cles, jours = 30) {
   if (!cles.includes('rgd') || !scope.canRgd) return null;
   const depuis = new Date(Date.now() - jours * 86400000).toISOString();
-  const l = scope.rgd('rgd_envois_auto').filter(e => String(e.envoye_le || '') >= depuis);
+  const tous = scope.rgd('rgd_envois_auto');
+  const l = tous.filter(e => String(e.envoye_le || '') >= depuis);
   if (!l.length) return null;
+  // ⚠ ON CHERCHE LE RATTRAPAGE DANS TOUTE LA TABLE, pas seulement dans la
+  // fenêtre : un échec du 30 rattrapé le 31 doit rester rattrapé même quand la
+  // fenêtre glissante finit par couper le succès.
+  const partiApres = (e) => tous.some(x => x.statut !== 'echec' && cleEnvoi(x) === cleEnvoi(e)
+    && String(x.envoye_le || '') > String(e.envoye_le || ''));
+  const rates = l.filter(e => e.statut === 'echec');
   const par = (nature) => l.filter(e => e.nature === nature && e.statut !== 'echec').length;
   return {
     jours,
     partis: l.filter(e => e.statut !== 'echec').length,
-    echecs: l.filter(e => e.statut === 'echec'),
+    echecs: rates.filter(e => !partiApres(e)),
+    rattrapes: rates.filter(partiApres).length,
     relances: par('relance_devis'),
     confirmations: par('confirmation_rdv'),
     avis: par('avis_google'),
