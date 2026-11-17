@@ -654,7 +654,23 @@ export function ouvrirCahier(chantier, dossier, retour) {
       const pris = new Set(listeDe(cle).map(e => sansAccent(e.texte)));
       const b = biblioElements();
       const toutes = [...b.contrainte.map(t => ['contrainte', t]), ...b.technique.map(t => ['technique', t])];
-      const trouves = toutes.filter(([, t]) => !pris.has(sansAccent(t)) && (!q || sansAccent(t).includes(q))).slice(0, 8);
+      const libres = toutes.filter(([, t]) => !pris.has(sansAccent(t)) && (!q || sansAccent(t).includes(q)));
+      // ⚠ AU REPOS, ON ALTERNE LES DEUX FAMILLES (17/11/2026, Élodie : « je ne
+      // vois que les pastilles contraintes, c'est normal ? » — non). Les
+      // contraintes étaient listées en premier et la bande s'arrête à huit :
+      // avec neuf contraintes, aucune phrase technique n'apparaissait tant
+      // qu'on n'avait pas tapé. Une famille entière était invisible.
+      // En recherche, on garde l'ordre de pertinence : le filtre a déjà trié.
+      let trouves;
+      if (q) trouves = libres.slice(0, 8);
+      else {
+        const parF = { contrainte: libres.filter(x => x[0] === 'contrainte'), technique: libres.filter(x => x[0] === 'technique') };
+        trouves = [];
+        for (let i = 0; trouves.length < 8 && (parF.contrainte[i] || parF.technique[i]); i++) {
+          if (parF.contrainte[i]) trouves.push(parF.contrainte[i]);
+          if (trouves.length < 8 && parF.technique[i]) trouves.push(parF.technique[i]);
+        }
+      }
       const connue = toutes.some(([, t]) => sansAccent(t) === q);
       const brut = champ.value.trim();
       // ⚠ LA BIBLIOTHÈQUE D'ABORD, LA CRÉATION ENSUITE, et pas avant quatre
