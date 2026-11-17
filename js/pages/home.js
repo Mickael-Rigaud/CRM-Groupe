@@ -310,9 +310,24 @@ export const homePage = {
                 ses contrôles ; il n'a simplement plus de lecteur. Le jour où
                 l'on voudra ce signal, il est prêt — ne pas le réécrire. */ ''}
 
-          <section class="card tb-x7">
+          ${/* ⚠ SEULEMENT EN VUE GROUPE (17/11/2026). Élodie : « mets-le que dans
+                "groupe" pour voir tous les chiffres d'affaires de toutes les
+                structures ». Filtré sur une seule structure, la courbe n'avait
+                plus qu'une ligne et le CA du mois était déjà dit deux fois —
+                par l'encadré « CA facturé HT » et par « Objectifs & performance ».
+                En vue groupe elle montre ce qu'aucun autre écran ne montre :
+                les structures côte à côte sur douze mois.
+
+                ⚠ `dessineCourbe` SUPPORTE L'ABSENCE : `if (!canvas) return;`.
+                Ne pas retirer cette garde en croyant la carte toujours là.
+
+                ⚠ ET ELLE PREND LES 12 COLONNES, pas 7. La rangee doit se
+                refermer : « Ma journée » est passée de 5 à 6 colonnes quand
+                « À traiter » a été retiré, et 7 + 6 = 13 débordait. */ ''}
+          ${state.filtre === 'groupe' ? `
+          <section class="card tb-x12">
             <div class="card-head"><h2>Évolution du chiffre d'affaires</h2>
-              <span class="muted small">CA HT · 12 derniers mois</span></div>
+              <span class="muted small">CA HT · 12 derniers mois · toutes les structures</span></div>
             <div class="tb-chartwrap">
               <div class="chart-box tb-chart"><canvas id="tb-canvas"></canvas></div>
               <div class="tb-totals">
@@ -321,11 +336,23 @@ export const homePage = {
                   <span class="tb-tnm">${esc(ACTIVITIES[k].label)}</span><b>${eur(caMois(k, moisCle(), deals))}</b></div>`).join('')}
               </div>
             </div>
-          </section>
+          </section>` : ''}
 
-          ${taille(carteJournee(visibles), 'tb-x5')}
-          ${taille(carteTaches(), 'tb-x6')}
-          ${taille(cartePatrimoine(), 'tb-x6')}
+          ${/* ⚠ « À TRAITER » A ÉTÉ RETIRÉ LE 17/11/2026. Élodie : « il ne sert à
+                rien je trouve » — et elle a raison : « Ma journée » affiche déjà
+                `tachesDuJour()`, donc son bloc « Aujourd'hui ». Il n'ajoutait
+                que « En retard » et « Cette semaine », que l'écran #/today
+                donne en entier.
+
+                ⚠ LA LARGEUR DE « MA JOURNÉE » EST CALCULÉE, pas fixée : la
+                grille fait 12 colonnes et « Patrimoine » rend '' quand la
+                structure filtrée n'a ni patrimoine ni locatif (RGD). Fixée à
+                6, elle laisserait alors une demi-ligne vide. */ ''}
+          ${(() => {
+            const patrimoine = cartePatrimoine();
+            return taille(carteJournee(visibles), patrimoine ? 'tb-x6' : 'tb-x12')
+              + taille(patrimoine, 'tb-x6');
+          })()}
 
         </div>
 
@@ -920,28 +947,6 @@ async function enregistrerReglage(cle, valeur) {
   if (!existe && !valeur) return;
   if (existe) await db.update('settings', cle, { value: valeur });
   else await db.insert('settings', { key: cle, value: valeur });
-}
-
-// ---------- tâches ----------
-function carteTaches() {
-  const ouvertes = scope.activities().filter(a => !a.done);
-  const retard = ouvertes.filter(a => a.due_date && daysSince(a.due_date) > 0);
-  const jour = ouvertes.filter(a => a.due_date && daysSince(a.due_date) === 0);
-  const semaine = ouvertes.filter(a => a.due_date && daysSince(a.due_date) < 0 && daysSince(a.due_date) >= -7);
-  const bloc = (cls, titre, arr, urgent) => arr.length ? `<div class="tb-grp ${cls}">
-    <div class="tb-ghead">${titre}<span class="tb-cnt">${arr.length}</span></div>
-    ${arr.slice(0, 5).map(a => `<div class="tb-task click" data-go="#/today">
-      <span class="tb-box"></span><span class="t">${esc(a.title)}</span>
-      <span class="who">${esc(userName(a.assignee_id))}</span>
-      <span class="when ${urgent ? 'r' : 'n'}">${urgent ? Math.abs(daysSince(a.due_date)) + ' j' : cls === 'tdy' ? "aujourd'hui" : new Date(a.due_date + 'T00:00:00').toLocaleDateString('fr-FR', { weekday: 'short' })}</span>
-    </div>`).join('')}
-    ${arr.length > 5 ? `<div class="tb-plus click" data-go="#/today">+ ${arr.length - 5} autre${arr.length - 5 > 1 ? 's' : ''}</div>` : ''}
-  </div>` : '';
-  const corps = bloc('late', 'En retard', retard, true) + bloc('tdy', "Aujourd'hui", jour, false) + bloc('week', 'Cette semaine', semaine, false);
-  return `<section class="card">
-    <div class="card-head"><h2>À traiter</h2><span class="muted small">${ouvertes.length} tâche${ouvertes.length > 1 ? 's' : ''} ouverte${ouvertes.length > 1 ? 's' : ''}</span></div>
-    ${corps || '<div class="empty" style="padding:18px 0">Rien à faire — tout est à jour.</div>'}
-  </section>`;
 }
 
 // ---------- patrimoine et locatif ----------
