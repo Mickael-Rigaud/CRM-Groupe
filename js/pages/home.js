@@ -415,6 +415,24 @@ export const homePage = {
       });
       root.querySelectorAll('[data-p]').forEach(b => b.onclick = () => { state.periode = b.dataset.p; draw(); });
       root.querySelector('#tb-mois')?.addEventListener('change', (e) => { state.mois = e.target.value; draw(); });
+      root.querySelectorAll('[data-ouvre]').forEach(el => {
+        const cible = root.querySelector('#' + el.dataset.ouvre);
+        if (!cible) return;
+        const basculer = () => {
+          const ouvre = cible.hidden;
+          cible.hidden = !ouvre;
+          el.setAttribute('aria-expanded', String(ouvre));
+          const c = el.querySelector('.tb-caret');
+          if (c) c.textContent = ouvre ? '\u25be' : '\u25b8';
+        };
+        el.onclick = basculer;
+        // ⚠ LE CLAVIER AUSSI : `role="button"` promet la barre d'espace et
+        // Entrée, et un div ne les donne pas tout seul. Promettre le rôle sans
+        // le tenir est pire que ne rien promettre.
+        el.onkeydown = (ev) => {
+          if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); basculer(); }
+        };
+      });
       root.querySelectorAll('[data-go]').forEach(el => el.onclick = (e) => {
         e.stopPropagation();          // une pastille est posée dans une tuile cliquable
         location.hash = el.dataset.go;
@@ -1232,8 +1250,18 @@ function carteReseau(cles) {
     <span class="tb-sous">de devis gagnés grâce au réseau${e.commissions
       ? ` · ${eur(e.commissions)} de commissions` : ''}</span>
     <div class="tb-duo">
-      <div class="tb-du"><b>${e.gagnes}<small style="font-size:15px;opacity:.5"> / ${decides}</small></b>
-        <span>affaires gagnées</span></div>
+      ${/* ⚠ UN DIV, PAS UN BOUTON : `.tb-du` est dessiné comme une tuile, et
+            un élément <button> hériterait des styles de bouton du navigateur
+            qu'il faudrait annuler dans app.css — où travaille une autre
+            session. On garde le rôle et le clavier, qui sont ce qui compte.
+
+            ⚠ ET LE CHEVRON EST LÀ POUR QU'ON SACHE QUE ÇA S'OUVRE : une tuile
+            cliquable qui ne le dit pas est une fonctionnalité livrée et
+            introuvable. */ ''}
+      <div class="tb-du${e.gagnes ? ' click' : ''}"${e.gagnes ? ` role="button" tabindex="0"
+        aria-expanded="false" aria-controls="reseau-gagnees" data-ouvre="reseau-gagnees"
+        style="cursor:pointer"` : ''}><b>${e.gagnes}<small style="font-size:15px;opacity:.5"> / ${decides}</small></b>
+        <span>affaires gagnées${e.gagnes ? ' <span class="tb-caret">\u25b8</span>' : ''}</span></div>
       <div class="tb-du"><b>${e.taux === null ? '\u2014' : Math.round(e.taux * 100) + '\u00a0%'}</b>
         <span>des affaires tranchées</span></div>
     </div>
@@ -1242,6 +1270,27 @@ function carteReseau(cles) {
           au dénominateur ferait baisser le taux à chaque nouvel apport. */ ''}
     ${e.enCours ? `<p class="muted small" style="margin:8px 0 0">${e.enCours} affaire${
       e.enCours > 1 ? 's' : ''} encore sans issue, hors du taux.</p>` : ''}
+    ${/* ⚠ LE FILET VERT RATTACHE LE DÉTAIL À SA TUILE. Sans lui, la liste
+          dépliée et celle des apporteurs ont la même forme, se touchent, et
+          portent les mêmes montants : on ne sait plus où l'une finit. Le défaut
+          se voit sur une capture, jamais dans un contrôle — tout était
+          « présent ». Style en ligne : app.css porte le travail d'une autre
+          session, on n'y ajoute rien. */ ''}
+    ${e.gagnes ? `<div id="reseau-gagnees" hidden
+      style="border-left:3px solid #22C55E;padding-left:13px;margin-top:10px">
+      <p class="muted small" style="margin:0">Les ${e.gagnes} affaires gagnées, de la plus grosse à la plus petite :</p>
+      <div class="tb-liste">
+        ${e.gagnees.map(g => `<div class="tb-lg">
+          <i style="background:#22C55E"></i>
+          <span class="tx">${esc(g.client)}<em>${esc(g.apporteur)}${g.date ? ` · ${date(g.date)}` : ''}${
+            g.commission ? ` · ${eur(g.commission)} de commission` : ''}</em></span>
+          <b>${eur(g.montant)}</b></div>`).join('')}
+      </div>
+    </div>` : ''}
+    ${/* ⚠ UN TITRE, PARCE QU'IL Y A DEUX LISTES. Celle-ci compte par
+          APPORTEUR, celle du dessus par AFFAIRE : mêmes pastilles, mêmes
+          montants, et rien ne les séparait. */ ''}
+    <p class="muted small" style="margin:14px 0 0">Par apporteur :</p>
     <div class="tb-liste">
       ${e.parApporteur.slice(0, 4).map(a => `<div class="tb-lg click" data-go="#/rgd/apporteurs">
         <i style="background:var(--accent)"></i>

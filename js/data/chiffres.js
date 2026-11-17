@@ -803,6 +803,21 @@ export function reseauApporteurs(cles) {
   }).sort((a, b) => b.ca - a.ca || b.apports - a.apports);
 
   return {
+    // ⚠ LA LISTE DES GAGNÉES EST RENDUE EN ENTIER, pas tronquée à trois :
+    // elle ne s'affiche qu'à la demande, en dépliant la tuile, et un
+    // « + 2 autres » sous un détail qu'on vient d'ouvrir exprès serait une
+    // porte qui ne mène nulle part. Triée par montant : c'est l'ordre dans
+    // lequel on relit ses affaires.
+    gagnees: gagnes.map((a) => {
+      const f = fiches.find(x => String(x.id) === String(a.apporteur_id));
+      return {
+        client: a.client || '(client non nommé)',
+        date: a.date_apport || null,
+        montant: Number(a.montant_devis) || 0,
+        commission: Number(a.montant_commission) || 0,
+        apporteur: f ? nomDe(f) : '(fiche supprimée)',
+      };
+    }).sort((x, y) => y.montant - x.montant),
     apports: apports.length,
     gagnes: gagnes.length,
     perdus: perdus.length,
