@@ -91,8 +91,8 @@ export function nouveauProspectCourtage(apres) {
   const moi = scope.user?.id || null;
   const v = {
     type_financement: '', objectif: '', avancement: '',
-    montant_projet: '', apport: '', montant_financement: '', financement_saisi: false,
-    duree: '', emprunteurs: '', revenus_foyer: '', ville_projet: '',
+    montant_projet: '', apport: '', montant_financement: '',
+    duree: '', emprunteurs: '', revenus_foyer: '', credits_en_cours: '', ville_projet: '',
     first_name: '', last_name: '', phone: '', email: '', city: '', canal: '', apporteur: '', message: '',
     contact: 'rappel', jour: jourLocal(new Date(Date.now() + 86400000)), heure: '10:00', responsable: moi,
   };
@@ -108,17 +108,25 @@ export function nouveauProspectCourtage(apres) {
     .filter(o => (o.activities || []).includes(KEY) && o.type !== 'Banque' && o.partner_job !== 'Banque')
     .sort((a, b) => String(a.name).localeCompare(String(b.name)));
 
-  // Le même e-mail ou le même téléphone : c'est la même personne.
+  // Le même e-mail ou le même téléphone : c'est la même personne — MAIS
+  // SEULEMENT DANS LA BASE DE LA RÉFÉRENCE COURTAGE.
+  // ⚠ CHAQUE STRUCTURE A SA BASE (17/11/2026, Mickael : « j'ai fait un test avec
+  // Élodie Carré et on m'a dit que le contact était déjà dans le CRM — rappelle-
+  // toi que je veux distinguer les bases de données de chaque structure »). La
+  // première version cherchait dans TOUS les contacts visibles : une cliente de
+  // RGD Renova était proposée comme doublon, et sa fiche RGD aurait été
+  // rattachée au courtage. Une personne connue ailleurs dans le groupe a donc
+  // ici une fiche à elle, propre au courtage.
   const doublon = () => {
     const e = v.email.trim().toLowerCase();
     const t = telNet(v.phone);
     if (!e && t.length < 9) return null;
-    return scope.contacts().find(c => (e && String(c.email || '').trim().toLowerCase() === e)
+    return scope.contacts().filter(c => (c.activities || []).includes(KEY)).find(c => (e && String(c.email || '').trim().toLowerCase() === e)
       || (t.length >= 9 && telNet(c.phone) === t)) || null;
   };
   const reponses = (i) => {
     const k = [['type_financement', 'objectif', 'avancement'],
-      ['montant_projet', 'apport', 'duree', 'emprunteurs', 'revenus_foyer'],
+      ['montant_projet', 'apport', 'revenus_foyer', 'duree', 'emprunteurs'],
       ['first_name', 'last_name', 'phone', 'email', 'canal'],
       ['contact']][i];
     return k.filter(x => String(v[x] || '').trim()).length + '/' + k.length;
@@ -134,25 +142,84 @@ export function nouveauProspectCourtage(apres) {
       <span class="lrc-saisie"><input name="${nom}" type="${type}" value="${esc(v[nom])}" placeholder="${esc(ph)}"
         ${type === 'number' ? 'inputmode="numeric" min="0" step="1000"' : ''} autocomplete="off">${suffixe ? `<i>${esc(suffixe)}</i>` : ''}</span></label>`;
 
+  // ---------------------------------------------------------------- les calculs
+  // ⚠ LES TAUX SONT CEUX DU SIMULATEUR DU SITE (CONFIG.TAUX de
+  // lareferencecourtage.fr/simulateur : 15 ans 2,95 %, 20 ans 3,25 %, 25 ans
+  // 3,45 %), et le seuil d'endettement est son repère de 35 % : le CRM et le site
+  // rendent le même ordre de grandeur pour le même projet. Hors assurance, comme
+  // le site. Indicatif : le dossier tranche.
+  const TAUX = { 15: 0.0295, 20: 0.0325, 25: 0.0345 };
+  const SEUIL = 35;
+  function calculs() {
+    const P = nombre(v.montant_projet), A = nombre(v.apport) || 0, F = nombre(v.montant_financement);
+    const R = nombre(v.revenus_foyer), C = nombre(v.credits_en_cours) || 0;
+    const ans = parseInt(v.duree, 10) || 25;
+    const t = (TAUX[ans] || TAUX[25]) / 12, n = ans * 12;
+    const facteur = (1 - Math.pow(1 + t, -n)) / t;            // capital pour 1 € par mois
+    const mens = F ? Math.round(F / facteur) : null;
+    const endet = R && mens ? Math.round(((mens + C) / R) * 1000) / 10 : null;
+    const mensMax = R ? R * SEUIL / 100 - C : null;
+    const capa = mensMax !== null ? Math.max(0, Math.floor((mensMax * facteur) / 1000) * 1000) : null;
+    const apportPct = P && A ? Math.round((A / P) * 1000) / 10 : null;
+    const ton = endet === null ? '' : endet <= SEUIL ? 'est-vert' : endet <= SEUIL + 3 ? 'est-orange' : 'est-rouge';
+    return { P, A, F, R, C, ans, mens, endet, capa, apportPct, ton, taux: (TAUX[ans] || TAUX[25]) * 100 };
+  }
+  function panneau() {
+    const k = calculs();
+    const pct = (x) => String(x).replace('.', ',');
+    const jauge = k.endet === null ? 0 : Math.min(100, (k.endet / 60) * 100);
+    const avis = k.endet === null ? 'Renseignez le montant à financer et les revenus pour voir le taux d’endettement.'
+      : k.ton === 'est-vert' ? 'Dans le repère des banques.'
+      : k.ton === 'est-orange' ? 'À la limite : quelques dizaines d’euros font basculer.'
+      : 'Au-dessus du repère : apport, durée ou montant à revoir.';
+    const ecart = k.capa !== null && k.F ? k.capa - k.F : null;
+    return `
+      <div class="lrc-calc-cases">
+        <div><span>Mensualité estimée</span><b>${k.mens ? esc(eur(k.mens)) : '—'}</b><em>sur ${k.ans} ans à ${pct(k.taux.toFixed(2))} %</em></div>
+        <div class="${k.ton}"><span>Taux d’endettement</span><b>${k.endet !== null ? pct(k.endet) + ' %' : '—'}</b><em>${k.C ? 'crédits en cours compris' : 'hors assurance'}</em></div>
+        <div><span>Capacité d’emprunt</span><b>${k.capa !== null ? esc(eur(k.capa)) : '—'}</b><em>${ecart === null ? `à ${SEUIL} % d’endettement` : ecart >= 0 ? `marge de ${esc(eur(ecart))}` : `manque ${esc(eur(-ecart))}`}</em></div>
+        <div><span>Apport</span><b>${k.apportPct !== null ? pct(k.apportPct) + ' %' : '—'}</b><em>du projet</em></div>
+      </div>
+      <div class="lrc-jauge ${k.ton}"><i style="width:${jauge}%"></i><span class="lrc-repere" style="left:${(SEUIL / 60) * 100}%">${SEUIL} %</span></div>
+      <p class="lrc-avis ${k.ton}">${esc(avis)}</p>`;
+  }
+  // Projet = apport + montant à financer : le champ qu'on tape commande, l'un
+  // des deux autres suit. Les autres champs sont réécrits sans redessiner,
+  // pour ne pas perdre le curseur.
+  function lier(source) {
+    const P = nombre(v.montant_projet), A = nombre(v.apport) || 0, F = nombre(v.montant_financement);
+    const poser = (nom, val) => {
+      v[nom] = val === null ? '' : String(Math.max(0, Math.round(val)));
+      const el = hote.querySelector(`[name="${nom}"]`); if (el && el !== document.activeElement) el.value = v[nom];
+    };
+    if (source === 'montant_projet' || source === 'apport') { if (P) poser('montant_financement', P - A); }
+    else if (source === 'montant_financement') {
+      if (P && F !== null) poser('apport', P - F);
+      else if (!P && F) poser('montant_projet', F + A);
+    }
+    const c = hote.querySelector('#lrc-calcul'); if (c) c.innerHTML = panneau();
+  }
+
   const corps = () => {
     if (etape === 0) return `
       <h4>Le financement</h4>${tuiles('type_financement', FINANCEMENTS, v.type_financement)}
       <h4>Pour quel projet ?</h4>${puces('objectif', OBJECTIFS(), v.objectif)}
       <h4>Où en est-il ?</h4>${puces('avancement', AVANCEMENTS, v.avancement)}`;
-    if (etape === 1) {
-      const calc = nombre(v.montant_projet) && (nombre(v.montant_projet) - (nombre(v.apport) || 0));
-      return `
-      <div class="lrc-grille">
+    if (etape === 1) return `
+      <div class="lrc-grille est-trois">
         ${champ('montant_projet', 'Montant du projet', { type: 'number', ph: '300 000', suffixe: '€' })}
         ${champ('apport', 'Apport', { type: 'number', ph: '30 000', suffixe: '€' })}
-        ${champ('montant_financement', 'Montant à financer', { type: 'number', ph: calc ? String(calc) : '270 000', suffixe: '€' })}
+        ${champ('montant_financement', 'Montant à financer', { type: 'number', ph: '270 000', suffixe: '€' })}
         ${champ('revenus_foyer', 'Revenus nets du foyer', { type: 'number', ph: '4 500', suffixe: '€ / mois' })}
+        ${champ('credits_en_cours', 'Crédits en cours', { type: 'number', ph: '0', suffixe: '€ / mois' })}
+        ${champ('ville_projet', 'Ville du projet', { ph: 'Nice' })}
       </div>
-      ${calc && !v.financement_saisi ? `<p class="lrc-note">Montant à financer calculé : <b>${esc(eur(calc))}</b> (projet moins apport).</p>` : ''}
-      <h4>Durée souhaitée</h4>${puces('duree', DUREES, v.duree)}
-      <h4>Emprunteurs</h4>${puces('emprunteurs', EMPRUNTEURS, v.emprunteurs)}
-      <div class="lrc-grille">${champ('ville_projet', 'Ville du projet', { ph: 'Nice' })}</div>`;
-    }
+      <p class="lrc-lien">Les trois montants se tiennent : projet = apport + montant à financer. Changez-en un, les autres suivent.</p>
+      <div class="lrc-duo">
+        <div><h4>Durée souhaitée</h4>${puces('duree', DUREES, v.duree)}</div>
+        <div><h4>Emprunteurs</h4>${puces('emprunteurs', EMPRUNTEURS, v.emprunteurs)}</div>
+      </div>
+      <div class="lrc-calcul" id="lrc-calcul">${panneau()}</div>`;
     if (etape === 2) {
       const d = doublon();
       return `
@@ -161,7 +228,7 @@ export function nouveauProspectCourtage(apres) {
         ${champ('phone', 'Téléphone', { type: 'tel', ph: '06 12 34 56 78' })}${champ('email', 'E-mail', { type: 'email', ph: 'nom@exemple.fr' })}
         ${champ('city', 'Ville de résidence', { ph: 'Nice' })}
       </div>
-      ${d ? `<p class="lrc-note est-doublon">Déjà dans le CRM : <b>${esc(contactName(d))}</b>. La demande sera rattachée à sa fiche, rien ne sera créé en double.</p>` : ''}
+      ${d ? `<p class="lrc-note est-doublon">Déjà dans la base de La Référence Courtage : <b>${esc(contactName(d))}</b>. La demande sera rattachée à sa fiche, rien ne sera créé en double.</p>` : ''}
       <h4>Comment nous a-t-il connus ?</h4>${tuiles('canal', ORIGINES.map(([l, i, c]) => [c, i, '', l]), v.canal)}
       ${v.canal === 'Partenaire / apporteur' ? `<label class="lrc-champ large"><span>Apporteur d’affaires</span>
         <select name="apporteur"><option value="">— Choisir —</option>${apporteurs().map(o => `<option value="${esc(o.id)}" ${v.apporteur === o.id ? 'selected' : ''}>${esc(o.name)}</option>`).join('')}</select></label>` : ''}
@@ -191,7 +258,7 @@ export function nouveauProspectCourtage(apres) {
   };
   function recap() {
     const fin = FINANCEMENTS.find(f => f[0] === v.type_financement);
-    const montant = nombre(v.montant_financement) || (nombre(v.montant_projet) && nombre(v.montant_projet) - (nombre(v.apport) || 0));
+    const montant = nombre(v.montant_financement);
     const action = libelleAction();
     return `<b>Ce qui sera créé</b>
       <span>Le prospect <b>${esc(nomComplet() || '—')}</b>${doublon() ? ' (fiche existante)' : ''}</span>
@@ -248,7 +315,7 @@ export function nouveauProspectCourtage(apres) {
     hote.querySelectorAll('input[name], textarea[name], select[name]').forEach(el => {
       el.addEventListener('input', () => {
         v[el.name] = el.value;
-        if (el.name === 'montant_financement') v.financement_saisi = !!el.value;
+        if (['montant_projet', 'apport', 'montant_financement', 'revenus_foyer', 'credits_en_cours'].includes(el.name)) lier(el.name);
         const r = hote.querySelector('.lrc-recap'); if (r) r.innerHTML = recap();
       });
       // Le doublon se vérifie en quittant le champ : pendant la frappe, il clignoterait.
@@ -272,9 +339,7 @@ export function nouveauProspectCourtage(apres) {
     try {
       // 1. Le contact : l'existant s'il y en a un, rattaché au courtage au besoin.
       let c = doublon();
-      if (c) {
-        if (!(c.activities || []).includes(KEY)) await db.update('contacts', c.id, { activities: [...(c.activities || []), KEY] });
-      } else {
+      if (!c) {
         c = await db.insert('contacts', {
           first_name: v.first_name.trim(), last_name: v.last_name.trim() || '—',
           phone: v.phone.trim() || null, email: v.email.trim() || null, city: v.city.trim() || null,
@@ -283,11 +348,12 @@ export function nouveauProspectCourtage(apres) {
       }
       // 2. Le dossier. Les champs du schéma d'abord (ils nourrissent les filtres et
       //    la fiche), puis ce que la fiche « Le projet en détail » sait lire.
-      const calc = nombre(v.montant_projet) && (nombre(v.montant_projet) - (nombre(v.apport) || 0));
+      const k = calculs();
       const fields = Object.fromEntries(Object.entries({
         type_financement: v.type_financement, objectif: v.objectif, projet: v.objectif,
         montant_projet: nombre(v.montant_projet), apport: nombre(v.apport),
-        montant_financement: nombre(v.montant_financement) || calc || null,
+        montant_financement: nombre(v.montant_financement),
+        mensualite: k.mens, endettement: k.endet, capacite: k.capa, credits_en_cours: nombre(v.credits_en_cours),
         avancement: v.avancement, duree: v.duree, emprunteurs: v.emprunteurs,
         revenus_foyer: nombre(v.revenus_foyer), ville: v.ville_projet.trim(), message: v.message.trim(),
         source: 'Saisie CRM',

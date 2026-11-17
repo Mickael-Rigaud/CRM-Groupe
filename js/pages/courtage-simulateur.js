@@ -154,6 +154,10 @@ export function blocProjetSaisi(d) {
   const lignes = [
     ['Où en est-il', f.avancement], ['Durée souhaitée', f.duree], ['Emprunteurs', f.emprunteurs],
     ['Revenus nets du foyer', euros(f.revenus_foyer) ? `${euros(f.revenus_foyer)} / mois` : ''],
+    ['Crédits en cours', euros(f.credits_en_cours) ? `${euros(f.credits_en_cours)} / mois` : ''],
+    ['Mensualité estimée', euros(f.mensualite)],
+    ['Taux d’endettement', pourcent(f.endettement)],
+    ['Capacité d’emprunt', euros(f.capacite)],
     ['Ville du projet', f.ville], ['Ce qu’il a dit', f.message],
   ].filter(([, v]) => v);
   if (!lignes.length) return '';
