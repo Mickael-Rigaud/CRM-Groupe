@@ -245,7 +245,24 @@ export const homePage = {
           ${(() => {
             const argent = carteArgent(cles, r, state);
             return taille(argent, 'tb-x7')
-              + (scope.canPilotage ? taille(carteObjectifs(cles, deals), argent ? 'tb-x5' : 'tb-x12') : '');
+              + (scope.canPilotage ? taille(carteObjectifs(cles, deals), argent ? 'tb-x5' : 'tb-x12',
+                  // ⚠ LES OBJECTIFS ENJAMBENT DEUX RANGÉES POUR QUE « MA JOURNÉE »
+                  // VIENNE SE COLLER SOUS LE CHEMIN DE L'ARGENT (17/11/2026, Élodie :
+                  // « je veux que ce soit collé le chemin de l'argent et ma journée »).
+                  // Le blanc entre les deux ne venait PAS d'une marge : dans une
+                  // grille, la hauteur d'une rangée est celle de sa carte la plus
+                  // haute, et les objectifs dépassent le chemin de l'argent. « Ma
+                  // journée », sur la rangée suivante, commençait donc sous le bas
+                  // DES OBJECTIFS. Les faire enjamber rend à chaque colonne sa propre
+                  // hauteur. Changer la marge n'y aurait rien fait.
+                  //
+                  // ⚠ LES TROIS CONDITIONS SONT NÉCESSAIRES. Sans chemin de
+                  // l'argent les objectifs prennent les 12 colonnes, et rien ne peut
+                  // se glisser à côté ; en vue filtrée « Ma journée » fait 12 colonnes
+                  // et ne tiendrait pas dans les 7 laissés libres — elle descendrait
+                  // d'une rangée en laissant un trou. Et sans pilotage il n'y a pas de
+                  // carte à faire enjamber : les deux sont déjà collées.
+                  argent && !enFiltre ? 'style="grid-row:span 2"' : '') : '');
           })()}
 
           ${/* ⚠ « MA JOURNÉE » EST REMONTÉE ICI LE 17/11/2026, sous le chemin de
@@ -1245,19 +1262,28 @@ function carteArgent(cles, r, state) {
    ========================================================================== */
 
 /**
- * Pose la taille d'une tuile sur la carte elle-même.
+ * Pose la taille d'une tuile sur la carte elle-même, et au besoin un attribut
+ * de plus (`attrs`, par exemple `style="grid-row:span 2"`).
  *
  * ⚠ PAS D'EMBALLAGE AUTOUR : un enfant de grille supplémentaire recevrait la
- * largeur, et la carte flotterait dedans sans la remplir. Les cartes
- * existantes sortent toutes de leur fonction en `<section class="card">` ; si
- * l'une changeait de forme, on retombe sur l'emballage plutôt que de la
- * perdre — un bento dépareillé vaut mieux qu'une carte disparue.
+ * largeur, et la carte flotterait dedans sans la remplir. Et ce n'est plus
+ * seulement une question de largeur depuis le 17/11/2026 : `.tb-bento > div`
+ * porte dans app.css un fond, une bordure et une ombre — un emballage
+ * DEVIENDRAIT une carte, avec les vraies cartes dedans.
+ *
+ * ⚠ LES ATTRIBUTS S'INSÈRENT APRÈS LE GUILLEMET FERMANT DE `class=`, pas au
+ * milieu de l'attribut : la carte arrive avec ses propres classes derrière
+ * `card` (`tb-argent`, `tb-chaud`…), et écrire le style juste après `card`
+ * les avalerait dans la valeur de `style`.
  */
-function taille(html, cls) {
+function taille(html, cls, attrs = '') {
   const t = String(html || '').trim();
   if (!t) return '';
   const m = '<section class="card';
-  return t.startsWith(m) ? t.replace(m, `<section class="card ${cls}`) : `<div class="${cls}">${t}</div>`;
+  const a = attrs ? ' ' + attrs : '';
+  if (!t.startsWith(m)) return `<div class="${cls}"${a}>${t}</div>`;
+  const fin = t.indexOf('"', m.length);
+  return t.slice(0, m.length) + ' ' + cls + t.slice(m.length, fin + 1) + a + t.slice(fin + 1);
 }
 
 // Sous la tuile des chantiers : le compte PAR DEVIS, puis le panier. C'est la
