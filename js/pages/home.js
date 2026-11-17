@@ -162,6 +162,19 @@ export const homePage = {
       // seule trace des campagnes. Un seul booléen pour les cinq blocs, parce
       // qu'ils partent et reviennent ensemble.
       const enFiltre = state.filtre !== 'groupe';
+      // ⚠ CALCULÉ ICI PARCE QUE DEUX CARTES EN DÉPENDENT, et pas seulement
+      // pour l'afficher : sa présence décide de la largeur de « Ma journée » et
+      // de l'enjambement des objectifs. L'appeler deux fois relirait les devis,
+      // les paiements et les factures pour rien.
+      const argent = vueP ? '' : carteArgent(cles, r, state);
+      // ⚠ « MA JOURNÉE » SE COLLE SOUS LE CHEMIN DE L'ARGENT QUAND LES DEUX
+      // CONDITIONS SONT RÉUNIES, dans TOUTES les vues depuis le 17/11/2026
+      // (Élodie : « fais pareil pour ma journée dans la vue de rgd renova »).
+      // Sans chemin de l'argent, les objectifs prennent les 12 colonnes et rien
+      // ne peut se glisser à côté ; sans pilotage, il n'y a pas de carte à
+      // faire enjamber et les deux sont déjà collées. Dans ces deux cas
+      // « Ma journée » reprend les 12 colonnes.
+      const journeeCollee = !!argent && scope.canPilotage;
       const reseau = enFiltre ? carteReseau(cles) : '';
       // ⚠ ET L'ENTONNOIR NE SE CALCULE MÊME PLUS EN VUE GROUPE : `entonnoir` et
       // `comparaisonEntonnoir` relisent toutes les affaires, deux fois, et la
@@ -242,9 +255,7 @@ export const homePage = {
                 sans signature n'en a aucun — septembre 2026 était dans ce cas.
                 Fixer les objectifs à 5 colonnes laisserait alors un trou de 7.
                 Vu en démo, où aucun devis n'est signé dans le mois. */ ''}
-          ${(() => {
-            const argent = carteArgent(cles, r, state);
-            return taille(argent, 'tb-x7')
+          ${taille(argent, 'tb-x7')
               + (scope.canPilotage ? taille(carteObjectifs(cles, deals), argent ? 'tb-x5' : 'tb-x12',
                   // ⚠ LES OBJECTIFS ENJAMBENT DEUX RANGÉES POUR QUE « MA JOURNÉE »
                   // VIENNE SE COLLER SOUS LE CHEMIN DE L'ARGENT (17/11/2026, Élodie :
@@ -256,14 +267,13 @@ export const homePage = {
                   // DES OBJECTIFS. Les faire enjamber rend à chaque colonne sa propre
                   // hauteur. Changer la marge n'y aurait rien fait.
                   //
-                  // ⚠ LES TROIS CONDITIONS SONT NÉCESSAIRES. Sans chemin de
-                  // l'argent les objectifs prennent les 12 colonnes, et rien ne peut
-                  // se glisser à côté ; en vue filtrée « Ma journée » fait 12 colonnes
-                  // et ne tiendrait pas dans les 7 laissés libres — elle descendrait
-                  // d'une rangée en laissant un trou. Et sans pilotage il n'y a pas de
-                  // carte à faire enjamber : les deux sont déjà collées.
-                  argent && !enFiltre ? 'style="grid-row:span 2"' : '') : '');
-          })()}
+                  // ⚠ ET C'EST L'ENJAMBEMENT QUI REND LES VUES FILTRÉES POSSIBLES.
+                  // Sans lui, « Ma journée » à 7 colonnes laissait 5 colonnes libres
+                  // à sa droite, et le PREMIER des quatre encadrés (3 colonnes) y
+                  // remontait — les trois autres laissaient un trou sur la rangée
+                  // d'après. Les objectifs occupent maintenant ces 5 colonnes : les
+                  // encadrés repartent proprement d'une rangée neuve.
+                  journeeCollee ? 'style="grid-row:span 2"' : '') : '')}
 
           ${/* ⚠ « MA JOURNÉE » EST REMONTÉE ICI LE 17/11/2026, sous le chemin de
                 l'argent. Élodie : « je pense qu'il a plus sa place juste en
@@ -272,25 +282,36 @@ export const homePage = {
                 avant ce qu'on a fait depuis le 1er. Dans TOUTES les vues : le
                 même agenda ne doit pas se chercher selon la puce choisie.
 
-                ⚠ SA LARGEUR, ELLE, DÉPEND DE LA VUE, et ce n'est pas une
-                hésitation. Élodie, le même jour : « je veux que ça prenne
-                seulement la place en dessous du chemin de l'argent, même
-                largeur » — donc 7 colonnes, alignée sur la carte du dessus,
-                avec 5 colonnes laissées libres à sa droite. C'est voulu : la
-                rangée respire entre deux cartes de couleur.
+                ⚠ SEPT COLONNES, ALIGNÉE SUR LA CARTE DU DESSUS. Élodie, le même
+                jour : « je veux que ça prenne seulement la place en dessous du
+                chemin de l'argent, même largeur », puis « fais pareil pour ma
+                journée dans la vue de rgd renova ». C'est `journeeCollee` qui
+                en décide, et il retombe à 12 colonnes sans chemin de l'argent
+                ou sans accès pilotage — les deux cas où aucune carte ne peut
+                tenir à sa droite.
 
-                ⚠ MAIS 12 COLONNES DANS LES VUES FILTRÉES, PAR NÉCESSITÉ. La
-                rangée suivante y porte les quatre encadrés de 3 colonnes :
-                posée à 7, « Ma journée » laisserait le premier encadré monter
-                à côté d'elle (7 + 3 = 10), et les trois autres se répartiraient
-                sur la rangée d'après en laissant un trou de 3. Le placement de
-                la grille est « sparse » — un bloc de 5 libre n'est JAMAIS
-                comblé par une carte de 7, mais il l'est par une carte de 3.
+                ⚠ CE COMMENTAIRE A DIT L'INVERSE PENDANT UNE HEURE : « 12
+                colonnes dans les vues filtrées, par nécessité », parce que le
+                premier des quatre encadrés (3 colonnes) remontait se coller à
+                côté d'elle. C'est l'enjambement des objectifs qui l'a levé — ce
+                sont eux qui occupent désormais ces 5 colonnes. Le placement de
+                la grille reste « sparse » : un bloc libre n'est jamais comblé
+                par une carte plus large que lui, mais il l'est par une plus
+                étroite. Vérifier ce point avant de réduire une carte. */ ''}
+          ${/* ⚠ EN VUE FILTRÉE, L'AGENDA DE LA STRUCTURE ET RIEN D'AUTRE
+                (17/11/2026). Élodie : « je ne veux que les rendez-vous du jour
+                du google agenda de rgd renova ». Deux changements, pas un :
+                la carte ne reçoit plus que la structure filtrée — elle recevait
+                toutes les structures visibles quelle que soit la puce — et elle
+                laisse de côté les tâches horodatées du CRM, celles qui portent
+                l'étiquette « CRM ».
 
-                ⚠ EN VUE GROUPE LE TROU TIENT : la carte suivante est la courbe,
-                qui réclame 7 colonnes et ne peut donc pas y entrer. Vérifier ce
-                point avant de réduire une carte de cette grille. */ ''}
-          ${taille(carteJournee(visibles), enFiltre ? 'tb-x12' : 'tb-x7')}
+                ⚠ CE QU'ON NE VOIT DONC PLUS DANS CES VUES : un rappel du CRM
+                avec une heure (« Appeler le prospect à 9 h 30 »). Il n'est pas
+                perdu — l'écran #/today le porte en entier, et la vue groupe
+                continue de le mêler aux rendez-vous. C'est un choix de lecture,
+                pas une suppression. */ ''}
+          ${taille(carteJournee(enFiltre ? cles : visibles, enFiltre), journeeCollee ? 'tb-x7' : 'tb-x12')}
 
           ${/* ⚠ LES QUATRE ENCADRÉS NE SORTENT PLUS EN VUE GROUPE (17/11/2026).
                 Ils donnaient le CUMUL des structures : quatre nombres du groupe
@@ -945,8 +966,19 @@ const libellePeriode = (p) => ({
 // Google des structures et les tâches horodatées du CRM, mélangés et triés, chacun
 // à la couleur de sa structure. Le cadre intégré de Google ne sert plus que de
 // repli, tant qu'aucun identifiant client n'est renseigné.
-function carteJournee(cles) {
+/**
+ * ⚠ `agendaSeul` LAISSE DE CÔTÉ LES TÂCHES DU CRM (17/11/2026, Élodie :
+ * « je ne veux que les rendez-vous du jour du google agenda de rgd renova »).
+ * Il est posé dans les vues filtrées, pas en vue groupe : là, mêler les deux
+ * reste l'intérêt de dessiner la journée nous-mêmes plutôt que d'encadrer
+ * Google. `tachesDuJour()` n'est de toute façon PAS filtrée par structure —
+ * elle déduit la structure de l'affaire liée, et une tâche sans affaire n'en a
+ * aucune : la passer dans une vue filtrée y ferait entrer des rappels d'une
+ * autre structure.
+ */
+function carteJournee(cles, agendaSeul = false) {
   const ids = idsDeTous(cles);
+  const taches = agendaSeul ? [] : tachesDuJour();
   const entete = `<div class="card-head"><h2>Ma journée</h2>
     <span class="muted small">${new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
     ${peutRaccorder() ? `<button class="btn ghost sm" id="tb-ag">${ids.length ? 'Agendas' : 'Raccorder les agendas'}</button>` : ''}</div>`;
@@ -962,14 +994,14 @@ function carteJournee(cles) {
         ${peutRaccorder() ? modeEmploi() + '<p class="muted small">Puis « Raccorder les agendas » ci-dessus.</p>'
           : '<p class="muted small">La direction peut les renseigner depuis cet écran.</p>'}
       </div>
-      <div id="tb-jour">${dessinerJournee(tachesDuJour(), cles)}</div>
+      <div id="tb-jour">${dessinerJournee(taches, cles)}</div>
     </section>`;
   }
   // La journée est lue dans le CRM, pas chez Google : elle s'affiche aussitôt,
   // pour tout le monde. La recopie, elle, se fait en fond et n'appartient qu'à
   // la direction — c'est elle qui a accès aux calendriers.
   return `<section class="card">${entete}
-    <div id="tb-jour">${dessinerJournee([...evenementsEnregistres(cles), ...tachesDuJour()], cles)}</div>
+    <div id="tb-jour">${dessinerJournee([...evenementsEnregistres(cles), ...taches], cles)}</div>
     ${monAgendaHtml(cles)}
     <p class="muted small tb-ag-src">${sourcesHtml(cles)}<span id="tb-maj">${etatSync(cles)}</span></p>
   </section>`;
