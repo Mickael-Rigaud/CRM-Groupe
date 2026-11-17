@@ -248,6 +248,33 @@ export const homePage = {
               + (scope.canPilotage ? taille(carteObjectifs(cles, deals), argent ? 'tb-x5' : 'tb-x12') : '');
           })()}
 
+          ${/* ⚠ « MA JOURNÉE » EST REMONTÉE ICI LE 17/11/2026, sous le chemin de
+                l'argent. Élodie : « je pense qu'il a plus sa place juste en
+                dessous du chemin de l'argent ». Elle était tout en bas, après
+                les chiffres du mois ; ce qu'on fait aujourd'hui passe donc
+                avant ce qu'on a fait depuis le 1er. Dans TOUTES les vues : le
+                même agenda ne doit pas se chercher selon la puce choisie.
+
+                ⚠ SA LARGEUR, ELLE, DÉPEND DE LA VUE, et ce n'est pas une
+                hésitation. Élodie, le même jour : « je veux que ça prenne
+                seulement la place en dessous du chemin de l'argent, même
+                largeur » — donc 7 colonnes, alignée sur la carte du dessus,
+                avec 5 colonnes laissées libres à sa droite. C'est voulu : la
+                rangée respire entre deux cartes de couleur.
+
+                ⚠ MAIS 12 COLONNES DANS LES VUES FILTRÉES, PAR NÉCESSITÉ. La
+                rangée suivante y porte les quatre encadrés de 3 colonnes :
+                posée à 7, « Ma journée » laisserait le premier encadré monter
+                à côté d'elle (7 + 3 = 10), et les trois autres se répartiraient
+                sur la rangée d'après en laissant un trou de 3. Le placement de
+                la grille est « sparse » — un bloc de 5 libre n'est JAMAIS
+                comblé par une carte de 7, mais il l'est par une carte de 3.
+
+                ⚠ EN VUE GROUPE LE TROU TIENT : la carte suivante est la courbe,
+                qui réclame 7 colonnes et ne peut donc pas y entrer. Vérifier ce
+                point avant de réduire une carte de cette grille. */ ''}
+          ${taille(carteJournee(visibles), enFiltre ? 'tb-x12' : 'tb-x7')}
+
           ${/* ⚠ LES QUATRE ENCADRÉS NE SORTENT PLUS EN VUE GROUPE (17/11/2026).
                 Ils donnaient le CUMUL des structures : quatre nombres du groupe
                 qu'aucune décision ne suit, puisqu'on ne pilote pas « le groupe »,
@@ -440,18 +467,7 @@ export const homePage = {
             </div>
           </section>` : ''}
           ${enFiltre ? '' : taille(carteGroupe(cles, r, deals, state), 'tb-x5')}
-
-          ${/* ⚠ « À TRAITER » A ÉTÉ RETIRÉ LE 17/11/2026. Élodie : « il ne sert à
-                rien je trouve » — et elle a raison : « Ma journée » affiche déjà
-                `tachesDuJour()`, donc son bloc « Aujourd'hui ». Il n'ajoutait
-                que « En retard » et « Cette semaine », que l'écran #/today
-                donne en entier.
-
-                ⚠ « MA JOURNÉE » EST SEULE SUR SA RANGÉE depuis que
-                « Patrimoine » a sa propre vue (17/11/2026) : elle prend donc les
-                12 colonnes. Lui en donner 6 laisserait une demi-rangée vide,
-                et il n'y a plus rien pour la combler. */ ''}
-          ${taille(carteJournee(visibles), 'tb-x12')}`}
+`}
 
         </div>
 
