@@ -1081,62 +1081,75 @@ const jourCourt = (iso) => (iso
 // L'âge d'une échéance dépassée, en mots. ⚠ C'est lui qui fait agir, pas le
 
 /**
- * Le chemin de l'argent.
+ * Le chemin de l'argent — mise en page du 17/11/2026, proposée par Élodie :
+ * « facturé / encaissé, et le chiffre en haut en gros le reste à facturer ».
  *
- * ⚠ IL A FALLU DEUX PASSES LE 17/11/2026, ET LA SECONDE CORRIGE LA PREMIÈRE.
- *
- * 1. D'abord la carte comparait, sur une même fenêtre, le signé d'un côté, le
- *    facturé de l'autre, l'encaissé d'un troisième — trois cohortes d'euros
- *    sans rapport (Élodie : « ça ne va pas du tout »). Voir `cheminDesSignes`
- *    pour les mesures qui l'ont établi, et pourquoi aucune période ne répare.
- * 2. Puis je l'ai refaite ENTIÈREMENT sur la cohorte des signés — et Élodie a
- *    corrigé : « CA facturé HT c'est 12 253 € et encaissé c'est 9 093 € ».
- *    Elle veut les chiffres DU MOIS, ceux de sa comptabilité, pas la part
+ * ⚠ TROIS PASSES LE MÊME JOUR, et chacune corrige la précédente. Les lire
+ * dans l'ordre évite de refaire le chemin :
+ * 1. La carte comparait signé / facturé / encaissé d'une même fenêtre : trois
+ *    cohortes d'euros sans rapport. Voir `cheminDesSignes` pour les mesures qui
+ *    l'ont établi, et pourquoi AUCUNE période ne répare ça.
+ * 2. Refaite sur la cohorte des signés — Élodie a corrigé : elle veut le CA
+ *    facturé DU MOIS (12 253 €), celui de sa comptabilité, pas la part
  *    facturée des seuls chantiers signés en novembre (9 093 €).
+ * 3. Et le montant signé en tête portait à confusion : c'est le RESTE À
+ *    FACTURER qui monte en gros. C'est le seul des quatre nombres sur lequel
+ *    on peut agir.
  *
- * ⚠ LES DEUX NE SE SOUSTRAIENT DONC PAS, et les libellés portent cet écart.
- * « CA facturé HT » est le facturé du mois, TOUS CHANTIERS CONFONDUS : il
- * contient des factures de chantiers signés il y a six mois. « Reste à
- * facturer » porte sur les SEULS chantiers signés sur la période. Faire
- * `signé − facturé` ne donne pas le reste, et c'est pourquoi le signé n'est
- * plus affiché en grand : Élodie, « enlève le 133 346 €, ça porte à
- * confusion ». Ne pas le remettre « pour le contexte ».
+ * ⚠ LA TÊTE ET LES TUILES NE PARLENT PAS DU MÊME ARGENT, et les libellés le
+ * portent. Le reste à facturer ne concerne que les chantiers SIGNÉS sur la
+ * période ; le CA facturé contient des factures de chantiers signés il y a six
+ * mois. Aucune soustraction entre eux ne tombe juste. Ne pas réintroduire le
+ * montant signé « pour le contexte » : il invite précisément à cette
+ * soustraction, et c'est ce qu'Élodie a fait retirer.
  *
- * ⚠ PLUS AUCUNE BARRE DE PROGRESSION. Elles mesuraient chaque tuile sur le
- * montant signé. Sans lui, elles rapporteraient l'une à l'autre des
- * populations différentes — le défaut même qu'on vient de corriger. Une barre
- * fausse se lit, une barre absente ne ment pas.
+ * ⚠ PAS DE BARRE DE PROGRESSION. Elles se mesuraient sur le montant signé ;
+ * sans lui, elles rapporteraient des populations différentes l'une à l'autre.
+ * Une barre fausse se lit, une barre absente ne ment pas.
+ *
+ * ⚠ LA CARTE SURVIT À UN MOIS SANS SIGNATURE, et c'est délibéré : septembre
+ * 2026 n'a eu aucune signature mais 16 479 € de factures. Rendre '' aurait
+ * fait disparaître le CA du mois avec le reste à facturer, et ouvert un trou
+ * de 7 colonnes dans la rangée.
  *
  * ⚠ « RESTE À FACTURER » N'EST PAS UN IMPAYÉ : c'est du chantier en cours.
  * Élodie a écarté une carte sur l'argent non rentré le même jour.
  */
 function carteArgent(cles, r, state) {
+  // ⚠ CARTE RÉSERVÉE À RGD : elle seule a des devis suivis dans le CRM. En vue
+  // groupe, la tête reste donc celle de RGD tandis que les deux tuiles portent
+  // le cumul des structures — c'est ce que dit chaque libellé.
+  if (!cles.includes('rgd') || !scope.canRgd) return '';
   const a = cheminDesSignes(cles, r);
-  if (!a) return '';
   const t = total(cles, r, scope.deals());
-  const encaisse = cumulMensuel(cles, r, 'encaisse');
+  const encaisse = cumulMensuel(cles, r, 'encaisse') || 0;
+  if (!a && !t.ca && !encaisse) return '';
+  const reste = a ? a.reste : 0;
+  const nb = a ? a.nb : 0;
   const pct = (l) => (l.montant ? Math.round(l.facture / l.montant * 100) : 0);
   return `<section class="card tb-argent">
     <h2>Le chemin de l'argent</h2>
-    <span class="tb-sous">\u00e9mis, rentr\u00e9, et ce qui reste \u00e0 facturer \u00b7 ${esc(periodeAffichee(state, cles))}</span>
-    <div class="tb-gros"><span class="tb-nb" data-n="${t.ca}" data-eur="1">${eur(t.ca)}</span></div>
-    <span class="tb-sous">de CA factur\u00e9 HT sur la p\u00e9riode \u00b7 tous chantiers confondus</span>
+    <span class="tb-sous">ce qui reste \u00e0 facturer, et l'argent du mois \u00b7 ${esc(periodeAffichee(state, cles))}</span>
+    <div class="tb-gros"><span class="tb-nb" data-n="${reste}" data-eur="1">${eur(reste)}</span></div>
+    <span class="tb-sous">${nb
+      ? `restant \u00e0 facturer sur ${nb} chantier${nb > 1 ? 's' : ''} sign\u00e9${nb > 1 ? 's' : ''} sur la p\u00e9riode`
+      : 'aucun chantier sign\u00e9 sur la p\u00e9riode'}</span>
     ${/* ⚠ DEUX TUILES, PAS TROIS : `tb-flux` est une grille de trois colonnes
           dans app.css, qu'on ne touche pas (une autre session y travaille). */ ''}
     <div class="tb-flux" style="grid-template-columns:repeat(2,minmax(0,1fr))">
       <div class="tb-fx">
-        <span class="lb">Encaiss\u00e9</span>
-        <b class="tb-nb" data-n="${encaisse || 0}" data-eur="1">${eur(encaisse || 0)}</b>
-        <span class="ss">r\u00e8glements re\u00e7us sur la p\u00e9riode</span></div>
+        <span class="lb">Factur\u00e9</span>
+        <b class="tb-nb" data-n="${t.ca}" data-eur="1">${eur(t.ca)}</b>
+        <span class="ss">CA HT \u00e9mis \u00b7 tous chantiers confondus</span></div>
       <div class="tb-fx">
-        <span class="lb">Reste \u00e0 facturer</span>
-        <b class="tb-nb" data-n="${a.reste}" data-eur="1">${eur(a.reste)}</b>
-        <span class="ss">sur ${a.nb} chantier${a.nb > 1 ? 's' : ''} sign\u00e9${a.nb > 1 ? 's' : ''} sur la p\u00e9riode</span></div>
+        <span class="lb">Encaiss\u00e9</span>
+        <b class="tb-nb" data-n="${encaisse}" data-eur="1">${eur(encaisse)}</b>
+        <span class="ss">r\u00e8glements re\u00e7us sur la p\u00e9riode</span></div>
     </div>
     ${/* ⚠ LE DÉTAIL EST STYLÉ EN LIGNE : `tb-detail` est dessiné pour les
           cartes claires et disparaîtrait sur le dégradé. */ ''}
-    ${a.lignes.length ? `<div style="margin-top:16px;border-top:1px solid rgba(255,255,255,.22);padding-top:6px">
-      <span class="tb-sous" style="display:block;margin-bottom:2px">reste \u00e0 facturer, chantier par chantier</span>
+    ${a && a.lignes.length ? `<div style="margin-top:16px;border-top:1px solid rgba(255,255,255,.22);padding-top:6px">
+      <span class="tb-sous" style="display:block;margin-bottom:2px">chantier par chantier</span>
       ${a.lignes.slice(0, 3).map(l => `<div style="display:flex;align-items:baseline;gap:10px;padding:6px 0;font-size:12.5px">
         <span style="font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:42%">${esc(l.client)}</span>
         <span style="opacity:.8;font-size:11.5px">${eur(l.montant)} sign\u00e9s \u00b7 ${pct(l)}\u00a0% factur\u00e9</span>
@@ -1148,7 +1161,7 @@ function carteArgent(cles, r, state) {
           signé depuis plus de deux mois n'est pas dans le mois en cours. Il ne
           se montre que sur Trimestre, Exercice ou Tout. C'est le banc d'essai
           qui l'a établi, pas une relecture. */ ''}
-    ${a.oublies.length ? `<p class="tb-sous" style="margin:10px 0 0">${a.oublies.length === 1
+    ${a && a.oublies.length ? `<p class="tb-sous" style="margin:10px 0 0">${a.oublies.length === 1
       ? `${esc(a.oublies[0].client)} a sign\u00e9 il y a ${Math.round(a.oublies[0].jours / 30)} mois (${eur(a.oublies[0].montant)}) et aucune facture n'y est rattach\u00e9e.`
       : `${a.oublies.length} chantiers sign\u00e9s depuis plus de deux mois n'ont aucune facture rattach\u00e9e.`}</p>` : ''}
   </section>`;
