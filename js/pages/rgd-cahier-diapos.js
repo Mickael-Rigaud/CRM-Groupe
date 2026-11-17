@@ -24,14 +24,50 @@
 // « suite », plutôt que de déborder.
 import { esc } from '../ui.js';
 import { finDe, dureeLue, versDate, lignesDe } from '../data/rgd-planning.js';
-import { piecesDe } from '../data/rgd-cahier.js';
+import { piecesDe, pointsDuDetail } from '../data/rgd-cahier.js';
 import { donnees } from './rgd-cahier-doc.js';
 
 const LOGO_CLAIR = new URL('../../assets/logos/rgd-complet-clair.png', import.meta.url).href;
 const MOIS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
 const dateLongue = (iso) => { if (!iso) return ''; const d = versDate(iso); return `${d.getDate()} ${MOIS[d.getMonth()]} ${d.getFullYear()}`; };
 const qte = (p) => [p.quantite, p.unite].filter(Boolean).join(' ');
-const PAR_DIAPO = 9;
+// ⚠ UNE DIAPOSITIVE SE REMPLIT AU POIDS, PLUS À NEUF TRAVAUX (17/11/2026).
+// Tant que les postes n'avaient pas de descriptif, neuf tenaient toujours.
+// Depuis que le devis est lu en entier, un seul travail peut porter dix lignes
+// de détail : le panneau débordait de la diapositive et le texte était coupé
+// net (vu à l'écran avant de corriger). On empile donc les travaux tant que le
+// panneau tient, et on passe à la diapositive suivante quand il est plein.
+// Le budget d'une diapositive. ⚠ MESURÉ, PAS ESTIMÉ : la presentation à
+// l'écran est en 16/9 (`.cp-scene`), plus basse que l'A4 à l'italienne du PDF,
+// et c'est donc ELLE qui contraint. Mesure du 17/11/2026, en comptant les
+// panneaux qui sortent du cadre : 14 → 28 planches et AUCUN débordement ;
+// 16 → 23 planches mais 3 panneaux dehors ; 30 → 16 planches et 8 dehors.
+const POIDS_DIAPO = 14;
+const LARGEUR_LIGNE = 78;                 // caractères tenant sur une ligne du panneau élargi
+const poidsDuPoste = (p) => {
+  const titre = 1 + (String(p.designation || '').length > 52 ? 0.5 : 0);
+  const lignes = pointsDuDetail(p.detail)
+    .reduce((n, x) => n + Math.max(1, Math.ceil(x.length / LARGEUR_LIGNE)), 0);
+  return titre + lignes * 0.5;
+};
+// Les paquets de travaux d'une pièce : jamais vide, jamais au-delà du poids.
+function paquets(l) {
+  const out = [];
+  let cour = [], poids = 0;
+  for (const p of l) {
+    const w = poidsDuPoste(p);
+    if (cour.length && poids + w > POIDS_DIAPO) { out.push(cour); cour = []; poids = 0; }
+    cour.push(p); poids += w;
+  }
+  if (cour.length || !out.length) out.push(cour);
+  return out;
+}
+// Le détail d'un poste, en points — le même découpage que le cahier de
+// l'équipe, pour que les deux documents disent la même chose de la même façon.
+const detailEnPoints = (detail) => {
+  const l = pointsDuDetail(detail);
+  return l.length ? `<ul class="cd-points">${l.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : '';
+};
 
 export const POLICES = 'https://fonts.googleapis.com/css2?family=Inter+Tight:wght@600;700;800;900&family=Inter:wght@400;500;600;700&display=block';
 
@@ -104,6 +140,32 @@ export function diapos(chantier, k, dossier, version, urls) {
       </div>
     </div>` });
 
+  // ⚠ LE DÉROULÉ DU CHANTIER (17/11/2026, Élodie, pour le cahier CLIENT :
+  // « les dates, l'ordre des pièces, ce qui se passe quand »).
+  //
+  // ⚠ ON NE DONNE PAS DE DATE PAR PIÈCE, ET C'EST VOULU : le CRM n'en a pas.
+  // En répartir sur la durée aurait fabriqué un planning que personne n'a
+  // décidé, et un client le lirait comme un engagement. On donne donc ce qui
+  // est vrai : le début, la fin, la durée, et l'ORDRE des pièces.
+  if (chantier.date_debut) {
+    liste.push({ nom: 'Le déroulé', vignette: null, html: `
+      <div class="cd cd-resume">${fond(null)}
+        <div class="cd-in">
+          <div class="cd-sur"><i></i>${esc(sur)}</div>
+          <h2 class="cd-titre moyen">Le déroulé</h2>
+          <p class="cd-sous">Du ${esc(dateLongue(chantier.date_debut))} au ${esc(dateLongue(finDe(chantier)))}
+            · ${esc(dureeLue(chantier).texte)}</p>
+          <div class="cd-panneau large"><ol class="cd-etapes">${pieces.map((lot, i) => `
+            <li style="--i:${i}"><em>${String(i + 1).padStart(2, '0')}</em>
+              <b>${esc(lot || 'Travaux')}</b>
+              <span>${(() => { const n2 = postes.filter(p => (p.lot || '') === lot).length;
+                return `${n2} ${n2 > 1 ? 'travaux' : 'travail'}`; })()}</span></li>`).join('')}</ol></div>
+          <p class="cd-note">Les pièces sont traitées dans cet ordre. Les dates de passage
+            pièce par pièce vous seront confirmées au démarrage.</p>
+        </div>
+      </div>` });
+  }
+
   if (k.plan && urls[k.plan]) {
     liste.push({ nom: 'Plan', vignette: urls[k.plan], html: `
       <div class="cd cd-plan">${fond(null)}
@@ -115,8 +177,8 @@ export function diapos(chantier, k, dossier, version, urls) {
   pieces.forEach((lot, n) => {
     const tous = postes.filter(p => (p.lot || '') === lot);
     const ph = photosDe(lot);
-    for (let debut = 0, morceau = 0; debut < Math.max(tous.length, 1); debut += PAR_DIAPO, morceau++) {
-      const l = tous.slice(debut, debut + PAR_DIAPO);
+    const groupes = paquets(tous);
+    groupes.forEach((l, morceau) => {
       const suite = morceau > 0;
       const photo = ph[morceau % Math.max(ph.length, 1)] || null;
       const vignette2 = ph.length > 1 ? ph[(morceau + 1) % ph.length] : null;
@@ -125,15 +187,42 @@ export function diapos(chantier, k, dossier, version, urls) {
           <div class="cd-in">
             <div class="cd-sur"><i></i>Pièce ${n + 1} sur ${pieces.length} · ${esc(k.objet || chantier.titre || '')}</div>
             <h2 class="cd-titre${(lot || '').length > 13 ? ' long' : ''}">${esc(lot || 'Travaux')}${suite ? '<small> suite</small>' : ''}</h2>
-            <p class="cd-sous">${tous.length} travaux prévus${d.adresse ? ` · ${esc(d.adresse)}` : ''}</p>
+            <p class="cd-sous">${tous.length} ${tous.length > 1 ? 'travaux prévus' : 'travail prévu'}${d.adresse ? ` · ${esc(d.adresse)}` : ''}</p>
             <div class="cd-panneau${l.length > 6 ? ' serre' : ''}"><ul class="cd-travaux${equipe ? ' cases' : ''}">${l.map((p, i) => `
-              <li style="--i:${i}"><div><b>${esc(p.designation)}</b>${p.detail ? `<small>${esc(p.detail)}</small>` : ''}</div>${
+              <li style="--i:${i}"><div><b>${esc(p.designation)}</b>${detailEnPoints(p.detail)}</div>${
                 qte(p) ? `<span>${esc(qte(p))}</span>` : ''}</li>`).join('')}</ul></div>
             ${barres(n, pieces.length)}
           </div>
           ${vignette2 ? `<div class="cd-vignette"><img src="${esc(vignette2)}" alt=""></div>` : ''}
           <div class="cd-num">${String(n + 1).padStart(2, '0')}</div>
         </div>` });
+    });
+
+    // ⚠ LES PHOTOS D'UNE PIÈCE ONT LEUR PLANCHE, EN CLAIR (17/11/2026, Élodie :
+    // « je veux rajouter les photos pour les clients »). Elles existaient déjà —
+    // son cahier de Gouvieux en porte 19 — mais le document n'en montrait que
+    // DEUX par pièce, l'une assombrie en fond de planche, l'autre en vignette.
+    // Ici elles sont toutes montrées, à plat, sans voile : c'est la pièce que
+    // le client reconnaît, pas un décor.
+    //
+    // ⚠ RÉSERVÉE AU CLIENT : la version équipe s'imprime sur papier blanc depuis
+    // le 17/11, une photo pleine page n'y a plus sa place.
+    // ⚠ QUATRE PHOTOS PAR PLANCHE AU PLUS. Au-delà, la grille sortait du cadre
+    // sans rien dire : la troisième photo d'une pièce tombait sous le bord de la
+    // diapositive (vu à l'écran le 17/11). On ouvre donc une planche de plus.
+    if (!equipe && ph.length) {
+      for (let d0 = 0, m = 0; d0 < ph.length; d0 += 4, m++) {
+        const lot4 = ph.slice(d0, d0 + 4);
+        liste.push({ nom: `${lot || 'Travaux'} en images${m ? ' (suite)' : ''}`, vignette: lot4[0], html: `
+        <div class="cd cd-galerie">${fond(null, { voile: 'plein' })}
+          <div class="cd-in">
+            <div class="cd-sur"><i></i>Pièce ${n + 1} sur ${pieces.length} · ${esc(k.objet || chantier.titre || '')}</div>
+            <h2 class="cd-titre moyen">${esc(lot || 'Travaux')} <small>en images${m ? ' (suite)' : ''}</small></h2>
+            <div class="cd-grille cd-grille-${lot4.length}">${lot4.map((u, i) =>
+              `<figure style="--i:${i}"><img src="${esc(u)}" alt="${esc(lot || 'Travaux')}"></figure>`).join('')}</div>
+          </div>
+        </div>` });
+      }
     }
   });
 
@@ -157,13 +246,30 @@ export function diapos(chantier, k, dossier, version, urls) {
         </div>
       </div>` });
   } else {
+    // ⚠ CE QUI RESTE À LA CHARGE DU CLIENT A SA PROPRE PLANCHE (17/11/2026,
+    // Élodie : « aujourd'hui c'est noyé dans une seule ligne »). C'était un
+    // paragraphe en haut de la page de signature, là où on ne lit plus rien.
+    // Le champ existe déjà — « Précisions » du cahier — et il est découpé en
+    // points comme les descriptifs du devis.
+    const aLui = pointsDuDetail(k.precisions);
+    if (aLui.length) {
+      liste.push({ nom: 'Ce qui vous revient', vignette: null, html: `
+        <div class="cd cd-resume">${fond(null)}
+          <div class="cd-in">
+            <div class="cd-sur"><i></i>${esc(sur)}</div>
+            <h2 class="cd-titre moyen">Ce qui vous revient</h2>
+            <p class="cd-sous">Ce que nous attendons de vous pour que le chantier avance sans arrêt.</p>
+            <div class="cd-panneau large"><ul class="cd-vous">${aLui.map((x, i) =>
+              `<li style="--i:${i}">${esc(x)}</li>`).join('')}</ul></div>
+          </div>
+        </div>` });
+    }
     const signe = k.signature && k.signe_le;
     liste.push({ nom: 'Bon pour accord', vignette: null, html: `
       <div class="cd cd-fin">${fond(null)}
         <div class="cd-in">
           <div class="cd-sur"><i></i>${esc(sur)}</div>
           <h2 class="cd-titre moyen">Bon pour accord</h2>
-          ${k.precisions ? `<div class="cd-panneau petit large"><h3>À la charge du client</h3><p class="cd-libre">${esc(k.precisions)}</p></div>` : ''}
           <div class="cd-accord">
             <p>Je soussigné(e) déclare avoir pris connaissance du présent cahier des charges et en valider le contenu
               avant le démarrage des travaux. Il complète le devis${k.devis_numero ? ` n° ${esc(k.devis_numero)}` : ''}, qui reste seul à faire foi pour les prix.</p>
@@ -197,6 +303,11 @@ export const STYLE_DIAPOS = `
 .cd-piece .cd-titre.long { font-size: 6cqw; }
 .cd-titre small { font-size: .32em; font-weight: 600; letter-spacing: 0; color: #F6C08A; margin-left: 1cqw; }
 .cd-sous { font-size: 1.42cqw; color: #D6CFC8; margin: 0 0 2.4cqw; }
+/* ⚠ LE PANNEAU D'UNE PIÈCE S'ÉLARGIT À 60cqw depuis que le devis est lu en
+   entier (17/11/2026) : à 46cqw, le descriptif d'un seul travail prenait dix
+   lignes et la pièce réclamait trois diapositives. La photo garde 40 % du
+   cadre, ce qui suffit à reconnaître la pièce. */
+.cd-piece .cd-panneau { width: 60cqw; }
 .cd-panneau { width: 46cqw; background: rgba(28, 24, 20, .5); border: .08cqw solid rgba(255,255,255,.16); border-radius: 1.7cqw;
   padding: 1.1cqw 1.8cqw; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
 .cd-panneau.petit { width: auto; }
@@ -208,6 +319,50 @@ ul.cd-travaux li { display: flex; align-items: baseline; justify-content: space-
 ul.cd-travaux li:last-child { border-bottom: 0; }
 ul.cd-travaux li b { font-weight: 500; }
 ul.cd-travaux li small { display: block; font-size: .82em; color: #BDB4AB; margin-top: .2cqw; }
+/* Le descriptif du devis, un point par ligne (17/11/2026) : en pavé il était
+   illisible, et les puces que Costructor écrit en « - » se retrouvaient au
+   milieu des phrases. */
+/* Les photos d'une pièce, à plat et sans voile (17/11/2026). La grille suit le
+   nombre de photos : une seule occupe le cadre, quatre se rangent en deux
+   rangées. Les images sont recadrées (object-fit: cover) pour que la grille
+   reste régulière quelles que soient les proportions des prises de vue.
+   ⚠ Pas d'accent grave dans ce commentaire : il vit dans un gabarit JS, et
+   une paire de backticks y refermerait la chaîne. */
+.cd-galerie .cd-grille { display: grid; gap: 1.4cqw; width: 100%; margin-top: 2cqw;
+  flex: 1; min-height: 0; }
+.cd-galerie .cd-grille-1 { grid-template-columns: 1fr; }
+.cd-galerie .cd-grille-2 { grid-template-columns: 1fr 1fr; }
+.cd-galerie .cd-grille-3, .cd-galerie .cd-grille-4 { grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr; }
+/* Trois photos : la dernière prend toute la largeur, sinon il reste un trou. */
+.cd-galerie .cd-grille-3 figure:nth-child(3) { grid-column: span 2; }
+.cd-galerie figure { margin: 0; min-height: 0; overflow: hidden; border-radius: 1.2cqw;
+  border: .1cqw solid rgba(255, 255, 255, .14); background: #1C1814; }
+.cd-galerie figure img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cd-galerie .cd-titre small { font-size: .34em; font-weight: 600; letter-spacing: 0;
+  color: #F6C08A; margin-left: 1cqw; }
+
+/* L'ordre des pièces, et ce qui revient au client (17/11/2026). */
+ol.cd-etapes { list-style: none; margin: 0; padding: 0; counter-reset: e; }
+ol.cd-etapes li { display: flex; align-items: baseline; gap: 1.4cqw; padding: .78cqw 0;
+  border-bottom: .08cqw solid rgba(255,255,255,.1); font-size: 1.36cqw; }
+ol.cd-etapes li:last-child { border-bottom: 0; }
+ol.cd-etapes em { font-style: normal; font-weight: 800; color: #FC5D00; flex: none; }
+ol.cd-etapes b { flex: 1; font-weight: 500; }
+ol.cd-etapes span { flex: none; color: #BDB4AB; font-size: .85em; }
+ul.cd-vous { list-style: none; margin: 0; padding: 0; }
+ul.cd-vous li { position: relative; padding: .62cqw 0 .62cqw 2.6cqw; font-size: 1.3cqw; line-height: 1.4;
+  border-bottom: .08cqw solid rgba(255,255,255,.1); }
+ul.cd-vous li:last-child { border-bottom: 0; }
+ul.cd-vous li::before { content: ""; position: absolute; left: .5cqw; top: 1.25cqw;
+  width: .95cqw; height: .95cqw; border-radius: 50%; border: .16cqw solid #FC5D00; }
+.cd-note { font-size: 1.1cqw; color: #BDB4AB; margin: 1.4cqw 0 0; max-width: 62cqw; }
+
+ul.cd-points { list-style: none; margin: .35cqw 0 0; padding: 0; }
+ul.cd-points li { display: block; position: relative; padding: 0 0 0 1.4cqw; border: 0;
+  font-size: .74em; line-height: 1.32; color: #BDB4AB; }
+ul.cd-points li::before { content: ""; position: absolute; left: 0; top: .62em;
+  width: .85cqw; height: .07cqw; background: rgba(255, 255, 255, .42); }
 ul.cd-travaux li span { flex: none; color: #FC5D00; font-weight: 700; white-space: nowrap; }
 ul.cd-travaux.cases li > div { display: flex; gap: 1cqw; align-items: baseline; flex-wrap: wrap; }
 ul.cd-travaux.cases li > div::before { content: ""; flex: none; width: 1.15cqw; height: 1.15cqw; border: .13cqw solid #fff;
