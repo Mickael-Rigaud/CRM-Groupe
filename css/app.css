@@ -9276,3 +9276,151 @@ td .pl-toque { color: #4f46e5; }
 .ca-sug.neuf { border-style: solid; border-color: #FC5D00;
   background: color-mix(in srgb, #E48312 14%, var(--card)); }
 @media (prefers-reduced-motion: reduce) { .ca-el-puce, .ca-sug { animation: none; } }
+
+/* ==========================================================================
+   To do list — le langage du tableau de bord (17/11/2026, Élodie : « moderniser
+   et dynamiser la to do avec les mêmes couleurs du tableau de bord, je veux
+   quelque chose de frais »). Fond qui dérive (`.tb-fond`, défini plus haut),
+   cartes vitrées, dégradé indigo → rose → orange, entrée en cascade.
+
+   ⚠ TOUT EST SOUS `.ecran-todo`, posée par `today.js` et retirée en partant :
+   les cartes `.kb-*` et `.todo-*` gardent leur dessin partout ailleurs.
+   ⚠ VISIBLE PAR DÉFAUT : la cascade ne s'arme que si le script pose `.anime`
+   (même règle que `.tb-bento.anime`, et pour la même raison).
+   -------------------------------------------------------------------------- */
+.ecran-todo {
+  --td-indigo: #5B52F0; --td-rose: #FF4D8D; --td-orange: #FF7A2D;
+  --td-verre: color-mix(in srgb, var(--card) 84%, transparent);
+  --td-ombre: 0 20px 44px -34px rgba(21,22,42,.55);
+}
+.ecran-todo > *:not(.tb-fond) { position: relative; z-index: 1; }
+
+/* ---- l'en-tête ---- */
+.td-hero { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px 24px; flex-wrap: wrap; margin: 2px 0 22px; }
+.td-hero h1 { font-family: var(--font-display); font-size: 34px; font-weight: 800; letter-spacing: -.045em; line-height: 1.05; margin: 0; }
+.td-hero h1 span { background: linear-gradient(100deg, var(--td-indigo), var(--td-rose) 58%, var(--td-orange));
+  -webkit-background-clip: text; background-clip: text; color: transparent; }
+.td-hero p { display: flex; align-items: center; gap: 8px; margin: 8px 0 0; font-size: 13.5px; color: var(--muted); }
+.td-hero p::first-letter { text-transform: uppercase; }
+
+.td-tuiles { display: flex; gap: 12px; flex-wrap: wrap; }
+.td-tuile { position: relative; display: grid; grid-template-columns: auto 1fr; column-gap: 10px; align-items: baseline;
+  min-width: 150px; padding: 14px 18px 13px; border-radius: 20px; overflow: hidden;
+  background: var(--td-verre); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255,255,255,.9); box-shadow: var(--td-ombre);
+  transition: transform .45s cubic-bezier(.2,.8,.2,1), box-shadow .3s ease, opacity .5s ease; }
+.td-tuile:hover { transform: translateY(-3px); box-shadow: 0 28px 52px -30px rgba(91,82,240,.45); }
+.td-tuile::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 4px; background: var(--t); }
+.td-tuile b { grid-row: span 2; font-family: var(--font-display); font-size: 38px; font-weight: 800; letter-spacing: -.05em;
+  line-height: 1; color: var(--t); font-variant-numeric: tabular-nums; }
+.td-tuile span { font-size: 13px; font-weight: 750; color: var(--text); }
+.td-tuile em { font-style: normal; font-size: 11.5px; color: var(--muted); }
+.td-tuile.retard { --t: #E5484D; background: linear-gradient(135deg, rgba(255,90,77,.10), rgba(255,138,92,.14)), var(--td-verre); }
+.td-tuile.jour { --t: #E07A12; background: linear-gradient(135deg, rgba(255,177,92,.14), rgba(255,122,45,.10)), var(--td-verre); }
+.td-tuile.avenir { --t: var(--td-indigo); background: linear-gradient(135deg, rgba(139,123,255,.14), rgba(91,82,240,.08)), var(--td-verre); }
+.td-tuile.fait { --t: var(--td-rose); grid-template-columns: auto auto 1fr; padding-right: 20px; }
+.td-tuile.fait::before { background: linear-gradient(180deg, var(--td-indigo), var(--td-rose), var(--td-orange)); }
+.td-tuile.fait b { background: linear-gradient(100deg, var(--td-indigo), var(--td-rose)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.td-anneau { grid-row: span 2; width: 44px; height: 44px; transform: rotate(-90deg); align-self: center; }
+.td-anneau circle { fill: none; stroke-width: 5; }
+.td-anneau .fond { stroke: color-mix(in srgb, var(--td-indigo) 14%, transparent); }
+.td-anneau .plein { stroke: url(#td-grad); stroke-linecap: round; stroke-dasharray: 113.1;
+  stroke-dashoffset: calc(113.1 - 113.1 * var(--p, 0) / 100); transition: stroke-dashoffset 1s cubic-bezier(.2,.8,.2,1); }
+
+/* ---- les onglets et la barre d'outils ---- */
+/* Le décompte « 3 en retard · 2 aujourd'hui » de la barre redisait les tuiles. */
+.ecran-todo .toolbar > .muted.small { display: none; }
+.ecran-todo .todo-onglets button { border-radius: 999px; background: rgba(255,255,255,.75); }
+.ecran-todo .todo-onglets button.on { background: var(--text); color: #fff; box-shadow: 0 12px 26px -16px rgba(21,22,42,.9); }
+.ecran-todo .todo-onglets button.on span { background: rgba(255,255,255,.2); color: #fff; }
+.ecran-todo .toolbar .search, .ecran-todo .toolbar input[type="search"] { border-radius: 999px; background: var(--td-verre); }
+.ecran-todo #t-send { border: 0; color: #fff;
+  background: linear-gradient(100deg, var(--td-indigo), var(--td-rose) 70%, var(--td-orange));
+  box-shadow: 0 14px 28px -16px rgba(255,77,141,.8); transition: transform .2s ease, box-shadow .2s ease; }
+.ecran-todo #t-send:hover { transform: translateY(-2px); box-shadow: 0 18px 32px -14px rgba(255,77,141,.85); }
+.ecran-todo #t-new { border-radius: 999px; }
+.ecran-todo #t-send { border-radius: 999px; }
+
+/* ---- le tableau par structure ---- */
+.ecran-todo .kb-plateau { gap: 16px; }
+.ecran-todo .kb-col { border-radius: 24px; padding: 14px 12px 12px;
+  background: var(--td-verre); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255,255,255,.9); box-shadow: var(--td-ombre);
+  transition: transform .45s cubic-bezier(.2,.8,.2,1), opacity .5s ease; }
+.ecran-todo .kb-tete { position: relative; border-bottom: 0; padding: 4px 6px 12px; margin-bottom: 8px; }
+.ecran-todo .kb-tete::after { content: ""; position: absolute; left: 6px; right: 6px; bottom: 0; height: 4px; border-radius: 999px;
+  background: linear-gradient(90deg, var(--c), color-mix(in srgb, var(--c) 25%, transparent)); }
+.ecran-todo .kb-tete h3 { font-family: var(--font-display); font-size: 14px; letter-spacing: -.01em; display: flex; align-items: center; gap: 8px; }
+.ecran-todo .kb-tete h3::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--c);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--c) 18%, transparent); }
+.ecran-todo .kb-plus { width: 30px; height: 30px; border-radius: 50%; font-size: 18px;
+  background: linear-gradient(135deg, var(--c), color-mix(in srgb, var(--c) 70%, #fff));
+  box-shadow: 0 8px 18px -10px var(--c); transition: transform .25s cubic-bezier(.2,.8,.2,1); }
+.ecran-todo .kb-plus:hover { transform: rotate(90deg) scale(1.08); }
+
+.ecran-todo .kb-carte, .ecran-todo .kb-dossier { border-radius: 16px; border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  border-left: 1px solid color-mix(in srgb, var(--line) 70%, transparent); background: var(--card);
+  box-shadow: 0 1px 2px rgba(17,21,28,.04), inset 4px 0 0 var(--c);
+  transition: transform .35s cubic-bezier(.2,.8,.2,1), box-shadow .3s ease, opacity .5s ease; }
+.ecran-todo .kb-dossier { box-shadow: 0 1px 2px rgba(17,21,28,.04), inset 4px 0 0 var(--d); }
+.ecran-todo .kb-carte:hover, .ecran-todo .kb-carte:focus-visible,
+.ecran-todo .kb-dossier:hover, .ecran-todo .kb-dossier:focus-visible {
+  transform: translateY(-3px); border-color: color-mix(in srgb, var(--c) 35%, var(--line));
+  box-shadow: 0 22px 40px -26px color-mix(in srgb, var(--c) 70%, rgba(21,22,42,.5)), inset 4px 0 0 var(--c); }
+.ecran-todo .kb-carte.est-urgente { box-shadow: 0 1px 2px rgba(17,21,28,.04), inset 4px 0 0 #E5484D;
+  background: linear-gradient(135deg, rgba(255,90,77,.07), transparent 55%), var(--card); }
+
+/* La case : un rond qui se remplit du dégradé, et la carte qui « respire ». */
+.ecran-todo .kb-case input[type="checkbox"] { appearance: none; -webkit-appearance: none; width: 20px; height: 20px; margin: 1px 0 0;
+  border-radius: 50%; border: 2px solid color-mix(in srgb, var(--c) 55%, var(--line-strong)); background: var(--card);
+  cursor: pointer; display: grid; place-items: center; transition: border-color .2s ease, background .25s ease, transform .2s ease; }
+.ecran-todo .kb-case input[type="checkbox"]:hover { border-color: var(--c); transform: scale(1.08); }
+.ecran-todo .kb-case input[type="checkbox"]::after { content: ""; width: 5px; height: 9px; margin-top: -2px;
+  border: solid #fff; border-width: 0 2.5px 2.5px 0; transform: rotate(45deg) scale(0); transition: transform .2s ease .05s; }
+.ecran-todo .kb-case input[type="checkbox"]:checked { border-color: transparent;
+  background: linear-gradient(135deg, var(--td-indigo), var(--td-rose) 70%, var(--td-orange)); }
+.ecran-todo .kb-case input[type="checkbox"]:checked::after { transform: rotate(45deg) scale(1); }
+.ecran-todo .kb-carte.est-faite { opacity: .55; }
+.ecran-todo .kb-carte.est-recente { opacity: 1; animation: tdFait .7s cubic-bezier(.2,.8,.2,1);
+  background: linear-gradient(135deg, rgba(91,82,240,.08), rgba(255,77,141,.08)), var(--card); }
+.ecran-todo .kb-carte.est-recente .kb-case input { animation: tdPop .45s cubic-bezier(.2,.8,.2,1); }
+.ecran-todo .kb-carte.est-faite .kb-titre { text-decoration-color: var(--td-rose); text-decoration-thickness: 2px; }
+@keyframes tdFait { 0% { transform: scale(1) } 35% { transform: scale(1.025) } 100% { transform: scale(1) } }
+@keyframes tdPop { 0% { transform: scale(.6) } 60% { transform: scale(1.25) } 100% { transform: scale(1) } }
+
+.ecran-todo .kb-quand.est-tard { color: #E5484D; }
+.ecran-todo .kb-quand.est-tard::before, .ecran-todo .kb-quand.est-aujourdhui::before {
+  content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; background: currentColor;
+  animation: tdPouls 2.2s infinite; }
+@keyframes tdPouls { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 50%, transparent) } 70% { box-shadow: 0 0 0 7px transparent } 100% { box-shadow: 0 0 0 0 transparent } }
+.ecran-todo .kb-qui { box-shadow: 0 0 0 2px var(--card); }
+
+/* La liste « Envoyées » : la même carte vitrée. */
+.ecran-todo .todo-liste { border-radius: 24px; background: var(--td-verre); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255,255,255,.9); box-shadow: var(--td-ombre); }
+
+/* ---- l'entrée en cascade (armée par le script) ---- */
+.ecran-todo .todo-page.anime :is(.td-tuile, .kb-col, .kb-carte, .kb-dossier, .todo-liste) {
+  opacity: 0; transform: translateY(22px); transition-delay: calc(var(--i, 0) * 45ms); }
+.ecran-todo .todo-page.anime.vu :is(.td-tuile, .kb-col, .kb-carte, .kb-dossier, .todo-liste) { opacity: 1; transform: none; }
+
+/* ---- téléphone ---- */
+@media screen and (max-width: 820px) {
+  .td-hero { margin-bottom: 16px; }
+  .td-hero h1 { font-size: 26px; }
+  /* Quatre petites tuiles sur une rangée : la journée se lit d'un coup d'œil
+     sans repousser les tâches sous le pli. */
+  .td-tuiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; width: 100%; }
+  .td-tuile, .td-tuile.fait { min-width: 0; grid-template-columns: 1fr; justify-items: center; text-align: center;
+    padding: 10px 4px 9px; border-radius: 16px; }
+  .td-tuile::before { inset: 0 0 auto 0; width: auto; height: 3px; }
+  .td-tuile.fait::before { background: linear-gradient(90deg, var(--td-indigo), var(--td-rose), var(--td-orange)); }
+  .td-tuile b { grid-row: auto; font-size: 26px; }
+  .td-tuile span { font-size: 11px; line-height: 1.15; margin-top: 3px; }
+  .td-tuile em, .td-anneau { display: none; }
+  .ecran-todo .kb-onglet { border-radius: 999px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ecran-todo .kb-carte.est-recente, .ecran-todo .kb-carte.est-recente .kb-case input,
+  .ecran-todo .kb-quand::before { animation: none; }
+}

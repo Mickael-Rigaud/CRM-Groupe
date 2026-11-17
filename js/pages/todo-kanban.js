@@ -69,7 +69,7 @@ function carte(a, recentes) {
   const sousTaches = Array.isArray(a.checklist) ? a.checklist : [];
   const faites = sousTaches.filter(x => x && x.f).length;
 
-  return `<article class="kb-carte ${a.done ? 'est-faite' : ''} ${!a.done && a.priority === 'urgent' ? 'est-urgente' : ''}"
+  return `<article class="kb-carte ${a.done ? 'est-faite' : ''} ${a.done && recentes && recentes.has(a.id) ? 'est-recente' : ''} ${!a.done && a.priority === 'urgent' ? 'est-urgente' : ''}"
     data-tache="${esc(a.id)}" tabindex="0">
     <label class="kb-case" title="${a.done ? 'Rouvrir' : 'Marquer comme fait'}">
       <input type="checkbox" ${a.done ? 'checked' : ''} data-toggle="${esc(a.id)}"><span></span></label>

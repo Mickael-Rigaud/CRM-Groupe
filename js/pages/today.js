@@ -152,6 +152,14 @@ const ongletsDe = (direction) => (direction ? [ONGLET_KANBAN, ONGLETS[1]] : ONGL
 export const todayPage = {
   title: () => 'To do list',
   render(root) {
+    // ⚠ LA TO DO PREND LE LANGAGE DU TABLEAU DE BORD (17/11/2026, Élodie :
+    // « moderniser et dynamiser la to do avec les mêmes couleurs du tableau de
+    // bord, je veux quelque chose de frais »). Même fond qui dérive, mêmes
+    // cartes vitrées, même dégradé indigo → rose → orange. Tout est sous
+    // `.ecran-todo`, posée ici et retirée en partant : les cartes `.kb-*`
+    // servent aussi ailleurs et ne changent pas hors de cet écran.
+    root.classList.add('ecran-todo');
+    let premiere = true;   // l'entrée en cascade ne joue qu'à l'arrivée, pas à chaque coche
     const enTableau = true;
     const onglets = ongletsDe(enTableau);
     const state = { onglet: onglets[0].key, structure: '', q: '', showDone: false, focus: null };
@@ -232,8 +240,41 @@ export const todayPage = {
             && (!state.structure || state.structure === '—' || d.activity === state.structure))
         : [];
 
+      // Les compteurs de l'en-tête lisent les tâches de l'onglet, avant la
+      // recherche et la structure : ils disent la journée, pas le filtre.
+      const ouvOnglet = toutes.filter(a => !a.done && onglet.garde(a, moi));
+      const nRetard = ouvOnglet.filter(a => a.priority === 'retard' || ecart(a) > 0).length;
+      const nJour = ouvOnglet.filter(a => ecart(a) === 0 && a.priority !== 'retard').length;
+      const nAvenir = ouvOnglet.length - nRetard - nJour;
+      const nFait = toutes.filter(a => a.done && onglet.garde(a, moi) && a.done_at && daysSince(a.done_at) === 0).length;
+      const aTraiter = nRetard + nJour;
+      const part = aTraiter + nFait ? Math.round((nFait / (aTraiter + nFait)) * 100) : 100;
+      const prenom = String(scope.user?.full_name || '').trim().split(/\s+/)[0];
+      const phrase = onglet.key === 'envoyees'
+        ? (ouvOnglet.length ? `${ouvOnglet.length} tâche${ouvOnglet.length > 1 ? 's' : ''} confiée${ouvOnglet.length > 1 ? 's' : ''} en cours.` : 'rien en attente chez les autres.')
+        : (aTraiter ? `${aTraiter} tâche${aTraiter > 1 ? 's' : ''} pour aujourd’hui.` : 'tout est à jour.');
+      const tuile = (cle, n, libelle, sous) => `<div class="td-tuile ${cle}"><b data-compte="${n}">${n}</b><span>${libelle}</span><em>${sous}</em></div>`;
+
       root.innerHTML = `
+        <div class="tb-fond" aria-hidden="true"><span class="tb-tache t1"></span><span class="tb-tache t2"></span><span class="tb-tache t3"></span></div>
         <div class="todo-page">
+        <header class="td-hero">
+          <div class="td-hero-txt">
+            <h1>${prenom ? `Bonjour ${esc(prenom)}, ` : ''}<span>${esc(phrase)}</span></h1>
+            <p><i class="tb-vivant"></i>${esc(new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }))}</p>
+          </div>
+          <div class="td-tuiles">
+            ${tuile('retard', nRetard, 'en retard', 'à rattraper')}
+            ${tuile('jour', nJour, 'aujourd’hui', 'à faire avant ce soir')}
+            ${tuile('avenir', nAvenir, 'à venir', 'les jours suivants')}
+            <div class="td-tuile fait">
+              <svg class="td-anneau" viewBox="0 0 44 44" aria-hidden="true"><defs><linearGradient id="td-grad" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#5B52F0"/><stop offset=".6" stop-color="#FF4D8D"/><stop offset="1" stop-color="#FF7A2D"/></linearGradient></defs>
+                <circle cx="22" cy="22" r="18" class="fond"/><circle cx="22" cy="22" r="18" class="plein" style="--p:${part}"/></svg>
+              <b data-compte="${nFait}">${nFait}</b><span>fait${nFait > 1 ? 'es' : 'e'} aujourd’hui</span><em>${part} % de la journée</em>
+            </div>
+          </div>
+        </header>
         <div class="pill-tabs todo-onglets">
           ${onglets.map(o => `<button type="button" data-onglet="${o.key}" class="${state.onglet === o.key ? 'on' : ''}">${esc(o.label)}<span>${compte(o)}</span></button>`).join('')}
         </div>
@@ -359,6 +400,7 @@ export const todayPage = {
         draw();
       });
       lierSousTaches(root, draw);
+      if (premiere) { premiere = false; animerEntree(root); }
     };
 
     draw();
@@ -366,7 +408,34 @@ export const todayPage = {
       refresh: draw,
       // Quitter l'écran emporte les minuteurs avec lui, sinon ils redessineraient
       // une page qui n'est plus là.
-      destroy() { recentes.forEach(clearTimeout); recentes.clear(); oublierSousTaches(); },
+      destroy() { recentes.forEach(clearTimeout); recentes.clear(); oublierSousTaches(); root.classList.remove('ecran-todo'); },
     };
   },
 };
+
+// L'arrivée sur l'écran : les colonnes et les cartes montent en cascade, les
+// compteurs de l'en-tête comptent jusqu'à leur valeur.
+// ⚠ VISIBLE PAR DÉFAUT, COMME LE TABLEAU DE BORD : c'est ce script qui pose
+// `.anime` puis la retire. S'il ne part pas, tout est simplement là — jamais un
+// écran blanc. Et une personne qui demande moins d'animations n'en a pas.
+function animerEntree(root) {
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+  const page = root.querySelector('.todo-page');
+  if (!page) return;
+  const morceaux = [...page.querySelectorAll('.td-tuile, .kb-col, .kb-carte, .kb-dossier, .todo-liste')];
+  morceaux.forEach((el, i) => el.style.setProperty('--i', Math.min(i, 24)));
+  page.classList.add('anime');
+  requestAnimationFrame(() => requestAnimationFrame(() => page.classList.add('vu')));
+  setTimeout(() => { page.classList.remove('anime', 'vu'); morceaux.forEach(el => el.style.removeProperty('--i')); }, 1600);
+  page.querySelectorAll('[data-compte]').forEach(b => {
+    const fin = Number(b.dataset.compte) || 0;
+    if (fin < 2) return;
+    const t0 = performance.now();
+    const pas = (t) => {
+      const k = Math.min(1, (t - t0) / 700);
+      b.textContent = Math.round(fin * (1 - Math.pow(1 - k, 3)));
+      if (k < 1) requestAnimationFrame(pas);
+    };
+    requestAnimationFrame(pas);
+  });
+}
