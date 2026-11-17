@@ -106,9 +106,12 @@ input, select, textarea { font: inherit; }
 .u-tab { color: var(--muted); border-bottom: 0; border-radius: 14px; padding: 10px 15px;
   transition: .2s cubic-bezier(.2,.8,.2,1); }
 .u-tab:hover { color: var(--text); background: color-mix(in srgb, var(--accent) 8%, transparent); transform: translateY(-1px); }
-.u-tab.on { color: var(--on-accent); background: linear-gradient(135deg, var(--accent), var(--accent-2));
-  box-shadow: 0 11px 22px -11px var(--accent); }
-.u-tab.on:hover { transform: none; background: linear-gradient(135deg, var(--accent), var(--accent-2)); }
+/* ⚠ L'ONGLET OUVERT PREND LE DÉGRADÉ DU TABLEAU DE BORD (17/11/2026, Élodie :
+   « les boutons cliqués de la même couleur que celui de “Nouvelle tâche” ») —
+   indigo → rose → orange, le même que le bonjour de l'accueil. */
+.u-tab.on { color: #fff; background: linear-gradient(110deg, #5B52F0, #FF4D8D 70%, #FF7A2D);
+  box-shadow: 0 12px 24px -12px rgba(255,77,141,.8); }
+.u-tab.on:hover { transform: none; background: linear-gradient(110deg, #5B52F0, #FF4D8D 70%, #FF7A2D); }
 .u-cnt { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
 .u-tab.on .u-cnt { background: color-mix(in srgb, var(--on-accent) 28%, transparent); color: var(--on-accent); }
 

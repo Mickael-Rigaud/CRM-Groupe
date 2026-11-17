@@ -41,7 +41,9 @@
   .bb-ico { position: relative; display: grid; place-items: center; width: 52px; height: 28px; border-radius: 999px;
             transition: background .15s ease, color .15s ease; }
   .bb-lien.on { color: var(--accent-ink, var(--accent)); }
-  .bb-lien.on .bb-ico { background: var(--accent-soft, color-mix(in srgb, var(--accent) 14%, transparent)); color: var(--accent); }
+  /* Même dégradé que l'onglet ouvert sur ordinateur (17/11/2026). */
+  .bb-lien.on .bb-ico { background: linear-gradient(110deg, #5B52F0, #FF4D8D 70%, #FF7A2D); color: #fff;
+    box-shadow: 0 8px 16px -10px rgba(255,77,141,.8); }
   .bb-lien:active .bb-ico { transform: scale(.94); }
   .bb-lien:focus-visible { outline: 2px solid var(--accent); outline-offset: -4px; border-radius: 10px; }
   .bb-ico i { position: absolute; top: -3px; right: 6px; min-width: 18px; height: 18px; padding: 0 5px;
