@@ -10282,3 +10282,21 @@ td .pl-toque { color: #4f46e5; }
 .lrc-lien-action:hover { color: var(--lrc-orange, #F4801C); }
 .lrc-sous-titre { margin: 4px 0 8px; font-size: 11px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; color: var(--lrc-encre-2, #4A6579); }
 .cts-source { font-family: "Inter", sans-serif; font-size: 11.5px; font-weight: 650; letter-spacing: 0; color: var(--lrc-gris, #8CA2B3); }
+
+/* Base de données Courtage : les colonnes du formulaire (18/11/2026) */
+.ct-manque { font-size: 12px; font-style: italic; color: var(--muted-2, #8CA2B3); }
+.ct-manque.est-orange { font-style: normal; font-weight: 700; color: #C9740C; }
+.ct-fin { font-weight: 700; }
+.ct-faisa { display: inline-flex; align-items: center; gap: 6px; font-weight: 800; white-space: nowrap; }
+.ct-faisa i { width: 9px; height: 9px; border-radius: 50%; background: #8CA2B3; }
+.ct-faisa.est-vert { color: #2E8B57; } .ct-faisa.est-vert i { background: #2E8B57; }
+.ct-faisa.est-orange { color: #C9740C; } .ct-faisa.est-orange i { background: #E38A12; }
+.ct-faisa.est-rouge { color: #D9483B; } .ct-faisa.est-rouge i { background: #D9483B; }
+.ct-rdv { font-weight: 700; white-space: nowrap; }
+.ct-rdv.est-retard { color: #D9483B; }
+.esp-app[data-espace="courtage"] td .small.muted { margin-top: 2px; }
+/* La cellule des boutons était en `display:flex` : elle quittait la grille du tableau,
+   et son filet du bas tombait à une autre hauteur que le reste de la ligne. */
+.esp-app[data-espace="courtage"] td.acts { display: table-cell; white-space: nowrap; vertical-align: middle; text-align: right; }
+.esp-app[data-espace="courtage"] td.acts > * + * { margin-left: 6px; }
+.esp-app[data-espace="courtage"] tbody td { vertical-align: middle; }

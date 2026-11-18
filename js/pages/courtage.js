@@ -295,9 +295,53 @@ const statutDossier = (c, d) => {
   const pastilleOrigine = o ? `<span class="ct-orig est-${o.key}" title="${esc(c.channel || 'Canal non renseigné')}">${esc(o.label)}</span>` : '';
   if (!d) return `<div class="ct-statut">${pastilleOrigine || '—'}</div>`;
   const feu = feuDe(d);
-  return `${esc(estSimulation(d) ? (d.fields?.projet || 'Simulation') : d.title)}
-    <div class="ct-statut"><span class="ct-etape-pastille">${feu ? `<i class="cts-feu est-${feu}"></i>` : ''}${esc(etapeDe(d))}</span>${pastilleOrigine}</div>`;
+  // Le titre du dossier n'est plus redit ici (18/11/2026) : le nom et le projet ont
+  // leurs colonnes, la cellule ne porte que le statut.
+  return `<div class="ct-statut"><span class="ct-etape-pastille">${feu ? `<i class="cts-feu est-${feu}"></i>` : ''}${esc(etapeDe(d))}</span>${pastilleOrigine}</div>`;
 };
+
+// Les cellules d'une ligne Prospects / Clients, tirées du contact et de son dossier.
+// Une simulation range ses chiffres sous d'autres noms (`emprunt`, `budget`) :
+// on lit l'un ou l'autre, comme la fiche.
+const nb = (v) => { const n = Number(String(v ?? '').replace(/\s/g, '').replace(',', '.').replace(/[^\d.-]/g, '')); return Number.isFinite(n) && n ? n : null; };
+const sousLigne = (t) => (t ? `<div class="small muted">${t}</div>` : '');
+const ligneDossier = (c, d) => {
+  const f = d?.fields || {};
+  const lieu = [c.postal_code, c.city].filter(Boolean).join(' ');
+  const fin = f.type_financement === 'Crédit professionnel' ? 'Financement professionnel' : f.type_financement;
+  const projet = f.objectif || f.projet || '';
+  const aFinancer = nb(f.montant_financement) ?? nb(f.emprunt);
+  const total = nb(f.montant_projet) ?? nb(f.budget);
+  const apport = nb(f.apport);
+  const endet = nb(f.endettement);
+  const feu = d ? feuDe(d) : '';
+  const ton = feu ? `est-${feu}` : endet === null ? '' : endet <= 35 ? 'est-vert' : endet <= 38 ? 'est-orange' : 'est-rouge';
+  // Le prochain rendez-vous ou la prochaine action datée du dossier.
+  const prochaine = d ? db.t('activities').filter(a => a.deal_id === d.id && !a.done && a.due_date)
+    .sort((x, y) => (x.due_date + (x.due_time || '')).localeCompare(y.due_date + (y.due_time || '')))[0] : null;
+  const retard = prochaine && daysSince(prochaine.due_date) > 0;
+  return {
+    prospect: `<b>${esc(contactName(c))}</b>${sousLigne(lieu ? esc(lieu) : '<span class="ct-manque">Ville à compléter</span>')}`,
+    coordonnees: `${c.phone ? lien('tel:', c.phone) : '<span class="ct-manque">Pas de téléphone</span>'}${sousLigne(c.email ? lien('mailto:', c.email) : '')}`,
+    projet: fin || projet ? `<b class="ct-fin">${esc(fin || projet)}</b>${sousLigne(fin && projet ? esc(projet) : '')}` : '<span class="ct-manque">À compléter</span>',
+    montant: aFinancer ? `<b class="num">${esc(eur(aFinancer))}</b>${sousLigne(total ? `sur ${esc(eur(total))}${apport && total ? ` · apport ${Math.round((apport / total) * 100)} %` : ''}` : '')}` : '—',
+    faisabilite: endet !== null || feu
+      ? `<span class="ct-faisa ${ton}"><i></i>${endet !== null ? `${String(endet).replace('.', ',')} %` : esc(FEUX_LIB[feu] || '')}</span>${sousLigne(endet !== null ? 'd’endettement' : '')}`
+      : '—',
+    rdv: prochaine
+      ? `<span class="ct-rdv ${retard ? 'est-retard' : ''}">${esc(fmtDate(prochaine.due_date))}${prochaine.due_time ? ` · ${esc(prochaine.due_time)}` : ''}</span>${sousLigne(esc(prochaine.title))}`
+      : d && d.status === 'open' ? '<span class="ct-manque est-orange">À programmer</span>' : '—',
+    csv: {
+      nom: contactName(c), type: c.type, adresse: c.address, code_postal: c.postal_code, ville: c.city,
+      telephone: c.phone, email: c.email, origine: c.channel,
+      financement: fin, projet, montant_projet: total, apport, a_financer: aFinancer,
+      endettement: endet, mensualite: nb(f.mensualite), capacite: nb(f.capacite),
+      prochain_rdv: prochaine ? `${prochaine.due_date} ${prochaine.due_time || ''}`.trim() : '',
+      dossier: d?.title, etape: d ? etapeDe(d) : '',
+    },
+  };
+};
+const FEUX_LIB = { vert: 'Feu vert', orange: 'Feu orange', rouge: 'Feu rouge' };
 
 // Le dossier de courtage d'un contact : l'ouvert le plus récent, sinon le plus récent.
 const dossierDe = (contactId) => {
@@ -383,20 +427,24 @@ export const courtageBasePage = {
           });
       } else {
         const filtre = { clients: (c) => c.type === 'Client', prospects: (c) => c.type === 'Prospect', tous: () => true }[state.vue];
-        colonnes = ['Nom', 'Type', 'Ville', 'Téléphone', 'Email', 'Financement', 'Dossier', ''];
+        // ⚠ LES COLONNES SUIVENT LE FORMULAIRE (18/11/2026, Mickael : « revoir les
+        // colonnes du tableau avec les informations remplies »). Une ligne dit ce
+        // qu'un courtier regarde avant d'appeler : qui et où, comment le joindre,
+        // ce qu'il veut financer, combien, si c'est faisable, quand on le rappelle,
+        // où en est le dossier. Le type ne sert que dans « Tous les contacts ».
+        colonnes = ['Prospect', 'Coordonnées', 'Projet', 'À financer', 'Faisabilité', 'Prochain rendez-vous', 'Statut', ''];
+        if (state.vue === 'tous') colonnes.splice(1, 0, 'Type');
         lignes = contacts.filter(filtre)
           .filter(c => !state.canal || c.channel === state.canal)
           .map(c => ({ c, d: dossierDe(c.id) }))
           .filter(({ d }) => !state.fin || d?.fields?.type_financement === state.fin)
           .filter(({ c, d }) => hit([contactName(c), c.email, c.phone, c.city, c.channel, d?.title, d?.fields?.type_financement], ts))
-          .map(({ c, d }) => ({
-            id: c.id, kind: 'contact',
-            cells: [`<b>${esc(contactName(c))}</b>`, esc(c.type || '—'), esc(c.city || '—'),
-              lien('tel:', c.phone), lien('mailto:', c.email),
-              esc(d?.fields?.type_financement || d?.fields?.projet || '—'),
-              statutDossier(c, d)],
-            csv: { nom: contactName(c), type: c.type, ville: c.city, telephone: c.phone, email: c.email, canal: c.channel, financement: d?.fields?.type_financement, dossier: d?.title, etape: d ? etapeDe(d) : '' },
-          }));
+          .map(({ c, d }) => {
+            const l = ligneDossier(c, d);
+            const cells = [l.prospect, l.coordonnees, l.projet, l.montant, l.faisabilite, l.rdv, statutDossier(c, d)];
+            if (state.vue === 'tous') cells.splice(1, 0, esc(c.type || '—'));
+            return { id: c.id, kind: 'contact', cells, csv: l.csv };
+          });
       }
 
       const compte = (v) => {
