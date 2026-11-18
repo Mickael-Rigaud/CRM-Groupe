@@ -10406,3 +10406,77 @@ td .pl-toque { color: #4f46e5; }
 .ct-carte-pipe.est-compacte .cts-avis { font-size: 11px; line-height: 1.3; }
 .cts-appel.est-rond { flex: none; width: 28px; height: 28px; padding: 0; display: grid; place-items: center; }
 .cts-appel.est-rond svg { width: 14px; height: 14px; fill: currentColor; }
+
+/* ---- le chiffre d'affaires, à côté du « À faire » (18/11/2026) ----
+   Mickael : « une présentation plus moderne et dynamique du CA ». Bento de
+   tuiles inégales sur la charte du site : ciel et soleil pour le grand
+   chiffre, mer qui ondule (CSS seul, rien à arrêter en quittant la page),
+   anneau de l'objectif, barre de l'argent par avancement, mois par mois. */
+.ct-duo-ca { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 18px; align-items: stretch; }
+.ct-duo-ca > .ct-panneau { margin: 0; }
+.ct-duo-ca .ct-afaire-liste { grid-template-columns: 1fr; }
+@media screen and (max-width: 1180px) { .ct-duo-ca { grid-template-columns: 1fr; } }
+.ca-direct { margin-left: auto; display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 650; color: #2E8B57; }
+.ca-direct i { width: 8px; height: 8px; border-radius: 50%; background: #2E8B57; animation: caPouls 2s infinite; }
+@keyframes caPouls { 0% { box-shadow: 0 0 0 0 rgba(46,139,87,.5); } 70%, 100% { box-shadow: 0 0 0 8px rgba(46,139,87,0); } }
+.ca-bento { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 12px; }
+.ca-tuile { position: relative; border-radius: 20px; background: #fff; border: 1px solid var(--lrc-filet, #F1E4CF); padding: 16px 18px; overflow: hidden;
+  transition: transform .35s cubic-bezier(.2,.8,.2,1), box-shadow .35s; }
+.ca-tuile:hover { transform: translateY(-3px); box-shadow: 0 22px 40px -28px rgba(21,56,78,.55); }
+.ca-large { grid-column: 1 / -1; }
+.ca-etiq { font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.ca-sous { font-size: 12.5px; color: #3d5a6c; }
+.ca-proba { grid-row: span 2; color: #15384E; border-color: #d8eef5; padding-bottom: 70px;
+  background: radial-gradient(circle at 88% 12%, rgba(255,210,120,.95) 0, rgba(255,210,120,.35) 16%, transparent 34%),
+              linear-gradient(170deg, #BFE6F3 0%, #E6F5FA 45%, #FFF3E2 100%); }
+.ca-chiffre { font-family: var(--font-display, Fraunces, serif); font-weight: 700; font-size: clamp(36px, 3.4vw, 54px); letter-spacing: -.04em; line-height: 1; margin: 10px 0 6px; white-space: nowrap; }
+.ca-puce { display: inline-flex; align-items: center; gap: 6px; margin-top: 12px; padding: 5px 11px; border-radius: 999px; font-size: 12px; font-weight: 750; background: rgba(255,255,255,.8); color: #2E8B57; }
+.ca-puce svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.ca-vague { position: absolute; left: 0; bottom: 0; width: 200%; height: 64px; }
+.ca-vague .v1 { fill: rgba(15,163,196,.18); animation: caHoule 9s linear infinite; }
+.ca-vague .v2 { fill: rgba(15,163,196,.28); animation: caHoule 6s linear infinite reverse; }
+@keyframes caHoule { to { transform: translateX(-200px); } }
+.ca-objectif { display: flex; align-items: center; gap: 12px; padding: 14px; }
+.ca-anneau { position: relative; width: 96px; height: 96px; flex: none; }
+.ca-anneau svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.ca-anneau circle { fill: none; stroke-width: 12; stroke-linecap: round; transition: stroke-dasharray 1.6s cubic-bezier(.2,.8,.2,1); }
+.ca-anneau .fond { stroke: #F3EBDD; }
+.ca-anneau .enc { stroke: url(#caDeg); }
+.ca-anneau .avec { stroke: #FFA43D; opacity: .35; }
+.ca-centre { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; }
+.ca-centre b { font-family: var(--font-display, Fraunces, serif); font-size: 22px; line-height: 1; }
+.ca-centre small { display: block; font-size: 10.5px; color: var(--muted); margin-top: 2px; }
+.ca-lignes { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 7px; font-size: 12px; }
+.ca-lignes > div { display: flex; align-items: center; gap: 7px; }
+.ca-lignes i { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.ca-lignes i.enc { background: #F4801C; } .ca-lignes i.avec { background: #FFA43D; opacity: .5; }
+.ca-lignes b { margin-left: auto; padding-left: 8px; white-space: nowrap; }
+.ca-moy { font-family: var(--font-display, Fraunces, serif); font-size: 30px; font-weight: 700; margin: 8px 0 2px; white-space: nowrap; }
+.ca-flux { display: flex; height: 16px; border-radius: 999px; overflow: hidden; background: #F3EBDD; gap: 3px; margin: 12px 0; }
+.ca-flux i { display: block; height: 100%; border-radius: 999px; transition: width 1.1s cubic-bezier(.2,.8,.2,1); }
+.ca-flux i:hover { filter: brightness(1.08); }
+.ca-flux .sec, .ca-leg i.sec { background: #2E8B57; }
+.ca-flux .ban, .ca-leg i.ban { background: #0FA3C4; }
+.ca-flux .mon, .ca-leg i.mon { background: #FFA43D; }
+.ca-leg { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.ca-leg > div { font-size: 12px; color: var(--muted); }
+.ca-leg span { display: flex; align-items: center; gap: 6px; font-weight: 650; color: #15384E; }
+.ca-leg i { width: 9px; height: 9px; border-radius: 50%; }
+.ca-leg b { display: block; font-size: 17px; font-weight: 800; color: #15384E; margin: 2px 0; white-space: nowrap; }
+.ca-mois { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)) minmax(0, 1.5fr); gap: 7px; align-items: end; height: 120px; margin-top: 12px; }
+.ca-mois > div { display: flex; flex-direction: column; align-items: center; gap: 5px; height: 100%; justify-content: flex-end; }
+.ca-b { position: relative; width: 100%; border-radius: 8px 8px 4px 4px; transition: height .8s cubic-bezier(.2,.8,.2,1); }
+.ca-b.passe { background: linear-gradient(180deg, #FFA43D, #F4801C); }
+.ca-b.maintenant { box-shadow: 0 0 0 3px rgba(244,128,28,.25); }
+.ca-b.futur { background: repeating-linear-gradient(135deg, rgba(15,163,196,.28) 0 6px, rgba(15,163,196,.12) 6px 12px); border: 1.5px dashed rgba(15,163,196,.6); }
+.ca-bulle { position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translate(-50%, 4px); opacity: 0; pointer-events: none; z-index: 2;
+  white-space: nowrap; font-size: 11px; font-weight: 750; padding: 4px 8px; border-radius: 8px; background: #15384E; color: #fff; transition: .2s; }
+.ca-b:hover .ca-bulle { opacity: 1; transform: translate(-50%, 0); }
+.ca-mois small { font-size: 10.5px; color: var(--muted); font-weight: 600; white-space: nowrap; }
+.ca-mois-leg { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 11.5px; color: var(--muted); margin-top: 10px; }
+.ca-mois-leg span { display: flex; align-items: center; gap: 6px; }
+.ca-mois-leg i { width: 12px; height: 9px; border-radius: 3px; }
+.ca-mois-leg i.passe { background: linear-gradient(180deg, #FFA43D, #F4801C); }
+.ca-mois-leg i.futur { background: rgba(15,163,196,.25); border: 1px dashed rgba(15,163,196,.7); }
+.ca-note { margin: 12px 0 0; font-size: 11.5px; color: var(--muted); }
+@media (prefers-reduced-motion: reduce) { .ca-vague path, .ca-direct i { animation: none; } }

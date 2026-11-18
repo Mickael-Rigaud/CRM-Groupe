@@ -72,7 +72,8 @@ export const courtageHomePage = {
       const a = act();
       const all = deals();
       const open = all.filter(d => d.status === 'open');
-      const pondere = open.reduce((s, d) => s + weightedAmount(d), 0);
+      const ca = chiffreAffaires(a, all);
+      const pondere = ca.probable;
       const nouveaux = open.filter(d => ['lead', 'qualifie'].includes(d.stage));
       // À partir de « Transmis banque », le financement est engagé : c'est ce qui se suit de près.
       const banque = open.filter(d => ['banque', 'offre'].includes(d.stage));
@@ -82,7 +83,7 @@ export const courtageHomePage = {
       const colonnes = a.stages.map(s => {
         const cartes = open.filter(d => d.stage === s.key)
           .sort((x, y) => String(y.created_at || '').localeCompare(String(x.created_at || '')));
-        return { s, cartes, somme: cartes.reduce((t, d) => t + (Number(d.amount) || 0), 0) };
+        return { s, cartes, somme: cartes.reduce((t, d) => t + commissionDe(d), 0) };
       });
 
       // Le recrutement, résumé ici et détaillé dans l'onglet Vivier courtiers
@@ -155,7 +156,7 @@ export const courtageHomePage = {
              cette pipeline est la seule de l'espace, on n'en perd aucun. -->
         <section class="ct-panneau ct-pipe" id="ct-pipe">
           <div class="ct-panneau-tete"><h2>Pipeline des demandes</h2>
-            <span class="ct-compte">${open.length} dossier${open.length > 1 ? 's' : ''} · ${eur(open.reduce((s, d) => s + (Number(d.amount) || 0), 0))} de commissions estimées</span>
+            <span class="ct-compte">${open.length} dossier${open.length > 1 ? 's' : ''} · ${eur(ca.possible)} de commissions possibles</span>
             <button type="button" class="ct-nouveau" id="ct-nouveau">+ Prospect</button>
             <div class="ct-feux">
               <span class="est-vert" title="Feu vert : projet faisable"><i></i>${parFeuOuverts('vert')}</span>
@@ -174,12 +175,15 @@ export const courtageHomePage = {
             </div>`).join('')}</div>
         </section>
 
+        <div class="ct-duo-ca">
         <section class="ct-panneau ct-afaire">
           <div class="ct-panneau-tete"><h2>À faire</h2>
             <span class="ct-compte ${retard.length ? 'est-retard' : ''}">${retard.length} en retard · ${jour.length} aujourd’hui</span></div>
           <div class="ct-afaire-liste">${[...retard, ...jour].slice(0, 8).map(x => activityRowHtml(x, { showContext: true })).join('')
             || '<div class="ct-vide"><b>Rien d’échu.</b><span>Les prochaines actions sont plus loin dans le temps.</span></div>'}</div>
         </section>
+        ${blocChiffreAffaires(ca)}
+        </div>
 
         <section class="ct-panneau ct-recrut">
           <div class="ct-panneau-tete"><h2>Recrutement</h2>
@@ -223,7 +227,7 @@ export const courtageHomePage = {
           draw();
         });
       });
-      if (premiere) { premiere = false; animerAccueil(root); }
+      if (premiere) { premiere = false; animerAccueil(root); animerCA(root); }
     };
 
     let premiere = true;
@@ -289,6 +293,151 @@ function carteDemande(d, contact, { compacte = false } = {}) {
         ${tel ? `<a class="cts-appel" href="tel:${esc(tel)}" data-tel draggable="false">Appeler</a>` : ''}
       </div>
     </article>`;
+}
+
+// ---------------------------------------------------------------- le chiffre d'affaires
+// ⚠ LE CA SE CALCULE, IL NE SE LIT PAS DANS `amount` (18/11/2026, Mickael :
+// « frais de courtage 1 % et objectif 60 000 € »). Le simulateur range dans
+// `amount` le montant du PROJET (183 000 € pour une demande) : sommé, il
+// annonçait des « commissions » cent fois trop grosses. La rémunération d'un
+// dossier est 1 % du prêt — `emprunt` (simulateur) ou `montant_financement`
+// (formulaire « + Prospect ») ; sans l'un ni l'autre, le dossier ne compte pas,
+// et le bloc dit combien sont dans ce cas.
+// Le CA « probable » pondère chaque dossier par la probabilité de son étape
+// (`p` du schéma : 5 % au nouveau lead, 90 % à l'offre éditée) ; l'encaissé est
+// celui des dossiers gagnés dans l'année (`won_at`).
+const TAUX_COURTAGE = 0.01;
+const OBJECTIF_CA = 60000;
+const montant = (v) => {
+  const n = Number(String(v ?? '').replace(/\s/g, '').replace(',', '.').replace(/[^\d.-]/g, ''));
+  return Number.isFinite(n) && n > 0 ? n : 0;
+};
+const pretDe = (d) => montant(d?.fields?.emprunt) || montant(d?.fields?.montant_financement);
+const commissionDe = (d) => Math.round(pretDe(d) * TAUX_COURTAGE);
+const dateGain = (d) => new Date(d.won_at || d.closed_at || d.updated_at || 0);
+
+function chiffreAffaires(a, all) {
+  const proba = Object.fromEntries(a.stages.map(s => [s.key, (s.p || 0) / 100]));
+  const annee = new Date().getFullYear();
+  const ouverts = all.filter(d => d.status === 'open');
+  const chiffres = ouverts.filter(d => pretDe(d));
+  const somme = (l) => l.reduce((t, d) => t + commissionDe(d), 0);
+  const gagnes = all.filter(d => d.status === 'won' && pretDe(d) && dateGain(d).getFullYear() === annee);
+  const mois = Array.from({ length: 12 }, () => 0);
+  gagnes.forEach(d => { mois[dateGain(d).getMonth()] += commissionDe(d); });
+  const securise = somme(chiffres.filter(d => d.stage === 'offre'));
+  const banque = somme(chiffres.filter(d => d.stage === 'banque'));
+  const pourMoyenne = [...chiffres, ...gagnes];
+  return {
+    annee, mois, moisCourant: new Date().getMonth(),
+    probable: Math.round(chiffres.reduce((t, d) => t + commissionDe(d) * (proba[d.stage] ?? 0), 0)),
+    possible: somme(chiffres),
+    securise, banque, montage: somme(chiffres) - securise - banque,
+    encaisse: somme(gagnes),
+    semaine: somme(chiffres.filter(d => Date.now() - Date.parse(d.created_at || 0) < 7 * 86400000)),
+    moyenne: pourMoyenne.length ? Math.round(somme(pourMoyenne) / pourMoyenne.length) : 0,
+    nbChiffres: chiffres.length, sansPret: ouverts.length - chiffres.length,
+  };
+}
+
+const RAYON = 50, TOUR = 2 * Math.PI * RAYON;
+const pct = (x, t) => (t ? Math.max(0, Math.min(100, (x / t) * 100)) : 0);
+function blocChiffreAffaires(c) {
+  const partEnc = pct(c.encaisse, OBJECTIF_CA);
+  const partAvec = pct(c.encaisse + c.probable, OBJECTIF_CA);
+  const attendu = c.securise + c.banque;
+  const haut = Math.max(1, ...c.mois, attendu);
+  const LETTRES = 'JFMAMJJASOND';
+  const e = (n) => eur(Math.round(n));
+  const hauteur = (v) => (v ? Math.max(5, (v / haut) * 100) : 2);
+  const barre = (v, cls, titre) => `<span class="ca-b ${cls}" data-h="${hauteur(v)}" style="height:${hauteur(v)}%"><span class="ca-bulle">${esc(titre)}</span></span>`;
+  const s = (n) => (n > 1 ? 's' : '');
+  return `
+        <section class="ct-panneau ct-ca">
+          <div class="ct-panneau-tete"><h2>Chiffre d’affaires</h2>
+            <span class="ct-compte">${c.annee} · ${c.nbChiffres} dossier${s(c.nbChiffres)} chiffré${s(c.nbChiffres)}</span>
+            <span class="ca-direct"><i></i>en direct</span></div>
+          <div class="ca-bento">
+            <div class="ca-tuile ca-proba">
+              <div class="ca-etiq">CA probable des dossiers ouverts</div>
+              <div class="ca-chiffre" data-euros="${c.probable}">${e(c.probable)}</div>
+              <div class="ca-sous">sur <b data-euros="${c.possible}">${e(c.possible)}</b> si tout aboutit</div>
+              ${c.semaine ? `<div class="ca-puce"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M1 9l3.5-3.5 2.5 2.5L11 3M8 3h3v3"/></svg>+${e(c.semaine)} de dossiers cette semaine</div>` : ''}
+              <svg class="ca-vague" viewBox="0 0 800 70" preserveAspectRatio="none" aria-hidden="true">
+                <path class="v1" d="M0 38 Q50 28 100 38 T200 38 T300 38 T400 38 T500 38 T600 38 T700 38 T800 38 V70 H0Z"/>
+                <path class="v2" d="M0 50 Q50 43 100 50 T200 50 T300 50 T400 50 T500 50 T600 50 T700 50 T800 50 V70 H0Z"/></svg>
+            </div>
+            <div class="ca-tuile ca-objectif">
+              <div class="ca-anneau">
+                <svg viewBox="0 0 120 120" aria-hidden="true"><defs><linearGradient id="caDeg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFA43D"/><stop offset="1" stop-color="#F4801C"/></linearGradient></defs>
+                  <circle class="fond" cx="60" cy="60" r="${RAYON}"/>
+                  <circle class="avec" cx="60" cy="60" r="${RAYON}" style="stroke-dasharray:${(TOUR * partAvec) / 100} ${TOUR}" data-part="${partAvec}"/>
+                  <circle class="enc" cx="60" cy="60" r="${RAYON}" style="stroke-dasharray:${(TOUR * partEnc) / 100} ${TOUR}" data-part="${partEnc}"/></svg>
+                <div class="ca-centre"><div><b data-pourcent="${Math.round(partEnc)}">${Math.round(partEnc)} %</b><small>de l’objectif</small></div></div>
+              </div>
+              <div class="ca-lignes">
+                <div class="ca-etiq">Objectif ${e(OBJECTIF_CA)}</div>
+                <div><i class="enc"></i>Encaissé<b data-euros="${c.encaisse}">${e(c.encaisse)}</b></div>
+                <div><i class="avec"></i>Probable<b data-euros="${c.probable}">${e(c.probable)}</b></div>
+              </div>
+            </div>
+            <div class="ca-tuile ca-moyenne">
+              <div class="ca-etiq">Commission moyenne</div>
+              <div class="ca-moy" data-euros="${c.moyenne}">${e(c.moyenne)}</div>
+              <div class="ca-sous">par dossier · 1 % du prêt</div>
+            </div>
+            <div class="ca-tuile ca-large">
+              <div class="ca-etiq">Où en est l’argent</div>
+              <div class="ca-flux">
+                <i class="sec" data-l="${pct(c.securise, c.possible)}" style="width:${pct(c.securise, c.possible)}%" title="Sécurisé : ${e(c.securise)}"></i>
+                <i class="ban" data-l="${pct(c.banque, c.possible)}" style="width:${pct(c.banque, c.possible)}%" title="En banque : ${e(c.banque)}"></i>
+                <i class="mon" data-l="${pct(c.montage, c.possible)}" style="width:${pct(c.montage, c.possible)}%" title="En montage : ${e(c.montage)}"></i>
+              </div>
+              <div class="ca-leg">
+                <div><span><i class="sec"></i>Sécurisé</span><b data-euros="${c.securise}">${e(c.securise)}</b>offres éditées</div>
+                <div><span><i class="ban"></i>En banque</span><b data-euros="${c.banque}">${e(c.banque)}</b>transmis</div>
+                <div><span><i class="mon"></i>En montage</span><b data-euros="${c.montage}">${e(c.montage)}</b>de lead à étude</div>
+              </div>
+            </div>
+            <div class="ca-tuile ca-large">
+              <div class="ca-etiq">Mois par mois</div>
+              <div class="ca-mois">
+                ${c.mois.map((v, i) => `<div>${barre(v, `passe${i === c.moisCourant ? ' maintenant' : ''}`, `${e(v)} encaissés`)}<small>${LETTRES[i]}</small></div>`).join('')}
+                <div>${barre(attendu, 'futur', `${e(attendu)} attendus`)}<small>À venir</small></div>
+              </div>
+              <div class="ca-mois-leg"><span><i class="passe"></i>Encaissé</span><span><i class="futur"></i>À venir : offres éditées et dossiers en banque</span></div>
+            </div>
+          </div>
+          <p class="ca-note">Frais de courtage : 1 % du montant du prêt.${c.sansPret ? ` ${c.sansPret} dossier${s(c.sansPret)} sans montant de prêt ${c.sansPret > 1 ? 'ne sont' : 'n’est'} pas compté${s(c.sansPret)}.` : ''}</p>
+        </section>`;
+}
+
+// L'entrée du bloc : montants qui défilent, anneau qui se remplit, barres qui montent.
+// Comme le reste de l'accueil, tout est d'abord posé à sa valeur finale : si ce
+// script ne part pas, les chiffres sont simplement là.
+function animerCA(root) {
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+  const bloc = root.querySelector('.ct-ca');
+  if (!bloc) return;
+  const anneaux = [...bloc.querySelectorAll('.ca-anneau circle[data-part]')];
+  const flux = [...bloc.querySelectorAll('.ca-flux i')];
+  const barres = [...bloc.querySelectorAll('.ca-b')];
+  anneaux.forEach(c => { c.style.transition = 'none'; c.style.strokeDasharray = `0 ${TOUR}`; });
+  flux.forEach(i => { i.style.transition = 'none'; i.style.width = '0'; });
+  barres.forEach(b => { b.style.transition = 'none'; b.style.height = '0'; });
+  void bloc.offsetWidth;
+  setTimeout(() => {
+    anneaux.forEach((c, n) => { c.style.transition = ''; c.style.transitionDelay = `${n ? 250 : 0}ms`; c.style.strokeDasharray = `${(TOUR * Number(c.dataset.part)) / 100} ${TOUR}`; });
+    flux.forEach((i, n) => { i.style.transition = ''; i.style.transitionDelay = `${n * 220}ms`; i.style.width = `${i.dataset.l}%`; });
+    barres.forEach((b, n) => { b.style.transition = ''; b.style.transitionDelay = `${300 + n * 60}ms`; b.style.height = `${b.dataset.h}%`; });
+    const compter = (el, fin, fmt) => {
+      const t0 = performance.now();
+      const pas = (t) => { const k = Math.min(1, (t - t0) / 1400); el.textContent = fmt(fin * (1 - Math.pow(1 - k, 3))); if (k < 1) requestAnimationFrame(pas); };
+      requestAnimationFrame(pas);
+    };
+    bloc.querySelectorAll('[data-euros]').forEach(el => compter(el, Number(el.dataset.euros) || 0, (n) => eur(Math.round(n))));
+    bloc.querySelectorAll('[data-pourcent]').forEach(el => compter(el, Number(el.dataset.pourcent) || 0, (n) => `${Math.round(n)} %`));
+  }, 350);
 }
 
 // L'entrée de l'accueil : cascade des cartes et compteurs qui comptent.
