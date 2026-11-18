@@ -7,7 +7,12 @@ import { scope } from '../data/scope.js';
 import { ACTIVITIES, ACTIVITY_KEYS } from '../data/schema.js';
 import { propertyMetrics, loanStatus } from '../data/finance.js';
 import {
-  chiffres, total, entonnoir, entonnoirParCohorte, structuresHorsEntonnoir, caMois, leadsMois, derniersMois, moisCle, moisPrecedent,
+  // ⚠ `entonnoir`, `entonnoirParCohorte` et `structuresHorsEntonnoir` NE SONT
+  // PLUS IMPORTÉS depuis le 18/11/2026 : leur unique lecteur, « Pipeline &
+  // conversion », a été retiré. Elles restent dans chiffres.js avec leurs
+  // contrôles — les retirer d'ici évite de croire que cet écran les dessine
+  // encore.
+  chiffres, total, caMois, leadsMois, derniersMois, moisCle, moisPrecedent,
   objectifs, objectif, objectifAnnuel, enregistrerObjectifs, ecoule, anneeEnCours, CLES_VISIBLES,
   rdvMois, signeesMois, periodePrecedente, moisEnCours, externe, exerciceDe,
   // Les quatre cartes ajoutées le 12/11/2026. Elles rendent `null` quand la
@@ -148,12 +153,6 @@ export const homePage = {
       const serieDe = (f) => moisSerie.map(m => f(m.cle));
       const caDu = (cle) => cles.reduce((s, k) => s + caMois(k, cle, deals), 0);
 
-      // Les deux taux se lisent sur l'entonnoir, c'est-à-dire sur les affaires nées
-      // pendant la période. Les calculer sur des populations différentes (RDV du mois
-      // ÷ leads du mois) donnerait des taux que l'entonnoir juste en dessous contredit.
-      // ⚠ CALCULÉ ICI, PAS DANS LE GABARIT : le gabarit en a besoin deux
-      // fois (choisir, puis afficher), et l'appeler deux fois relirait les
-      // deux tables pour rien.
       // ⚠ `enFiltre` COMMANDE TOUTE LA MOITIÉ HAUTE DE L'ÉCRAN (17/11/2026).
       // Élodie : « supprime pipeline & conversion, publicité meta et les
       // encadrés demandes, rendez-vous, affaires signées et ca facturé ht ».
@@ -182,20 +181,6 @@ export const homePage = {
       // aucun objectif n'est saisi. La frise des douze mois est le seul élément
       // qui sache absorber de la hauteur : sa présence EST la condition.
       const etire = journeeCollee && objectifs.includes('ob-frise');
-      const reseau = enFiltre ? carteReseau(cles) : '';
-      // ⚠ ET L'ENTONNOIR NE SE CALCULE MÊME PLUS EN VUE GROUPE : `entonnoir` et
-      // `comparaisonEntonnoir` relisent toutes les affaires, deux fois, et la
-      // vue groupe en porte le plus. Les valeurs de repli ci-dessous ne sont
-      // jamais lues — le gabarit n'évalue pas la branche — elles évitent
-      // seulement qu'une relecture distraite croie à un plantage.
-      const ent = enFiltre ? entonnoir(cles, r, deals) : [];
-      const jalon = (champ) => ent.find(x => x.champ === champ)?.n ?? null;
-      const recus = jalon('leads'), avecRdv = jalon('rdv'), conclus = jalon('signed');
-      const tauxRdv = recus && avecRdv !== null ? avecRdv / recus : null;
-      const tauxVente = avecRdv && conclus !== null ? conclus / avecRdv : null;
-      const entAvant = enFiltre ? comparaisonEntonnoir(cles, r, deals) : null;
-      const horsEntonnoir = enFiltre ? structuresHorsEntonnoir(cles) : [];
-      const parCohorte = enFiltre && entonnoirParCohorte(cles);
       const obj = cles.reduce((s, k) => s + objectif(k, r), 0);
       const sources = cles.map(k => chiffres(k, r, deals)).filter(x => x.source);
 
@@ -367,8 +352,8 @@ export const homePage = {
                   c'est celui du PLANNING. Un devis signé en novembre dont le
                   chantier démarre en janvier n'est pas un chantier de novembre.
                   `t.signees` reste ce qu'il est — des clients qui ont signé — et
-                  continue de nourrir l'entonnoir, le panier et le taux de
-                  transformation, qui parlent bien de signatures. */ ''}
+                  continue de nourrir le panier et le taux de transformation,
+                  qui parlent bien de signatures. */ ''}
             ${kpi(cles.length === 1 && cles[0] === 'rgd' ? 'Chantiers' : 'Affaires signées',
               chantiersDuMois(cles, r, t) ?? '—',
               evolution(chantiersDuMois(cles, periodePrecedente(r), t), chantiersDuMois(cles, r, t)),
@@ -380,90 +365,29 @@ export const homePage = {
               detailsPeriode(cles, r, 'ca'))}
           ` : ''}
 
-          ${/* ⚠ CE BLOC NE SORT PLUS QU'EN VUE FILTRÉE (17/11/2026), ET IL A
-                CHANGÉ DEUX FOIS LE MÊME JOUR — ce commentaire a dit l'inverse
-                pendant quelques heures, le relire évite de le recroire :
+          ${/* ⚠ « PIPELINE & CONVERSION » A ÉTÉ RETIRÉ LE 18/11/2026, et il n'en
+                reste rien nulle part : la vue groupe l'avait perdu la veille, et
+                ici il ne subsistait que comme REPLI, pour une structure dont la
+                carte du réseau n'avait rien à dire. Cette carte sort désormais
+                pour toutes les structures, même vide — le repli n'est donc plus
+                jamais atteint, et du code qu'on ne peut plus atteindre ment sur
+                ce que fait l'écran.
 
-                1. Le matin, le RÉSEAU D'APPORTEURS a pris la place de
-                   l'entonnoir dans les vues filtrées. Élodie : « j'ai
-                   l'impression que pipeline & conversion répète vraiment les
-                   données que l'on retrouve juste au-dessus ». L'entonnoir
-                   restait alors en vue groupe, comme cumul des structures.
-                2. L'après-midi, il en est parti aussi : « supprime pipeline &
-                   conversion ». La vue groupe n'a donc plus NI entonnoir NI
-                   réseau — « Qui tire le groupe » occupe la rangée.
+                ⚠ OÙ LE RETROUVER : le gabarit complet, ses cinq jalons, ses deux
+                taux de passage et leur évolution sont dans le commit d'avant
+                celui-ci. `entonnoir`, `entonnoirParCohorte` et
+                `structuresHorsEntonnoir` restent dans data/chiffres.js avec
+                leurs contrôles ; elles n'ont simplement plus de lecteur. Le jour
+                où l'on voudra ce dessin, il est prêt — ne pas le réécrire. */ ''}
+          ${enFiltre ? taille(carteReseau(cles), 'tb-x7') : ''}
 
-                ⚠ ET L'ENTONNOIR REVIENT SI LE RÉSEAU N'A RIEN À DIRE :
-                `carteReseau` rend '' hors RGD, et sans ce repli, filtrer sur
-                BTP ou Courtage laisserait un trou de 7 colonnes. C'est pour ce
-                cas-là seulement qu'il est encore écrit ici. */ ''}
-          ${!enFiltre ? '' : reseau ? taille(reseau, 'tb-x7') : `
-          <section class="card tb-x7">
-            <div class="card-head"><h2>Pipeline &amp; conversion</h2>
-              <span class="muted small">${parCohorte ? 'prospects arrivés sur la période, suivis jusqu\'à aujourd\'hui'
-                : cles.every(k => externe(k)?.direct) ? 'demandes, rendez-vous, devis envoyés et signés de la période'
-                : 'affaires créées sur la période'} · taux de passage</span></div>
-            ${!parCohorte && ent.some((s, i) => i && s.n > ent[i - 1].n) ? `<p class="muted small tb-hors">
-              <span class="ag-abs">Une étape dépasse la précédente : ces affaires sont arrivées avant la période. Un entonnoir ne se lit bien que sur une période assez longue.</span></p>` : ''}
-            ${horsEntonnoir.length ? `<p class="muted small tb-hors">${horsEntonnoir.map(k =>
-              `<span class="ag-src"><span class="dot" style="background:${ACTIVITIES[k].color}"></span>${esc(ACTIVITIES[k].label)}</span>`).join('')}
-              ${horsEntonnoir.length > 1 ? "n'apparaissent pas ici : leurs outils envoient" : "n'apparaît pas ici : son outil envoie"} des totaux, pas le détail des étapes.</p>` : ''}
-            ${/* ⚠ LES ÉTAPES SONT DES LIGNES, PAS DES BARRES PLEINES (05/11/2026,
-                  Élodie : « mettre le même tableau que l'on retrouve dans vue
-                  d'ensemble du tableau de bord RGD Renova »). Le nombre reste
-                  HORS de la barre : dans la barre, « Signés : 0 » n'aurait plus
-                  de place où s'écrire, et c'est justement la ligne qu'on regarde.
+          ${/* ⚠ LA PUB META RESTE DANS LES VUES FILTRÉES SEULEMENT, et c'est le
+                choix d'Élodie du 17/11 : en vue groupe, cumuler les dépenses de
+                quatre structures ne décide de rien.
 
-                  ⚠ LA BARRE SE MESURE SUR L'ÉTAPE LA PLUS HAUTE, pas sur la
-                  précédente : c'est elle qui donne la forme de l'entonnoir. */ ''}
-            <div class="tb-etapes">
-              ${ent.map((s, i) => {
-                const prev = i ? ent[i - 1].n : null;
-                const haut = Math.max(...ent.map(x => x.n)) || 1;
-                const large = Math.min(100, s.n / haut * 100);
-                const fin = i === ent.length - 1;
-                const taux = prev ? Math.round(s.n / prev * 100) : null;
-                return `<div class="tb-et">
-                  <div class="h"><b>${s.nom}</b>${taux === null ? (prev === null ? '' : '<span>—</span>') : taux > 100
-                    ? `<span title="Plus d'affaires à cette étape qu'à la précédente : elles viennent de mois antérieurs.">↑ ${taux} %</span>`
-                    : `<span>↓ ${taux} %</span>`}${s.partiel ? '<span title="Toutes les structures ne comptent pas cette étape.">partiel</span>' : ''}
-                    <em>${s.n}</em></div>
-                  <div class="tb-piste"><i data-large="${Math.max(large, s.n ? 4 : 0).toFixed(1)}"
-                    style="background:${degradeEtape(i, ent.length, fin)}"></i></div>
-                </div>`;
-              }).join('')}
-            </div>
-            <div class="tb-funnel-out">
-              <b>${recus && conclus !== null ? pct(conclus / recus) + ' %' : '—'}</b>
-              <span class="muted small">${recus && conclus !== null
-                ? `des leads reçus sur la période sont déjà signés${conclus ? ` · ${conclus} affaire${conclus > 1 ? 's' : ''}` : ''}`
-                : 'taux de transformation indisponible sur cette période'}</span>
-            </div>
-            ${/* ⚠ CES DEUX TAUX ÉTAIENT DEUX TUILES DU BANDEAU, et ils ont failli
-                  disparaître en passant de six indicateurs à quatre (12/11/2026).
-                  L'entonnoir au-dessus montre bien le passage d'une étape à
-                  l'autre, mais PAS son évolution : « 100 % » ne dit pas si c'était
-                  60 % le mois dernier. C'est cette comparaison-là qu'on reperd en
-                  supprimant une tuile, et elle revient ici — à sa place, sous
-                  l'entonnoir qu'elle commente.
-
-                  ⚠ EN POINTS, PAS EN POURCENTAGE : un taux qui passe de 40 % à
-                  60 % gagne 20 points, pas 50 %. */ ''}
-            <div class="tb-taux">
-              <div><span>Lead → RDV</span><b>${tauxRdv === null ? '—' : pct(tauxRdv) + ' %'}</b>${delta(ecart(entAvant?.tauxRdv, tauxRdv), true)}
-                <em>${tauxRdv === null ? (recus === 0 ? 'aucun lead sur la période' : 'étape non comptée')
-                  : `${avecRdv} RDV sur ${recus} lead${recus > 1 ? 's' : ''}`}</em></div>
-              <div><span>RDV → devis signé</span><b>${tauxVente === null ? '—' : pct(tauxVente) + ' %'}</b>${delta(ecart(entAvant?.tauxVente, tauxVente), true)}
-                <em>${tauxVente === null ? (avecRdv === 0 ? 'aucun RDV sur la période' : 'étape non comptée')
-                  : `${conclus} signé${conclus > 1 ? 's' : ''} sur ${avecRdv} RDV`}</em></div>
-            </div>
-          </section>`}
-
-          ${/* ⚠ LA PUB META RESTE DANS LES VUES FILTRÉES SEULEMENT. En vue
-                groupe elle n'avait de toute façon qu'un compte : RGD est la
-                seule structure qui achète de la publicité. Elle y occupait 5
-                colonnes à côté de l'entonnoir ; les deux partent ensemble, et
-                la rangée se referme toute seule. */ ''}
+                ⚠ ET ELLE SORT POUR LES TROIS STRUCTURES depuis le 18/11, même
+                sans campagne. Seule RGD en a relevé jusqu'ici ; les autres
+                voient la carte vide, qui se remplira d'elle-même. */ ''}
           ${enFiltre ? carteMeta(cles) : ''}
 
           ${/* ⚠ LA RANGÉE DU BAS A ÉTÉ VIDÉE LE 17/11/2026, en trois temps.
@@ -703,16 +627,6 @@ const comparaisonLabel = (p) => ({
 // Les taux se comparent en points de pourcentage, pas en pourcentage de pourcentage
 const ecart = (avant, apres) => (avant == null || apres == null) ? null : Math.round((apres - avant) * 100);
 
-// L'entonnoir de la période précédente, pour comparer les taux à population comparable
-function comparaisonEntonnoir(cles, r, deals) {
-  const e = entonnoir(cles, periodePrecedente(r), deals);
-  const j = (champ) => e.find(x => x.champ === champ)?.n ?? null;
-  const recus = j('leads'), rdv = j('rdv'), signes = j('signed');
-  return {
-    tauxRdv: recus && rdv !== null ? rdv / recus : null,
-    tauxVente: rdv && signes !== null ? signes / rdv : null,
-  };
-}
 // CA porté par les affaires nées ET signées dans la période — le chiffre qui va avec l'entonnoir
 const montantCohorte = (cles, r, deals) => deals
   .filter(d => cles.includes(d.activity) && d.status === 'won' && inRange(d.created_at, r))
@@ -1230,6 +1144,15 @@ function cartePatrimoine() {
 
 // Le nom de la période affichée, pour le bandeau. ⚠ Il dit l'EXERCICE quand la
 // structure en a un : « année 2026 » sur RGD Renova serait faux de trois mois.
+// Le nom à mettre dans une phrase. Une seule structure : son nom. Plusieurs :
+// une formule neutre, parce qu'énumérer quatre marques au milieu d'une phrase
+// la rend illisible.
+// Le tiret des cartes sans donnée : plus petit et plus pâle que le chiffre
+// qu'il remplace, pour qu'une absence ne pèse pas autant qu'une valeur.
+const STYLE_TIRET = 'style="font-size:30px;opacity:.55"';
+const nomDesStructures = (cles) => (cles.length === 1 && ACTIVITIES[cles[0]]
+  ? ACTIVITIES[cles[0]].label : 'ces structures');
+
 function periodeAffichee(state, cles) {
   if (state.periode === 'mois') {
     return new Date(state.mois + '-01T00:00:00').toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
@@ -1280,23 +1203,41 @@ const jourCourt = (iso) => (iso
  * Élodie a écarté une carte sur l'argent non rentré le même jour.
  */
 function carteArgent(cles, r, state) {
-  // ⚠ CARTE RÉSERVÉE À RGD : elle seule a des devis suivis dans le CRM. En vue
-  // groupe, la tête reste donc celle de RGD tandis que les deux tuiles portent
+  // ⚠ ELLE SORT POUR TOUTES LES STRUCTURES DEPUIS LE 18/11/2026, et elle
+  // était réservée à RGD. Élodie : « la présentation de la vue de rgd renova,
+  // je veux exactement la même pour btp expertise et la référence courtage ».
+  //
+  // ⚠ MAIS SEULE RGD A DES DEVIS SUIVIS DANS LE CRM, et ça, ça ne change pas :
+  // le reste à facturer se calcule sur `rgd_devis` et `rgd_devis_crm`. Ailleurs
+  // la tête affiche « — » et la ligne du dessous dit pourquoi. Écrire « 0 € »
+  // annoncerait qu'il ne reste rien à facturer : ce n'est pas la même chose que
+  // « on ne le sait pas encore ». Même règle pour l'encaissé, que seules les
+  // structures dont l'outil le dépose savent donner.
+  //
+  // ⚠ ELLE NE REND PLUS JAMAIS '' : la rangée du haut n'a donc plus à s'adapter,
+  // et `journeeCollee` est vrai partout où il y a le pilotage. C'est ce qui rend
+  // les trois vues identiques, y compris un mois sans la moindre signature.
+  //
+  // En vue groupe, la tête reste celle de RGD tandis que les deux tuiles portent
   // le cumul des structures — c'est ce que dit chaque libellé.
-  if (!cles.includes('rgd') || !scope.canRgd) return '';
-  const a = cheminDesSignes(cles, r);
+  const suitLesDevis = cles.includes('rgd') && scope.canRgd;
+  const a = suitLesDevis ? cheminDesSignes(cles, r) : null;
   const t = total(cles, r, scope.deals());
-  const encaisse = cumulMensuel(cles, r, 'encaisse') || 0;
-  if (!a && !t.ca && !encaisse) return '';
-  const reste = a ? a.reste : 0;
+  const encaisse = cumulMensuel(cles, r, 'encaisse');
+  const reste = a ? a.reste : null;
   const nb = a ? a.nb : 0;
   const pct = (l) => (l.montant ? Math.round(l.facture / l.montant * 100) : 0);
   return `<section class="card tb-argent">
     <h2>Le chemin de l'argent</h2>
     <span class="tb-sous">ce qui reste \u00e0 facturer, et l'argent du mois \u00b7 ${esc(periodeAffichee(state, cles))}</span>
-    <div class="tb-gros"><span class="tb-nb" data-n="${reste}" data-eur="1">${eur(reste)}</span></div>
-    <span class="tb-sous">${nb
-      ? `restant \u00e0 facturer sur ${nb} chantier${nb > 1 ? 's' : ''} sign\u00e9${nb > 1 ? 's' : ''} sur la p\u00e9riode`
+    ${/* ⚠ LE TIRET EST PLUS PETIT QUE LE CHIFFRE QU'IL REMPLACE : à 46 px,
+          un cadratin devient une barre pleine aussi lourde qu'un montant, et
+          l'œil la lit comme une valeur. Une absence doit peser moins. */ ''}
+    ${reste === null ? `<div class="tb-gros" ${STYLE_TIRET}>\u2014</div>`
+      : `<div class="tb-gros"><span class="tb-nb" data-n="${reste}" data-eur="1">${eur(reste)}</span></div>`}
+    <span class="tb-sous">${reste === null
+      ? `les devis de ${esc(nomDesStructures(cles))} ne sont pas encore suivis dans le CRM`
+      : nb ? `restant \u00e0 facturer sur ${nb} chantier${nb > 1 ? 's' : ''} sign\u00e9${nb > 1 ? 's' : ''} sur la p\u00e9riode`
       : 'aucun chantier sign\u00e9 sur la p\u00e9riode'}</span>
     ${/* ⚠ DEUX TUILES, PAS TROIS : `tb-flux` est une grille de trois colonnes
           dans app.css, qu'on ne touche pas (une autre session y travaille). */ ''}
@@ -1305,10 +1246,15 @@ function carteArgent(cles, r, state) {
         <span class="lb">Factur\u00e9</span>
         <b class="tb-nb" data-n="${t.ca}" data-eur="1">${eur(t.ca)}</b>
         <span class="ss">CA HT \u00e9mis \u00b7 tous chantiers confondus</span></div>
+      ${/* ⚠ « — » ET NON « 0 € » QUAND L'OUTIL NE DONNE PAS L'ENCAISSÉ :
+            `cumulMensuel` rend `null` pour une structure qui ne dépose pas ce
+            champ. Un zéro dirait « rien n'est rentré ». */ ''}
       <div class="tb-fx">
         <span class="lb">Encaiss\u00e9</span>
-        <b class="tb-nb" data-n="${encaisse}" data-eur="1">${eur(encaisse)}</b>
-        <span class="ss">r\u00e8glements re\u00e7us sur la p\u00e9riode</span></div>
+        ${encaisse === null ? '<b>\u2014</b>'
+          : `<b class="tb-nb" data-n="${encaisse}" data-eur="1">${eur(encaisse)}</b>`}
+        <span class="ss">${encaisse === null ? 'pas encore suivi pour cette structure'
+          : 'r\u00e8glements re\u00e7us sur la p\u00e9riode'}</span></div>
     </div>
     ${/* ⚠ LE DÉTAIL EST STYLÉ EN LIGNE : `tb-detail` est dessiné pour les
           cartes claires et disparaîtrait sur le dégradé. */ ''}
@@ -1425,17 +1371,6 @@ function phraseHero(state, cles) {
   const ex = cles.length === 1 ? exerciceDe(cles[0]) : null;
   return ex && ex.label.includes('–') ? `voici l'exercice ${ex.label}.` : `voici l'année ${new Date().getFullYear()}.`;
 }
-
-// L'entonnoir descend de l'indigo vers l'orange, en passant par le rose : la
-// couleur fait la pente, pas seulement la longueur des barres.
-const PENTE = ['#5B52F0', '#6B63F2', '#8B5BF0', '#C65AC8', '#FF4D8D', '#FF7A2D'];
-function degradeEtape(i, n, fin) {
-  const a = PENTE[Math.min(i, PENTE.length - 1)];
-  const b = PENTE[Math.min(i + 1, PENTE.length - 1)];
-  return fin && n <= PENTE.length ? `linear-gradient(90deg,${PENTE[PENTE.length - 1]},#FFB15C)`
-    : `linear-gradient(90deg,${a},${b})`;
-}
-
 /**
  * La grande carte chaude — la publicité Meta (17/11/2026, Élodie : « l'encadré
  * "ce qui dort" je voudrais le remplacer par les données de la publicité meta
@@ -1459,18 +1394,29 @@ function degradeEtape(i, n, fin) {
  * Cette carte prend sa place, et ne répète rien : le tableau de bord ne
  * parlait nulle part des apporteurs.
  *
- * ⚠ ELLE REND '' SI LE RÉSEAU N'A RIEN APPORTÉ, et le gabarit remet alors
- * l'entonnoir. Sans ça, filtrer sur BTP ou Courtage ferait disparaître les
- * deux cartes et laisserait un trou de 7 colonnes.
+ * ⚠ ELLE NE REND PLUS JAMAIS '' depuis le 18/11/2026 : sans registre
+ * d'apporteurs, elle sort dans son état vide (voir `carteReseauVide`). Le
+ * gabarit n'a donc plus de repli — « Pipeline & conversion », qui tenait ce
+ * rôle, a été retiré le même jour.
  *
  * ⚠ LE MONTANT ANNONCÉ EST CELUI DES DEVIS GAGNÉS, pas du CA encaissé :
  * `rgd_apports` porte le montant du devis au moment de l'apport. Dire
  * « de chiffre d'affaires » promettrait un rapprochement avec la facturation
  * que ces lignes ne permettent pas.
  */
+/**
+ * ⚠ LE REGISTRE DES APPORTEURS N'EXISTE QUE DANS L'ESPACE RGD RENOVA
+ * (`rgd_apporteurs`). Depuis le 18/11/2026 la carte sort quand même pour les
+ * autres structures, dans son état vide — Élodie veut la même présentation
+ * partout. Elle le dit au lieu de faire croire à un réseau à zéro.
+ *
+ * ⚠ ELLE NE SE REMPLIRA PAS TOUTE SEULE : il faudrait un registre
+ * d'apporteurs pour BTP Expertise et La Référence Courtage, qui n'existe pas
+ * encore. Signalé à Élodie le jour de la livraison.
+ */
 function carteReseau(cles) {
   const e = reseauApporteurs(cles);
-  if (!e) return '';
+  if (!e) return carteReseauVide(cles);
   const date = (d) => d ? new Date(d + 'T00:00:00').toLocaleDateString('fr-FR',
     { day: 'numeric', month: 'short', year: '2-digit' }) : '';
   const decides = e.gagnes + e.perdus;
@@ -1566,6 +1512,23 @@ function carteReseau(cles) {
  * `repeat(4)`, sinon quatre tuiles de 90 px sur un téléphone. L'inline passe
  * devant la règle mobile de `.tb-flux`, qui force une seule colonne.
  */
+function carteReseauVide(cles) {
+  const nom = esc(nomDesStructures(cles));
+  return `<section class="card">
+    <div class="card-head"><h2>Ce que le réseau rapporte</h2>
+      <span class="muted small">apporteurs d'affaires · depuis le début</span></div>
+    <div class="tb-gros" ${STYLE_TIRET}>—</div>
+    <span class="tb-sous">aucun apporteur d'affaires enregistré pour ${nom}</span>
+    <div class="tb-duo">
+      <div class="tb-du"><b>—</b><span>affaires gagnées</span></div>
+      <div class="tb-du"><b>—</b><span>des affaires tranchées</span></div>
+    </div>
+    <p class="muted small" style="margin:10px 0 0">Le registre des apporteurs vit
+      aujourd'hui dans l'espace RGD Renova. Cette carte se remplira le jour où
+      ${nom} en aura un.</p>
+  </section>`;
+}
+
 function carteGroupe(cles, r, deals, state) {
   if (cles.length < 2) return '';
   const l = cles
@@ -1603,9 +1566,16 @@ function carteGroupe(cles, r, deals, state) {
   </section>`;
 }
 
+/**
+ * ⚠ ELLE SORT MÊME SANS CAMPAGNE DEPUIS LE 18/11/2026, dans son état vide :
+ * même présentation pour les trois structures. Contrairement au réseau, celle-ci
+ * SE REMPLIRA toute seule — le relevé Meta range déjà ses lignes par structure
+ * (`meta_ads_periode.activity`). Le jour où BTP Expertise ou La Référence
+ * Courtage fera tourner une campagne, elle apparaît ici sans rien toucher.
+ */
 function carteMeta(cles) {
   const p = publicite(cles);
-  if (!p) return '';
+  if (!p) return carteMetaVide(cles);
   const virgule = (n, d = 1) => n.toLocaleString('fr-FR', { minimumFractionDigits: d, maximumFractionDigits: d });
   const bloc = (lb, val, ss) => `<div class="tb-fx"><span class="lb">${lb}</span>
     <b>${val}</b><span class="ss">${esc(ss)}</span></div>`;
@@ -1622,6 +1592,27 @@ function carteMeta(cles) {
         `${p.campagnes} campagne${p.campagnes > 1 ? 's' : ''}`)}
     </div>
     ${p.tauxLead != null ? `<p><b>${virgule(p.tauxLead * 100)} %</b> des clics laissent leurs coordonn\u00e9es.</p>` : ''}
+  </section>`;
+}
+
+function carteMetaVide(cles) {
+  const bloc = (lb, ss) => `<div class="tb-fx"><span class="lb">${lb}</span>
+    <b>—</b><span class="ss">${esc(ss)}</span></div>`;
+  // ⚠ `tb-x5` EST POSÉ ICI, PAS PAR `taille()` : cette carte n'est pas
+  // emballée au point d'appel, contrairement aux autres. L'oublier a coûté
+  // 5 colonnes aux vues BTP et Courtage — vu au relevé des rangées.
+  return `<section class="card tb-x5 tb-chaud">
+    <h2>Publicité Meta</h2>
+    <span class="tb-sous">aucune campagne relevée pour ${esc(nomDesStructures(cles))}</span>
+    <div class="tb-gros" ${STYLE_TIRET}>—</div>
+    <span class="tb-sous">dépensés en tout</span>
+    <div class="tb-flux">
+      ${bloc('Leads', 'coordonn\u00e9es re\u00e7ues')}
+      ${bloc('Par lead', 'd\u00e9pense \u00f7 leads')}
+      ${bloc('Clics', 'aucune campagne')}
+    </div>
+    <p>Les relevés Meta sont rangés par structure : dès qu'une campagne tourne
+      pour celle-ci, ses chiffres arrivent ici sans rien avoir à brancher.</p>
   </section>`;
 }
 
