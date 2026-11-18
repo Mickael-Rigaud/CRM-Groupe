@@ -166,11 +166,11 @@ export const courtageHomePage = {
           ${open.length ? '' : `<div class="ct-vide"><b>Aucune demande pour l’instant.</b>
             <span>Chaque simulation faite sur lareferencecourtage.fr arrive ici, dans « Nouveau lead », avec son verdict, ses chiffres et une tâche de rappel.</span></div>`}
           <div class="ct-etapes ct-etapes-cartes">${colonnes.map(({ s, cartes, somme }, n) => `
-            <div class="ct-etape" style="--n:${n}" data-col="${esc(s.key)}">
+            <div class="ct-etape ${GRANDES.includes(s.key) ? 'est-grande' : 'est-etroite'}" style="--n:${n}" data-col="${esc(s.key)}">
               <div class="ct-etape-tete"><b>${esc(s.label)}</b><span>${cartes.length}</span></div>
               <div class="ct-jauge"><i style="width:${Math.round((cartes.length / plusGrosse) * 100)}%"></i></div>
               <div class="ct-etape-somme">${somme ? eur(somme) : '—'}</div>
-              <div class="ct-etape-corps">${cartes.map(d => carteDemande(d, contactDe(d))).join('') || '<div class="ct-etape-vide">—</div>'}</div>
+              <div class="ct-etape-corps">${cartes.map(d => carteDemande(d, contactDe(d), { compacte: !GRANDES.includes(s.key) })).join('') || '<div class="ct-etape-vide">—</div>'}</div>
             </div>`).join('')}</div>
         </section>
 
@@ -239,7 +239,14 @@ export const courtageHomePage = {
 // un dossier saisi à la main sans budget montre ce qu'il a — le montant à financer.
 const PHRASE_FEU = { vert: 'Projet faisable', orange: 'Projet à optimiser', rouge: 'Projet à étudier' };
 const LIB_FEU = { vert: 'Feu vert', orange: 'Feu orange', rouge: 'Feu rouge' };
-function carteDemande(d, contact) {
+// ⚠ DEUX TAILLES DE CARTE (18/11/2026, Mickael, piste 3 retenue : la pipeline
+// doit tenir sur la largeur de l'écran). La carte entière dans « Nouveau lead »
+// et « Qualifié », là où l'on rappelle et où l'on juge la faisabilité ; une
+// carte compacte ensuite — feu, nom, projet, le prêt en gros, téléphone —,
+// le détail restant dans la fiche, à un clic.
+const GRANDES = ['lead', 'qualifie'];
+const TEL_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.57a1 1 0 0 1-.25 1z"/></svg>';
+function carteDemande(d, contact, { compacte = false } = {}) {
   const f = d.fields || {};
   const feu = feuDossier(d);
   const nom = contact ? [contact.first_name, contact.last_name].filter(Boolean).join(' ') : '';
@@ -249,10 +256,27 @@ function carteDemande(d, contact) {
   const aFinancer = Number(f.montant_financement) || 0;
   if (aFinancer && !chiffres.some(c => c.k === 'Prêt')) chiffres = [...chiffres, { k: 'À financer', v: eur(aFinancer) }];
   const tel = contact?.phone;
+  const avis = feu ? PHRASE_FEU[feu] : (estSimulation(d) ? 'Simulation reçue' : 'Saisi dans le CRM');
+  const titreFeu = feu ? `${LIB_FEU[feu]} — ${PHRASE_FEU[feu]}` : 'Sans feu : revenus à compléter';
+  const attributs = `data-deal="${esc(d.id)}" draggable="true" tabindex="0" role="button"
+      title="Glisser vers une autre étape, ou cliquer pour ouvrir"`;
+  if (compacte) {
+    const pret = chiffres.find(c => c.k === 'Prêt' || c.k === 'À financer');
+    return `
+    <article class="cts-carte ct-carte-pipe est-compacte ${feu ? 'est-' + feu : ''}" ${attributs}>
+      <span class="cts-feu" title="${esc(titreFeu)}"></span>
+      <div class="cts-carte-tete"><b>${esc(titre)}</b></div>
+      ${ou ? `<p class="cts-ou" title="${esc(ou)}">${esc(ou)}</p>` : ''}
+      ${pret ? `<div class="ct-pret"><em>${esc(pret.k)}</em><b>${esc(pret.v)}</b></div>` : ''}
+      <div class="cts-carte-pied">
+        <span class="cts-avis">${esc(avis)}</span>
+        ${tel ? `<a class="cts-appel est-rond" href="tel:${esc(tel)}" data-tel draggable="false" title="Appeler ${esc(tel)}" aria-label="Appeler">${TEL_SVG}</a>` : ''}
+      </div>
+    </article>`;
+  }
   return `
-    <article class="cts-carte ct-carte-pipe ${feu ? 'est-' + feu : ''}" data-deal="${esc(d.id)}" draggable="true" tabindex="0" role="button"
-      title="Glisser vers une autre étape, ou cliquer pour ouvrir">
-      <span class="cts-feu" title="${esc(feu ? `${LIB_FEU[feu]} — ${PHRASE_FEU[feu]}` : 'Sans feu : revenus à compléter')}"></span>
+    <article class="cts-carte ct-carte-pipe ${feu ? 'est-' + feu : ''}" ${attributs}>
+      <span class="cts-feu" title="${esc(titreFeu)}"></span>
       <div class="cts-carte-tete">
         <b>${esc(titre)}</b>
         ${estNouvelle(d) ? '<span class="cts-neuf">Nouveau</span>' : ''}
@@ -261,7 +285,7 @@ function carteDemande(d, contact) {
       ${ou ? `<p class="cts-ou">${esc(ou)}</p>` : ''}
       ${chiffres.length ? `<div class="cts-mini">${chiffres.slice(0, 3).map(c => `<span><em>${esc(c.k)}</em>${esc(c.v)}</span>`).join('')}</div>` : ''}
       <div class="cts-carte-pied">
-        <span class="cts-avis">${esc(feu ? PHRASE_FEU[feu] : (estSimulation(d) ? 'Simulation reçue' : 'Saisi dans le CRM'))}</span>
+        <span class="cts-avis">${esc(avis)}</span>
         ${tel ? `<a class="cts-appel" href="tel:${esc(tel)}" data-tel draggable="false">Appeler</a>` : ''}
       </div>
     </article>`;
