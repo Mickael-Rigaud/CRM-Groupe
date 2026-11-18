@@ -349,9 +349,23 @@ const FEUX_LIB = { vert: 'Feu vert', orange: 'Feu orange', rouge: 'Feu rouge' };
 // c'est le déclencheur `courtage_offre_rend_client` qui passe `contacts.type` à
 // « Client » (migration 20261118150000). L'écran applique la même règle sans
 // attendre de relire la fiche : la ligne change d'onglet au moment même où le
-// dossier passe à « Offre éditée ». À sens unique, comme en base.
-const estClient = (c) => c.type === 'Client'
-  || deals().some(d => d.contact_id === c.id && (d.stage === 'offre' || d.status === 'won'));
+// dossier passe à « Offre éditée ».
+//
+// ⚠ DANS LES DEUX SENS DEPUIS LE MÊME JOUR (Mickael : « pouvoir rebasculer le
+// client en prospect pour les étapes antérieures de l'offre éditée »). Un dossier
+// passé par l'offre puis revenu à une étape antérieure, ouvert, ramène la fiche en
+// Prospect — sauf autre dossier à l'offre ou gagné. Le passage par l'offre se lit
+// dans `stage_history` : un client saisi « Client » d'emblée, qui ouvre un nouveau
+// dossier, reste client (la base ne le déclasse pas non plus : rien n'a reculé).
+const aLOffre = (d) => d.stage === 'offre' || d.status === 'won';
+const revenuDeLOffre = (d) => d.status === 'open' && d.stage !== 'offre'
+  && (d.stage_history || []).some(h => h.stage === 'offre');
+const estClient = (c) => {
+  const siens = deals().filter(d => d.contact_id === c.id);
+  if (siens.some(aLOffre)) return true;
+  if (siens.some(revenuDeLOffre)) return false;
+  return c.type === 'Client';
+};
 
 // Le dossier de courtage d'un contact : l'ouvert le plus récent, sinon le plus récent.
 const dossierDe = (contactId) => {
