@@ -16,7 +16,7 @@ import { orgForm, openOrg } from './organisations.js';
 import { activityRowHtml, bindActivityRows, nextActivity } from './activity.js';
 import { coquilleEspace, poserEspace, kpiEspace, archiverFiche, supprimerDefinitivement, estActive } from './espace.js';
 import { vivierPage } from './vivier.js';
-import { estSimulation, feuDe, carteSimulation, estNouvelle } from './courtage-simulateur.js';
+import { estSimulation, feuDe, feuDossier, carteSimulation, estNouvelle } from './courtage-simulateur.js';
 import { nouveauProspectCourtage } from './courtage-nouveau.js';
 
 const KEY = 'courtage';
@@ -109,7 +109,12 @@ export const courtageHomePage = {
       const phrase = neuves.length
         ? `${neuves.length} demande${neuves.length > 1 ? 's' : ''} à rappeler.`
         : nouveaux.length ? `${nouveaux.length} lead${nouveaux.length > 1 ? 's' : ''} à qualifier.` : 'tout est à jour.';
-      const tuile = (cle, n, libelle, sous, href) => `<a class="ct-tuile ${cle}" href="${href}"><b data-compte="${n}">${n}</b><span>${libelle}</span><em>${sous}</em></a>`;
+      // ⚠ PLUS DE PAGE PIPELINE COMPLÈTE DEPUIS L'ESPACE (18/11/2026, Mickael : « juste
+      // la pipeline dans la vue d'ensemble me suffit »). Les tuiles qui y menaient
+      // descendent au bloc pipeline ; « nouveaux leads » ouvre les prospects.
+      const tuile = (cle, n, libelle, sous, href) => href
+        ? `<a class="ct-tuile ${cle}" href="${href}"><b data-compte="${n}">${n}</b><span>${libelle}</span><em>${sous}</em></a>`
+        : `<button type="button" class="ct-tuile ${cle}" data-defiler="ct-pipe"><b data-compte="${n}">${n}</b><span>${libelle}</span><em>${sous}</em></button>`;
       const contactDe = (d) => (d.contact_id ? db.byId('contacts', d.contact_id) : null);
       const plusGrosse = Math.max(1, ...colonnes.map(c => c.cartes.length));
 
@@ -131,10 +136,10 @@ export const courtageHomePage = {
               : 'Les simulations du site arrivent ici en direct'}</p>
           </div>
           <div class="ct-tuiles">
-            ${tuile('leads', nouveaux.length, 'nouveaux leads', 'à qualifier et à appeler', '#/pipeline/courtage')}
-            ${tuile('ouverts', open.length, 'dossiers ouverts', `${eur(pondere)} pondérés`, '#/pipeline/courtage')}
-            ${tuile('banque', banque.length, 'en banque', 'transmis et offres', '#/pipeline/courtage')}
-            ${tuile('relance', sansSuite.length, 'sans action', 'à relancer', '#/pipeline/courtage')}
+            ${tuile('leads', nouveaux.length, 'nouveaux leads', 'à qualifier et à appeler', '#/courtage/base')}
+            ${tuile('ouverts', open.length, 'dossiers ouverts', `${eur(pondere)} pondérés`)}
+            ${tuile('banque', banque.length, 'en banque', 'transmis et offres')}
+            ${tuile('relance', sansSuite.length, 'sans action', 'à relancer')}
           </div>
         </header>
 
@@ -152,7 +157,7 @@ export const courtageHomePage = {
             <div class="cts-liste">${simusOuvertes.slice(0, 6).map(d => carteSimulation(d, contactDe(d))).join('')
               || `<div class="ct-vide"><b>Aucune demande pour l’instant.</b>
                   <span>Chaque simulation faite sur lareferencecourtage.fr arrivera ici avec son verdict, ses chiffres et une tâche de rappel.</span></div>`}</div>
-            ${simusOuvertes.length > 6 ? `<a class="ct-plus" href="#/pipeline/courtage">Voir les ${simusOuvertes.length} demandes →</a>` : ''}
+            ${simusOuvertes.length > 6 ? `<a class="ct-plus" href="#/courtage/base">Voir les ${simusOuvertes.length} demandes →</a>` : ''}
           </section>
 
           <section class="ct-panneau ct-afaire">
@@ -163,10 +168,9 @@ export const courtageHomePage = {
           </section>
         </div>
 
-        <section class="ct-panneau ct-pipe">
+        <section class="ct-panneau ct-pipe" id="ct-pipe">
           <div class="ct-panneau-tete"><h2>Pipeline dossiers</h2>
             <span class="ct-compte">${eur(open.reduce((s, d) => s + (Number(d.amount) || 0), 0))} de commissions estimées</span>
-            <a class="ct-lien" href="#/pipeline/courtage">Page complète →</a>
           </div>
           <div class="ct-etapes">${colonnes.map(({ s, cartes, somme }, n) => `
             <div class="ct-etape" style="--n:${n}" data-col="${esc(s.key)}">
@@ -174,10 +178,11 @@ export const courtageHomePage = {
               <div class="ct-jauge"><i style="width:${Math.round((cartes.length / plusGrosse) * 100)}%"></i></div>
               <div class="ct-etape-somme">${somme ? eur(somme) : '—'}</div>
               <div class="ct-etape-corps">${cartes.map(d => `
-                <button type="button" class="ct-dossier ${feuDe(d) ? 'cts-' + feuDe(d) : ''}" data-deal="${d.id}" draggable="true" title="Glisser vers une autre étape, ou cliquer pour ouvrir">
+                <button type="button" class="ct-dossier ${feuDossier(d) ? 'cts-' + feuDossier(d) : ''}" data-deal="${d.id}" draggable="true" title="Glisser vers une autre étape, ou cliquer pour ouvrir">
                   <b>${esc(estSimulation(d) ? (contactDe(d) ? [contactDe(d).first_name, contactDe(d).last_name].filter(Boolean).join(' ') : d.title.split(' — ').pop()) : d.title)}</b>
                   <span>${esc(estSimulation(d) ? (d.fields?.projet || 'Simulateur') : dealParty(d))}</span>
                   ${d.amount ? `<em>${eur(d.amount)}</em>` : ''}
+                  ${feuDossier(d) ? `<span class="ct-faisa est-${feuDossier(d)}" title="${esc(TITRES_FEU[feuDossier(d)])}"><i></i>${esc(FEUX_LIB[feuDossier(d)])}</span>` : ''}
                 </button>`).join('') || '<div class="ct-etape-vide">—</div>'}</div>
             </div>`).join('')}</div>
         </section>
@@ -202,6 +207,8 @@ export const courtageHomePage = {
       });
       bindActivityRows(root, draw);
       root.querySelector('#ct-nouveau')?.addEventListener('click', () => nouveauProspectCourtage(draw));
+      root.querySelectorAll('[data-defiler]').forEach(b => b.onclick = () =>
+        root.querySelector('#' + b.dataset.defiler)?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
       // ⚠ LE PIPELINE DE L'ACCUEIL SE MANIPULE AU GLISSER (18/11/2026, Mickael :
       // « pouvoir glisser les dossiers d'une case à une autre »). Même geste et
       // même `moveStage` que la page Pipeline : l'historique d'étapes, la règle
@@ -334,7 +341,9 @@ const ligneDossier = (c, d) => {
   const total = nb(f.montant_projet) ?? nb(f.budget);
   const apport = nb(f.apport);
   const endet = nb(f.endettement);
-  const feu = d ? feuDe(d) : '';
+  // Le feu de TOUS les dossiers (18/11/2026) : celui du simulateur, sinon celui
+  // de l'endettement — `feuDossier` dans courtage-simulateur.js.
+  const feu = d ? feuDossier(d) : '';
   const ton = feu ? `est-${feu}` : endet === null ? '' : endet <= 35 ? 'est-vert' : endet <= 38 ? 'est-orange' : 'est-rouge';
   // Le prochain rendez-vous ou la prochaine action datée du dossier.
   const prochaine = d ? db.t('activities').filter(a => a.deal_id === d.id && !a.done && a.due_date)

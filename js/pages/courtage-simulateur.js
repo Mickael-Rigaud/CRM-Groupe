@@ -66,6 +66,20 @@ export const chiffresDe = (d) => {
   ].filter(c => c.v);
 };
 
+// ---------------------------------------------------------------- le feu d'un dossier
+// ⚠ TOUS LES DOSSIERS ONT UN FEU (18/11/2026, Mickael : « rajouter les feux rouge,
+// jaune et vert dans la pipeline et la base de données des prospects »). Une
+// demande du simulateur porte celui de son verdict ; un dossier saisi dans le CRM
+// le tire de son taux d'endettement, au repère des banques : vert jusqu'à 35 %,
+// jaune jusqu'à 38 %, rouge au-delà. Sans ce chiffre, pas de feu.
+// (La clé reste `orange`, celle du simulateur ; c'est la lumière du milieu.)
+export const feuDossier = (d) => {
+  const f = feuDe(d);
+  if (f) return f;
+  const e = nombre(d?.fields?.endettement);
+  if (e === null) return '';
+  return e <= 35 ? 'vert' : e <= 38 ? 'orange' : 'rouge';
+};
 // ---------------------------------------------------------------- la fiche
 // Le bloc « Le simulateur » de la fiche d'une affaire. Rien si l'affaire n'en vient pas.
 export function blocSimulateurFiche(d, { toujours = false } = {}) {

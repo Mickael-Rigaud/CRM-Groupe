@@ -10306,3 +10306,9 @@ td .pl-toque { color: #4f46e5; }
 .ct-dossier.en-main { opacity: .45; cursor: grabbing; }
 .ct-etape.survol { background: var(--lrc-orange-doux, #FFEAD1); border-color: var(--lrc-orange, #F4801C); box-shadow: inset 0 0 0 2px var(--lrc-orange-2, #FFA43D); }
 .ct-etape .ct-etape-corps { min-height: 40px; }
+/* Le feu colore aussi le liseré de la carte du pipeline : la règle de la charte
+   (`.ct-dossier { --f: azur }`) l'emportait sur `.ct-dossier.cts-*`. */
+.esp-app[data-espace="courtage"] .ct-dossier.cts-vert { --f: #2E8B57; }
+.esp-app[data-espace="courtage"] .ct-dossier.cts-orange { --f: #E38A12; }
+.esp-app[data-espace="courtage"] .ct-dossier.cts-rouge { --f: #D9483B; }
+.ct-dossier .ct-faisa { margin-top: 4px; font-size: 11.5px; }
