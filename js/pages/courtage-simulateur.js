@@ -145,26 +145,73 @@ export function alerteNomDiverge(d, contact) {
   </div>`;
 }
 
-// ---------------------------------------------------------------- le récapitulatif
-// Le texte complet que la page a composé, tel qu'il part par mail.
-// ⚠ IL NE S'AFFICHE PLUS COMME UNE VALEUR DE LIGNE (18/11/2026, Christophe :
-// « la ligne "ce qu'il a dit" sur le crm ne va pas du tout, j'ai toutes les
-// infos en mode brouillon »). C'est un document de trente lignes, avec ses
-// colonnes et ses séparateurs : coulé dans un `<b>` justifié, il devenait une
-// bouillie. Il est replié, et respecte ses retours à la ligne quand on l'ouvre.
-// Tout ce qu'il contient est par ailleurs rangé en lignes propres ci-dessus :
-// il ne sert plus qu'à relire la simulation mot pour mot.
-function blocRecap(f) {
-  // ⚠ `message` EST LE REPLI DES AFFAIRES D'AVANT LE 18/11/2026 : le
-  // récapitulatif y arrivait jusque-là. Le lire ici évite que la correction
-  // vide les fiches déjà enregistrées de ce qu'elles portaient.
-  const t = String(f.recap_simulateur || f.message || '').trim();
-  if (!t) return '';
-  return `<details class="cts-recap">
-    <summary>Le récapitulatif complet du simulateur</summary>
-    <pre>${esc(t)}</pre>
-  </details>`;
-}
+// ---------------------------------------------------------------- les lignes de la fiche
+// ⚠ UNE SEULE DÉFINITION POUR LES DEUX ORIGINES (18/11/2026, Christophe :
+// « je veux exactement la même chose dans la fiche prospect, formulaire et
+// simulateur du site internet »).
+//
+// Il y avait deux listes — une pour les demandes du simulateur, une pour les
+// dossiers saisis au téléphone — et elles avaient divergé : la première
+// montrait le budget et le prêt à taux zéro, la seconde l'adresse et la durée.
+// Le même dossier ne disait donc pas la même chose selon la porte par laquelle
+// il était entré. Deux listes à tenir, c'est une liste qui dérive.
+//
+// ⚠ CHAQUE LIGNE LIT LES DEUX ÉCRITURES D'UNE MÊME VALEUR. Le simulateur pose
+// `budget` (« 183 000 € », déjà écrit) ; le formulaire pose `montant_projet`
+// (un nombre). Pareil pour `emprunt` / `montant_financement`, et pour `projet`
+// / `objectif`. Les anciens dossiers gardent leurs clés, les nouveaux aussi :
+// c'est ici que les deux se rejoignent, et nulle part ailleurs.
+const lignesProjet = (f) => {
+  const fin = f.type_financement === 'Crédit professionnel' ? 'Financement professionnel' : f.type_financement;
+  return [
+    ['Financement', fin],
+    ['Projet', f.objectif || f.projet],
+    ['Type de bien', f.type_bien],
+    ['Où', [f.ville, f.region].filter(Boolean).join(' · ')],
+    ['Où en est-il', f.avancement],
+    ['Primo-accédant', f.primo],
+    ['Logement actuel', f.logement_actuel],
+    ['Travaux', euros(f.travaux) || f.travaux],
+  ].filter(([, v]) => v);
+};
+
+// L'ordre est celui d'un montage bancaire, pas celui du formulaire : ce qu'on
+// finance, avec quoi, ce qui entre, ce qui sort, qui emprunte.
+const lignesChiffres = (f) => {
+  const ptz = [f.ptz_statut, f.ptz_montant, f.ptz_zone ? `zone ${f.ptz_zone}` : ''].filter(Boolean).join(' · ');
+  return [
+    ['Budget', f.budget || euros(f.montant_projet)],
+    ['Apport', euros(f.apport) || f.apport],
+    ['Épargne restante', euros(f.epargne_restante) || f.epargne_restante],
+    ['Montant à financer', euros(f.montant_financement) || euros(f.emprunt)],
+    ['Revenus du foyer', mensuel(f.revenus_foyer)],
+    ['Autres revenus', mensuel(f.autres_revenus) || f.autres_revenus],
+    ['Revenus locatifs', mensuel(f.revenus_locatifs) || f.revenus_locatifs],
+    ['Crédits en cours', mensuel(f.credits_en_cours) || f.credits_en_cours],
+    ['Quels crédits', f.detail_credits],
+    ['Pension versée', mensuel(f.pension_versee) || f.pension_versee],
+    ['Loyer ou mensualité actuelle', mensuel(f.loyer_actuel) || f.loyer_actuel],
+    ['Durée souhaitée', f.duree],
+    ['Emprunteurs', f.emprunteurs],
+    // ⚠ `!= null` ET PAS UN TEST DE VÉRITÉ : « 0 enfant » est une réponse, et
+    // `'0'` comme `0` sont faux en JavaScript. Testés comme le reste, ils
+    // disparaissaient — la question paraissait non posée.
+    ['Enfants à charge', f.enfants_a_charge == null || f.enfants_a_charge === '' ? '' : String(f.enfants_a_charge)],
+    ['Emprunteur 1', f.emprunteur_1],
+    ['Emprunteur 2', f.emprunteur_2],
+    // Hors taux d'endettement : le simulateur l'estime à part, et un courtier
+    // qui lirait ce taux assurance comprise se tromperait.
+    ['Assurance estimée', f.assurance],
+    ['Prêt à taux zéro', ptz],
+  ].filter(([, v]) => v);
+};
+
+// Les trois chiffres en gros, en tête de « Les chiffres ».
+const calculsDe = (f) => [
+  ['Mensualité estimée', euros(f.mensualite)],
+  ['Taux d’endettement', pourcent(f.endettement)],
+  ['Capacité d’emprunt', euros(f.capacite)],
+].filter(([, v]) => v);
 
 // ---------------------------------------------------------------- la fiche
 // Le bloc « Le simulateur » de la fiche d'une affaire. Rien si l'affaire n'en vient pas.
@@ -184,64 +231,21 @@ export function blocSimulateurFiche(d, { toujours = false, contact = null } = {}
   // chiffres » (calculs, budget, apport, emprunteurs) —, et ce qu'on a complété
   // par « Modifier » se fond dans les deux parties au lieu de s'empiler dessous.
   if (toujours) {
-    const fin = f.type_financement === 'Crédit professionnel' ? 'Financement professionnel' : f.type_financement;
     const n = (k) => `<span class="lrc-num-partie">${k}</span>`;
     return `
     <section class="rgdf-bloc cts-fiche lrc-partie ${F ? F.classe : ''}">
       <h3>${n(1)}Le projet <span class="cts-source">via le simulateur</span></h3>
       ${alerteNomDiverge(d, contact)}
-      <div class="cts-lignes">
-        ${ligne('Financement', fin)}
-        ${ligne('Projet', f.objectif || f.projet)}
-        ${ligne('Type de bien', f.type_bien)}
-        ${ligne('Où', [f.ville, f.region].filter(Boolean).join(' · '))}
-        ${ligne('Où en est-il', f.avancement)}
-        ${ligne('Primo-accédant', f.primo)}
-        ${ligne('Travaux', f.travaux)}
-      </div>
+      <div class="cts-lignes">${lignesProjet(f).map(([k, x]) => ligne(k, x)).join('')}</div>
       ${puces('Ce qui bloque', liste(f.blocages), 'est-bloque')}
       ${puces('Les leviers', liste(f.leviers), 'est-levier')}
-      ${blocRecap(f)}
     </section>
     <section class="rgdf-bloc cts-fiche lrc-partie">
       <h3>${n(2)}Les chiffres</h3>
       ${verdictFeu(d)}
-      <div class="cts-chiffres">
-        ${[
-          { k: 'Mensualité estimée', v: euros(f.mensualite) },
-          { k: 'Taux d’endettement', v: pourcent(f.endettement) },
-          { k: 'Capacité d’emprunt', v: euros(f.capacite) },
-        ].filter(c => c.v).map(c => `<div><b>${esc(c.v)}</b><span>${esc(c.k)}</span></div>`).join('')}
-      </div>
-      <!-- ⚠ L'ORDRE EST CELUI D'UN MONTAGE BANCAIRE, pas celui du formulaire :
-           ce qu'on finance, avec quoi, ce qui entre, ce qui sort, qui emprunte.
-           Les lignes ajoutées le 18/11/2026 (épargne, autres revenus, pension,
-           logement actuel, enfants, assurance, détail du crédit) étaient dans
-           le mail interne depuis toujours et manquaient ici : c'est ce que
-           Christophe ne « retrouvait pas » entre le simulateur et le CRM. -->
-      <div class="cts-lignes">
-        ${ligne('Budget', f.budget || euros(f.montant_projet))}
-        ${ligne('Apport', euros(f.apport) || f.apport)}
-        ${ligne('Épargne restante', euros(f.epargne_restante) || f.epargne_restante)}
-        ${ligne('Montant à financer', euros(f.montant_financement) || euros(f.emprunt))}
-        ${ligne('Revenus du foyer', mensuel(f.revenus_foyer))}
-        ${ligne('Autres revenus', f.autres_revenus)}
-        ${ligne('Revenus locatifs', f.revenus_locatifs)}
-        ${ligne('Crédits en cours', mensuel(f.credits_en_cours) || f.credits_en_cours)}
-        ${ligne('Détail du crédit', f.detail_credits)}
-        ${ligne('Pension versée', f.pension_versee)}
-        ${ligne('Logement actuel', f.logement_actuel)}
-        ${ligne('Loyer actuel', mensuel(f.loyer_actuel) || f.loyer_actuel)}
-        ${ligne('Durée souhaitée', f.duree)}
-        ${ligne('Emprunteurs', f.emprunteurs)}
-        ${ligne('Enfants à charge', f.enfants_a_charge)}
-        ${ligne('Emprunteur 1', f.emprunteur_1)}
-        ${ligne('Emprunteur 2', f.emprunteur_2)}
-        <!-- Hors taux d'endettement : le simulateur l'estime à part, et un
-             courtier qui lirait ce taux assurance comprise se tromperait. -->
-        ${ligne('Assurance estimée', f.assurance)}
-        ${ligne('Prêt à taux zéro', ptz)}
-      </div>
+      <div class="cts-chiffres">${calculsDe(f).map(([k, x]) =>
+        `<div><b>${esc(x)}</b><span>${esc(k)}</span></div>`).join('')}</div>
+      <div class="cts-lignes">${lignesChiffres(f).map(([k, x]) => ligne(k, x)).join('')}</div>
     </section>`;
   }
   return `
@@ -289,7 +293,6 @@ export function blocSimulateurFiche(d, { toujours = false, contact = null } = {}
         ${ligne('Assurance estimée', f.assurance)}
         ${ligne('Prêt à taux zéro', ptz)}
       </div>
-      ${blocRecap(f)}
     </section>${complements}`;
 }
 
@@ -328,43 +331,38 @@ export function carteSimulation(d, contact) {
 // pour qu'on retrouve sur la fiche ce qu'on y a saisi, au même endroit.
 // ⚠ C'EST LA FICHE DU DOSSIER QUI S'OUVRE DES DEUX CÔTÉS (18/11/2026) : la
 // pipeline et la base de données montrent donc exactement ce bloc.
-// Les avancements du formulaire du CRM (ceux du simulateur sont libellés autrement).
-const AVANCEMENTS_CRM = ['Se renseigne', 'Cherche activement', 'Offre faite', 'Offre acceptée', 'Compromis signé'];
 export function blocProjetSaisi(d, { simulation = false, toujours = false } = {}) {
   if (!d || d.activity !== 'courtage') return '';
   const f = d.fields || {};
-  const fin = f.type_financement === 'Crédit professionnel' ? 'Financement professionnel' : f.type_financement;
-  const lignes = [
-    // Pour une simulation, le projet, la ville et le budget sont déjà dans le bloc du simulateur.
-    ['Financement', fin], ['Projet', simulation ? f.objectif : (f.objectif || f.projet)], ['Où en est-il', AVANCEMENTS_CRM.includes(f.avancement) || !simulation ? f.avancement : ''],
-    ['Ville du projet', simulation ? '' : f.ville], ['Ce qu’il a dit', f.message],
-  ].filter(([, v]) => v);
-  const montants = [
-    ['Montant du projet', euros(f.montant_projet)], ['Apport', euros(f.apport)],
-    ['Montant à financer', euros(f.montant_financement)], ['Revenus du foyer', mensuel(f.revenus_foyer)],
-    ['Crédits en cours', mensuel(f.credits_en_cours)], ['Durée', f.duree], ['Emprunteurs', f.emprunteurs],
-  ].filter(([, v]) => v);
+  // ⚠ LES MÊMES LIGNES QUE POUR UNE SIMULATION, à la lettre : c'est la demande
+  // du 18/11/2026. Ce bloc avait sa propre liste, plus courte de douze lignes,
+  // et les deux avaient dérivé l'une de l'autre.
+  //
+  // `simulation` ne retire plus rien : cet appel-là sert à compléter le bloc du
+  // simulateur, et masquer « le projet, la ville, le budget » pour éviter une
+  // répétition faisait disparaître les réponses saisies ensuite à la main.
+  // Dans la fiche en quatre parties, les deux blocs ne coexistent jamais.
+  const lignes = lignesProjet(f);
+  const montants = lignesChiffres(f);
   const e = nombre(f.endettement);
   const ton = e === null ? '' : e <= 35 ? 'est-vert' : e <= 38 ? 'est-orange' : 'est-rouge';
-  const calc = simulation ? [] : [
-    ['Mensualité estimée', euros(f.mensualite), ''], ['Taux d’endettement', pourcent(f.endettement), ton],
-    ['Capacité d’emprunt', euros(f.capacite), ''],
-  ].filter(([, v]) => v);
+  const calc = simulation ? [] : calculsDe(f).map(([k, v]) => [k, v, k === 'Taux d’endettement' ? ton : '']);
   // `toujours` : la fiche en quatre parties montre « Le projet » et « Les
   // chiffres » même vides, avec une invitation à compléter (18/11/2026).
   if (!toujours && !lignes.length && !montants.length && !calc.length) return '';
   const num = (n) => (toujours ? `<span class="lrc-num-partie">${n}</span>` : '');
   const vide = '<p class="rgdf-rien lrc-a-completer">À compléter avec « Modifier ».</p>';
+  const rang = ([k, v]) => `<div class="cts-ligne"><span>${esc(k)}</span><b>${esc(v)}</b></div>`;
   return `
     ${lignes.length || toujours ? `<section class="rgdf-bloc cts-fiche lrc-partie">
       <h3>${num(1)}Le projet</h3>
-      ${lignes.length ? `<div class="cts-lignes">${lignes.map(([k, v]) => `<div class="cts-ligne"><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join('')}</div>` : vide}
+      ${lignes.length ? `<div class="cts-lignes">${lignes.map(rang).join('')}</div>` : vide}
     </section>` : ''}
     ${montants.length || calc.length || toujours ? `<section class="rgdf-bloc cts-fiche lrc-partie">
       <h3>${num(2)}Les chiffres</h3>
       ${toujours ? verdictFeu(d) : ''}
       ${!montants.length && !calc.length ? vide : ''}
       ${calc.length ? `<div class="cts-chiffres">${calc.map(([k, v, t]) => `<div class="${t}"><b>${esc(v)}</b><span>${esc(k)}</span></div>`).join('')}</div>` : ''}
-      <div class="cts-lignes">${montants.map(([k, v]) => `<div class="cts-ligne"><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join('')}</div>
+      <div class="cts-lignes">${montants.map(rang).join('')}</div>
     </section>` : ''}`;
 }

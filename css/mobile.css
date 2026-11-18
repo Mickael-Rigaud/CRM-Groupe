@@ -596,3 +596,27 @@
   -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 .pl-barre.attrapee, .pl-frise-barre.attrapee {
   transform: translateY(-2px) scale(1.04); box-shadow: 0 10px 22px -8px rgba(15, 23, 42, .45); z-index: 6; }
+
+/* ------------------------------------------------------------------ *
+ * 16 PX SUR TÉLÉPHONE, ET CE N'EST PAS UN CHOIX DE TAILLE
+ * ------------------------------------------------------------------ *
+ * Sous 16 px, Safari sur iPhone AGRANDIT la page dès qu'un champ prend
+ * le focus, puis la laisse décalée : on dézoome à la main entre chaque
+ * ligne. Le formulaire « + Prospect » du courtage comptait seize champs
+ * à 14 px après l'avoir aligné sur les questions du simulateur
+ * (18/11/2026) — c'est un dossier qui se saisit au téléphone, souvent
+ * depuis un téléphone.
+ *
+ * ⚠ LA RÈGLE VISE TOUS LES CHAMPS DU CRM, pas seulement ceux du
+ * courtage : un formulaire ajouté demain ne doit pas retomber dedans.
+ * Même leçon que sur le site de l'agence le matin même.
+ * ⚠ Et elle est dans `mobile.css`, qui se charge APRÈS `app.css` : une
+ * règle posée là-bas se ferait battre par un sélecteur plus précis. */
+@media (max-width: 760px) {
+  input[type="text"], input[type="tel"], input[type="email"],
+  input[type="number"], input[type="search"], input[type="date"],
+  input[type="time"], input:not([type]), select, textarea,
+  .lrc-saisie input, .lrc-champ input, .lrc-champ textarea, .lrc-champ select {
+    font-size: 16px;
+  }
+}

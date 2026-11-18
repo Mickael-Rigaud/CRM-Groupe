@@ -735,7 +735,19 @@ export function openDeal(id, onChange) {
             // La partie « Le rendez-vous » : le prochain en grand, puis le reste.
             const aVenir = db.t('activities').filter(a => a.deal_id === id && !a.done)
               .sort((x, y) => (String(x.due_date || '9') + (x.due_time || '')).localeCompare(String(y.due_date || '9') + (y.due_time || '')));
-            const prochain = aVenir.find(a => a.type === 'rdv') || aVenir[0];
+            // ⚠ UNE TÂCHE D'APPEL N'EST PAS UN RENDEZ-VOUS (18/11/2026,
+            // Christophe : « tu as calé un rendez-vous sur la fiche projet mais
+            // aucun rendez-vous n'a été calé, d'où tu sors ça ? »).
+            // Le repli `|| aVenir[0]` affichait la PREMIÈRE action à venir en
+            // grand, sous le titre « Le rendez-vous ». Or toute demande entrante
+            // reçoit automatiquement une tâche « Appeler le prospect (lead
+            // entrant) » datée du lendemain (`intake_lead_v2`) : chaque dossier
+            // annonçait donc un rendez-vous que personne n'avait pris, à une
+            // date qui n'avait été convenue avec personne. Un rendez-vous est
+            // un engagement vis-à-vis du prospect ; l'inventer est pire que ne
+            // rien afficher. Sans `type === 'rdv'`, le bloc dit qu'il n'y en a
+            // pas — et la tâche d'appel reste, plus bas, dans les actions.
+            const prochain = aVenir.find(a => a.type === 'rdv');
             const quand = prochain?.due_date
               ? new Date(prochain.due_date + 'T12:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }) : '';
             return `<section class="rgdf-bloc lrc-partie">

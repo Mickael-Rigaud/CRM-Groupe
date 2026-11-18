@@ -58,6 +58,16 @@ const OBJECTIFS = () => ACTIVITIES[KEY].fields.find(f => f.key === 'objectif')?.
 const AVANCEMENTS = ['Se renseigne', 'Cherche activement', 'Offre faite', 'Offre acceptée', 'Compromis signé'];
 const DUREES = ['15 ans', '20 ans', '25 ans'];
 const EMPRUNTEURS = ['Seul', 'À deux'];
+// ⚠ LES LIBELLÉS SONT CEUX DU SIMULATEUR, relevés dans ses propres tables de
+// traduction (`NB` et `LG` dans la page) et non réécrits de mémoire
+// (18/11/2026, Christophe : « je veux exactement la même chose dans la fiche
+// prospect, formulaire et simulateur du site internet »). Une même réponse
+// doit s'écrire pareil qu'elle vienne du site ou du téléphone : « Appart.
+// neuf » d'un côté et « Appartement neuf » de l'autre, et plus aucun filtre
+// ni aucun comptage ne les réunit.
+const TYPES_BIEN = ['Logement ancien', 'Appartement neuf', 'Terrain + construction', 'Autre'];
+const LOGEMENTS = ['Locataire', 'Propriétaire', 'Hébergé à titre gratuit', 'Logé par l’employeur'];
+const OUI_NON = ['Oui', 'Non'];
 // La provenance : le libellé dit à l'écran, puis le canal du CRM qu'il range.
 const ORIGINES = [
   ['Site internet', 'globe', 'Site internet direct'],
@@ -85,6 +95,23 @@ const ETAPES = [
 
 const jourLocal = (d) => d.toLocaleDateString('sv-SE');
 const nombre = (v) => { const n = Number(String(v ?? '').replace(/\s/g, '').replace(',', '.')); return Number.isFinite(n) && n > 0 ? n : null; };
+// ⚠ UN CHAMP `number` N'AFFICHE RIEN SI SA VALEUR N'EST PAS UN NOMBRE, et ne
+// le dit pas. Le simulateur écrit « 10 000 € » ou « 400 € /mois » : sans cette
+// conversion, rouvrir un dossier venu du site montrait des cases vides, et
+// « Enregistrer » effaçait pour de bon ce qu'il avait apporté.
+// Rend '' pour « aucun », « Aucune » ou « — » : ce sont des absences.
+// ⚠ `zeroCompte` N'EST PAS UN DÉTAIL : pour un montant, 0 est une absence
+// (pas de pension versée) et la case doit rester vide ; pour les personnes à
+// charge, « 0 enfant » EST la réponse. Éprouvé : sans ce drapeau, rouvrir un
+// dossier venu du site montrait « Personnes à charge » vide alors que le
+// visiteur avait répondu, et la question paraissait restée sans réponse.
+const nombreTxt = (v, zeroCompte = false) => {
+  const brut = String(v ?? '').replace(/[^\d,.-]/g, '').replace(',', '.');
+  if (!brut) return '';
+  const n = Number(brut);
+  if (!Number.isFinite(n)) return '';
+  return (n !== 0 || zeroCompte) ? String(n) : '';
+};
 const telNet = (t) => String(t || '').replace(/\D/g, '').replace(/^33/, '0');
 
 // ⚠ LE MÊME FORMULAIRE CRÉE ET MODIFIE (18/11/2026, Mickael : « je voudrais
@@ -110,6 +137,27 @@ export function nouveauProspectCourtage(apres, { dealId = null, retour = null, e
     montant_projet: txt(f0.montant_projet), apport: txt(typeof f0.apport === 'number' ? f0.apport : ''), montant_financement: txt(f0.montant_financement),
     duree: DUREES.includes(f0.duree) ? f0.duree : '', emprunteurs: EMPRUNTEURS.includes(f0.emprunteurs) ? f0.emprunteurs : '',
     revenus_foyer: txt(f0.revenus_foyer), credits_en_cours: txt(f0.credits_en_cours), ville_projet: txt(f0.ville),
+    // 18/11/2026 — les questions que le simulateur posait et que le formulaire
+    // ignorait. Elles portent ICI les clés que le simulateur pose déjà sur
+    // l'affaire : saisie au téléphone ou remplie sur le site, la fiche montre
+    // la même ligne, au même endroit.
+    // ⚠ `nombreTxt` et non `txt` : le simulateur écrit ses montants en toutes
+    // lettres (« 10 000 € », « 400 € /mois »). Posés tels quels dans un champ
+    // `number`, ils s'affichent VIDES — le navigateur refuse une valeur qui
+    // n'est pas un nombre, sans erreur. Modifier un dossier venu du site
+    // aurait alors effacé ce qu'il avait apporté.
+    type_bien: TYPES_BIEN.includes(f0.type_bien) ? f0.type_bien : '',
+    primo: OUI_NON.includes(f0.primo) ? f0.primo : '',
+    travaux: nombreTxt(f0.travaux),
+    epargne_restante: nombreTxt(f0.epargne_restante),
+    autres_revenus: nombreTxt(f0.autres_revenus),
+    revenus_locatifs: nombreTxt(f0.revenus_locatifs),
+    pension_versee: nombreTxt(f0.pension_versee),
+    detail_credits: txt(f0.detail_credits),
+    logement_actuel: LOGEMENTS.includes(f0.logement_actuel) ? f0.logement_actuel : '',
+    loyer_actuel: nombreTxt(f0.loyer_actuel),
+    enfants_a_charge: nombreTxt(f0.enfants_a_charge, true),
+    emprunteur_1: txt(f0.emprunteur_1), emprunteur_2: txt(f0.emprunteur_2),
     first_name: txt(fiche?.first_name), last_name: txt(fiche?.last_name === '—' ? '' : fiche?.last_name),
     phone: txt(fiche?.phone), email: txt(fiche?.email), address: txt(fiche?.address), postal_code: txt(fiche?.postal_code), city: txt(fiche?.city),
     canal: txt(fiche?.channel || dossier?.channel), apporteur: txt(dossier?.referrer_org_id), message: txt(f0.message),
@@ -149,8 +197,9 @@ export function nouveauProspectCourtage(apres, { dealId = null, retour = null, e
       || (t.length >= 9 && telNet(c.phone) === t)) || null;
   };
   const reponses = (i) => {
-    const k = [['type_financement', 'objectif', 'avancement'],
-      ['montant_projet', 'apport', 'revenus_foyer', 'duree', 'emprunteurs'],
+    const k = [['type_financement', 'objectif', 'type_bien', 'avancement', 'primo'],
+      ['montant_projet', 'apport', 'revenus_foyer', 'credits_en_cours', 'duree',
+        'emprunteurs', 'logement_actuel', 'emprunteur_1'],
       ['first_name', 'last_name', 'phone', 'email', 'canal'],
       ['contact']][i];
     return k.filter(x => String(v[x] || '').trim()).length + '/' + k.length;
@@ -228,21 +277,45 @@ export function nouveauProspectCourtage(apres, { dealId = null, retour = null, e
     if (etape === 0) return `
       <h4>Le financement</h4>${tuiles('type_financement', FINANCEMENTS, v.type_financement)}
       <h4>Pour quel projet ?</h4>${puces('objectif', OBJECTIFS(), v.objectif)}
-      <h4>Où en est-il ?</h4>${puces('avancement', AVANCEMENTS, v.avancement)}`;
+      <h4>Quel type de bien ?</h4>${puces('type_bien', TYPES_BIEN, v.type_bien)}
+      <h4>Où en est-il ?</h4>${puces('avancement', AVANCEMENTS, v.avancement)}
+      <div class="lrc-duo">
+        <div><h4>Primo-accédant ?</h4>${puces('primo', OUI_NON, v.primo)}</div>
+        <div><h4>Son logement actuel</h4>${puces('logement_actuel', LOGEMENTS, v.logement_actuel)}</div>
+      </div>`;
     if (etape === 1) return `
       <div class="lrc-grille est-trois">
         ${champ('montant_projet', 'Montant du projet', { type: 'number', ph: '300 000', suffixe: '€' })}
         ${champ('apport', 'Apport', { type: 'number', ph: '30 000', suffixe: '€' })}
         ${champ('montant_financement', 'Montant à financer', { type: 'number', ph: '270 000', suffixe: '€' })}
-        ${champ('revenus_foyer', 'Revenus nets du foyer', { type: 'number', ph: '4 500', suffixe: '€ / mois' })}
-        ${champ('credits_en_cours', 'Crédits en cours', { type: 'number', ph: '0', suffixe: '€ / mois' })}
+        ${champ('travaux', 'Travaux à prévoir', { type: 'number', ph: '0', suffixe: '€' })}
+        ${champ('epargne_restante', 'Épargne restante', { type: 'number', ph: '10 000', suffixe: '€' })}
         ${champ('ville_projet', 'Ville du projet', { ph: 'Nice' })}
       </div>
       <p class="lrc-lien">Les trois montants se tiennent : projet = apport + montant à financer. Changez-en un, les autres suivent.</p>
+      <h4>Ce qui entre</h4>
+      <div class="lrc-grille est-trois">
+        ${champ('revenus_foyer', 'Revenus nets du foyer', { type: 'number', ph: '4 500', suffixe: '€ / mois' })}
+        ${champ('autres_revenus', 'Autres revenus', { type: 'number', ph: '0', suffixe: '€ / mois' })}
+        ${champ('revenus_locatifs', 'Revenus locatifs', { type: 'number', ph: '0', suffixe: '€ / mois' })}
+      </div>
+      <h4>Ce qui sort</h4>
+      <div class="lrc-grille est-trois">
+        ${champ('credits_en_cours', 'Crédits en cours', { type: 'number', ph: '0', suffixe: '€ / mois' })}
+        ${champ('pension_versee', 'Pension versée', { type: 'number', ph: '0', suffixe: '€ / mois' })}
+        ${champ('loyer_actuel', 'Loyer ou mensualité actuelle', { type: 'number', ph: '0', suffixe: '€ / mois' })}
+      </div>
+      ${champ('detail_credits', 'Quels crédits ?', { ph: 'Crédit auto, crédit conso…', large: true })}
+      <h4>Qui emprunte</h4>
+      <div class="lrc-grille">
+        ${champ('emprunteur_1', 'Emprunteur 1', { ph: '35 ans, CDI, 3 000 € / mois' })}
+        ${champ('emprunteur_2', 'Emprunteur 2', { ph: 'Si le projet se fait à deux' })}
+      </div>
       <div class="lrc-duo">
         <div><h4>Durée souhaitée</h4>${puces('duree', DUREES, v.duree)}</div>
         <div><h4>Emprunteurs</h4>${puces('emprunteurs', EMPRUNTEURS, v.emprunteurs)}</div>
       </div>
+      ${champ('enfants_a_charge', 'Personnes à charge (enfants)', { type: 'number', ph: '0' })}
       <div class="lrc-calcul" id="lrc-calcul">${panneau()}</div>`;
     if (etape === 2) {
       const d = doublon();
@@ -395,6 +468,25 @@ export function nouveauProspectCourtage(apres, { dealId = null, retour = null, e
         mensualite: k.mens, endettement: k.endet, capacite: k.capa, credits_en_cours: nombre(v.credits_en_cours),
         avancement: v.avancement, duree: v.duree, emprunteurs: v.emprunteurs,
         revenus_foyer: nombre(v.revenus_foyer), ville: v.ville_projet.trim(), message: v.message.trim(),
+        // 18/11/2026 — les mêmes clés que celles posées par le simulateur
+        // (fonction `simulateur-courtage`), pour que la fiche n'ait qu'une
+        // ligne par question, d'où que vienne la réponse.
+        // ⚠ CHACUNE DOIT FIGURER DANS `fn_fields_whitelist` : une clé qui n'y
+        // est pas est écartée sans la moindre erreur. Elles y sont toutes
+        // depuis la migration 20261118193000.
+        type_bien: v.type_bien, primo: v.primo, travaux: nombre(v.travaux),
+        epargne_restante: nombre(v.epargne_restante),
+        autres_revenus: nombre(v.autres_revenus),
+        revenus_locatifs: nombre(v.revenus_locatifs),
+        pension_versee: nombre(v.pension_versee),
+        detail_credits: v.detail_credits.trim(),
+        logement_actuel: v.logement_actuel,
+        loyer_actuel: nombre(v.loyer_actuel),
+        // ⚠ `nombre()` REFUSE ZÉRO (il ne garde que les valeurs > 0), et « 0
+        // enfant » est une réponse, pas une absence de réponse. D'où la
+        // chaîne : elle s'affiche, et le champ cesse de paraître non rempli.
+        enfants_a_charge: String(v.enfants_a_charge).trim(),
+        emprunteur_1: v.emprunteur_1.trim(), emprunteur_2: v.emprunteur_2.trim(),
         source: 'Saisie CRM',
       };
       // En modification : ce qui est vidé s'efface, ce que le formulaire ne connaît
