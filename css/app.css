@@ -10342,3 +10342,17 @@ td .pl-toque { color: #4f46e5; }
 .lrc-sourcil .lrc-feu.est-vert { background: #2E9E5B; color: #fff; }
 .lrc-sourcil .lrc-feu.est-orange { background: #E89A0C; color: #fff; }
 .lrc-sourcil .lrc-feu.est-rouge { background: #E0483B; color: #fff; }
+
+/* ---- la pipeline des demandes (18/11/2026) ----
+   Les colonnes portent les cartes du simulateur : elles s'élargissent pour
+   que les trois chiffres tiennent, et la rangée défile à l'horizontale
+   au-delà de la largeur de l'écran plutôt que d'écraser les cartes. */
+.ct-etapes.ct-etapes-cartes { grid-auto-columns: minmax(280px, 1fr); padding-bottom: 10px; scroll-snap-type: x proximity; }
+.ct-etapes-cartes .ct-etape { scroll-snap-align: start; }
+.ct-etapes-cartes .ct-etape-corps { gap: 10px; }
+.ct-carte-pipe { cursor: grab; }
+.ct-carte-pipe.en-main { opacity: .45; cursor: grabbing; transform: none; }
+.ct-pipe > .ct-vide { margin-bottom: 12px; }
+.ct-afaire-liste { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 0 14px; }
+.ct-carte-pipe .cts-mini { grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); }
+.ct-carte-pipe .cts-mini span { font-size: 12.5px; }

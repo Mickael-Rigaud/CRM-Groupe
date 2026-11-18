@@ -16,7 +16,7 @@ import { orgForm, openOrg } from './organisations.js';
 import { activityRowHtml, bindActivityRows, nextActivity } from './activity.js';
 import { coquilleEspace, poserEspace, kpiEspace, archiverFiche, supprimerDefinitivement, estActive } from './espace.js';
 import { vivierPage } from './vivier.js';
-import { estSimulation, feuDe, feuDossier, carteSimulation, estNouvelle } from './courtage-simulateur.js';
+import { estSimulation, feuDe, feuDossier, estNouvelle, chiffresDe, depuis } from './courtage-simulateur.js';
 import { nouveauProspectCourtage } from './courtage-nouveau.js';
 
 const KEY = 'courtage';
@@ -80,7 +80,8 @@ export const courtageHomePage = {
 
       // La pipeline, colonne par colonne, avec les affaires dedans
       const colonnes = a.stages.map(s => {
-        const cartes = open.filter(d => d.stage === s.key);
+        const cartes = open.filter(d => d.stage === s.key)
+          .sort((x, y) => String(y.created_at || '').localeCompare(String(x.created_at || '')));
         return { s, cartes, somme: cartes.reduce((t, d) => t + (Number(d.amount) || 0), 0) };
       });
 
@@ -105,9 +106,8 @@ export const courtageHomePage = {
       const prenom = String(scope.user?.full_name || '').trim().split(/\s+/)[0];
       const simus = all.filter(estSimulation)
         .sort((x, y) => String(y.created_at || '').localeCompare(String(x.created_at || '')));
-      const simusOuvertes = simus.filter(d => d.status === 'open');
       const neuves = simus.filter(estNouvelle);
-      const parFeu = (f) => simusOuvertes.filter(d => feuDe(d) === f).length;
+      const parFeuOuverts = (f) => open.filter(d => feuDossier(d) === f).length;
       const semaine = simus.filter(d => (Date.now() - Date.parse(d.created_at || 0)) < 7 * 86400000).length;
       const phrase = neuves.length
         ? `${neuves.length} demande${neuves.length > 1 ? 's' : ''} à rappeler.`
@@ -146,48 +146,39 @@ export const courtageHomePage = {
           </div>
         </header>
 
-        <div class="ct-duo">
-          <section class="ct-panneau ct-simu">
-            <div class="ct-panneau-tete">
-              <h2>Demandes du simulateur</h2>
-              <button type="button" class="ct-nouveau" id="ct-nouveau">+ Prospect</button>
-              <div class="ct-feux">
-                <span class="est-vert" title="Feu vert : projet faisable"><i></i>${parFeu('vert')}</span>
-                <span class="est-orange" title="Feu orange : projet à optimiser"><i></i>${parFeu('orange')}</span>
-                <span class="est-rouge" title="Feu rouge : projet à étudier"><i></i>${parFeu('rouge')}</span>
-              </div>
-            </div>
-            <div class="cts-liste">${simusOuvertes.slice(0, 6).map(d => carteSimulation(d, contactDe(d))).join('')
-              || `<div class="ct-vide"><b>Aucune demande pour l’instant.</b>
-                  <span>Chaque simulation faite sur lareferencecourtage.fr arrivera ici avec son verdict, ses chiffres et une tâche de rappel.</span></div>`}</div>
-            ${simusOuvertes.length > 6 ? `<a class="ct-plus" href="#/courtage/base">Voir les ${simusOuvertes.length} demandes →</a>` : ''}
-          </section>
-
-          <section class="ct-panneau ct-afaire">
-            <div class="ct-panneau-tete"><h2>À faire</h2>
-              <span class="ct-compte ${retard.length ? 'est-retard' : ''}">${retard.length} en retard · ${jour.length} aujourd’hui</span></div>
-            ${[...retard, ...jour].slice(0, 8).map(x => activityRowHtml(x, { showContext: true })).join('')
-              || '<div class="ct-vide"><b>Rien d’échu.</b><span>Les prochaines actions sont plus loin dans le temps.</span></div>'}
-          </section>
-        </div>
-
+        <!-- ⚠ LA PIPELINE EST CELLE DES DEMANDES (18/11/2026, Mickael : « que la
+             pipeline dossiers devienne une pipeline des demandes du simulateur […]
+             conserve l'encadré des prospects »). Le panneau « Demandes du
+             simulateur » est fondu dedans : chaque dossier y est sa carte — feu,
+             chiffres, « Appeler » — et se glisse d'une étape à l'autre. Les
+             dossiers saisis par « + Prospect » y sont aussi, avec la même carte :
+             cette pipeline est la seule de l'espace, on n'en perd aucun. -->
         <section class="ct-panneau ct-pipe" id="ct-pipe">
-          <div class="ct-panneau-tete"><h2>Pipeline dossiers</h2>
-            <span class="ct-compte">${eur(open.reduce((s, d) => s + (Number(d.amount) || 0), 0))} de commissions estimées</span>
+          <div class="ct-panneau-tete"><h2>Pipeline des demandes</h2>
+            <span class="ct-compte">${open.length} dossier${open.length > 1 ? 's' : ''} · ${eur(open.reduce((s, d) => s + (Number(d.amount) || 0), 0))} de commissions estimées</span>
+            <button type="button" class="ct-nouveau" id="ct-nouveau">+ Prospect</button>
+            <div class="ct-feux">
+              <span class="est-vert" title="Feu vert : projet faisable"><i></i>${parFeuOuverts('vert')}</span>
+              <span class="est-orange" title="Feu orange : projet à optimiser"><i></i>${parFeuOuverts('orange')}</span>
+              <span class="est-rouge" title="Feu rouge : projet à étudier"><i></i>${parFeuOuverts('rouge')}</span>
+            </div>
           </div>
-          <div class="ct-etapes">${colonnes.map(({ s, cartes, somme }, n) => `
+          ${open.length ? '' : `<div class="ct-vide"><b>Aucune demande pour l’instant.</b>
+            <span>Chaque simulation faite sur lareferencecourtage.fr arrive ici, dans « Nouveau lead », avec son verdict, ses chiffres et une tâche de rappel.</span></div>`}
+          <div class="ct-etapes ct-etapes-cartes">${colonnes.map(({ s, cartes, somme }, n) => `
             <div class="ct-etape" style="--n:${n}" data-col="${esc(s.key)}">
               <div class="ct-etape-tete"><b>${esc(s.label)}</b><span>${cartes.length}</span></div>
               <div class="ct-jauge"><i style="width:${Math.round((cartes.length / plusGrosse) * 100)}%"></i></div>
               <div class="ct-etape-somme">${somme ? eur(somme) : '—'}</div>
-              <div class="ct-etape-corps">${cartes.map(d => `
-                <button type="button" class="ct-dossier ${feuDossier(d) ? 'cts-' + feuDossier(d) : ''}" data-deal="${d.id}" draggable="true" title="Glisser vers une autre étape, ou cliquer pour ouvrir">
-                  <b>${esc(estSimulation(d) ? (contactDe(d) ? [contactDe(d).first_name, contactDe(d).last_name].filter(Boolean).join(' ') : d.title.split(' — ').pop()) : d.title)}</b>
-                  <span>${esc(estSimulation(d) ? (d.fields?.projet || 'Simulateur') : dealParty(d))}</span>
-                  ${d.amount ? `<em>${eur(d.amount)}</em>` : ''}
-                  ${feuDossier(d) ? `<span class="ct-faisa est-${feuDossier(d)}" title="${esc(TITRES_FEU[feuDossier(d)])}"><i></i>${esc(FEUX_LIB[feuDossier(d)])}</span>` : ''}
-                </button>`).join('') || '<div class="ct-etape-vide">—</div>'}</div>
+              <div class="ct-etape-corps">${cartes.map(d => carteDemande(d, contactDe(d))).join('') || '<div class="ct-etape-vide">—</div>'}</div>
             </div>`).join('')}</div>
+        </section>
+
+        <section class="ct-panneau ct-afaire">
+          <div class="ct-panneau-tete"><h2>À faire</h2>
+            <span class="ct-compte ${retard.length ? 'est-retard' : ''}">${retard.length} en retard · ${jour.length} aujourd’hui</span></div>
+          <div class="ct-afaire-liste">${[...retard, ...jour].slice(0, 8).map(x => activityRowHtml(x, { showContext: true })).join('')
+            || '<div class="ct-vide"><b>Rien d’échu.</b><span>Les prochaines actions sont plus loin dans le temps.</span></div>'}</div>
         </section>
 
         <section class="ct-panneau ct-recrut">
@@ -217,7 +208,7 @@ export const courtageHomePage = {
       // même `moveStage` que la page Pipeline : l'historique d'étapes, la règle
       // Client/Prospect et les relances suivent de la même façon.
       let enMain = null;
-      root.querySelectorAll('.ct-dossier[draggable]').forEach(c => {
+      root.querySelectorAll('.ct-etape [data-deal][draggable]').forEach(c => {
         c.addEventListener('dragstart', e => { enMain = c.dataset.deal; c.classList.add('en-main'); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', enMain); });
         c.addEventListener('dragend', () => { c.classList.remove('en-main'); root.querySelectorAll('.ct-etape.survol').forEach(x => x.classList.remove('survol')); });
       });
@@ -240,6 +231,41 @@ export const courtageHomePage = {
     return { refresh: draw, destroy: coquille.retirer };
   },
 };
+
+// ---------------------------------------------------------------- la carte de la pipeline
+// La carte des « Demandes du simulateur », reprise trait pour trait (mêmes
+// classes `.cts-*`), avec trois différences : elle se glisse, son feu est celui
+// de TOUT dossier (`feuDossier` : verdict du simulateur, sinon endettement), et
+// un dossier saisi à la main sans budget montre ce qu'il a — le montant à financer.
+const PHRASE_FEU = { vert: 'Projet faisable', orange: 'Projet à optimiser', rouge: 'Projet à étudier' };
+const LIB_FEU = { vert: 'Feu vert', orange: 'Feu orange', rouge: 'Feu rouge' };
+function carteDemande(d, contact) {
+  const f = d.fields || {};
+  const feu = feuDossier(d);
+  const nom = contact ? [contact.first_name, contact.last_name].filter(Boolean).join(' ') : '';
+  const titre = nom || String(d.title || '').split(' — ').pop();
+  const ou = [f.projet || f.objectif, f.ville || contact?.city || f.region].filter(Boolean).join(' · ');
+  let chiffres = chiffresDe(d);
+  const aFinancer = Number(f.montant_financement) || 0;
+  if (aFinancer && !chiffres.some(c => c.k === 'Prêt')) chiffres = [...chiffres, { k: 'À financer', v: eur(aFinancer) }];
+  const tel = contact?.phone;
+  return `
+    <article class="cts-carte ct-carte-pipe ${feu ? 'est-' + feu : ''}" data-deal="${esc(d.id)}" draggable="true" tabindex="0" role="button"
+      title="Glisser vers une autre étape, ou cliquer pour ouvrir">
+      <span class="cts-feu" title="${esc(feu ? `${LIB_FEU[feu]} — ${PHRASE_FEU[feu]}` : 'Sans feu : revenus à compléter')}"></span>
+      <div class="cts-carte-tete">
+        <b>${esc(titre)}</b>
+        ${estNouvelle(d) ? '<span class="cts-neuf">Nouveau</span>' : ''}
+        <time>${esc(depuis(d.created_at))}</time>
+      </div>
+      ${ou ? `<p class="cts-ou">${esc(ou)}</p>` : ''}
+      ${chiffres.length ? `<div class="cts-mini">${chiffres.slice(0, 3).map(c => `<span><em>${esc(c.k)}</em>${esc(c.v)}</span>`).join('')}</div>` : ''}
+      <div class="cts-carte-pied">
+        <span class="cts-avis">${esc(feu ? PHRASE_FEU[feu] : (estSimulation(d) ? 'Simulation reçue' : 'Saisi dans le CRM'))}</span>
+        ${tel ? `<a class="cts-appel" href="tel:${esc(tel)}" data-tel draggable="false">Appeler</a>` : ''}
+      </div>
+    </article>`;
+}
 
 // L'entrée de l'accueil : cascade des cartes et compteurs qui comptent.
 // ⚠ VISIBLE PAR DÉFAUT, comme la To do : ce script pose `.anime` puis la retire.
