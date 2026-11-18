@@ -475,6 +475,7 @@ function formulaire(cle, existant, defauts = {}) {
 
 export const rgdCommunicationPage = pageCommunication('rgd');
 export const btpCommunicationPage = pageCommunication('btp');
+export const courtageCommunicationPage = pageCommunication('courtage');
 
 // ---------- Analyse : réseaux sociaux et site internet ----------
 // (08/10/2026, raccordée à Facebook et Instagram le 12/10/2026).

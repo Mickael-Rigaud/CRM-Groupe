@@ -35,11 +35,14 @@ const ONGLETS = [
   // « Communication » (12/10/2026, Élodie) : pour l'instant la seule analyse du
   // site lareferencecourtage.fr, les réseaux viendront plus tard. Réservé à la
   // direction, comme chez RGD Renova et BTP Expertise.
+  // « Calendrier réseaux sociaux » le 18/11/2026 (Mickael : « générer du contenu
+  // et programmer les contenus pour les publier ») : le même écran que RGD et BTP.
   { label: 'Communication', pliable: true, sous: [
+    { hash: '#/courtage/communication', label: 'Calendrier réseaux sociaux' },
     { hash: '#/courtage/analyse', label: 'Analyse' },
   ] },
 ];
-const RESERVES_DIRECTION_COURTAGE = ['#/courtage/analyse'];
+const RESERVES_DIRECTION_COURTAGE = ['#/courtage/communication', '#/courtage/analyse'];
 const sansDirection = (liste) => liste
   .filter(o => !RESERVES_DIRECTION_COURTAGE.includes(o.hash))
   .map(o => (o.sous ? { ...o, sous: sansDirection(o.sous) } : o))

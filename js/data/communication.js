@@ -58,7 +58,9 @@ export const STATUTS = {
 // RGD Renova branché le 12/10/2026 (Élodie : « j'ai plein de stories à
 // programmer ») : Instagram et sa page Facebook — une story, elle, ne part
 // jamais sur Facebook, l'outil la saute.
-export const PUBLICATION_AUTO = { btp: ['instagram'], rgd: ['instagram', 'facebook'] };
+// La Référence Courtage le 18/11/2026 (compte `la_reference_courtage` du dépôt
+// publication-instagram, secret META_TOKEN_LA_REFERENCE).
+export const PUBLICATION_AUTO = { btp: ['instagram'], rgd: ['instagram', 'facebook'], courtage: ['instagram', 'facebook'] };
 // Même règle : miroir de la contrainte `check` de `format`.
 export const FORMATS = {
   post: 'Post',

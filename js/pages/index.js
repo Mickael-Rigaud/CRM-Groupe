@@ -108,6 +108,7 @@ export const pages = {
   courtage_base: ecran('./courtage.js', 'courtageBasePage'),
   courtage_vivier: ecran('./courtage.js', 'courtageVivierPage'),
   courtage_analyse: ecran('./communication.js', 'courtageAnalysePage'),
+  courtage_communication: ecran('./communication.js', 'courtageCommunicationPage'),
   dashboard: ecran('./dashboard.js', 'dashboardPage'),
   messagerie: ecran('./messagerie.js', 'messageriePage'),
   today: ecran('./today.js', 'todayPage'),
