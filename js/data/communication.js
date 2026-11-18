@@ -29,9 +29,11 @@ export const RESEAUX_DE = {
   // pas le connecter ») — son API exige une autorisation après examen, écartée.
   rgd: ['facebook', 'instagram', 'tiktok'],
   btp: ['facebook', 'instagram'],
-  // La Référence Courtage (12/10/2026) : aucun réseau raccordé pour l'instant,
-  // seul le site est mesuré — l'écran Analyse n'y montre donc pas d'onglet.
-  courtage: [],
+  // La Référence Courtage : site seul le 12/10/2026 ; Facebook et Instagram le
+  // 18/11/2026 (Mickael : « rajouter l'analyse des réseaux sociaux »), une fois
+  // ses comptes créés. Tant que la clé META_STATS_TOKEN_COURTAGE n'est pas posée,
+  // leurs cartes disent « À raccorder ».
+  courtage: ['facebook', 'instagram'],
 };
 
 // ⚠ MIROIR DE LA CONTRAINTE `check` de la colonne `statut` : une clé ajoutée
