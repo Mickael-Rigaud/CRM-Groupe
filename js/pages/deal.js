@@ -11,7 +11,7 @@ import { estAmoHenrri, blocHenrri, lierHenrri, etatHenrri } from '../henrri.js';
 // vivent dans `rgd-fiche.js` et servent aux trois fiches du CRM : trois
 // présentations qui se ressemblent s'apprennent une fois.
 import { initiales, tuile, info } from './rgd-fiche.js';
-import { blocSimulateurFiche } from './courtage-simulateur.js';
+import { blocSimulateurFiche, feuDe, FEUX } from './courtage-simulateur.js';
 import { activityRowHtml, bindActivityRows, activityForm } from './activity.js';
 // Ce que la fiche projet enregistre en plus des champs structurés, et où le
 // ranger. Voir l'en-tête du module : la copie porte la plus grande partie de
@@ -588,6 +588,8 @@ export function openDeal(id, onChange) {
         <div class="rgdf-hero-haut">
           <div class="rgdf-avatar">${esc(initiales(contact ? contactName(contact) : d.title))}</div>
           <div class="rgdf-identite">
+            ${d.activity === 'courtage' ? `<span class="lrc-sourcil"><i></i>Dossier de financement${feuDe(d)
+              ? ` · <b class="lrc-feu est-${feuDe(d)}">${esc(FEUX[feuDe(d)].libelle)}</b>` : ''}</span>` : ''}
             <h2>${esc(d.title)}</h2>
             <div class="rgdf-argent">${ligneArgent}</div>
             <div class="rgdf-meta">
@@ -761,6 +763,9 @@ export function openDeal(id, onChange) {
     // ferait lire deux fois, à deux tailles différentes.
     const m = openModal('', html, { wide: true, onClose: () => onChange?.() });
     m.classList.add('rgdf');
+    // La fiche d'un dossier de courtage prend la charte de lareferencecourtage.fr
+    // (18/11/2026) : tout est sous `.lrc-fiche` dans app.css, RGD et BTP ne bougent pas.
+    m.classList.toggle('lrc-fiche', d.activity === 'courtage');
     const refresh = () => { render(); onChange?.(); };
 
     // ⚠ LES ONGLETS NE RECHARGENT RIEN : ils montrent et cachent deux blocs
