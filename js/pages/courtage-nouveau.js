@@ -96,7 +96,7 @@ const telNet = (t) => String(t || '').replace(/\D/g, '').replace(/^33/, '0');
 // « Modifier » de la fiche (deal.js) et le crayon de la base passent ici. Le
 // formulaire générique `dealForm` ne connaissait ni l'avancement, ni la durée,
 // ni les revenus : modifier par lui, c'était laisser ces réponses figées.
-export function nouveauProspectCourtage(apres, { dealId = null, retour = null } = {}) {
+export function nouveauProspectCourtage(apres, { dealId = null, retour = null, etape: etapeDepart = 0 } = {}) {
   const moi = scope.user?.id || null;
   const dossier = dealId ? db.byId('deals', dealId) : null;
   const fiche = dossier?.contact_id ? db.byId('contacts', dossier.contact_id) : null;
@@ -114,10 +114,10 @@ export function nouveauProspectCourtage(apres, { dealId = null, retour = null } 
     phone: txt(fiche?.phone), email: txt(fiche?.email), address: txt(fiche?.address), postal_code: txt(fiche?.postal_code), city: txt(fiche?.city),
     canal: txt(fiche?.channel || dossier?.channel), apporteur: txt(dossier?.referrer_org_id), message: txt(f0.message),
     // En modification, aucune action n'est ajoutée d'office : le dossier a déjà les siennes.
-    contact: edition ? 'rien' : 'rappel', jour: jourLocal(new Date(Date.now() + 86400000)), heure: '10:00',
+    contact: edition ? (etapeDepart === 3 ? 'tel' : 'rien') : 'rappel', jour: jourLocal(new Date(Date.now() + 86400000)), heure: '10:00',
     responsable: dossier?.owner_id || moi,
   };
-  let etape = 0;
+  let etape = etapeDepart;
   let enCours = false;
   const libCreer = edition ? 'Enregistrer' : 'Créer le prospect';
 

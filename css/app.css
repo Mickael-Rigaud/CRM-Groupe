@@ -10255,3 +10255,30 @@ td .pl-toque { color: #4f46e5; }
 }
 /* Le compteur et le bouton logés dans un titre de bloc gardent la police du texte, pas Fraunces. */
 .lrc-fiche .rgdf-bloc > h3 :is(.rgdf-compte, .btn) { font-family: "Inter", -apple-system, "Segoe UI", sans-serif; font-size: 12px; letter-spacing: 0; }
+
+/* La fiche d'un dossier de courtage en quatre parties (18/11/2026) : projet, chiffres,
+   prospect, rendez-vous — numérotées comme les étapes du formulaire. */
+.lrc-num-partie { display: inline-grid; place-items: center; width: 24px; height: 24px; flex: none; border-radius: 50%;
+  background: var(--lrc-azur-encre, #0A6F86); color: #fff; font-family: "Inter", sans-serif; font-size: 12px; font-weight: 800;
+  box-shadow: 0 0 0 4px var(--lrc-azur-doux, #D8F1F8); }
+.lrc-fiche .lrc-partie > h3 { gap: 11px; }
+.lrc-cp-ville { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 0 14px; border-top: 1px solid var(--line); }
+.lrc-cp-ville .rgdf-ligne + .rgdf-ligne { border-top: 0; }
+.lrc-fiche .lrc-cp-ville + .rgdf-ligne { border-top: 1px solid var(--line); }
+.lrc-vide { font-size: 13px; font-weight: 600; font-style: italic; color: var(--lrc-gris, #8CA2B3); }
+.lrc-fiche .rgdf-ligne.est-vide .rgdf-rond { opacity: .55; }
+.lrc-a-completer { font-style: italic; }
+.lrc-prochain { display: flex; align-items: center; gap: 14px; padding: 14px 16px; margin-bottom: 12px; border-radius: 16px;
+  background: linear-gradient(135deg, #FFF3E2, #FFFCF6 70%); border: 1px solid var(--lrc-filet, #F2E3CE); }
+.lrc-prochain-date { display: flex; flex-direction: column; padding-right: 14px; border-right: 1px solid var(--lrc-filet-fort, #E3CDAF); }
+.lrc-prochain-date b { font-family: var(--lrc-serif, Georgia, serif); font-size: 17px; font-weight: 600; color: var(--lrc-encre, #15384E); }
+.lrc-prochain-date b::first-letter { text-transform: uppercase; }
+.lrc-prochain-date em { font-style: normal; font-size: 22px; font-weight: 800; color: var(--lrc-orange, #F4801C); }
+.lrc-prochain-quoi { display: flex; flex-direction: column; font-size: 14px; font-weight: 700; color: var(--lrc-encre, #15384E); }
+.lrc-prochain-quoi em { font-style: normal; font-size: 12px; font-weight: 500; color: var(--lrc-encre-2, #4A6579); }
+.lrc-actions-liste { display: flex; flex-direction: column; gap: 8px; }
+.lrc-lien-action { margin-top: 10px; padding: 0; border: 0; background: none; cursor: pointer; font: inherit; font-size: 12.5px; font-weight: 700;
+  color: var(--lrc-azur-encre, #0A6F86); }
+.lrc-lien-action:hover { color: var(--lrc-orange, #F4801C); }
+.lrc-sous-titre { margin: 4px 0 8px; font-size: 11px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; color: var(--lrc-encre-2, #4A6579); }
+.cts-source { font-family: "Inter", sans-serif; font-size: 11.5px; font-weight: 650; letter-spacing: 0; color: var(--lrc-gris, #8CA2B3); }

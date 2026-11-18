@@ -68,8 +68,8 @@ export const chiffresDe = (d) => {
 
 // ---------------------------------------------------------------- la fiche
 // Le bloc « Le simulateur » de la fiche d'une affaire. Rien si l'affaire n'en vient pas.
-export function blocSimulateurFiche(d) {
-  if (!estSimulation(d)) return blocProjetSaisi(d);
+export function blocSimulateurFiche(d, { toujours = false } = {}) {
+  if (!estSimulation(d)) return blocProjetSaisi(d, { toujours });
   // Ce qu'on a complété à la main par « Modifier » s'affiche sous le verdict.
   const complements = blocProjetSaisi(d, { simulation: true });
   const f = d.fields || {};
@@ -79,6 +79,59 @@ export function blocSimulateurFiche(d) {
   const puces = (titre, l, classe) => l.length
     ? `<div class="cts-puces ${classe}"><h4>${esc(titre)}</h4><ul>${l.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : '';
   const ptz = [f.ptz_statut, f.ptz_montant, f.ptz_zone ? `zone ${f.ptz_zone}` : ''].filter(Boolean).join(' · ');
+  // ⚠ LA FICHE EN QUATRE PARTIES (18/11/2026) : une simulation se range comme un
+  // dossier saisi — « 1 Le projet » (verdict, projet, leviers) et « 2 Les
+  // chiffres » (calculs, budget, apport, emprunteurs) —, et ce qu'on a complété
+  // par « Modifier » se fond dans les deux parties au lieu de s'empiler dessous.
+  if (toujours) {
+    const fin = f.type_financement === 'Crédit professionnel' ? 'Financement professionnel' : f.type_financement;
+    const mens = (x) => (euros(x) ? `${euros(x)} / mois` : '');
+    const n = (k) => `<span class="lrc-num-partie">${k}</span>`;
+    return `
+    <section class="rgdf-bloc cts-fiche lrc-partie ${F ? F.classe : ''}">
+      <h3>${n(1)}Le projet <span class="cts-source">via le simulateur</span></h3>
+      <div class="cts-verdict">
+        <span class="cts-feu" aria-hidden="true"></span>
+        <div><b>${esc(F ? F.libelle : 'Simulation reçue')}</b>${F ? `<em>${esc(F.phrase)}</em>` : ''}</div>
+        ${f.relance_mois && feu === 'rouge' ? `<span class="cts-relance">À reprendre dans ${esc(f.relance_mois)} mois</span>` : ''}
+      </div>
+      <div class="cts-lignes">
+        ${ligne('Financement', fin)}
+        ${ligne('Projet', f.objectif || f.projet)}
+        ${ligne('Type de bien', f.type_bien)}
+        ${ligne('Où', [f.ville, f.region].filter(Boolean).join(' · '))}
+        ${ligne('Où en est-il', f.avancement)}
+        ${ligne('Primo-accédant', f.primo)}
+        ${ligne('Travaux', f.travaux)}
+        ${ligne('Ce qu’il a dit', f.message)}
+      </div>
+      ${puces('Ce qui bloque', liste(f.blocages), 'est-bloque')}
+      ${puces('Les leviers', liste(f.leviers), 'est-levier')}
+    </section>
+    <section class="rgdf-bloc cts-fiche lrc-partie">
+      <h3>${n(2)}Les chiffres</h3>
+      <div class="cts-chiffres">
+        ${[
+          { k: 'Mensualité estimée', v: euros(f.mensualite) },
+          { k: 'Taux d’endettement', v: pourcent(f.endettement) },
+          { k: 'Capacité d’emprunt', v: euros(f.capacite) },
+        ].filter(c => c.v).map(c => `<div><b>${esc(c.v)}</b><span>${esc(c.k)}</span></div>`).join('')}
+      </div>
+      <div class="cts-lignes">
+        ${ligne('Budget', f.budget || euros(f.montant_projet))}
+        ${ligne('Apport', euros(f.apport) || f.apport)}
+        ${ligne('Montant à financer', euros(f.montant_financement) || euros(f.emprunt))}
+        ${ligne('Revenus du foyer', mens(f.revenus_foyer))}
+        ${ligne('Crédits en cours', mens(f.credits_en_cours) || f.credits_en_cours)}
+        ${ligne('Durée souhaitée', f.duree)}
+        ${ligne('Emprunteurs', f.emprunteurs)}
+        ${ligne('Emprunteur 1', f.emprunteur_1)}
+        ${ligne('Emprunteur 2', f.emprunteur_2)}
+        ${ligne('Revenus locatifs', f.revenus_locatifs)}
+        ${ligne('Prêt à taux zéro', ptz)}
+      </div>
+    </section>`;
+  }
   return `
     <section class="rgdf-bloc cts-fiche ${F ? F.classe : ''}">
       <h3>Le simulateur</h3>
@@ -153,7 +206,7 @@ export function carteSimulation(d, contact) {
 // pipeline et la base de données montrent donc exactement ce bloc.
 // Les avancements du formulaire du CRM (ceux du simulateur sont libellés autrement).
 const AVANCEMENTS_CRM = ['Se renseigne', 'Cherche activement', 'Offre faite', 'Offre acceptée', 'Compromis signé'];
-export function blocProjetSaisi(d, { simulation = false } = {}) {
+export function blocProjetSaisi(d, { simulation = false, toujours = false } = {}) {
   if (!d || d.activity !== 'courtage') return '';
   const f = d.fields || {};
   const fin = f.type_financement === 'Crédit professionnel' ? 'Financement professionnel' : f.type_financement;
@@ -174,14 +227,19 @@ export function blocProjetSaisi(d, { simulation = false } = {}) {
     ['Mensualité estimée', euros(f.mensualite), ''], ['Taux d’endettement', pourcent(f.endettement), ton],
     ['Capacité d’emprunt', euros(f.capacite), ''],
   ].filter(([, v]) => v);
-  if (!lignes.length && !montants.length && !calc.length) return '';
+  // `toujours` : la fiche en quatre parties montre « Le projet » et « Les
+  // chiffres » même vides, avec une invitation à compléter (18/11/2026).
+  if (!toujours && !lignes.length && !montants.length && !calc.length) return '';
+  const num = (n) => (toujours ? `<span class="lrc-num-partie">${n}</span>` : '');
+  const vide = '<p class="rgdf-rien lrc-a-completer">À compléter avec « Modifier ».</p>';
   return `
-    ${lignes.length ? `<section class="rgdf-bloc cts-fiche">
-      <h3>Le projet</h3>
-      <div class="cts-lignes">${lignes.map(([k, v]) => `<div class="cts-ligne"><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join('')}</div>
+    ${lignes.length || toujours ? `<section class="rgdf-bloc cts-fiche lrc-partie">
+      <h3>${num(1)}Le projet</h3>
+      ${lignes.length ? `<div class="cts-lignes">${lignes.map(([k, v]) => `<div class="cts-ligne"><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join('')}</div>` : vide}
     </section>` : ''}
-    ${montants.length || calc.length ? `<section class="rgdf-bloc cts-fiche">
-      <h3>Les chiffres</h3>
+    ${montants.length || calc.length || toujours ? `<section class="rgdf-bloc cts-fiche lrc-partie">
+      <h3>${num(2)}Les chiffres</h3>
+      ${!montants.length && !calc.length ? vide : ''}
       ${calc.length ? `<div class="cts-chiffres">${calc.map(([k, v, t]) => `<div class="${t}"><b>${esc(v)}</b><span>${esc(k)}</span></div>`).join('')}</div>` : ''}
       <div class="cts-lignes">${montants.map(([k, v]) => `<div class="cts-ligne"><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join('')}</div>
     </section>` : ''}`;

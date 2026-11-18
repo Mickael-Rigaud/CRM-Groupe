@@ -579,6 +579,12 @@ export function openDeal(id, onChange) {
         return info('regle', c.label, esc(texte), 'est-gris');
       }).join('');
 
+    // Une ligne de la partie « Le prospect » d'un dossier de courtage : vide, elle
+    // reste affichée avec « À compléter » — le code postal et la ville manquants
+    // doivent se voir pour être demandés (18/11/2026).
+    const infoCourtage = (icone, quoi, valeur, teinte) => valeur
+      ? info(icone, quoi, valeur, teinte)
+      : info(icone, quoi, '<span class="lrc-vide">À compléter</span>', `${teinte} est-vide`);
     const blocSi = (titre, dedans, vide) => dedans || vide
       ? `<section class="rgdf-bloc"><h3>${esc(titre)}</h3>${dedans || `<p class="rgdf-rien">${esc(vide)}</p>`}</section>`
       : '';
@@ -678,6 +684,66 @@ export function openDeal(id, onChange) {
         <button type="button" data-onglet="facture">Facturation</button>
       </div>
 
+      ${d.activity === 'courtage' ? `
+      <!-- ⚠ LA FICHE D'UN DOSSIER DE COURTAGE EN QUATRE PARTIES (18/11/2026, Mickael :
+           « une partie projet, une partie chiffres, une partie prospect et une partie
+           rendez-vous ») — les quatre étapes du formulaire « + Prospect », dans le
+           même ordre : à gauche ce qu'on finance, à droite qui et quand. Chaque
+           partie s'affiche même vide, avec « à compléter » : une partie absente
+           faisait croire que l'information n'existait pas dans le CRM. -->
+      <div class="rgdf-corps lrc-corps-fiche" data-vue="fiche">
+        <div class="rgdf-colonne">
+          ${blocSimulateurFiche(d, { toujours: true })}
+          ${blocSi('Le dossier bancaire', champsDe('projet'), '')}
+        </div>
+        <div class="rgdf-colonne">
+          <section class="rgdf-bloc lrc-partie">
+            <h3><span class="lrc-num-partie">3</span>Le prospect</h3>
+            ${infoCourtage('personne', 'Nom', contact ? `<a href="#/contacts/${esc(contact.id)}" data-close>${esc(contactName(contact))}</a>` : '', 'est-orange')}
+            ${infoCourtage('tel', 'Téléphone', contact?.phone ? `<a href="tel:${esc(contact.phone)}">${esc(contact.phone)}</a>` : '', 'est-vert')}
+            ${infoCourtage('mail', 'E-mail', contact?.email ? `<a href="mailto:${esc(contact.email)}">${esc(contact.email)}</a>` : '', 'est-bleu')}
+            ${infoCourtage('maison', 'Adresse', esc(contact?.address || ''), 'est-orange')}
+            <div class="lrc-cp-ville">
+              ${infoCourtage('maison', 'Code postal', esc(contact?.postal_code || ''), 'est-orange')}
+              ${infoCourtage('maison', 'Ville', esc(contact?.city || ''), 'est-orange')}
+            </div>
+            ${infoCourtage('source', 'Comment il nous a connus', esc(d.channel || contact?.channel || ''), 'est-violet')}
+            ${refOrg || refC ? info('personne', 'Apporteur', refOrg ? esc(refOrg.name) : esc(contactName(refC)), 'est-vert') : ''}
+            ${info('personne', 'Responsable', marqueResponsable(d.owner_id), 'est-gris')}
+          </section>
+          ${(() => {
+            // La partie « Le rendez-vous » : le prochain en grand, puis le reste.
+            const aVenir = db.t('activities').filter(a => a.deal_id === id && !a.done)
+              .sort((x, y) => (String(x.due_date || '9') + (x.due_time || '')).localeCompare(String(y.due_date || '9') + (y.due_time || '')));
+            const prochain = aVenir.find(a => a.type === 'rdv') || aVenir[0];
+            const quand = prochain?.due_date
+              ? new Date(prochain.due_date + 'T12:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }) : '';
+            return `<section class="rgdf-bloc lrc-partie">
+              <h3><span class="lrc-num-partie">4</span>Le rendez-vous
+                <button type="button" class="btn ghost sm" id="d-rdv" style="margin-left:auto">+ Rendez-vous</button></h3>
+              ${prochain ? `<div class="lrc-prochain">
+                  <span class="lrc-prochain-date"><b>${esc(quand || 'Sans date')}</b>${prochain.due_time ? `<em>${esc(prochain.due_time)}</em>` : ''}</span>
+                  <span class="lrc-prochain-quoi">${esc(prochain.title)}<em>${esc(userName(prochain.assignee_id))}</em></span>
+                </div>` : '<p class="rgdf-rien">Aucun rendez-vous prévu. « + Rendez-vous » en programme un.</p>'}
+              ${aVenir.length ? `<h4 class="lrc-sous-titre">Toutes les actions à venir</h4>
+                <div class="lrc-actions-liste">${aVenir.map(a => activityRowHtml(a)).join('')}</div>` : ''}
+              <button type="button" class="lrc-lien-action" id="d-action">+ Autre action (appel, relance, pièces…)</button>
+            </section>`;
+          })()}
+          <section class="rgdf-bloc rgdf-suivi">
+            <h3>Historique <span class="rgdf-compte">${events.length}</span></h3>
+            <form id="note-form" class="rgdf-ajout">
+              <input name="body" required placeholder="Noter un appel, un échange, une décision…">
+              <button class="btn sm" type="submit">Ajouter</button>
+            </form>
+            <div class="timeline">${events.length
+              ? events.map(e => `<div class="tl ${esc(e.kind)}"><div class="meta">${esc(fmtDateTime(e.created_at))} · ${esc(userName(e.author_id))}</div>${esc(e.body)}</div>`).join('')
+              : '<p class="rgdf-rien">Aucun échange enregistré.</p>'}</div>
+          </section>
+
+          ${documentsSection('deals', id)}
+        </div>
+      </div>` : `
       <div class="rgdf-corps" data-vue="fiche">
         <div class="rgdf-colonne">
           ${blocSi('Le prospect', `
@@ -712,19 +778,6 @@ export function openDeal(id, onChange) {
         <!-- ⚠ L'HISTORIQUE PASSE A DROITE (demande du 25/09), au-dessus des
              actions a venir, qui RESTENT : elles portent les relances. -->
         <div class="rgdf-colonne">
-          <!-- ⚠ LES ACTIONS À VENIR, POUR LE COURTAGE (18/11/2026) : la fiche du
-               dossier s'ouvre désormais aussi depuis la base de données, à la place
-               de la fiche contact qui les montrait. Sans ce bloc, le rappel
-               programmé à la création disparaissait de la vue. -->
-          ${d.activity === 'courtage' ? (() => {
-            const aVenir = db.t('activities').filter(a => a.deal_id === id && !a.done)
-              .sort((x, y) => String(x.due_date || '9').localeCompare(String(y.due_date || '9')));
-            return `<section class="rgdf-bloc">
-              <h3>Actions à venir <span class="rgdf-compte">${aVenir.length}</span>
-                <button type="button" class="btn ghost sm" id="d-action" style="margin-left:auto">+ Action</button></h3>
-              ${aVenir.map(a => activityRowHtml(a)).join('') || '<p class="rgdf-rien">Aucune action prévue.</p>'}
-            </section>`;
-          })() : ''}
           <section class="rgdf-bloc rgdf-suivi">
             <h3>Historique <span class="rgdf-compte">${events.length}</span></h3>
             <form id="note-form" class="rgdf-ajout">
@@ -739,6 +792,7 @@ export function openDeal(id, onChange) {
           ${documentsSection('deals', id)}
         </div>
       </div>
+      `}
 
       <!-- ⚠ LA FACTURATION SE SAISIT ICI, pas dans le formulaire de modification
            (demande du 25/09/2026, deux fois). Elle se lit dans cet onglet : la
@@ -793,6 +847,12 @@ export function openDeal(id, onChange) {
     m.querySelector('#d-lost')?.addEventListener('click', () => setLost(db.byId('deals', id), refresh, render));
     if (d.activity === 'courtage') {
       bindActivityRows(m, render, () => openDeal(id, onChange));
+      // « + Rendez-vous » rouvre le formulaire du dossier à son étape 4.
+      m.querySelector('#d-rdv')?.addEventListener('click', async () => {
+        const { nouveauProspectCourtage } = await import('./courtage-nouveau.js');
+        nouveauProspectCourtage(() => { onChange?.(); openDeal(id, onChange); },
+          { dealId: id, etape: 3, retour: () => openDeal(id, onChange) });
+      });
       m.querySelector('#d-action')?.addEventListener('click', () => activityForm(
         { deal_id: id, contact_id: d.contact_id, activity: 'courtage' }, null,
         () => openDeal(id, onChange), () => openDeal(id, onChange)));
