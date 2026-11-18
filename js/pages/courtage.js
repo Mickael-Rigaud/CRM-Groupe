@@ -345,6 +345,14 @@ const ligneDossier = (c, d) => {
 };
 const FEUX_LIB = { vert: 'Feu vert', orange: 'Feu orange', rouge: 'Feu rouge' };
 
+// ⚠ UN PROSPECT DEVIENT CLIENT À L'OFFRE ÉDITÉE (18/11/2026, Mickael). En base,
+// c'est le déclencheur `courtage_offre_rend_client` qui passe `contacts.type` à
+// « Client » (migration 20261118150000). L'écran applique la même règle sans
+// attendre de relire la fiche : la ligne change d'onglet au moment même où le
+// dossier passe à « Offre éditée ». À sens unique, comme en base.
+const estClient = (c) => c.type === 'Client'
+  || deals().some(d => d.contact_id === c.id && (d.stage === 'offre' || d.status === 'won'));
+
 // Le dossier de courtage d'un contact : l'ouvert le plus récent, sinon le plus récent.
 const dossierDe = (contactId) => {
   const l = deals().filter(d => d.contact_id === contactId)
@@ -428,7 +436,7 @@ export const courtageBasePage = {
             };
           });
       } else {
-        const filtre = { clients: (c) => c.type === 'Client', prospects: (c) => c.type === 'Prospect', tous: () => true }[state.vue];
+        const filtre = { clients: estClient, prospects: (c) => c.type === 'Prospect' && !estClient(c), tous: () => true }[state.vue];
         // ⚠ LES COLONNES SUIVENT LE FORMULAIRE (18/11/2026, Mickael : « revoir les
         // colonnes du tableau avec les informations remplies »). Une ligne dit ce
         // qu'un courtier regarde avant d'appeler : qui et où, comment le joindre,
@@ -444,7 +452,7 @@ export const courtageBasePage = {
           .map(({ c, d }) => {
             const l = ligneDossier(c, d);
             const cells = [l.prospect, l.coordonnees, l.projet, l.montant, l.faisabilite, l.rdv, statutDossier(c, d)];
-            if (state.vue === 'tous') cells.splice(1, 0, esc(c.type || '—'));
+            if (state.vue === 'tous') cells.splice(1, 0, esc(estClient(c) ? 'Client' : (c.type || '—')));
             return { id: c.id, kind: 'contact', cells, csv: l.csv };
           });
       }
@@ -453,7 +461,7 @@ export const courtageBasePage = {
         if (v === 'apporteurs') return orgs.filter(estApporteur).length;
         if (v === 'banques') return orgs.filter(estBanque).length;
         if (v === 'tous') return contacts.length;
-        return contacts.filter(c => c.type === (v === 'clients' ? 'Client' : 'Prospect')).length;
+        return contacts.filter(v === 'clients' ? estClient : (c) => c.type === 'Prospect' && !estClient(c)).length;
       };
 
       // Banques citées sur un dossier mais absentes du répertoire : sans fiche, leurs
