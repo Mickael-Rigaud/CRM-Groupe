@@ -70,6 +70,8 @@ export const chiffresDe = (d) => {
 // Le bloc « Le simulateur » de la fiche d'une affaire. Rien si l'affaire n'en vient pas.
 export function blocSimulateurFiche(d) {
   if (!estSimulation(d)) return blocProjetSaisi(d);
+  // Ce qu'on a complété à la main par « Modifier » s'affiche sous le verdict.
+  const complements = blocProjetSaisi(d, { simulation: true });
   const f = d.fields || {};
   const feu = feuDe(d);
   const F = FEUX[feu];
@@ -111,7 +113,7 @@ export function blocSimulateurFiche(d) {
         ${ligne('Revenus locatifs', f.revenus_locatifs)}
         ${ligne('Prêt à taux zéro', ptz)}
       </div>
-    </section>`;
+    </section>${complements}`;
 }
 
 // ---------------------------------------------------------------- l'accueil
@@ -144,26 +146,43 @@ export function carteSimulation(d, contact) {
 }
 
 // ---------------------------------------------------------------- saisie à la main
-// Les réponses du formulaire « + Prospect » (courtage-nouveau.js) que le schéma
-// ne déclare pas : sans ce bloc, elles seraient enregistrées et invisibles.
-// (Le financement, l'objectif, les montants sont des champs du schéma : la fiche
-// les montre déjà dans « Le projet ».)
-export function blocProjetSaisi(d) {
+// Un dossier saisi dans le CRM (formulaire « + Prospect », courtage-nouveau.js) :
+// « Le projet » puis « Les chiffres », rangés comme les étapes du formulaire,
+// pour qu'on retrouve sur la fiche ce qu'on y a saisi, au même endroit.
+// ⚠ C'EST LA FICHE DU DOSSIER QUI S'OUVRE DES DEUX CÔTÉS (18/11/2026) : la
+// pipeline et la base de données montrent donc exactement ce bloc.
+// Les avancements du formulaire du CRM (ceux du simulateur sont libellés autrement).
+const AVANCEMENTS_CRM = ['Se renseigne', 'Cherche activement', 'Offre faite', 'Offre acceptée', 'Compromis signé'];
+export function blocProjetSaisi(d, { simulation = false } = {}) {
   if (!d || d.activity !== 'courtage') return '';
   const f = d.fields || {};
+  const fin = f.type_financement === 'Crédit professionnel' ? 'Financement professionnel' : f.type_financement;
   const lignes = [
-    ['Où en est-il', f.avancement], ['Durée souhaitée', f.duree], ['Emprunteurs', f.emprunteurs],
-    ['Revenus nets du foyer', euros(f.revenus_foyer) ? `${euros(f.revenus_foyer)} / mois` : ''],
-    ['Crédits en cours', euros(f.credits_en_cours) ? `${euros(f.credits_en_cours)} / mois` : ''],
-    ['Mensualité estimée', euros(f.mensualite)],
-    ['Taux d’endettement', pourcent(f.endettement)],
-    ['Capacité d’emprunt', euros(f.capacite)],
-    ['Ville du projet', f.ville], ['Ce qu’il a dit', f.message],
+    // Pour une simulation, le projet, la ville et le budget sont déjà dans le bloc du simulateur.
+    ['Financement', fin], ['Projet', simulation ? f.objectif : (f.objectif || f.projet)], ['Où en est-il', AVANCEMENTS_CRM.includes(f.avancement) || !simulation ? f.avancement : ''],
+    ['Ville du projet', simulation ? '' : f.ville], ['Ce qu’il a dit', f.message],
   ].filter(([, v]) => v);
-  if (!lignes.length) return '';
+  const mens = (x) => (euros(x) ? `${euros(x)} / mois` : '');
+  const montants = [
+    ['Montant du projet', euros(f.montant_projet)], ['Apport', euros(f.apport)],
+    ['Montant à financer', euros(f.montant_financement)], ['Revenus du foyer', mens(f.revenus_foyer)],
+    ['Crédits en cours', mens(f.credits_en_cours)], ['Durée', f.duree], ['Emprunteurs', f.emprunteurs],
+  ].filter(([, v]) => v);
+  const e = nombre(f.endettement);
+  const ton = e === null ? '' : e <= 35 ? 'est-vert' : e <= 38 ? 'est-orange' : 'est-rouge';
+  const calc = simulation ? [] : [
+    ['Mensualité estimée', euros(f.mensualite), ''], ['Taux d’endettement', pourcent(f.endettement), ton],
+    ['Capacité d’emprunt', euros(f.capacite), ''],
+  ].filter(([, v]) => v);
+  if (!lignes.length && !montants.length && !calc.length) return '';
   return `
-    <section class="rgdf-bloc cts-fiche">
-      <h3>Le projet en détail</h3>
+    ${lignes.length ? `<section class="rgdf-bloc cts-fiche">
+      <h3>Le projet</h3>
       <div class="cts-lignes">${lignes.map(([k, v]) => `<div class="cts-ligne"><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join('')}</div>
-    </section>`;
+    </section>` : ''}
+    ${montants.length || calc.length ? `<section class="rgdf-bloc cts-fiche">
+      <h3>Les chiffres</h3>
+      ${calc.length ? `<div class="cts-chiffres">${calc.map(([k, v, t]) => `<div class="${t}"><b>${esc(v)}</b><span>${esc(k)}</span></div>`).join('')}</div>` : ''}
+      <div class="cts-lignes">${montants.map(([k, v]) => `<div class="cts-ligne"><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join('')}</div>
+    </section>` : ''}`;
 }

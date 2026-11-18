@@ -87,19 +87,43 @@ const jourLocal = (d) => d.toLocaleDateString('sv-SE');
 const nombre = (v) => { const n = Number(String(v ?? '').replace(/\s/g, '').replace(',', '.')); return Number.isFinite(n) && n > 0 ? n : null; };
 const telNet = (t) => String(t || '').replace(/\D/g, '').replace(/^33/, '0');
 
-export function nouveauProspectCourtage(apres) {
+// ⚠ LE MÊME FORMULAIRE CRÉE ET MODIFIE (18/11/2026, Mickael : « je voudrais
+// retrouver toutes les informations enregistrées dans le formulaire, que la
+// fiche soit la même dans la base de données et la pipeline dossiers, et que
+// toutes les données soient synchronisées »). Avec `dealId`, il s'ouvre rempli
+// des valeurs du dossier et de son contact, et « Enregistrer » réécrit les deux.
+// Il n'y a donc qu'UNE saisie pour un dossier de courtage, d'où qu'on l'ouvre :
+// « Modifier » de la fiche (deal.js) et le crayon de la base passent ici. Le
+// formulaire générique `dealForm` ne connaissait ni l'avancement, ni la durée,
+// ni les revenus : modifier par lui, c'était laisser ces réponses figées.
+export function nouveauProspectCourtage(apres, { dealId = null, retour = null } = {}) {
   const moi = scope.user?.id || null;
+  const dossier = dealId ? db.byId('deals', dealId) : null;
+  const fiche = dossier?.contact_id ? db.byId('contacts', dossier.contact_id) : null;
+  const edition = !!dossier;
+  const f0 = dossier?.fields || {};
+  const txt = (x) => (x === null || x === undefined ? '' : String(x));
+  // Un dossier venu du simulateur porte son projet sous `projet` et non `objectif`.
+  const objectif0 = f0.objectif || (OBJECTIFS().includes(f0.projet) ? f0.projet : '');
   const v = {
-    type_financement: '', objectif: '', avancement: '',
-    montant_projet: '', apport: '', montant_financement: '',
-    duree: '', emprunteurs: '', revenus_foyer: '', credits_en_cours: '', ville_projet: '',
-    first_name: '', last_name: '', phone: '', email: '', city: '', canal: '', apporteur: '', message: '',
-    contact: 'rappel', jour: jourLocal(new Date(Date.now() + 86400000)), heure: '10:00', responsable: moi,
+    type_financement: txt(f0.type_financement), objectif: objectif0, avancement: AVANCEMENTS.includes(f0.avancement) ? f0.avancement : '',
+    montant_projet: txt(f0.montant_projet), apport: txt(typeof f0.apport === 'number' ? f0.apport : ''), montant_financement: txt(f0.montant_financement),
+    duree: DUREES.includes(f0.duree) ? f0.duree : '', emprunteurs: EMPRUNTEURS.includes(f0.emprunteurs) ? f0.emprunteurs : '',
+    revenus_foyer: txt(f0.revenus_foyer), credits_en_cours: txt(f0.credits_en_cours), ville_projet: txt(f0.ville),
+    first_name: txt(fiche?.first_name), last_name: txt(fiche?.last_name === '—' ? '' : fiche?.last_name),
+    phone: txt(fiche?.phone), email: txt(fiche?.email), address: txt(fiche?.address), postal_code: txt(fiche?.postal_code), city: txt(fiche?.city),
+    canal: txt(fiche?.channel || dossier?.channel), apporteur: txt(dossier?.referrer_org_id), message: txt(f0.message),
+    // En modification, aucune action n'est ajoutée d'office : le dossier a déjà les siennes.
+    contact: edition ? 'rien' : 'rappel', jour: jourLocal(new Date(Date.now() + 86400000)), heure: '10:00',
+    responsable: dossier?.owner_id || moi,
   };
   let etape = 0;
   let enCours = false;
+  const libCreer = edition ? 'Enregistrer' : 'Créer le prospect';
 
-  const m = openModal('Nouveau prospect', '<div class="lrc-form" id="lrc-form"></div>', { wide: true });
+  const m = openModal(edition ? 'Modifier le dossier' : 'Nouveau prospect', '<div class="lrc-form" id="lrc-form"></div>',
+    { wide: true, onClose: () => { if (!sauve) retour?.(); } });
+  let sauve = false;
   // `openModal` rend la boîte `.modal` elle-même, pas son fond.
   m.classList.add('lrc-modal');
   const hote = m.querySelector('#lrc-form');
@@ -121,7 +145,7 @@ export function nouveauProspectCourtage(apres) {
     const e = v.email.trim().toLowerCase();
     const t = telNet(v.phone);
     if (!e && t.length < 9) return null;
-    return scope.contacts().filter(c => (c.activities || []).includes(KEY)).find(c => (e && String(c.email || '').trim().toLowerCase() === e)
+    return scope.contacts().filter(c => (c.activities || []).includes(KEY) && c.id !== fiche?.id).find(c => (e && String(c.email || '').trim().toLowerCase() === e)
       || (t.length >= 9 && telNet(c.phone) === t)) || null;
   };
   const reponses = (i) => {
@@ -226,9 +250,10 @@ export function nouveauProspectCourtage(apres) {
       <div class="lrc-grille">
         ${champ('first_name', 'Prénom')}${champ('last_name', 'Nom')}
         ${champ('phone', 'Téléphone', { type: 'tel', ph: '06 12 34 56 78' })}${champ('email', 'E-mail', { type: 'email', ph: 'nom@exemple.fr' })}
-        ${champ('city', 'Ville de résidence', { ph: 'Nice' })}
+        ${champ('address', 'Adresse', { ph: '30 rue …' })}
+        <div class="lrc-grille est-cp">${champ('postal_code', 'Code postal', { ph: '06000' })}${champ('city', 'Ville', { ph: 'Nice' })}</div>
       </div>
-      ${d ? `<p class="lrc-note est-doublon">Déjà dans la base de La Référence Courtage : <b>${esc(contactName(d))}</b>. La demande sera rattachée à sa fiche, rien ne sera créé en double.</p>` : ''}
+      <div id="lrc-doublon">${d ? `<p class="lrc-note est-doublon">Déjà dans la base de La Référence Courtage : <b>${esc(contactName(d))}</b>. ${edition ? 'Vérifiez qu’il ne s’agit pas de la même personne.' : 'La demande sera rattachée à sa fiche, rien ne sera créé en double.'}</p>` : ''}</div>
       <h4>Comment nous a-t-il connus ?</h4>${tuiles('canal', ORIGINES.map(([l, i, c]) => [c, i, '', l]), v.canal)}
       ${v.canal === 'Partenaire / apporteur' ? `<label class="lrc-champ large"><span>Apporteur d’affaires</span>
         <select name="apporteur"><option value="">— Choisir —</option>${apporteurs().map(o => `<option value="${esc(o.id)}" ${v.apporteur === o.id ? 'selected' : ''}>${esc(o.name)}</option>`).join('')}</select></label>` : ''}
@@ -260,10 +285,10 @@ export function nouveauProspectCourtage(apres) {
     const fin = FINANCEMENTS.find(f => f[0] === v.type_financement);
     const montant = nombre(v.montant_financement);
     const action = libelleAction();
-    return `<b>Ce qui sera créé</b>
-      <span>Le prospect <b>${esc(nomComplet() || '—')}</b>${doublon() ? ' (fiche existante)' : ''}</span>
-      <span>Le dossier <b>${esc([fin ? (fin[3] || fin[0]) : 'Courtage', v.objectif].filter(Boolean).join(' · '))}</b>${montant ? ` — ${esc(eur(montant))} à financer` : ''}, en « Nouveau lead »</span>
-      ${action ? `<span>L’action <b>${esc(action)}</b> le ${esc(new Date(v.jour + 'T12:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }))} à ${esc(v.heure)}</span>` : '<span>Aucune action programmée</span>'}`;
+    return `<b>${edition ? 'Ce qui sera mis à jour' : 'Ce qui sera créé'}</b>
+      <span>Le prospect <b>${esc(nomComplet() || '—')}</b>${!edition && doublon() ? ' (fiche existante)' : ''}</span>
+      <span>Le dossier <b>${esc([fin ? (fin[3] || fin[0]) : 'Courtage', v.objectif].filter(Boolean).join(' · '))}</b>${montant ? ` — ${esc(eur(montant))} à financer` : ''}${edition ? '' : ', en « Nouveau lead »'}</span>
+      ${action ? `<span>L’action <b>${esc(action)}</b> le ${esc(new Date(v.jour + 'T12:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }))} à ${esc(v.heure)}</span>` : `<span>${edition ? 'Aucune action ajoutée' : 'Aucune action programmée'}</span>`}`;
   }
 
   const draw = () => {
@@ -272,7 +297,7 @@ export function nouveauProspectCourtage(apres) {
       <aside class="lrc-etapes">${ETAPES.map((x, i) => `
         <button type="button" class="lrc-etape ${i === etape ? 'on' : ''} ${i < etape ? 'fait' : ''}" data-aller="${i}">
           <span class="lrc-num">${i + 1}</span><span><b>${esc(x.titre)}</b>${i === etape ? `<em>${reponses(i)} réponses</em>` : ''}</span></button>`).join('')}
-        <div class="lrc-astuce"><span class="lrc-ico">${ico('cible')}</span><b>Créer à tout moment</b><em>Seuls un nom et un moyen de contact sont indispensables.</em></div>
+        <div class="lrc-astuce"><span class="lrc-ico">${ico('cible')}</span><b>${edition ? 'Enregistrer à tout moment' : 'Créer à tout moment'}</b><em>${edition ? 'Les changements valent pour la base de données et la pipeline : c’est le même dossier.' : 'Seuls un nom et un moyen de contact sont indispensables.'}</em></div>
       </aside>
       <section class="lrc-carte">
         <div class="lrc-carte-tete"><span class="lrc-rubrique">${esc(e.titre)}</span><span class="lrc-compteur">${etape + 1} / ${ETAPES.length}</span></div>
@@ -284,7 +309,7 @@ export function nouveauProspectCourtage(apres) {
           <button type="button" class="lrc-annuler" data-annuler>Annuler</button>
           <span class="lrc-erreur" id="lrc-erreur"></span>
           ${etape < ETAPES.length - 1 ? '<button type="button" class="lrc-btn est-second" data-suivant>Suivant →</button>' : ''}
-          <button type="button" class="lrc-btn" data-creer>Créer le prospect</button>
+          <button type="button" class="lrc-btn" data-creer>${libCreer}</button>
         </div>
       </section>`;
     brancher();
@@ -319,7 +344,15 @@ export function nouveauProspectCourtage(apres) {
         const r = hote.querySelector('.lrc-recap'); if (r) r.innerHTML = recap();
       });
       // Le doublon se vérifie en quittant le champ : pendant la frappe, il clignoterait.
-      if (['email', 'phone'].includes(el.name)) el.addEventListener('change', () => { lireChamps(); draw(); hote.querySelector(`[name="${el.name}"]`)?.focus(); });
+      // ⚠ SANS REDESSINER (18/11/2026) : redessiner remettait le curseur dans le
+      // téléphone au moment où l'on cliquait l'adresse, et l'adresse partait dans
+      // le téléphone. Seul l'avertissement se met à jour.
+      if (['email', 'phone'].includes(el.name)) el.addEventListener('change', () => {
+        lireChamps();
+        const zone = hote.querySelector('#lrc-doublon');
+        if (zone) { const tmp = document.createElement('div'); tmp.innerHTML = corps(); zone.innerHTML = tmp.querySelector('#lrc-doublon')?.innerHTML || ''; }
+        const r = hote.querySelector('.lrc-recap'); if (r) r.innerHTML = recap();
+      });
       if (el.type === 'date' || el.type === 'time' || el.tagName === 'SELECT') el.addEventListener('change', () => { lireChamps(); draw(); });
     });
     hote.querySelector('.lrc-corps input[name]:not([type="date"]):not([type="time"])')?.focus();
@@ -337,19 +370,25 @@ export function nouveauProspectCourtage(apres) {
     enCours = true;
     hote.querySelector('[data-creer]').disabled = true;
     try {
-      // 1. Le contact : l'existant s'il y en a un, rattaché au courtage au besoin.
-      let c = doublon();
+      // 1. Le contact. En modification, c'est celui du dossier qu'on réécrit.
+      const coord = {
+        first_name: v.first_name.trim(), last_name: v.last_name.trim() || '—',
+        phone: v.phone.trim() || null, email: v.email.trim() || null,
+        address: v.address.trim() || null, postal_code: v.postal_code.trim() || null, city: v.city.trim() || null,
+        channel: v.canal || null,
+      };
+      let c = edition ? fiche : doublon();
+      if (edition && c) { await db.update('contacts', c.id, coord); c = db.byId('contacts', c.id) || c; }
+      else if (edition && !c) c = await db.insert('contacts', { ...coord, type: 'Prospect', activities: [KEY], owner_id: v.responsable || moi });
       if (!c) {
         c = await db.insert('contacts', {
-          first_name: v.first_name.trim(), last_name: v.last_name.trim() || '—',
-          phone: v.phone.trim() || null, email: v.email.trim() || null, city: v.city.trim() || null,
-          type: 'Prospect', activities: [KEY], channel: v.canal || null, owner_id: v.responsable || moi,
+          ...coord, type: 'Prospect', activities: [KEY], owner_id: v.responsable || moi,
         });
       }
       // 2. Le dossier. Les champs du schéma d'abord (ils nourrissent les filtres et
       //    la fiche), puis ce que la fiche « Le projet en détail » sait lire.
       const k = calculs();
-      const fields = Object.fromEntries(Object.entries({
+      const saisis = {
         type_financement: v.type_financement, objectif: v.objectif, projet: v.objectif,
         montant_projet: nombre(v.montant_projet), apport: nombre(v.apport),
         montant_financement: nombre(v.montant_financement),
@@ -357,11 +396,33 @@ export function nouveauProspectCourtage(apres) {
         avancement: v.avancement, duree: v.duree, emprunteurs: v.emprunteurs,
         revenus_foyer: nombre(v.revenus_foyer), ville: v.ville_projet.trim(), message: v.message.trim(),
         source: 'Saisie CRM',
-      }).filter(([, x]) => x !== '' && x !== null && x !== undefined));
+      };
+      // En modification : ce qui est vidé s'efface, ce que le formulaire ne connaît
+      // pas (verdict du simulateur, banque, pièces…) reste tel quel, et la source
+      // d'origine n'est pas remplacée.
+      if (edition) delete saisis.source;
+      const base = edition ? { ...f0 } : {};
+      for (const [cle, x] of Object.entries(saisis)) {
+        if (x === '' || x === null || x === undefined) {
+          // `projet` d'une simulation n'est effacé que si le formulaire l'avait repris.
+          if (cle === 'projet' && edition && !objectif0) continue;
+          delete base[cle];
+        } else base[cle] = x;
+      }
+      const fields = base;
       const fin = FINANCEMENTS.find(f => f[0] === v.type_financement);
       const titre = `${fin ? (fin[3] || fin[0]) : 'Courtage'} — ${nomComplet() || contactName(c)}`;
       const maintenant = new Date().toISOString();
-      const d = await db.insert('deals', {
+      let d;
+      if (edition) {
+        // Le titre d'une simulation garde son verdict ; les autres suivent le formulaire.
+        const garderTitre = /^Simulateur/i.test(dossier.title || '');
+        await db.update('deals', dossier.id, {
+          ...(garderTitre ? {} : { title: titre }), contact_id: c.id, owner_id: v.responsable || dossier.owner_id,
+          channel: v.canal || null, referrer_org_id: v.apporteur || null, fields,
+        });
+        d = db.byId('deals', dossier.id) || dossier;
+      } else d = await db.insert('deals', {
         activity: KEY, title: titre, contact_id: c.id, owner_id: v.responsable || moi,
         channel: v.canal || null, referrer_org_id: v.apporteur || null,
         stage: 'lead', status: 'open', fields,
@@ -376,8 +437,10 @@ export function nouveauProspectCourtage(apres) {
           assignee_id: v.responsable || moi, done: false, created_by: moi,
         });
       }
+      sauve = true;
       closeModal(true);
-      toast(ch && ch[3] ? 'Prospect créé, premier contact programmé' : 'Prospect créé');
+      toast(edition ? (ch && ch[3] ? 'Dossier mis à jour, action ajoutée' : 'Dossier mis à jour')
+        : (ch && ch[3] ? 'Prospect créé, premier contact programmé' : 'Prospect créé'));
       apres?.(d.id);
     } catch (e) {
       enCours = false;

@@ -10162,3 +10162,6 @@ td .pl-toque { color: #4f46e5; }
 /* Les flèches des champs numériques recouvraient le « € » : retirées, la saisie se fait au clavier. */
 .lrc-form input[type="number"] { -moz-appearance: textfield; appearance: textfield; padding-right: 64px; }
 .lrc-form input[type="number"]::-webkit-inner-spin-button, .lrc-form input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+/* « + Prospect » : code postal et ville sur une ligne, à côté de l'adresse (18/11/2026) */
+.lrc-grille.est-cp { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 0 12px; margin-top: 0; }
+.cts-chiffres .est-vert b { color: #2E8B57; } .cts-chiffres .est-orange b { color: #E38A12; } .cts-chiffres .est-rouge b { color: #D9483B; }

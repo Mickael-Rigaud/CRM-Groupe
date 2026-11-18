@@ -299,6 +299,15 @@ const statutDossier = (c, d) => {
     <div class="ct-statut"><span class="ct-etape-pastille">${feu ? `<i class="cts-feu est-${feu}"></i>` : ''}${esc(etapeDe(d))}</span>${pastilleOrigine}</div>`;
 };
 
+// Le dossier de courtage d'un contact : l'ouvert le plus récent, sinon le plus récent.
+const dossierDe = (contactId) => {
+  const l = deals().filter(d => d.contact_id === contactId)
+    .sort((x, y) => (x.status === 'open') === (y.status === 'open')
+      ? String(y.created_at || '').localeCompare(String(x.created_at || ''))
+      : (x.status === 'open' ? -1 : 1));
+  return l[0] || null;
+};
+
 export const courtageBasePage = {
   title: () => 'La Référence Courtage — Base de données',
   render(root) {
@@ -377,7 +386,7 @@ export const courtageBasePage = {
         colonnes = ['Nom', 'Type', 'Ville', 'Téléphone', 'Email', 'Financement', 'Dossier', ''];
         lignes = contacts.filter(filtre)
           .filter(c => !state.canal || c.channel === state.canal)
-          .map(c => ({ c, d: deals().find(x => x.contact_id === c.id) }))
+          .map(c => ({ c, d: dossierDe(c.id) }))
           .filter(({ d }) => !state.fin || d?.fields?.type_financement === state.fin)
           .filter(({ c, d }) => hit([contactName(c), c.email, c.phone, c.city, c.channel, d?.title, d?.fields?.type_financement], ts))
           .map(({ c, d }) => ({
@@ -435,11 +444,21 @@ export const courtageBasePage = {
       root.querySelectorAll('[data-row]').forEach(tr => tr.onclick = (e) => {
         if (e.target.closest('[data-modif], [data-archiver], [data-suppr]')) return;
         const [kind, id] = tr.dataset.row.split('|');
-        if (kind === 'org') openOrg(id, draw); else openContact(id, draw);
+        // ⚠ UN PROSPECT OU UN CLIENT OUVRE SON DOSSIER (18/11/2026, Mickael : « que
+        // la fiche soit la même dans la base de données et la pipeline dossiers ») :
+        // la fiche du dossier porte le prospect, le projet et les chiffres, la
+        // fiche contact seule n'en montrait que les coordonnées. Sans dossier,
+        // c'est la fiche contact.
+        if (kind === 'org') openOrg(id, draw);
+        else { const d = dossierDe(id); if (d) openDeal(d.id, draw); else openContact(id, draw); }
       });
       root.querySelectorAll('[data-modif]').forEach(b => b.onclick = () => {
         const [kind, id] = b.dataset.modif.split('|');
-        if (kind === 'org') orgForm(db.byId('organisations', id), draw); else contactForm(db.byId('contacts', id), draw);
+        // Le crayon d'un prospect qui a un dossier rouvre le formulaire en étapes, rempli.
+        const d = kind === 'contact' ? dossierDe(id) : null;
+        if (kind === 'org') orgForm(db.byId('organisations', id), draw);
+        else if (d) nouveauProspectCourtage(draw, { dealId: d.id });
+        else contactForm(db.byId('contacts', id), draw);
       });
       root.querySelectorAll('[data-archiver]').forEach(b => b.onclick = () => {
         const [kind, id] = b.dataset.archiver.split('|');

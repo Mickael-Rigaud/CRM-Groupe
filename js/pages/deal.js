@@ -12,6 +12,7 @@ import { estAmoHenrri, blocHenrri, lierHenrri, etatHenrri } from '../henrri.js';
 // présentations qui se ressemblent s'apprennent une fois.
 import { initiales, tuile, info } from './rgd-fiche.js';
 import { blocSimulateurFiche } from './courtage-simulateur.js';
+import { activityRowHtml, bindActivityRows, activityForm } from './activity.js';
 // Ce que la fiche projet enregistre en plus des champs structurés, et où le
 // ranger. Voir l'en-tête du module : la copie porte la plus grande partie de
 // ce qui a été saisi, et rien ne l'affichait.
@@ -548,8 +549,13 @@ export function openDeal(id, onChange) {
       return trouve ? String(Array.isArray(trouve) ? trouve[1] : trouve) : String(v);
     };
 
+    // ⚠ COURTAGE : le financement, le projet et les montants sont montrés par les
+    // blocs « Le projet » / « Les chiffres » (courtage-simulateur.js), rangés
+    // comme le formulaire. Les redire ici les afficherait deux fois.
+    const DEJA_COURTAGE = d.activity === 'courtage'
+      ? ['type_financement', 'objectif', 'montant_projet', 'montant_financement', 'apport'] : [];
     const champsDe = (rub) => act.fields
-      .filter(fl => rubriqueDe(fl.key) === rub && !MORCEAUX.includes(fl.key))
+      .filter(fl => rubriqueDe(fl.key) === rub && !MORCEAUX.includes(fl.key) && !DEJA_COURTAGE.includes(fl.key))
       .map(fl => {
         const v = ADRESSE_RECOLLEE[fl.key] ? adresseEntiere(fl.key) : d.fields?.[fl.key];
         if (v === undefined || v === '' || v === null || v === false) return '';
@@ -694,16 +700,29 @@ export function openDeal(id, onChange) {
                s'affichaient nulle part. Rien pour une affaire qui n'en vient pas. -->
           ${blocSimulateurFiche(d)}
 
-          ${blocSi('Le projet',
+          ${blocSi(d.activity === 'courtage' ? 'Le dossier bancaire' : 'Le projet',
             info('regle', 'Motifs de la demande', esc(d.fields?.problematique || ''), 'est-gris')
             + info('regle', 'Description', esc(d.fields?.detail || ''), 'est-gris')
-            + champsDe('projet'), 'Le projet n’a pas encore été décrit.')}
+            + champsDe('projet'), d.activity === 'courtage' ? '' : 'Le projet n’a pas encore été décrit.')}
           ${blocSi('La mission', champsDe('mission'), '')}
         </div>
 
         <!-- ⚠ L'HISTORIQUE PASSE A DROITE (demande du 25/09), au-dessus des
              actions a venir, qui RESTENT : elles portent les relances. -->
         <div class="rgdf-colonne">
+          <!-- ⚠ LES ACTIONS À VENIR, POUR LE COURTAGE (18/11/2026) : la fiche du
+               dossier s'ouvre désormais aussi depuis la base de données, à la place
+               de la fiche contact qui les montrait. Sans ce bloc, le rappel
+               programmé à la création disparaissait de la vue. -->
+          ${d.activity === 'courtage' ? (() => {
+            const aVenir = db.t('activities').filter(a => a.deal_id === id && !a.done)
+              .sort((x, y) => String(x.due_date || '9').localeCompare(String(y.due_date || '9')));
+            return `<section class="rgdf-bloc">
+              <h3>Actions à venir <span class="rgdf-compte">${aVenir.length}</span>
+                <button type="button" class="btn ghost sm" id="d-action" style="margin-left:auto">+ Action</button></h3>
+              ${aVenir.map(a => activityRowHtml(a)).join('') || '<p class="rgdf-rien">Aucune action prévue.</p>'}
+            </section>`;
+          })() : ''}
           <section class="rgdf-bloc rgdf-suivi">
             <h3>Historique <span class="rgdf-compte">${events.length}</span></h3>
             <form id="note-form" class="rgdf-ajout">
@@ -767,6 +786,12 @@ export function openDeal(id, onChange) {
     m.querySelectorAll('[data-stage]').forEach(b => b.onclick = async () => { const dd = db.byId('deals', id); const st = stageOf(dd.activity, b.dataset.stage); if (dd.status === 'lost') return toast('Réouvrez l\'affaire avant de changer d\'étape', 'warn'); if (dd.status === 'won' && !st.delivery) return toast('Affaire gagnée : réouvrez-la pour revenir à une étape commerciale', 'warn'); await moveStage(dd, b.dataset.stage); refresh(); });
     m.querySelector('#d-won')?.addEventListener('click', async () => { await setWon(db.byId('deals', id)); refresh(); });
     m.querySelector('#d-lost')?.addEventListener('click', () => setLost(db.byId('deals', id), refresh, render));
+    if (d.activity === 'courtage') {
+      bindActivityRows(m, render, () => openDeal(id, onChange));
+      m.querySelector('#d-action')?.addEventListener('click', () => activityForm(
+        { deal_id: id, contact_id: d.contact_id, activity: 'courtage' }, null,
+        () => openDeal(id, onChange), () => openDeal(id, onChange)));
+    }
     m.querySelector('#d-reopen')?.addEventListener('click', async () => { await reopen(db.byId('deals', id)); refresh(); });
     m.querySelector('#d-fiche')?.addEventListener('click', async () => {
       try {
@@ -777,7 +802,15 @@ export function openDeal(id, onChange) {
       } catch (err) { toast(err.message, 'err'); }
     });
     m.querySelector('#d-attr')?.addEventListener('click', () => attribuerDeal(db.byId('deals', id), refresh, render));
-    m.querySelector('#d-edit').onclick = () => dealForm(d.activity, db.byId('deals', id), {}, (nid) => { if (nid) refresh(); else { onChange?.(); } }, render);
+    // ⚠ UN DOSSIER DE COURTAGE SE MODIFIE PAR SON FORMULAIRE EN ÉTAPES (18/11/2026) :
+    // le même que « + Prospect », rempli, qui réécrit le dossier ET son contact.
+    // `dealForm` ignorait l'avancement, la durée, les revenus, l'adresse…
+    m.querySelector('#d-edit').onclick = d.activity === 'courtage'
+      ? async () => {
+        const { nouveauProspectCourtage } = await import('./courtage-nouveau.js');
+        nouveauProspectCourtage(() => { onChange?.(); openDeal(id, onChange); }, { dealId: id, retour: () => openDeal(id, onChange) });
+      }
+      : () => dealForm(d.activity, db.byId('deals', id), {}, (nid) => { if (nid) refresh(); else { onChange?.(); } }, render);
         m.querySelector('#d-del').onclick = async () => {
       const dd = db.byId('deals', id);
 
