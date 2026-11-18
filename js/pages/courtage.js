@@ -327,7 +327,9 @@ const ligneDossier = (c, d) => {
     montant: aFinancer ? `<b class="num">${esc(eur(aFinancer))}</b>${sousLigne(total ? `sur ${esc(eur(total))}${apport && total ? ` · apport ${Math.round((apport / total) * 100)} %` : ''}` : '')}` : '—',
     faisabilite: endet !== null || feu
       ? `<span class="ct-faisa ${ton}"><i></i>${endet !== null ? `${String(endet).replace('.', ',')} %` : esc(FEUX_LIB[feu] || '')}</span>${sousLigne(endet !== null ? 'd’endettement' : '')}`
-      : '—',
+      // Le montant est là mais pas les revenus : c'est la seule chose qui manque au
+      // calcul, on le dit (18/11/2026, Mickael : « Revenus à compléter »).
+      : d && aFinancer && !nb(f.revenus_foyer) ? '<span class="ct-manque est-orange">Revenus à compléter</span>' : '—',
     rdv: prochaine
       ? `<span class="ct-rdv ${retard ? 'est-retard' : ''}">${esc(fmtDate(prochaine.due_date))}${prochaine.due_time ? ` · ${esc(prochaine.due_time)}` : ''}</span>${sousLigne(esc(prochaine.title))}`
       : d && d.status === 'open' ? '<span class="ct-manque est-orange">À programmer</span>' : '—',
