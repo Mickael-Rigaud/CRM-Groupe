@@ -10,7 +10,7 @@ import {
   esc, eur, daysSince, fmtDate, contactName, dealParty,
   terms, hit, searchInput, bindSearch, restoreFocus, csvDownload,
 } from '../ui.js';
-import { openDeal } from './deal.js';
+import { openDeal, moveStage } from './deal.js';
 import { contactForm, openContact } from './contacts.js';
 import { orgForm, openOrg } from './organisations.js';
 import { activityRowHtml, bindActivityRows, nextActivity } from './activity.js';
@@ -169,12 +169,12 @@ export const courtageHomePage = {
             <a class="ct-lien" href="#/pipeline/courtage">Page complète →</a>
           </div>
           <div class="ct-etapes">${colonnes.map(({ s, cartes, somme }, n) => `
-            <div class="ct-etape" style="--n:${n}">
+            <div class="ct-etape" style="--n:${n}" data-col="${esc(s.key)}">
               <div class="ct-etape-tete"><b>${esc(s.label)}</b><span>${cartes.length}</span></div>
               <div class="ct-jauge"><i style="width:${Math.round((cartes.length / plusGrosse) * 100)}%"></i></div>
               <div class="ct-etape-somme">${somme ? eur(somme) : '—'}</div>
               <div class="ct-etape-corps">${cartes.map(d => `
-                <button type="button" class="ct-dossier ${feuDe(d) ? 'cts-' + feuDe(d) : ''}" data-deal="${d.id}">
+                <button type="button" class="ct-dossier ${feuDe(d) ? 'cts-' + feuDe(d) : ''}" data-deal="${d.id}" draggable="true" title="Glisser vers une autre étape, ou cliquer pour ouvrir">
                   <b>${esc(estSimulation(d) ? (contactDe(d) ? [contactDe(d).first_name, contactDe(d).last_name].filter(Boolean).join(' ') : d.title.split(' — ').pop()) : d.title)}</b>
                   <span>${esc(estSimulation(d) ? (d.fields?.projet || 'Simulateur') : dealParty(d))}</span>
                   ${d.amount ? `<em>${eur(d.amount)}</em>` : ''}
@@ -202,6 +202,26 @@ export const courtageHomePage = {
       });
       bindActivityRows(root, draw);
       root.querySelector('#ct-nouveau')?.addEventListener('click', () => nouveauProspectCourtage(draw));
+      // ⚠ LE PIPELINE DE L'ACCUEIL SE MANIPULE AU GLISSER (18/11/2026, Mickael :
+      // « pouvoir glisser les dossiers d'une case à une autre »). Même geste et
+      // même `moveStage` que la page Pipeline : l'historique d'étapes, la règle
+      // Client/Prospect et les relances suivent de la même façon.
+      let enMain = null;
+      root.querySelectorAll('.ct-dossier[draggable]').forEach(c => {
+        c.addEventListener('dragstart', e => { enMain = c.dataset.deal; c.classList.add('en-main'); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', enMain); });
+        c.addEventListener('dragend', () => { c.classList.remove('en-main'); root.querySelectorAll('.ct-etape.survol').forEach(x => x.classList.remove('survol')); });
+      });
+      root.querySelectorAll('.ct-etape[data-col]').forEach(col => {
+        col.addEventListener('dragover', e => { if (!enMain) return; e.preventDefault(); col.classList.add('survol'); });
+        col.addEventListener('dragleave', e => { if (!col.contains(e.relatedTarget)) col.classList.remove('survol'); });
+        col.addEventListener('drop', async e => {
+          e.preventDefault(); col.classList.remove('survol');
+          const d = enMain && db.byId('deals', enMain); enMain = null;
+          if (!d || d.stage === col.dataset.col) return;
+          await moveStage(d, col.dataset.col);
+          draw();
+        });
+      });
       if (premiere) { premiere = false; animerAccueil(root); }
     };
 

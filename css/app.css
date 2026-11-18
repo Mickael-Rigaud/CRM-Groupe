@@ -10300,3 +10300,9 @@ td .pl-toque { color: #4f46e5; }
 .esp-app[data-espace="courtage"] td.acts { display: table-cell; white-space: nowrap; vertical-align: middle; text-align: right; }
 .esp-app[data-espace="courtage"] td.acts > * + * { margin-left: 6px; }
 .esp-app[data-espace="courtage"] tbody td { vertical-align: middle; }
+
+/* Le pipeline de l'accueil Courtage se manipule au glisser (18/11/2026) */
+.ct-dossier[draggable="true"] { cursor: grab; }
+.ct-dossier.en-main { opacity: .45; cursor: grabbing; }
+.ct-etape.survol { background: var(--lrc-orange-doux, #FFEAD1); border-color: var(--lrc-orange, #F4801C); box-shadow: inset 0 0 0 2px var(--lrc-orange-2, #FFA43D); }
+.ct-etape .ct-etape-corps { min-height: 40px; }

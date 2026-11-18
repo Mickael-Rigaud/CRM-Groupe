@@ -187,6 +187,12 @@ export function attribuerDeal(deal, onDone, onClose = null) {
 // un client en prospect, ce serait absurde vu du client.
 async function promouvoirClient(avant, apres) {
   if (!apres?.contact_id) return;
+  // ⚠ PAS POUR LE COURTAGE (18/11/2026) : La Référence Courtage a sa règle —
+  // Client à « Offre éditée », de retour Prospect si le dossier recule —, tenue
+  // en base par le déclencheur `courtage_offre_rend_client`. Celle-ci faisait
+  // d'un prospect un client dès « Qualifié », et c'est elle qui avait laissé
+  // Élodie Carré en Client avec un dossier revenu à « RDV réalisé ».
+  if (apres.activity === 'courtage') return;
   if (!estNouveauLead(avant) || estNouveauLead(apres)) return;
   const c = db.byId('contacts', apres.contact_id);
   if (c && c.type !== 'Client') await db.update('contacts', c.id, { type: 'Client' });
