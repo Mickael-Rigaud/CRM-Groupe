@@ -10490,3 +10490,101 @@ td .pl-toque { color: #4f46e5; }
   .ca-bento { grid-template-columns: 1fr; }
   .ca-bento > .ca-large:nth-child(4), .ca-bento > .ca-large:nth-child(5) { grid-column: 1 / -1; }
 }
+
+
+/* ---- Pilotage : un sous-menu de structures (18/11/2026) -------------------
+   Élodie : « je voudrais moderniser et dynamiser ces onglets […] lorsque l'on
+   clique sur pilotage avoir un sous-menu pour savoir quelle structure on
+   voudrait voir ». La rangée d'onglets de la bande 2 est remplacée par un
+   panneau déroulant : une carte par structure, son logo, sa couleur et ses
+   affaires ouvertes.
+
+   ⚠ `.univ` PREND `position: relative` POUR ANCRER LE PANNEAU, et cela ne
+   déplace rien : `.acct` et `.u-struct`, les deux autres menus de la barre,
+   portent déjà le leur — leurs panneaux restent accrochés à eux.
+
+   ⚠ ET LE PANNEAU N'EST PAS DANS `.u-set` : cette bande est en
+   `overflow-x: auto` pour défiler au doigt, et y poser un menu absolu le
+   couperait à sa première ligne. Il est posé dans `.univ`, et son décalage
+   gauche est mesuré en JavaScript (`renderNav`).
+   ------------------------------------------------------------------------- */
+.univ { position: relative; }
+/* ⚠ L'ONGLET PILOTAGE EST UN <button>, ET LA FEUILLE N'EN AVAIT JAMAIS EU :
+   `.u-tab` ne déclare un fond que sur `:hover` et `.on`. Un lien hérite du
+   transparent, un bouton hérite du gris du navigateur — il s'affichait en
+   relief gris clair au milieu d'onglets plats. */
+button.u-tab { border: 0; background: transparent; }
+/* Même flèche que le titre du haut (`.u-struct-fl`), même taille : les deux
+   disent la même chose — « ceci se déroule ». */
+.u-tab-fl { font-size: 12px; opacity: .85; margin-left: 2px; transition: transform .18s cubic-bezier(.2, .8, .2, 1); display: inline-block; }
+.u-tab[aria-expanded="true"] .u-tab-fl { transform: rotate(180deg); }
+
+.pil-menu {
+  position: absolute; top: calc(100% + 10px); left: 0; z-index: 60;
+  background: var(--card); color: var(--text);
+  border: 1px solid var(--line); border-radius: 20px; padding: 12px;
+  box-shadow: var(--shadow-lift), 0 34px 64px -42px color-mix(in srgb, var(--accent) 85%, transparent);
+  animation: pil-ouvre .18s cubic-bezier(.2, .8, .2, 1);
+}
+@keyframes pil-ouvre { from { opacity: 0; transform: translateY(-7px); } }
+.pil-tete { color: var(--muted-2); font-weight: 800; text-transform: uppercase;
+  letter-spacing: .1em; font-size: 10.5px; padding: 3px 8px 11px; }
+.pil-grille { display: grid; grid-template-columns: repeat(2, minmax(172px, 1fr)); gap: 8px; }
+
+.pil-carte {
+  display: grid; grid-template-columns: 36px 1fr auto;
+  grid-template-areas: "m n f" "m c f";
+  align-items: center; gap: 1px 11px;
+  text-decoration: none; color: var(--text);
+  padding: 11px 13px 11px 11px; border-radius: 15px;
+  border: 1px solid var(--line); background: var(--card);
+  transition: .18s cubic-bezier(.2, .8, .2, 1);
+}
+.pil-carte:hover {
+  border-color: color-mix(in srgb, var(--c) 55%, transparent);
+  background: color-mix(in srgb, var(--c) 7%, var(--card));
+  transform: translateY(-2px);
+  box-shadow: 0 16px 28px -20px var(--c);
+}
+.pil-marque { grid-area: m; width: 36px; height: 36px; border-radius: 11px;
+  overflow: hidden; display: grid; place-items: center; flex: none; }
+.pil-marque img { width: 100%; height: 100%; object-fit: contain; background: #fff; }
+.pil-nom { grid-area: n; font-weight: 700; font-size: 14px; letter-spacing: -.01em; }
+.pil-chiffre { grid-area: c; color: var(--muted); font-size: 11.5px; font-weight: 600; }
+.pil-fl { grid-area: f; color: var(--c); font-weight: 800; font-size: 15px;
+  opacity: 0; transform: translateX(-5px); transition: .18s cubic-bezier(.2, .8, .2, 1); }
+.pil-carte:hover .pil-fl { opacity: 1; transform: none; }
+/* La structure ouverte porte le dégradé du groupe, comme l'onglet actif de la
+   barre : un seul langage pour dire « vous êtes ici ». */
+.pil-carte.on { color: #fff; border-color: transparent;
+  background: linear-gradient(110deg, #5B52F0, #FF4D8D 70%, #FF7A2D);
+  box-shadow: 0 16px 28px -16px rgba(255, 77, 141, .75); }
+.pil-carte.on:hover { transform: translateY(-2px); border-color: transparent;
+  background: linear-gradient(110deg, #5B52F0, #FF4D8D 70%, #FF7A2D); }
+.pil-carte.on .pil-chiffre { color: rgba(255, 255, 255, .85); }
+.pil-carte.on .pil-fl { color: #fff; opacity: 1; transform: none; }
+
+/* La bande 2 qui reste — Patrimoine, Gestion locative — suit le même dessin
+   que la barre flottante : pilule, léger soulèvement, et le dégradé du groupe
+   sur l'onglet ouvert au lieu de l'aplat d'accent. */
+.s-tab { border-radius: 12px; padding: 8px 14px; transition: .18s cubic-bezier(.2, .8, .2, 1); }
+.s-tab:hover { color: var(--text); background: color-mix(in srgb, var(--accent) 8%, transparent);
+  transform: translateY(-1px); }
+.s-tab.on, .s-tab.brand.on {
+  color: #fff; background: linear-gradient(110deg, #5B52F0, #FF4D8D 70%, #FF7A2D);
+  box-shadow: 0 11px 22px -13px rgba(255, 77, 141, .8);
+}
+.s-tab.on:hover, .s-tab.brand.on:hover { transform: none;
+  background: linear-gradient(110deg, #5B52F0, #FF4D8D 70%, #FF7A2D); }
+
+@media (prefers-reduced-motion: reduce) {
+  .pil-menu { animation: none; }
+  .pil-carte, .pil-carte:hover, .s-tab, .s-tab:hover { transition: none; transform: none; }
+  .pil-fl { transition: none; }
+}
+/* Sous 820 px la bande des univers est cachée (`.u-set`) : le bouton Pilotage
+   et son panneau n'existent pas, on change de structure par le titre du haut.
+   Entre 820 et 1000 px le panneau tient en une colonne plutôt qu'en deux. */
+@media (max-width: 1000px) {
+  .pil-grille { grid-template-columns: minmax(200px, 1fr); }
+}

@@ -76,11 +76,33 @@ const lateRent = () => { const k = isoDay().slice(0, 7); return db.t('leases').f
 // est un écran de son espace, pas un univers du CRM.
 const ESPACES = ['rgd', 'btp', 'courtage'];
 
+// Les affaires encore ouvertes d'une structure. ⚠ UN SEUL CALCUL POUR DEUX
+// LECTEURS : le compteur des pipelines (ci-dessous) et le sous-menu de Pilotage
+// (`panneauPilotage`). Deux comptages du même réel finissent par ne plus dire
+// le même nombre.
+const affairesOuvertes = (k) => scope.deals().filter(d => d.activity === k && d.status === 'open').length;
+
 const NAV = [
   { key: 'home', icon: 'home', label: 'Tableau de bord', hash: '#/home' },
   { key: 'today', icon: 'check', label: 'To do list', hash: '#/today', count: () => scope.activities().filter(a => !a.done && a.due_date && daysSince(a.due_date) >= 0).length },
   {
-    key: 'commercial', icon: 'kanban', label: 'Pilotage', items: [
+    // ⚠ PILOTAGE NE MÈNE NULLE PART, IL DÉROULE (18/11/2026, Élodie :
+    // « lorsque l'on clique sur pilotage avoir un sous-menu pour savoir quelle
+    // structure on voudrait voir, là ça ouvre d'office rgd renova mais je
+    // voudrais pouvoir avoir le choix »). L'onglet pointait sur le premier
+    // écran de son univers — donc toujours RGD Renova — et la rangée d'onglets
+    // de la bande 2 servait ensuite à changer. Un geste pour arriver où l'on
+    // n'allait pas, un second pour en partir.
+    //
+    // ⚠ `menu: true` EST LU À DEUX ENDROITS, ET LES DEUX COMPTENT : la bande 1
+    // en fait un bouton au lieu d'un lien (`tab`), la bande 2 n'écrit plus ses
+    // entrées (`items` dans `renderNav`). Sans le second, on aurait le
+    // sous-menu **et** la rangée d'onglets qu'il remplace — ce qu'Élodie
+    // demande justement de supprimer.
+    //
+    // ⚠ ET AUCUN ACCÈS NE DISPARAÎT : `itemsOf` reste la source du sous-menu, du
+    // tiroir et du routeur. On change la porte, pas ce qu'elle ouvre.
+    key: 'commercial', icon: 'kanban', label: 'Pilotage', menu: true, items: [
       // « Vue d'ensemble » a quitté ce menu le 2026-09-18. L'écran existe
       // toujours et reste joignable à #/dashboard — il porte sa propre garde
       // (`directionOnly`), le retirer d'ici n'ouvre donc rien à personne. Même
@@ -90,7 +112,7 @@ const NAV = [
       // son application, BTP Expertise et La Référence Courtage leurs écrans internes.
       // Les pipelines restent joignables à #/pipeline/<clé>.
       ...ESPACES.map(k => ({ hash: `#/${k}`, label: ACTIVITIES[k].label, dot: ACTIVITIES[k].color, activity: k })),
-      ...Object.values(ACTIVITIES).filter(a => !ESPACES.includes(a.key)).map(a => ({ hash: `#/pipeline/${a.key}`, label: a.label, dot: a.color, activity: a.key, count: () => scope.deals().filter(d => d.activity === a.key && d.status === 'open').length })),
+      ...Object.values(ACTIVITIES).filter(a => !ESPACES.includes(a.key)).map(a => ({ hash: `#/pipeline/${a.key}`, label: a.label, dot: a.color, activity: a.key, count: () => affairesOuvertes(a.key) })),
       // Pilotage ne montre que la vue d'ensemble et les quatre structures. Le répertoire
       // global des contacts, les partenaires et l'acquisition ont quitté le menu :
       // leurs écrans restent joignables par leur adresse (#/partners, #/acquisition).
@@ -186,7 +208,7 @@ function renderLayout() {
   });
   // Capture : la barre est réécrite à chaque rendu, la cible d'un clic « bulle » n'y est plus rattachée
   document.addEventListener('click', e => {
-    if (navState.open && !e.target.closest('#acct, #u-struct, .bb-groupe')) closeMenu();
+    if (navState.open && !e.target.closest('#acct, #u-struct, #u-pilote, [data-univ-menu], .bb-groupe')) closeMenu();
   }, { capture: true });
   renderNav();
   suivreBarre();
@@ -684,6 +706,38 @@ function applyBrand(hash) {
   document.documentElement.dataset.brand = a ? a.key : '';
 }
 
+// Le sous-menu de Pilotage : une carte par structure, son logo, sa couleur et
+// ce qui y attend.
+//
+// ⚠ LE CHIFFRE EST CELUI QUI EXISTE DÉJÀ (`affairesOuvertes`, le compteur des
+// pipelines). Y mettre le CA du mois demanderait `data/chiffres.js`, donc
+// `rgd-objectifs` et `rgd-planning` : douze mois recalculés à CHAQUE rendu de la
+// barre, c'est-à-dire à chaque écriture en base (`db.onChange`).
+//
+// ⚠ ET IL NE S'ÉCRIT PAS « 0 » : une structure sans affaire ouverte le dit en
+// mots. Un zéro aligné sous des nombres se lit comme un chiffre manquant.
+//
+// ⚠ LE PANNEAU EST POSÉ DANS `.univ`, PAS DANS `.u-set` : cette dernière est en
+// `overflow-x: auto` et le découpe à sa première ligne.
+function panneauPilotage(g, hash) {
+  const carte = (i) => {
+    const k = i.activity;
+    const a = ACTIVITIES[k];
+    const n = affairesOuvertes(k);
+    const ici = isOn(i, hash);
+    const mark = LOGOS.has(k) ? `<span class="pil-marque"><img src="assets/logos/${k}.png" alt=""></span>`
+      : `<span class="pil-marque" style="background:${a.color}"></span>`;
+    return `<a href="${i.hash}" role="menuitem" class="pil-carte ${ici ? 'on' : ''}" style="--c:${a.color}" ${ici ? 'aria-current="true"' : ''}>
+      ${mark}<span class="pil-nom">${esc(i.label)}</span>
+      <span class="pil-chiffre">${n ? `${n} affaire${n > 1 ? 's' : ''} en cours` : 'aucune affaire en cours'}</span>
+      <span class="pil-fl" aria-hidden="true">→</span></a>`;
+  };
+  return `<div class="pil-menu" id="u-pilote" role="menu" aria-label="${esc(g.label)}">
+    <div class="pil-tete">Quelle structure ouvrir&nbsp;?</div>
+    <div class="pil-grille">${itemsOf(g).map(carte).join('')}</div>
+  </div>`;
+}
+
 function renderNav() {
   const univ = document.getElementById('univ'); if (!univ) return;
   queueMicrotask(mesurerBarre);   // apres que le navigateur ait pose la barre
@@ -696,8 +750,14 @@ function renderNav() {
   const tab = (g) => {
     const items = itemsOf(g);
     const cnt = g.count ? g.count() : items.reduce((s, i) => s + (i.count ? i.count() : 0), 0);
-    return `<a href="${g.hash || itemsOf(g)[0].hash}" class="u-tab ${here?.key === g.key ? 'on' : ''}" data-univ="${g.key}">
-      ${icon(g.icon, 17)}<span>${esc(g.label)}</span>${cnt ? `<i class="u-cnt">${cnt}</i>` : ''}</a>`;
+    const ici = here?.key === g.key;
+    const corps = `${icon(g.icon, 17)}<span>${esc(g.label)}</span>${cnt ? `<i class="u-cnt">${cnt}</i>` : ''}`;
+    // Un univers à sous-menu est un BOUTON : le toucher déroule ses structures,
+    // et c'est le choix d'une structure qui navigue. Un lien aurait emmené
+    // quelque part avant qu'on ait choisi.
+    if (g.menu) return `<button type="button" class="u-tab ${ici ? 'on' : ''}" data-univ-menu="${g.key}"
+      aria-haspopup="true" aria-expanded="${navState.open === '__pil'}">${corps}<span class="u-tab-fl" aria-hidden="true">▾</span></button>`;
+    return `<a href="${g.hash || items[0].hash}" class="u-tab ${ici ? 'on' : ''}" data-univ="${g.key}">${corps}</a>`;
   };
   const ini = (u.full_name || '?').split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
   univ.innerHTML = `
@@ -716,11 +776,19 @@ function renderNav() {
           <button type="button" class="acct-act danger" id="logout">Déconnexion</button>
         </div>` : ''}
       </div>
-    </div>`;
+    </div>
+    ${/* ⚠ LE PANNEAU NE DÉPEND PAS DE L'UNIVERS OUVERT : on déroule Pilotage
+         depuis le tableau de bord ou la to-do, là où `here` est un autre
+         univers. Le lire dans `here` l'aurait rendu muet partout sauf déjà
+         dans une structure — le seul endroit où l'on n'en a pas besoin. */ ''}
+    ${navState.open === '__pil' && gs.find(g => g.menu) ? panneauPilotage(gs.find(g => g.menu), hash) : ''}`;
 
   // ---- Bande 2 : les écrans de l'univers ouvert
   const sub = document.getElementById('subnav');
-  const items = here && here.items ? itemsOf(here) : [];
+  // ⚠ UN UNIVERS À SOUS-MENU N'A PLUS DE RANGÉE D'ONGLETS : ses entrées sont
+  // dans le panneau de la bande 1. `items` vide éteint la bande 2 (`sub.hidden`
+  // plus bas), ce qui est exactement la demande — « supprimer les onglets ».
+  const items = here && here.items && !here.menu ? itemsOf(here) : [];
   let sep = false;   // un trait sépare les écrans transverses des structures
   let transverse = false;   // un écran sans structure a-t-il été posé avant ?
   const screens = items.map((i) => {
@@ -759,6 +827,23 @@ function renderNav() {
   univ.querySelector('#burger').onclick = () => { navState.tiroir = !navState.tiroir; navState.open = null; renderNav(); };
   univ.querySelector('#me-btn').onclick = () => { navState.open = navState.open === '__me' ? null : '__me'; renderNav(); };
   univ.querySelector('#u-struct-btn')?.addEventListener('click', () => { navState.open = navState.open === '__struct' ? null : '__struct'; renderNav(); });
+  univ.querySelector('[data-univ-menu]')?.addEventListener('click', () => {
+    navState.tiroir = false; navState.open = navState.open === '__pil' ? null : '__pil'; renderNav();
+  });
+  // Après la navigation : la structure déjà ouverte ne change pas d'adresse, le
+  // panneau doit se fermer quand même.
+  univ.querySelectorAll('.pil-carte').forEach(a => a.addEventListener('click', () => setTimeout(closeMenu)));
+  // ⚠ LE PANNEAU POINTE L'ONGLET QUI L'OUVRE, ET C'EST MESURÉ, PAS CALCULÉ : la
+  // place de « Pilotage » dépend du nom de l'écran ouvert, à sa gauche, qui n'a
+  // pas de largeur fixe. Borné à droite pour ne pas sortir de la barre.
+  const panneau = univ.querySelector('#u-pilote');
+  const declencheur = univ.querySelector('[data-univ-menu]');
+  if (panneau && declencheur) {
+    const barre = univ.getBoundingClientRect();
+    const bouton = declencheur.getBoundingClientRect();
+    const droite = Math.max(0, barre.width - panneau.offsetWidth - 6);
+    panneau.style.left = Math.max(0, Math.min(bouton.left - barre.left - 8, droite)) + 'px';
+  }
   univ.querySelectorAll('.u-struct-ligne').forEach(a => a.addEventListener('click', () => setTimeout(closeMenu)));   // après la navigation : la structure déjà ouverte ne change pas d'adresse
   // ⚠ L'ENTRÉE DU MENU DOUBLE LE GESTE, ELLE NE LE REMPLACE PAS : le geste
   // n'existe qu'au doigt, et l'application se consulte aussi au bureau.
