@@ -10312,3 +10312,33 @@ td .pl-toque { color: #4f46e5; }
 .esp-app[data-espace="courtage"] .ct-dossier.cts-orange { --f: #E38A12; }
 .esp-app[data-espace="courtage"] .ct-dossier.cts-rouge { --f: #D9483B; }
 .ct-dossier .ct-faisa { margin-top: 4px; font-size: 11.5px; }
+
+/* --------------------------------------------------------------------------
+   Le feu en grand dans la fiche d'un dossier de courtage (18/11/2026) : un vrai
+   feu tricolore — boîtier sombre, trois lumières, celle du dossier allumée et
+   qui rayonne — en tête de « Les chiffres ». Éteint, il dit ce qu'il manque.
+   -------------------------------------------------------------------------- */
+.lrc-verdict { display: flex; align-items: center; gap: 16px; padding: 14px 18px; margin-bottom: 14px; border-radius: 18px;
+  border: 1.5px solid var(--v-bord, #E3CDAF); background: var(--v-fond, #FFFCF6); }
+.lrc-verdict.est-vert { --v: #2E9E5B; --v-fond: #E7F5EC; --v-bord: #A9DABB; }
+.lrc-verdict.est-orange { --v: #F0A010; --v-fond: #FFF4DE; --v-bord: #F6D08A; }
+.lrc-verdict.est-rouge { --v: #E0483B; --v-fond: #FDEBE8; --v-bord: #F2B3AB; }
+.lrc-feu-boitier { display: flex; flex-direction: column; gap: 6px; padding: 8px 7px; border-radius: 14px; flex: none;
+  background: linear-gradient(180deg, #23384A, #15384E); box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 8px 18px -10px rgba(21,56,78,.8); }
+.lrc-feu-boitier i { width: 20px; height: 20px; border-radius: 50%; background: rgba(255,255,255,.12); box-shadow: inset 0 2px 3px rgba(0,0,0,.35); }
+.lrc-verdict.est-rouge .lrc-feu-boitier .r { background: #FF5A4A; box-shadow: 0 0 12px 3px rgba(255,90,74,.75); }
+.lrc-verdict.est-orange .lrc-feu-boitier .o { background: #FFC23A; box-shadow: 0 0 12px 3px rgba(255,194,58,.75); }
+.lrc-verdict.est-vert .lrc-feu-boitier .v { background: #3DD47A; box-shadow: 0 0 12px 3px rgba(61,212,122,.75); }
+.lrc-verdict-texte { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.lrc-verdict-texte b { font-family: var(--lrc-serif, Georgia, serif); font-size: 24px; font-weight: 600; line-height: 1.1; color: var(--v, #4A6579); }
+.lrc-verdict-texte span { font-size: 14px; font-weight: 700; color: var(--lrc-encre, #15384E); }
+.lrc-verdict-texte em { font-style: normal; font-size: 12px; color: var(--lrc-encre-2, #4A6579); }
+.lrc-verdict.est-eteint .lrc-verdict-texte b { color: var(--lrc-gris, #8CA2B3); }
+.lrc-verdict .cts-relance { margin-left: auto; }
+/* La pastille de l'en-tête : le feu en couleur pleine, plus lisible */
+.lrc-sourcil .lrc-feu { display: inline-flex; align-items: center; gap: 6px; margin-left: 6px; padding: 2px 10px 2px 7px; border-radius: 999px;
+  font-size: 12px; font-weight: 800; color: #fff; }
+.lrc-sourcil .lrc-feu i { width: 8px; height: 8px; border-radius: 50%; background: #fff; box-shadow: 0 0 6px rgba(255,255,255,.9); }
+.lrc-sourcil .lrc-feu.est-vert { background: #2E9E5B; color: #fff; }
+.lrc-sourcil .lrc-feu.est-orange { background: #E89A0C; color: #fff; }
+.lrc-sourcil .lrc-feu.est-rouge { background: #E0483B; color: #fff; }

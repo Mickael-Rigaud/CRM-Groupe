@@ -11,7 +11,7 @@ import { estAmoHenrri, blocHenrri, lierHenrri, etatHenrri } from '../henrri.js';
 // vivent dans `rgd-fiche.js` et servent aux trois fiches du CRM : trois
 // présentations qui se ressemblent s'apprennent une fois.
 import { initiales, tuile, info } from './rgd-fiche.js';
-import { blocSimulateurFiche, feuDe, FEUX } from './courtage-simulateur.js';
+import { blocSimulateurFiche, feuDossier, FEUX } from './courtage-simulateur.js';
 import { activityRowHtml, bindActivityRows, activityForm } from './activity.js';
 // Ce que la fiche projet enregistre en plus des champs structurés, et où le
 // ranger. Voir l'en-tête du module : la copie porte la plus grande partie de
@@ -600,8 +600,8 @@ export function openDeal(id, onChange) {
         <div class="rgdf-hero-haut">
           <div class="rgdf-avatar">${esc(initiales(contact ? contactName(contact) : d.title))}</div>
           <div class="rgdf-identite">
-            ${d.activity === 'courtage' ? `<span class="lrc-sourcil"><i></i>Dossier de financement${feuDe(d)
-              ? ` · <b class="lrc-feu est-${feuDe(d)}">${esc(FEUX[feuDe(d)].libelle)}</b>` : ''}</span>` : ''}
+            ${d.activity === 'courtage' ? `<span class="lrc-sourcil"><i></i>Dossier de financement${feuDossier(d)
+              ? ` <b class="lrc-feu est-${feuDossier(d)}"><i></i>${esc(FEUX[feuDossier(d)].libelle)}</b>` : ''}</span>` : ''}
             <h2>${esc(d.title)}</h2>
             <div class="rgdf-argent">${ligneArgent}</div>
             <div class="rgdf-meta">
@@ -700,6 +700,20 @@ export function openDeal(id, onChange) {
       <div class="rgdf-corps lrc-corps-fiche" data-vue="fiche">
         <div class="rgdf-colonne">
           ${blocSimulateurFiche(d, { toujours: true })}
+          <!-- ⚠ L'HISTORIQUE SOUS « LES CHIFFRES » (18/11/2026, Mickael : « pour
+               recentrer tous les éléments ») : à gauche le dossier et ce qui s'y
+               est dit, à droite la personne, le rendez-vous et les pièces. -->
+          <section class="rgdf-bloc rgdf-suivi">
+            <h3>Historique <span class="rgdf-compte">${events.length}</span></h3>
+            <form id="note-form" class="rgdf-ajout">
+              <input name="body" required placeholder="Noter un appel, un échange, une décision…">
+              <button class="btn sm" type="submit">Ajouter</button>
+            </form>
+            <div class="timeline">${events.length
+              ? events.map(e => `<div class="tl ${esc(e.kind)}"><div class="meta">${esc(fmtDateTime(e.created_at))} · ${esc(userName(e.author_id))}</div>${esc(e.body)}</div>`).join('')
+              : '<p class="rgdf-rien">Aucun échange enregistré.</p>'}</div>
+          </section>
+
           ${blocSi('Le dossier bancaire', champsDe('projet'), '')}
         </div>
         <div class="rgdf-colonne">
@@ -736,17 +750,6 @@ export function openDeal(id, onChange) {
               <button type="button" class="lrc-lien-action" id="d-action">+ Autre action (appel, relance, pièces…)</button>
             </section>`;
           })()}
-          <section class="rgdf-bloc rgdf-suivi">
-            <h3>Historique <span class="rgdf-compte">${events.length}</span></h3>
-            <form id="note-form" class="rgdf-ajout">
-              <input name="body" required placeholder="Noter un appel, un échange, une décision…">
-              <button class="btn sm" type="submit">Ajouter</button>
-            </form>
-            <div class="timeline">${events.length
-              ? events.map(e => `<div class="tl ${esc(e.kind)}"><div class="meta">${esc(fmtDateTime(e.created_at))} · ${esc(userName(e.author_id))}</div>${esc(e.body)}</div>`).join('')
-              : '<p class="rgdf-rien">Aucun échange enregistré.</p>'}</div>
-          </section>
-
           ${documentsSection('deals', id)}
         </div>
       </div>` : `

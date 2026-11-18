@@ -80,6 +80,31 @@ export const feuDossier = (d) => {
   if (e === null) return '';
   return e <= 35 ? 'vert' : e <= 38 ? 'orange' : 'rouge';
 };
+// ⚠ LE FEU EN GRAND DANS LA FICHE (18/11/2026, Mickael : « que les feux
+// ressortent mieux dans la fiche projet »). Un vrai feu tricolore — trois
+// lumières dans leur boîtier, celle du dossier allumée — en tête de « Les
+// chiffres », avec le verdict en toutes lettres et ce qui le fonde. Sans feu,
+// le boîtier reste éteint et dit ce qu'il manque pour l'allumer.
+const PHRASES_FEU = { vert: 'Projet faisable', orange: 'Projet à optimiser', rouge: 'Projet à étudier' };
+export function verdictFeu(d) {
+  const f = d?.fields || {};
+  const feu = feuDossier(d);
+  const e = nombre(f.endettement);
+  const pct = e !== null ? `${String(e).replace('.', ',')} % d’endettement` : '';
+  const source = feuDe(d) ? 'verdict du simulateur' : pct ? 'calculé sur le taux d’endettement' : '';
+  const manque = !nombre(f.montant_financement) && !nombre(f.emprunt)
+    ? 'Montant à financer et revenus du foyer à compléter' : 'Revenus du foyer à compléter';
+  return `<div class="lrc-verdict ${feu ? 'est-' + feu : 'est-eteint'}">
+    <span class="lrc-feu-boitier" aria-hidden="true"><i class="r"></i><i class="o"></i><i class="v"></i></span>
+    <div class="lrc-verdict-texte">
+      <b>${feu ? esc(FEUX[feu].libelle) : 'Feu éteint'}</b>
+      <span>${feu ? esc(PHRASES_FEU[feu]) + (pct ? ` · ${esc(pct)}` : '') : esc(manque)}</span>
+      ${source ? `<em>${esc(source)}</em>` : '<em>« Modifier » → étape 2, « Les chiffres »</em>'}
+    </div>
+    ${f.relance_mois && feu === 'rouge' ? `<span class="cts-relance">À reprendre dans ${esc(f.relance_mois)} mois</span>` : ''}
+  </div>`;
+}
+
 // ---------------------------------------------------------------- la fiche
 // Le bloc « Le simulateur » de la fiche d'une affaire. Rien si l'affaire n'en vient pas.
 export function blocSimulateurFiche(d, { toujours = false } = {}) {
@@ -104,11 +129,6 @@ export function blocSimulateurFiche(d, { toujours = false } = {}) {
     return `
     <section class="rgdf-bloc cts-fiche lrc-partie ${F ? F.classe : ''}">
       <h3>${n(1)}Le projet <span class="cts-source">via le simulateur</span></h3>
-      <div class="cts-verdict">
-        <span class="cts-feu" aria-hidden="true"></span>
-        <div><b>${esc(F ? F.libelle : 'Simulation reçue')}</b>${F ? `<em>${esc(F.phrase)}</em>` : ''}</div>
-        ${f.relance_mois && feu === 'rouge' ? `<span class="cts-relance">À reprendre dans ${esc(f.relance_mois)} mois</span>` : ''}
-      </div>
       <div class="cts-lignes">
         ${ligne('Financement', fin)}
         ${ligne('Projet', f.objectif || f.projet)}
@@ -124,6 +144,7 @@ export function blocSimulateurFiche(d, { toujours = false } = {}) {
     </section>
     <section class="rgdf-bloc cts-fiche lrc-partie">
       <h3>${n(2)}Les chiffres</h3>
+      ${verdictFeu(d)}
       <div class="cts-chiffres">
         ${[
           { k: 'Mensualité estimée', v: euros(f.mensualite) },
@@ -253,6 +274,7 @@ export function blocProjetSaisi(d, { simulation = false, toujours = false } = {}
     </section>` : ''}
     ${montants.length || calc.length || toujours ? `<section class="rgdf-bloc cts-fiche lrc-partie">
       <h3>${num(2)}Les chiffres</h3>
+      ${toujours ? verdictFeu(d) : ''}
       ${!montants.length && !calc.length ? vide : ''}
       ${calc.length ? `<div class="cts-chiffres">${calc.map(([k, v, t]) => `<div class="${t}"><b>${esc(v)}</b><span>${esc(k)}</span></div>`).join('')}</div>` : ''}
       <div class="cts-lignes">${montants.map(([k, v]) => `<div class="cts-ligne"><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join('')}</div>
