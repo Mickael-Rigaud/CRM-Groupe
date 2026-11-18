@@ -325,8 +325,16 @@ const ligneDossier = (c, d) => {
     coordonnees: `${c.phone ? lien('tel:', c.phone) : '<span class="ct-manque">Pas de téléphone</span>'}${sousLigne(c.email ? lien('mailto:', c.email) : '')}`,
     projet: fin || projet ? `<b class="ct-fin">${esc(fin || projet)}</b>${sousLigne(fin && projet ? esc(projet) : '')}` : '<span class="ct-manque">À compléter</span>',
     montant: aFinancer ? `<b class="num">${esc(eur(aFinancer))}</b>${sousLigne(total ? `sur ${esc(eur(total))}${apport && total ? ` · apport ${Math.round((apport / total) * 100)} %` : ''}` : '')}` : '—',
-    faisabilite: endet !== null || feu
-      ? `<span class="ct-faisa ${ton}"><i></i>${endet !== null ? `${String(endet).replace('.', ',')} %` : esc(FEUX_LIB[feu] || '')}</span>${sousLigne(endet !== null ? 'd’endettement' : '')}`
+    // ⚠ LE FEU PORTE SON MOT, PAS SEULEMENT SA COULEUR : un point coloré seul
+    // est illisible pour qui distingue mal le rouge du vert, et ne se cherche pas
+    // au clavier. `FEUX_LIB` donne déjà les trois libellés.
+    feu: feu ? `<span class="ct-faisa est-${feu}" title="${esc(TITRES_FEU[feu])}"><i></i>${esc(FEUX_LIB[feu])}</span>` : '—',
+    // ⚠ LE LIBELLÉ DU FEU A QUITTÉ CETTE CELLULE le jour où il a eu sa colonne :
+    // il s'y affichait quand l'endettement manquait, et les deux cellules
+    // voisines auraient dit « Feu vert » deux fois de suite. La couleur, elle,
+    // reste sur le pourcentage — c'est la même lecture, pas une répétition.
+    faisabilite: endet !== null
+      ? `<span class="ct-faisa ${ton}"><i></i>${String(endet).replace('.', ',')} %</span>${sousLigne('d’endettement')}`
       // Le montant est là mais pas les revenus : c'est la seule chose qui manque au
       // calcul, on le dit (18/11/2026, Mickael : « Revenus à compléter »).
       : d && aFinancer && !nb(f.revenus_foyer) ? '<span class="ct-manque est-orange">Revenus à compléter</span>' : '—',
@@ -337,13 +345,21 @@ const ligneDossier = (c, d) => {
       nom: contactName(c), type: c.type, adresse: c.address, code_postal: c.postal_code, ville: c.city,
       telephone: c.phone, email: c.email, origine: c.channel,
       financement: fin, projet, montant_projet: total, apport, a_financer: aFinancer,
-      endettement: endet, mensualite: nb(f.mensualite), capacite: nb(f.capacite),
+      feu: FEUX_LIB[feu] || '', endettement: endet, mensualite: nb(f.mensualite), capacite: nb(f.capacite),
       prochain_rdv: prochaine ? `${prochaine.due_date} ${prochaine.due_time || ''}`.trim() : '',
       dossier: d?.title, etape: d ? etapeDe(d) : '',
     },
   };
 };
 const FEUX_LIB = { vert: 'Feu vert', orange: 'Feu orange', rouge: 'Feu rouge' };
+// Ce que chaque couleur veut dire, repris mot pour mot de l'accueil Courtage :
+// deux écrans qui nomment différemment le même verdict se lisent comme deux
+// verdicts.
+const TITRES_FEU = {
+  vert: 'Feu vert : projet faisable',
+  orange: 'Feu orange : projet à optimiser',
+  rouge: 'Feu rouge : projet à étudier',
+};
 
 // ⚠ UN PROSPECT DEVIENT CLIENT À L'OFFRE ÉDITÉE (18/11/2026, Mickael). En base,
 // c'est le déclencheur `courtage_offre_rend_client` qui passe `contacts.type` à
@@ -456,7 +472,17 @@ export const courtageBasePage = {
         // qu'un courtier regarde avant d'appeler : qui et où, comment le joindre,
         // ce qu'il veut financer, combien, si c'est faisable, quand on le rappelle,
         // où en est le dossier. Le type ne sert que dans « Tous les contacts ».
-        colonnes = ['Prospect', 'Coordonnées', 'Projet', 'À financer', 'Faisabilité', 'Prochain rendez-vous', 'Statut', ''];
+        // ⚠ LE FEU A SA COLONNE DEPUIS LE 18/11/2026 (Élodie : « rajoute les feux
+        // rouge, jaune et vert dans la base de données, colonne du tableau »). Il
+        // était déjà là, mais en pastille logée dans « Faisabilité » et dans
+        // « Statut » : une couleur qu'on ne peut pas suivre du regard d'une ligne
+        // à l'autre ne sert pas à trier un rappel du matin.
+        //
+        // ⚠ IL EST POSÉ JUSTE AVANT « FAISABILITÉ », pas en tête de ligne : c'est
+        // le verdict de ce calcul, l'œil va de la couleur au pourcentage. Le
+        // mettre en première colonne décalerait aussi le `splice(1, 0, 'Type')`
+        // de la vue « Tous les contacts », qui compte sur la place du nom.
+        colonnes = ['Prospect', 'Coordonnées', 'Projet', 'À financer', 'Feu', 'Faisabilité', 'Prochain rendez-vous', 'Statut', ''];
         if (state.vue === 'tous') colonnes.splice(1, 0, 'Type');
         lignes = contacts.filter(filtre)
           .filter(c => !state.canal || c.channel === state.canal)
@@ -465,7 +491,7 @@ export const courtageBasePage = {
           .filter(({ c, d }) => hit([contactName(c), c.email, c.phone, c.city, c.channel, d?.title, d?.fields?.type_financement], ts))
           .map(({ c, d }) => {
             const l = ligneDossier(c, d);
-            const cells = [l.prospect, l.coordonnees, l.projet, l.montant, l.faisabilite, l.rdv, statutDossier(c, d)];
+            const cells = [l.prospect, l.coordonnees, l.projet, l.montant, l.feu, l.faisabilite, l.rdv, statutDossier(c, d)];
             if (state.vue === 'tous') cells.splice(1, 0, esc(estClient(c) ? 'Client' : (c.type || '—')));
             return { id: c.id, kind: 'contact', cells, csv: l.csv };
           });
