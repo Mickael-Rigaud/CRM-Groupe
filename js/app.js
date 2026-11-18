@@ -913,6 +913,46 @@ async function route() {
     if (b) b.onclick = () => location.reload();
   }
   window.scrollTo(0, 0);
+  ouvrirFicheDemandee();
+}
+
+// ---------------------------------------------------------------- ?fiche=
+// ⚠ LE CRM N'AVAIT PAS D'ADRESSE PAR AFFAIRE (18/11/2026, Christophe : « sur le
+// mail de confirmation que nous on le reçoit en interne je voudrais juste
+// rajouter le lien direct pour aller sur la fiche prospect dans le crm »).
+// Les écrans se routent par le fragment, mais une fiche s'ouvre en fenêtre
+// par-dessus l'écran courant, sans rien laisser dans l'adresse : il n'y avait
+// donc rien à mettre dans un lien de mail.
+//
+// `?fiche=<id>` se lit ICI, et pas dans l'écran d'une activité, pour deux
+// raisons : le lien marche depuis n'importe quel écran, et il reste à l'écart
+// des écrans eux-mêmes, qui évoluent chacun de leur côté.
+//
+// ⚠ ET LE PARAMÈTRE S'EFFACE UNE FOIS SERVI. Sans cela il reste dans la barre
+// d'adresse : la même fiche se rouvrirait à chaque navigation, et un
+// rafraîchissement ramènerait une fenêtre qu'on venait de fermer.
+async function ouvrirFicheDemandee() {
+  const id = new URLSearchParams(location.hash.split('?')[1] || '').get('fiche');
+  if (!id) return;
+  const propre = location.hash.split('?')[0] || '#/home';
+  history.replaceState(null, '', location.pathname + location.search + propre);
+  // ⚠ `openDeal` SE REFERME SANS UN MOT sur une affaire qu'il ne trouve pas :
+  // son premier geste est `db.byId('deals', id)`, et un `closeModal()` sur rien
+  // ne se voit pas. On vérifie donc avant — sinon le lien du mail ne produit
+  // rien du tout, ce qui se lit comme un lien mort alors que la demande est là.
+  if (!db.byId('deals', id)) {
+    toast('Cette fiche est introuvable — elle a pu être supprimée, ou elle appartient à un espace auquel vous n’avez pas accès.');
+    return;
+  }
+  try {
+    const { openDeal } = await import('./pages/deal.js');
+    await openDeal(id, () => route());
+  } catch (e) {
+    // Une affaire supprimée, un lien recopié de travers, un droit qui manque :
+    // le lien a fait son travail en amenant sur l'écran, on ne casse rien.
+    console.error('Fiche demandée par lien —', e);
+    toast("Cette fiche n'a pas pu être ouverte.");
+  }
 }
 
 export function passwordForm(forced = false) {

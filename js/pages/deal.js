@@ -699,7 +699,7 @@ export function openDeal(id, onChange) {
            faisait croire que l'information n'existait pas dans le CRM. -->
       <div class="rgdf-corps lrc-corps-fiche" data-vue="fiche">
         <div class="rgdf-colonne">
-          ${blocSimulateurFiche(d, { toujours: true })}
+          ${blocSimulateurFiche(d, { toujours: true, contact })}
           <!-- ⚠ L'HISTORIQUE SOUS « LES CHIFFRES » (18/11/2026, Mickael : « pour
                recentrer tous les éléments ») : à gauche le dossier et ce qui s'y
                est dit, à droite la personne, le rendez-vous et les pièces. -->
@@ -775,7 +775,7 @@ export function openDeal(id, onChange) {
                leviers d'une demande venue de lareferencecourtage.fr. Rangés dans
                fields sous des clés que act.fields ne déclare pas, ils ne
                s'affichaient nulle part. Rien pour une affaire qui n'en vient pas. -->
-          ${blocSimulateurFiche(d)}
+          ${blocSimulateurFiche(d, { contact })}
 
           ${blocSi(d.activity === 'courtage' ? 'Le dossier bancaire' : 'Le projet',
             info('regle', 'Motifs de la demande', esc(d.fields?.problematique || ''), 'est-gris')
