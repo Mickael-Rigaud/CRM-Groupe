@@ -1224,8 +1224,40 @@ function carteArgent(cles, r, state) {
   const a = suitLesDevis ? cheminDesSignes(cles, r) : null;
   const t = total(cles, r, scope.deals());
   const encaisse = cumulMensuel(cles, r, 'encaisse');
-  const reste = a ? a.reste : null;
+  // ⚠ DEUX ABSENCES QUI NE SE DISENT PAS PAREIL, et la carte les a confondues
+  // pendant une demi-journée (18/11/2026) : une structure qui NE SUIT PAS ses
+  // devis dans le CRM rend « — », une structure qui les suit mais n'a RIEN
+  // SIGNÉ sur la période rend « 0 € ». La première ne sait pas, la seconde sait
+  // que c'est zéro. Confondre les deux annonçait à RGD, un mois creux, que ses
+  // devis n'étaient pas suivis.
+  const reste = suitLesDevis ? (a ? a.reste : 0) : null;
   const nb = a ? a.nb : 0;
+  // ⚠ EN VUE GROUPE, LE DÉTAIL EST PAR STRUCTURE ET NON PAR CHANTIER
+  // (18/11/2026, Élodie : « le chemin de l'argent est très ciblé pour rgd
+  // renova, réadapte-le pour toutes les structures »). Lister trois chantiers
+  // RGD sous deux tuiles qui cumulent le groupe faisait lire la carte comme
+  // celle de RGD seule.
+  //
+  // ⚠ `t.lignes` PORTE DÉJÀ LE CA DE CHAQUE STRUCTURE : `total()` les calcule
+  // une par une avant de les additionner. Le relire ici donnerait un second
+  // calcul du même nombre, qui finirait par diverger du cumul affiché juste
+  // au-dessus.
+  //
+  // ⚠ ET LE RESTE À FACTURER SE DEMANDE STRUCTURE PAR STRUCTURE : hors RGD,
+  // `cheminDesSignes` rend `null` dès sa première ligne — ce n'est pas trois
+  // parcours de plus, c'est trois sorties immédiates. `null` veut dire « cette
+  // structure ne suit pas ses devis ici », et s'écrit « — », jamais « 0 € ».
+  const groupe = cles.length > 1;
+  const parStructure = !groupe ? [] : cles.map((k) => {
+    const c = cheminDesSignes([k], r);
+    return {
+      cle: k, label: ACTIVITIES[k].label,
+      ca: t.lignes.find(x => x.cle === k)?.ca || 0,
+      reste: c ? c.reste : null,
+      nb: c ? c.nb : 0,
+    };
+  }).sort((x, y) => (y.reste ?? -1) - (x.reste ?? -1) || y.ca - x.ca);
+  const suivies = parStructure.filter(x => x.reste !== null).map(x => x.label);
   const pct = (l) => (l.montant ? Math.round(l.facture / l.montant * 100) : 0);
   return `<section class="card tb-argent">
     <h2>Le chemin de l'argent</h2>
@@ -1235,9 +1267,14 @@ function carteArgent(cles, r, state) {
           l'œil la lit comme une valeur. Une absence doit peser moins. */ ''}
     ${reste === null ? `<div class="tb-gros" ${STYLE_TIRET}>\u2014</div>`
       : `<div class="tb-gros"><span class="tb-nb" data-n="${reste}" data-eur="1">${eur(reste)}</span></div>`}
+    ${/* ⚠ EN VUE GROUPE, LA LIGNE NOMME SON PÉRIMÈTRE. Le grand chiffre ne
+          cumule que les structures qui suivent leurs devis dans le CRM — une
+          seule aujourd'hui. Sans ce mot, il se lisait comme le reste à facturer
+          du groupe entier, alors que deux structures sur trois n'y entrent pas. */ ''}
     <span class="tb-sous">${reste === null
       ? `les devis de ${esc(nomDesStructures(cles))} ne sont pas encore suivis dans le CRM`
-      : nb ? `restant \u00e0 facturer sur ${nb} chantier${nb > 1 ? 's' : ''} sign\u00e9${nb > 1 ? 's' : ''} sur la p\u00e9riode`
+      : nb ? `restant \u00e0 facturer sur ${nb} chantier${nb > 1 ? 's' : ''} sign\u00e9${nb > 1 ? 's' : ''} sur la p\u00e9riode${
+          groupe && suivies.length ? ` \u00b7 ${esc(suivies.join(' et '))}` : ''}`
       : 'aucun chantier sign\u00e9 sur la p\u00e9riode'}</span>
     ${/* ⚠ DEUX TUILES, PAS TROIS : `tb-flux` est une grille de trois colonnes
           dans app.css, qu'on ne touche pas (une autre session y travaille). */ ''}
@@ -1258,7 +1295,25 @@ function carteArgent(cles, r, state) {
     </div>
     ${/* ⚠ LE DÉTAIL EST STYLÉ EN LIGNE : `tb-detail` est dessiné pour les
           cartes claires et disparaîtrait sur le dégradé. */ ''}
-    ${a && a.lignes.length ? `<div style="margin-top:16px;border-top:1px solid rgba(255,255,255,.22);padding-top:6px">
+    ${/* ⚠ UN SEUL DÉTAIL, DEUX DÉCOUPAGES : par structure en vue groupe, par
+          chantier dans l'espace d'une structure. C'est la même question — d'où
+          vient ce qui reste à facturer — posée à l'échelle qu'on regarde.
+
+          ⚠ LE DÉTAIL EST STYLÉ EN LIGNE : `tb-detail` est dessiné pour les
+          cartes claires et disparaîtrait sur le dégradé. */ ''}
+    ${groupe ? `<div style="margin-top:16px;border-top:1px solid rgba(255,255,255,.22);padding-top:6px">
+      <span class="tb-sous" style="display:block;margin-bottom:2px">structure par structure</span>
+      ${parStructure.map(x => `<div style="display:flex;align-items:baseline;gap:10px;padding:6px 0;font-size:12.5px">
+        <span style="font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:42%">${esc(x.label)}</span>
+        <span style="opacity:.8;font-size:11.5px">${eur(x.ca)} factur\u00e9${x.reste !== null && x.nb
+          ? ` \u00b7 ${x.nb} chantier${x.nb > 1 ? 's' : ''} sign\u00e9${x.nb > 1 ? 's' : ''}` : ''}</span>
+        <b style="margin-left:auto;font-variant-numeric:tabular-nums${x.reste === null ? ';opacity:.6' : ''}"${
+          x.reste === null ? ' title="Les devis de cette structure ne sont pas suivis dans le CRM"' : ''}>${
+          x.reste === null ? '\u2014' : x.reste ? eur(x.reste) : 'sold\u00e9'}</b>
+      </div>`).join('')}
+      <div style="font-size:11.5px;opacity:.78;padding-top:2px">à droite, ce qui reste \u00e0 facturer</div>
+    </div>`
+    : a && a.lignes.length ? `<div style="margin-top:16px;border-top:1px solid rgba(255,255,255,.22);padding-top:6px">
       <span class="tb-sous" style="display:block;margin-bottom:2px">chantier par chantier</span>
       ${a.lignes.slice(0, 3).map(l => `<div style="display:flex;align-items:baseline;gap:10px;padding:6px 0;font-size:12.5px">
         <span style="font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:42%">${esc(l.client)}</span>
