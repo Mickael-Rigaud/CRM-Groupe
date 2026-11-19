@@ -179,14 +179,20 @@ const depuis = (d) => {
 // dans les variables du thème ; au-delà on recommence, deux calendriers de la
 // même couleur valant mieux qu'une teinte inventée à l'exécution.
 const TEINTES = ['var(--accent)', 'var(--blue)', 'var(--green)', 'var(--violet)', 'var(--amber)', 'var(--sea)'];
+// ⚠ UNE STRUCTURE PEUT DONNER SA PROPRE PALETTE (19/11/2026, Élodie : « peux-tu
+// juste me mettre les rendez-vous de cet agenda sur l'écran du crm de la
+// référence courtage en bleu clair »). La première teinte est `var(--accent)`,
+// et dans l'espace courtage `--accent` VAUT L'ORANGE de la charte : un agenda
+// à un seul calendrier y sortait donc orange. La palette se déclare dans
+// l'espace, et le courtage ouvre sur l'azur.
 // ⚠ `calendriers` PEUT ÊTRE UNE PALETTE (`Map` calendrier → teinte) depuis le
 // 28/10/2026 : la direction voit tout le monde dans la même grille, et c'est
 // alors LA PERSONNE qui donne la couleur — l'agenda commun, qui peut compter
 // plusieurs calendriers, n'en a qu'une. Voir `palette` dans `draw`.
-const teinteDe = (calendriers, id) => {
-  if (calendriers instanceof Map) return calendriers.get(id) || TEINTES[0];
+const teinteDe = (calendriers, id, teintes = TEINTES) => {
+  if (calendriers instanceof Map) return calendriers.get(id) || teintes[0];
   const i = calendriers.indexOf(id);
-  return TEINTES[(i < 0 ? 0 : i) % TEINTES.length];
+  return teintes[(i < 0 ? 0 : i) % teintes.length];
 };
 
 /**
@@ -308,7 +314,7 @@ function voies(evts) {
   return out;
 }
 
-function grille(jours, parJour, calendriers, ecriture, pxParHeure = 52) {
+function grille(jours, parJour, calendriers, ecriture, pxParHeure = 52, teintes = TEINTES) {
   const { debut, fin } = plageHoraire(jours, parJour);
   const hauteur = (fin - debut) / 60 * pxParHeure;
   const y = (min) => (min - debut) / (fin - debut) * hauteur;
@@ -352,7 +358,7 @@ function grille(jours, parJour, calendriers, ecriture, pxParHeure = 52) {
           return `<button type="button" class="ag-evt" data-ev="${esc(e.id)}"
                 ${ecriture ? 'draggable="true"' : ''}
                 style="top:${y(d)}px;height:${Math.max(18, y(f) - y(d))}px;${cote}
-                --ag-teinte:${teinteDe(calendriers, e.calendar_id)}"
+                --ag-teinte:${teinteDe(calendriers, e.calendar_id, teintes)}"
                 title="${esc(e.title || '')}${e.location ? ' — ' + esc(e.location) : ''}">
             <b>${esc(e.title || '(sans titre)')}</b>
             <span>${esc(hhmm(e.starts_at))}${e.location ? ' · ' + esc(e.location) : ''}</span>
@@ -729,6 +735,8 @@ export const pageAgenda = (espace) => ({
   title: () => espace.titre,
   render(root) {
     const { cle: KEY, cadre, guard } = espace;
+    // La palette de la structure, ou celle par défaut.
+    const PALETTE = espace.teintes || TEINTES;
     if (guard(root)) return {};
     const coquille = poserEspace(root);
     // Le jour courant n'est PAS retenu d'une visite à l'autre : on ouvre un
@@ -889,7 +897,7 @@ export const pageAgenda = (espace) => ({
       // boutons au-dessus de la grille servent de légende.
       const agendas = scope.agendasAViser(KEY);
       const palette = new Map();
-      agendas.forEach((a, i) => a.calendriers.forEach(c => palette.set(c, TEINTES[i % TEINTES.length])));
+      agendas.forEach((a, i) => a.calendriers.forEach(c => palette.set(c, PALETTE[i % PALETTE.length])));
       if (state.agendaVu && !agendas.some(a => a.valeur === state.agendaVu)) state.agendaVu = '';
       const calendriersTous = [...new Set(visibles.map(e => e.calendar_id).filter(Boolean))].sort();
       const vise = state.agendaVu ? agendas.find(a => a.valeur === state.agendaVu).calendriers : null;
@@ -897,7 +905,7 @@ export const pageAgenda = (espace) => ({
       const choixAgendas = agendas.length > 1 ? `<div class="ag-qui" role="group" aria-label="Agenda affiché">
         <button type="button" class="ag-qui-b${state.agendaVu ? '' : ' on'}" data-agenda-vu="">Tout le monde</button>
         ${agendas.map(a => `<button type="button" class="ag-qui-b${state.agendaVu === a.valeur ? ' on' : ''}"
-          data-agenda-vu="${esc(a.valeur)}" style="--ag-teinte:${teinteDe(palette, a.calendriers[0])}">
+          data-agenda-vu="${esc(a.valeur)}" style="--ag-teinte:${teinteDe(palette, a.calendriers[0], PALETTE)}">
           <i></i>${esc(a.libelle)}</button>`).join('')}
       </div>` : '';
 
@@ -984,7 +992,7 @@ export const pageAgenda = (espace) => ({
               <div class="card-head"><h2>Prochains rendez-vous</h2></div>
               ${prochains.length ? prochains.map(e => `
                 <a class="ag-prochain" ${e.link ? `href="${esc(e.link)}" target="_blank" rel="noopener"` : ''}
-                   style="--ag-teinte:${teinteDe(teintes, e.calendar_id)}">
+                   style="--ag-teinte:${teinteDe(teintes, e.calendar_id, PALETTE)}">
                   <span class="ag-prochain-q">${esc(relDay(e.day))}</span>
                   <b>${esc(e.title || '(sans titre)')}</b>
                   <span class="muted s">${e.all_day ? 'journée entière' : esc(hhmm(e.starts_at))}${
@@ -1029,7 +1037,7 @@ export const pageAgenda = (espace) => ({
             ${bandeJours}
             <section class="card ag-cadre">
               ${vide ? `<p class="ag-libre">Aucun rendez-vous ${telephone ? 'ce jour-là' : 'cette semaine'}.</p>` : ''}
-              ${grille(affiches, parJour, teintes, state.ecriture, pxParHeure)}
+              ${grille(affiches, parJour, teintes, state.ecriture, pxParHeure, PALETTE)}
             </section>
           </section>
         </div>`;

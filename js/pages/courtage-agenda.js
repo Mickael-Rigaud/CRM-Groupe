@@ -32,4 +32,14 @@ export const courtageAgendaPage = pageAgenda({
   guard: guardCourtage,
   hash: '#/courtage/agenda',
   titre: 'La Référence Courtage — Agenda',
+  // ⚠ L'AZUR D'ABORD (19/11/2026, Élodie : « mets les rendez-vous de cet agenda
+  // en bleu clair »). La palette commune ouvre sur `var(--accent)`, et dans cet
+  // espace `--accent` VAUT L'ORANGE de la charte : un agenda à un seul
+  // calendrier y sortait donc orange vif. `--lrc-azur` est le bleu clair de La
+  // Référence Courtage, celui des pastilles et des liens de l'espace — la
+  // barre de gauche le porte plein, le fond à 14 %.
+  //
+  // Les suivantes servent le jour où plusieurs courtiers auront chacun leur
+  // agenda : elles restent distinctes entre elles, et de l'azur.
+  teintes: ['var(--lrc-azur)', 'var(--violet)', 'var(--green)', 'var(--amber)', 'var(--sea)'],
 });
