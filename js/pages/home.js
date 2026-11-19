@@ -799,21 +799,20 @@ function blocObjectif(cles, couleur, deals, titre, attrs, grand = false) {
   // ce qui désigne un manque de travail là où il n'y a qu'un manque de mesure.
   // On garde l'objectif affiché — il a été fixé, il existe — et on remplace le
   // verdict par ce qu'on sait vraiment.
+  //
+  // ⚠ RÉVISÉ LE 19/11/2026 — Élodie : « je voudrais quand même voir les
+  // graphiques de btp expertise et la référence courtage même si les résultats
+  // sont à zéro ». Le bloc complet s'affiche donc toujours (jauges et frise) ;
+  // ce qui reste du 12/11, c'est la PHRASE qui dit pourquoi c'est à zéro, posée
+  // sous le titre, et la sortie du total « Groupe » (`mesurables` plus haut).
   const connu = cles.some(k => argentConnu(k, deals));
-  if (!connu) {
-    return `<article class="ob-bloc ob-muet${attrs ? ' click' : ''}" style="--c:${couleur}" ${attrs}>
-      <header class="ob-tete"><span class="tb-struct">${titre}</span>
-        <span class="muted small">objectif annuel <b>${eur(objAn)}</b></span></header>
-      <p class="ob-sansdonnee"><b>Aucun chiffre d'affaires dans le CRM</b> pour cette structure :
-        sa facturation ne passe pas par ici. L'objectif est affiché pour mémoire — l'avancement
-        ne peut pas être calculé, et un « 0 % » dirait autre chose que la vérité.</p>
-    </article>`;
-  }
+  const sansDonnee = connu ? '' : `<p class="muted small" style="margin:2px 0 8px">Aucun chiffre d'affaires encore enregistré dans le CRM pour cette structure : les barres restent à zéro.</p>`;
 
   return `<article class="ob-bloc${attrs ? ' click' : ''}" style="--c:${couleur}${
     grand && frise ? ';flex:1 1 auto;display:flex;flex-direction:column' : ''}" ${attrs}>
     <header class="ob-tete"><span class="tb-struct">${titre}</span>
       <span class="muted small">objectif annuel <b>${eur(objAn)}</b></span></header>
+    ${sansDonnee}
     <div class="ob-jauges">
       ${jaugeObjectif(`${mois.start.toLocaleDateString('fr-FR', { month: 'long' })} · en cours`, caDe(mois), objMois, mois, 'jour')}
       ${jaugeObjectif(nomAnnee, caAnnee, objAn, partAnnee || exercices[0], partAnnee ? 'mois' : '',
