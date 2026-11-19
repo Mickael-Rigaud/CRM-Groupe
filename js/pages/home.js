@@ -870,7 +870,15 @@ function jaugeObjectif(libelle, realise, vise, r, unite, partForcee = null) {
     <div class="ob-barre"><span class="ob-rempli" style="width:${Math.min(100, p * 100).toFixed(1)}%"></span>
       ${part > 0 && part < 1 ? `<span class="ob-repere" style="left:${(part * 100).toFixed(1)}%" title="Où il faudrait être aujourd'hui"></span>` : ''}</div>
     ${verdict ? `<p class="ob-verdict ${etat}">${verdict}</p>` : ''}
-    <p class="muted small">${reste ? `Reste ${eur(reste)}${rythme}` : 'Plus rien à faire sur cette période.'}</p>
+    ${'' /* ⚠ `ob-reste` N'EST PAS DÉCORATIF : il dit « ceci est un CHIFFRE, pas
+           une note ». `mobile.css` masque sur téléphone les `p.small.muted` qui
+           ferment un encadré — demande d'Élodie du 10/11, « enlève toutes les
+           écritures en petit à la fin de chaque encadré ». La règle emportait
+           aussi cette ligne-ci, qui porte ce qui reste à faire et en combien de
+           temps : le tableau de bord du téléphone ne disait plus la même chose
+           que celui de l'ordinateur (19/11/2026, Élodie). Les vraies notes —
+           les deux légendes et les sources — restent masquées, elles. */}
+    <p class="muted small ob-reste">${reste ? `Reste ${eur(reste)}${rythme}` : 'Plus rien à faire sur cette période.'}</p>
   </div>`;
 }
 /**
