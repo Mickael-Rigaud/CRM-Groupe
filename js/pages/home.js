@@ -770,15 +770,24 @@ function blocObjectif(cles, couleur, deals, titre, attrs, grand = false) {
       label: r.start.toLocaleDateString('fr-FR', { month: 'short' }).replace('.', ''),
     };
   });
-  const haut = Math.max(1, ...colonnes.map(c => Math.max(c.o, c.v || 0)));
+  // ⚠ DE LA PLACE AU-DESSUS DU TRAIT D'OBJECTIF (19/11/2026, Élodie : « que les
+  // barres aillent au delà de la ligne des objectifs pour que l'on voie
+  // réellement cette ligne »). L'échelle s'arrêtait au plus haut des objectifs :
+  // un mois sans dépassement posait son trait sur le BORD SUPÉRIEUR de la
+  // colonne, où il se confondait avec l'arrondi. Un tiers de marge le décolle,
+  // et une barre qui dépasse l'objectif a de quoi le montrer.
+  const haut = Math.max(1, ...colonnes.map(c => Math.max(c.o, c.v || 0))) * 1.35;
   const frise = !colonnes.length ? '' : `<div class="ob-frise" aria-label="CA mois par mois"${grand ? ' style="flex:1 1 auto"' : ''}>${colonnes.map(c => {
     const futur = c.v === null, courant = c.cle === cleMoisCourant;
     const atteint = !futur && c.o > 0 && c.v >= c.o;
     return `<div class="ob-col${futur ? ' futur' : ''}${courant ? ' courant' : ''}"
         title="${esc(c.label)} : ${futur ? 'à venir' : eur(c.v)} · objectif ${eur(c.o)}">
-      <div class="ob-col-zone"${grand ? ' style="flex:1 1 auto"' : ''}>
+      <div class="ob-col-zone" style="overflow:visible${grand ? ';flex:1 1 auto' : ''}">
         ${futur ? '' : `<span class="ob-col-val${atteint ? ' ok' : ''}" style="height:${Math.max(c.v > 0 ? 3 : 0, c.v / haut * 100).toFixed(1)}%"></span>`}
-        <span class="ob-col-obj" style="bottom:${(c.o / haut * 100).toFixed(1)}%"></span>
+        ${/* Le trait déborde de la colonne de 3 px de chaque côté et passe
+              à 3 px d'encre pleine : on le voit d'un mois à l'autre comme une
+              ligne, et non plus comme un liseré du fond. */ ''}
+        ${c.o > 0 ? `<span class="ob-col-obj" style="bottom:${(c.o / haut * 100).toFixed(1)}%;left:-3px;right:-3px;height:3px;margin-bottom:-1.5px;border-radius:2px;opacity:.9;z-index:1"></span>` : ''}
       </div>
       <span class="ob-col-nom">${esc(c.label)}</span></div>`;
   }).join('')}</div>`;
@@ -1093,8 +1102,16 @@ async function releverSemaine(du, au, apres) {
 // ⚠ BTP EXPERTISE N'Y FIGURE JAMAIS (`scope.STRUCTURES_A_AGENDA_COMMUN`) :
 // le métier d'un rendez-vous s'y déduit du calendrier, un agenda personnel ne
 // recevrait rien. On y invite la personne au lieu de lui en créer un.
+//
+// ⚠ NI UNE STRUCTURE SANS LE MOINDRE CALENDRIER RACCORDÉ (19/11/2026,
+// Élodie : « supprime "créer mon agenda propulsion" »). Propulsion n'a pas de
+// `propulsion_calendar_id` : l'agenda personnel qu'on y aurait créé serait le
+// PREMIER de la structure, c'est-à-dire un calendrier commun déguisé en agenda
+// privé, et personne ne l'attend. On raccorde d'abord la structure — bouton
+// « Agendas » ci-dessus —, on distribue ensuite.
 const structuresSansMonAgenda = (cles) => (cles || []).filter(
-  k => !scope.STRUCTURES_A_AGENDA_COMMUN.includes(k) && !scope.aUnAgendaAVoir(k));
+  k => !scope.STRUCTURES_A_AGENDA_COMMUN.includes(k)
+    && idsDe(k).length && !scope.aUnAgendaAVoir(k));
 
 const monAgendaHtml = (cles) => {
   const manquantes = structuresSansMonAgenda(cles);

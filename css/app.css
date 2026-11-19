@@ -10906,3 +10906,87 @@ button.u-tab { border: 0; background: transparent; }
 .ct-rdv-txt em { font-style: normal; font-weight: 800; color: var(--lrc-azur-encre, #0A6F86); }
 .ct-rdv-ligne.est-encours { background: var(--lrc-azur-doux, #D8F1F8); }
 .ct-rdv-ligne.est-fini { opacity: .55; border-left-color: var(--line); }
+
+
+/* ---- « Ma semaine » : l'habillage « Vitrine » (19/11/2026)
+   Élodie, devant trois maquettes cliquables : « le c ». Le dégradé du CRM entre
+   dans le calendrier — halo en fond, pastille du jour en dégradé, trait de
+   l'heure qui pulse, rendez-vous en verre dépoli qui arrivent en cascade.
+
+   ⚠ TOUT EST PRÉFIXÉ PAR `.tb-cal` : la même grille sert à l'écran Agenda, qui
+   ne doit rien voir de tout ceci. Ces règles arrivent après le premier bloc
+   `.tb-cal` du fichier et le surchargent à spécificité égale, par l'ordre.
+   ------------------------------------------------------------------------- */
+/* ⚠ LE HALO SE TIENT TRÈS BAS. À 11 % il teintait l'en-tête des jours en rose
+   et donnait un calendrier sali plutôt qu'habillé ; vu à la capture. Il doit se
+   deviner dans les coins, pas se voir. */
+.tb-cal { background:
+    radial-gradient(660px 200px at 6% -22%, color-mix(in srgb, var(--accent) 7%, transparent), transparent),
+    radial-gradient(540px 180px at 99% -14%, color-mix(in srgb, #FF4D8D 6%, transparent), transparent),
+    var(--card); }
+/* Les traits s'effacent : c'est la couleur des rendez-vous qui structure. */
+.tb-cal .ag-col { border-left-color: color-mix(in srgb, var(--line) 55%, transparent); }
+.tb-cal .ag-heures { border-right-color: color-mix(in srgb, var(--line) 55%, transparent); }
+.tb-cal .ag-ligne { background: color-mix(in srgb, var(--line) 50%, transparent); }
+.tb-cal .ag-col-tete { height: 46px; gap: 2px;
+  border-bottom-color: color-mix(in srgb, var(--line) 60%, transparent); }
+
+/* Le jour en cours : son chiffre dans une pastille en dégradé. */
+.tb-cal .ag-col.auj .ag-col-tete b { width: 26px; height: 26px; display: grid; place-items: center;
+  border-radius: 999px; color: #fff; font-size: 14px;
+  background: linear-gradient(135deg, #5B52F0, #FF4D8D 65%, #FF7A2D);
+  box-shadow: 0 9px 16px -10px rgba(255, 77, 141, .95); }
+
+/* Le rendez-vous en verre dépoli, avec un liseré qui glisse de sa couleur vers
+   le rose de la charte. ⚠ LE LISERÉ EST UN `::after` ET NON UN `border-left` :
+   un bord ne prend pas de dégradé. */
+.tb-cal .ag-evt { border-left: 0; border-radius: 10px; padding: 1px 6px 1px 9px;
+  background: color-mix(in srgb, var(--ag-teinte, var(--accent)) 13%, var(--card));
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ag-teinte, var(--accent)) 30%, transparent),
+              0 10px 20px -16px color-mix(in srgb, var(--ag-teinte, var(--accent)) 85%, #000);
+  transition: transform .18s cubic-bezier(.2, .8, .2, 1), box-shadow .18s, background .18s; }
+.tb-cal .ag-evt::after { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+  background: linear-gradient(180deg, var(--ag-teinte, var(--accent)),
+    color-mix(in srgb, var(--ag-teinte, var(--accent)) 35%, #FF4D8D)); }
+.tb-cal .ag-evt:hover { transform: translateY(-2px) scale(1.012);
+  background: color-mix(in srgb, var(--ag-teinte, var(--accent)) 20%, var(--card));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ag-teinte, var(--accent)) 55%, transparent),
+              0 18px 28px -18px color-mix(in srgb, var(--ag-teinte, var(--accent)) 90%, #000); }
+
+/* Le trait de l'heure qu'il est, en dégradé, avec un point qui respire. */
+.tb-cal .ag-now { height: 2px; border-radius: 2px;
+  background: linear-gradient(90deg, #5B52F0, #FF4D8D, #FF7A2D); }
+.tb-cal .ag-now::before { background: #FF4D8D; animation: tbPouls 2.6s ease-in-out infinite; }
+@keyframes tbPouls {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 77, 141, .5); }
+  50% { box-shadow: 0 0 0 7px rgba(255, 77, 141, 0); }
+}
+
+/* L'arrivée en cascade, une colonne après l'autre.
+   ⚠ `backwards` ET NON `both` : une animation qui garde son état final écrase le
+   `transform` du survol, et le rendez-vous ne se soulèverait plus jamais. Avec
+   `backwards`, le style normal reprend la main dès la dernière image.
+
+   ⚠ ELLE NE PART PAS DE `opacity: 0`, ET C'EST UNE LEÇON PAYÉE : avec
+   `backwards`, l'état de départ s'applique PENDANT LE DÉLAI. Un navigateur qui
+   gelle ses animations laisse alors sept colonnes de rendez-vous INVISIBLES, et
+   rien ne le signale — mesuré à l'essai : onze rendez-vous à `opacity: 0`.
+   Partir de .35 et d'un décalage de 7 px donne la même cascade à l'œil, et le
+   pire des cas reste un rendez-vous pâle et légèrement déplacé, donc lisible. */
+@keyframes tbArrive {
+  from { opacity: .35; transform: translateY(7px) scale(.97); }
+  to { opacity: 1; transform: none; }
+}
+.tb-cal .ag-evt { animation: tbArrive .42s cubic-bezier(.2, .9, .25, 1) backwards; }
+.tb-cal .ag-col:nth-child(2) .ag-evt { animation-delay: 40ms; }
+.tb-cal .ag-col:nth-child(3) .ag-evt { animation-delay: 80ms; }
+.tb-cal .ag-col:nth-child(4) .ag-evt { animation-delay: 120ms; }
+.tb-cal .ag-col:nth-child(5) .ag-evt { animation-delay: 160ms; }
+.tb-cal .ag-col:nth-child(6) .ag-evt { animation-delay: 200ms; }
+.tb-cal .ag-col:nth-child(7) .ag-evt { animation-delay: 240ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tb-cal .ag-evt { animation: none; transition: none; }
+  .tb-cal .ag-now::before { animation: none; }
+}
