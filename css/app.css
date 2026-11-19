@@ -10152,6 +10152,10 @@ td .pl-toque { color: #4f46e5; }
 
 /* « + Prospect », l'écran des chiffres : les montants liés et le calcul en direct (17/11/2026) */
 .lrc-grille.est-trois { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+/* ⚠ EST-DEUX SE DECLARE ICI, AVANT LE @media, et non plus bas avec les replis :
+   posee apres lui, elle le gagnait a specificite egale et le telephone gardait
+   deux colonnes — « Lesquels » y etait coupe a « Credit auto, cr ». */
+.lrc-grille.est-deux { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .lrc-lien { margin: 10px 0 0; font-size: 12.5px; color: var(--lrc-encre-2); }
 .lrc-duo { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 18px; }
 .lrc-calcul { margin-top: 18px; padding: 16px 18px 14px; border-radius: 18px;
@@ -10170,7 +10174,8 @@ td .pl-toque { color: #4f46e5; }
 .lrc-avis { margin: 6px 0 0; font-size: 12.5px; font-weight: 650; color: var(--lrc-encre-2); }
 .lrc-avis.est-vert { color: #2E8B57; } .lrc-avis.est-orange { color: #B86A08; } .lrc-avis.est-rouge { color: #C8483C; }
 @media screen and (max-width: 820px) {
-  .lrc-grille.est-trois, .lrc-duo { grid-template-columns: 1fr; }
+  .lrc-grille.est-trois, .lrc-grille.est-deux, .lrc-duo { grid-template-columns: 1fr; }
+  .lrc-repli-corps { margin-left: 0; padding: 2px 0 12px 10px; }
   .lrc-calc-cases { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 /* Les flèches des champs numériques recouvraient le « € » : retirées, la saisie se fait au clavier. */
@@ -10178,6 +10183,33 @@ td .pl-toque { color: #4f46e5; }
 .lrc-form input[type="number"]::-webkit-inner-spin-button, .lrc-form input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 /* « + Prospect » : code postal et ville sur une ligne, à côté de l'adresse (18/11/2026) */
 .lrc-grille.est-cp { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 0 12px; margin-top: 0; }
+
+/* --------------------------------------------------------------------------
+   LES QUESTIONS EN CASCADE DU FORMULAIRE PROSPECT (19/11/2026, Elodie : « je
+   veux qu'il soit simple a remplir, par exemple : on demande d'abord s'il y a
+   des credits en cours et si oui, quels credits et combien ? »).
+
+   Un repli n'est pas un accordeon decoratif : son titre reste lisible et
+   cliquable meme ferme, pour qu'on sache ce qu'on n'a pas ouvert.
+   -------------------------------------------------------------------------- */
+.lrc-repli { margin-top: 16px; }
+.lrc-replier { display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px 7px 10px; border-radius: 999px;
+  border: 1.5px dashed var(--lrc-filet-fort); background: transparent; cursor: pointer; font: inherit; font-size: 12.5px;
+  font-weight: 750; color: var(--lrc-encre-2); }
+.lrc-replier:hover { border-style: solid; color: var(--lrc-encre); background: rgba(255,255,255,.6); }
+.lrc-replier i { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; font-style: normal;
+  font-size: 13px; line-height: 1; background: var(--lrc-orange); color: #fff; }
+.lrc-repli.est-ouvert .lrc-replier { border-style: solid; background: #fff; color: var(--lrc-encre); }
+.lrc-repli-corps { margin-top: 6px; padding: 2px 14px 14px; border-left: 2px solid var(--lrc-filet-fort); margin-left: 10px; }
+.lrc-repli-corps > h4:first-child { margin-top: 10px; }
+
+/* Ce qui est indispensable se voit AVANT de cliquer « Creer » : le formulaire
+   ne reclamait le nom qu'au moment d'enregistrer, deux etapes plus loin.
+   ⚠ UNE PHRASE, PAS UNE PASTILLE PAR CHAMP : la regle est « un nom ET (un
+   telephone OU un e-mail) », qu'aucune etiquette posee sur un champ ne sait
+   dire sans mentir. */
+.lrc-lien.est-manque { font-weight: 700; color: #B86A08; }
+.lrc-lien.est-bon { font-weight: 700; color: #2E8B57; }
 .cts-chiffres .est-vert b { color: #2E8B57; } .cts-chiffres .est-orange b { color: #E38A12; } .cts-chiffres .est-rouge b { color: #D9483B; }
 
 /* --------------------------------------------------------------------------
