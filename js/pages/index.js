@@ -106,6 +106,10 @@ export const pages = {
   btp_atlas: ecran('./btp-atlas.js', 'btpAtlasPage'),
   courtage_home: ecran('./courtage.js', 'courtageHomePage'),
   courtage_base: ecran('./courtage.js', 'courtageBasePage'),
+  // ⚠ LE MÊME ÉCRAN QUE `rgd_agenda`, paramétré par `courtage-agenda.js` : une
+  // seule page Agenda pour les deux structures, et la clé d'activité fait le
+  // cloisonnement (19/11/2026).
+  courtage_agenda: ecran('./courtage-agenda.js', 'courtageAgendaPage'),
   courtage_vivier: ecran('./courtage.js', 'courtageVivierPage'),
   courtage_analyse: ecran('./communication.js', 'courtageAnalysePage'),
   courtage_communication: ecran('./communication.js', 'courtageCommunicationPage'),

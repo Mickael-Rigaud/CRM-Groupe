@@ -89,6 +89,16 @@ import { scope } from '../data/scope.js';
 import { esc, isoDay, relDay, toast, openModal, closeModal } from '../ui.js';
 import { poserEspace } from './espace.js';
 import { cadre, guard, KEY } from './rgd-espace.js';
+// ⚠ CET ÉCRAN SERT DÉSORMAIS DEUX STRUCTURES (19/11/2026, Élodie : « on peut
+// rajouter l'agenda google sur le crm de la référence courtage ? »). Tout ce
+// qui était propre à RGD — l'habillage, le contrôle d'accès, l'adresse de la
+// page et la clé d'activité — passe par cet objet. `rgdAgendaPage` garde son
+// nom et son comportement ; `courtage-agenda.js` fournit les siens.
+//
+// ⚠ ET LA CLÉ N'EST PAS DÉCORATIVE : elle filtre `agenda_events.activity`.
+// Les deux agendas vivent dans la MÊME table, et c'est elle qui garantit
+// qu'un rendez-vous de courtage n'apparaît jamais dans l'agenda de RGD.
+const ESPACE_RGD = { cle: KEY, cadre, guard, hash: '#/rgd/agenda', titre: 'RGD Renova — Agenda' };
 // ⚠ LE FORMULAIRE A QUITTÉ CE FICHIER LE 30/09/2026, avec les deux calculs
 // d'heure qu'il porte : le tableau de bord de BTP Expertise crée désormais ses
 // rendez-vous par le même. Il en est SORTI, pas recopié — `decale` et
@@ -387,7 +397,7 @@ function lierGrille(root, ecriture, apres) {
   // `scope.rgd(...)`, et jamais dans une copie gardée de côté : le relevé
   // remplace ces lignes, et une copie désignerait un rendez-vous qui n'existe
   // plus à l'identique.
-  const parId = (id) => scope.rgd('agenda_events').find(e => e.id === id) || null;
+  const parId = (id) => db.t('agenda_events').find(e => e.id === id) || null;
 
   root.querySelectorAll('[data-ev]').forEach(b => {
     b.onclick = () => {
@@ -711,9 +721,14 @@ function jourDemande() {
   return (vise >= min && vise <= max) ? vise : isoDay();
 }
 
-export const rgdAgendaPage = {
-  title: () => 'RGD Renova — Agenda',
+/**
+ * L'écran Agenda d'une structure. `espace` porte ce qui change d'une structure
+ * à l'autre : la clé d'activité, l'habillage, le contrôle d'accès, l'adresse.
+ */
+export const pageAgenda = (espace) => ({
+  title: () => espace.titre,
   render(root) {
+    const { cle: KEY, cadre, guard } = espace;
     if (guard(root)) return {};
     const coquille = poserEspace(root);
     // Le jour courant n'est PAS retenu d'une visite à l'autre : on ouvre un
@@ -831,7 +846,7 @@ export const rgdAgendaPage = {
       // à elle et regarde celui d'entrée — lui proposer d'en créer un cacherait
       // l'agenda où arrivent les leads derrière un bouton.
       if (!db.demo && !scope.aUnAgendaAVoir(KEY)) {
-        root.innerHTML = cadre('#/rgd/agenda', 'Agenda', sansAgenda());
+        root.innerHTML = cadre(espace.hash, 'Agenda', sansAgenda());
         const b = root.querySelector('#ag-creer');
         if (b) b.onclick = async () => {
           const zone = root.querySelector('#ag-creer-retour');
@@ -858,7 +873,7 @@ export const rgdAgendaPage = {
       // calendrier), et la direction y échappe de toute façon. Voir
       // `scope.voitAgenda` : chacun ne voit que ses calendriers dès qu'il en a
       // un, et rien ne change tant qu'il n'en a pas.
-      const visibles = scope.rgd('agenda_events')
+      const visibles = db.t('agenda_events')
         .filter(e => e.activity === KEY && scope.voitAgenda(e));
 
       // ⚠ LA DIRECTION VOIT TOUS LES AGENDAS, ET CHOISIT LEQUEL REGARDER
@@ -1019,7 +1034,7 @@ export const rgdAgendaPage = {
           </section>
         </div>`;
 
-      root.innerHTML = cadre('#/rgd/agenda', 'Agenda', corps);
+      root.innerHTML = cadre(espace.hash, 'Agenda', corps);
 
       // ⚠ CHANGER DE SEMAINE, C'EST ALLER LA CHERCHER. Dessiner d'abord —
       // l'écran répond tout de suite, avec ce qu'on a — puis relever : la
@@ -1064,4 +1079,7 @@ export const rgdAgendaPage = {
       destroy() { vivant = false; coquille.retirer(); },
     };
   },
-};
+});
+
+// La page de RGD, inchangée pour qui l'importe.
+export const rgdAgendaPage = pageAgenda(ESPACE_RGD);

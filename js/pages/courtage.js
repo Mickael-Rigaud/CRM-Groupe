@@ -31,6 +31,12 @@ const brokers = () => db.t('broker_profiles').filter(r => !r.archive);
 const ONGLETS = [
   { hash: '#/courtage', label: "Vue d'ensemble" },
   { hash: '#/courtage/base', label: 'Base de données' },
+  // « Agenda » (19/11/2026, Élodie : « on peut rajouter l'agenda google sur le
+  // crm de la référence courtage ? […] je veux l'agenda de la référence
+  // courtage SEULEMENT pour le crm de la référence courtage »). L'agenda
+  // lareferencecourtage@gmail.com est raccordé le même jour ; ses rendez-vous
+  // portent `activity: 'courtage'` et ne paraissent nulle part chez RGD.
+  { hash: '#/courtage/agenda', label: 'Agenda' },
   { hash: '#/courtage/vivier', label: 'Vivier courtiers' },
   // « Communication » (12/10/2026, Élodie) : pour l'instant la seule analyse du
   // site lareferencecourtage.fr, les réseaux viendront plus tard. Réservé à la
@@ -55,11 +61,15 @@ export const cadreCourtage = (actif, titre, corps) => coquilleEspace({
 });
 const cadre = cadreCourtage;
 
-const guard = (root) => {
+// ⚠ EXPORTÉ POUR L'ÉCRAN AGENDA (19/11/2026) : il vit dans un autre fichier et
+// doit poser le MÊME contrôle d'accès. Le recopier aurait fait deux règles pour
+// une seule question — et c'est celle qui décide qui voit l'agenda de l'agence.
+export const guardCourtage = (root) => {
   if (scope.activityKeys.includes(KEY)) return false;
   root.innerHTML = '<div class="card"><div class="empty">Vous n&rsquo;avez pas accès à l&rsquo;activité La Référence Courtage.</div></div>';
   return true;
 };
+const guard = guardCourtage;
 
 // ---------------------------------------------------------------- Vue d'ensemble
 export const courtageHomePage = {

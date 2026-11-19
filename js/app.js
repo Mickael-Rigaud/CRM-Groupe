@@ -499,13 +499,15 @@ const BAS_STRUCTURE = {
     { hash: '#/btp/amo', icon: 'building', label: 'AMO' },
     { hash: '#/btp/base', icon: 'users', label: 'Base' },
   ],
-  // L'espace n'a que trois écrans ouverts à tous : la quatrième place va donc à
-  // la messagerie, qui sert partout, plutôt qu'à un doublon.
+  // ⚠ L'AGENDA PREND LA QUATRIÈME PLACE DEPUIS LE 19/11/2026, et c'est la
+  // messagerie qui la cède : sur un téléphone, un courtier ouvre son agenda
+  // plusieurs fois par jour et sa messagerie interne rarement. Les quatre
+  // places de la barre du bas sont le bien le plus rare de l'application.
   courtage: () => [
     { hash: '#/courtage', icon: 'home', label: 'Accueil', ici: (h) => h === '#/courtage' },
     { hash: '#/courtage/base', icon: 'users', label: 'Base' },
+    { hash: '#/courtage/agenda', icon: 'calendar', label: 'Agenda' },
     { hash: '#/courtage/vivier', icon: 'target', label: 'Vivier' },
-    { hash: '#/messagerie', icon: 'chat', label: 'Messages', count: () => messagesNonLus() },
   ],
   // ⚠ PROPULSION N'A PAS D'ESPACE, ET SON APPLICATION S'OUVRE DONC SUR SON
   // PIPELINE. C'est la seule des quatre dans ce cas : les trois autres ont des
