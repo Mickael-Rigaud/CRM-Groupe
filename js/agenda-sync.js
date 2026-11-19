@@ -57,12 +57,3 @@ export function lignesEnregistrees(cles, du = jourCle(), au = du) {
         ? new Date(a.starts_at) - new Date(b.starts_at) : a.all_day ? -1 : 1)
       : (a.day < b.day ? -1 : 1)));
 }
-// Quand la dernière copie a-t-elle eu lieu ? Sert à dire « à jour il y a 10 min »
-// plutôt que de laisser croire que la journée est vide.
-export function derniereSync(cles, du = jourCle(), au = du) {
-  const dates = db.t('agenda_events')
-    .filter(e => e.day >= du && e.day <= au && cles.includes(e.activity) && e.synced_at
-      && scope.voitAgenda(e))
-    .map(e => new Date(e.synced_at).getTime());
-  return dates.length ? new Date(Math.max(...dates)) : null;
-}

@@ -37,7 +37,7 @@ import {
   idsDe, idsDeTous, structuresRaccordees, cadreJour, noteAgenda, modeEmploi,
   champsAgendas, enregistrerAgendas, peutRaccorder,
 } from '../agenda.js';
-import { lignesEnregistrees, derniereSync, agendasDe, jourCle } from '../agenda-sync.js';
+import { lignesEnregistrees, agendasDe, jourCle } from '../agenda-sync.js';
 // ⚠ LA GRILLE HEBDOMADAIRE VIENT DE L'ÉCRAN AGENDA, ce n'est pas une copie :
 // elle sait déjà placer deux rendez-vous qui se chevauchent côte à côte, tracer
 // l'heure qu'il est et choisir sa plage horaire selon ce qu'il y a dedans. Deux
@@ -1038,7 +1038,7 @@ function carteSemaine(cles, sem = 0) {
   return `<section class="card">${entete}
     <div id="tb-jour">${dessinerSemaine(rdv, jours)}</div>
     ${monAgendaHtml(cles)}
-    <p class="muted small tb-ag-src">${sourcesHtml(cles)}<span id="tb-maj">${etatSync(cles, du, au)}</span></p>
+    ${legendeHtml(cles)}
   </section>`;
 }
 
@@ -1130,19 +1130,29 @@ const monAgendaHtml = (cles) => {
     </p><div id="tb-mon-agenda"></div>`;
 };
 
-const etatSync = (cles, du, au) => {
-  const d = derniereSync(cles, du, au);
-  if (!d) return '<span class="ag-abs">pas encore relevé</span>';
-  const min = Math.round((Date.now() - d.getTime()) / 60000);
-  const quand = min < 1 ? 'à l\'instant' : min < 60 ? `il y a ${min} min`
-    : d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-  return `<span class="ag-abs">agendas relevés ${quand}</span>`;
-};
-const sourcesHtml = (cles) => {
-  const raccordees = structuresRaccordees(cles);
-  const manquantes = cles.filter(k => !raccordees.includes(k));
-  return raccordees.map(k => `<span class="ag-src"><span class="dot" style="background:${ACTIVITIES[k].color}"></span>${esc(ACTIVITIES[k].label)}</span>`).join('')
-    + (manquantes.length ? `<span class="ag-abs">sans agenda : ${manquantes.map(k => esc(ACTIVITIES[k].label)).join(', ')}</span>` : '');
+/**
+ * La légende des couleurs, sous le calendrier (19/11/2026, Élodie : « enlève
+ * ceci et remplace-le par une légende des codes couleurs »).
+ *
+ * ⚠ CE QUI ÉTAIT LÀ AVANT DISAIT TOUT SAUF ÇA : les agendas lus, ceux qui
+ * manquaient (« sans agenda : Propulsion ») et l'heure du dernier relevé —
+ * trois informations d'intendance sous un calendrier où l'on cherche quelle
+ * couleur est quelle structure.
+ *
+ * ⚠ ET SES PASTILLES ÉTAIENT INVISIBLES : elle posait un `<span class="dot">`,
+ * or `.dot` n'a de taille que dans les écrans qui la stylent eux-mêmes
+ * (`.s-tab .dot`, `.tabs button .dot`…), jamais ici. La légende portait donc
+ * ses noms sans ses couleurs, et personne ne l'avait vu. Celle-ci a sa propre
+ * pastille, dessinée comme le bloc d'un rendez-vous.
+ *
+ * Rien à légender quand une seule structure est affichée : en vue filtrée,
+ * tous les rendez-vous ont déjà la même couleur.
+ */
+const legendeHtml = (cles) => {
+  const avecAgenda = structuresRaccordees(cles);
+  if (avecAgenda.length < 2) return '';
+  return `<p class="tb-coul">${avecAgenda.map(k =>
+    `<span class="tb-coul-i"><i style="background:${ACTIVITIES[k].color}"></i>${esc(ACTIVITIES[k].label)}</span>`).join('')}</p>`;
 };
 
 // La semaine, en colonnes. Élodie, 19/11/2026 : « je ne voulais pas cette
