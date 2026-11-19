@@ -171,6 +171,18 @@ const lignesProjet = (f) => {
     ['Où en est-il', f.avancement],
     ['Primo-accédant', f.primo],
     ['Logement actuel', f.logement_actuel],
+    // ⚠ 19/11/2026 — CES LIGNES-LÀ ÉTAIENT ÉCRITES ET INVISIBLES. Le formulaire
+    // et le simulateur les enregistraient depuis le 18 ; la fiche n'en montrait
+    // aucune, et seule une requête en base pouvait les relire. Un champ qu'on
+    // remplit et que personne ne relit n'est pas livré.
+    ['Ce qu’il en fait', f.logement_actuel_devenir],
+    ['Valeur estimée', euros(f.logement_actuel_valeur) || f.logement_actuel_valeur],
+    ['Loyer espéré', mensuel(f.logement_actuel_loyer_espere) || f.logement_actuel_loyer_espere],
+    ['Où en est la vente', f.vente_avancement],
+    ['Capital restant dû', euros(f.vente_capital_restant_du) || f.vente_capital_restant_du],
+    ['Prêt relais', f.pret_relais],
+    ['Apport dégagé par la vente', euros(f.apport_degage_par_la_vente) || f.apport_degage_par_la_vente],
+    ['Taux actuel', f.taux_actuel],
     ['Travaux', euros(f.travaux) || f.travaux],
   ].filter(([, v]) => v);
 };
@@ -182,13 +194,22 @@ const lignesChiffres = (f) => {
   return [
     ['Budget', f.budget || euros(f.montant_projet)],
     ['Apport', euros(f.apport) || f.apport],
+    // Ce que la banque attend, et ce qu'il dit pouvoir réunir : les quatre
+    // lignes de la section « Apport » du formulaire.
+    ['Apport attendu', euros(f.apport_attendu) || f.apport_attendu],
+    ['Complément possible', f.apport_complement_possible],
+    ['Apport potentiel', euros(f.apport_potentiel) || f.apport_potentiel],
+    ['Apport supérieur au prix', f.apport_confirme_superieur],
     ['Épargne restante', euros(f.epargne_restante) || f.epargne_restante],
     ['Montant à financer', euros(f.montant_financement) || euros(f.emprunt)],
     ['Revenus du foyer', mensuel(f.revenus_foyer)],
     ['Autres revenus', mensuel(f.autres_revenus) || f.autres_revenus],
+    ['Type d’autres revenus', f.type_autres_revenus],
     ['Revenus locatifs', mensuel(f.revenus_locatifs) || f.revenus_locatifs],
     ['Crédits en cours', mensuel(f.credits_en_cours) || f.credits_en_cours],
     ['Quels crédits', f.detail_credits],
+    ['Combien de crédits', f.nombre_de_credits],
+    ['Regroupement de crédits', f.regroupement_credits],
     ['Pension versée', mensuel(f.pension_versee) || f.pension_versee],
     ['Loyer ou mensualité actuelle', mensuel(f.loyer_actuel) || f.loyer_actuel],
     ['Durée souhaitée', f.duree],
@@ -203,6 +224,10 @@ const lignesChiffres = (f) => {
     // qui lirait ce taux assurance comprise se tromperait.
     ['Assurance estimée', f.assurance],
     ['Prêt à taux zéro', ptz],
+    // Les deux réponses que le formulaire pose pour le PTZ : elles décident la
+    // tranche et la zone, et n'apparaissaient pas davantage que les autres.
+    ['Revenu fiscal de référence', euros(f.ptz_rfr) || f.ptz_rfr],
+    ['Occupants du logement', f.ptz_occupants],
   ].filter(([, v]) => v);
 };
 

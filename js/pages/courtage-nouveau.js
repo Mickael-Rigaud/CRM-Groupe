@@ -285,6 +285,20 @@ export function nouveauProspectCourtage(apres, { dealId = null, retour = null, e
     regroupement: OUI_NON.includes(f0.regroupement_credits) ? f0.regroupement_credits : '',
     assurance: txt(f0.assurance),
     ptz_rfr: nombreTxt(f0.ptz_rfr), ptz_occupants: nombreTxt(f0.ptz_occupants),
+    // 19/11/2026 — les six dernières lignes du récapitulatif du simulateur,
+    // chacune dans SA section (Élodie : « mets-les dans les bonnes catégories
+    // et ne mélange pas tout, parce que là les champs étaient parfaits »).
+    // Les huit autres y étaient déjà depuis le matin.
+    // ⚠ DEUX SAISIES SEULEMENT SUR LES SIX. Relu dans le simulateur, à la
+    // source : `apport_attendu` (10 % du budget, 5 % dans le neuf),
+    // `apport_potentiel`, `apport_degage_par_la_vente` et `nombre_de_credits`
+    // sont des CALCULS, pas des questions. Les redemander ferait diverger deux
+    // chiffres qui doivent s'accorder. Restent deux vraies questions, et elles
+    // ne se posent que dans leur cas : le complément quand l'apport est court,
+    // la confirmation quand il dépasse le budget.
+    apport_complement: OUI_NON.includes(f0.apport_complement_possible) ? f0.apport_complement_possible : '',
+    apport_superieur: String(f0.apport_confirme_superieur || '').startsWith('Oui') ? 'Oui'
+      : (String(f0.apport_confirme_superieur || '').trim() === 'Non' ? 'Non' : ''),
     // 18/11/2026 — les questions que le simulateur posait et que le formulaire
     // ignorait. Elles portent ICI les clés que le simulateur pose déjà sur
     // l'affaire : saisie au téléphone ou remplie sur le site, la fiche montre
@@ -415,6 +429,30 @@ export function nouveauProspectCourtage(apres, { dealId = null, retour = null, e
     && (v.type_bien === 'Appartement neuf' || v.type_bien === 'Terrain + construction')
     && v.primo === 'Non';
 
+  // ⚠ CE QUE LA BANQUE ATTEND D'APPORT SE CALCULE — c'est la règle du
+  // simulateur (`apportAttendu`) : 10 % du budget, 5 % seulement dans le neuf,
+  // où les frais de notaire sont bien moindres. Rien à demander au client, et
+  // rien à taper : un courtier qui saisirait ce chiffre à la main finirait un
+  // jour par en écrire un autre que celui du site, sur le même dossier.
+  const TAUX_APPORT = () => (v.type_bien === 'Appartement neuf' ? 0.05 : 0.10);
+  const apportAttendu = () => (v.objectif === 'Rachat / renégociation' ? 0
+    : Math.round((nombre(v.montant_projet) || 0) * TAUX_APPORT()));
+  const apportCourt = () => apportAttendu() > 0 && (nombre(v.apport) || 0) < apportAttendu();
+  const complementApport = () => Math.max(0, apportAttendu() - (nombre(v.apport) || 0));
+  // Un apport supérieur au prix du bien est presque toujours une erreur de
+  // saisie (l'épargne totale à la place de l'apport). Le simulateur le fait
+  // confirmer ; le formulaire aussi, sinon un zéro de trop traverse la fiche.
+  const apportIncoherent = () => (nombre(v.montant_projet) || 0) > 0
+    && (nombre(v.apport) || 0) > nombre(v.montant_projet)
+    && v.objectif !== 'Rachat / renégociation';
+  // L'apport dégagé par la vente : 70 % de la valeur estimée moins le capital
+  // restant dû. Zéro quand le crédit en cours mange cette avance.
+  const apportVente = () => {
+    if (v.devenir_rp !== 'Vente prévue') return 0;
+    const avance = Math.round((nombre(v.valeur_rp) || 0) * 0.70);
+    return avance > (nombre(v.crd_rp) || 0) ? avance - (nombre(v.crd_rp) || 0) : 0;
+  };
+
   // ⚠ LES BIENS LOCATIFS SE DÉTAILLENT UN PAR UN (19/11/2026, Élodie : « si
   // oui, combien de biens et combien de loyers et la valeur de chaque bien,
   // capital restant dû de chaque bien et mensualités de crédits »). Le
@@ -470,7 +508,9 @@ export function nouveauProspectCourtage(apres, { dealId = null, retour = null, e
       case 'ptz': return ptzPossible() ? ['ville_projet', 'ptz_rfr', 'ptz_occupants'] : [];
       case 'charges': return [...(q.credits === 'Oui' ? ['credits_en_cours'] : []),
         ...(q.pension === 'Oui' ? ['pension_versee'] : [])];
-      case 'apport': return ['apport', 'epargne_restante'];
+      case 'apport': return ['apport', 'epargne_restante',
+        ...(apportCourt() ? ['apport_complement'] : []),
+        ...(apportIncoherent() ? ['apport_superieur'] : [])];
       case 'financement': return ['duree'];
       case 'coordonnees': return ['first_name', 'last_name', 'phone', 'email', 'canal'];
       default: return ['contact'];
@@ -662,6 +702,15 @@ export function nouveauProspectCourtage(apres, { dealId = null, retour = null, e
           </div>
           <h4>Où en est cette vente ?</h4>${puces('vente_avancement', VENTE_AVANCEMENT, v.vente_avancement)}
           <h4>Un prêt relais est-il envisagé ?</h4>${puces('pret_relais', PRET_RELAIS, v.pret_relais)}` : ''}
+        ${'' /* ⚠ L'APPORT DÉGAGÉ PAR LA VENTE SE CALCULE, IL NE SE SAISIT PAS :
+               c'est 70 % de la valeur estimée moins le capital restant dû, la
+               formule du simulateur (`apportVente`). Le demander serait faire
+               faire au courtier une soustraction que l'écran sait poser — et
+               deux chiffres qui doivent s'accorder finissent toujours par
+               diverger. Il s'affiche dès que la valeur est connue. */}
+        <div id="lrc-vente-apport">${v.devenir_rp === 'Vente prévue' && nombre(v.valeur_rp) ? `<p class="lrc-lien">${apportVente() > 0
+          ? `La vente dégagerait environ <b>${esc(eur(apportVente()))}</b> d’apport — 70 % de la valeur estimée, moins le capital restant dû.`
+          : 'La vente ne dégagerait aucun apport : le capital restant dû dépasse 70 % de la valeur estimée.'}</p>` : ''}</div>
         ${v.devenir_rp === 'Mise en location prévue' ? `<div class="lrc-grille est-deux">
           ${champ('loyer_espere_rp', 'Quel loyer en espère-t-il ?', { type: 'number', ph: '750', suffixe: '€ / mois' })}
         </div>` : ''}`)}`;
@@ -763,6 +812,28 @@ export function nouveauProspectCourtage(apres, { dealId = null, retour = null, e
       </div>
       ${v.montant_projet ? `<p class="lrc-lien">Budget du projet : <b>${esc(eur(nombre(v.montant_projet)))}</b> —
         reste <b>${esc(eur(Math.max(0, (nombre(v.montant_projet) || 0) - (nombre(v.apport) || 0))))}</b> à financer.</p>` : ''}
+      ${'' /* ⚠ L'APPORT ATTENDU NE SE TAPE PAS, IL SE DIT. Même règle que le
+             simulateur : 10 % du budget, 5 % dans le neuf. Et la question qui
+             suit n'a de sens que si l'apport est court — on ne demande pas un
+             complément à quelqu'un qui a déjà ce qu'il faut. Le libellé parle
+             du MANQUE, pas de la cible : c'est ce que le client doit trouver. */}
+      <div id="lrc-apport-plus">${apportCourt() ? `
+        <p class="lrc-lien">Les banques attendent en général <b>${esc(eur(apportAttendu()))}</b>
+        sur ce projet (${v.type_bien === 'Appartement neuf' ? '5 %' : '10 %'} du budget) :
+        il manque <b>${esc(eur(complementApport()))}</b>.</p>
+        <h4>Pourrait-il réunir ${esc(eur(complementApport()))} de plus ?</h4>
+        ${puces('apport_complement', OUI_NON, v.apport_complement)}
+        ${v.apport_complement === 'Oui' ? `<p class="lrc-lien">Apport potentiel :
+          <b>${esc(eur(apportAttendu()))}</b> — pas encore constitué.</p>` : ''}` : ''}
+      ${'' /* Un apport qui dépasse le prix du bien est presque toujours
+             l'épargne totale saisie à la place de l'apport. On le fait
+             confirmer plutôt que de le laisser passer. */}
+      ${apportIncoherent() ? `
+        <h4>Son apport dépasse le budget du projet — est-ce bien exact ?</h4>
+        <p class="lrc-note">Apport annoncé <b>${esc(eur(nombre(v.apport)))}</b> pour un projet de
+        <b>${esc(eur(nombre(v.montant_projet)))}</b>. Si c’est son épargne totale, corrigez le champ ci-dessus :
+        l’apport, c’est seulement ce qu’il met dans cet achat.</p>
+        ${puces('apport_superieur', OUI_NON, v.apport_superieur)}` : ''}</div>
       ${replie('assurance', 'Assurance emprunteur', `<div class="lrc-grille est-deux">
         ${champ('assurance', 'Ce qu’elle coûte', { ph: '32 €/mois (0,25 %)' })}
       </div>`)}`;
@@ -895,14 +966,32 @@ export function nouveauProspectCourtage(apres, { dealId = null, retour = null, e
       if (d) v.detail_credits = d;
     }
   }
+  // Les choix (tuiles et puces) d'une portion de l'écran — `brancher()` les
+  // reprend tous, et le rafraîchissement partiel de l'apport ceux de sa zone.
+  const brancherChoix = (racine) => racine.querySelectorAll('[data-choix]').forEach(b => b.onclick = () => {
+    lireChamps();
+    const k = b.dataset.choix;
+    v[k] = (v[k] === b.dataset.val && k !== 'contact') ? '' : b.dataset.val;
+    if (k === 'canal' && v.canal !== 'Partenaire / apporteur') v.apporteur = '';
+    draw();
+  });
+  // ⚠ LA QUESTION DU COMPLÉMENT DOIT APPARAÎTRE PENDANT LA FRAPPE — elle dépend
+  // du montant qu'on est en train de taper. Mais un `draw()` complet reposerait
+  // le curseur ailleurs à chaque chiffre (le piège du 18/11) : on ne réécrit
+  // donc QUE cette zone, et on rebranche ses seuls boutons.
+  // Une zone de l'écran réécrite seule, à partir d'un corps neuf. Elle sert aux
+  // deux lignes qui dépendent d'un montant qu'on est en train de taper.
+  function rafraichirZone(id) {
+    const zone = hote.querySelector('#' + id);
+    if (!zone) return null;
+    const tmp = document.createElement('div');
+    tmp.innerHTML = corps();
+    zone.innerHTML = tmp.querySelector('#' + id)?.innerHTML || '';
+    return zone;
+  }
+  function rafraichirApport() { const z = rafraichirZone('lrc-apport-plus'); if (z) brancherChoix(z); }
   function brancher() {
-    hote.querySelectorAll('[data-choix]').forEach(b => b.onclick = () => {
-      lireChamps();
-      const k = b.dataset.choix;
-      v[k] = (v[k] === b.dataset.val && k !== 'contact') ? '' : b.dataset.val;
-      if (k === 'canal' && v.canal !== 'Partenaire / apporteur') v.apporteur = '';
-      draw();
-    });
+    brancherChoix(hote);
     // Une question fermée : « Non » referme ET efface ce qu'elle avait ouvert.
     hote.querySelectorAll('[data-q]').forEach(b => b.onclick = () => {
       lireChamps();
@@ -958,6 +1047,11 @@ export function nouveauProspectCourtage(apres, { dealId = null, retour = null, e
         poserChamp(el);
         if (['montant_projet', 'apport', 'montant_financement', 'revenus_foyer', 'credits_en_cours',
           'salaire_1', 'salaire_2', 'primes_1', 'primes_2'].includes(el.name)) lier(el.name);
+        if (['apport', 'montant_projet', 'montant_financement'].includes(el.name)) rafraichirApport();
+        // ⚠ CELLE-CI AUSSI SE RÉÉCRIT PENDANT LA FRAPPE : mesuré au banc, la
+        // ligne « la vente dégagerait… » restait invisible tant qu'on ne
+        // cliquait pas ailleurs. Le chiffre était juste et pourtant absent.
+        if (['valeur_rp', 'crd_rp'].includes(el.name)) rafraichirZone('lrc-vente-apport');
         const r = hote.querySelector('.lrc-recap'); if (r) r.innerHTML = recap();
         // ⚠ SANS REDESSINER : la ligne se réécrit pendant la frappe, et un
         // `draw()` ici reposerait le curseur ailleurs à chaque lettre tapée.
@@ -1065,6 +1159,26 @@ export function nouveauProspectCourtage(apres, { dealId = null, retour = null, e
         vente_capital_restant_du: nombre(v.crd_rp),
         pret_relais: v.pret_relais,
         regroupement_credits: v.regroupement,
+        // 19/11/2026 — LES SIX DERNIÈRES, chacune dans SA section (Élodie :
+        // « mets-les dans les bonnes catégories et ne mélange pas tout »).
+        // ⚠ QUATRE SUR SIX SONT DES CALCULS, pas des champs : elles se
+        // déduisent de ce qui est déjà saisi, exactement comme le simulateur
+        // les déduit. Les faire taire à la main aurait mis deux chiffres
+        // contradictoires sur la même fiche.
+        // ⚠ ET PAS `apportVente()` TOUT COURT : il rend 0 quand il n'y a pas de
+        // vente, et 0 s'écrit (seuls '' et null s'effacent) — la ligne serait
+        // apparue sur tous les dossiers. Une vente qui ne dégage rien, elle,
+        // est une information : le simulateur l'écrit en toutes lettres.
+        apport_degage_par_la_vente: apportVente() || (v.devenir_rp === 'Vente prévue' && nombre(v.valeur_rp)
+          ? 'aucun — le capital restant dû dépasse 70 % de la valeur' : null),
+        nombre_de_credits: q.credits === 'Oui'              // combien, pas le total
+          ? String(credits.filter(c => nombre(c.montant)).length) : '',
+        apport_attendu: apportCourt() ? apportAttendu() : null,
+        apport_potentiel: (apportCourt() && v.apport_complement === 'Oui') ? apportAttendu() : null,
+        apport_complement_possible: apportCourt() ? v.apport_complement : '',
+        apport_confirme_superieur: apportIncoherent() && v.apport_superieur === 'Oui'
+          ? 'Oui — le client confirme un apport supérieur au prix du bien'
+          : (apportIncoherent() ? v.apport_superieur : ''),
         assurance: v.assurance.trim(),
         ptz_rfr: nombre(v.ptz_rfr), ptz_occupants: nombre(v.ptz_occupants),
         // ⚠ LE DÉTAIL DES BIENS ET DES CRÉDITS EST ÉCRIT EN JSON, à côté des
