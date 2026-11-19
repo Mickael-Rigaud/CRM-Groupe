@@ -133,16 +133,26 @@ const HEURES = ['09:00', '10:00', '11:00', '14:00', '15:00', '16:00', '17:00'];
 // `etape: 3` ; en passant de quatre à neuf sections, ce 3 serait tombé sur
 // « Ses revenus », sans erreur et sans que rien ne le dise. Les appelants
 // nomment désormais la section (`etape: 'rdv'`), et `rangEtape` traduit.
+// ⚠ CES VINGT-DEUX QUESTIONS SONT CELLES D'ÉLODIE, DANS SON ORDRE, ÉCRITES
+// SOUS SA DICTÉE LE 19/11/2026 — « je vais devoir te donner toutes les
+// questions dans l'ordre des questions ». C'est la troisième version de la
+// journée : j'avais d'abord inventé un ordre, puis déduit celui du simulateur
+// section par section, et les deux étaient encore à côté. Cette liste-ci est
+// la référence ; elle prime sur ma lecture de `SCREENS`.
+//
+// ⚠ LE RENDEZ-VOUS PASSE AVANT LES COORDONNÉES, et ce n'est pas une coquille
+// de sa part : c'est l'ordre qu'elle a écrit. Les coordonnées ferment le
+// parcours, comme sur le site.
 const ETAPES = [
-  { cle: 'projet', titre: 'Le projet', question: 'Quel est son projet ?', aide: 'Ce qu’il veut financer, et où il en est.' },
-  { cle: 'perso', titre: 'Sa situation', question: 'Où en est-il aujourd’hui ?', aide: 'Son logement actuel, et ce qu’il compte en faire.' },
-  { cle: 'pro', titre: 'Son métier', question: 'Ce qu’il fait', aide: 'Le statut compte autant que le salaire pour une banque.' },
-  { cle: 'revenus', titre: 'Ses revenus', question: 'Ce qui entre chaque mois', aide: 'Salaires, primes, loyers perçus, autres revenus.' },
-  { cle: 'charges', titre: 'Ses charges', question: 'Ce qui sort chaque mois', aide: 'Les crédits en cours et les pensions versées.' },
-  { cle: 'apport', titre: 'Son apport', question: 'Ce qu’il met sur la table', aide: 'Et ce qui lui reste après.' },
-  { cle: 'financement', titre: 'Le financement', question: 'Sur combien de temps ?', aide: 'Le calcul se met à jour à chaque réponse.' },
-  { cle: 'coordonnees', titre: 'Ses coordonnées', question: 'Qui est-ce ?', aide: 'Comme sur le simulateur : on les demande à la fin.' },
-  { cle: 'rdv', titre: 'Le rendez-vous', question: 'Et ensuite ?', aide: 'Le premier contact devient une action datée dans le CRM.' },
+  { cle: 'projet', titre: 'Projet', question: 'Quel est son projet ?', aide: 'Dix questions : le bien, le budget, qui emprunte et où il habite.' },
+  { cle: 'perso', titre: 'Situation personnelle et professionnelle', question: 'Qui emprunte ?', aide: 'L’âge et le statut comptent autant que le salaire pour une banque.' },
+  { cle: 'revenus', titre: 'Revenus', question: 'Ce qui entre chaque mois', aide: 'Salaires, primes, loyers perçus, autres revenus.' },
+  { cle: 'ptz', titre: 'Prêt à taux zéro', question: 'Le prêt à taux zéro', aide: 'Trois réponses suffisent à l’estimer.' },
+  { cle: 'charges', titre: 'Charges', question: 'Ce qui sort chaque mois', aide: 'Les crédits en cours et les pensions versées.' },
+  { cle: 'apport', titre: 'Apport', question: 'Ce qu’il met sur la table', aide: 'Et ce qui lui reste après.' },
+  { cle: 'financement', titre: 'Financement', question: 'Sur combien de temps emprunter ?', aide: 'Le calcul se met à jour à chaque réponse.' },
+  { cle: 'rdv', titre: 'Rendez-vous', question: 'Et ensuite ?', aide: 'Le premier contact devient une action datée dans le CRM.' },
+  { cle: 'coordonnees', titre: 'Coordonnées du prospect', question: 'Qui est-ce ?', aide: 'En dernier, comme sur le simulateur.' },
 ];
 /** Le rang d'une section, par sa clé. Rend 0 pour une clé inconnue. */
 const rangEtape = (x) => {
@@ -230,6 +240,7 @@ export function nouveauProspectCourtage(apres, { dealId = null, retour = null, e
     pret_relais: PRET_RELAIS.includes(f0.pret_relais) ? f0.pret_relais : '',
     regroupement: OUI_NON.includes(f0.regroupement_credits) ? f0.regroupement_credits : '',
     assurance: txt(f0.assurance),
+    ptz_rfr: nombreTxt(f0.ptz_rfr), ptz_occupants: nombreTxt(f0.ptz_occupants),
     // 18/11/2026 — les questions que le simulateur posait et que le formulaire
     // ignorait. Elles portent ICI les clés que le simulateur pose déjà sur
     // l'affaire : saisie au téléphone ou remplie sur le site, la fiche montre
@@ -350,6 +361,49 @@ export function nouveauProspectCourtage(apres, { dealId = null, retour = null, e
   const pro = () => v.type_financement === 'Crédit professionnel';
   const montre = (k, utile) => utile || !!String(v[k] || '').trim();
 
+  // ⚠ LES TROIS CONDITIONS DU PRÊT À TAUX ZÉRO, celles du simulateur
+  // (`ptzPossible`) : une résidence principale, un bien NEUF ou un terrain +
+  // construction, et quelqu'un qui n'a pas été propriétaire de sa résidence
+  // principale ces deux dernières années. Ailleurs la section n'a rien à
+  // demander — et trois cases vides sur un dossier qui n'y a pas droit se
+  // lisent comme un formulaire qu'on a oublié de remplir.
+  const ptzPossible = () => v.objectif === 'Résidence principale'
+    && (v.type_bien === 'Appartement neuf' || v.type_bien === 'Terrain + construction')
+    && v.primo === 'Non';
+
+  // ⚠ LES BIENS LOCATIFS SE DÉTAILLENT UN PAR UN (19/11/2026, Élodie : « si
+  // oui, combien de biens et combien de loyers et la valeur de chaque bien,
+  // capital restant dû de chaque bien et mensualités de crédits »). Le
+  // simulateur en pose jusqu'à six, avec ces quatre mêmes questions : on fait
+  // pareil. Ils vivent dans une liste à part de `v`, et se replient en une
+  // ligne de texte à l'enregistrement.
+  const LOC_MAX = 6;
+  const biens = (() => {
+    const l = Array.isArray(f0.biens_locatifs) ? f0.biens_locatifs
+      : (() => { try { return JSON.parse(String(f0.biens_locatifs || '[]')); } catch { return []; } })();
+    const propre = (Array.isArray(l) ? l : []).slice(0, LOC_MAX)
+      .map(b => ({ loyer: nombreTxt(b?.loyer), valeur: nombreTxt(b?.valeur), crd: nombreTxt(b?.crd), mensualite: nombreTxt(b?.mensualite) }));
+    // Un dossier du site ne porte que le total : on ouvre un bien pour le tenir.
+    if (!propre.length && nombre(v.revenus_locatifs)) {
+      return [{ loyer: nombreTxt(v.revenus_locatifs), valeur: '', crd: '', mensualite: '' }];
+    }
+    return propre.length ? propre : [{ loyer: '', valeur: '', crd: '', mensualite: '' }];
+  })();
+
+  // ⚠ ET LES CRÉDITS AUSSI (« lesquels et le montant des mensualités »). Le
+  // simulateur en accepte douze ; chacun a son type et sa mensualité.
+  const CRED_MAX = 12;
+  const credits = (() => {
+    const l = Array.isArray(f0.liste_credits) ? f0.liste_credits
+      : (() => { try { return JSON.parse(String(f0.liste_credits || '[]')); } catch { return []; } })();
+    const propre = (Array.isArray(l) ? l : []).slice(0, CRED_MAX)
+      .map(c => ({ type: TYPES_CREDIT.includes(c?.type) ? c.type : '', montant: nombreTxt(c?.montant) }));
+    if (!propre.length && (nombre(v.credits_en_cours) || v.detail_credits.trim())) {
+      return [{ type: '', montant: nombreTxt(v.credits_en_cours) }];
+    }
+    return propre.length ? propre : [{ type: '', montant: '' }];
+  })();
+
   // Les questions RÉELLEMENT posées à cette étape — pas une liste figée.
   // ⚠ LE COMPTEUR MENTAIT : il annonçait « 0/8 réponses » sur l'étape qui en
   // posait dix-huit, et comptait des questions que l'écran ne montrait pas.
@@ -357,22 +411,21 @@ export function nouveauProspectCourtage(apres, { dealId = null, retour = null, e
     const rachat = v.type_financement === 'Regroupement de crédits'
       || v.objectif === 'Rachat / renégociation';
     const aDeux = v.emprunteurs === 'Deux';
-    const proprio = v.logement_actuel === 'Propriétaire';
-    const vend = v.devenir_rp === 'Vente prévue';
     switch (ETAPES[i].cle) {
-      case 'projet': return ['type_financement', 'objectif',
+      // Les dix questions de la section « Projet », telles qu'Élodie les a
+      // numérotées — celles qui ne se posent pas ne se comptent pas.
+      case 'projet': return ['type_financement',
         ...(montre('type_bien', immo() && !rachat) ? ['type_bien'] : []),
         ...(montre('avancement', (immo() || pro()) && !rachat) ? ['avancement'] : []),
         ...(montre('primo', immo() && !rachat) ? ['primo'] : []),
         ...(montre('region', immo() && !rachat) ? ['region'] : []),
-        'montant_projet', 'apport', 'emprunteurs'];
-      case 'perso': return ['logement_actuel', 'loyer_actuel', 'enfants_a_charge',
-        ...(montre('devenir_rp', proprio) ? ['devenir_rp'] : []),
-        ...(montre('vente_avancement', vend) ? ['vente_avancement', 'valeur_rp'] : [])];
-      case 'pro': return ['statut_1', 'age_1', ...(aDeux ? ['statut_2', 'age_2'] : [])];
-      case 'revenus': return ['salaire_1', 'revenus_foyer', ...(aDeux ? ['salaire_2'] : [])];
-      case 'charges': return [...(q.credits === 'Oui' ? ['credits_en_cours', 'detail_credits'] : []),
-        ...(q.pension === 'Oui' ? ['pension_versee'] : []), 'credits_en_cours'].filter((x, j, t) => t.indexOf(x) === j);
+        'montant_projet', 'emprunteurs', 'logement_actuel', 'enfants_a_charge'];
+      case 'perso': return ['age_1', 'statut_1', ...(aDeux ? ['age_2', 'statut_2'] : [])];
+      case 'revenus': return ['salaire_1', 'primes_1', 'revenus_foyer',
+        ...(aDeux ? ['salaire_2'] : [])];
+      case 'ptz': return ptzPossible() ? ['ville_projet', 'ptz_rfr', 'ptz_occupants'] : [];
+      case 'charges': return [...(q.credits === 'Oui' ? ['credits_en_cours'] : []),
+        ...(q.pension === 'Oui' ? ['pension_versee'] : [])];
       case 'apport': return ['apport', 'epargne_restante'];
       case 'financement': return ['duree'];
       case 'coordonnees': return ['first_name', 'last_name', 'phone', 'email', 'canal'];
@@ -418,6 +471,21 @@ export function nouveauProspectCourtage(apres, { dealId = null, retour = null, e
     return m.length ? `Il manque ${m.join(', et ')} pour créer le prospect.`
       : 'C’est bon : le prospect peut être créé dès maintenant, le reste se complète après.';
   };
+  // Les quatre cases d'un bien locatif, et les deux d'un crédit. Elles ne
+  // passent pas par `champ()` : leur valeur vit dans une liste, pas dans `v`.
+  const champBien = (i, k, label, ph, suffixe) => `
+    <label class="lrc-champ"><span>${esc(label)}</span>
+      <span class="lrc-saisie"><input name="bien_${i}_${k}" type="number" inputmode="numeric" min="0" step="100"
+        value="${esc(biens[i][k])}" placeholder="${esc(ph)}" autocomplete="off"><i>${esc(suffixe)}</i></span></label>`;
+  const champCredit = (i) => `
+    <label class="lrc-champ"><span>Type du crédit ${i + 1}</span>
+      <select name="credit_${i}_type"><option value="">— Choisir —</option>${TYPES_CREDIT.map(t =>
+        `<option value="${esc(t)}" ${credits[i].type === t ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></label>`;
+  const champCreditMontant = (i) => `
+    <label class="lrc-champ"><span>Mensualité${credits.length > 1 ? ` (crédit ${i + 1})` : ''}
+      ${i > 0 || credits.length > 1 ? `<button type="button" class="lrc-oter" data-oter-credit="${i}">retirer</button>` : ''}</span>
+      <span class="lrc-saisie"><input name="credit_${i}_montant" type="number" inputmode="numeric" min="0" step="10"
+        value="${esc(credits[i].montant)}" placeholder="250" autocomplete="off"><i>€ / mois</i></span></label>`;
   // Un repli : le titre reste visible, le contenu attend qu'on en ait besoin.
   const replie = (cle, label, dedans) => `<div class="lrc-repli ${ouverts.has(cle) ? 'est-ouvert' : ''}">
     <button type="button" class="lrc-replier" data-repli="${cle}"><i>${ouverts.has(cle) ? '−' : '+'}</i>${esc(label)}</button>
@@ -497,151 +565,170 @@ export function nouveauProspectCourtage(apres, { dealId = null, retour = null, e
 
   const corps = () => {
     const E = ETAPES[etape].cle;
+    const rachat = v.type_financement === 'Regroupement de crédits'
+      || v.objectif === 'Rachat / renégociation';
+    const aDeux = v.emprunteurs === 'Deux';
 
-    // ========================================================= 1. LE PROJET
-    // L'ordre est celui du simulateur : ce qu'on finance, le type de bien, où
-    // on en est, le premier achat, la région, puis les montants et la durée.
+    // ======================================================== PROJET (1 à 10)
+    // L'ordre est celui dicté par Élodie, numéro par numéro. Les questions
+    // 9 et 10 — le logement d'aujourd'hui et les personnes à charge — sont
+    // DANS le projet, pas dans une section à part : c'est là qu'elle les a
+    // mises, et c'est là qu'elles restent.
     if (E === 'projet') {
-      const rachat = v.type_financement === 'Regroupement de crédits'
-        || v.objectif === 'Rachat / renégociation';
+      const proprio = v.logement_actuel === 'Propriétaire';
       return `
-      ${tuiles('type_financement', FINANCEMENTS, v.type_financement)}
+      ${'' /* 1 */}${tuiles('type_financement', FINANCEMENTS, v.type_financement)}
       ${v.type_financement || v.objectif ? `<h4>Pour quel projet ?</h4>${puces('objectif', OBJECTIFS(), v.objectif)}` : ''}
-      ${montre('type_bien', immo() && !rachat) ? `<h4>Quel type de bien ?</h4>${puces('type_bien', TYPES_BIEN, v.type_bien)}` : ''}
-      ${montre('avancement', (immo() || pro()) && !rachat) ? `<h4>Où en est-il ?</h4>${puces('avancement', AVANCEMENTS, v.avancement)}` : ''}
-      ${'' /* ⚠ LA QUESTION DU PRIMO EST CELLE DU PTZ, et le simulateur la pose
-             en toutes lettres : « avez-vous été propriétaire de votre résidence
-             principale au cours des 2 dernières années ? ». « Est-ce son premier
-             achat ? » n'est pas la même question — quelqu'un qui a vendu il y a
-             cinq ans rachète, et reste primo-accédant au sens du prêt. */}
+      ${'' /* 2 */}${montre('type_bien', immo() && !rachat) ? `<h4>Quel type de bien ?</h4>${puces('type_bien', TYPES_BIEN, v.type_bien)}` : ''}
+      ${'' /* 3 */}${montre('avancement', (immo() || pro()) && !rachat) ? `<h4>Où en est-il ?</h4>${puces('avancement', AVANCEMENTS, v.avancement)}` : ''}
+      ${'' /* 4 — la question du PTZ, en toutes lettres comme sur le site */}
       ${montre('primo', immo() && !rachat) ? `<h4>Propriétaire de sa résidence principale ces 2 dernières années ?</h4>
         ${puces('primo', OUI_NON, v.primo)}` : ''}
-      ${montre('region', immo() && !rachat) ? `<h4>Où se situe le bien ?</h4>${puces('region', REGIONS, v.region)}` : ''}
-      ${'' /* ⚠ ON NE CACHE JAMAIS UN CHIFFRE DÉJÀ SAISI. La cascade n'ouvre les
-             montants qu'une fois le financement choisi — mais un dossier venu
-             du site porte un budget SANS type de financement, et il devenait
-             alors invisible : attrapé par le banc d'essai, pas à l'œil. Masquer
-             une réponse, c'est l'effacer à l'enregistrement suivant. */}
-      ${v.type_financement || v.montant_projet || v.apport || v.montant_financement || v.emprunteurs ? `
-        <div class="lrc-grille est-trois">
-          ${champ('montant_projet', rachat ? 'Capital restant dû' : 'Le budget du projet', { type: 'number', ph: '300 000', suffixe: '€' })}
-          ${champ('apport', 'Apport', { type: 'number', ph: '30 000', suffixe: '€' })}
-          ${champ('montant_financement', 'Montant à financer', { type: 'number', ph: '270 000', suffixe: '€' })}
-        </div>
-        <p class="lrc-lien">Les trois se tiennent : projet = apport + montant à financer. Changez-en un, les autres suivent.</p>
-        ${rachat ? `<div class="lrc-grille est-deux">${champ('taux_actuel', 'À quel taux est-il aujourd’hui ?', { ph: '3,45 % — ou « inconnu »' })}</div>` : ''}
-        ${ouinon('travaux', 'Des travaux sont-ils prévus ?')}
-        ${q.travaux === 'Oui' ? `<div class="lrc-grille est-deux">${champ('travaux', 'Combien', { type: 'number', ph: '20 000', suffixe: '€' })}</div>` : ''}
-        <div class="lrc-grille est-deux">${champ('ville_projet', 'Ville du projet', { ph: 'Nice' })}</div>
-        <h4>Il emprunte…</h4>${puces('emprunteurs', EMPRUNTEURS, v.emprunteurs)}` : ''}`;
-    }
-
-    // ================================================== 2. SA SITUATION PERSO
-    // Le logement d'aujourd'hui, ce qu'il compte en faire, et les personnes à
-    // charge. Tout ce bloc est en cascade : propriétaire ouvre la mensualité et
-    // le devenir du bien, « vendre » ouvre la valeur, la vente et le relais.
-    if (E === 'perso') {
-      const proprio = v.logement_actuel === 'Propriétaire';
-      const vend = v.devenir_rp === 'Vente prévue';
-      const loue = v.devenir_rp === 'Mise en location prévue';
-      return `
-      <h4>Aujourd’hui, il est…</h4>${puces('logement_actuel', LOGEMENTS, v.logement_actuel)}
-      ${v.logement_actuel || v.loyer_actuel ? `<div class="lrc-grille est-deux">
-        ${champ('loyer_actuel', proprio ? 'Sa mensualité de crédit' : 'Son loyer actuel',
-          { type: 'number', ph: proprio ? '950' : '800', suffixe: '€ / mois' })}
-      </div>` : ''}
-      ${montre('crd_rp', proprio) ? `<div class="lrc-grille est-deux">
-        ${champ('crd_rp', 'Capital restant dû sur ce bien', { type: 'number', ph: '120 000', suffixe: '€' })}
-      </div>` : ''}
-      ${montre('devenir_rp', proprio) ? `<h4>Que compte-t-il en faire ?</h4>${puces('devenir_rp', DEVENIR_RP, v.devenir_rp)}` : ''}
-      ${montre('valeur_rp', vend) ? `<div class="lrc-grille est-deux">
-        ${champ('valeur_rp', 'À combien l’estime-t-il ?', { type: 'number', ph: '250 000', suffixe: '€' })}
-      </div>` : ''}
-      ${montre('vente_avancement', vend) ? `<h4>Où en est cette vente ?</h4>${puces('vente_avancement', VENTE_AVANCEMENT, v.vente_avancement)}` : ''}
-      ${montre('pret_relais', vend) ? `<h4>Un prêt relais est-il envisagé ?</h4>${puces('pret_relais', PRET_RELAIS, v.pret_relais)}` : ''}
-      ${montre('loyer_espere_rp', loue) ? `<div class="lrc-grille est-deux">
-        ${champ('loyer_espere_rp', 'Quel loyer en espère-t-il ?', { type: 'number', ph: '750', suffixe: '€ / mois' })}
-      </div>` : ''}
+      ${'' /* 5 */}${montre('region', immo() && !rachat) ? `<h4>Où se situe le bien ?</h4>${puces('region', REGIONS, v.region)}` : ''}
+      ${'' /* 6 — LE BUDGET SEUL : l'apport a sa propre section (20), et le
+             montant à financer s'en déduit. Les mettre ici mélangeait trois
+             chiffres là où elle n'en demande qu'un. */}
+      ${'' /* ⚠ LE BUDGET SEUL, ET IL LE RESTE. Le montant à financer se déduit
+             dans l'ombre (`lier`) mais ne s'affiche PAS ici : il n'a de sens
+             qu'à côté de l'apport, question 20. Les faire apparaître dès la
+             première frappe ramenait les trois chiffres à l'étape du projet —
+             exactement le mélange qu'Élodie a fait retirer. */}
       <div class="lrc-grille est-deux">
-        ${champ('enfants_a_charge', 'Personnes à charge (enfants)', { type: 'number', ph: '0' })}
-      </div>`;
-    }
-
-    // ===================================================== 3. SON MÉTIER (PRO)
-    // ⚠ UN STATUT CHOISI, PAS UNE PHRASE LIBRE. Le simulateur pose dix statuts
-    // et le courtier en déduit le type de contrat des mois plus tard ; « 35 ans,
-    // CDI, 3 000 € » tapé à la main ne se filtre ni ne se compte.
-    if (E === 'pro') {
-      const aDeux = v.emprunteurs === 'Deux';
-      return `
-      <h4>Sa situation professionnelle</h4>${puces('statut_1', STATUTS, v.statut_1)}
-      <div class="lrc-grille est-deux">${champ('age_1', 'Son âge', { type: 'number', ph: '35' })}</div>
-      ${aDeux ? `<h4>La situation du second emprunteur</h4>${puces('statut_2', STATUTS, v.statut_2)}
-        <div class="lrc-grille est-deux">${champ('age_2', 'Son âge', { type: 'number', ph: '33' })}</div>`
-        : `<p class="lrc-lien">Le second emprunteur apparaîtra ici si vous répondez « Deux » à « Il emprunte… », à l’étape du projet.</p>`}`;
-    }
-
-    // ======================================================== 4. SES REVENUS
-    if (E === 'revenus') {
-      const aDeux = v.emprunteurs === 'Deux';
-      return `
-      <div class="lrc-grille est-deux">
-        ${champ('salaire_1', 'Son salaire net mensuel', { type: 'number', ph: '2 400', suffixe: '€ / mois' })}
-        ${champ('primes_1', 'Ses primes / 13e mois', { type: 'number', ph: '0', suffixe: '€ / an' })}
+        ${champ('montant_projet', rachat ? 'Capital restant dû' : 'Le budget du projet', { type: 'number', ph: '300 000', suffixe: '€' })}
       </div>
-      ${aDeux ? `<div class="lrc-grille est-deux">
-        ${champ('salaire_2', 'Le salaire net du second', { type: 'number', ph: '2 200', suffixe: '€ / mois' })}
-        ${champ('primes_2', 'Ses primes / 13e mois', { type: 'number', ph: '0', suffixe: '€ / an' })}
+      ${rachat ? `<div class="lrc-grille est-deux">${champ('taux_actuel', 'À quel taux est-il aujourd’hui ?', { ph: '3,45 % — ou « inconnu »' })}</div>` : ''}
+      ${'' /* 7 */}${ouinon('travaux', 'Des travaux sont-ils prévus ?')}
+      ${q.travaux === 'Oui' ? `<div class="lrc-grille est-deux">${champ('travaux', 'Combien', { type: 'number', ph: '20 000', suffixe: '€' })}</div>` : ''}
+      ${'' /* 8 */}<h4>Il emprunte seul ou à deux ?</h4>${puces('emprunteurs', EMPRUNTEURS, v.emprunteurs)}
+      ${'' /* 9 */}<h4>Aujourd’hui, il est…</h4>${puces('logement_actuel', LOGEMENTS, v.logement_actuel)}
+      ${'' /* 10 */}<div class="lrc-grille est-deux">
+        ${champ('enfants_a_charge', 'Personnes à charge (enfants)', { type: 'number', ph: '0' })}
+      </div>
+      ${'' /* Ce que le simulateur demande en plus et qu'Élodie n'a pas listé :
+             replié, jamais perdu. Un dossier qui en porte une s'ouvre dessus. */}
+      ${replie('logement', 'Son logement actuel en détail', `
+        <div class="lrc-grille est-deux">
+          ${champ('loyer_actuel', proprio ? 'Sa mensualité de crédit' : 'Son loyer actuel',
+            { type: 'number', ph: proprio ? '950' : '800', suffixe: '€ / mois' })}
+          ${proprio ? champ('crd_rp', 'Capital restant dû sur ce bien', { type: 'number', ph: '120 000', suffixe: '€' }) : ''}
+        </div>
+        ${proprio ? `<h4>Que compte-t-il en faire ?</h4>${puces('devenir_rp', DEVENIR_RP, v.devenir_rp)}` : ''}
+        ${v.devenir_rp === 'Vente prévue' ? `<div class="lrc-grille est-deux">
+            ${champ('valeur_rp', 'À combien l’estime-t-il ?', { type: 'number', ph: '250 000', suffixe: '€' })}
+          </div>
+          <h4>Où en est cette vente ?</h4>${puces('vente_avancement', VENTE_AVANCEMENT, v.vente_avancement)}
+          <h4>Un prêt relais est-il envisagé ?</h4>${puces('pret_relais', PRET_RELAIS, v.pret_relais)}` : ''}
+        ${v.devenir_rp === 'Mise en location prévue' ? `<div class="lrc-grille est-deux">
+          ${champ('loyer_espere_rp', 'Quel loyer en espère-t-il ?', { type: 'number', ph: '750', suffixe: '€ / mois' })}
+        </div>` : ''}`)}`;
+    }
+
+    // ========================= SITUATION PERSONNELLE ET PROFESSIONNELLE (11, 12)
+    if (E === 'perso') return `
+      <div class="lrc-grille est-deux">${champ('age_1', 'Son âge', { type: 'number', ph: '35' })}</div>
+      <h4>Sa situation professionnelle</h4>${puces('statut_1', STATUTS, v.statut_1)}
+      ${aDeux ? `<h4>Le second emprunteur</h4>
+        <div class="lrc-grille est-deux">${champ('age_2', 'Son âge', { type: 'number', ph: '33' })}</div>
+        <h4>Sa situation professionnelle</h4>${puces('statut_2', STATUTS, v.statut_2)}`
+        : '<p class="lrc-lien">Le second emprunteur apparaîtra ici si vous répondez « à deux » à la question 8.</p>'}`;
+
+    // ===================================================== REVENUS (13 à 16)
+    if (E === 'revenus') return `
+      ${'' /* 13 et 14 */}
+      <div class="lrc-grille est-deux">
+        ${champ('salaire_1', 'Salaire net mensuel', { type: 'number', ph: '2 400', suffixe: '€ / mois' })}
+        ${champ('primes_1', 'Primes / 13e mois', { type: 'number', ph: '0', suffixe: '€ / an' })}
+      </div>
+      ${aDeux ? `<h4>Le second emprunteur</h4><div class="lrc-grille est-deux">
+        ${champ('salaire_2', 'Salaire net mensuel', { type: 'number', ph: '2 200', suffixe: '€ / mois' })}
+        ${champ('primes_2', 'Primes / 13e mois', { type: 'number', ph: '0', suffixe: '€ / an' })}
       </div>` : ''}
-      ${'' /* `revenus_foyer` reste la ligne que lisent la fiche et le calcul :
-             elle se déduit des salaires, ou se saisit seule si on ne les a pas. */}
       <div class="lrc-grille est-deux">
         ${champ('revenus_foyer', 'Revenus nets du foyer', { type: 'number', ph: '4 500', suffixe: '€ / mois' })}
       </div>
       <p class="lrc-lien">C’est ce total qui sert au calcul d’endettement. Il se remplit tout seul à partir des salaires et des primes.</p>
-      ${ouinon('locatif', 'Possède-t-il déjà des biens en location ?')}
-      ${q.locatif === 'Oui' ? `<div class="lrc-grille est-deux">
-        ${champ('revenus_locatifs', 'Loyers perçus en tout', { type: 'number', ph: '600', suffixe: '€ / mois' })}
-      </div>` : ''}
-      ${ouinon('autres', 'A-t-il d’autres revenus réguliers ?')}
-      ${q.autres === 'Oui' ? `<h4>De quelle nature ?</h4>${puces('type_autres_revenus', AUTRES_REVENUS, v.type_autres_revenus)}
+      ${'' /* 15 — chaque bien détaillé, comme sur le site : loyer, valeur,
+             capital restant dû et mensualité. Jusqu'à six, comme lui. */}
+      ${ouinon('locatif', 'Possède-t-il des biens en location ?')}
+      ${q.locatif === 'Oui' ? `${biens.map((b, i) => `
+        <h4>Bien ${i + 1}${biens.length > 1 ? ` sur ${biens.length}` : ''}
+          <button type="button" class="lrc-oter" data-oter-bien="${i}" title="Retirer ce bien">retirer</button></h4>
+        <div class="lrc-grille est-deux">
+          ${champBien(i, 'loyer', 'Loyer perçu', '650', '€ / mois')}
+          ${champBien(i, 'valeur', 'Valeur du bien', '180 000', '€')}
+          ${champBien(i, 'crd', 'Capital restant dû', '90 000', '€')}
+          ${champBien(i, 'mensualite', 'Mensualité du crédit', '450', '€ / mois')}
+        </div>`).join('')}
+        ${biens.length < 6 ? '<button type="button" class="lrc-ajouter" data-ajouter-bien>+ Ajouter un bien</button>' : '<p class="lrc-lien">Six biens au maximum, comme sur le simulateur.</p>'}`
+        : ''}
+      ${'' /* 16 */}${ouinon('autres', 'A-t-il d’autres revenus réguliers ?')}
+      ${q.autres === 'Oui' ? `<h4>Lesquels ?</h4>${puces('type_autres_revenus', AUTRES_REVENUS, v.type_autres_revenus)}
         <div class="lrc-grille est-deux">
           ${champ('autres_revenus', 'À combien par mois', { type: 'number', ph: '0', suffixe: '€ / mois' })}
         </div>` : ''}`;
+
+    // ================================================= PRÊT À TAUX ZÉRO (17)
+    // ⚠ LA SECTION NE S'OUVRE QUE SI LE PRÊT EST POSSIBLE, et les trois
+    // conditions sont celles du simulateur (`ptzPossible`) : une résidence
+    // principale, un bien neuf ou un terrain + construction, et quelqu'un qui
+    // n'a pas été propriétaire de sa résidence principale ces deux dernières
+    // années. Ailleurs, la poser ferait remplir trois cases pour rien.
+    if (E === 'ptz') {
+      if (!ptzPossible()) return `
+        <p class="lrc-note">Le prêt à taux zéro ne s’applique pas à ce dossier : il demande une
+        <b>résidence principale</b>, un <b>appartement neuf</b> ou un <b>terrain + construction</b>,
+        et quelqu’un qui n’a <b>pas été propriétaire de sa résidence principale ces 2 dernières années</b>.
+        Ces trois réponses se donnent à l’étape « Projet ».</p>`;
+      return `
+      <div class="lrc-grille est-deux">
+        ${champ('ville_projet', 'Commune du bien', { ph: 'Saint-Denis' })}
+        ${champ('ptz_rfr', 'Revenu fiscal de référence', { type: 'number', ph: '32 000', suffixe: '€' })}
+      </div>
+      <div class="lrc-grille est-deux">
+        ${champ('ptz_occupants', 'Personnes qui vivront dans le logement', { type: 'number', ph: '3' })}
+      </div>
+      <p class="lrc-lien">La commune donne la zone, le revenu fiscal donne la tranche : le simulateur du site en déduit le montant.</p>`;
     }
 
-    // ======================================================== 5. SES CHARGES
+    // ===================================================== CHARGES (18, 19)
     if (E === 'charges') return `
-      ${ouinon('credits', 'A-t-il des crédits en cours ?')}
-      ${q.credits === 'Oui' ? `<div class="lrc-grille est-deux">
-        ${champ('credits_en_cours', 'Total des mensualités', { type: 'number', ph: '350', suffixe: '€ / mois' })}
-        ${champ('detail_credits', 'Lesquels', { ph: 'Crédit auto 250 €, conso 100 €…' })}
-      </div>
-      <p class="lrc-lien">Le simulateur détaille jusqu’à douze crédits ; ici une ligne suffit — c’est le total qui entre dans le calcul.</p>
-      <h4>Un regroupement de crédits l’intéresserait-il ?</h4>${puces('regroupement', OUI_NON, v.regroupement)}` : ''}
-      ${ouinon('pension', 'Verse-t-il une pension alimentaire ?')}
+      ${'' /* 18 */}${ouinon('credits', 'A-t-il des crédits en cours ?')}
+      ${q.credits === 'Oui' ? `${credits.map((c, i) => `
+        <div class="lrc-grille est-deux">
+          ${champCredit(i)}
+          ${champCreditMontant(i)}
+        </div>`).join('')}
+        ${credits.length < 12 ? '<button type="button" class="lrc-ajouter" data-ajouter-credit>+ Ajouter un crédit</button>' : ''}
+        <h4>Un regroupement de crédits l’intéresserait-il ?</h4>${puces('regroupement', OUI_NON, v.regroupement)}` : ''}
+      ${'' /* 19 */}${ouinon('pension', 'Verse-t-il une pension alimentaire ?')}
       ${q.pension === 'Oui' ? `<div class="lrc-grille est-deux">
         ${champ('pension_versee', 'Combien par mois', { type: 'number', ph: '200', suffixe: '€ / mois' })}
       </div>` : ''}`;
 
-    // ========================================================= 6. SON APPORT
+    // ====================================================== APPORT (20, 21)
     if (E === 'apport') return `
       <div class="lrc-grille est-deux">
         ${champ('apport', 'Son apport personnel', { type: 'number', ph: '30 000', suffixe: '€' })}
         ${champ('epargne_restante', 'Épargne restante après apport', { type: 'number', ph: '10 000', suffixe: '€' })}
       </div>
-      <p class="lrc-lien">L’apport est repris de l’étape du projet : le changer ici le change là-bas, c’est le même chiffre.</p>
-      <div class="lrc-grille est-deux">${champ('assurance', 'Assurance emprunteur', { ph: '32 €/mois (0,25 %)' })}</div>`;
+      ${'' /* Le montant à financer vit ICI, à côté de l'apport qui le décide,
+             et nulle part ailleurs. Il reste modifiable : certains montages
+             empruntent plus que le prix (frais inclus). */}
+      <div class="lrc-grille est-deux">
+        ${champ('montant_financement', 'Montant à financer', { type: 'number', ph: '270 000', suffixe: '€' })}
+      </div>
+      ${v.montant_projet ? `<p class="lrc-lien">Budget du projet : <b>${esc(eur(nombre(v.montant_projet)))}</b> —
+        reste <b>${esc(eur(Math.max(0, (nombre(v.montant_projet) || 0) - (nombre(v.apport) || 0))))}</b> à financer.</p>` : ''}
+      ${replie('assurance', 'Assurance emprunteur', `<div class="lrc-grille est-deux">
+        ${champ('assurance', 'Ce qu’elle coûte', { ph: '32 €/mois (0,25 %)' })}
+      </div>`)}`;
 
-    // ===================================================== 7. LE FINANCEMENT
+    // ======================================================= FINANCEMENT (22)
     if (E === 'financement') return `
-      <h4>Sur combien de temps emprunter ?</h4>${puces('duree', DUREES, v.duree)}
+      ${puces('duree', DUREES, v.duree)}
       <div class="lrc-calcul" id="lrc-calcul">${panneau()}</div>`;
 
-    // ====================================================== 8. SES COORDONNÉES
-    // ⚠ EN AVANT-DERNIER, COMME SUR LE SITE (19/11/2026). Le simulateur garde
-    // l'identité pour la fin : on a d'abord un projet, on sait à qui il est
-    // ensuite. Le formulaire les demandait en premier depuis le matin même.
+    // ==================================================== COORDONNÉES (fin)
     if (E === 'coordonnees') {
       const d = doublon();
       return `
@@ -658,7 +745,8 @@ export function nouveauProspectCourtage(apres, { dealId = null, retour = null, e
       <h4>Comment nous a-t-il connus ?</h4>${tuiles('canal', ORIGINES.map(([l, i, c]) => [c, i, '', l]), v.canal)}
       ${v.canal === 'Partenaire / apporteur' ? `<label class="lrc-champ large"><span>Apporteur d’affaires</span>
         <select name="apporteur"><option value="">— Choisir —</option>${apporteurs().map(o => `<option value="${esc(o.id)}" ${v.apporteur === o.id ? 'selected' : ''}>${esc(o.name)}</option>`).join('')}</select></label>` : ''}
-      <label class="lrc-champ large"><span>Ce qu’il a dit</span><textarea name="message" rows="3" placeholder="Sa situation, ses délais, ce qui l’inquiète…">${esc(v.message)}</textarea></label>`;
+      <label class="lrc-champ large"><span>Ce qu’il a dit</span><textarea name="message" rows="3" placeholder="Sa situation, ses délais, ce qui l’inquiète…">${esc(v.message)}</textarea></label>
+      <div class="lrc-recap">${recap()}</div>`;
     }
     const c = CONTACTS.find(x => x[0] === v.contact);
     const dates = [['Aujourd’hui', 0], ['Demain', 1], ['Dans 2 jours', 2], ['Dans 1 semaine', 7]];
@@ -730,10 +818,38 @@ export function nouveauProspectCourtage(apres, { dealId = null, retour = null, e
 
   // Les saisies au clavier vivent dans `v` sans redessiner (on perdrait le curseur) ;
   // seuls les choix par tuile ou par puce redessinent.
+  // ⚠ UN SEUL ENDROIT RANGE UNE CASE, et c'est tout l'objet de cette fonction.
+  // Le gestionnaire de frappe faisait `v[el.name] = el.value` pour n'importe
+  // quel champ : il CRÉAIT donc `v.bien_0_loyer` à la première lettre tapée, et
+  // le test `el.name in v` d'ici devenait vrai — la valeur n'arrivait jamais
+  // dans la liste des biens. Symptôme : ajouter un second bien effaçait le
+  // loyer du premier. Attrapé par le banc d'essai, invisible à la relecture.
+  const poserChamp = (el) => {
+    // Les cases des biens locatifs et des crédits vivent dans leurs listes,
+    // pas dans `v` : leur nom porte le rang et la colonne. On les teste EN
+    // PREMIER, avant toute écriture dans `v`.
+    const b = /^bien_(\d+)_(loyer|valeur|crd|mensualite)$/.exec(el.name);
+    if (b) { if (biens[+b[1]]) biens[+b[1]][b[2]] = el.value; return; }
+    const c = /^credit_(\d+)_(type|montant)$/.exec(el.name);
+    if (c) { if (credits[+c[1]]) credits[+c[1]][c[2]] = el.value; return; }
+    if (el.name in v) v[el.name] = el.value;
+  };
   function lireChamps() {
-    hote.querySelectorAll('input[name], select[name], textarea[name]').forEach(el => {
-      if (el.name in v) v[el.name] = el.value;
-    });
+    hote.querySelectorAll('input[name], select[name], textarea[name]').forEach(poserChamp);
+    // Le total des loyers suit le détail : c'est lui que lisent la fiche et le
+    // simulateur (`revenus_locatifs`), le détail n'en est que la justification.
+    if (q.locatif === 'Oui') {
+      const t = biens.reduce((n, b) => n + (nombre(b.loyer) || 0), 0);
+      if (t) v.revenus_locatifs = String(t);
+    }
+    if (q.credits === 'Oui') {
+      const t = credits.reduce((n, c) => n + (nombre(c.montant) || 0), 0);
+      if (t) v.credits_en_cours = String(t);
+      const d = credits.filter(c => c.type || nombre(c.montant))
+        .map(c => [c.type, nombre(c.montant) ? `${nombre(c.montant)} € /mois` : ''].filter(Boolean).join(' '))
+        .filter(Boolean).join(', ');
+      if (d) v.detail_credits = d;
+    }
   }
   function brancher() {
     hote.querySelectorAll('[data-choix]').forEach(b => b.onclick = () => {
@@ -751,6 +867,35 @@ export function nouveauProspectCourtage(apres, { dealId = null, retour = null, e
       if (q[k] !== 'Oui') for (const c of (VIDER[k] || [])) v[c] = '';
       draw();
     });
+    hote.querySelector('[data-ajouter-bien]')?.addEventListener('click', () => {
+      lireChamps();
+      if (biens.length < LOC_MAX) biens.push({ loyer: '', valeur: '', crd: '', mensualite: '' });
+      draw();
+    });
+    hote.querySelectorAll('[data-oter-bien]').forEach(b => b.onclick = () => {
+      lireChamps();
+      biens.splice(Number(b.dataset.oterBien), 1);
+      if (!biens.length) biens.push({ loyer: '', valeur: '', crd: '', mensualite: '' });
+      // Le total doit suivre une suppression, sinon il garde le loyer d'un bien
+      // qui n'existe plus — et `lireChamps` ne baisse jamais un total.
+      v.revenus_locatifs = String(biens.reduce((n, x) => n + (nombre(x.loyer) || 0), 0) || '');
+      draw();
+    });
+    hote.querySelector('[data-ajouter-credit]')?.addEventListener('click', () => {
+      lireChamps();
+      if (credits.length < CRED_MAX) credits.push({ type: '', montant: '' });
+      draw();
+    });
+    hote.querySelectorAll('[data-oter-credit]').forEach(b => b.onclick = () => {
+      lireChamps();
+      credits.splice(Number(b.dataset.oterCredit), 1);
+      if (!credits.length) credits.push({ type: '', montant: '' });
+      v.credits_en_cours = String(credits.reduce((n, x) => n + (nombre(x.montant) || 0), 0) || '');
+      v.detail_credits = credits.filter(c => c.type || nombre(c.montant))
+        .map(c => [c.type, nombre(c.montant) ? `${nombre(c.montant)} € /mois` : ''].filter(Boolean).join(' '))
+        .filter(Boolean).join(', ');
+      draw();
+    });
     hote.querySelectorAll('[data-repli]').forEach(b => b.onclick = () => {
       lireChamps();
       const k = b.dataset.repli;
@@ -766,7 +911,7 @@ export function nouveauProspectCourtage(apres, { dealId = null, retour = null, e
     hote.querySelector('[data-creer]').onclick = creer;
     hote.querySelectorAll('input[name], textarea[name], select[name]').forEach(el => {
       el.addEventListener('input', () => {
-        v[el.name] = el.value;
+        poserChamp(el);
         if (['montant_projet', 'apport', 'montant_financement', 'revenus_foyer', 'credits_en_cours',
           'salaire_1', 'salaire_2', 'primes_1', 'primes_2'].includes(el.name)) lier(el.name);
         const r = hote.querySelector('.lrc-recap'); if (r) r.innerHTML = recap();
@@ -877,6 +1022,15 @@ export function nouveauProspectCourtage(apres, { dealId = null, retour = null, e
         pret_relais: v.pret_relais,
         regroupement_credits: v.regroupement,
         assurance: v.assurance.trim(),
+        ptz_rfr: nombre(v.ptz_rfr), ptz_occupants: nombre(v.ptz_occupants),
+        // ⚠ LE DÉTAIL DES BIENS ET DES CRÉDITS EST ÉCRIT EN JSON, à côté des
+        // totaux que lisent déjà la fiche et le simulateur. Les totaux restent
+        // la vérité affichée ; le détail est ce qui permet de les rouvrir et
+        // de les corriger un par un, sans retaper.
+        biens_locatifs: q.locatif === 'Oui'
+          ? JSON.stringify(biens.filter(b => nombre(b.loyer) || nombre(b.valeur) || nombre(b.crd) || nombre(b.mensualite))) : '',
+        liste_credits: q.credits === 'Oui'
+          ? JSON.stringify(credits.filter(c => c.type || nombre(c.montant))) : '',
         // ⚠ `emprunteur_1` / `emprunteur_2` SE COMPOSENT MAINTENANT, comme le
         // simulateur les compose : « 35 ans, CDI, 2 400 € /mois ». C'est cette
         // phrase que la fiche affiche et que le courtier relit des mois plus

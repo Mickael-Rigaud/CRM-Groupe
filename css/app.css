@@ -10210,6 +10210,18 @@ td .pl-toque { color: #4f46e5; }
    dire sans mentir. */
 .lrc-lien.est-manque { font-weight: 700; color: #B86A08; }
 .lrc-lien.est-bon { font-weight: 700; color: #2E8B57; }
+
+/* Ajouter / retirer un bien locatif ou un credit (19/11/2026, Elodie : « si
+   oui, combien de biens et combien de loyers et la valeur de chaque bien,
+   capital restant du de chaque bien et mensualites de credits »).
+   ⚠ « retirer » vit DANS l'etiquette du champ, pas en marge : une croix
+   flottante se clique par erreur en voulant corriger un montant. */
+.lrc-ajouter { margin-top: 10px; padding: 8px 16px; border-radius: 999px; border: 1.5px dashed var(--lrc-filet-fort);
+  background: transparent; cursor: pointer; font: inherit; font-size: 12.5px; font-weight: 750; color: var(--lrc-encre-2); }
+.lrc-ajouter:hover { border-style: solid; background: #fff; color: var(--lrc-encre); }
+.lrc-oter { margin-left: 8px; padding: 0 6px; border: 0; background: none; cursor: pointer; font: inherit;
+  font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--lrc-gris); }
+.lrc-oter:hover { color: #C8483C; text-decoration: underline; }
 .cts-chiffres .est-vert b { color: #2E8B57; } .cts-chiffres .est-orange b { color: #E38A12; } .cts-chiffres .est-rouge b { color: #D9483B; }
 
 /* --------------------------------------------------------------------------
