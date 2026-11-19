@@ -633,11 +633,8 @@ const dossierDe = (contactId) => {
   return l[0] || null;
 };
 
-// La date qui range une ligne de la base : la plus récente du contact et de son dossier.
-const recenceDe = ({ c, d }) => {
-  const a = String(c?.created_at || ''), b = String(d?.created_at || '');
-  return a > b ? a : b;
-};
+// La date qui range une ligne de la base : l'ajout du contact dans le CRM.
+const recenceDe = ({ c }) => String(c?.created_at || '');
 
 export const courtageBasePage = {
   title: () => 'La Référence Courtage — Base de données',
@@ -737,10 +734,10 @@ export const courtageBasePage = {
           .filter(({ d }) => !state.fin || d?.fields?.type_financement === state.fin)
           .filter(({ c, d }) => hit([contactName(c), c.email, c.phone, c.city, c.channel, d?.title, d?.fields?.type_financement], ts))
           // ⚠ LE PLUS RÉCENT EN HAUT (19/11/2026, Élodie : « les lignes de contact
-          // rangées du plus récent (en haut) au plus ancien »). « Récent » = la plus
-          // tardive de la création du contact et de celle de son dossier : un
-          // prospect déjà connu qui revient par le simulateur ou un rendez-vous a un
-          // dossier neuf, et c'est lui qu'il faut rappeler en premier.
+          // rangées du plus récent (en haut) au plus ancien »). « Récent » = la DATE
+          // D'AJOUT DU CONTACT dans le CRM, et elle seule — précisé par Élodie le même
+          // jour (« date d'ajout sur le crm »). Une première version prenait la plus
+          // tardive du contact et de son dossier ; ce n'était pas la demande.
           .sort((x, y) => recenceDe(y).localeCompare(recenceDe(x)))
           .map(({ c, d }) => {
             const l = ligneDossier(c, d);
