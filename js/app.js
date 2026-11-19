@@ -8,7 +8,7 @@ import { pages, prechargerLesEcrans } from './pages/index.js';
 import { messagesNonLus, monterBulle } from './pages/messagerie.js';
 import { icon } from './icons.js';
 import { actualiser, poserGesteActualiser } from './actualiser.js';
-import { surveillerVersion } from './maj.js';
+import { surveillerVersion, signalerChargementIncomplet } from './maj.js';
 import { monterRappels, demonterRappels, brancherBoutonNotifications } from './rappels.js';
 import { ouvrirRecherche, brancherRecherche } from './recherche.js';
 
@@ -1120,6 +1120,9 @@ async function rafraichirApresCopie(copie) {
   try { u = await db.currentUser(); } catch { return; }
   if (!u) { await db.signOut(); location.reload(); return; }
   try { await db.rafraichirTout(u); } catch { return; }
+  // ⚠ L'ÉCRAN DIT S'IL EST INCOMPLET. Sans ce bandeau, une table qui n'arrive
+  // pas laisse des chiffres FAUX sans rien signaler — le défaut du 19/11.
+  signalerChargementIncomplet(db.echecs, () => location.reload());
   if (JSON.stringify(u) !== JSON.stringify(copie)) { await db.memoriser(u, 0); location.reload(); }
 }
 
@@ -1205,7 +1208,11 @@ function refusDeLien() {
     const copie = retourDeLien() ? null : await db.reprendreCopie();
     if (copie) { start(copie); rafraichirApresCopie(copie); return; }
     const u = await db.currentUser();
-    if (u) { if (!db.demo) await db.loadAll(u); start(u); } else renderLogin(refusDeLien());
+    if (u) {
+      if (!db.demo) await db.loadAll(u);
+      start(u);
+      signalerChargementIncomplet(db.echecs, () => location.reload());
+    } else renderLogin(refusDeLien());
   } catch (e) {
     console.error(e);
     app.innerHTML = `<div class="login"><div class="card"><h2>Erreur de démarrage</h2><p>${esc(e.message)}</p><p class="muted small">Vérifiez la configuration dans <code>js/config.js</code>.</p></div></div>`;

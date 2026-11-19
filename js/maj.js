@@ -95,14 +95,14 @@ async function aDuNeuf(local) {
   return false;
 }
 
-function bandeau(surRechargement) {
+function bandeau(surRechargement, texte = 'Une nouvelle version est en ligne.', libelle = 'Recharger') {
   if (document.getElementById('maj-bandeau')) return;
   const el = document.createElement('div');
   el.id = 'maj-bandeau';
   el.className = 'maj-bandeau';
   el.innerHTML = `
-    <span class="maj-texte">${esc('Une nouvelle version est en ligne.')}</span>
-    <button type="button" class="maj-oui">Recharger</button>
+    <span class="maj-texte">${esc(texte)}</span>
+    <button type="button" class="maj-oui">${esc(libelle)}</button>
     <button type="button" class="maj-non" aria-label="Plus tard">×</button>`;
   el.querySelector('.maj-non').onclick = () => el.remove();
   el.querySelector('.maj-oui').onclick = async () => {
@@ -152,4 +152,33 @@ export function surveillerVersion() {
   // Un premier contrôle à l'ouverture : la page a pu être servie depuis le
   // cache alors qu'une version plus récente était déjà en ligne.
   setTimeout(controler, 4000);
+}
+
+/**
+ * Le bandeau qui prévient que l'écran est INCOMPLET.
+ *
+ * ⚠ UN CHIFFRE FAUX EST PIRE QU'UN ÉCRAN VIDE, et c'est toute la raison d'être
+ * de ce bandeau (19/11/2026, Élodie : « les éléments du tableau de bord du
+ * téléphone ne coordonnent pas avec ceux de l'ordinateur, qui sont les vraies
+ * données »). Une table qui n'arrive pas — un échec réseau sur `rgd_paiements`
+ * en 4G suffit — faisait afficher 3 160 € de chiffre d'affaires au lieu de
+ * 12 253 €, « 0 affaire signée » et un graphique plat. Rien ne le disait : le
+ * seul signe était un `console.warn`, invisible sur un téléphone.
+ *
+ * ⚠ IL NOMME LES TABLES MANQUANTES. « Certaines données n'ont pas pu être
+ * chargées » n'aide personne à juger si le chiffre qu'il regarde est bon ;
+ * « rgd_paiements » dit à qui connaît le CRM que c'est l'argent qui manque.
+ *
+ * ⚠ ET IL NE SE MONTRE PAS SI LE BANDEAU DE VERSION EST DÉJÀ LÀ : deux bandes
+ * superposées en bas d'un téléphone se recouvrent, et c'est la mise à jour
+ * qu'il faut faire d'abord — elle recharge tout.
+ */
+export function signalerChargementIncomplet(tables, surReessai) {
+  if (!tables?.length) return;
+  const n = tables.length;
+  bandeau(surReessai,
+    `Écran incomplet : ${n === 1 ? 'une table n’a' : `${n} tables n’ont`} pas pu être `
+    + `chargée${n === 1 ? '' : 's'} (${tables.slice(0, 3).join(', ')}${n > 3 ? '…' : ''}). `
+    + 'Les chiffres affichés sont partiels.',
+    'Réessayer');
 }

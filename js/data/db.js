@@ -183,6 +183,11 @@ const TRADUCTION_CHANTIER = {
 // plus haut que sa déclaration marche tant que l'usage est dans une fonction,
 // et casse le jour où quelqu'un le sort de la fonction. Autant ne pas laisser
 // le piège en place.
+// La clé sous laquelle un chargement range les tables qu'il n'a PAS pu lire.
+// Un symbole, pour qu'elle ne puisse pas se confondre avec un nom de table ni
+// voyager dans une copie JSON.
+export const ECHECS = Symbol('tables en échec');
+
 const CLE_PRIMAIRE = {
   settings: 'key',
   rgd_reglages: 'cle',
@@ -765,25 +770,59 @@ const supabaseAdapter = {
   // enregistrerait. (Une table absente, elle, a un `code` : on continue.)
   async load(tables = TABLES, { exigeant = false } = {}) {
     const out = {};
+    // Les tables que le serveur n'a pas rendues. Rangées hors énumération pour
+    // qu'aucune boucle `for (const t of TABLES)` ne les prenne pour des données.
+    const echecs = [];
     const PAGE = 1000; // Supabase limite chaque requête à 1 000 lignes : on pagine
     const EN_VOL = 12;
+    // ⚠ ON RÉESSAIE AVANT D'ABANDONNER (19/11/2026). Douze requêtes en vol sur
+    // un téléphone en 4G, c'est une coupure de temps en temps — et une seule
+    // suffisait à vider une table pour toute la session. Deux essais de plus,
+    // espacés, règlent l'immense majorité de ces échecs : ils sont passagers.
+    // Une table réellement absente (module non installé) porte un `code` et
+    // échoue pareil aux trois essais, pour un coût de deux allers-retours.
+    const ESSAIS = 3;
+    const souffler = (ms) => new Promise(ok => setTimeout(ok, ms));
     const chargerTable = async (t) => {
-      const rows = []; let from = 0; let failed = false;
-      while (true) {
-        const { data, error } = await this.client.from(t).select('*').range(from, from + PAGE - 1);
-        if (error && exigeant && !error.code) throw new Error(`Table ${t} : ${error.message}`);
-        if (error) { console.warn(`Table ${t} : ${error.message}`); failed = true; break; } // table absente (module non installé) : on continue
-        rows.push(...(data || []));
-        if (!data || data.length < PAGE) break;
-        from += PAGE;
+      let rows = []; let failed = false;
+      for (let essai = 1; essai <= ESSAIS; essai++) {
+        rows = []; failed = false;
+        let from = 0;
+        while (true) {
+          const { data, error } = await this.client.from(t).select('*').range(from, from + PAGE - 1);
+          if (error && exigeant && !error.code) throw new Error(`Table ${t} : ${error.message}`);
+          if (error) { // table absente (module non installé) ou réseau : on verra au prochain essai
+            if (essai === ESSAIS) console.warn(`Table ${t} : ${error.message}`);
+            failed = true; break;
+          }
+          rows.push(...(data || []));
+          if (!data || data.length < PAGE) break;
+          from += PAGE;
+        }
+        if (!failed) break;
+        if (essai < ESSAIS) await souffler(essai * 400);
       }
-      out[t] = failed ? [] : rows;
+      // ⚠ UNE TABLE QUI N'A PAS PU ÊTRE LUE N'EST PAS UNE TABLE VIDE, et la
+      // confondre coûte cher (19/11/2026, Élodie : « les éléments du tableau de
+      // bord du téléphone ne coordonnent pas avec ceux de l'ordinateur, qui
+      // sont les vraies données »). En 4G, un échec sur `rgd_paiements` suffit :
+      // le tableau de bord affichait alors 3 160 € de CA au lieu de 12 253 €
+      // — les seules factures du CRM, sans celles de Costructor —, « 0 affaire
+      // signée » et un graphique plat sur douze mois. Des chiffres FAUX, pas un
+      // écran vide, et le seul signe était un `console.warn` que personne ne lit
+      // sur un téléphone. Pire : la copie locale enregistrait ensuite cet état,
+      // qui survivait donc à la fermeture de l'application.
+      //
+      // La table absente n'est plus POSÉE : l'appelant voit qu'elle manque et
+      // décide (garder ce qu'il avait, ne rien mémoriser, le dire).
+      if (failed) echecs.push(t); else out[t] = rows;
     };
     const file = [...tables];
     const ouvrier = async () => { while (file.length) await chargerTable(file.shift()); };
     await Promise.all(Array.from({ length: Math.min(EN_VOL, file.length) }, ouvrier));
     // Gestion locative sans accès patrimoine : les biens viennent d'une vue allégée (sans prix ni financement)
     if (out.properties && !out.properties.length) { const { data } = await this.client.from('v_properties_rental').select('*'); if (data?.length) out.properties = data; }
+    Object.defineProperty(out, ECHECS, { value: echecs, enumerable: false });
     return out;
   },
   async insert(table, row) {
@@ -947,11 +986,20 @@ export const db = {
     if (!CONFIG.DEMO) await this.adapter.connect();
     else await this.adapter.load();
   },
+  // Les tables que le dernier chargement n'a pas rendues. Lue par le bandeau
+  // qui prévient que l'écran est incomplet — voir `js/actualiser.js`.
+  echecs: [],
+
   async loadAll(user = null) {
-    this.cache = await this.adapter.load();
+    const frais = await this.adapter.load();
+    this.echecs = frais[ECHECS] || [];
+    this.cache = frais;
     for (const t of TABLES) this.cache[t] ||= [];
     this.emit();
-    if (user) this.memoriser(user);
+    // ⚠ ON NE FIGE PAS UN CHARGEMENT INCOMPLET. La copie locale sert à rouvrir
+    // vite ; y enregistrer des tables manquantes ferait survivre l'erreur à la
+    // fermeture de l'application, et l'écran resterait faux le lendemain.
+    if (user && !this.echecs.length) this.memoriser(user);
   },
   // Par défaut après le dessin de l'écran : la copie d'1,8 Mo prend quelques
   // dizaines de millisecondes sur téléphone, autant ne pas les prendre à
@@ -980,13 +1028,19 @@ export const db = {
     let frais, avant, essais = 0;
     do { avant = this.ecritures; frais = await this.adapter.load(TABLES, { exigeant: true }); }
     while (avant !== this.ecritures && ++essais < 3);
+    this.echecs = frais[ECHECS] || [];
     let change = false;
+    // ⚠ ON NE REMPLACE QUE CE QUI EST ARRIVÉ. Une table absente de `frais` n'a
+    // pas été lue : écrire `[]` à sa place effacerait des données justes —
+    // celles de la copie locale ou du chargement précédent — au profit d'un
+    // vide qui se lirait comme une vérité.
     for (const t of TABLES) {
+      if (!(t in frais)) continue;
       const rows = frais[t] || [];
       if (JSON.stringify(rows) !== JSON.stringify(this.cache[t] || [])) { this.cache[t] = rows; change = true; }
     }
     if (change) this.emit();
-    this.memoriser(user);
+    if (!this.echecs.length) this.memoriser(user);
   },
   // Recharge quelques tables seulement, sans toucher au reste du cache.
   // N'émet que si quelque chose a bougé : autrement un rafraîchissement
@@ -994,7 +1048,10 @@ export const db = {
   async refresh(tables, options) {
     const out = await this.adapter.load(tables, options);
     let change = false;
+    // Même règle qu'au chargement complet : ce qui n'est pas arrivé n'est pas
+    // vide. Un rafraîchissement partiel qui échoue laisse l'écran tel quel.
     for (const t of tables) {
+      if (!(t in out)) continue;
       const rows = out[t] || [];
       if (JSON.stringify(rows) !== JSON.stringify(this.cache[t] || [])) { this.cache[t] = rows; change = true; }
     }
