@@ -10126,6 +10126,16 @@ td .pl-toque { color: #4f46e5; }
 
 /* ---- le pied ---- */
 .lrc-pied { display: flex; align-items: center; gap: 10px; margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--lrc-filet); }
+/* ⚠ UN BOUTON QUI DÉFAIT NE SE DÉGUISE PAS EN LIEN (19/11/2026). Annuler un
+   rendez-vous retire l'événement de l'agenda de l'agence ET la tâche de la
+   fiche : c'est irréversible des deux côtés. Il porte donc la couleur d'alerte
+   et un contour, là où `.lrc-annuler` — qui ferme un formulaire sans rien
+   détruire — reste un texte discret. Deux gestes différents, deux apparences. */
+.lrc-rdv-annuler { margin-left: auto; flex: none; padding: 7px 13px; border-radius: 999px;
+  border: 1.5px solid var(--ct-rouge, #E5484D); background: none; cursor: pointer;
+  font: inherit; font-size: 12.5px; font-weight: 650; color: var(--ct-rouge, #E5484D); }
+.lrc-rdv-annuler:hover:not(:disabled) { background: var(--ct-rouge, #E5484D); color: #fff; }
+.lrc-rdv-annuler:disabled { opacity: .55; cursor: default; }
 .lrc-annuler { border: 0; background: none; font: inherit; font-size: 13.5px; font-weight: 650; color: var(--lrc-encre-2); cursor: pointer; padding: 8px 4px; }
 .lrc-erreur { flex: 1; font-size: 12.5px; font-weight: 650; color: #C8483C; }
 .lrc-btn { padding: 11px 20px; border-radius: 999px; border: 0; cursor: pointer; font: inherit; font-size: 14px; font-weight: 750; color: #fff;

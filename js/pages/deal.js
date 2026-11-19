@@ -1,4 +1,5 @@
 // Affaires : fiche détaillée (modale), création / édition, changement d'étape, gagné / perdu.
+import { CONFIG } from '../config.js';
 import { db } from '../data/db.js';
 import { scope } from '../data/scope.js';
 import { ACTIVITIES, CHANNELS, LOST_REASONS, stageOf, stageIndex, stagesDe, missionDe, couleurMission, estNouveauLead, etapeEquivalente, estEtapeFinale, etapeFinale, estEngagee } from '../data/schema.js';
@@ -756,6 +757,15 @@ export function openDeal(id, onChange) {
               ${prochain ? `<div class="lrc-prochain">
                   <span class="lrc-prochain-date"><b>${esc(quand || 'Sans date')}</b>${prochain.due_time ? `<em>${esc(prochain.due_time)}</em>` : ''}</span>
                   <span class="lrc-prochain-quoi">${esc(prochain.title)}<em>${esc(userName(prochain.assignee_id))}</em></span>
+                  <!-- ⚠ ANNULER FAIT LES DEUX GESTES À LA FOIS (19/11/2026,
+                       Mickael : « comment je peux annuler un rendez-vous et
+                       libérer un rendez-vous sur le site »). Il fallait
+                       supprimer l'événement dans Google Agenda pour rendre le
+                       créneau, PUIS retirer la tâche ici — et rien ne reliait
+                       les deux : un oubli laissait soit un créneau bloqué pour
+                       rien, soit une fiche annonçant un rendez-vous mort. -->
+                  <button type="button" class="lrc-rdv-annuler" data-annuler="${esc(prochain.id)}" data-quand="${esc((quand || '') + (prochain.due_time ? ' à ' + prochain.due_time : ''))}"
+                    title="Annuler ce rendez-vous et libérer le créneau sur le site">Annuler</button>
                 </div>` : '<p class="rgdf-rien">Aucun rendez-vous prévu. « + Rendez-vous » en programme un.</p>'}
               ${aVenir.length ? `<h4 class="lrc-sous-titre">Toutes les actions à venir</h4>
                 <div class="lrc-actions-liste">${aVenir.map(a => activityRowHtml(a)).join('')}</div>` : ''}
@@ -877,6 +887,49 @@ export function openDeal(id, onChange) {
           // simulateur, et ce `3` serait tombé sur « Ses revenus » — sans
           // erreur, et sans que rien ne le dise.
           { dealId: id, etape: 'rdv', retour: () => openDeal(id, onChange) });
+      });
+      // ⚠ ANNULER EST IRRÉVERSIBLE DES DEUX CÔTÉS : l'événement quitte
+      // l'agenda de l'agence et la tâche quitte la fiche. On demande donc
+      // confirmation, en disant ce qui va se passer plutôt qu'en demandant
+      // « êtes-vous sûr ? ».
+      m.querySelector('[data-annuler]')?.addEventListener('click', async (ev) => {
+        const bouton = ev.currentTarget;
+        // Le créneau est lu sur le bouton : le gestionnaire est posé hors de
+        // la portée du rendu, et relire la tâche pour l'afficher serait un
+        // aller-retour pour une phrase.
+        const ok = await confirm(
+          `Annuler le rendez-vous du ${bouton.dataset.quand || 'créneau choisi'} ? `
+          + 'Il sera retiré de la fiche et son créneau redeviendra disponible sur '
+          + 'le site. Le prospect n’est pas prévenu : à vous de l’appeler.');
+        if (!ok) return;
+        bouton.disabled = true;
+        bouton.textContent = 'Annulation…';
+        try {
+          const jeton = await db.accessToken();
+          const r = await fetch(`${CONFIG.SUPABASE_URL}/functions/v1/annuler-rdv-courtage`, {
+            method: 'POST',
+            headers: {
+              apikey: CONFIG.SUPABASE_ANON_KEY,
+              Authorization: `Bearer ${jeton}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ activity_id: bouton.dataset.annuler }),
+          });
+          const data = await r.json().catch(() => ({}));
+          if (!r.ok || !data.ok) throw new Error(data.erreur || `HTTP ${r.status}`);
+          // ⚠ ON DIT CE QU'A FAIT L'AGENDA, pas un « c'est fait » global : si le
+          // créneau n'a pas pu être libéré, il reste un geste à faire là-bas, et
+          // personne ne le devinera tout seul.
+          toast(/libéré/.test(String(data.agenda))
+            ? 'Rendez-vous annulé, créneau libéré sur le site.'
+            : `Rendez-vous annulé. Créneau du site : ${data.agenda}.`);
+          await db.rafraichir?.('activities');
+          onChange?.(); openDeal(id, onChange);
+        } catch (e) {
+          bouton.disabled = false;
+          bouton.textContent = 'Annuler';
+          toast(`L’annulation a échoué : ${String(e.message).slice(0, 120)}`);
+        }
       });
       m.querySelector('#d-action')?.addEventListener('click', () => activityForm(
         { deal_id: id, contact_id: d.contact_id, activity: 'courtage' }, null,
