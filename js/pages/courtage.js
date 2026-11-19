@@ -633,6 +633,12 @@ const dossierDe = (contactId) => {
   return l[0] || null;
 };
 
+// La date qui range une ligne de la base : la plus récente du contact et de son dossier.
+const recenceDe = ({ c, d }) => {
+  const a = String(c?.created_at || ''), b = String(d?.created_at || '');
+  return a > b ? a : b;
+};
+
 export const courtageBasePage = {
   title: () => 'La Référence Courtage — Base de données',
   render(root) {
@@ -730,6 +736,12 @@ export const courtageBasePage = {
           .map(c => ({ c, d: dossierDe(c.id) }))
           .filter(({ d }) => !state.fin || d?.fields?.type_financement === state.fin)
           .filter(({ c, d }) => hit([contactName(c), c.email, c.phone, c.city, c.channel, d?.title, d?.fields?.type_financement], ts))
+          // ⚠ LE PLUS RÉCENT EN HAUT (19/11/2026, Élodie : « les lignes de contact
+          // rangées du plus récent (en haut) au plus ancien »). « Récent » = la plus
+          // tardive de la création du contact et de celle de son dossier : un
+          // prospect déjà connu qui revient par le simulateur ou un rendez-vous a un
+          // dossier neuf, et c'est lui qu'il faut rappeler en premier.
+          .sort((x, y) => recenceDe(y).localeCompare(recenceDe(x)))
           .map(({ c, d }) => {
             const l = ligneDossier(c, d);
             const cells = [l.prospect, l.coordonnees, l.projet, l.montant, l.feu, l.faisabilite, l.rdv, statutDossier(c, d)];
