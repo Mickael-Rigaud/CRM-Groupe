@@ -505,7 +505,16 @@
    Une note au milieu d'un encadre reste, comme tout ce qui est dans une
    fenetre ou un formulaire (hors de `#content`). L'ordinateur garde tout. */
 @media screen and (max-width: 820px) {
-  #content p.small.muted:not(:has(~ :not(p.small.muted, .ko))) { display: none; }
+  /* ⚠ SAUF CE QUI PORTE UN CHIFFRE (19/11/2026, Elodie : « les elements du
+     tableau de bord du telephone ne coordonnent pas avec les elements que l'on
+     retrouve sur l'ordinateur, qui sont les vraies donnees »). La regle
+     ci-dessus visait les NOTES d'explication ; elle emportait aussi « Reste
+     15 000 € en 12 jours » et « Reste 178 800 €, soit 89 400 € par mois », qui
+     sont la reponse a « ou en est-on ». Mesure a l'ecran : sur six paragraphes
+     masques du tableau de bord, deux portaient une donnee, quatre une note.
+     Une donnee se marque (`ob-reste`) ; les legendes et les sources restent
+     masquees, elles, et c'est bien ce qui avait ete demande le 10/11. */
+  #content p.small.muted:not(:has(~ :not(p.small.muted, .ko))):not(.ob-reste) { display: none; }
 }
 
 /* ---- Graphique des objectifs : lisible sur telephone ----
