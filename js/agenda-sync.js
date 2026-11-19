@@ -40,22 +40,22 @@ export const agendasDe = (cles = ACTIVITY_KEYS) =>
 // avec le même cloisonnement — deux lectures différentes de `agenda_events`
 // auraient fini par ne plus montrer la même chose.
 //
-// Chaque rendez-vous porte `jour` (sa clé AAAA-MM-JJ) : c'est elle qui range
-// l'événement dans sa colonne, et surtout c'est elle qui fait apparaître un
-// « journée entière » de trois jours les trois jours — le relève en écrit une
-// ligne par jour occupé, l'heure de début, elle, ne change pas.
-export function evenementsEnregistres(cles, du = jourCle(), au = du) {
+// ⚠ ON REND LES LIGNES TELLES QU'ELLES SONT EN BASE, et non une forme
+// remaniée : la grille hebdomadaire de l'écran Agenda, que le tableau de bord
+// emprunte, lit `starts_at`, `ends_at`, `all_day` et `calendar_id`. Les
+// traduire ici obligeait à les retraduire là-bas.
+//
+// `day` est la clé AAAA-MM-JJ qui range le rendez-vous dans sa colonne : c'est
+// elle qui fait apparaître un « journée entière » de trois jours les trois
+// jours — le relevé en écrit une ligne par jour occupé, l'heure de début, elle,
+// ne change pas.
+export function lignesEnregistrees(cles, du = jourCle(), au = du) {
   return db.t('agenda_events')
     .filter(e => e.day >= du && e.day <= au && cles.includes(e.activity) && scope.voitAgenda(e))
-    .map(e => ({
-      id: e.id, titre: e.title || '(sans titre)', lieu: e.location || '',
-      debut: new Date(e.starts_at), fin: e.ends_at ? new Date(e.ends_at) : new Date(e.starts_at),
-      journee: !!e.all_day, structure: e.activity, jour: e.day,
-      invites: e.attendees || 0, lien: e.link || '',
-    }))
-    .sort((a, b) => (a.jour === b.jour
-      ? (a.journee === b.journee ? a.debut - b.debut : a.journee ? -1 : 1)
-      : (a.jour < b.jour ? -1 : 1)));
+    .sort((a, b) => (a.day === b.day
+      ? (!!a.all_day === !!b.all_day
+        ? new Date(a.starts_at) - new Date(b.starts_at) : a.all_day ? -1 : 1)
+      : (a.day < b.day ? -1 : 1)));
 }
 // Quand la dernière copie a-t-elle eu lieu ? Sert à dire « à jour il y a 10 min »
 // plutôt que de laisser croire que la journée est vide.

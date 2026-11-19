@@ -314,7 +314,13 @@ function voies(evts) {
   return out;
 }
 
-function grille(jours, parJour, calendriers, ecriture, pxParHeure = 52, teintes = TEINTES) {
+// ⚠ EXPORTÉE DEPUIS LE 19/11/2026 : le tableau de bord dessine sa semaine
+// avec CETTE grille, pas avec une copie. Élodie, devant une première version
+// en lignes : « je ne voulais pas cette présentation en ligne mais plutôt des
+// colonnes comme un calendrier hebdomadaire ». Deux calendriers hebdomadaires
+// dans la même application auraient divergé au premier correctif — et celui-ci
+// sait déjà placer les chevauchements côte à côte et tracer l'heure qu'il est.
+export function grille(jours, parJour, calendriers, ecriture, pxParHeure = 52, teintes = TEINTES) {
   const { debut, fin } = plageHoraire(jours, parJour);
   const hauteur = (fin - debut) / 60 * pxParHeure;
   const y = (min) => (min - debut) / (fin - debut) * hauteur;

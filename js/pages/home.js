@@ -37,7 +37,13 @@ import {
   idsDe, idsDeTous, structuresRaccordees, cadreJour, noteAgenda, modeEmploi,
   champsAgendas, enregistrerAgendas, peutRaccorder,
 } from '../agenda.js';
-import { evenementsEnregistres, derniereSync, agendasDe, jourCle } from '../agenda-sync.js';
+import { lignesEnregistrees, derniereSync, agendasDe, jourCle } from '../agenda-sync.js';
+// ⚠ LA GRILLE HEBDOMADAIRE VIENT DE L'ÉCRAN AGENDA, ce n'est pas une copie :
+// elle sait déjà placer deux rendez-vous qui se chevauchent côte à côte, tracer
+// l'heure qu'il est et choisir sa plage horaire selon ce qu'il y a dedans. Deux
+// calendriers hebdomadaires dans la même application auraient divergé au
+// premier correctif.
+import { grille } from './rgd-agenda.js';
 import { creerAgendaPersonnel } from '../comptes.js';
 
 const LS_FILTRE = 'crm_home_filtre';
@@ -516,6 +522,21 @@ export const homePage = {
         state.sem = pas === 0 ? 0 : state.sem + pas;
         draw();
       });
+      // Un rendez-vous de la grille mène à l'agenda de sa structure, quand elle
+      // en a un à elle ; un rappel du CRM mène à la liste des tâches. Le
+      // tableau de bord ne sait pas déplacer ni supprimer un rendez-vous — c'est
+      // le métier de l'écran Agenda, et il vaut mieux y emmener que l'imiter.
+      root.querySelectorAll('#tb-jour .ag-evt').forEach(b => b.onclick = () => {
+        const id = b.dataset.ev || '';
+        if (id.startsWith('crm-')) return void (location.hash = '#/today');
+        // ⚠ BTP EXPERTISE N'A PAS D'ÉCRAN AGENDA À LUI : son agenda s'affiche
+        // dans l'accueil de l'espace, en cadre Google. Propulsion n'en a aucun,
+        // et son rendez-vous reste alors sans destination plutôt que d'emmener
+        // quelque part au hasard.
+        const ou = { rgd: '#/rgd/agenda', courtage: '#/courtage/agenda', btp: '#/btp' }[
+          db.byId('agenda_events', id)?.activity];
+        if (ou) location.hash = ou;
+      });
       // ⚠ ON NE REDESSINE QUE SI L'ÉCRAN EST ENCORE LÀ : le relevé prend
       // plusieurs secondes, et d'ici là on peut avoir changé de page. Écrire
       // dans un hôte détaché ne lève rien et ne se voit nulle part.
@@ -969,7 +990,7 @@ const libellePeriode = (p) => ({
 function carteSemaine(cles, agendaSeul = false, sem = 0) {
   const ids = idsDeTous(cles);
   const { du, au, jours } = bornesSemaine(sem);
-  const rdv = evenementsEnregistres(cles, du, au);
+  const rdv = lignesEnregistrees(cles, du, au);
   const taches = agendaSeul ? [] : tachesEntre(du, au);
   const entete = `<div class="card-head"><h2>Ma semaine</h2>
     <span class="muted small">${libelleSemaine(du, au)}${
@@ -1103,6 +1124,10 @@ const sourcesHtml = (cles) => {
 // Les tâches du CRM qui ont une heure : elles rejoignent les rendez-vous Google
 // dans la même semaine, c'est tout l'intérêt de dessiner nous-mêmes.
 //
+// ⚠ ELLES PRENNENT LA FORME D'UNE LIGNE `agenda_events`, avec un `calendar_id`
+// qui n'existe pas (`crm`) : c'est ce que la grille sait lire, et cela leur
+// donne au passage leur propre teinte. Elles ne sont jamais enregistrées.
+//
 // ⚠ L'HEURE SE POSE SUR LE JOUR DE LA TÂCHE, pas sur aujourd'hui. Tant que la
 // carte ne montrait que la journée en cours, partir de `new Date()` revenait au
 // même ; sur une semaine, toutes les tâches se seraient rangées le jour même.
@@ -1110,59 +1135,84 @@ function tachesEntre(du, au) {
   return scope.activities()
     .filter(a => !a.done && a.due_date >= du && a.due_date <= au && a.due_time)
     .map(a => {
-      const [h, m] = a.due_time.split(':').map(Number);
-      const d = new Date(`${a.due_date}T00:00:00`); d.setHours(h || 0, m || 0, 0, 0);
-      const f = new Date(d.getTime() + 30 * 60000);
+      const d = new Date(`${a.due_date}T${String(a.due_time).slice(0, 5)}:00`);
       return {
-        id: 'crm-' + a.id, titre: a.title, lieu: '', debut: d, fin: f, journee: false,
-        jour: a.due_date,
-        structure: db.byId('deals', a.deal_id)?.activity || null,
-        crm: true, type: a.type || 'Tâche', qui: userName(a.assignee_id),
+        id: 'crm-' + a.id, day: a.due_date, calendar_id: 'crm', crm: true,
+        activity: db.byId('deals', a.deal_id)?.activity || null,
+        title: a.title, location: [a.type || 'Tâche', userName(a.assignee_id)].filter(Boolean).join(' · '),
+        starts_at: d.toISOString(), ends_at: new Date(d.getTime() + 30 * 60000).toISOString(),
+        all_day: false, attendees: 0, link: '',
       };
     });
 }
 
-// Sept lignes, une par jour. ⚠ UNE LIGNE PAR JOUR ET NON SEPT COLONNES, et ce
-// n'est pas un rabais : la carte fait sept colonnes de large quand elle se
-// colle sous le chemin de l'argent (17/11/2026). Sept colonnes dans cette
-// largeur donnent 55 px par jour — de quoi afficher une heure, pas un titre.
-// En lignes, un rendez-vous garde son libellé entier à toutes les largeurs.
-function dessinerSemaine(elements, jours) {
+// La semaine, en colonnes. Élodie, 19/11/2026 : « je ne voulais pas cette
+// présentation en ligne mais plutôt des colonnes comme un calendrier
+// hebdomadaire ». C'est la grille de l'écran Agenda, pas une seconde.
+//
+// ⚠ LA COULEUR VIENT DE LA STRUCTURE, PAS DU CALENDRIER. La grille accepte une
+// palette `calendar_id → teinte` (elle sert à l'écran Agenda pour donner une
+// couleur par personne) : on lui en donne une qui range tous les calendriers
+// d'une structure sous sa couleur de charte. C'est ce que la légende du pied de
+// carte annonce, et les agendas personnels d'une même structure ne doivent pas
+// s'y distinguer — ici on regarde le groupe, pas qui fait quoi.
+//
+// ⚠ LE TÉLÉPHONE GARDE LA LISTE. Sept colonnes dans 375 px font 46 px par jour :
+// l'écran Agenda lui-même n'y montre qu'une journée à la fois. Une semaine en
+// lignes dit plus qu'une colonne unique, et c'est la même matière.
+function dessinerSemaine(lignes, jours) {
+  const parJour = new Map(jours.map(j => [j, []]));
+  lignes.forEach(e => parJour.get(e.day)?.push(e));
+  const teinte = (e) => (e.crm ? 'var(--muted-2)'
+    : (e.activity && ACTIVITIES[e.activity] ? ACTIVITIES[e.activity].color : 'var(--muted-2)'));
+  const palette = new Map(lignes.map(e => [e.calendar_id, teinte(e)]));
+
+  if (!matchMedia('(max-width: 820px)').matches) {
+    // ⚠ 52 PX PAR HEURE, PAS MOINS, ET C'EST UNE MESURE : un rendez-vous d'une
+    // demi-heure occupe alors 26 px, de quoi poser le titre ET l'heure en
+    // dessous (12 + 10,5 px, plus 2 de marge). À 44 px par heure il n'en
+    // restait que 22 et la seconde ligne était tranchée en son milieu — vu sur
+    // une planche agrandie, pas dans le code.
+    return `<div class="tb-cal">${grille(jours, parJour, palette, false, 52)}</div>`;
+  }
+  return listeSemaine(parJour, jours);
+}
+
+// Le repli du téléphone : un jour par ligne, les rendez-vous les uns sous les
+// autres. ⚠ LES JOURS VIDES RESTENT À L'ÉCRAN — les retirer donnerait une
+// semaine qui se rétrécit à trois lignes et ne se lirait plus comme une
+// semaine : c'est justement de voir où il reste de la place qu'il s'agit.
+function listeSemaine(parJour, jours) {
   const maintenant = new Date();
   const ajd = jourCle();
   const hhmm = (d) => d.toTimeString().slice(0, 5);
-  const parJour = new Map(jours.map(j => [j, []]));
-  elements.forEach(e => parJour.get(e.jour)?.push(e));
-  parJour.forEach(l => l.sort((a, b) =>
-    (a.journee === b.journee ? a.debut - b.debut : a.journee ? -1 : 1)));
 
-  const duree = (e) => Math.max(0, Math.round((e.fin - e.debut) / 60000));
   const ligne = (e) => {
-    const c = e.structure ? ACTIVITIES[e.structure]?.color : 'var(--muted-2)';
-    const passe = !e.journee && e.fin < maintenant;
-    const encours = !e.journee && e.debut <= maintenant && e.fin > maintenant;
-    const min = duree(e);
+    const c = e.crm ? 'var(--muted-2)'
+      : (e.activity && ACTIVITIES[e.activity] ? ACTIVITIES[e.activity].color : 'var(--muted-2)');
+    const debut = new Date(e.starts_at);
+    const fin = e.ends_at ? new Date(e.ends_at) : debut;
+    const passe = !e.all_day && fin < maintenant;
+    const encours = !e.all_day && debut <= maintenant && fin > maintenant;
+    const min = Math.max(0, Math.round((fin - debut) / 60000));
     return `<div class="tb-ev${passe ? ' passe' : ''}${encours ? ' encours' : ''}" style="--c:${c}">
-      <span class="tb-ev-h">${e.journee ? '<i>jour</i>' : hhmm(e.debut)}</span>
+      <span class="tb-ev-h">${e.all_day ? '<i>jour</i>' : hhmm(debut)}</span>
       <span class="tb-ev-b">
-        <span class="tb-ev-t">${esc(e.titre)}</span>
+        <span class="tb-ev-t">${esc(e.title || '(sans titre)')}</span>
         <span class="tb-ev-d">${[
-          e.structure ? esc(ACTIVITIES[e.structure].label) : 'Groupe',
-          e.crm ? esc(e.type) : (e.journee ? 'toute la journée'
+          e.activity && ACTIVITIES[e.activity] ? esc(ACTIVITIES[e.activity].label) : 'Groupe',
+          e.crm ? '' : (e.all_day ? 'toute la journée'
             : (min >= 60 ? Math.floor(min / 60) + ' h' + (min % 60 ? ' ' + String(min % 60).padStart(2, '0') : '') : min + ' min')),
-          e.lieu ? esc(e.lieu) : '',
-          e.crm ? esc(e.qui) : (e.invites > 1 ? e.invites + ' participants' : ''),
+          e.location ? esc(e.location) : '',
+          !e.crm && e.attendees > 1 ? e.attendees + ' participants' : '',
         ].filter(Boolean).join(' · ')}</span>
       </span>
       ${e.crm ? '<span class="tb-tag">CRM</span>' : ''}
     </div>`;
   };
 
-  // ⚠ LES JOURS VIDES RESTENT À L'ÉCRAN. Les retirer donnerait une semaine qui
-  // se rétrécit à trois lignes et ne se lirait plus comme une semaine : c'est
-  // justement de voir où il reste de la place qu'il s'agit.
   return `<div class="tb-sem">${jours.map(j => {
-    const l = parJour.get(j);
+    const l = parJour.get(j) || [];
     const d = new Date(`${j}T12:00:00`);
     const cls = [j === ajd ? 'ajd' : '', j < ajd ? 'avant' : '', l.length ? '' : 'vide']
       .filter(Boolean).join(' ');

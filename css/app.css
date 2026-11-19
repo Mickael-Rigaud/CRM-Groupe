@@ -10858,3 +10858,29 @@ button.u-tab { border: 0; background: transparent; }
 @media (prefers-reduced-motion: reduce) {
   .tb-sem-fl, .tb-sem-ajd { transition: none; }
 }
+
+
+/* ---- Le calendrier hebdomadaire du tableau de bord (19/11/2026)
+   Élodie : « je ne voulais pas cette présentation en ligne mais plutôt des
+   colonnes comme un calendrier hebdomadaire ». C'est la grille de l'écran
+   Agenda (`.ag-*`), pas une seconde : ici on ne fait que la mettre à l'échelle
+   d'une carte.
+
+   ⚠ LES POLICES SONT PLUS PETITES QU'À L'ÉCRAN AGENDA, ET C'EST NÉCESSAIRE :
+   une colonne y fait ~101 px contre ~140 là-bas, et un rendez-vous de vingt
+   minutes n'a que 18 px de haut. Au corps de l'agenda, la deuxième ligne
+   était coupée EN PLEIN MILIEU d'un chiffre ; serrée, elle disparaît
+   proprement sous le titre.
+   ------------------------------------------------------------------------- */
+/* ⚠ LE TALON DE 10 PX N'EST PAS DE L'ESTHÉTIQUE : la dernière étiquette
+   d'heure est centrée sur le trait du bas et déborde de la piste. Sans lui,
+   le cadre la tranchait en deux — « 19:00 » n'en montrait que le haut. */
+.tb-cal { border: 1px solid var(--line); border-radius: 13px; overflow: hidden;
+  background: var(--card); padding-bottom: 10px; }
+.tb-cal .ag-heures { width: 46px; font-size: 10.5px; }
+.tb-cal .ag-col-tete { height: 42px; }
+.tb-cal .ag-evt { padding: 1px 5px; border-radius: 6px; }
+.tb-cal .ag-evt b { font-size: 10.5px; line-height: 1.15; }
+.tb-cal .ag-evt span { font-size: 9.5px; line-height: 1.1; }
+/* Le trait de l'heure qu'il est reste le repère le plus utile de la carte. */
+.tb-cal .ag-now { z-index: 3; }
