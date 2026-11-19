@@ -29,7 +29,7 @@ import { finDe } from '../data/rgd-planning.js';
 // Les objectifs de volume de RGD : un seul écrivain, partagé avec Réglages RGD.
 import { objectifsMensuels, enregistrerObjectifsMensuels } from '../data/rgd-objectifs.js';
 import {
-  esc, eur, daysSince, periodRange, inRange, isoDay, userName,
+  esc, eur, daysSince, periodRange, inRange, isoDay,
   openModal, closeModal, toast,
 } from '../ui.js';
 import { activeInMonth, rowOf, dueOf, receivedOf, balanceOf } from './locatif.js';
@@ -324,7 +324,7 @@ export const homePage = {
                 perdu — l'écran #/today le porte en entier, et la vue groupe
                 continue de le mêler aux rendez-vous. C'est un choix de lecture,
                 pas une suppression. */ ''}
-          ${taille(carteSemaine(enFiltre ? cles : visibles, enFiltre, state.sem), semaineCollee ? 'tb-x7' : 'tb-x12')}
+          ${taille(carteSemaine(enFiltre ? cles : visibles, state.sem), semaineCollee ? 'tb-x7' : 'tb-x12')}
 
           ${/* ⚠ LES QUATRE ENCADRÉS NE SORTENT PLUS EN VUE GROUPE (17/11/2026).
                 Ils donnaient le CUMUL des structures : quatre nombres du groupe
@@ -523,18 +523,16 @@ export const homePage = {
         draw();
       });
       // Un rendez-vous de la grille mène à l'agenda de sa structure, quand elle
-      // en a un à elle ; un rappel du CRM mène à la liste des tâches. Le
+      // en a un à elle. Le
       // tableau de bord ne sait pas déplacer ni supprimer un rendez-vous — c'est
       // le métier de l'écran Agenda, et il vaut mieux y emmener que l'imiter.
       root.querySelectorAll('#tb-jour .ag-evt').forEach(b => b.onclick = () => {
-        const id = b.dataset.ev || '';
-        if (id.startsWith('crm-')) return void (location.hash = '#/today');
         // ⚠ BTP EXPERTISE N'A PAS D'ÉCRAN AGENDA À LUI : son agenda s'affiche
         // dans l'accueil de l'espace, en cadre Google. Propulsion n'en a aucun,
         // et son rendez-vous reste alors sans destination plutôt que d'emmener
         // quelque part au hasard.
         const ou = { rgd: '#/rgd/agenda', courtage: '#/courtage/agenda', btp: '#/btp' }[
-          db.byId('agenda_events', id)?.activity];
+          db.byId('agenda_events', b.dataset.ev)?.activity];
         if (ou) location.hash = ou;
       });
       // ⚠ ON NE REDESSINE QUE SI L'ÉCRAN EST ENCORE LÀ : le relevé prend
@@ -978,20 +976,22 @@ const libellePeriode = (p) => ({
 // même — c'est le cas la plupart des jours pour trois structures sur quatre, et
 // la carte laissait croire à un agenda vide alors que la semaine est pleine.
 /**
- * ⚠ `agendaSeul` LAISSE DE CÔTÉ LES TÂCHES DU CRM (17/11/2026, Élodie :
- * « je ne veux que les rendez-vous du jour du google agenda de rgd renova »).
- * Il est posé dans les vues filtrées, pas en vue groupe : là, mêler les deux
- * reste l'intérêt de dessiner la semaine nous-mêmes plutôt que d'encadrer
- * Google. `tachesEntre()` n'est de toute façon PAS filtrée par structure —
- * elle déduit la structure de l'affaire liée, et une tâche sans affaire n'en a
- * aucune : la passer dans une vue filtrée y ferait entrer des rappels d'une
- * autre structure.
+ * ⚠ LES TÂCHES DU CRM N'Y SONT PLUS (19/11/2026, Élodie : « ah bah enlève les
+ * tâches du crm stp »). Elles se mêlaient aux rendez-vous depuis que la carte
+ * existe, en gris et sous l'étiquette CRM ; la vue filtrée les laissait déjà
+ * de côté depuis le 17/11.
+ *
+ * ⚠ CE QUI A TRANCHÉ, C'EST LE DOUBLON. Un dossier du courtage né d'une prise
+ * de rendez-vous en ligne porte une tâche « Rendez-vous téléphone » à l'heure
+ * du rendez-vous — qui est AUSSI dans l'agenda Google. Le même rendez-vous
+ * sortait donc deux fois dans la même colonne, à la même heure. Élodie :
+ * « il sort d'où celui-là ?? ». Cette carte montre LES AGENDAS et rien
+ * d'autre ; les rappels du CRM vivent dans « À traiter » et dans `#/today`.
  */
-function carteSemaine(cles, agendaSeul = false, sem = 0) {
+function carteSemaine(cles, sem = 0) {
   const ids = idsDeTous(cles);
   const { du, au, jours } = bornesSemaine(sem);
   const rdv = lignesEnregistrees(cles, du, au);
-  const taches = agendaSeul ? [] : tachesEntre(du, au);
   const entete = `<div class="card-head"><h2>Ma semaine</h2>
     <span class="muted small">${libelleSemaine(du, au)}${
       rdv.length ? ` · ${rdv.length} rendez-vous` : ''}</span>
@@ -1013,14 +1013,14 @@ function carteSemaine(cles, agendaSeul = false, sem = 0) {
         ${peutRaccorder() ? modeEmploi() + '<p class="muted small">Puis « Raccorder les agendas » ci-dessus.</p>'
           : '<p class="muted small">La direction peut les renseigner depuis cet écran.</p>'}
       </div>
-      <div id="tb-jour">${dessinerSemaine(taches, jours)}</div>
+      <div id="tb-jour">${dessinerSemaine([], jours)}</div>
     </section>`;
   }
   // La semaine est lue dans le CRM, pas chez Google : elle s'affiche aussitôt,
   // pour tout le monde. La recopie, elle, se fait en fond et n'appartient qu'à
   // la direction — c'est elle qui a accès aux calendriers.
   return `<section class="card">${entete}
-    <div id="tb-jour">${dessinerSemaine([...rdv, ...taches], jours)}</div>
+    <div id="tb-jour">${dessinerSemaine(rdv, jours)}</div>
     ${monAgendaHtml(cles)}
     <p class="muted small tb-ag-src">${sourcesHtml(cles)}<span id="tb-maj">${etatSync(cles, du, au)}</span></p>
   </section>`;
@@ -1121,31 +1121,6 @@ const sourcesHtml = (cles) => {
     + (manquantes.length ? `<span class="ag-abs">sans agenda : ${manquantes.map(k => esc(ACTIVITIES[k].label)).join(', ')}</span>` : '');
 };
 
-// Les tâches du CRM qui ont une heure : elles rejoignent les rendez-vous Google
-// dans la même semaine, c'est tout l'intérêt de dessiner nous-mêmes.
-//
-// ⚠ ELLES PRENNENT LA FORME D'UNE LIGNE `agenda_events`, avec un `calendar_id`
-// qui n'existe pas (`crm`) : c'est ce que la grille sait lire, et cela leur
-// donne au passage leur propre teinte. Elles ne sont jamais enregistrées.
-//
-// ⚠ L'HEURE SE POSE SUR LE JOUR DE LA TÂCHE, pas sur aujourd'hui. Tant que la
-// carte ne montrait que la journée en cours, partir de `new Date()` revenait au
-// même ; sur une semaine, toutes les tâches se seraient rangées le jour même.
-function tachesEntre(du, au) {
-  return scope.activities()
-    .filter(a => !a.done && a.due_date >= du && a.due_date <= au && a.due_time)
-    .map(a => {
-      const d = new Date(`${a.due_date}T${String(a.due_time).slice(0, 5)}:00`);
-      return {
-        id: 'crm-' + a.id, day: a.due_date, calendar_id: 'crm', crm: true,
-        activity: db.byId('deals', a.deal_id)?.activity || null,
-        title: a.title, location: [a.type || 'Tâche', userName(a.assignee_id)].filter(Boolean).join(' · '),
-        starts_at: d.toISOString(), ends_at: new Date(d.getTime() + 30 * 60000).toISOString(),
-        all_day: false, attendees: 0, link: '',
-      };
-    });
-}
-
 // La semaine, en colonnes. Élodie, 19/11/2026 : « je ne voulais pas cette
 // présentation en ligne mais plutôt des colonnes comme un calendrier
 // hebdomadaire ». C'est la grille de l'écran Agenda, pas une seconde.
@@ -1163,8 +1138,8 @@ function tachesEntre(du, au) {
 function dessinerSemaine(lignes, jours) {
   const parJour = new Map(jours.map(j => [j, []]));
   lignes.forEach(e => parJour.get(e.day)?.push(e));
-  const teinte = (e) => (e.crm ? 'var(--muted-2)'
-    : (e.activity && ACTIVITIES[e.activity] ? ACTIVITIES[e.activity].color : 'var(--muted-2)'));
+  const teinte = (e) => (e.activity && ACTIVITIES[e.activity]
+    ? ACTIVITIES[e.activity].color : 'var(--muted-2)');
   const palette = new Map(lignes.map(e => [e.calendar_id, teinte(e)]));
 
   if (!matchMedia('(max-width: 820px)').matches) {
@@ -1188,8 +1163,8 @@ function listeSemaine(parJour, jours) {
   const hhmm = (d) => d.toTimeString().slice(0, 5);
 
   const ligne = (e) => {
-    const c = e.crm ? 'var(--muted-2)'
-      : (e.activity && ACTIVITIES[e.activity] ? ACTIVITIES[e.activity].color : 'var(--muted-2)');
+    const c = e.activity && ACTIVITIES[e.activity]
+      ? ACTIVITIES[e.activity].color : 'var(--muted-2)';
     const debut = new Date(e.starts_at);
     const fin = e.ends_at ? new Date(e.ends_at) : debut;
     const passe = !e.all_day && fin < maintenant;
@@ -1201,13 +1176,12 @@ function listeSemaine(parJour, jours) {
         <span class="tb-ev-t">${esc(e.title || '(sans titre)')}</span>
         <span class="tb-ev-d">${[
           e.activity && ACTIVITIES[e.activity] ? esc(ACTIVITIES[e.activity].label) : 'Groupe',
-          e.crm ? '' : (e.all_day ? 'toute la journée'
-            : (min >= 60 ? Math.floor(min / 60) + ' h' + (min % 60 ? ' ' + String(min % 60).padStart(2, '0') : '') : min + ' min')),
+          e.all_day ? 'toute la journée'
+            : (min >= 60 ? Math.floor(min / 60) + ' h' + (min % 60 ? ' ' + String(min % 60).padStart(2, '0') : '') : min + ' min'),
           e.location ? esc(e.location) : '',
-          !e.crm && e.attendees > 1 ? e.attendees + ' participants' : '',
+          e.attendees > 1 ? e.attendees + ' participants' : '',
         ].filter(Boolean).join(' · ')}</span>
       </span>
-      ${e.crm ? '<span class="tb-tag">CRM</span>' : ''}
     </div>`;
   };
 
