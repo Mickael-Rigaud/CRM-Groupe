@@ -872,7 +872,11 @@ export function openDeal(id, onChange) {
       m.querySelector('#d-rdv')?.addEventListener('click', async () => {
         const { nouveauProspectCourtage } = await import('./courtage-nouveau.js');
         nouveauProspectCourtage(() => { onChange?.(); openDeal(id, onChange); },
-          { dealId: id, etape: 3, retour: () => openDeal(id, onChange) });
+          // ⚠ LA SECTION SE NOMME, ELLE NE SE NUMÉROTE PLUS (19/11/2026) : le
+          // formulaire est passé de quatre à neuf étapes pour suivre l'ordre du
+          // simulateur, et ce `3` serait tombé sur « Ses revenus » — sans
+          // erreur, et sans que rien ne le dise.
+          { dealId: id, etape: 'rdv', retour: () => openDeal(id, onChange) });
       });
       m.querySelector('#d-action')?.addEventListener('click', () => activityForm(
         { deal_id: id, contact_id: d.contact_id, activity: 'courtage' }, null,
