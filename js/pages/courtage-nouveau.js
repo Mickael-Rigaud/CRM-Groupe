@@ -72,6 +72,11 @@ const OUI_NON = ['Oui', 'Non'];
 const ORIGINES = [
   ['Site internet', 'globe', 'Site internet direct'],
   ['Simulateur', 'cible', 'Simulateur du site'],
+  // 19/11/2026 — les rendez-vous pris sur le site entrent dans le CRM
+  // (fonction `rdv-courtage`) et arrivent sous ce canal. Il doit figurer
+  // ICI, sinon il n'est proposé par aucun formulaire et n'apparaît dans
+  // aucun filtre : une source qu'on ne peut plus ni saisir ni mesurer.
+  ['Rendez-vous en ligne', 'rappel', 'Rendez-vous en ligne'],
   ['Partenaire', 'poignee', 'Partenaire / apporteur'],
   ['Recommandation', 'coeur', 'Recommandation client'],
   ['Meta Ads', 'megaphone', 'Meta Ads'],
@@ -86,10 +91,20 @@ const CONTACTS = [
 ];
 const HEURES = ['09:00', '10:00', '11:00', '14:00', '15:00', '16:00', '17:00'];
 
+// ⚠ L'ORDRE EST CELUI DE L'APPEL, ET IL A CHANGÉ LE 19/11/2026 (Élodie : « je
+// le trouve plutôt complexe à comprendre et difficile à remplir […] les mots et
+// l'ordre ne suivent pas l'appel », formulaire rempli « pendant l'appel, en
+// direct »). « Le prospect » était en TROISIÈME position : on demandait le
+// budget d'un inconnu, puis son nom. Et comme le nom est la seule chose
+// vraiment obligatoire, « Créer » renvoyait en arrière, deux étapes plus tôt.
+//
+// ⚠ LE RENDEZ-VOUS RESTE LE QUATRIÈME, et ce n'est pas un hasard : `deal.js`
+// ouvre ce formulaire avec `etape: 3` pour son bouton « + Rendez-vous ». Le
+// déplacer aurait ouvert la mauvaise page depuis la fiche, sans erreur.
 const ETAPES = [
-  { cle: 'projet', titre: 'Le projet', question: 'Quel est son projet ?', aide: 'Ce qu’il veut financer, et où il en est.' },
+  { cle: 'prospect', titre: 'Le prospect', question: 'Qui appelle ?', aide: 'Son nom, et de quoi le rappeler. Le reste peut attendre.' },
+  { cle: 'projet', titre: 'Son projet', question: 'Que veut-il financer ?', aide: 'Les questions suivantes s’adaptent à sa réponse.' },
   { cle: 'chiffres', titre: 'Les chiffres', question: 'Les grandes lignes du budget', aide: 'Des ordres de grandeur suffisent : le dossier les précisera.' },
-  { cle: 'prospect', titre: 'Le prospect', question: 'Qui est-ce ?', aide: 'Un téléphone ou un e-mail au moins, pour pouvoir le recontacter.' },
   { cle: 'rdv', titre: 'Le rendez-vous', question: 'Et ensuite ?', aide: 'Le premier contact devient une action datée dans le CRM.' },
 ];
 
@@ -134,9 +149,17 @@ export function nouveauProspectCourtage(apres, { dealId = null, retour = null, e
   const objectif0 = f0.objectif || (OBJECTIFS().includes(f0.projet) ? f0.projet : '');
   const v = {
     type_financement: txt(f0.type_financement), objectif: objectif0, avancement: AVANCEMENTS.includes(f0.avancement) ? f0.avancement : '',
-    montant_projet: txt(f0.montant_projet), apport: txt(typeof f0.apport === 'number' ? f0.apport : ''), montant_financement: txt(f0.montant_financement),
+    // ⚠ CES CINQ-LÀ AUSSI PASSENT PAR `nombreTxt` (19/11/2026), et ils avaient
+    // été oubliés le 18 : ce sont des champs `number`, et le simulateur du site
+    // y écrit « 10 000 € » ou « 400 € /mois ». Mesuré sur un dossier du site —
+    // APPORT et CRÉDITS EN COURS s'affichaient VIDES, et « Enregistrer »
+    // effaçait pour de bon ce que le visiteur avait répondu. `apport` était
+    // même explicitement jeté dès qu'il n'était pas un nombre.
+    montant_projet: nombreTxt(f0.montant_projet), apport: nombreTxt(f0.apport),
+    montant_financement: nombreTxt(f0.montant_financement),
     duree: DUREES.includes(f0.duree) ? f0.duree : '', emprunteurs: EMPRUNTEURS.includes(f0.emprunteurs) ? f0.emprunteurs : '',
-    revenus_foyer: txt(f0.revenus_foyer), credits_en_cours: txt(f0.credits_en_cours), ville_projet: txt(f0.ville),
+    revenus_foyer: nombreTxt(f0.revenus_foyer), credits_en_cours: nombreTxt(f0.credits_en_cours),
+    ville_projet: txt(f0.ville),
     // 18/11/2026 — les questions que le simulateur posait et que le formulaire
     // ignorait. Elles portent ICI les clés que le simulateur pose déjà sur
     // l'affaire : saisie au téléphone ou remplie sur le site, la fiche montre
@@ -165,6 +188,15 @@ export function nouveauProspectCourtage(apres, { dealId = null, retour = null, e
     contact: edition ? (etapeDepart === 3 ? 'tel' : 'rien') : 'rappel', jour: jourLocal(new Date(Date.now() + 86400000)), heure: '10:00',
     responsable: dossier?.owner_id || moi,
   };
+  // ⚠ LE TROISIÈME MONTANT SE DÉDUIT À L'OUVERTURE, pas seulement à la frappe.
+  // Un dossier venu du site porte souvent le projet et l'apport sans le montant
+  // à financer : la carte s'ouvrait alors sur une mensualité « — » alors que les
+  // deux chiffres qui la donnent étaient sous les yeux. Ce n'est pas une valeur
+  // inventée, c'est la soustraction que la ligne d'explication promet déjà —
+  // et `lier()` la fait de toute façon au premier caractère tapé.
+  if (!v.montant_financement && nombre(v.montant_projet)) {
+    v.montant_financement = String(Math.max(0, nombre(v.montant_projet) - (nombre(v.apport) || 0)));
+  }
   let etape = etapeDepart;
   let enCours = false;
   const libCreer = edition ? 'Enregistrer' : 'Créer le prospect';
@@ -196,12 +228,66 @@ export function nouveauProspectCourtage(apres, { dealId = null, retour = null, e
     return scope.contacts().filter(c => (c.activities || []).includes(KEY) && c.id !== fiche?.id).find(c => (e && String(c.email || '').trim().toLowerCase() === e)
       || (t.length >= 9 && telNet(c.phone) === t)) || null;
   };
+  // ------------------------------------------------- ce qui se pose, ce qui attend
+  //
+  // ⚠ UNE QUESTION N'APPELLE LA SUIVANTE QUE SI ELLE Y MÈNE (19/11/2026, Élodie :
+  // « je veux qu'il soit simple à remplir, par exemple : on demande d'abord s'il
+  // y a des crédits en cours et si oui, quels crédits et combien ? »). L'étape
+  // des chiffres posait SES DIX-HUIT QUESTIONS D'UN COUP — mesuré avant de
+  // toucher au code : 16 cases et 2 rangées de choix, une carte qui dépassait de
+  // 375 px un écran de 1000, et le panneau de calcul entièrement sous le pli.
+  // Neuf fois sur dix, la moitié de ces cases valent zéro.
+  //
+  // ⚠ CE QUI EST REPLIÉ N'EST JAMAIS PERDU : un dossier qui porte déjà une de
+  // ces réponses s'ouvre DÉPLIÉ. Sinon la question paraîtrait restée vide — et
+  // c'est tout le propos de `nombreTxt` plus haut, qui a déjà coûté une
+  // correction le 18/11.
+  const ouverts = new Set();
+  const DETAIL = ['travaux', 'epargne_restante', 'autres_revenus', 'revenus_locatifs',
+    'pension_versee', 'logement_actuel', 'loyer_actuel', 'enfants_a_charge', 'ville_projet'];
+  if (DETAIL.some(k => String(v[k] || '').trim())) ouverts.add('detail');
+  if (v.address.trim() || v.postal_code.trim() || v.city.trim()) ouverts.add('adresse');
+
+  // Les questions d'aiguillage : « y en a-t-il ? » avant « combien ? ».
+  // ⚠ ELLES NE SONT PAS ENREGISTRÉES, et n'ont pas à l'être : `creer()` ne lit
+  // que les clés qu'il nomme. Leur valeur se DÉDUIT des réponses à l'ouverture,
+  // pour qu'un dossier venu du simulateur s'affiche déjà ouvert.
+  const q = {
+    credits: (nombre(v.credits_en_cours) || v.detail_credits.trim()) ? 'Oui' : '',
+    autres: (nombre(v.autres_revenus) || nombre(v.revenus_locatifs)) ? 'Oui' : '',
+    pension: nombre(v.pension_versee) ? 'Oui' : '',
+  };
+  // Répondre « Non » efface ce que la question ouvrait : un crédit saisi puis
+  // démenti ne doit pas rester dans le dossier, invisible.
+  const VIDER = {
+    credits: ['credits_en_cours', 'detail_credits'],
+    autres: ['autres_revenus', 'revenus_locatifs'],
+    pension: ['pension_versee'],
+  };
+
+  // ⚠ « PRIMO-ACCÉDANT » N'A AUCUN SENS POUR UN REGROUPEMENT DE CRÉDITS, pas
+  // plus que « quel type de bien ». Ces questions ne se posent que là où elles
+  // veulent dire quelque chose — mais une réponse DÉJÀ DONNÉE reste visible,
+  // sinon l'enregistrement suivant l'effacerait sans que personne la voie.
+  const immo = () => v.type_financement === 'Crédit immobilier';
+  const pro = () => v.type_financement === 'Crédit professionnel';
+  const montre = (k, utile) => utile || !!String(v[k] || '').trim();
+
+  // Les questions RÉELLEMENT posées à cette étape — pas une liste figée.
+  // ⚠ LE COMPTEUR MENTAIT : il annonçait « 0/8 réponses » sur l'étape qui en
+  // posait dix-huit, et comptait des questions que l'écran ne montrait pas.
+  const clesDe = (i) => {
+    if (i === 0) return ['first_name', 'last_name', 'phone', 'email', 'canal'];
+    if (i === 1) return ['type_financement', 'objectif',
+      ...(montre('type_bien', immo()) ? ['type_bien'] : []),
+      ...(montre('avancement', immo() || pro()) ? ['avancement'] : []),
+      ...(montre('primo', immo()) ? ['primo'] : [])];
+    if (i === 2) return ['montant_projet', 'apport', 'duree', 'revenus_foyer', 'emprunteurs',
+      ...(q.credits === 'Oui' ? ['credits_en_cours'] : [])];
+    return ['contact'];
+  };
   const reponses = (i) => {
-    const k = [['type_financement', 'objectif', 'type_bien', 'avancement', 'primo'],
-      ['montant_projet', 'apport', 'revenus_foyer', 'credits_en_cours', 'duree',
-        'emprunteurs', 'logement_actuel', 'emprunteur_1'],
-      ['first_name', 'last_name', 'phone', 'email', 'canal'],
-      ['contact']][i];
+    const k = clesDe(i);
     return k.filter(x => String(v[x] || '').trim()).length + '/' + k.length;
   };
 
@@ -214,6 +300,35 @@ export function nouveauProspectCourtage(apres, { dealId = null, retour = null, e
     <label class="lrc-champ ${large ? 'large' : ''}"><span>${esc(label)}</span>
       <span class="lrc-saisie"><input name="${nom}" type="${type}" value="${esc(v[nom])}" placeholder="${esc(ph)}"
         ${type === 'number' ? 'inputmode="numeric" min="0" step="1000"' : ''} autocomplete="off">${suffixe ? `<i>${esc(suffixe)}</i>` : ''}</span></label>`;
+  // Une question fermée, qui en ouvre d'autres. Elle se relit comme on la pose
+  // au téléphone : « vous avez des crédits en cours ? » — oui, non, on passe.
+  const ouinon = (nom, label) => `<h4>${esc(label)}</h4><div class="lrc-puces">${OUI_NON.map(o => `
+    <button type="button" class="lrc-puce ${q[nom] === o ? 'on' : ''}" data-q="${nom}" data-val="${o}">${o}</button>`).join('')}</div>`;
+  // ⚠ CE QUI MANQUE SE DIT, IL NE SE DEVINE PAS — et surtout pas sous la forme
+  // de trois pastilles « obligatoire » sur le prénom, le nom et le téléphone :
+  // ce serait FAUX. `creer()` demande (un prénom OU un nom) ET (un téléphone OU
+  // un e-mail valable), donc l'étiquette aurait réclamé un numéro à quelqu'un
+  // qui n'a laissé que son adresse. La ligne nomme ce qui manque vraiment, et
+  // devient verte quand il ne manque plus rien.
+  const manque = () => {
+    const m = [];
+    if (!v.first_name.trim() && !v.last_name.trim()) m.push('un nom');
+    if (telNet(v.phone).length < 9 && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v.email.trim())) {
+      m.push('un téléphone ou un e-mail');
+    }
+    return m;
+  };
+  const ditManque = () => {
+    const m = manque();
+    // « un nom, et un téléphone ou un e-mail » : la virgule sépare les deux
+    // exigences, sans quoi les trois « ou » et « et » se lisent de travers.
+    return m.length ? `Il manque ${m.join(', et ')} pour créer le prospect.`
+      : 'C’est bon : le prospect peut être créé dès maintenant, le reste se complète après.';
+  };
+  // Un repli : le titre reste visible, le contenu attend qu'on en ait besoin.
+  const replie = (cle, label, dedans) => `<div class="lrc-repli ${ouverts.has(cle) ? 'est-ouvert' : ''}">
+    <button type="button" class="lrc-replier" data-repli="${cle}"><i>${ouverts.has(cle) ? '−' : '+'}</i>${esc(label)}</button>
+    ${ouverts.has(cle) ? `<div class="lrc-repli-corps">${dedans}</div>` : ''}</div>`;
 
   // ---------------------------------------------------------------- les calculs
   // ⚠ LES TAUX SONT CEUX DU SIMULATEUR DU SITE (CONFIG.TAUX de
@@ -274,63 +389,89 @@ export function nouveauProspectCourtage(apres, { dealId = null, retour = null, e
   }
 
   const corps = () => {
-    if (etape === 0) return `
-      <h4>Le financement</h4>${tuiles('type_financement', FINANCEMENTS, v.type_financement)}
-      <h4>Pour quel projet ?</h4>${puces('objectif', OBJECTIFS(), v.objectif)}
-      <h4>Quel type de bien ?</h4>${puces('type_bien', TYPES_BIEN, v.type_bien)}
-      <h4>Où en est-il ?</h4>${puces('avancement', AVANCEMENTS, v.avancement)}
-      <div class="lrc-duo">
-        <div><h4>Primo-accédant ?</h4>${puces('primo', OUI_NON, v.primo)}</div>
-        <div><h4>Son logement actuel</h4>${puces('logement_actuel', LOGEMENTS, v.logement_actuel)}</div>
-      </div>`;
-    if (etape === 1) return `
-      <div class="lrc-grille est-trois">
-        ${champ('montant_projet', 'Montant du projet', { type: 'number', ph: '300 000', suffixe: '€' })}
-        ${champ('apport', 'Apport', { type: 'number', ph: '30 000', suffixe: '€' })}
-        ${champ('montant_financement', 'Montant à financer', { type: 'number', ph: '270 000', suffixe: '€' })}
-        ${champ('travaux', 'Travaux à prévoir', { type: 'number', ph: '0', suffixe: '€' })}
-        ${champ('epargne_restante', 'Épargne restante', { type: 'number', ph: '10 000', suffixe: '€' })}
-        ${champ('ville_projet', 'Ville du projet', { ph: 'Nice' })}
-      </div>
-      <p class="lrc-lien">Les trois montants se tiennent : projet = apport + montant à financer. Changez-en un, les autres suivent.</p>
-      <h4>Ce qui entre</h4>
-      <div class="lrc-grille est-trois">
-        ${champ('revenus_foyer', 'Revenus nets du foyer', { type: 'number', ph: '4 500', suffixe: '€ / mois' })}
-        ${champ('autres_revenus', 'Autres revenus', { type: 'number', ph: '0', suffixe: '€ / mois' })}
-        ${champ('revenus_locatifs', 'Revenus locatifs', { type: 'number', ph: '0', suffixe: '€ / mois' })}
-      </div>
-      <h4>Ce qui sort</h4>
-      <div class="lrc-grille est-trois">
-        ${champ('credits_en_cours', 'Crédits en cours', { type: 'number', ph: '0', suffixe: '€ / mois' })}
-        ${champ('pension_versee', 'Pension versée', { type: 'number', ph: '0', suffixe: '€ / mois' })}
-        ${champ('loyer_actuel', 'Loyer ou mensualité actuelle', { type: 'number', ph: '0', suffixe: '€ / mois' })}
-      </div>
-      ${champ('detail_credits', 'Quels crédits ?', { ph: 'Crédit auto, crédit conso…', large: true })}
-      <h4>Qui emprunte</h4>
-      <div class="lrc-grille">
-        ${champ('emprunteur_1', 'Emprunteur 1', { ph: '35 ans, CDI, 3 000 € / mois' })}
-        ${champ('emprunteur_2', 'Emprunteur 2', { ph: 'Si le projet se fait à deux' })}
-      </div>
-      <div class="lrc-duo">
-        <div><h4>Durée souhaitée</h4>${puces('duree', DUREES, v.duree)}</div>
-        <div><h4>Emprunteurs</h4>${puces('emprunteurs', EMPRUNTEURS, v.emprunteurs)}</div>
-      </div>
-      ${champ('enfants_a_charge', 'Personnes à charge (enfants)', { type: 'number', ph: '0' })}
-      <div class="lrc-calcul" id="lrc-calcul">${panneau()}</div>`;
-    if (etape === 2) {
+    // ---------------------------------------------------------- 1. qui appelle
+    if (etape === 0) {
       const d = doublon();
       return `
       <div class="lrc-grille">
         ${champ('first_name', 'Prénom')}${champ('last_name', 'Nom')}
         ${champ('phone', 'Téléphone', { type: 'tel', ph: '06 12 34 56 78' })}${champ('email', 'E-mail', { type: 'email', ph: 'nom@exemple.fr' })}
+      </div>
+      <p class="lrc-lien ${manque().length ? 'est-manque' : 'est-bon'}" id="lrc-manque">${esc(ditManque())}</p>
+      <div id="lrc-doublon">${d ? `<p class="lrc-note est-doublon">Déjà dans la base de La Référence Courtage : <b>${esc(contactName(d))}</b>. ${edition ? 'Vérifiez qu’il ne s’agit pas de la même personne.' : 'La demande sera rattachée à sa fiche, rien ne sera créé en double.'}</p>` : ''}</div>
+      ${replie('adresse', 'Son adresse', `<div class="lrc-grille">
         ${champ('address', 'Adresse', { ph: '30 rue …' })}
         <div class="lrc-grille est-cp">${champ('postal_code', 'Code postal', { ph: '06000' })}${champ('city', 'Ville', { ph: 'Nice' })}</div>
-      </div>
-      <div id="lrc-doublon">${d ? `<p class="lrc-note est-doublon">Déjà dans la base de La Référence Courtage : <b>${esc(contactName(d))}</b>. ${edition ? 'Vérifiez qu’il ne s’agit pas de la même personne.' : 'La demande sera rattachée à sa fiche, rien ne sera créé en double.'}</p>` : ''}</div>
+      </div>`)}
       <h4>Comment nous a-t-il connus ?</h4>${tuiles('canal', ORIGINES.map(([l, i, c]) => [c, i, '', l]), v.canal)}
       ${v.canal === 'Partenaire / apporteur' ? `<label class="lrc-champ large"><span>Apporteur d’affaires</span>
         <select name="apporteur"><option value="">— Choisir —</option>${apporteurs().map(o => `<option value="${esc(o.id)}" ${v.apporteur === o.id ? 'selected' : ''}>${esc(o.name)}</option>`).join('')}</select></label>` : ''}
       <label class="lrc-champ large"><span>Ce qu’il a dit</span><textarea name="message" rows="3" placeholder="Sa situation, ses délais, ce qui l’inquiète…">${esc(v.message)}</textarea></label>`;
+    }
+    // ------------------------------------------------------------ 2. son projet
+    // Rien ne s'affiche tant que le financement n'est pas choisi : c'est lui qui
+    // décide des questions qui suivent.
+    // ⚠ PAS DE TITRE SUR LES TUILES : la question de l'étape dit déjà « Que
+    // veut-il financer ? » en gros. Le répéter juste en dessous, en petites
+    // capitales, faisait lire deux questions là où il n'y en a qu'une.
+    if (etape === 1) return `
+      ${tuiles('type_financement', FINANCEMENTS, v.type_financement)}
+      ${v.type_financement || v.objectif ? `<h4>Pour quel projet ?</h4>${puces('objectif', OBJECTIFS(), v.objectif)}` : ''}
+      ${montre('type_bien', immo()) ? `<h4>Quel type de bien ?</h4>${puces('type_bien', TYPES_BIEN, v.type_bien)}` : ''}
+      ${montre('avancement', immo() || pro()) ? `<h4>Où en est-il ?</h4>${puces('avancement', AVANCEMENTS, v.avancement)}` : ''}
+      ${montre('primo', immo()) ? `<h4>Est-ce son premier achat ?</h4>${puces('primo', OUI_NON, v.primo)}` : ''}`;
+    // ----------------------------------------------------------- 3. les chiffres
+    if (etape === 2) {
+      const rachat = v.type_financement === 'Regroupement de crédits';
+      const aDeux = v.emprunteurs === 'À deux';
+      return `
+      <div class="lrc-grille est-trois">
+        ${champ('montant_projet', rachat ? 'Montant total à racheter' : 'Montant du projet', { type: 'number', ph: '300 000', suffixe: '€' })}
+        ${champ('apport', 'Apport', { type: 'number', ph: '30 000', suffixe: '€' })}
+        ${champ('montant_financement', 'Montant à financer', { type: 'number', ph: '270 000', suffixe: '€' })}
+      </div>
+      <p class="lrc-lien">Les trois se tiennent : projet = apport + montant à financer. Changez-en un, les autres suivent.</p>
+      <h4>Sur combien de temps ?</h4>${puces('duree', DUREES, v.duree)}
+      <div class="lrc-grille est-deux">
+        ${champ('revenus_foyer', 'Revenus nets du foyer', { type: 'number', ph: '4 500', suffixe: '€ / mois' })}
+      </div>
+      ${ouinon('credits', 'A-t-il des crédits en cours ?')}
+      ${q.credits === 'Oui' ? `<div class="lrc-grille est-deux">
+        ${champ('credits_en_cours', 'Combien par mois', { type: 'number', ph: '350', suffixe: '€ / mois' })}
+        ${champ('detail_credits', 'Lesquels', { ph: 'Crédit auto, crédit conso…' })}
+      </div>` : ''}
+      ${'' /* ⚠ LE PANNEAU REMONTE ICI, et c'est la moitié de la correction du
+             19/11 : il vivait tout en bas, après dix-huit questions, donc HORS
+             DE L'ÉCRAN — mesuré, 375 px sous le pli. On vient voir une
+             mensualité et un taux d'endettement, et on ne les voyait jamais.
+             Il se place après tout ce qui le nourrit (montants, durée, revenus,
+             crédits) et avant tout ce qui ne le change pas. */}
+      <div class="lrc-calcul" id="lrc-calcul">${panneau()}</div>
+      <h4>Emprunte-t-il seul ou à deux ?</h4>${puces('emprunteurs', EMPRUNTEURS, v.emprunteurs)}
+      ${v.emprunteurs || v.emprunteur_1 || v.emprunteur_2 ? `<div class="lrc-grille${aDeux ? '' : ' est-deux'}">
+        ${champ('emprunteur_1', aDeux ? 'Emprunteur 1' : 'Sa situation', { ph: '35 ans, CDI, 3 000 € / mois' })}
+        ${aDeux || v.emprunteur_2 ? champ('emprunteur_2', 'Emprunteur 2', { ph: '33 ans, CDI, 2 200 € / mois' }) : ''}
+      </div>` : ''}
+      ${replie('detail', 'Plus de détails', `
+        <div class="lrc-grille est-trois">
+          ${champ('travaux', 'Travaux à prévoir', { type: 'number', ph: '0', suffixe: '€' })}
+          ${champ('epargne_restante', 'Épargne restante', { type: 'number', ph: '10 000', suffixe: '€' })}
+          ${champ('ville_projet', 'Ville du projet', { ph: 'Nice' })}
+        </div>
+        ${ouinon('autres', 'A-t-il d’autres revenus ?')}
+        ${q.autres === 'Oui' ? `<div class="lrc-grille est-deux">
+          ${champ('autres_revenus', 'Autres revenus', { type: 'number', ph: '0', suffixe: '€ / mois' })}
+          ${champ('revenus_locatifs', 'Revenus locatifs', { type: 'number', ph: '0', suffixe: '€ / mois' })}
+        </div>` : ''}
+        ${ouinon('pension', 'Verse-t-il une pension ?')}
+        ${q.pension === 'Oui' ? `<div class="lrc-grille est-deux">
+          ${champ('pension_versee', 'Pension versée', { type: 'number', ph: '0', suffixe: '€ / mois' })}
+        </div>` : ''}
+        <h4>Où habite-t-il aujourd’hui ?</h4>${puces('logement_actuel', LOGEMENTS, v.logement_actuel)}
+        ${v.logement_actuel === 'Locataire' || v.logement_actuel === 'Propriétaire' || v.loyer_actuel ? `<div class="lrc-grille est-deux">
+          ${champ('loyer_actuel', v.logement_actuel === 'Propriétaire' ? 'Sa mensualité actuelle' : 'Son loyer', { type: 'number', ph: '0', suffixe: '€ / mois' })}
+        </div>` : ''}
+        <div class="lrc-grille est-deux">${champ('enfants_a_charge', 'Personnes à charge (enfants)', { type: 'number', ph: '0' })}</div>`)}`;
     }
     const c = CONTACTS.find(x => x[0] === v.contact);
     const dates = [['Aujourd’hui', 0], ['Demain', 1], ['Dans 2 jours', 2], ['Dans 1 semaine', 7]];
@@ -403,6 +544,20 @@ export function nouveauProspectCourtage(apres, { dealId = null, retour = null, e
       if (k === 'canal' && v.canal !== 'Partenaire / apporteur') v.apporteur = '';
       draw();
     });
+    // Une question fermée : « Non » referme ET efface ce qu'elle avait ouvert.
+    hote.querySelectorAll('[data-q]').forEach(b => b.onclick = () => {
+      lireChamps();
+      const k = b.dataset.q;
+      q[k] = q[k] === b.dataset.val ? '' : b.dataset.val;
+      if (q[k] !== 'Oui') for (const c of (VIDER[k] || [])) v[c] = '';
+      draw();
+    });
+    hote.querySelectorAll('[data-repli]').forEach(b => b.onclick = () => {
+      lireChamps();
+      const k = b.dataset.repli;
+      if (ouverts.has(k)) ouverts.delete(k); else ouverts.add(k);
+      draw();
+    });
     hote.querySelectorAll('[data-jour]').forEach(b => b.onclick = () => { lireChamps(); v.jour = b.dataset.jour; draw(); });
     hote.querySelectorAll('[data-heure]').forEach(b => b.onclick = () => { lireChamps(); v.heure = b.dataset.heure; draw(); });
     hote.querySelectorAll('[data-aller]').forEach(b => b.onclick = () => { lireChamps(); etape = Number(b.dataset.aller); draw(); });
@@ -415,6 +570,10 @@ export function nouveauProspectCourtage(apres, { dealId = null, retour = null, e
         v[el.name] = el.value;
         if (['montant_projet', 'apport', 'montant_financement', 'revenus_foyer', 'credits_en_cours'].includes(el.name)) lier(el.name);
         const r = hote.querySelector('.lrc-recap'); if (r) r.innerHTML = recap();
+        // ⚠ SANS REDESSINER : la ligne se réécrit pendant la frappe, et un
+        // `draw()` ici reposerait le curseur ailleurs à chaque lettre tapée.
+        const mq = hote.querySelector('#lrc-manque');
+        if (mq) { mq.textContent = ditManque(); mq.className = `lrc-lien ${manque().length ? 'est-manque' : 'est-bon'}`; }
       });
       // Le doublon se vérifie en quittant le champ : pendant la frappe, il clignoterait.
       // ⚠ SANS REDESSINER (18/11/2026) : redessiner remettait le curseur dans le
@@ -436,9 +595,14 @@ export function nouveauProspectCourtage(apres, { dealId = null, retour = null, e
     lireChamps();
     const err = hote.querySelector('#lrc-erreur');
     const t = telNet(v.phone);
-    if (!v.first_name.trim() && !v.last_name.trim()) { etape = 2; draw(); hote.querySelector('#lrc-erreur').textContent = 'Il faut au moins un nom.'; return; }
+    // ⚠ LA PREMIÈRE ÉTAPE, PAS LA TROISIÈME : « Le prospect » a pris la tête du
+    // parcours le 19/11/2026. Laisser `2` ici aurait renvoyé sur les chiffres
+    // en annonçant qu'il manque un nom — l'écran et le message se seraient
+    // contredits, et c'est précisément le genre de défaut muet qu'un numéro
+    // d'étape écrit en dur fabrique.
+    if (!v.first_name.trim() && !v.last_name.trim()) { etape = 0; draw(); hote.querySelector('#lrc-erreur').textContent = 'Il faut au moins un nom.'; return; }
     if (t.length < 9 && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v.email.trim())) {
-      etape = 2; draw(); hote.querySelector('#lrc-erreur').textContent = 'Il faut un téléphone ou un e-mail valable.'; return;
+      etape = 0; draw(); hote.querySelector('#lrc-erreur').textContent = 'Il faut un téléphone ou un e-mail valable.'; return;
     }
     enCours = true;
     hote.querySelector('[data-creer]').disabled = true;
