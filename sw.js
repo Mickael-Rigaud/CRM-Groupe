@@ -200,13 +200,40 @@ self.addEventListener('message', (e) => {
 // `notifications-crm` (rendez-vous de l'ouvrier, messages, depuis le
 // 28/10/2026) : { titre, corps, url, tag }.
 
+// ⚠ UNE ICÔNE ET UN NOM PAR STRUCTURE (19/11/2026, Élodie : « à chaque fois
+// c'est rgd renova et il y a l'icone de rgd renova [...] si c'est la référence
+// = icone la référence courtage »). La structure vient du message
+// (`structure`, posé par `rappels-echeances` d'après la tâche) ou, à défaut, de
+// l'adresse qu'ouvre la notification (`#/btp/...`, `#/courtage/...`) : les
+// leads et les rendez-vous la portent déjà. Sans structure (un message de la
+// messagerie, commune au groupe), c'est l'icône du CRM Groupe.
+//
+// ⚠ L'EN-TÊTE DE LA NOTIFICATION RESTE CELUI DE L'APPLICATION INSTALLÉE : le
+// téléphone y écrit le nom de l'appli qui a reçu le message (« RGD Renova »
+// pour qui a installé celle-là), et aucune notification ne peut le changer.
+// C'est pourquoi le nom de la structure est aussi mis en tête du titre, quand
+// le titre ne le dit pas déjà.
+const STRUCTURES_NOTIF = {
+  rgd: { nom: 'RGD Renova', icone: 'assets/icon-rgd-192.png' },
+  btp: { nom: 'BTP Expertise', icone: 'assets/icon-btp-192.png' },
+  courtage: { nom: 'La Référence Courtage', icone: 'assets/icon-courtage-192.png' },
+  propulsion: { nom: 'Propulsion', icone: 'assets/icon-propulsion-192.png' },
+};
+function structureDuMessage(m) {
+  if (STRUCTURES_NOTIF[m.structure]) return m.structure;
+  const h = String(m.url || '').match(/#\/(?:pipeline\/)?(rgd|btp|courtage|propulsion)(?:\/|$)/);
+  return h ? h[1] : null;
+}
+
 self.addEventListener('push', (e) => {
   let m = {};
   try { m = e.data ? e.data.json() : {}; } catch { m = { corps: e.data && e.data.text() }; }
-  const titre = m.titre || 'CRM Groupe — échéance';
+  const s = STRUCTURES_NOTIF[structureDuMessage(m)];
+  let titre = m.titre || 'CRM Groupe — échéance';
+  if (s && !titre.toLowerCase().includes(s.nom.toLowerCase())) titre = `${s.nom} · ${titre}`;
   e.waitUntil(self.registration.showNotification(titre, {
     body: m.corps || '',
-    icon: 'assets/icon-192.png',
+    icon: s ? s.icone : 'assets/icon-192.png',
     badge: 'assets/icon-192.png',
     // Le même `tag` remplace la notification précédente de la même tâche au lieu
     // d'en empiler deux si l'échéance a été déplacée puis atteinte à nouveau.
