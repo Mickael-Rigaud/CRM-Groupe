@@ -54,7 +54,13 @@ const sansAccent = (s) => String(s || '').normalize('NFD')
  * @returns {object[]}
  */
 export function rendezVousDeLaFiche(f, chantiers, evenements, nom) {
-  const tous = evenements || [];
+  // ⚠ RGD SEULEMENT, DEPUIS LE 19/11/2026 : l'agenda de La Référence Courtage
+  // est raccordé au CRM et ses rendez-vous vivent dans la MÊME table, sous
+  // `activity: 'courtage'`. Sans ce filtre, le repli par le nom — qui cherche
+  // « visite technique » dans un titre — pouvait accrocher un rendez-vous de
+  // courtage à une fiche RGD. Improbable avec les titres d'aujourd'hui
+  // (« RDV téléphone — … »), silencieux le jour où ça arriverait.
+  const tous = (evenements || []).filter(e => e.activity === 'rgd');
   const parId = new Set((chantiers || []).map(c => c.source_event_id).filter(Boolean));
   const trouves = tous.filter(e => parId.has(e.google_id));
 
