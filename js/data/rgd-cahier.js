@@ -310,45 +310,103 @@ const BIBLIO_DE_DEPART = {
   // Elles ne sont qu'un point de départ : chaque phrase écrite à la main entre
   // dans la bibliothèque, et « Modifier la bibliothèque » permet de faire le
   // ménage. Au bout de quelques chantiers, la liste sera faite de leurs mots.
-  technique: [
+  //
+  // ⚠ LE THÈME N'EST PLUS UN COMMENTAIRE, C'EST LA RUBRIQUE (19/11/2026,
+  // Élodie : « le pop-up modifier la bibliothèque […] deux grands blocs où tout
+  // est mélangé »). Ces quatre groupes existaient déjà ici en commentaires
+  // depuis le 17/11 — c'est-à-dire NULLE PART À L'ÉCRAN, où l'on lisait
+  // vingt et une phrases à la suite. Ils sont maintenant la donnée, et la
+  // fenêtre les affiche en titres repliables.
+  technique: {
     // Ce que la préparation des murs réserve — le devis prévoit le cas, encore
     // faut-il l'avoir constaté.
-    'Murs très fissurés : toile à enduire nécessaire (supplément au devis)',
-    'Supports très dégradés : préparation importante, hors devis',
-    'Ancienne peinture glycéro : ponçage et sous-couche d’accrochage',
-    'Papier peint en place : dépose avant préparation',
-    'Cloisons neuves sans saignée : finition B en direct',
-    'Teinte foncée ou peu couvrante : couches supplémentaires à prévoir',
-    'Pièce humide : peinture hydrofuge',
+    'Murs et peinture': [
+      'Murs très fissurés : toile à enduire nécessaire (supplément au devis)',
+      'Supports très dégradés : préparation importante, hors devis',
+      'Ancienne peinture glycéro : ponçage et sous-couche d’accrochage',
+      'Papier peint en place : dépose avant préparation',
+      'Cloisons neuves sans saignée : finition B en direct',
+      'Teinte foncée ou peu couvrante : couches supplémentaires à prévoir',
+      'Pièce humide : peinture hydrofuge',
+    ],
     // L'électricité : ce qui passe, ce qui ne passe pas.
-    'Support béton : saignée nécessaire pour le passage des câbles',
-    'Béton très dur : percements et saignées plus lents que prévu',
-    'Circuit existant suffisant : pas de reprise du tableau',
-    'Tableau électrique à reprendre : hors devis, à chiffrer à part',
-    'Câblage existant à modifier : hors devis, à chiffrer à part',
-    'Boîtes d’encastrement existantes réutilisables',
-    // Le chauffage.
-    'Radiateur déposable sans vidange complète du réseau',
-    'Radiateur non déposable : peinture en place',
-    'Traces d’oxydation sur radiateur : traitement ponctuel avant peinture',
+    'Électricité': [
+      'Support béton : saignée nécessaire pour le passage des câbles',
+      'Béton très dur : percements et saignées plus lents que prévu',
+      'Circuit existant suffisant : pas de reprise du tableau',
+      'Tableau électrique à reprendre : hors devis, à chiffrer à part',
+      'Câblage existant à modifier : hors devis, à chiffrer à part',
+      'Boîtes d’encastrement existantes réutilisables',
+    ],
+    'Chauffage': [
+      'Radiateur déposable sans vidange complète du réseau',
+      'Radiateur non déposable : peinture en place',
+      'Traces d’oxydation sur radiateur : traitement ponctuel avant peinture',
+    ],
     // Le bâti et ce qu'on garde.
-    'Hauteur sous plafond supérieure à 2,50 m : échafaudage nécessaire',
-    'Murs non d’équerre : reprises à prévoir sur les angles',
-    'Plancher bois : protection renforcée, points de fixation à vérifier',
-    'Sol conservé : protection intégrale pendant toute la durée',
-    'Menuiseries conservées : masquage et protection',
-  ],
-  contrainte: [
-    'Ascenseur indisponible : manutention par les escaliers',
-    'Stationnement difficile : prévoir une autorisation de voirie',
-    'Horaires d’immeuble à respecter (8 h – 18 h, pas le week-end)',
-    'Coupure d’eau nécessaire : à prévoir avec le client',
-    'Coupure d’électricité nécessaire : à prévoir avec le client',
-    'Logement occupé pendant les travaux',
-    'Présence d’animaux dans le logement',
-    'Amiante : diagnostic fourni, intervention sans perforation',
-    'Accès par digicode : code à demander avant chaque passage',
-  ],
+    'Bâti et protections': [
+      'Hauteur sous plafond supérieure à 2,50 m : échafaudage nécessaire',
+      'Murs non d’équerre : reprises à prévoir sur les angles',
+      'Plancher bois : protection renforcée, points de fixation à vérifier',
+      'Sol conservé : protection intégrale pendant toute la durée',
+      'Menuiseries conservées : masquage et protection',
+    ],
+  },
+  contrainte: {
+    'Accès et immeuble': [
+      'Ascenseur indisponible : manutention par les escaliers',
+      'Stationnement difficile : prévoir une autorisation de voirie',
+      'Horaires d’immeuble à respecter (8 h – 18 h, pas le week-end)',
+      'Accès par digicode : code à demander avant chaque passage',
+    ],
+    'Réseaux': [
+      'Coupure d’eau nécessaire : à prévoir avec le client',
+      'Coupure d’électricité nécessaire : à prévoir avec le client',
+    ],
+    'Occupants': [
+      'Logement occupé pendant les travaux',
+      'Présence d’animaux dans le logement',
+    ],
+    'Sécurité': [
+      'Amiante : diagnostic fourni, intervention sans perforation',
+    ],
+  },
+};
+
+/** Le modèle à plat : `{ t: phrase, r: rubrique }`, dans l'ordre des rubriques. */
+const depart = (f) => Object.entries(BIBLIO_DE_DEPART[f]).flatMap(([r, l]) => l.map(t => ({ t, r })));
+
+// ⚠ LA RUBRIQUE D'UNE PHRASE DU MODÈLE, POUR RATTRAPER L'ANCIEN FORMAT. Une
+// bibliothèque enregistrée avant le 19/11 est une liste de phrases NUES : sans
+// cette table, les trente phrases de départ seraient toutes retombées dans
+// « Sans rubrique » à la première ouverture. Elle ne sert QU'À ça : une phrase
+// enregistrée au nouveau format avec une rubrique vide le reste, parce que
+// c'est alors un choix (voir `ligneBiblio`).
+const RUBRIQUE_DE_DEPART = new Map(
+  [...depart('technique'), ...depart('contrainte')].map(e => [e.t.toLowerCase(), e.r]));
+
+// Une entrée de bibliothèque, quelle que soit la forme où on la trouve.
+const ligneBiblio = (x) => {
+  if (typeof x === 'string') {
+    const t = x.trim();
+    return t ? { t, r: RUBRIQUE_DE_DEPART.get(t.toLowerCase()) || '' } : null;
+  }
+  const t = String(x?.t || '').trim();
+  return t ? { t, r: String(x?.r || '').trim() } : null;
+};
+
+// ⚠ LE DOUBLON SE JUGE SUR LA PHRASE, PAS SUR LE COUPLE : la même phrase dans
+// deux rubriques est un doublon, et c'est la première qui gagne.
+const normaliserBiblio = (l) => {
+  const vu = new Set(); const out = [];
+  for (const x of (Array.isArray(l) ? l : [])) {
+    const e = ligneBiblio(x);
+    if (!e) continue;
+    const k = e.t.toLowerCase();
+    if (vu.has(k)) continue;
+    vu.add(k); out.push(e);
+  }
+  return out;
 };
 
 export const FAMILLES = {
@@ -356,32 +414,58 @@ export const FAMILLES = {
   contrainte: { label: 'Contraintes', court: 'Contrainte' },
 };
 
-/** La bibliothèque, ou le modèle de départ si personne ne l'a encore touchée. */
-export function biblioElements() {
+/**
+ * La bibliothèque RANGÉE : `{ technique: [{ t, r }], contrainte: [{ t, r }] }`,
+ * ou le modèle de départ si personne ne l'a encore touchée.
+ */
+export function biblioRangee() {
   const l = db.t('rgd_reglages').find(x => x.cle === CLE_BIBLIO);
   try {
     const v = l ? JSON.parse(l.valeur) : null;
-    if (v && Array.isArray(v.technique) && Array.isArray(v.contrainte)) return v;
+    if (v && Array.isArray(v.technique) && Array.isArray(v.contrainte)) {
+      return { technique: normaliserBiblio(v.technique), contrainte: normaliserBiblio(v.contrainte) };
+    }
   } catch { /* réglage illisible : on repart du modèle */ }
-  return { technique: [...BIBLIO_DE_DEPART.technique], contrainte: [...BIBLIO_DE_DEPART.contrainte] };
+  return { technique: depart('technique'), contrainte: depart('contrainte') };
 }
 
+/**
+ * La bibliothèque en PHRASES NUES — ce que lisent les suggestions du cahier.
+ *
+ * ⚠ ELLE N'A PAS CHANGÉ DE FORME QUAND LES RUBRIQUES SONT ARRIVÉES (19/11/2026),
+ * et c'est délibéré : la bande de suggestions propose des phrases, pas un
+ * classement, et n'avait aucune raison d'être touchée. Un seul endroit sait
+ * lire le réglage (`biblioRangee`), deux le servent.
+ */
+export function biblioElements() {
+  const b = biblioRangee();
+  return { technique: b.technique.map(e => e.t), contrainte: b.contrainte.map(e => e.t) };
+}
+
+/** Accepte les deux formes : phrases nues (ancien) ou `{ t, r }` (depuis le 19/11). */
 export async function enregistrerBiblio(b) {
-  const propre = (l) => [...new Set((l || []).map(x => String(x).trim()).filter(Boolean))];
-  const valeur = JSON.stringify({ technique: propre(b.technique), contrainte: propre(b.contrainte) });
+  const valeur = JSON.stringify({
+    technique: normaliserBiblio(b.technique), contrainte: normaliserBiblio(b.contrainte),
+  });
   const existe = db.t('rgd_reglages').some(x => x.cle === CLE_BIBLIO);
   return existe
     ? db.update('rgd_reglages', CLE_BIBLIO, { valeur })
     : db.insert('rgd_reglages', { cle: CLE_BIBLIO, valeur });
 }
 
-/** Ajoute une phrase à la bibliothèque si elle n'y est pas déjà. */
+/**
+ * Ajoute une phrase à la bibliothèque si elle n'y est pas déjà.
+ *
+ * ⚠ SANS RUBRIQUE, ET C'EST LE BON DÉFAUT : une phrase écrite au fil d'un
+ * cahier n'a pas à faire choisir un classement à ce moment-là. Elle se range
+ * ensuite, d'un geste, dans « Modifier la bibliothèque ».
+ */
 export async function garderDansBiblio(famille, texte) {
   const t = String(texte || '').trim();
   if (!t || !FAMILLES[famille]) return false;
-  const b = biblioElements();
-  if (b[famille].some(x => x.trim().toLowerCase() === t.toLowerCase())) return false;
-  b[famille] = [...b[famille], t];
+  const b = biblioRangee();
+  if (b[famille].some(x => x.t.toLowerCase() === t.toLowerCase())) return false;
+  b[famille] = [...b[famille], { t, r: '' }];
   await enregistrerBiblio(b);
   return true;
 }

@@ -16,7 +16,7 @@ import { cahierDe, estSigne, creerCahier, majCahier, signerCahier, retirerSignat
          preparerLien, lienSignature, lienValable, envoyerPourSignature,
          devisSignesDu, postesDuDevisCrm, decouperCollage, lireDevisCostructor,
          ajouterPhotos, retirerPhoto, poserPlan, liensDuCahier, piecesDe, renommerPhotos, deplacerPhoto,
-         FAMILLES, biblioElements, enregistrerBiblio, garderDansBiblio, elementsDe, renommerElements,
+         FAMILLES, biblioElements, biblioRangee, enregistrerBiblio, garderDansBiblio, elementsDe, renommerElements,
          derniereDemandeNas, dossiersNas, enCoursNas, demanderPhotosNas, RESERVE } from '../data/rgd-cahier.js';
 import { trierPhotos } from './rgd-cahier-tri.js';
 import { imprimerCahierClient, imprimerCahierOuvriers } from './rgd-cahier-doc.js';
@@ -465,27 +465,226 @@ export function ouvrirCahier(chantier, dossier, retour) {
     return k;
   };
 
-  // Tenir la bibliothèque : une ligne par phrase, comme les listes standard du
-  // planning — même geste, même endroit dans la tête de celui qui s'en sert.
+  // ---------------------------------------------- tenir la bibliothèque
+  //
+  // ⚠ DEUX ONGLETS, UNE FAMILLE À LA FOIS, RANGÉE PAR RUBRIQUE (19/11/2026).
+  // Élodie : « je voudrais que le pop-up modifier la bibliothèque soit plus
+  // sympa visuellement que deux grands blocs où tout est mélangé », puis, devant
+  // trois maquettes cliquables, elle a choisi celle-ci. C'était deux `textarea`
+  // de douze lignes côte à côte : vingt et une phrases techniques à la suite,
+  // sans titre, dans une fenêtre où l'on n'en voyait que la moitié.
+  //
+  // ⚠ LES PHRASES SONT ADRESSÉES PAR `id`, PAS PAR RANG, et il le faut : relire
+  // l'écran retire au passage les phrases vidées à la main, ce qui DÉCALE les
+  // rangs. Une croix aurait alors supprimé la ligne suivante. Les `id` ne
+  // vivent que le temps de la fenêtre et ne sont jamais enregistrés.
   function ouvrirBiblioTenir() {
-    const b = biblioElements();
-    const m = openModal('Modifier la bibliothèque', `
-      <p class="muted small">Une ligne par phrase. Ce que vous écrivez à la main dans un cahier
-        s’ajoute ici tout seul. Modifier la bibliothèque ne change pas les cahiers déjà préparés.</p>
-      <div class="pl-std">${Object.entries(FAMILLES).map(([f, info]) => `
-        <label class="pl-champ"><span>${esc(info.label)}</span>
-          <textarea name="${esc(f)}" rows="12">${esc(b[f].join('\n'))}</textarea></label>`).join('')}</div>
-      <div class="form-actions"><button type="button" class="btn ghost" data-close>Annuler</button>
-        <button type="button" class="btn primary" id="ca-biblio-save">Enregistrer</button></div>`, { wide: true });
-    m.querySelector('#ca-biblio-save').onclick = async () => {
-      const lire2 = (f) => m.querySelector(`textarea[name="${f}"]`).value.split('\n');
-      try {
-        await enregistrerBiblio({ technique: lire2('technique'), contrainte: lire2('contrainte') });
-        closeModal();
-        toast('Bibliothèque enregistrée');
-        dessiner();                       // les suggestions suivent la bibliothèque
-      } catch (e) { toast(e.message || 'Enregistrement impossible', 'erreur'); }
+    const b = biblioRangee();
+    let compteur = 0;
+    Object.keys(FAMILLES).forEach(f => b[f].forEach(e => { e.id = ++compteur; }));
+    const etat = { famille: 'technique', q: '', neuves: [], replie: new Set() };
+    const sansAcc = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    const propre = (t) => String(t || '').replace(/\s+/g, ' ').trim();
+
+    // ⚠ LA FENÊTRE DU CAHIER EST REMPLACÉE, PAS SUPERPOSÉE : `openModal` ferme
+    // celle qui est ouverte. En sortant d'ici, il faut donc la REMONTER —
+    // exactement ce que fait `demander` après une question.
+    //
+    // ⚠ C'EST UN DÉFAUT QUI EXISTAIT DÉJÀ, et il se voyait (vérifié sur la
+    // version publiée, 19/11/2026) : « Enregistrer » comme « Annuler »
+    // renvoyaient au Planning chantier, le cahier en cours de préparation
+    // disparu. `dessiner()` écrivait alors dans un `hote` détaché de la page,
+    // c'est-à-dire nulle part, et rien ne le signalait.
+    //
+    // ⚠ ET C'EST `onClose` QUI LE FAIT, pas le bouton : la fenêtre se ferme
+    // aussi par la croix et par le fond. Les trois sorties doivent remonter le
+    // cahier, pas seulement celle qu'on a sous la main.
+    const m = openModal('Modifier la bibliothèque', '<div id="bi"></div>', {
+      wide: true,
+      onClose: () => { monter(); dessiner(); },
+    });
+    const hote2 = () => m.querySelector('#bi');
+
+    // L'ordre des rubriques : celui d'apparition des phrases, puis celles qu'on
+    // vient de créer et qui n'ont encore rien dedans. « Sans rubrique » en
+    // dernier — c'est là que tombent les phrases écrites au fil d'un cahier.
+    const rubriques = (f) => {
+      const vues = [...new Set(b[f].map(e => e.r))];
+      const out = vues.filter(Boolean);
+      for (const r of etat.neuves) if (!out.includes(r)) out.push(r);
+      if (vues.includes('')) out.push('');
+      return out;
     };
+    // ⚠ UNE PHRASE QUI CHANGE DE RUBRIQUE CHANGE AUSSI DE PLACE DANS LA LISTE,
+    // et sans cela l'ordre des rubriques SAUTE sous les yeux : il se lit de la
+    // première phrase de chaque groupe, et déplacer la première phrase de
+    // « Murs et peinture » faisait passer « Électricité » en tête (vu à
+    // l'essai, 19/11/2026). La phrase se range donc derrière ses nouvelles
+    // voisines, et l'ordre affiché est celui de la liste enregistrée.
+    const placer = (e, rub) => {
+      const l = b[etat.famille];
+      const i = l.indexOf(e);
+      if (i >= 0) l.splice(i, 1);
+      e.r = rub;
+      let dernier = -1;
+      l.forEach((x, j) => { if (x.r === rub) dernier = j; });
+      l.splice(dernier + 1, 0, e);
+    };
+    const nomNeuf = () => {
+      const pris = new Set(rubriques(etat.famille));
+      let n = 'Nouvelle rubrique';
+      for (let i = 2; pris.has(n); i++) n = `Nouvelle rubrique ${i}`;
+      return n;
+    };
+
+    // ⚠ ON RELIT L'ÉCRAN AVANT CHAQUE REDESSIN. Les phrases et les titres de
+    // rubrique sont des champs libres : un redessin les réécrit depuis `b`, et
+    // sans cette lecture une correction tapée puis suivie d'un repli, d'une
+    // recherche ou d'un ajout serait perdue sans un bruit.
+    const lireB = () => {
+      const h = hote2(); if (!h) return;
+      h.querySelectorAll('[data-bi-id]').forEach(el => {
+        const e = b[etat.famille].find(x => x.id === +el.dataset.biId);
+        if (e) e.t = propre(el.textContent);
+      });
+      h.querySelectorAll('[data-bi-rub]').forEach(el => {
+        const avant = el.dataset.biRub;
+        const apres = propre(el.textContent);
+        if (apres === avant) return;
+        // Renommer une rubrique renomme toutes ses phrases : c'est le même geste
+        // vu de l'autre côté. Un titre vidé renvoie ses phrases dans « Sans
+        // rubrique », ce qui est la seule lecture possible d'un nom effacé.
+        b[etat.famille].forEach(e => { if (e.r === avant) e.r = apres; });
+        etat.neuves = etat.neuves.map(r => (r === avant ? apres : r)).filter(Boolean);
+        el.dataset.biRub = apres;
+      });
+      b[etat.famille] = b[etat.famille].filter(e => e.t);
+    };
+
+    const dessinerB = () => {
+      const f = etat.famille;
+      const q = sansAcc(etat.q);
+      const toutes = rubriques(f);
+      // Le menu de déplacement, calculé une fois : il est le même sur toutes les
+      // lignes de la famille.
+      const choix = (courante) => toutes.filter(Boolean).map(x =>
+        `<option value="${esc(x)}"${x === courante ? ' selected' : ''}>${esc(x)}</option>`).join('')
+        + `<option value=""${courante ? '' : ' selected'}>Sans rubrique</option>`
+        + '<option value="__neuve">Nouvelle rubrique…</option>';
+
+      const bloc = (r) => {
+        const phrases = b[f].filter(e => e.r === r && (!q || sansAcc(e.t).includes(q)));
+        if (q && !phrases.length) return '';
+        const sans = !r;
+        // ⚠ « SANS RUBRIQUE » N'EST PAS UN NOM, C'EST UNE ABSENCE : le titre ne
+        // doit donc pas être modifiable. Le rendre éditable aurait fait, à la
+        // première relecture, une VRAIE rubrique appelée « Sans rubrique ».
+        const titre = sans
+          ? '<span class="bi-nom est-sans">Sans rubrique</span>'
+          : `<span class="bi-nom" contenteditable="true" spellcheck="false" data-bi-rub="${esc(r)}">${esc(r)}</span>`;
+        return `<details class="bi-rub"${q || !etat.replie.has(r) ? ' open' : ''} data-bi-bloc="${esc(r)}">
+          <summary>${titre}<i>${phrases.length}</i></summary>
+          <div class="bi-lignes">
+            ${phrases.map(e => `<div class="bi-ph">
+              <span class="bi-pou" aria-hidden="true"></span>
+              <span class="bi-txt" contenteditable="true" spellcheck="false" data-bi-id="${e.id}">${esc(e.t)}</span>
+              <span class="bi-bouger">⇅<select data-bi-move="${e.id}" aria-label="Rubrique de la phrase">${choix(e.r)}</select></span>
+              <button type="button" class="bi-x" data-bi-x="${e.id}" aria-label="Retirer cette phrase">✕</button>
+            </div>`).join('')}
+            <div class="bi-ajout"><input type="text" placeholder="Ajouter une phrase…" data-bi-add="${esc(r)}"></div>
+          </div></details>`;
+      };
+
+      const liste = toutes.map(bloc).join('');
+      hote2().innerHTML = `
+        <p class="muted small" style="margin:0 0 14px">Une ligne par phrase. Ce que vous écrivez à la main dans un
+          cahier s’ajoute ici tout seul, sans rubrique. Modifier la bibliothèque ne change pas les cahiers
+          déjà préparés.</p>
+        <div class="bi-onglets">${Object.entries(FAMILLES).map(([k, info]) =>
+          `<button type="button" class="${k === f ? 'on' : ''}" data-bi-fam="${k}">${esc(info.label)}<i>${b[k].length}</i></button>`).join('')}</div>
+        <div class="bi-cherche"><input type="search" id="bi-q" placeholder="Chercher dans ${esc(FAMILLES[f].label.toLowerCase())}…" value="${esc(etat.q)}"></div>
+        <div class="bi-liste">${liste || `<div class="bi-vide">${q ? 'Aucune phrase ne correspond.' : 'Cette famille est vide.'}</div>`}</div>
+        <button type="button" class="bi-neuve" id="bi-neuve">+ Nouvelle rubrique</button>
+        <div class="form-actions"><button type="button" class="btn ghost" data-close>Annuler</button>
+          <button type="button" class="btn primary" id="ca-biblio-save">Enregistrer</button></div>`;
+      brancherB();
+    };
+
+    const ajouter = (rub, champ) => {
+      const t = propre(champ.value);
+      if (!t) return;
+      lireB();
+      if (b[etat.famille].some(e => sansAcc(e.t) === sansAcc(t))) {
+        toast('Cette phrase est déjà dans la bibliothèque'); return;
+      }
+      placer({ t, r: rub, id: ++compteur }, rub);
+      etat.q = '';
+      dessinerB();
+      // On en ajoute souvent deux ou trois d'affilée : on rend la main dans le
+      // champ de la même rubrique.
+      hote2().querySelector(`[data-bi-add="${CSS.escape(rub)}"]`)?.focus();
+    };
+
+    function brancherB() {
+      const h = hote2();
+      h.querySelectorAll('[data-bi-fam]').forEach(btn => btn.onclick = () => {
+        lireB(); etat.famille = btn.dataset.biFam; etat.q = ''; etat.neuves = []; dessinerB();
+      });
+      const champQ = h.querySelector('#bi-q');
+      champQ.oninput = () => {
+        const pos = champQ.selectionStart;
+        lireB(); etat.q = champQ.value; dessinerB();
+        const n = hote2().querySelector('#bi-q');
+        n.focus(); try { n.setSelectionRange(pos, pos); } catch { /* type search : pas toujours permis */ }
+      };
+      h.querySelectorAll('[data-bi-x]').forEach(btn => btn.onclick = () => {
+        lireB();
+        b[etat.famille] = b[etat.famille].filter(e => e.id !== +btn.dataset.biX);
+        dessinerB();
+      });
+      h.querySelectorAll('[data-bi-move]').forEach(sel => sel.onchange = () => {
+        const id = +sel.dataset.biMove;
+        const neuve = sel.value === '__neuve' ? nomNeuf() : null;
+        lireB();
+        const e = b[etat.famille].find(x => x.id === id);
+        if (e) placer(e, neuve || sel.value);
+        if (neuve) etat.neuves.push(neuve);
+        dessinerB();
+      });
+      h.querySelectorAll('[data-bi-add]').forEach(champ => champ.onkeydown = (ev) => {
+        if (ev.key !== 'Enter') return;
+        ev.preventDefault();
+        ajouter(champ.dataset.biAdd, champ);
+      });
+      // Un repli survit au redessin : sans cela, replier une rubrique puis taper
+      // une lettre dans la recherche la rouvrirait.
+      h.querySelectorAll('[data-bi-bloc]').forEach(d => d.addEventListener('toggle', () => {
+        if (etat.q) return;             // en recherche, tout est ouvert : on ne retient rien
+        if (d.open) etat.replie.delete(d.dataset.biBloc); else etat.replie.add(d.dataset.biBloc);
+      }));
+      h.querySelector('#bi-neuve').onclick = () => {
+        lireB();
+        const nom = nomNeuf();
+        etat.neuves.push(nom); etat.q = '';
+        dessinerB();
+        const t = [...hote2().querySelectorAll('[data-bi-rub]')].find(x => x.dataset.biRub === nom);
+        if (t) { t.focus(); getSelection().selectAllChildren(t); }
+      };
+      h.querySelector('#ca-biblio-save').onclick = async () => {
+        lireB();
+        try {
+          // ⚠ UNE RUBRIQUE VIDE NE S'ENREGISTRE PAS : la bibliothèque est une
+          // liste de phrases, et une rubrique n'existe que par celles qu'elle
+          // porte. Celle qu'on vient de créer sans rien mettre dedans disparaît
+          // donc à la fermeture — il n'y a rien à garder.
+          await enregistrerBiblio(b);
+          closeModal();                   // `onClose` remonte le cahier et le redessine
+          toast('Bibliothèque enregistrée');
+        } catch (e) { toast(e.message || 'Enregistrement impossible', 'erreur'); }
+      };
+    }
+
+    dessinerB();
   }
 
   function brancher(fige) {

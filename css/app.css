@@ -10633,3 +10633,99 @@ button.u-tab { border: 0; background: transparent; }
 /* La loupe reste sur téléphone : `.u-right .u-ico` y est masqué (les autres
    icônes vivent dans le tiroir), pas elle — c'est là qu'on cherche le plus. */
 @media (max-width: 820px) { .u-right .u-ico.u-cherche { display: grid; } }
+
+
+/* ---- Modifier la bibliothèque : deux onglets, rangée par rubrique (19/11/2026)
+   Élodie : « je voudrais que le pop-up modifier la bibliothèque soit plus sympa
+   visuellement que deux grands blocs où tout est mélangé ». C'étaient deux
+   `textarea` de douze lignes côte à côte. Choix fait devant trois maquettes :
+   une famille à la fois, sur toute la largeur, en titres repliables.
+
+   ⚠ LES COMMANDES DE LIGNE NE SE CACHENT QUE LÀ OÙ IL Y A UN SURVOL. Les
+   masquer partout les aurait rendues INATTEIGNABLES au doigt : sur une
+   tablette, rien ne survole jamais. Voir `@media (hover: hover)` plus bas.
+   ------------------------------------------------------------------------- */
+.bi-onglets { display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; }
+.bi-onglets button { border: 0; background: transparent; color: var(--muted); font: inherit;
+  font-weight: 650; padding: 9px 15px; border-radius: 11px; display: flex; align-items: center; gap: 8px;
+  transition: .18s cubic-bezier(.2, .8, .2, 1); }
+.bi-onglets button:hover { background: var(--card-2); color: var(--text); }
+/* Le même dégradé que l'onglet ouvert de la barre du haut : un seul langage
+   pour dire « vous êtes ici ». */
+.bi-onglets button.on { color: #fff; background: linear-gradient(110deg, #5B52F0, #FF4D8D 70%, #FF7A2D);
+  box-shadow: 0 11px 20px -14px rgba(255, 77, 141, .8); }
+.bi-onglets button i { font-style: normal; background: rgba(0, 0, 0, .07); border-radius: 999px;
+  padding: 0 7px; font-size: 11px; font-weight: 800; }
+.bi-onglets button.on i { background: rgba(255, 255, 255, .25); }
+
+.bi-cherche { position: relative; margin-bottom: 14px; }
+.bi-cherche input { width: 100%; padding: 11px 14px 11px 38px; border: 1px solid var(--line-strong);
+  border-radius: 12px; font: inherit; background: var(--card-2); }
+.bi-cherche input:focus { outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  outline-offset: -1px; background: var(--card); }
+.bi-cherche::before { content: "\2315"; position: absolute; left: 14px; top: 50%;
+  transform: translateY(-50%); color: var(--muted-2); font-size: 17px; pointer-events: none; }
+
+.bi-liste { border: 1px solid var(--line); border-radius: 15px; max-height: min(52vh, 440px);
+  overflow: auto; background: var(--card); }
+.bi-rub { border-top: 1px solid var(--line); }
+.bi-rub:first-child { border-top: 0; }
+.bi-rub > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 8px;
+  padding: 10px 13px; font-size: 11px; font-weight: 800; letter-spacing: .09em;
+  text-transform: uppercase; color: var(--muted-2); }
+.bi-rub > summary::-webkit-details-marker { display: none; }
+.bi-rub > summary::before { content: "\25B8"; font-size: 10px; transition: transform .15s; flex: none; }
+.bi-rub[open] > summary::before { transform: rotate(90deg); }
+/* Le compte se colle au titre : poussé à droite d'une barre de 1040 px, il ne
+   se rattachait plus à rien. */
+.bi-rub > summary i { font-style: normal; background: var(--card-2); color: var(--muted);
+  border-radius: 999px; padding: 1px 8px; font-size: 10.5px; letter-spacing: 0; }
+.bi-nom { border-radius: 5px; padding: 1px 3px; }
+.bi-nom:focus { outline: 2px solid color-mix(in srgb, var(--accent) 50%, transparent); outline-offset: 1px; }
+.bi-nom.est-sans { opacity: .75; font-style: italic; }
+.bi-lignes { padding: 0 7px 7px; }
+
+.bi-ph { display: flex; align-items: flex-start; gap: 9px; padding: 8px 9px; border-radius: 10px;
+  font-size: 14px; line-height: 1.45; }
+.bi-ph:hover { background: var(--card-2); }
+.bi-pou { width: 6px; height: 6px; border-radius: 50%; margin-top: 8px; flex: none; background: var(--line-strong); }
+.bi-txt { flex: 1; min-width: 0; }
+.bi-txt:focus { outline: 2px solid color-mix(in srgb, var(--accent) 50%, transparent);
+  outline-offset: 3px; border-radius: 5px; }
+/* ⚠ LE MENU EST POSÉ SUR LA FLÈCHE, INVISIBLE : un `select` natif ouvre sa
+   liste au premier contact, se pilote au clavier et ne demande aucun code de
+   fenêtre flottante. Un bouton qui se CHANGE en menu aurait coûté deux gestes
+   là où l'on en veut un. */
+.bi-bouger { position: relative; flex: none; color: var(--muted-2); font-size: 14px; line-height: 1.5;
+  padding: 0 2px; cursor: pointer; }
+.bi-bouger:hover { color: var(--accent); }
+.bi-bouger select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer;
+  font: inherit; }
+.bi-x { border: 0; background: transparent; color: var(--muted-2); font-size: 15px; padding: 0 2px;
+  line-height: 1.4; flex: none; }
+.bi-x:hover { color: var(--red, #D1495B); }
+@media (hover: hover) {
+  .bi-bouger, .bi-x { opacity: 0; transition: opacity .15s; }
+  .bi-ph:hover .bi-bouger, .bi-ph:hover .bi-x,
+  .bi-ph:focus-within .bi-bouger, .bi-ph:focus-within .bi-x { opacity: 1; }
+}
+
+.bi-ajout { padding: 7px 9px 3px; }
+.bi-ajout input { width: 100%; border: 1px dashed var(--line-strong); background: transparent;
+  border-radius: 9px; padding: 8px 10px; font: inherit; font-size: 13.5px; }
+.bi-ajout input:focus { outline: none; border-style: solid; border-color: var(--accent); background: var(--card); }
+
+.bi-neuve { margin-top: 10px; border: 1px dashed var(--line-strong); background: transparent;
+  color: var(--muted); font: inherit; font-weight: 650; font-size: 13px; padding: 9px 15px;
+  border-radius: 11px; }
+.bi-neuve:hover { border-style: solid; border-color: var(--accent); color: var(--accent-ink);
+  background: var(--accent-soft); }
+.bi-vide { color: var(--muted-2); font-size: 13.5px; padding: 22px 12px; text-align: center; }
+
+@media (max-width: 820px) {
+  .bi-liste { max-height: none; }
+  .bi-ph { font-size: 14.5px; padding: 10px 9px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bi-onglets button, .bi-rub > summary::before, .bi-bouger, .bi-x { transition: none; }
+}
