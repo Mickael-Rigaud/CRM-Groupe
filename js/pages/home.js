@@ -37,7 +37,7 @@ import {
   idsDe, idsDeTous, structuresRaccordees, cadreJour, noteAgenda, modeEmploi,
   champsAgendas, enregistrerAgendas, peutRaccorder,
 } from '../agenda.js';
-import { evenementsEnregistres, derniereSync, agendasDe } from '../agenda-sync.js';
+import { evenementsEnregistres, derniereSync, agendasDe, jourCle } from '../agenda-sync.js';
 import { creerAgendaPersonnel } from '../comptes.js';
 
 const LS_FILTRE = 'crm_home_filtre';
@@ -130,6 +130,11 @@ export const homePage = {
       // pour le mois en cours. Le mois dernier reste à un clic, dans la liste.
       mois: moisCle(),
       filtre: (() => { try { return localStorage.getItem(LS_FILTRE) || 'groupe'; } catch { return 'groupe'; } })(),
+      // La semaine montrée par « Ma semaine », en nombre de semaines à partir
+      // de celle-ci. ⚠ ELLE NE SURVIT PAS À LA FERMETURE, délibérément : un
+      // tableau de bord qui rouvre sur la semaine dernière ne dit plus ce qui
+      // arrive, et c'est ce qu'on lui demande.
+      sem: 0,
     };
 
     const draw = () => {
@@ -162,7 +167,7 @@ export const homePage = {
       // qu'ils partent et reviennent ensemble.
       const enFiltre = state.filtre !== 'groupe';
       // ⚠ CALCULÉ ICI PARCE QUE DEUX CARTES EN DÉPENDENT, et pas seulement
-      // pour l'afficher : sa présence décide de la largeur de « Ma journée » et
+      // pour l'afficher : sa présence décide de la largeur de « Ma semaine » et
       // de l'enjambement des objectifs. L'appeler deux fois relirait les devis,
       // les paiements et les factures pour rien.
       const argent = vueP ? '' : carteArgent(cles, r, state);
@@ -172,15 +177,15 @@ export const homePage = {
       // Sans chemin de l'argent, les objectifs prennent les 12 colonnes et rien
       // ne peut se glisser à côté ; sans pilotage, il n'y a pas de carte à
       // faire enjamber et les deux sont déjà collées. Dans ces deux cas
-      // « Ma journée » reprend les 12 colonnes.
-      const journeeCollee = !!argent && scope.canPilotage;
-      const objectifs = scope.canPilotage ? carteObjectifs(cles, deals, journeeCollee) : '';
+      // « Ma semaine » reprend les 12 colonnes.
+      const semaineCollee = !!argent && scope.canPilotage;
+      const objectifs = scope.canPilotage ? carteObjectifs(cles, deals, semaineCollee) : '';
       // ⚠ ON NE S'ÉTIRE QUE S'IL Y A UNE FRISE À NOURRIR. Sans objectif fixé,
       // la carte n'affiche qu'une phrase — étirée sur la hauteur des deux
       // rangées, elle devenait un rectangle blanc de 670 px. Vu en démo, où
       // aucun objectif n'est saisi. La frise des douze mois est le seul élément
       // qui sache absorber de la hauteur : sa présence EST la condition.
-      const etire = journeeCollee && objectifs.includes('ob-frise');
+      const etire = semaineCollee && objectifs.includes('ob-frise');
       const obj = cles.reduce((s, k) => s + objectif(k, r), 0);
       const sources = cles.map(k => chiffres(k, r, deals)).filter(x => x.source);
 
@@ -232,7 +237,7 @@ export const homePage = {
 
         ${/* ⚠ DES TUILES DE TAILLES INÉGALES, ET CHACUNE PREND SA HAUTEUR. C'est
               ce qui distingue le bento du tableau de cartes d'avant : les deux
-              colonnes figées ont disparu, « Ma journée » et « À traiter »
+              colonnes figées ont disparu, « Ma semaine » et « À traiter »
               descendent avec le reste au lieu de former une colonne qui
               s'allongeait toute seule. */ ''}
         <div class="tb-bento">
@@ -260,7 +265,7 @@ export const homePage = {
                   // hauteur. Changer la marge n'y aurait rien fait.
                   //
                   // ⚠ ET C'EST L'ENJAMBEMENT QUI REND LES VUES FILTRÉES POSSIBLES.
-                  // Sans lui, « Ma journée » à 7 colonnes laissait 5 colonnes libres
+                  // Sans lui, « Ma semaine » à 7 colonnes laissait 5 colonnes libres
                   // à sa droite, et le PREMIER des quatre encadrés (3 colonnes) y
                   // remontait — les trois autres laissaient un trou sur la rangée
                   // d'après. Les objectifs occupent maintenant ces 5 colonnes : les
@@ -271,7 +276,7 @@ export const homePage = {
                   // hauteur de son contenu et la colonne de droite se terminait bien
                   // avant la gauche. Les deux vont ensemble — enjamber sans s'étirer
                   // ne fait que réserver de la place vide.
-                  journeeCollee
+                  semaineCollee
                     ? `style="grid-row:span 2${etire
                         ? ';align-self:stretch;display:flex;flex-direction:column' : ''}"`
                     : '') : '')}
@@ -286,7 +291,8 @@ export const homePage = {
                 ⚠ SEPT COLONNES, ALIGNÉE SUR LA CARTE DU DESSUS. Élodie, le même
                 jour : « je veux que ça prenne seulement la place en dessous du
                 chemin de l'argent, même largeur », puis « fais pareil pour ma
-                journée dans la vue de rgd renova ». C'est `journeeCollee` qui
+                journée dans la vue de rgd renova » (la carte montre la semaine
+                entière depuis le 19/11). C'est `semaineCollee` qui
                 en décide, et il retombe à 12 colonnes sans chemin de l'argent
                 ou sans accès pilotage — les deux cas où aucune carte ne peut
                 tenir à sa droite.
@@ -312,7 +318,7 @@ export const homePage = {
                 perdu — l'écran #/today le porte en entier, et la vue groupe
                 continue de le mêler aux rendez-vous. C'est un choix de lecture,
                 pas une suppression. */ ''}
-          ${taille(carteJournee(enFiltre ? cles : visibles, enFiltre), journeeCollee ? 'tb-x7' : 'tb-x12')}
+          ${taille(carteSemaine(enFiltre ? cles : visibles, enFiltre, state.sem), semaineCollee ? 'tb-x7' : 'tb-x12')}
 
           ${/* ⚠ LES QUATRE ENCADRÉS NE SORTENT PLUS EN VUE GROUPE (17/11/2026).
                 Ils donnaient le CUMUL des structures : quatre nombres du groupe
@@ -502,6 +508,21 @@ export const homePage = {
       });
       root.querySelector('#tb-obj')?.addEventListener('click', () => formObjectifs(draw, cles));
       root.querySelector('#tb-ag')?.addEventListener('click', () => formAgendas(visibles, draw));
+
+      // Les flèches de « Ma semaine ». « Cette semaine » remet à zéro, les
+      // flèches avancent d'un cran : `data-sem` porte le pas, pas la cible.
+      root.querySelectorAll('[data-sem]').forEach(b => b.onclick = () => {
+        const pas = Number(b.dataset.sem);
+        state.sem = pas === 0 ? 0 : state.sem + pas;
+        draw();
+      });
+      // ⚠ ON NE REDESSINE QUE SI L'ÉCRAN EST ENCORE LÀ : le relevé prend
+      // plusieurs secondes, et d'ici là on peut avoir changé de page. Écrire
+      // dans un hôte détaché ne lève rien et ne se voit nulle part.
+      {
+        const { du, au } = bornesSemaine(state.sem);
+        releverSemaine(du, au, () => { if (document.body.contains(root)) draw(); });
+      }
 
       /* ⚠ LE RETOUR S'ÉCRIT DANS UN BLOC, PAS DANS UN `toast` : il porte
          l'identifiant du calendrier créé, qu'un message qui s'efface au bout
@@ -924,50 +945,118 @@ const libellePeriode = (p) => ({
   quarter: 'au trimestre', year: "sur l'année", all: '',
 }[p] || '');
 
-// ---------- journée ----------
-// Une seule journée, dessinée par le CRM : les rendez-vous lus dans les agendas
-// Google des structures et les tâches horodatées du CRM, mélangés et triés, chacun
+// ---------- la semaine ----------
+// La semaine entière, dessinée par le CRM : les rendez-vous lus dans les agendas
+// Google des structures et les tâches horodatées du CRM, un jour par ligne, chacun
 // à la couleur de sa structure. Le cadre intégré de Google ne sert plus que de
 // repli, tant qu'aucun identifiant client n'est renseigné.
+//
+// ⚠ C'ÉTAIT « MA JOURNÉE » JUSQU'AU 19/11/2026. Élodie : « remplacer la liste
+// des rendez-vous du jour par une vue d'ensemble de la semaine des 4 agendas ».
+// La journée seule ne montrait rien dès qu'aucun rendez-vous ne tombait le jour
+// même — c'est le cas la plupart des jours pour trois structures sur quatre, et
+// la carte laissait croire à un agenda vide alors que la semaine est pleine.
 /**
  * ⚠ `agendaSeul` LAISSE DE CÔTÉ LES TÂCHES DU CRM (17/11/2026, Élodie :
  * « je ne veux que les rendez-vous du jour du google agenda de rgd renova »).
  * Il est posé dans les vues filtrées, pas en vue groupe : là, mêler les deux
- * reste l'intérêt de dessiner la journée nous-mêmes plutôt que d'encadrer
- * Google. `tachesDuJour()` n'est de toute façon PAS filtrée par structure —
+ * reste l'intérêt de dessiner la semaine nous-mêmes plutôt que d'encadrer
+ * Google. `tachesEntre()` n'est de toute façon PAS filtrée par structure —
  * elle déduit la structure de l'affaire liée, et une tâche sans affaire n'en a
  * aucune : la passer dans une vue filtrée y ferait entrer des rappels d'une
  * autre structure.
  */
-function carteJournee(cles, agendaSeul = false) {
+function carteSemaine(cles, agendaSeul = false, sem = 0) {
   const ids = idsDeTous(cles);
-  const taches = agendaSeul ? [] : tachesDuJour();
-  const entete = `<div class="card-head"><h2>Ma journée</h2>
-    <span class="muted small">${new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
+  const { du, au, jours } = bornesSemaine(sem);
+  const rdv = evenementsEnregistres(cles, du, au);
+  const taches = agendaSeul ? [] : tachesEntre(du, au);
+  const entete = `<div class="card-head"><h2>Ma semaine</h2>
+    <span class="muted small">${libelleSemaine(du, au)}${
+      rdv.length ? ` · ${rdv.length} rendez-vous` : ''}</span>
+    <span class="tb-sem-nav">
+      <button type="button" class="tb-sem-fl" data-sem="-1" aria-label="Semaine précédente">‹</button>
+      ${sem ? '<button type="button" class="tb-sem-ajd" data-sem="0">Cette semaine</button>' : ''}
+      <button type="button" class="tb-sem-fl" data-sem="1" aria-label="Semaine suivante">›</button>
+    </span>
     ${peutRaccorder() ? `<button class="btn ghost sm" id="tb-ag">${ids.length ? 'Agendas' : 'Raccorder les agendas'}</button>` : ''}</div>`;
 
   if (!ids.length) {
     return `<section class="card">${entete}
       <div class="tb-ag-vide">
         <p><b>Aucun agenda n'est encore raccordé.</b> Une fois les calendriers des structures renseignés,
-        leurs rendez-vous du jour sont recopiés automatiquement dans le CRM.
+        leurs rendez-vous sont recopiés automatiquement dans le CRM.
         Personne n'a de connexion à faire. Chacun ne voit que les agendas qui lui
         appartiennent dès qu'on lui en a créé un&nbsp;; sans agenda à lui, il voit
         celui de sa structure.</p>
         ${peutRaccorder() ? modeEmploi() + '<p class="muted small">Puis « Raccorder les agendas » ci-dessus.</p>'
           : '<p class="muted small">La direction peut les renseigner depuis cet écran.</p>'}
       </div>
-      <div id="tb-jour">${dessinerJournee(taches, cles)}</div>
+      <div id="tb-jour">${dessinerSemaine(taches, jours)}</div>
     </section>`;
   }
-  // La journée est lue dans le CRM, pas chez Google : elle s'affiche aussitôt,
+  // La semaine est lue dans le CRM, pas chez Google : elle s'affiche aussitôt,
   // pour tout le monde. La recopie, elle, se fait en fond et n'appartient qu'à
   // la direction — c'est elle qui a accès aux calendriers.
   return `<section class="card">${entete}
-    <div id="tb-jour">${dessinerJournee([...evenementsEnregistres(cles), ...taches], cles)}</div>
+    <div id="tb-jour">${dessinerSemaine([...rdv, ...taches], jours)}</div>
     ${monAgendaHtml(cles)}
-    <p class="muted small tb-ag-src">${sourcesHtml(cles)}<span id="tb-maj">${etatSync(cles)}</span></p>
+    <p class="muted small tb-ag-src">${sourcesHtml(cles)}<span id="tb-maj">${etatSync(cles, du, au)}</span></p>
   </section>`;
+}
+
+// Le lundi de la semaine affichée, et les sept clés de jour qui la composent.
+// `sem` est un nombre de semaines à partir de celle-ci : 0 aujourd'hui, -1 la
+// précédente. ⚠ LA SEMAINE COMMENCE LE LUNDI, comme l'écran Agenda : les deux
+// doivent montrer la même découpe, sinon « la semaine » désigne deux choses
+// d'un écran à l'autre. Midi, et non minuit : un jour de changement d'heure,
+// ajouter sept jours à minuit peut retomber sur la veille 23 h.
+function bornesSemaine(sem = 0) {
+  const l = new Date();
+  l.setHours(12, 0, 0, 0);
+  l.setDate(l.getDate() - ((l.getDay() + 6) % 7) + sem * 7);
+  const jours = [...Array(7)].map((_, i) => {
+    const d = new Date(l); d.setDate(l.getDate() + i); return isoDay(d);
+  });
+  return { du: jours[0], au: jours[6], jours };
+}
+const libelleSemaine = (du, au) => {
+  const a = new Date(`${du}T12:00:00`), b = new Date(`${au}T12:00:00`);
+  const mois = (d) => d.toLocaleDateString('fr-FR', { month: 'long' });
+  return a.getMonth() === b.getMonth()
+    ? `${a.getDate()} – ${b.getDate()} ${mois(b)}`
+    : `${a.getDate()} ${mois(a)} – ${b.getDate()} ${mois(b)}`;
+};
+
+// ⚠ LA SEMAINE AFFICHÉE EST RELEVÉE À L'OUVERTURE, ET CE N'EST PAS UN LUXE :
+// le relevé automatique des 30 minutes ne rapporte QUE LA JOURNÉE EN COURS, et
+// seul le passage large de 10 h va chercher les trente jours suivants. Sans cet
+// appel, un rendez-vous pris ce matin pour jeudi n'apparaîtrait que demain — et
+// la carte dirait « aucun rendez-vous » avec aplomb. C'est la même RPC que
+// l'écran Agenda appelle à chaque semaine ouverte.
+//
+// Même registre que lui : une semaine déjà relevée il y a moins d'une minute ne
+// rappelle pas Google, sans quoi chaque changement de période ou de structure —
+// qui redessine l'écran — relancerait sept requêtes.
+const RELEVE_SEMAINE = new Map();
+async function releverSemaine(du, au, apres) {
+  if (db.demo || !scope.user) return;
+  if (Date.now() - (RELEVE_SEMAINE.get(du) || 0) < 60000) return;
+  RELEVE_SEMAINE.set(du, Date.now());
+  try {
+    await db.rpc('declencher_releve_agenda_fenetre', { du, au });
+    for (const attente of [2500, 4000]) {
+      await new Promise(r => setTimeout(r, attente));
+      // `recharger` ne prévient que si les lignes ont VRAIMENT changé : un
+      // relevé qui ne trouve rien de neuf ne fait pas sauter l'écran.
+      if (await db.recharger('agenda_events')) break;
+    }
+    apres();
+  } catch {
+    // Un relevé raté n'efface rien : la carte garde le reflet précédent. On le
+    // retire du registre pour que le prochain passage le retente.
+    RELEVE_SEMAINE.delete(du);
+  }
 }
 // Les structures que la personne porte et pour lesquelles elle n'a pas encore
 // d'agenda à elle. Tant qu'elle n'en a pas, elle voit celui de sa structure —
@@ -996,8 +1085,8 @@ const monAgendaHtml = (cles) => {
     </p><div id="tb-mon-agenda"></div>`;
 };
 
-const etatSync = (cles) => {
-  const d = derniereSync(cles);
+const etatSync = (cles, du, au) => {
+  const d = derniereSync(cles, du, au);
   if (!d) return '<span class="ag-abs">pas encore relevé</span>';
   const min = Math.round((Date.now() - d.getTime()) / 60000);
   const quand = min < 1 ? 'à l\'instant' : min < 60 ? `il y a ${min} min`
@@ -1012,43 +1101,55 @@ const sourcesHtml = (cles) => {
 };
 
 // Les tâches du CRM qui ont une heure : elles rejoignent les rendez-vous Google
-// dans la même journée, c'est tout l'intérêt de dessiner nous-mêmes.
-function tachesDuJour() {
-  const jour = isoDay();
+// dans la même semaine, c'est tout l'intérêt de dessiner nous-mêmes.
+//
+// ⚠ L'HEURE SE POSE SUR LE JOUR DE LA TÂCHE, pas sur aujourd'hui. Tant que la
+// carte ne montrait que la journée en cours, partir de `new Date()` revenait au
+// même ; sur une semaine, toutes les tâches se seraient rangées le jour même.
+function tachesEntre(du, au) {
   return scope.activities()
-    .filter(a => !a.done && a.due_date === jour && a.due_time)
+    .filter(a => !a.done && a.due_date >= du && a.due_date <= au && a.due_time)
     .map(a => {
       const [h, m] = a.due_time.split(':').map(Number);
-      const d = new Date(); d.setHours(h || 0, m || 0, 0, 0);
+      const d = new Date(`${a.due_date}T00:00:00`); d.setHours(h || 0, m || 0, 0, 0);
       const f = new Date(d.getTime() + 30 * 60000);
       return {
         id: 'crm-' + a.id, titre: a.title, lieu: '', debut: d, fin: f, journee: false,
+        jour: a.due_date,
         structure: db.byId('deals', a.deal_id)?.activity || null,
         crm: true, type: a.type || 'Tâche', qui: userName(a.assignee_id),
       };
     });
 }
 
-function dessinerJournee(elements, cles) {
+// Sept lignes, une par jour. ⚠ UNE LIGNE PAR JOUR ET NON SEPT COLONNES, et ce
+// n'est pas un rabais : la carte fait sept colonnes de large quand elle se
+// colle sous le chemin de l'argent (17/11/2026). Sept colonnes dans cette
+// largeur donnent 55 px par jour — de quoi afficher une heure, pas un titre.
+// En lignes, un rendez-vous garde son libellé entier à toutes les largeurs.
+function dessinerSemaine(elements, jours) {
   const maintenant = new Date();
+  const ajd = jourCle();
   const hhmm = (d) => d.toTimeString().slice(0, 5);
-  const journee = elements.filter(e => e.journee);
-  const horaires = elements.filter(e => !e.journee).sort((a, b) => a.debut - b.debut);
-  const duree = (e) => Math.max(0, Math.round((e.fin - e.debut) / 60000));
+  const parJour = new Map(jours.map(j => [j, []]));
+  elements.forEach(e => parJour.get(e.jour)?.push(e));
+  parJour.forEach(l => l.sort((a, b) =>
+    (a.journee === b.journee ? a.debut - b.debut : a.journee ? -1 : 1)));
 
+  const duree = (e) => Math.max(0, Math.round((e.fin - e.debut) / 60000));
   const ligne = (e) => {
     const c = e.structure ? ACTIVITIES[e.structure]?.color : 'var(--muted-2)';
-    const passe = e.fin < maintenant;
-    const encours = e.debut <= maintenant && e.fin > maintenant;
+    const passe = !e.journee && e.fin < maintenant;
+    const encours = !e.journee && e.debut <= maintenant && e.fin > maintenant;
     const min = duree(e);
-    return `<div class="tb-rdv${passe ? ' passe' : ''}${encours ? ' encours' : ''}" style="--c:${c}">
-      <span class="tb-h">${hhmm(e.debut)}<small>${hhmm(e.fin)}</small></span>
-      <span class="tb-filet"></span>
-      <span class="tb-corps">
-        <span class="tb-titre">${esc(e.titre)}</span>
-        <span class="tb-det">${[
-          e.crm ? esc(e.type) : (min >= 60 ? Math.floor(min / 60) + ' h' + (min % 60 ? ' ' + String(min % 60).padStart(2, '0') : '') : min + ' min'),
+    return `<div class="tb-ev${passe ? ' passe' : ''}${encours ? ' encours' : ''}" style="--c:${c}">
+      <span class="tb-ev-h">${e.journee ? '<i>jour</i>' : hhmm(e.debut)}</span>
+      <span class="tb-ev-b">
+        <span class="tb-ev-t">${esc(e.titre)}</span>
+        <span class="tb-ev-d">${[
           e.structure ? esc(ACTIVITIES[e.structure].label) : 'Groupe',
+          e.crm ? esc(e.type) : (e.journee ? 'toute la journée'
+            : (min >= 60 ? Math.floor(min / 60) + ' h' + (min % 60 ? ' ' + String(min % 60).padStart(2, '0') : '') : min + ' min')),
           e.lieu ? esc(e.lieu) : '',
           e.crm ? esc(e.qui) : (e.invites > 1 ? e.invites + ' participants' : ''),
         ].filter(Boolean).join(' · ')}</span>
@@ -1057,23 +1158,23 @@ function dessinerJournee(elements, cles) {
     </div>`;
   };
 
-  let corps = '';
-  if (journee.length) corps += `<div class="tb-alljour">${journee.map(e =>
-    `<span class="tb-puce" style="--c:${e.structure ? ACTIVITIES[e.structure]?.color : 'var(--muted-2)'}">${esc(e.titre)}</span>`).join('')}</div>`;
-  if (horaires.length) {
-    corps += '<div class="tb-jour">';
-    horaires.forEach((e, i) => {
-      const prec = horaires[i - 1];
-      if (prec && prec.debut <= maintenant && e.debut > maintenant)
-        corps += `<div class="tb-now"><span class="h">${hhmm(maintenant)}</span><span class="line"></span></div>`;
-      corps += ligne(e);
-    });
-    corps += '</div>';
-  }
-  if (!journee.length && !horaires.length)
-    corps = '<div class="empty" style="padding:20px 0">Aucun rendez-vous aujourd\'hui.</div>';
-
-  return corps;
+  // ⚠ LES JOURS VIDES RESTENT À L'ÉCRAN. Les retirer donnerait une semaine qui
+  // se rétrécit à trois lignes et ne se lirait plus comme une semaine : c'est
+  // justement de voir où il reste de la place qu'il s'agit.
+  return `<div class="tb-sem">${jours.map(j => {
+    const l = parJour.get(j);
+    const d = new Date(`${j}T12:00:00`);
+    const cls = [j === ajd ? 'ajd' : '', j < ajd ? 'avant' : '', l.length ? '' : 'vide']
+      .filter(Boolean).join(' ');
+    return `<div class="tb-sj${cls ? ' ' + cls : ''}">
+      <div class="tb-sj-d">
+        <b>${esc(d.toLocaleDateString('fr-FR', { weekday: 'short' }).replace('.', ''))}</b>
+        <i>${d.getDate()}</i>
+      </div>
+      <div class="tb-sj-c">${l.length ? l.map(ligne).join('')
+        : '<span class="tb-sj-rien">—</span>'}</div>
+    </div>`;
+  }).join('')}</div>`;
 }
 
 function formAgendas(cles, onSaved) {
@@ -1215,7 +1316,7 @@ function carteArgent(cles, r, state) {
   // structures dont l'outil le dépose savent donner.
   //
   // ⚠ ELLE NE REND PLUS JAMAIS '' : la rangée du haut n'a donc plus à s'adapter,
-  // et `journeeCollee` est vrai partout où il y a le pilotage. C'est ce qui rend
+  // et `semaineCollee` est vrai partout où il y a le pilotage. C'est ce qui rend
   // les trois vues identiques, y compris un mois sans la moindre signature.
   //
   // En vue groupe, la tête reste celle de RGD tandis que les deux tuiles portent

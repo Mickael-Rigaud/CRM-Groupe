@@ -32,23 +32,36 @@ export const agendasDe = (cles = ACTIVITY_KEYS) =>
   cles.flatMap(k => idsDe(k).map(c => ({ structure: k, calendrier: c })));
 
 // ---------- Lecture ----------
-// Les rendez-vous d'un jour, tels qu'ils sont enregistrés dans le CRM.
-export function evenementsEnregistres(cles, jour = jourCle()) {
+// Les rendez-vous d'un jour — ou d'une PLAGE de jours, bornes comprises.
+//
+// ⚠ LA PLAGE A ÉTÉ AJOUTÉE LE 19/11/2026 SANS CHANGER LA SIGNATURE : `au`
+// vaut `du` par défaut, donc tous les appels à un seul jour restent ce qu'ils
+// étaient. La semaine du tableau de bord lit la même fonction que la journée,
+// avec le même cloisonnement — deux lectures différentes de `agenda_events`
+// auraient fini par ne plus montrer la même chose.
+//
+// Chaque rendez-vous porte `jour` (sa clé AAAA-MM-JJ) : c'est elle qui range
+// l'événement dans sa colonne, et surtout c'est elle qui fait apparaître un
+// « journée entière » de trois jours les trois jours — le relève en écrit une
+// ligne par jour occupé, l'heure de début, elle, ne change pas.
+export function evenementsEnregistres(cles, du = jourCle(), au = du) {
   return db.t('agenda_events')
-    .filter(e => e.day === jour && cles.includes(e.activity) && scope.voitAgenda(e))
+    .filter(e => e.day >= du && e.day <= au && cles.includes(e.activity) && scope.voitAgenda(e))
     .map(e => ({
       id: e.id, titre: e.title || '(sans titre)', lieu: e.location || '',
       debut: new Date(e.starts_at), fin: e.ends_at ? new Date(e.ends_at) : new Date(e.starts_at),
-      journee: !!e.all_day, structure: e.activity,
+      journee: !!e.all_day, structure: e.activity, jour: e.day,
       invites: e.attendees || 0, lien: e.link || '',
     }))
-    .sort((a, b) => (a.journee === b.journee ? a.debut - b.debut : a.journee ? -1 : 1));
+    .sort((a, b) => (a.jour === b.jour
+      ? (a.journee === b.journee ? a.debut - b.debut : a.journee ? -1 : 1)
+      : (a.jour < b.jour ? -1 : 1)));
 }
 // Quand la dernière copie a-t-elle eu lieu ? Sert à dire « à jour il y a 10 min »
 // plutôt que de laisser croire que la journée est vide.
-export function derniereSync(cles, jour = jourCle()) {
+export function derniereSync(cles, du = jourCle(), au = du) {
   const dates = db.t('agenda_events')
-    .filter(e => e.day === jour && cles.includes(e.activity) && e.synced_at
+    .filter(e => e.day >= du && e.day <= au && cles.includes(e.activity) && e.synced_at
       && scope.voitAgenda(e))
     .map(e => new Date(e.synced_at).getTime());
   return dates.length ? new Date(Math.max(...dates)) : null;
