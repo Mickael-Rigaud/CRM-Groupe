@@ -10,6 +10,7 @@ import { icon } from './icons.js';
 import { actualiser, poserGesteActualiser } from './actualiser.js';
 import { surveillerVersion } from './maj.js';
 import { monterRappels, demonterRappels, brancherBoutonNotifications } from './rappels.js';
+import { ouvrirRecherche, brancherRecherche } from './recherche.js';
 
 
 // ⚠ L'ADRESSE D'ARRIVÉE EST CAPTURÉE ICI, AVANT TOUT LE RESTE, ET C'EST CE QUI
@@ -212,6 +213,7 @@ function renderLayout() {
   }, { capture: true });
   renderNav();
   suivreBarre();
+  brancherRecherche();
 }
 
 function closeMenu() { navState.open = null; renderNav(); }
@@ -767,6 +769,7 @@ function renderNav() {
     <nav class="u-set" aria-label="Univers">${gs.filter(g => !g.bottom).map(tab).join('')}</nav>
     <div class="u-right">
       ${gs.filter(g => g.bottom).map(g => `<a href="${g.hash}" class="u-ico ${here?.key === g.key ? 'on' : ''}" title="${esc(g.label)}" aria-label="${esc(g.label)}">${icon(g.icon, 18)}</a>`).join('')}
+      <button type="button" class="u-ico u-cherche" id="u-cherche" title="Rechercher (Ctrl+K)" aria-label="Rechercher">${icon('search', 18)}</button>
       <div class="acct" id="acct">
         <button type="button" class="u-me" id="me-btn" aria-expanded="${navState.open === '__me'}"><span class="av">${esc(ini)}</span><span class="nm">${esc((u.full_name || '').split(' ')[0])}</span></button>
         ${navState.open === '__me' ? `<div class="acct-menu">
@@ -825,6 +828,7 @@ function renderNav() {
   }
 
   univ.querySelector('#burger').onclick = () => { navState.tiroir = !navState.tiroir; navState.open = null; renderNav(); };
+  univ.querySelector('#u-cherche').onclick = () => ouvrirRecherche();
   univ.querySelector('#me-btn').onclick = () => { navState.open = navState.open === '__me' ? null : '__me'; renderNav(); };
   univ.querySelector('#u-struct-btn')?.addEventListener('click', () => { navState.open = navState.open === '__struct' ? null : '__struct'; renderNav(); });
   univ.querySelector('[data-univ-menu]')?.addEventListener('click', () => {
