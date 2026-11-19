@@ -182,6 +182,33 @@ const nombreTxt = (v, zeroCompte = false) => {
 };
 const telNet = (t) => String(t || '').replace(/\D/g, '').replace(/^33/, '0');
 
+// ⚠ LE SIMULATEUR N'ÉCRIT QUE LA PHRASE, PAS SES MORCEAUX (19/11/2026, signalé
+// par Élodie sur un dossier venu du site : « les valeurs ne correspondent pas à
+// ce qu'a laissé le prospect »). Il pose `emprunteur_1` — « 35 ans, CDI,
+// 3 900 € /mois + primes 18 000 € /an (soit 1 500 € /mois) » — et jamais
+// `age_1`, `statut_1`, `salaire_1`, `primes_1`. L'étape « Situation personnelle
+// et professionnelle » s'ouvrait donc VIDE sur un dossier qui portait tout.
+//
+// On relit donc la phrase. C'est une lecture, pas une devinette : elle est
+// composée par le site selon un gabarit fixe (`emp()` dans son `recap()`), et
+// c'est le même que celui que ce formulaire écrit depuis ce matin.
+//
+// ⚠ LA PARENTHÈSE FINALE EST UN CALCUL, PAS UNE DONNÉE : « (soit 1 500 € /mois) »
+// est la mensualisation des primes. La prendre pour le salaire doublerait les
+// revenus. On la retire avant de lire.
+export function litEmprunteur(phrase) {
+  const t = String(phrase || '').replace(/\s*\(soit[^)]*\)\s*/i, ' ').trim();
+  if (!t) return null;
+  const age = /(\d{1,3})\s*ans/i.exec(t);
+  const salaire = /([\d   .]+)\s*€\s*\/\s*mois/i.exec(t);
+  const primes = /primes\s*([\d   .]+)\s*€\s*\/\s*an/i.exec(t);
+  // Le statut est le morceau entre la première et la deuxième virgule.
+  const bouts = t.split(',').map(x => x.trim());
+  const statut = bouts.length > 1 ? bouts[1] : '';
+  const n = (m) => (m ? String(Number(String(m[1]).replace(/[^\d]/g, '')) || '') : '');
+  return { age: n(age), statut, salaire: n(salaire), primes: n(primes) };
+}
+
 // ⚠ LE MÊME FORMULAIRE CRÉE ET MODIFIE (18/11/2026, Mickael : « je voudrais
 // retrouver toutes les informations enregistrées dans le formulaire, que la
 // fiche soit la même dans la base de données et la pipeline dossiers, et que
@@ -200,6 +227,9 @@ export function nouveauProspectCourtage(apres, { dealId = null, retour = null, e
   const txt = (x) => (x === null || x === undefined ? '' : String(x));
   // Un dossier venu du simulateur porte son projet sous `projet` et non `objectif`.
   const objectif0 = f0.objectif || (OBJECTIFS().includes(f0.projet) ? f0.projet : '');
+  // Les deux phrases d'emprunteur, relues en morceaux. Voir `litEmprunteur`.
+  const e1 = litEmprunteur(f0.emprunteur_1);
+  const e2 = litEmprunteur(f0.emprunteur_2);
   const v = {
     type_financement: txt(f0.type_financement), objectif: objectif0, avancement: AVANCEMENTS.includes(f0.avancement) ? f0.avancement : '',
     // ⚠ CES CINQ-LÀ AUSSI PASSENT PAR `nombreTxt` (19/11/2026), et ils avaient
@@ -217,7 +247,13 @@ export function nouveauProspectCourtage(apres, { dealId = null, retour = null, e
     // n'en connaître qu'une.
     montant_projet: nombreTxt(f0.montant_projet) || nombreTxt(f0.budget),
     apport: nombreTxt(f0.apport),
-    montant_financement: nombreTxt(f0.montant_financement),
+    // ⚠ `emprunt` EN REPLI, ET IL EST PRIORITAIRE SUR TOUT CALCUL (19/11/2026).
+    // Le simulateur écrit le montant à financer sous `emprunt` (330200), jamais
+    // sous `montant_financement`. La case s'ouvrait donc vide, puis la
+    // déduction d'ouverture posait budget − apport = 290 000 — et ÉCRASAIT les
+    // 330 200 réels à l'enregistrement. Le vrai montant comprend les frais, que
+    // la soustraction ignore : il ne se recalcule pas, il se lit.
+    montant_financement: nombreTxt(f0.montant_financement) || nombreTxt(f0.emprunt),
     duree: DUREES.includes(f0.duree) ? f0.duree : '', emprunteurs: EMPRUNTEURS.includes(f0.emprunteurs) ? f0.emprunteurs : '',
     revenus_foyer: nombreTxt(f0.revenus_foyer), credits_en_cours: nombreTxt(f0.credits_en_cours),
     ville_projet: txt(f0.ville),
@@ -226,11 +262,19 @@ export function nouveauProspectCourtage(apres, { dealId = null, retour = null, e
     // vienne du site ou du téléphone.
     region: REGIONS.includes(f0.region) ? f0.region : '',
     taux_actuel: txt(f0.taux_actuel),
-    statut_1: STATUTS.includes(f0.statut_1) ? f0.statut_1 : '',
-    statut_2: STATUTS.includes(f0.statut_2) ? f0.statut_2 : '',
-    age_1: nombreTxt(f0.age_1), age_2: nombreTxt(f0.age_2),
-    salaire_1: nombreTxt(f0.salaire_1), salaire_2: nombreTxt(f0.salaire_2),
-    primes_1: nombreTxt(f0.primes_1), primes_2: nombreTxt(f0.primes_2),
+    // ⚠ LA PHRASE DU SIMULATEUR SERT DE REPLI, champ par champ : ce qui est
+    // écrit en clair dans `fields` l'emporte, et la phrase comble le reste.
+    // Sans cela l'étape « Situation personnelle et professionnelle » s'ouvrait
+    // vide sur un dossier venu du site, qui portait pourtant tout.
+    statut_1: STATUTS.includes(f0.statut_1) ? f0.statut_1
+      : (STATUTS.includes(e1?.statut) ? e1.statut : ''),
+    statut_2: STATUTS.includes(f0.statut_2) ? f0.statut_2
+      : (STATUTS.includes(e2?.statut) ? e2.statut : ''),
+    age_1: nombreTxt(f0.age_1) || txt(e1?.age), age_2: nombreTxt(f0.age_2) || txt(e2?.age),
+    salaire_1: nombreTxt(f0.salaire_1) || txt(e1?.salaire),
+    salaire_2: nombreTxt(f0.salaire_2) || txt(e2?.salaire),
+    primes_1: nombreTxt(f0.primes_1) || txt(e1?.primes),
+    primes_2: nombreTxt(f0.primes_2) || txt(e2?.primes),
     type_autres_revenus: AUTRES_REVENUS.includes(f0.type_autres_revenus) ? f0.type_autres_revenus : '',
     devenir_rp: DEVENIR_RP.includes(f0.logement_actuel_devenir) ? f0.logement_actuel_devenir : '',
     valeur_rp: nombreTxt(f0.logement_actuel_valeur),
