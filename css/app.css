@@ -10884,3 +10884,25 @@ button.u-tab { border: 0; background: transparent; }
 .tb-cal .ag-evt span { font-size: 9.5px; line-height: 1.1; }
 /* Le trait de l'heure qu'il est reste le repère le plus utile de la carte. */
 .tb-cal .ag-now { z-index: 3; }
+
+/* ---- les rendez-vous du jour, à la place de « À faire » (19/11/2026) ----
+   Élodie : « remplacer à faire de la vue d'ensemble de la référence courtage par
+   les rendez-vous du jour ». Lus dans l'agenda Google de l'agence. Une ligne par
+   rendez-vous : l'heure en Fraunces, le titre, le lieu ; celui en cours est
+   souligné d'azur, les passés s'effacent sans disparaître. */
+.ct-rdvjour .ct-lien { margin-left: auto; }
+.ct-rdv-liste { display: flex; flex-direction: column; gap: 8px; }
+.ct-rdv-ligne { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-radius: 14px;
+  background: rgba(255,255,255,.7); border: 1px solid var(--lrc-filet, #F1E4CF); border-left: 4px solid var(--lrc-azur, #0FA3C4);
+  transition: transform .2s, box-shadow .2s; }
+.ct-rdv-ligne[role="button"] { cursor: pointer; }
+.ct-rdv-ligne[role="button"]:hover { transform: translateY(-2px); box-shadow: 0 14px 28px -22px rgba(21,56,78,.6); }
+.ct-rdv-heure { flex: none; min-width: 64px; font-family: var(--font-display, Fraunces, serif); font-size: 18px; font-weight: 700;
+  color: #15384E; line-height: 1.1; white-space: nowrap; }
+.ct-rdv-heure small { display: block; font-family: inherit; font-size: 12px; font-weight: 600; color: var(--muted); }
+.ct-rdv-txt { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ct-rdv-txt b { font-size: 13.5px; line-height: 1.3; color: #15384E; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.ct-rdv-txt span { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ct-rdv-txt em { font-style: normal; font-weight: 800; color: var(--lrc-azur-encre, #0A6F86); }
+.ct-rdv-ligne.est-encours { background: var(--lrc-azur-doux, #D8F1F8); }
+.ct-rdv-ligne.est-fini { opacity: .55; border-left-color: var(--line); }

@@ -103,11 +103,6 @@ export const courtageHomePage = {
       const enCours = viv.filter(r => ['contact', 'rdv'].includes(r.suivi || 'new')).length;
       const recrutes = parSuivi('ok');
 
-      // Les prochaines échéances de l'équipe sur les dossiers de la structure
-      const ouvertes = activities().filter(x => !x.done);
-      const retard = ouvertes.filter(x => daysSince(x.due_date) > 0).sort((x, y) => x.due_date.localeCompare(y.due_date));
-      const jour = ouvertes.filter(x => daysSince(x.due_date) === 0);
-
       // ⚠ L'ACCUEIL A PRIS LA LIGNE DU TABLEAU DE BORD (17/11/2026, Élodie : « quelque
       // chose de plus moderne et dynamique, et que les demandes du simulateur arrivent
       // directement dans le CRM »). Mêmes ingrédients que la To do : fond qui dérive,
@@ -186,12 +181,7 @@ export const courtageHomePage = {
         </section>
 
         <div class="ct-duo-ca">
-        <section class="ct-panneau ct-afaire">
-          <div class="ct-panneau-tete"><h2>À faire</h2>
-            <span class="ct-compte ${retard.length ? 'est-retard' : ''}">${retard.length} en retard · ${jour.length} aujourd’hui</span></div>
-          <div class="ct-afaire-liste">${[...retard, ...jour].slice(0, 8).map(x => activityRowHtml(x, { showContext: true })).join('')
-            || '<div class="ct-vide"><b>Rien d’échu.</b><span>Les prochaines actions sont plus loin dans le temps.</span></div>'}</div>
-        </section>
+        ${blocRdvDuJour()}
         ${blocChiffreAffaires(ca)}
         </div>
 
@@ -214,6 +204,15 @@ export const courtageHomePage = {
         if (el.tagName !== 'BUTTON') el.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDeal(el.dataset.deal, draw); } };
       });
       bindActivityRows(root, draw);
+      root.querySelectorAll('[data-rdv-ev]').forEach(el => {
+        const ouvrir = () => {
+          if (el.dataset.rdvDeal) { openDeal(el.dataset.rdvDeal, draw); return; }
+          if (el.dataset.rdvLien) window.open(el.dataset.rdvLien, '_blank', 'noopener');
+        };
+        el.onclick = ouvrir;
+        el.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ouvrir(); } };
+      });
+      if (premiere) releverAujourdhui(draw);
       root.querySelector('#ct-nouveau')?.addEventListener('click', () => nouveauProspectCourtage(draw));
       root.querySelectorAll('[data-defiler]').forEach(b => b.onclick = () =>
         root.querySelector('#' + b.dataset.defiler)?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
@@ -303,6 +302,90 @@ function carteDemande(d, contact, { compacte = false } = {}) {
         ${tel ? `<a class="cts-appel" href="tel:${esc(tel)}" data-tel draggable="false">Appeler</a>` : ''}
       </div>
     </article>`;
+}
+
+// ---------------------------------------------------------------- les rendez-vous du jour
+// ⚠ ILS REMPLACENT « À FAIRE » (19/11/2026, Élodie : « remplacer à faire de la vue
+// d'ensemble de la référence courtage par les rendez-vous du jour »). Ils sont lus
+// dans l'AGENDA GOOGLE de l'agence (`agenda_events`, activité `courtage`, réglage
+// `courtage_calendar_id`), pas dans les actions du CRM : c'est là qu'arrivent les
+// réservations du site ET les rendez-vous que Mickael pose lui-même dans Google.
+// Mêmes droits de lecture que l'écran Agenda de l'espace (`scope.voitAgenda`).
+//
+// Un rendez-vous dont le titre porte le nom d'un prospect ouvre son dossier ; les
+// autres ouvrent l'événement dans Google. Le rapprochement se fait par le nom,
+// comme sur la fiche dossier : l'agenda ne porte aucun identifiant d'affaire.
+const FUSEAU = 'Europe/Paris';
+const jourParis = (d = new Date()) => new Intl.DateTimeFormat('en-CA', { timeZone: FUSEAU }).format(d);
+const heureParis = (iso) => new Intl.DateTimeFormat('fr-FR', { timeZone: FUSEAU, hour: '2-digit', minute: '2-digit' })
+  .format(new Date(iso)).replace(':', ' h ');
+const aplatNom = (v) => String(v || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+const rdvCourtage = () => db.t('agenda_events').filter(e => e.activity === KEY && scope.voitAgenda(e));
+
+function dossierDuRdv(ev) {
+  const titre = aplatNom(ev.title);
+  if (!titre) return null;
+  let meilleur = null;
+  for (const d of deals()) {
+    const c = d.contact_id ? db.byId('contacts', d.contact_id) : null;
+    const nom = aplatNom(c ? contactName(c) : '');
+    if (nom.length < 3 || !titre.includes(nom)) continue;
+    // L'ouvert le plus récent l'emporte, comme `dossierDe` dans la base.
+    if (!meilleur || (d.status === 'open') > (meilleur.status === 'open')
+      || ((d.status === 'open') === (meilleur.status === 'open') && String(d.created_at) > String(meilleur.created_at))) meilleur = d;
+  }
+  return meilleur;
+}
+
+function blocRdvDuJour() {
+  const auj = jourParis();
+  const tous = rdvCourtage();
+  const duJour = tous.filter(e => (e.day || jourParis(new Date(e.starts_at))) === auj)
+    .sort((a, b) => (b.all_day ? 1 : 0) - (a.all_day ? 1 : 0) || String(a.starts_at).localeCompare(String(b.starts_at)));
+  const maintenant = Date.now();
+  const prochain = tous.filter(e => (e.day || '') > auj)
+    .sort((a, b) => String(a.starts_at).localeCompare(String(b.starts_at)))[0];
+  const ligne = (e) => {
+    const d = dossierDuRdv(e);
+    const fini = !e.all_day && e.ends_at && Date.parse(e.ends_at) < maintenant;
+    const enCours = !e.all_day && Date.parse(e.starts_at) <= maintenant && !fini;
+    const quand = e.all_day ? 'Journée' : `${heureParis(e.starts_at)}${e.ends_at ? `<small>${heureParis(e.ends_at)}</small>` : ''}`;
+    const attrs = `data-rdv-ev="${esc(e.id)}" ${d ? `data-rdv-deal="${esc(d.id)}"` : ''} ${e.link ? `data-rdv-lien="${esc(e.link)}"` : ''}`;
+    const cliquable = d || e.link;
+    return `<div class="ct-rdv-ligne ${fini ? 'est-fini' : ''} ${enCours ? 'est-encours' : ''}" ${attrs} ${cliquable ? 'role="button" tabindex="0"' : ''}>
+        <div class="ct-rdv-heure">${quand}</div>
+        <div class="ct-rdv-txt"><b>${esc(e.title || 'Rendez-vous')}</b>
+          <span>${enCours ? '<em>en cours</em> · ' : ''}${esc(e.location || (d ? 'Ouvrir le dossier' : e.link ? 'Ouvrir dans Google Agenda' : ''))}</span></div>
+      </div>`;
+  };
+  const restants = duJour.filter(e => e.all_day || !e.ends_at || Date.parse(e.ends_at) >= maintenant).length;
+  return `
+        <section class="ct-panneau ct-rdvjour">
+          <div class="ct-panneau-tete"><h2>Rendez-vous du jour</h2>
+            <span class="ct-compte">${duJour.length ? `${duJour.length} aujourd’hui${restants < duJour.length ? ` · ${restants} à venir` : ''}` : 'aucun aujourd’hui'}</span>
+            <a class="ct-lien" href="#/courtage/agenda">Agenda →</a></div>
+          <div class="ct-rdv-liste">${duJour.map(ligne).join('')
+            || `<div class="ct-vide"><b>Aucun rendez-vous aujourd’hui.</b><span>${prochain
+              ? `Prochain : ${esc(fmtDate(prochain.day))}${prochain.all_day ? '' : ` à ${heureParis(prochain.starts_at)}`} — ${esc(prochain.title || 'Rendez-vous')}`
+              : 'Les rendez-vous pris sur le site et ceux posés dans l’agenda de l’agence s’affichent ici.'}</span></div>`}</div>
+        </section>`;
+}
+
+// Le relevé automatique passe toutes les 30 minutes : un rendez-vous réservé à
+// l'instant n'y serait pas encore. On relève donc la journée à l'ouverture de
+// l'accueil — une fois par minute au plus, comme l'écran Agenda.
+let releveCourtage = 0;
+async function releverAujourdhui(apres) {
+  if (db.demo || !scope.user || Date.now() - releveCourtage < 60000) return;
+  releveCourtage = Date.now();
+  const j = jourParis();
+  try {
+    await db.rpc('declencher_releve_agenda_fenetre', { du: j, au: j });
+    for (const attente of [2500, 4000]) {
+      await new Promise(r => setTimeout(r, attente));
+      if (await db.recharger('agenda_events')) { apres(); break; }
+    }
+  } catch { releveCourtage = 0; }
 }
 
 // ---------------------------------------------------------------- le chiffre d'affaires
