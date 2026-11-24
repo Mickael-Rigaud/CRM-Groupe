@@ -60,6 +60,55 @@ const vignette = (c) => {
 };
 const titreDe = (c) => c.titre || (c.texte ? c.texte.split('\n')[0].slice(0, 60) : 'Sans titre');
 
+// ---------- L'aperçu du feed Instagram (24/11/2026) ----------
+// Élodie : « pour le calendrier des réseaux sociaux de la référence courtage,
+// peux-tu rajouter un système où l'on peut voir l'aperçu du feed insta ».
+//
+// ⚠ CE N'EST PAS UNE AUTRE LISTE DES MÊMES CONTENUS : c'est la grille du
+// profil, et elle obéit aux règles d'Instagram, pas à celles du calendrier.
+//   — Le plus RÉCENT en haut à gauche. Les contenus programmés ont donc une
+//     date plus grande que les publiés : ils passent devant, et c'est tout
+//     l'intérêt — on voit le feed tel qu'il SERA.
+//   — Trois colonnes, carrés jointifs. Un aperçu à deux ou quatre colonnes ne
+//     dit rien du vrai rendu : ce qu'on vient y juger, c'est la façon dont
+//     trois images voisines s'accordent.
+//   — Une STORY n'est pas dans le feed, jamais. Un reel, si.
+//   — Un contenu SANS VISUEL n'a pas de vignette, et un contenu SANS DATE n'a
+//     pas de rang. Les écarter en silence ferait croire à une perte : ils sont
+//     comptés et nommés sous la grille.
+const DANS_LE_FEED = (c) => (c.reseaux || []).includes('instagram') && c.format !== 'story';
+const quandDe = (c) => `${c.date_prevue || ''} ${c.heure || '00:00'}`;
+const feedDe = (contenus) => {
+  const siens = contenus.filter(DANS_LE_FEED);
+  const places = siens.filter(c => c.date_prevue && (c.visuels || []).length)
+    .sort((a, b) => quandDe(b).localeCompare(quandDe(a)));
+  return {
+    places,
+    sansVisuel: siens.filter(c => c.date_prevue && !(c.visuels || []).length).length,
+    sansDate: siens.filter(c => !c.date_prevue).length,
+    stories: contenus.filter(c => (c.reseaux || []).includes('instagram') && c.format === 'story').length,
+  };
+};
+
+// Une case de la grille. ⚠ POUR UNE VIDÉO, PAS LE « ▶ » DES PUCES : un carré
+// gris ne dit rien du feed. `<video preload="metadata">` montre la première
+// image, qui est exactement ce qu'Instagram affiche de ce reel.
+const caseFeed = (c, ajd) => {
+  const v = (c.visuels || [])[0];
+  const aVenir = (c.date_prevue || '') > ajd || c.statut !== 'publie';
+  const st = STATUTS[c.statut] || {};
+  const marque = c.format === 'reel' ? '◗' : c.format === 'carrousel' ? '❏' : '';
+  return `<button type="button" class="com-case${aVenir ? ' est-a-venir' : ''}" data-ouvrir="${esc(c.id)}"
+      style="--st:${st.couleur || '#94A3B8'}"
+      title="${esc(jourLong(c.date_prevue))}${c.heure ? ` à ${esc(c.heure)}` : ''} — ${esc(st.label || '')} — ${esc(titreDe(c))}">
+    ${v.type === 'video'
+      ? `<video src="${esc(v.url)}" preload="metadata" muted playsinline></video>`
+      : `<img src="${esc(v.url)}" alt="" loading="lazy">`}
+    ${marque ? `<span class="com-case-format" aria-hidden="true">${marque}</span>` : ''}
+    <span class="com-case-bas"><i></i>${esc(String(Number(c.date_prevue.slice(8))))}/${esc(c.date_prevue.slice(5, 7))}</span>
+  </button>`;
+};
+
 export function pageCommunication(cle) {
   const hash = `#/${cle}/communication`;
   const cadre = CADRES[cle];
@@ -72,7 +121,9 @@ export function pageCommunication(cle) {
       }
       const coquille = poserEspace(root);
       const auj = new Date();
-      const state = { annee: auj.getFullYear(), mois: auj.getMonth(), reseau: '', statut: '' };
+      // `vue` : 'calendrier' ou 'feed'. L'aperçu du feed n'est proposé que là
+      // où Instagram est un réseau de la structure.
+      const state = { annee: auj.getFullYear(), mois: auj.getMonth(), reseau: '', statut: '', vue: 'calendrier' };
 
       const draw = () => {
         if (!scope.isDirection) {
@@ -138,14 +189,25 @@ export function pageCommunication(cle) {
         const reseaux = RESEAUX_DE[cle];
         const opt = (k, l, cur) => `<option value="${esc(k)}"${cur === k ? ' selected' : ''}>${esc(l)}</option>`;
 
+        // ⚠ L'APERÇU SE CALCULE SUR TOUS LES CONTENUS FILTRÉS, PAS SUR LE MOIS :
+        // un feed ne connaît pas les mois. La navigation mensuelle s'effacerait
+        // donc pour rien sur cette vue — elle laisse la place au compte.
+        const avecInsta = reseaux.includes('instagram');
+        const feed = avecInsta && state.vue === 'feed' ? feedDe(visibles) : null;
+        const bascule = avecInsta ? `<div class="com-vues">
+            <button type="button" data-vue="calendrier" class="${state.vue === 'calendrier' ? 'actif' : ''}">Calendrier</button>
+            <button type="button" data-vue="feed" class="${state.vue === 'feed' ? 'actif' : ''}">${logoReseau('instagram', 15)}Aperçu du feed</button>
+          </div>` : '';
+
         const corps = `
           <section class="com-barre">
-            <div class="com-nav">
+            ${feed ? `<div class="com-nav"><h2 class="com-nav-libre">Aperçu du feed Instagram</h2></div>` : `<div class="com-nav">
               <button type="button" class="btn ghost" data-mois="-1" aria-label="Mois précédent">‹</button>
               <h2>${esc(nomMois(state.annee, state.mois))}</h2>
               <button type="button" class="btn ghost" data-mois="1" aria-label="Mois suivant">›</button>
               <button type="button" class="btn ghost" data-mois="0">Aujourd’hui</button>
-            </div>
+            </div>`}
+            ${bascule}
             <div class="com-filtres">
               <div class="com-rs-filtre">
                 <button type="button" data-reseau="" class="${!state.reseau ? 'actif' : ''}">Tous</button>
@@ -160,11 +222,39 @@ export function pageCommunication(cle) {
 
           <div class="com-legende">
             ${Object.entries(STATUTS).map(([k, v]) => `<span style="--st:${v.couleur}"><i></i>${esc(v.label)}
-              <b>${duMois.filter(c => c.statut === k).length}</b></span>`).join('')}
-            <span class="com-legende-total">${duMois.length} contenu${duMois.length > 1 ? 's' : ''} ce mois-ci</span>
+              <b>${(feed ? feed.places : duMois).filter(c => c.statut === k).length}</b></span>`).join('')}
+            <span class="com-legende-total">${feed
+              ? `${feed.places.length} publication${feed.places.length > 1 ? 's' : ''} dans le feed`
+              : `${duMois.length} contenu${duMois.length > 1 ? 's' : ''} ce mois-ci`}</span>
           </div>
 
-          <div class="com-corps">
+          ${feed ? `<div class="com-corps est-feed">
+            <section class="com-feed">
+              <header class="com-feed-tete">
+                <span class="com-feed-rond">${esc(NOMS[cle].split(' ').map(m => m[0]).join('').slice(0, 2))}</span>
+                <div>
+                  <b>${esc(NOMS[cle])}</b>
+                  <em>${feed.places.length} publication${feed.places.length > 1 ? 's' : ''} — la plus récente en haut à gauche</em>
+                </div>
+              </header>
+              ${feed.places.length
+                ? `<div class="com-feed-grille">${feed.places.map(c => caseFeed(c, ajd)).join('')}</div>`
+                : '<div class="com-vide">Aucune publication Instagram datée avec un visuel : l’aperçu est vide.</div>'}
+              ${'' /* Ce qui n'a pas pu entrer dans la grille, nommé. */}
+              ${[
+                feed.sansVisuel ? `${feed.sansVisuel} contenu${feed.sansVisuel > 1 ? 's' : ''} Instagram sans visuel` : '',
+                feed.sansDate ? `${feed.sansDate} sans date` : '',
+                feed.stories ? `${feed.stories} story${feed.stories > 1 ? 's' : ''} (jamais dans le feed)` : '',
+              ].filter(Boolean).length
+                ? `<p class="com-feed-reste">Hors de l’aperçu : ${[
+                    feed.sansVisuel ? `${feed.sansVisuel} contenu${feed.sansVisuel > 1 ? 's' : ''} sans visuel` : '',
+                    feed.sansDate ? `${feed.sansDate} sans date` : '',
+                    feed.stories ? `${feed.stories} story${feed.stories > 1 ? 's' : ''} — une story ne s’affiche jamais dans le feed` : '',
+                  ].filter(Boolean).join(' · ')}.</p>` : ''}
+              <p class="com-feed-aide">Les publications à venir sont encadrées de la couleur de leur statut : vous voyez le feed
+                tel qu’il <b>sera</b>. Cliquez une vignette pour ouvrir le contenu.</p>
+            </section>
+          </div>` : `<div class="com-corps">
             <section class="com-cal">
               <div class="com-grille">
                 ${JOURS.map(j => `<div class="com-jsem">${j}</div>`).join('')}
@@ -178,7 +268,7 @@ export function pageCommunication(cle) {
               ${sansDate.map(puce).join('') || '<div class="com-vide">Aucune idée en réserve.</div>'}
               <button type="button" class="btn ghost com-idee-plus" data-nouveau="" data-idee="1">+ Noter une idée</button>
             </aside>
-          </div>`;
+          </div>`}`;
 
         root.innerHTML = cadre(hash, 'Calendrier réseaux sociaux', corps);
 
@@ -192,6 +282,7 @@ export function pageCommunication(cle) {
           draw();
         });
         root.querySelectorAll('[data-reseau]').forEach(b => b.onclick = () => { state.reseau = b.dataset.reseau; draw(); });
+        root.querySelectorAll('[data-vue]').forEach(b => b.onclick = () => { state.vue = b.dataset.vue; draw(); });
         root.querySelector('#com-statut').onchange = (e) => { state.statut = e.target.value; draw(); };
         root.querySelectorAll('[data-nouveau]').forEach(b => b.onclick = (e) => {
           e.stopPropagation();

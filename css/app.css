@@ -7245,6 +7245,52 @@ span.rpv-statut { display: inline-block; margin-bottom: 4px; }
 .com-vide { padding: 14px 6px; text-align: center; font-size: 12.5px; color: var(--muted); }
 .com-idee-plus { margin-top: 4px; }
 
+/* ---- L'aperçu du feed Instagram (24/11/2026) ----
+   Trois colonnes de carrés JOINTIFS, le plus récent en haut à gauche : c'est la
+   grille d'Instagram, et ce qu'on vient y juger est la façon dont trois images
+   voisines s'accordent. Deux ou quatre colonnes ne diraient rien du vrai rendu,
+   et un écart entre les cases non plus. La largeur est bornée : étalée sur un
+   grand écran, la grille montrerait des vignettes que le téléphone n'aura
+   jamais. */
+.com-vues { display: flex; gap: 4px; padding: 3px; border: 1px solid var(--line); border-radius: 999px; background: var(--card); }
+.com-vues button { display: inline-flex; align-items: center; gap: 6px; border: 0; background: none; padding: 5px 13px;
+  border-radius: 999px; cursor: pointer; font-family: inherit; font-size: 12.5px; color: var(--muted); }
+.com-vues button.actif { background: var(--accent-ink); color: #fff; }
+/* ⚠ PAS DE `filter: invert()` SUR LE LOGO : celui d'Instagram est un dégradé,
+   et l'inverser le réduisait à un carré blanc plein. Il se lit très bien tel
+   qu'il est sur le fond sombre du bouton actif. */
+/* ⚠ ET `capitalize` NE VAUT QUE POUR LE NOM DU MOIS : sur un vrai titre il
+   donnait « Aperçu Du Feed Instagram ». */
+.com-nav h2.com-nav-libre { text-transform: none; }
+.com-corps.est-feed { grid-template-columns: minmax(0, 1fr); }
+.com-feed { max-width: 640px; margin: 0 auto; padding: 16px; border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--card); box-shadow: var(--shadow); }
+.com-feed-tete { display: flex; align-items: center; gap: 14px; padding-bottom: 14px; margin-bottom: 14px;
+  border-bottom: 1px solid var(--line); }
+.com-feed-rond { flex: none; display: grid; place-items: center; width: 54px; height: 54px; border-radius: 50%;
+  background: linear-gradient(45deg, #F58529, #DD2A7B 50%, #8134AF); color: #fff; font-weight: 700; font-size: 17px; }
+.com-feed-tete b { display: block; font-size: 15px; }
+.com-feed-tete em { display: block; margin-top: 2px; font-size: 12px; font-style: normal; color: var(--muted); }
+.com-feed-grille { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; }
+.com-case { position: relative; aspect-ratio: 1; padding: 0; border: 0; overflow: hidden; cursor: pointer;
+  background: var(--card-2); }
+.com-case img, .com-case video { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* Une publication pas encore en ligne : liseré de la couleur de son statut, et
+   un voile léger pour que l'œil sépare d'un coup le réel du prévu. */
+.com-case.est-a-venir { outline: 2px solid var(--st); outline-offset: -2px; }
+.com-case.est-a-venir img, .com-case.est-a-venir video { opacity: .82; }
+/* La marque du format tombe aussi bien sur un aplat clair que sur une photo :
+   un glyphe blanc seul y disparaissait. Elle porte donc son propre fond. */
+.com-case-format { position: absolute; top: 5px; right: 5px; display: grid; place-items: center;
+  min-width: 19px; height: 19px; padding: 0 4px; border-radius: 5px; font-size: 11px; line-height: 1;
+  color: #fff; background: rgb(15 23 42 / .55); }
+.com-case-bas { position: absolute; left: 0; right: 0; bottom: 0; display: flex; align-items: center; gap: 5px;
+  padding: 4px 6px; font-size: 10.5px; font-weight: 600; color: #fff;
+  background: linear-gradient(transparent, rgb(0 0 0 / .62)); }
+.com-case-bas i { width: 7px; height: 7px; border-radius: 50%; background: var(--st); box-shadow: 0 0 0 1px rgb(255 255 255 / .5); }
+.com-feed-reste { margin: 12px 0 0; font-size: 12.5px; color: var(--muted); }
+.com-feed-aide { margin: 6px 0 0; font-size: 12px; color: var(--muted); }
+
 @media screen and (max-width: 1100px) {
   .com-corps { grid-template-columns: 1fr; }
   .com-idees { position: static; }
