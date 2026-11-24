@@ -524,13 +524,7 @@ export const rentalTodoPage = {
 // universelle. Le plombier d'un immeuble de rapport n'est le partenaire d'aucune
 // structure ; il reste derrière l'accès « gestion locative » (`has_rental()`).
 //
-// ⚠ UN FILTRE PAR CHAMP, dans une barre AU-DESSUS du tableau et pas dans son
-// en-tête : sur téléphone le tableau devient des fiches et l'en-tête disparaît,
-// les filtres seraient partis avec. C'est la demande, mot pour mot. La
-// profession et la ville sont des listes (les valeurs déjà saisies) : on filtre
-// « Plombier » ou « Nice » d'un geste, sans craindre une faute de frappe. Les
-// autres colonnes sont des champs libres qui cherchent « contient », accents et
-// majuscules ignorés. Le champ de recherche du haut cherche dans tout à la fois.
+// ⚠ LES SIX FILTRES ET LEUR PRÉSENTATION : voir l'en-tête de `prosPage` plus bas.
 const aplat = (v) => String(v || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
 const nomPro = (p) => [p.prenom, p.nom].filter(Boolean).join(' ');
 const villePro = (p) => String(p.ville || '').trim();
@@ -769,72 +763,298 @@ export function proForm(existing = null, onSaved, onClose = null) {
   if (!existing) setTimeout(() => $('pf-f-societe')?.focus(), 60);
 }
 
+// ⚠ L'ÉCRAN EST CELUI DE LA SECONDE MAQUETTE VALIDÉE (24/11/2026, Élodie : « juste
+// l'écran professionnels, je voudrais qu'il soit plus moderne et dynamique aussi »,
+// puis « vas-y »). Bandeau à compteurs, métiers en pastilles comptées qui filtrent,
+// une carte par professionnel avec Appeler / Écrire / Copier, filtres fins dans un
+// volet « Affiner », filtres actifs en puces retirables, bascule cartes ↔ tableau.
+//
+// ⚠ LES SIX FILTRES DE LA DEMANDE SONT TOUS LÀ : profession (pastilles), ville
+// (liste), société, nom, téléphone, mail (volet « Affiner »). Ils se combinent.
+//
+// ⚠ L'ÉCRAN NE SE REDESSINE PAS EN ENTIER À CHAQUE FRAPPE. La coquille (bandeau,
+// recherche, volet) est posée une fois ; seuls les pastilles, le résumé et la
+// liste se refont. Sinon le champ en cours de saisie perdrait le curseur, et le
+// volet « Affiner » se refermerait à chaque lettre.
+//
+// ⚠ COMPTE DES PASTILLES = CE QU'ON OBTIENDRAIT EN LA TOUCHANT : chaque nombre
+// applique tous les autres filtres, sauf celui du métier.
+const LPX_CSS = `<style>
+.lpx { display: flex; flex-direction: column; gap: 14px; }
+.lpx svg.i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.lpx-tete { position: relative; overflow: hidden; border-radius: 22px; padding: 20px 22px; border: 1px solid var(--line);
+  background: radial-gradient(90% 160% at 0% 0%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 55%),
+              radial-gradient(70% 140% at 100% 0%, color-mix(in srgb, #F0802C 16%, transparent), transparent 60%), var(--card);
+  display: flex; flex-wrap: wrap; align-items: center; gap: 16px 28px; }
+.lpx-tete h1 { margin: 0; font-size: 23px; font-weight: 800; letter-spacing: -.02em; }
+.lpx-tete p { margin: 4px 0 0; color: var(--muted); }
+.lpx-chiffres { display: flex; gap: 22px; margin-left: auto; }
+.lpx-chiffres b { display: block; font-size: 25px; font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.lpx-chiffres span { font-size: 12px; color: var(--muted); font-weight: 600; }
+.lpx-barre { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.lpx-recherche { position: relative; flex: 1 1 280px; }
+.lpx-recherche svg { position: absolute; left: 14px; top: 12px; color: var(--muted); }
+.lpx-recherche input { width: 100%; box-sizing: border-box; font: inherit; font-size: 15px; color: var(--text); background: var(--card); border: 1.5px solid var(--line); border-radius: 14px; padding: 11px 14px 11px 42px; outline: none; transition: border-color .2s, box-shadow .2s; }
+.lpx-recherche input:focus { border-color: var(--accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 15%, transparent); }
+.lpx-ville { font: inherit; font-size: 14px; font-weight: 600; color: var(--text); background: var(--card); border: 1.5px solid var(--line); border-radius: 14px; padding: 10px 12px; }
+.lpx-vues { display: inline-flex; padding: 3px; border-radius: 12px; background: var(--card); border: 1.5px solid var(--line); }
+.lpx-vues button { border: 0; background: transparent; color: var(--muted); padding: 7px 9px; border-radius: 9px; cursor: pointer; display: grid; place-items: center; }
+.lpx-vues button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
+.lpx-metiers { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 6px; scrollbar-width: thin; }
+.lpx-metier { flex: none; display: inline-flex; align-items: center; gap: 7px; padding: 7px 11px 7px 9px; border-radius: 999px; border: 1.5px solid var(--line); background: var(--card);
+  color: var(--text); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; transition: all .2s; }
+.lpx-metier svg { width: 16px; height: 16px; stroke: var(--lpx-t, var(--muted)); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.lpx-metier .n { min-width: 20px; padding: 1px 6px; border-radius: 999px; background: var(--card-2); color: var(--muted); font-size: 11px; font-weight: 800; font-variant-numeric: tabular-nums; text-align: center; }
+.lpx-metier:hover { transform: translateY(-1px); }
+.lpx-metier[aria-pressed="true"] { background: var(--lpx-t, var(--accent)); border-color: var(--lpx-t, var(--accent)); color: #fff; box-shadow: 0 8px 18px -10px var(--lpx-t, var(--accent)); }
+.lpx-metier[aria-pressed="true"] .n { background: rgba(255,255,255,.25); color: #fff; }
+.lpx-metier[aria-pressed="true"] svg { stroke: #fff; }
+.lpx-affiner { border: 1px solid var(--line); border-radius: 16px; background: var(--card); }
+.lpx-affiner summary { list-style: none; cursor: pointer; padding: 10px 14px; display: flex; align-items: center; gap: 8px; font-weight: 700; color: var(--muted); font-size: 13px; }
+.lpx-affiner summary::-webkit-details-marker { display: none; }
+.lpx-affiner summary .actifs { margin-left: auto; color: var(--accent); }
+.lpx-affiner[open] summary { border-bottom: 1px solid var(--line); }
+.lpx-fins { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; padding: 12px 14px 14px; }
+.lpx-fins label { display: flex; flex-direction: column; gap: 5px; font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.lpx-fins input { font: inherit; font-size: 14px; font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--text); background: var(--card-2); border: 1.5px solid var(--line); border-radius: 11px; padding: 9px 11px; outline: none; }
+.lpx-fins input:focus { border-color: var(--accent); background: var(--card); }
+.lpx-resume { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; min-height: 28px; }
+.lpx-resume b { color: var(--text); font-variant-numeric: tabular-nums; }
+.lpx-puce { display: inline-flex; align-items: center; gap: 6px; padding: 4px 6px 4px 11px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-weight: 700; font-size: 12px; }
+.lpx-puce button { border: 0; background: transparent; color: inherit; cursor: pointer; font-size: 14px; line-height: 1; padding: 0 3px; }
+.lpx-raz { border: 0; background: none; color: var(--accent); font: inherit; font-weight: 700; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.lpx-grille { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 14px; }
+.lpx-fiche { position: relative; display: flex; flex-direction: column; gap: 12px; padding: 16px; border-radius: 18px; background: var(--card); border: 1px solid var(--line); cursor: pointer;
+  transition: transform .25s cubic-bezier(.2,.8,.2,1), box-shadow .25s, border-color .25s; animation: lpxEntre .45s both cubic-bezier(.2,.8,.2,1); animation-delay: calc(min(var(--i), 12) * 40ms); }
+.lpx-fiche:hover { transform: translateY(-3px); box-shadow: 0 24px 48px -34px rgba(40,30,110,.5); border-color: color-mix(in srgb, var(--lpx-t) 40%, var(--line)); }
+@keyframes lpxEntre { from { opacity: 0; transform: translateY(10px) scale(.98); } }
+.lpx-fiche::before { content: ""; position: absolute; left: 16px; right: 16px; top: 0; height: 3px; border-radius: 0 0 4px 4px; background: var(--lpx-t); opacity: .85; }
+.lpx-haut { display: flex; align-items: center; gap: 12px; }
+.lpx-avatar { flex: none; width: 44px; height: 44px; border-radius: 13px; display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 15px;
+  background: linear-gradient(135deg, var(--lpx-t), color-mix(in srgb, var(--lpx-t) 55%, #F0802C)); }
+.lpx-qui { min-width: 0; flex: 1; }
+.lpx-qui b { display: block; font-size: 15px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lpx-qui span { display: block; color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-height: 1.2em; }
+.lpx-pill { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px 3px 7px; border-radius: 999px; font-size: 11.5px; font-weight: 700;
+  color: var(--lpx-t); background: color-mix(in srgb, var(--lpx-t) 12%, transparent); white-space: nowrap; }
+.lpx-pill svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.lpx-infos { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); }
+.lpx-infos div { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.lpx-infos div span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+.lpx-infos .manque { color: var(--muted); font-style: italic; }
+.lpx-infos svg.i { width: 15px; height: 15px; color: var(--muted); }
+.lpx-gestes { display: flex; gap: 8px; margin-top: auto; }
+.lpx-geste { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 8px; border-radius: 11px; border: 1.5px solid var(--line);
+  background: var(--card-2); color: var(--text); font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; text-decoration: none; transition: all .2s; }
+.lpx-geste:hover { border-color: var(--lpx-t); color: var(--lpx-t); }
+.lpx-geste[aria-disabled="true"] { opacity: .4; pointer-events: none; }
+.lpx-geste svg.i { width: 15px; height: 15px; }
+.lpx-geste.copie { flex: none; }
+.lpx-geste.copie.fait { color: var(--green); border-color: var(--green); background: var(--green-soft); }
+.lpx-tableau { background: var(--card); border: 1px solid var(--line); border-radius: 18px; overflow-x: auto; }
+.lpx-tableau table { width: 100%; border-collapse: collapse; min-width: 760px; }
+.lpx-tableau th { text-align: left; font-size: 11px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); padding: 13px 16px; border-bottom: 1px solid var(--line); }
+.lpx-tableau td { padding: 11px 16px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.lpx-tableau tbody tr { cursor: pointer; transition: background .15s; }
+.lpx-tableau tbody tr:hover { background: var(--card-2); }
+.lpx-tableau tbody tr:last-child td { border-bottom: 0; }
+.lpx-mini { display: flex; align-items: center; gap: 10px; font-weight: 700; }
+.lpx-mini .lpx-avatar { width: 32px; height: 32px; border-radius: 9px; font-size: 12px; }
+.lpx-vide { padding: 44px 20px; text-align: center; color: var(--muted); background: var(--card); border: 1.5px dashed var(--line); border-radius: 18px; }
+.lpx-vide b { display: block; color: var(--text); font-size: 15px; margin-bottom: 4px; }
+.lpx :is(button, a, summary, [tabindex]):focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 2px; }
+@media (max-width: 560px) { .lpx-chiffres { margin-left: 0; } .lpx-tete h1 { font-size: 20px; } }
+@media (prefers-reduced-motion: reduce) { .lpx *, .lpx *::before { animation: none !important; transition: none !important; } }
+</style>`;
+
+const LPX_ICO = {
+  loupe: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  cartes: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+  lignes: '<path d="M3 6h18M3 12h18M3 18h18"/>',
+  export: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>',
+  filtre: '<path d="M4 6h16M7 12h10M10 18h4"/>',
+  ville: '<path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/>',
+  tel: '<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/>',
+  mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>',
+  copie: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>',
+};
+const lpxSvg = (d, c = 'i') => `<svg class="${c}" viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`;
+const metierDe = (p) => METIERS.find(([x]) => aplat(x) === aplat(p.profession)) || AUTRE;
+const VUE_CLE = 'crm_locatif_pros_vue';
+const lireVue = () => { try { return localStorage.getItem(VUE_CLE) === 'tableau' ? 'tableau' : 'cartes'; } catch { return 'cartes'; } };
+
 export const prosPage = {
   title: () => 'Professionnels',
   render(root) {
     if (!scope.canRental) return denied(root);
-    const state = { q: '', focus: null, f: { societe: '', nom: '', profession: '', ville: '', telephone: '', email: '' } };
-    const draw = () => {
-      const tous = db.t('locatif_pros');
-      const qt = terms(state.q);
-      const f = state.f;
-      const chiffres = (v) => String(v || '').replace(/\D/g, '').replace(/^33/, '0');
-      const list = tous.filter(p =>
-        hit([p.societe, nomPro(p), p.profession, p.ville, p.telephone, p.email, p.notes], qt)
-        && (!f.societe || aplat(p.societe).includes(aplat(f.societe)))
-        && (!f.nom || aplat(nomPro(p)).includes(aplat(f.nom)))
-        && (!f.profession || p.profession === f.profession)
-        && (!f.ville || aplat(villePro(p)) === aplat(f.ville))
-        && (!f.telephone || chiffres(p.telephone).includes(chiffres(f.telephone)) || String(p.telephone || '').includes(f.telephone))
-        && (!f.email || aplat(p.email).includes(aplat(f.email))))
-        .sort((a, b) => String(a.profession || '~').localeCompare(String(b.profession || '~'), 'fr')
-          || String(a.societe || nomPro(a)).localeCompare(String(b.societe || nomPro(b)), 'fr'));
-      const valeurs = (fn) => [...new Map(tous.map(fn).filter(Boolean).map(v => [aplat(v), v])).values()].sort((a, b) => a.localeCompare(b, 'fr'));
-      const professions = valeurs(p => p.profession);
-      const villes = valeurs(villePro);
-      const actifs = Object.values(f).filter(Boolean).length;
-      const champ = (k, ph) => `<input type="search" style="width:100%;min-width:86px;box-sizing:border-box;font:inherit;font-size:12px;font-weight:500;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--card)" data-filtre="${k}" value="${esc(f[k])}" placeholder="${esc(ph)}" aria-label="Filtrer : ${esc(ph)}">`;
-      const liste = (k, opts, tout) => `<select style="width:100%;min-width:86px;box-sizing:border-box;font:inherit;font-size:12px;font-weight:500;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--card)" data-filtre="${k}" aria-label="Filtrer : ${esc(tout)}"><option value="">${esc(tout)}</option>${opts.map(o => `<option ${aplat(o) === aplat(f[k]) ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`;
-      const tel = (t) => t ? `<a href="tel:${esc(String(t).replace(/[^\d+]/g, ''))}">${esc(t)}</a>` : '<span class="muted">—</span>';
-      const mail = (m) => m ? `<a href="mailto:${esc(m)}">${esc(m)}</a>` : '<span class="muted">—</span>';
-      root.innerHTML = `
-        <div class="toolbar">${searchInput('lp-q', state, 'Rechercher dans toute la base…')}
-          <span class="muted small grow">${list.length} professionnel${list.length > 1 ? 's' : ''}${list.length !== tous.length ? ` sur ${tous.length}` : ''}</span>
-          ${actifs ? '<button class="btn ghost sm" id="lp-raz">Effacer les filtres</button>' : ''}
-          <button class="btn ghost sm" id="lp-export">Export CSV</button>
-          <button class="btn" id="lp-new">+ Professionnel</button></div>
-        <div class="lp-filtres" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px 10px;margin:0 0 14px">
-          ${[['Société', champ('societe', 'Nom de la société')], ['Nom et prénom', champ('nom', 'Nom ou prénom')],
-             ['Profession', liste('profession', professions, 'Toutes')], ['Ville', liste('ville', villes, 'Toutes')],
-             ['Téléphone', champ('telephone', 'Numéro')], ['Mail', champ('email', 'Adresse mail')]]
-            .map(([l, c]) => `<label style="display:flex;flex-direction:column;gap:4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)">${l}${c}</label>`).join('')}
+    const etat = { metier: '', ville: '', q: '', societe: '', nom: '', tel: '', mail: '', vue: lireVue() };
+    const chiffres = (v) => String(v || '').replace(/\D/g, '').replace(/^33/, '0');
+    // Les initiales ne prennent que des mots qui commencent par une lettre ou un
+    // chiffre : « Pose & Co » donne « PC », pas « P& ».
+    const ini = (p) => (p.societe || nomPro(p)).split(/\s+/).filter(w => /^[\p{L}\p{N}]/u.test(w)).slice(0, 2).map(x => x[0].toUpperCase()).join('');
+    const tous = () => db.t('locatif_pros');
+    const filtrer = (sauf) => tous().filter(p => {
+      const blob = aplat([p.societe, nomPro(p), p.profession, p.ville, p.telephone, p.email, p.notes].join(' '));
+      const mots = aplat(etat.q).split(/\s+/).filter(Boolean);
+      return mots.every(t => blob.includes(t) || (chiffres(t).length >= 2 && chiffres(p.telephone).includes(chiffres(t))))
+        && (sauf === 'metier' || !etat.metier || aplat(p.profession) === aplat(etat.metier))
+        && (!etat.ville || aplat(villePro(p)) === aplat(etat.ville))
+        && (!etat.societe || aplat(p.societe).includes(aplat(etat.societe)))
+        && (!etat.nom || aplat(nomPro(p)).includes(aplat(etat.nom)))
+        && (!etat.tel || chiffres(p.telephone).includes(chiffres(etat.tel)) || String(p.telephone || '').includes(etat.tel))
+        && (!etat.mail || aplat(p.email).includes(aplat(etat.mail)));
+    });
+    const valeurs = (fn) => [...new Map(tous().map(fn).filter(Boolean).map(v => [aplat(v), v])).values()].sort((a, b) => a.localeCompare(b, 'fr'));
+
+    // ---- la coquille, posée une fois
+    root.innerHTML = `${LPX_CSS}<div class="lpx">
+      <header class="lpx-tete">
+        <div><h1>Professionnels</h1><p>Artisans, syndics, notaires et assureurs des immeubles.</p></div>
+        <div class="lpx-chiffres">
+          <div><b id="lpx-k-total">0</b><span>professionnels</span></div>
+          <div><b id="lpx-k-metiers">0</b><span>métiers</span></div>
+          <div><b id="lpx-k-villes">0</b><span>villes</span></div>
         </div>
-        <div class="card"><div class="table-wrap"><table class="lp-table"><thead>
-          <tr><th>Société</th><th>Nom et prénom</th><th>Profession</th><th>Ville</th><th>Téléphone</th><th>Mail</th></tr>
-        </thead><tbody>
-          ${list.map(p => `<tr class="click" data-pro="${p.id}"><td><b>${esc(p.societe || '')}</b></td><td>${esc(nomPro(p))}</td><td>${p.profession ? `<span class="pill">${esc(p.profession)}</span>` : ''}</td><td>${esc(villePro(p))}</td><td class="nowrap">${tel(p.telephone)}</td><td>${mail(p.email)}</td></tr>`).join('')
-            || `<tr><td colspan="6" class="empty">${tous.length ? 'Aucun professionnel ne correspond à ces filtres' : 'Aucun professionnel pour l’instant — « + Professionnel » pour en ajouter un'}</td></tr>`}
-        </tbody></table></div><p class="muted small">Cliquer sur une ligne pour modifier ou supprimer la fiche.</p></div>`;
-      bindSearch(root, 'lp-q', state, draw);
-      restoreFocus(root, state);
-      root.querySelectorAll('[data-filtre]').forEach(el => {
-        const k = el.dataset.filtre;
-        if (el.tagName === 'SELECT') el.onchange = () => { f[k] = el.value; draw(); };
-        else el.oninput = () => {
-          f[k] = el.value;
-          const pos = el.selectionStart;
-          draw();
-          const neuf = root.querySelector(`[data-filtre="${k}"]`);
-          if (neuf) { neuf.focus(); try { neuf.setSelectionRange(pos, pos); } catch { /* type search */ } }
-        };
-      });
-      root.querySelector('#lp-raz')?.addEventListener('click', () => { Object.keys(f).forEach(k => { f[k] = ''; }); draw(); });
-      root.querySelector('#lp-new').onclick = () => proForm(null, draw);
-      root.querySelectorAll('[data-pro]').forEach(tr => tr.onclick = e => { if (e.target.closest('a')) return; proForm(db.byId('locatif_pros', tr.dataset.pro), draw); });
-      root.querySelector('#lp-export').onclick = () => csvDownload('professionnels.csv', list.map(p => ({ societe: p.societe, nom: p.nom, prenom: p.prenom, profession: p.profession, ville: p.ville, telephone: p.telephone, email: p.email, notes: p.notes })));
+        <button class="btn" type="button" id="lpx-new">${lpxSvg(LPX_ICO.plus)} Professionnel</button>
+      </header>
+      <div class="lpx-barre">
+        <div class="lpx-recherche">${lpxSvg(LPX_ICO.loupe)}<input id="lpx-q" type="search" placeholder="Rechercher un nom, une société, un numéro…" aria-label="Rechercher dans toute la base" autocomplete="off"></div>
+        <select class="lpx-ville" id="lpx-ville" aria-label="Filtrer par ville"></select>
+        <div class="lpx-vues" role="group" aria-label="Affichage">
+          <button type="button" id="lpx-v-cartes" title="Cartes" aria-label="Affichage en cartes">${lpxSvg(LPX_ICO.cartes)}</button>
+          <button type="button" id="lpx-v-tableau" title="Tableau" aria-label="Affichage en tableau">${lpxSvg(LPX_ICO.lignes)}</button>
+        </div>
+        <button class="btn ghost" type="button" id="lpx-export">${lpxSvg(LPX_ICO.export)} Export CSV</button>
+      </div>
+      <div class="lpx-metiers" id="lpx-metiers" role="group" aria-label="Filtrer par métier"></div>
+      <details class="lpx-affiner" id="lpx-affiner">
+        <summary>${lpxSvg(LPX_ICO.filtre)}Affiner par société, nom, téléphone ou mail<span class="actifs" id="lpx-actifs"></span></summary>
+        <div class="lpx-fins">
+          <label>Société<input id="lpx-f-societe" placeholder="Nom de la société" autocomplete="off"></label>
+          <label>Nom et prénom<input id="lpx-f-nom" placeholder="Nom ou prénom" autocomplete="off"></label>
+          <label>Téléphone<input id="lpx-f-tel" placeholder="Numéro" inputmode="tel" autocomplete="off"></label>
+          <label>Mail<input id="lpx-f-mail" placeholder="Adresse mail" autocomplete="off"></label>
+        </div>
+      </details>
+      <div class="lpx-resume" id="lpx-resume" aria-live="polite"></div>
+      <div id="lpx-liste"></div>
+    </div>`;
+    const $ = (id) => root.querySelector('#' + id);
+    const CHAMPS = { q: 'lpx-q', ville: 'lpx-ville', societe: 'lpx-f-societe', nom: 'lpx-f-nom', tel: 'lpx-f-tel', mail: 'lpx-f-mail' };
+
+    const dessinerMetiers = () => {
+      const base = filtrer('metier');
+      const metiers = valeurs(p => p.profession);
+      const n = (m) => base.filter(p => aplat(p.profession) === aplat(m)).length;
+      $('lpx-metiers').innerHTML = `<button type="button" class="lpx-metier" aria-pressed="${!etat.metier}" data-m="">Tous <span class="n">${base.length}</span></button>`
+        + metiers.map(m => { const [, t, d] = metierDe({ profession: m });
+          return `<button type="button" class="lpx-metier" style="--lpx-t:${t}" aria-pressed="${aplat(etat.metier) === aplat(m)}" data-m="${esc(m)}">${lpxSvg(d, '')}${esc(m)} <span class="n">${n(m)}</span></button>`; }).join('');
+      $('lpx-metiers').hidden = !metiers.length;
     };
-    draw();
-    return { refresh: draw };
+    const dessinerVilles = () => {
+      const v = valeurs(villePro);
+      if (etat.ville && !v.some(x => aplat(x) === aplat(etat.ville))) etat.ville = '';
+      $('lpx-ville').innerHTML = '<option value="">Toutes les villes</option>' + v.map(x => `<option ${aplat(x) === aplat(etat.ville) ? 'selected' : ''}>${esc(x)}</option>`).join('');
+    };
+    const dessinerChiffres = (anime) => {
+      const l = tous();
+      const cibles = { 'lpx-k-total': l.length, 'lpx-k-metiers': valeurs(p => p.profession).length, 'lpx-k-villes': valeurs(villePro).length };
+      const poser = (k) => Object.entries(cibles).forEach(([id, v]) => { const el = $(id); if (el) el.textContent = Math.round(v * k); });
+      if (!anime || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) { poser(1); return; }
+      const t0 = performance.now();
+      const pas = (t) => { const k = Math.min(1, (t - t0) / 900); poser(1 - Math.pow(1 - k, 3)); if (k < 1) requestAnimationFrame(pas); };
+      requestAnimationFrame(pas);
+    };
+    const dessinerListe = () => {
+      const tot = tous().length;
+      const l = filtrer().sort((a, b) => String(a.profession || '~').localeCompare(String(b.profession || '~'), 'fr')
+        || String(a.societe || nomPro(a)).localeCompare(String(b.societe || nomPro(b)), 'fr'));
+      const puces = [];
+      if (etat.metier) puces.push(['metier', etat.metier]);
+      if (etat.ville) puces.push(['ville', etat.ville]);
+      [['societe', 'Société'], ['nom', 'Nom'], ['tel', 'Tél.'], ['mail', 'Mail']].forEach(([k, lab]) => { if (etat[k]) puces.push([k, `${lab} : ${etat[k]}`]); });
+      if (etat.q) puces.push(['q', `« ${etat.q} »`]);
+      const fins = ['societe', 'nom', 'tel', 'mail'].filter(k => etat[k]).length;
+      $('lpx-actifs').textContent = fins ? `${fins} filtre${fins > 1 ? 's' : ''} actif${fins > 1 ? 's' : ''}` : '';
+      $('lpx-resume').innerHTML = `<span><b>${l.length}</b> professionnel${l.length > 1 ? 's' : ''}${l.length !== tot ? ` sur ${tot}` : ''}</span>`
+        + puces.map(([k, t]) => `<span class="lpx-puce">${esc(t)}<button type="button" data-ote="${k}" aria-label="Retirer ce filtre">×</button></span>`).join('')
+        + (puces.length > 1 ? '<button type="button" class="lpx-raz" data-ote="*">Tout effacer</button>' : '');
+      $('lpx-v-cartes').setAttribute('aria-pressed', String(etat.vue === 'cartes'));
+      $('lpx-v-tableau').setAttribute('aria-pressed', String(etat.vue === 'tableau'));
+      const tel = (t) => String(t || '').replace(/[^\d+]/g, '');
+      if (!l.length) {
+        $('lpx-liste').innerHTML = tot
+          ? '<div class="lpx-vide"><b>Aucun professionnel ne correspond</b>Retirez un filtre, ou ajoutez ce professionnel avec « + Professionnel ».</div>'
+          : '<div class="lpx-vide"><b>La base est vide</b>« + Professionnel » ajoute le premier : plombier, syndic, notaire…</div>';
+      } else if (etat.vue === 'cartes') {
+        $('lpx-liste').innerHTML = `<div class="lpx-grille">${l.map((p, i) => { const [, t, d] = metierDe(p); return `
+          <article class="lpx-fiche" tabindex="0" data-pro="${p.id}" style="--lpx-t:${t};--i:${i}" aria-label="${esc(p.societe || nomPro(p))}">
+            <div class="lpx-haut"><div class="lpx-avatar" aria-hidden="true">${esc(ini(p))}</div>
+              <div class="lpx-qui"><b>${esc(p.societe || nomPro(p))}</b><span>${p.societe ? esc(nomPro(p)) : ''}</span></div>
+              ${p.profession ? `<span class="lpx-pill">${lpxSvg(d, '')}${esc(p.profession)}</span>` : ''}</div>
+            <div class="lpx-infos">
+              <div>${lpxSvg(LPX_ICO.ville)}${villePro(p) ? `<span>${esc(villePro(p))}</span>` : '<span class="manque">ville non renseignée</span>'}</div>
+              <div>${lpxSvg(LPX_ICO.tel)}${p.telephone ? `<span>${esc(p.telephone)}</span>` : '<span class="manque">pas de téléphone</span>'}</div>
+              <div>${lpxSvg(LPX_ICO.mail)}${p.email ? `<span>${esc(p.email)}</span>` : '<span class="manque">pas de mail</span>'}</div>
+            </div>
+            <div class="lpx-gestes">
+              <a class="lpx-geste" href="tel:${esc(tel(p.telephone))}" ${p.telephone ? '' : 'aria-disabled="true" tabindex="-1"'}>${lpxSvg(LPX_ICO.tel)}Appeler</a>
+              <a class="lpx-geste" href="mailto:${esc(p.email || '')}" ${p.email ? '' : 'aria-disabled="true" tabindex="-1"'}>${lpxSvg(LPX_ICO.mail)}Écrire</a>
+              <button type="button" class="lpx-geste copie" data-copie="${esc(p.telephone || '')}" ${p.telephone ? '' : 'aria-disabled="true" tabindex="-1"'} title="Copier le numéro" aria-label="Copier le numéro">${lpxSvg(LPX_ICO.copie)}</button>
+            </div>
+          </article>`; }).join('')}</div>`;
+      } else {
+        $('lpx-liste').innerHTML = `<div class="lpx-tableau"><table><thead><tr><th>Société</th><th>Nom et prénom</th><th>Profession</th><th>Ville</th><th>Téléphone</th><th>Mail</th></tr></thead><tbody>
+          ${l.map(p => { const [, t, d] = metierDe(p); return `<tr data-pro="${p.id}" style="--lpx-t:${t}" tabindex="0">
+            <td><span class="lpx-mini"><span class="lpx-avatar" aria-hidden="true">${esc(ini(p))}</span>${esc(p.societe || '—')}</span></td>
+            <td>${esc(nomPro(p))}</td><td>${p.profession ? `<span class="lpx-pill">${lpxSvg(d, '')}${esc(p.profession)}</span>` : ''}</td>
+            <td>${esc(villePro(p))}</td>
+            <td style="white-space:nowrap">${p.telephone ? `<a href="tel:${esc(tel(p.telephone))}">${esc(p.telephone)}</a>` : '<span class="muted">—</span>'}</td>
+            <td>${p.email ? `<a href="mailto:${esc(p.email)}">${esc(p.email)}</a>` : '<span class="muted">—</span>'}</td></tr>`; }).join('')}
+        </tbody></table></div>`;
+      }
+    };
+    const draw = (anime = false) => { dessinerVilles(); dessinerMetiers(); dessinerListe(); dessinerChiffres(anime); };
+    const vider = (k) => { etat[k] = ''; if (CHAMPS[k] && $(CHAMPS[k])) $(CHAMPS[k]).value = ''; };
+    const ouvrir = (id) => proForm(db.byId('locatif_pros', id), () => draw());
+
+    $('lpx-metiers').addEventListener('click', (e) => {
+      const b = e.target.closest('.lpx-metier'); if (!b) return;
+      etat.metier = aplat(etat.metier) === aplat(b.dataset.m) ? '' : b.dataset.m;
+      dessinerMetiers(); dessinerListe();
+    });
+    $('lpx-ville').addEventListener('change', (e) => { etat.ville = e.target.value; dessinerMetiers(); dessinerListe(); });
+    Object.entries(CHAMPS).filter(([k]) => k !== 'ville').forEach(([k, id]) =>
+      $(id).addEventListener('input', (e) => { etat[k] = e.target.value.trim(); dessinerMetiers(); dessinerListe(); }));
+    $('lpx-resume').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-ote]'); if (!b) return;
+      if (b.dataset.ote === '*') ['metier', 'ville', 'q', 'societe', 'nom', 'tel', 'mail'].forEach(vider); else vider(b.dataset.ote);
+      draw();
+    });
+    const changerVue = (v) => { etat.vue = v; try { localStorage.setItem(VUE_CLE, v); } catch { /* préférence perdue, sans gravité */ } dessinerListe(); };
+    $('lpx-v-cartes').onclick = () => changerVue('cartes');
+    $('lpx-v-tableau').onclick = () => changerVue('tableau');
+    $('lpx-new').onclick = () => proForm(null, () => draw());
+    $('lpx-export').onclick = () => csvDownload('professionnels.csv', filtrer().map(p => ({ societe: p.societe, nom: p.nom, prenom: p.prenom, profession: p.profession, ville: p.ville, telephone: p.telephone, email: p.email, notes: p.notes })));
+    $('lpx-liste').addEventListener('click', async (e) => {
+      const c = e.target.closest('[data-copie]');
+      if (c) {
+        e.stopPropagation();
+        try { await navigator.clipboard.writeText(c.dataset.copie); c.classList.add('fait'); setTimeout(() => c.classList.remove('fait'), 1400); toast('Numéro copié : ' + c.dataset.copie); }
+        catch { toast('Copie impossible : sélectionnez le numéro sur la carte', 'warn'); }
+        return;
+      }
+      if (e.target.closest('a')) return;
+      const f = e.target.closest('[data-pro]'); if (f) ouvrir(f.dataset.pro);
+    });
+    $('lpx-liste').addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      const f = e.target.closest('[data-pro]'); if (!f || e.target !== f) return;
+      e.preventDefault(); ouvrir(f.dataset.pro);
+    });
+    draw(true);
+    return { refresh: () => draw() };
   },
 };
 
