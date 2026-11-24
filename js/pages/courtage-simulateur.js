@@ -261,6 +261,7 @@ export function blocSimulateurFiche(d, { toujours = false, contact = null } = {}
     <section class="rgdf-bloc cts-fiche lrc-partie ${F ? F.classe : ''}">
       <h3>${n(1)}Le projet <span class="cts-source">via le simulateur</span></h3>
       ${alerteNomDiverge(d, contact)}
+      ${blocMessage(d)}
       <div class="cts-lignes">${lignesProjet(f).map(([k, x]) => ligne(k, x)).join('')}</div>
       ${puces('Ce qui bloque', liste(f.blocages), 'est-bloque')}
       ${puces('Les leviers', liste(f.leviers), 'est-levier')}
@@ -356,6 +357,38 @@ export function carteSimulation(d, contact) {
 // pour qu'on retrouve sur la fiche ce qu'on y a saisi, au même endroit.
 // ⚠ C'EST LA FICHE DU DOSSIER QUI S'OUVRE DES DEUX CÔTÉS (18/11/2026) : la
 // pipeline et la base de données montrent donc exactement ce bloc.
+// ---------- Ce que le prospect a écrit de sa main (24/11/2026) ----------
+// Élodie : « lorsqu'une personne prend rdv sur le site elle peut laisser un
+// message avant de confirmer son rdv, je voudrais retrouver ces informations
+// sur la fiche prospect ».
+//
+// ⚠ IL ÉTAIT DÉJÀ EN BASE, ET AFFICHÉ NULLE PART. `rdv-courtage` l'envoie,
+// `intake_lead_v2` l'écrit dans `deals.fields.message` (hors liste blanche,
+// donc il passe), et aucun écran ne le lisait : mesuré sur la demande
+// d'Alexiane Delaye, 1 081 caractères invisibles. Seule une requête SQL
+// pouvait les relire.
+//
+// ⚠ ET IL PASSE AVANT LES LIGNES, PAS APRÈS. Le cas qui tranche est justement
+// celui-là : la fiche affichait « Financement professionnel · 550 000 € » et
+// le message commençait par « je recherche un courtier pour structurer le
+// financement d'une reprise d'entreprise (ET NON un projet immobilier) ».
+// Quand les deux se contredisent, c'est la phrase du prospect qui a raison —
+// elle doit donc se lire en premier.
+//
+// ⚠ NI COUPÉ NI REPLIÉ : ces messages font mille caractères et chaque phrase y
+// porte une contrainte (apport, calendrier, banque déjà vue). Un « lire la
+// suite » serait un message à moitié livré.
+const blocMessage = (d) => {
+  const m = String((d.fields || {}).message || '').trim();
+  if (!m) return '';
+  const d_ou = d.channel === 'Rendez-vous en ligne' ? 'écrit en prenant son rendez-vous'
+    : d.channel ? `reçu par ${d.channel.toLowerCase()}` : 'reçu depuis le site';
+  return `<div class="cts-message">
+    <h4>Son message <em>${esc(d_ou)}</em></h4>
+    <p>${esc(m)}</p>
+  </div>`;
+};
+
 export function blocProjetSaisi(d, { simulation = false, toujours = false } = {}) {
   if (!d || d.activity !== 'courtage') return '';
   const f = d.fields || {};
@@ -374,14 +407,19 @@ export function blocProjetSaisi(d, { simulation = false, toujours = false } = {}
   const calc = simulation ? [] : calculsDe(f).map(([k, v]) => [k, v, k === 'Taux d’endettement' ? ton : '']);
   // `toujours` : la fiche en quatre parties montre « Le projet » et « Les
   // chiffres » même vides, avec une invitation à compléter (18/11/2026).
-  if (!toujours && !lignes.length && !montants.length && !calc.length) return '';
+  const message = blocMessage(d);
+  // ⚠ UN MESSAGE SEUL SUFFIT À OUVRIR LA FICHE : sans lui dans ce test, une
+  // demande qui n'apporte qu'un texte (et aucun champ reconnu) ne montrait
+  // rien du tout.
+  if (!toujours && !message && !lignes.length && !montants.length && !calc.length) return '';
   const num = (n) => (toujours ? `<span class="lrc-num-partie">${n}</span>` : '');
   const vide = '<p class="rgdf-rien lrc-a-completer">À compléter avec « Modifier ».</p>';
   const rang = ([k, v]) => `<div class="cts-ligne"><span>${esc(k)}</span><b>${esc(v)}</b></div>`;
   return `
-    ${lignes.length || toujours ? `<section class="rgdf-bloc cts-fiche lrc-partie">
+    ${lignes.length || message || toujours ? `<section class="rgdf-bloc cts-fiche lrc-partie">
       <h3>${num(1)}Le projet</h3>
-      ${lignes.length ? `<div class="cts-lignes">${lignes.map(rang).join('')}</div>` : vide}
+      ${message}
+      ${lignes.length ? `<div class="cts-lignes">${lignes.map(rang).join('')}</div>` : (message ? '' : vide)}
     </section>` : ''}
     ${montants.length || calc.length || toujours ? `<section class="rgdf-bloc cts-fiche lrc-partie">
       <h3>${num(2)}Les chiffres</h3>

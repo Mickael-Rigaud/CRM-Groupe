@@ -9933,6 +9933,18 @@ td .pl-toque { color: #4f46e5; }
 .cts-puces ul { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.5; }
 .cts-puces.est-bloque li::marker { color: var(--ct-rouge, #E5484D); }
 .cts-puces.est-levier li::marker { color: var(--ct-vert, #12A26B); }
+/* Ce que le prospect a écrit de sa main (24/11/2026). Il passe AVANT les
+   lignes du projet : quand son texte contredit les champs — « et non un projet
+   immobilier » sous un budget de 550 000 € — c'est sa phrase qui a raison.
+   ⚠ `pre-wrap` ET PAS AUTRE CHOSE : ces messages sont écrits en paragraphes,
+   et tout recoller en un bloc rendait illisible ce qu'on vient y lire. */
+.cts-message { margin-bottom: 10px; padding: 11px 13px; border-radius: 11px;
+  border-left: 3px solid var(--accent); background: var(--accent-soft); }
+.cts-message h4 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; margin: 0 0 6px;
+  font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+.cts-message h4 em { font-size: 11px; font-weight: 500; font-style: normal;
+  letter-spacing: 0; text-transform: none; }
+.cts-message p { margin: 0; font-size: 13.5px; line-height: 1.55; white-space: pre-wrap; color: var(--text); }
 .cts-lignes { display: grid; gap: 1px; border-radius: 11px; overflow: hidden; background: var(--line); }
 .cts-ligne { display: flex; gap: 12px; justify-content: space-between; padding: 7px 11px; background: var(--card); font-size: 13px; }
 .cts-ligne span { color: var(--muted); }
