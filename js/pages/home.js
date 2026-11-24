@@ -730,7 +730,6 @@ function carteObjectifs(cles, deals, grand = false) {
     blocs.push(blocObjectif(mesurables, 'var(--accent)', deals, '<span class="ob-groupe">Groupe</span>', '', grand));
   }
   return `<section class="card">${entete}<div class="ob-liste"${grand ? ' style="flex:1 1 auto"' : ''}>${blocs.join('')}</div>
-    <p class="muted small tb-legend"><i></i> Le trait sépare ce qui est acquis de ce qui reste à faire.</p>
     ${/* ⚠ LE RETRAIT SE DIT, IL NE SE DEVINE PAS. Sans cette phrase, quelqu'un
           qui additionne les objectifs affichés ne retombe pas sur le total et
           croit à une erreur de saisie. Elle n'apparaît que s'il reste quelque
@@ -873,10 +872,12 @@ function jaugeObjectif(libelle, realise, vise, r, unite, partForcee = null) {
            selon le temps écoulé de l'exercice — un prorata linéaire, la même
            règle de trois que le verdict « en retard sur le rythme » retiré le
            17/11. Lu comme « ce qui est fait », il mentait : 0 € acquis, et un
-           trait à 15 %. Il sépare maintenant les deux parts de la barre, et
-           chacune est dite en euros dessous. */}
-    <div class="ob-barre"><span class="ob-rempli" style="width:${Math.min(100, p * 100).toFixed(1)}%"></span>
-      <span class="ob-repere" style="left:${Math.min(100, p * 100).toFixed(1)}%;opacity:.85" title="Acquis ${eur(realise)} · reste ${eur(reste)}"></span></div>
+           trait à 15 %.
+           ⚠ PUIS RETIRÉ TOUT À FAIT (même jour, Élodie : « enlève les traits
+           pour chaque objectif, je trouve que ça n'a pas de sens »). Ne pas le
+           remettre, ni au prorata ni à la limite : la barre remplie et les deux
+           montants dessous disent tout. */}
+    <div class="ob-barre" title="Acquis ${eur(realise)} · reste ${eur(reste)}"><span class="ob-rempli" style="width:${Math.min(100, p * 100).toFixed(1)}%"></span></div>
     <div style="display:flex;justify-content:space-between;gap:8px;margin-top:6px;font-size:12px;font-variant-numeric:tabular-nums">
       <span><b style="color:var(--c)">${eur(realise)}</b> <span class="muted">acquis</span></span>
       <span>${reste ? `<b>${eur(reste)}</b> <span class="muted">restant</span>` : '<span class="muted">objectif couvert</span>'}</span></div>
