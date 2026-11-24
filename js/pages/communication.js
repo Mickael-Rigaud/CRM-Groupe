@@ -280,30 +280,45 @@ export function pageCommunication(cle) {
                     feed.stories ? ` · ${feed.stories} ${feed.stories > 1 ? 'stories' : 'story'}` : ''}</em>
                 </div>
               </header>
-              ${'' /* LA BANDE DES STORIES EN PREMIER, comme sur un profil. */}
-              ${feed.aVenir.length || feed.passees.length ? `
-                <section class="com-stories-bloc">
-                  <h4>Stories ${feed.aVenir.length
-                    ? `<span>${feed.aVenir.length} à venir</span>`
-                    : '<span class="est-fade">aucune à venir</span>'}</h4>
+              ${'' /* LA BANDE DES STORIES EN PREMIER, comme sur un profil.
+                     ⚠ ET LA RUBRIQUE S'AFFICHE MÊME VIDE (24/11/2026, Élodie :
+                     « mets aussi la bande des stories sur BTP Expertise » — le
+                     code était déjà commun aux trois, mais BTP n'a AUCUNE story,
+                     21 carrousels et rien d'autre). Une rubrique absente se lit
+                     comme une fonction absente : c'est la troisième fois en deux
+                     jours qu'un écran muet passe pour un écran manquant. Elle
+                     montre donc sa place et dit pourquoi elle est vide. */}
+              <section class="com-stories-bloc">
+                <h4>Stories ${feed.aVenir.length
+                  ? `<span>${feed.aVenir.length} à venir</span>`
+                  : '<span class="est-fade">aucune à venir</span>'}</h4>
+                ${feed.aVenir.length || feed.passees.length ? `
                   <div class="com-stories">
                     ${feed.aVenir.map(c => caseStory(c, false)).join('')}
                     ${feed.passees.map(c => caseStory(c, true)).join('')}
                   </div>
                   <p class="com-feed-aide">Une story ne reste en ligne que 24 h : elles se lisent donc
                     de gauche à droite, les prochaines d’abord${feed.passees.length
-                      ? `, les ${feed.passees.length} déjà passées ensuite, en grisé` : ''}.</p>
-                </section>` : ''}
+                      ? `, les ${feed.passees.length} déjà passées ensuite, en grisé` : ''}.</p>`
+                  : `<p class="com-stories-vide">Aucune story ${feed.stories
+                      ? 'datée avec un visuel' : 'prévue'} pour l’instant. Elles s’afficheront ici,
+                      en 9:16 et dans l’ordre de publication, dès qu’un contenu sera créé au format
+                      <b>Story</b>.</p>`}
+              </section>
               ${feed.places.length
                 ? `<section class="com-feed-bloc">
-                    ${feed.aVenir.length || feed.passees.length ? '<h4>Le feed <span>la plus récente en haut à gauche</span></h4>' : ''}
+                    <h4>Le feed <span>la plus récente en haut à gauche</span></h4>
                     <div class="com-feed-grille">${feed.places.map(c => caseFeed(c, ajd)).join('')}</div>
                     <p class="com-feed-aide">Les publications à venir sont encadrées de la couleur de leur statut :
                       vous voyez le feed tel qu’il <b>sera</b>. Cliquez une vignette pour ouvrir le contenu.</p>
                   </section>`
-                : `<div class="com-vide">${feed.stories
-                    ? `Rien dans la grille : tout ce qui est prévu sur Instagram ${feed.stories > 1 ? 'est en stories' : 'est une story'}.`
-                    : 'Aucune publication Instagram datée avec un visuel : l’aperçu est vide.'}</div>`}
+                : `<section class="com-feed-bloc">
+                    <h4>Le feed <span class="est-fade">aucune publication</span></h4>
+                    <p class="com-stories-vide">${feed.stories
+                      ? `Tout ce qui est prévu sur Instagram ${feed.stories > 1 ? 'est en stories' : 'est une story'} :
+                         la grille du profil reste vide tant qu’aucun post, carrousel ou reel n’est programmé.`
+                      : 'Aucun post, carrousel ou reel daté avec un visuel : la grille du profil est vide.'}</p>
+                  </section>`}
               ${'' /* Ce qui n'a pu entrer NI dans la grille NI dans la bande. */}
               ${feed.sansVisuel || feed.sansDate
                 ? `<p class="com-feed-reste">Hors de l’aperçu : ${[
