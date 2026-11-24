@@ -999,8 +999,8 @@ export const prosPage = {
               <div>${lpxSvg(LPX_ICO.mail)}${p.email ? `<span>${esc(p.email)}</span>` : '<span class="manque">pas de mail</span>'}</div>
             </div>
             <div class="lpx-gestes">
-              <a class="lpx-geste" href="tel:${esc(tel(p.telephone))}" ${p.telephone ? '' : 'aria-disabled="true" tabindex="-1"'}>${lpxSvg(LPX_ICO.tel)}Appeler</a>
-              <a class="lpx-geste" href="mailto:${esc(p.email || '')}" ${p.email ? '' : 'aria-disabled="true" tabindex="-1"'}>${lpxSvg(LPX_ICO.mail)}Écrire</a>
+              <button type="button" class="lpx-geste" data-appeler="${esc(p.telephone || '')}" ${p.telephone ? '' : 'aria-disabled="true" tabindex="-1"'}>${lpxSvg(LPX_ICO.tel)}Appeler</button>
+              <button type="button" class="lpx-geste" data-ecrire="${esc(p.email || '')}" ${p.email ? '' : 'aria-disabled="true" tabindex="-1"'}>${lpxSvg(LPX_ICO.mail)}Écrire</button>
               <button type="button" class="lpx-geste copie" data-copie="${esc(p.telephone || '')}" ${p.telephone ? '' : 'aria-disabled="true" tabindex="-1"'} title="Copier le numéro" aria-label="Copier le numéro">${lpxSvg(LPX_ICO.copie)}</button>
             </div>
           </article>`; }).join('')}</div>`;
@@ -1010,8 +1010,8 @@ export const prosPage = {
             <td><span class="lpx-mini"><span class="lpx-avatar" aria-hidden="true">${esc(ini(p))}</span>${esc(p.societe || '—')}</span></td>
             <td>${esc(nomPro(p))}</td><td>${p.profession ? `<span class="lpx-pill">${lpxSvg(d, '')}${esc(p.profession)}</span>` : ''}</td>
             <td>${esc(villePro(p))}</td>
-            <td style="white-space:nowrap">${p.telephone ? `<a href="tel:${esc(tel(p.telephone))}">${esc(p.telephone)}</a>` : '<span class="muted">—</span>'}</td>
-            <td>${p.email ? `<a href="mailto:${esc(p.email)}">${esc(p.email)}</a>` : '<span class="muted">—</span>'}</td></tr>`; }).join('')}
+            <td style="white-space:nowrap">${p.telephone ? `<a href="tel:${esc(tel(p.telephone))}" data-appeler="${esc(p.telephone)}">${esc(p.telephone)}</a>` : '<span class="muted">—</span>'}</td>
+            <td>${p.email ? `<a href="mailto:${esc(p.email)}" data-ecrire="${esc(p.email)}">${esc(p.email)}</a>` : '<span class="muted">—</span>'}</td></tr>`; }).join('')}
         </tbody></table></div>`;
       }
     };
@@ -1043,6 +1043,33 @@ export const prosPage = {
         e.stopPropagation();
         try { await navigator.clipboard.writeText(c.dataset.copie); c.classList.add('fait'); setTimeout(() => c.classList.remove('fait'), 1400); toast('Numéro copié : ' + c.dataset.copie); }
         catch { toast('Copie impossible : sélectionnez le numéro sur la carte', 'warn'); }
+        return;
+      }
+      // ⚠ « ÉCRIRE » OUVRE GMAIL, PAS `mailto:` (24/11/2026, Élodie : « le bouton
+      // écrire ne fonctionne pas »). Un lien mailto: cherche un logiciel de
+      // messagerie installé sur l'ordinateur ; il n'y en a pas, tout passe par
+      // Gmail dans le navigateur, et le clic ne faisait rien. Même geste que la
+      // prospection RGD (`rgd-prospection.js`) : la fenêtre de rédaction Gmail,
+      // et l'adresse copiée au passage. `window.open` AVANT toute attente, sinon
+      // le navigateur ne le compte plus comme un clic et bloque la fenêtre.
+      const w = e.target.closest('[data-ecrire]');
+      if (w) {
+        e.preventDefault(); e.stopPropagation();
+        const mail = w.dataset.ecrire;
+        if (!mail) return;
+        window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(mail)}`, '_blank', 'noopener');
+        try { await navigator.clipboard.writeText(mail); toast(`Adresse copiée : ${mail}`); } catch { /* la fenêtre Gmail suffit */ }
+        return;
+      }
+      // « Appeler » : sur téléphone, l'appel part ; sur ordinateur, qui ne sait pas
+      // appeler, le numéro est copié — comme la prospection RGD.
+      const a = e.target.closest('[data-appeler]');
+      if (a) {
+        e.preventDefault(); e.stopPropagation();
+        const num = a.dataset.appeler;
+        if (!num) return;
+        if (window.matchMedia?.('(pointer: coarse)').matches) { window.location.href = `tel:${num.replace(/[^\d+]/g, '')}`; return; }
+        try { await navigator.clipboard.writeText(num); toast(`Numéro copié : ${num}`); } catch { toast(`Numéro : ${num}`); }
         return;
       }
       if (e.target.closest('a')) return;
