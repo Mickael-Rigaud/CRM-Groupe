@@ -527,6 +527,11 @@ export const rentalTodoPage = {
 // ⚠ LES SIX FILTRES ET LEUR PRÉSENTATION : voir l'en-tête de `prosPage` plus bas.
 const aplat = (v) => String(v || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
 const nomPro = (p) => [p.prenom, p.nom].filter(Boolean).join(' ');
+// Le site internet : saisi tel quel (« plomberie-azur.fr »), ouvert avec https://
+// devant s'il n'en porte pas, affiché sans le préfixe ni la barre finale.
+const siteOk = (v) => /^(https?:\/\/)?[^\s/.]+(\.[^\s/.]+)*\.[a-z]{2,}(\/\S*)?$/i.test(String(v || '').trim());
+const siteLien = (v) => { const s = String(v || '').trim(); return /^https?:\/\//i.test(s) ? s : `https://${s}`; };
+const siteCourt = (v) => String(v || '').trim().replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/$/, '');
 const villePro = (p) => String(p.ville || '').trim();
 
 // ⚠ LE FORMULAIRE EST CELUI DE LA MAQUETTE VALIDÉE (24/11/2026, Élodie : « je
@@ -560,6 +565,7 @@ const ICO = {
   ville: '<path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/>',
   tel: '<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/>',
   mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>',
+  site: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
   notes: '<path d="M4 5h16M4 10h16M4 15h10"/>',
   crayon: '<path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
 };
@@ -662,6 +668,7 @@ export function proForm(existing = null, onSaved, onClose = null) {
           <div>${champ('pf-f-tel', 'Téléphone', ICO.tel, e0.telephone, 'inputmode="tel" autocomplete="tel" data-coche')}<p class="pf-aide" id="pf-a-tel"></p></div>
           <div>${champ('pf-f-mail', 'Mail', ICO.mail, e0.email, 'inputmode="email" autocomplete="email" data-coche')}<p class="pf-aide" id="pf-a-mail"></p></div>
         </div>
+        ${champ('pf-f-site', 'Site internet', ICO.site, e0.site_web, 'inputmode="url" autocomplete="url" data-coche')}
         <div class="pf-champ"><svg class="pf-ico" viewBox="0 0 24 24">${ICO.notes}</svg>
           <textarea id="pf-f-notes" placeholder=" ">${esc(e0.notes || '')}</textarea><label for="pf-f-notes">Notes — immeubles, tarifs, disponibilités…</label></div>
       </div>
@@ -700,6 +707,9 @@ export function proForm(existing = null, onSaved, onClose = null) {
     const telBon = chiffres(t).length === 10, mailBon = mailOk(ml);
     $('pf-f-tel').parentElement.querySelector('.pf-etat').classList.toggle('ok', telBon);
     $('pf-f-mail').parentElement.querySelector('.pf-etat').classList.toggle('ok', mailBon);
+    // Le site n'entre pas dans l'anneau des six : ce sont les champs de la base
+    // demandés au départ. Il se coche seul quand il ressemble à une adresse.
+    $('pf-f-site').parentElement.querySelector('.pf-etat').classList.toggle('ok', siteOk(val('pf-f-site')));
     const reste = 10 - chiffres(t).length;
     $('pf-a-tel').textContent = t && !telBon && reste > 0 ? `${reste} chiffre${reste > 1 ? 's' : ''} encore` : '';
     const mailFaux = !!(ml && !mailBon);
@@ -729,7 +739,7 @@ export function proForm(existing = null, onSaved, onClose = null) {
     if (!/^\s*\+(?!33)/.test(el.value)) el.value = formaterTel(el.value);
     maj();
   });
-  ['pf-f-societe', 'pf-f-prenom', 'pf-f-nom', 'pf-f-ville', 'pf-f-mail', 'pf-f-autre'].forEach(id => $(id)?.addEventListener('input', () => maj()));
+  ['pf-f-societe', 'pf-f-prenom', 'pf-f-nom', 'pf-f-ville', 'pf-f-mail', 'pf-f-site', 'pf-f-autre'].forEach(id => $(id)?.addEventListener('input', () => maj()));
   $('pf-f-mail').addEventListener('blur', () => maj());
 
   $('pf').onsubmit = async (e) => {
@@ -739,6 +749,7 @@ export function proForm(existing = null, onSaved, onClose = null) {
       societe: val('pf-f-societe') || null, prenom: val('pf-f-prenom') || null, nom: val('pf-f-nom') || null,
       profession: leMetier() || null, ville: val('pf-f-ville') || null,
       telephone: val('pf-f-tel') || null, email: val('pf-f-mail') || null, notes: val('pf-f-notes') || null,
+      site_web: val('pf-f-site') || null,
     };
     $('pf-ok').disabled = true;
     try {
@@ -877,6 +888,7 @@ const LPX_ICO = {
   ville: '<path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/>',
   tel: '<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/>',
   mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>',
+  site: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
   copie: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>',
 };
 const lpxSvg = (d, c = 'i') => `<svg class="${c}" viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`;
@@ -895,7 +907,7 @@ export const prosPage = {
     const ini = (p) => (p.societe || nomPro(p)).split(/\s+/).filter(w => /^[\p{L}\p{N}]/u.test(w)).slice(0, 2).map(x => x[0].toUpperCase()).join('');
     const tous = () => db.t('locatif_pros');
     const filtrer = (sauf) => tous().filter(p => {
-      const blob = aplat([p.societe, nomPro(p), p.profession, p.ville, p.telephone, p.email, p.notes].join(' '));
+      const blob = aplat([p.societe, nomPro(p), p.profession, p.ville, p.telephone, p.email, p.site_web, p.notes].join(' '));
       const mots = aplat(etat.q).split(/\s+/).filter(Boolean);
       return mots.every(t => blob.includes(t) || (chiffres(t).length >= 2 && chiffres(p.telephone).includes(chiffres(t))))
         && (sauf === 'metier' || !etat.metier || aplat(p.profession) === aplat(etat.metier))
@@ -997,6 +1009,7 @@ export const prosPage = {
               <div>${lpxSvg(LPX_ICO.ville)}${villePro(p) ? `<span>${esc(villePro(p))}</span>` : '<span class="manque">ville non renseignée</span>'}</div>
               <div>${lpxSvg(LPX_ICO.tel)}${p.telephone ? `<span>${esc(p.telephone)}</span>` : '<span class="manque">pas de téléphone</span>'}</div>
               <div>${lpxSvg(LPX_ICO.mail)}${p.email ? `<span>${esc(p.email)}</span>` : '<span class="manque">pas de mail</span>'}</div>
+              ${p.site_web ? `<div>${lpxSvg(LPX_ICO.site)}<a href="${esc(siteLien(p.site_web))}" target="_blank" rel="noopener" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--lpx-t);font-weight:600">${esc(siteCourt(p.site_web))}</a></div>` : ''}
             </div>
             <div class="lpx-gestes">
               <button type="button" class="lpx-geste" data-appeler="${esc(p.telephone || '')}" ${p.telephone ? '' : 'aria-disabled="true" tabindex="-1"'}>${lpxSvg(LPX_ICO.tel)}Appeler</button>
@@ -1005,13 +1018,14 @@ export const prosPage = {
             </div>
           </article>`; }).join('')}</div>`;
       } else {
-        $('lpx-liste').innerHTML = `<div class="lpx-tableau"><table><thead><tr><th>Société</th><th>Nom et prénom</th><th>Profession</th><th>Ville</th><th>Téléphone</th><th>Mail</th></tr></thead><tbody>
+        $('lpx-liste').innerHTML = `<div class="lpx-tableau"><table><thead><tr><th>Société</th><th>Nom et prénom</th><th>Profession</th><th>Ville</th><th>Téléphone</th><th>Mail</th><th>Site</th></tr></thead><tbody>
           ${l.map(p => { const [, t, d] = metierDe(p); return `<tr data-pro="${p.id}" style="--lpx-t:${t}" tabindex="0">
             <td><span class="lpx-mini"><span class="lpx-avatar" aria-hidden="true">${esc(ini(p))}</span>${esc(p.societe || '—')}</span></td>
             <td>${esc(nomPro(p))}</td><td>${p.profession ? `<span class="lpx-pill">${lpxSvg(d, '')}${esc(p.profession)}</span>` : ''}</td>
             <td>${esc(villePro(p))}</td>
             <td style="white-space:nowrap">${p.telephone ? `<a href="tel:${esc(tel(p.telephone))}" data-appeler="${esc(p.telephone)}">${esc(p.telephone)}</a>` : '<span class="muted">—</span>'}</td>
-            <td>${p.email ? `<a href="mailto:${esc(p.email)}" data-ecrire="${esc(p.email)}">${esc(p.email)}</a>` : '<span class="muted">—</span>'}</td></tr>`; }).join('')}
+            <td>${p.email ? `<a href="mailto:${esc(p.email)}" data-ecrire="${esc(p.email)}">${esc(p.email)}</a>` : '<span class="muted">—</span>'}</td>
+            <td>${p.site_web ? `<a href="${esc(siteLien(p.site_web))}" target="_blank" rel="noopener">${esc(siteCourt(p.site_web))}</a>` : '<span class="muted">—</span>'}</td></tr>`; }).join('')}
         </tbody></table></div>`;
       }
     };
@@ -1036,7 +1050,7 @@ export const prosPage = {
     $('lpx-v-cartes').onclick = () => changerVue('cartes');
     $('lpx-v-tableau').onclick = () => changerVue('tableau');
     $('lpx-new').onclick = () => proForm(null, () => draw());
-    $('lpx-export').onclick = () => csvDownload('professionnels.csv', filtrer().map(p => ({ societe: p.societe, nom: p.nom, prenom: p.prenom, profession: p.profession, ville: p.ville, telephone: p.telephone, email: p.email, notes: p.notes })));
+    $('lpx-export').onclick = () => csvDownload('professionnels.csv', filtrer().map(p => ({ societe: p.societe, nom: p.nom, prenom: p.prenom, profession: p.profession, ville: p.ville, telephone: p.telephone, email: p.email, site_web: p.site_web, notes: p.notes })));
     $('lpx-liste').addEventListener('click', async (e) => {
       const c = e.target.closest('[data-copie]');
       if (c) {
