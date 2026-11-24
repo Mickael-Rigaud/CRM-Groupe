@@ -877,10 +877,23 @@ function jaugeObjectif(libelle, realise, vise, r, unite, partForcee = null) {
            pour chaque objectif, je trouve que ça n'a pas de sens »). Ne pas le
            remettre, ni au prorata ni à la limite : la barre remplie et les deux
            montants dessous disent tout. */}
-    <div class="ob-barre" title="Acquis ${eur(realise)} · reste ${eur(reste)}"><span class="ob-rempli" style="width:${Math.min(100, p * 100).toFixed(1)}%"></span></div>
+    ${'' /* ⚠ LE DÉPASSEMENT SE VOIT SUR LA BARRE, EN VERT (24/11/2026, Élodie :
+           « si l'objectif est atteint, qu'on le voie en surplus sur la ligne du
+           graphique, et peut-être en une autre couleur »). Tant que l'objectif
+           n'est pas atteint, la barre entière vaut l'objectif. Au-delà, elle
+           vaut le RÉALISÉ : la part de l'objectif garde la couleur de la
+           structure, le surplus prend le vert à rayures, et la frontière entre
+           les deux couleurs est l'objectif — sans trait, à sa demande. */}
+    ${realise > vise
+      ? `<div class="ob-barre" title="Objectif ${eur(vise)} · surplus ${eur(realise - vise)}" style="display:flex;overflow:hidden">
+          <span style="flex:none;width:${(vise / realise * 100).toFixed(1)}%;background:var(--c);border-radius:99px 0 0 99px"></span>
+          <span style="flex:1;margin-left:2px;border-radius:0 99px 99px 0;background:repeating-linear-gradient(135deg,var(--green) 0 6px,color-mix(in srgb,var(--green) 72%,#fff) 6px 12px)"></span></div>`
+      : `<div class="ob-barre" title="Acquis ${eur(realise)} · reste ${eur(reste)}"><span class="ob-rempli" style="width:${Math.min(100, p * 100).toFixed(1)}%"></span></div>`}
     <div style="display:flex;justify-content:space-between;gap:8px;margin-top:6px;font-size:12px;font-variant-numeric:tabular-nums">
-      <span><b style="color:var(--c)">${eur(realise)}</b> <span class="muted">acquis</span></span>
-      <span>${reste ? `<b>${eur(reste)}</b> <span class="muted">restant</span>` : '<span class="muted">objectif couvert</span>'}</span></div>
+      <span><b style="color:var(--c)">${eur(realise > vise ? vise : realise)}</b> <span class="muted">${realise > vise ? 'objectif' : 'acquis'}</span></span>
+      <span>${reste ? `<b>${eur(reste)}</b> <span class="muted">restant</span>`
+        : realise > vise ? `<b style="color:var(--green)">+${eur(realise - vise)}</b> <span class="muted">de surplus</span>`
+        : '<span class="muted">objectif couvert</span>'}</span></div>
     ${verdict ? `<p class="ob-verdict ${etat}">${verdict}</p>` : ''}
     ${'' /* ⚠ `ob-reste` N'EST PAS DÉCORATIF : il dit « ceci est un CHIFFRE, pas
            une note ». `mobile.css` masque sur téléphone les `p.small.muted` qui
