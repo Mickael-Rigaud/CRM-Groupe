@@ -293,6 +293,156 @@ function bankImport(k, onDone) {
 //  Page principale : suivi mensuel (réplique du suivi Excel)
 // ======================================================================
 
+// ---------- Export des loyers sur une période (bilans comptables) ----------
+// ⚠ 24/11/2026, Élodie : « quand on veut faire un export csv je voudrais pouvoir
+// sélectionner des dates pour avoir les données sur une année dans le but de
+// constituer les bilans comptables […] pas forcément du 1er janvier au
+// 31 décembre ». L'export ne sortait que le MOIS affiché.
+//
+// ⚠ LA PÉRIODE SE CHOISIT EN MOIS, PAS EN JOURS : le suivi est tenu par mois de
+// loyer (`rent_payments.month`) — un loyer de mars est celui de mars, quel que
+// soit le jour où il est arrivé. Un exercice d'octobre à septembre se choisit
+// « octobre 2025 → septembre 2026 ». La dernière période choisie est retenue.
+//
+// ⚠ DEUX PRÉSENTATIONS : le DÉTAIL (une ligne par bail et par mois, ce que le
+// comptable pointe) et le TOTAL PAR LOCATAIRE (dû, reçu, manquant sur la période,
+// et le reste dû à la fin). Les montants sont écrits avec une VIRGULE décimale :
+// Excel en français lit « 1234.5 » comme du texte, et le total ne se fait pas.
+//
+// ⚠ UN MOIS JAMAIS OUVERT N'A PAS DE LIGNE en base (`prepareMonth` ne crée les
+// lignes que des mois affichés). On l'exporte quand même — dû selon le bail,
+// rien de reçu — mais marqué « mois non saisi », pour que personne ne prenne
+// un oubli de saisie pour un impayé.
+// ⚠ ET LES BIENS SE CHOISISSENT PAR PROPRIÉTAIRE, PUIS UN PAR UN (même jour :
+// « juste sélectionner les propriétaires : sci bardock, sci kurama, nom propre
+// et après sélectionner les biens » — un filtre par type de bien a été proposé
+// puis RETIRÉ à sa demande, ne pas le remettre). Un bilan se fait par
+// propriétaire. Le propriétaire est `holding_name` (SCI Bardock, SCI Kurama…) ;
+// vide, c'est la `structure` (« Nom propre »). Cocher un propriétaire montre et
+// coche ses biens ; chaque bien se décoche encore à la main. Le choix est
+// retenu avec la période.
+const EXPORT_CLE = 'crm_locatif_export_periode';
+const proprioDe = (p) => String(p?.holding_name || '').trim() || String(p?.structure || '').trim() || 'Sans propriétaire';
+const virgule = (n) => (Math.round((Number(n) || 0) * 100) / 100).toFixed(2).replace('.', ',');
+const moisEntre = (du, au) => { const l = []; for (let m = du; m <= au && l.length < 60; m = shiftMonth(m, 1)) l.push(m); return l; };
+
+function exportLoyers(moisAffiche) {
+  const an = moisAffiche.slice(0, 4);
+  let memo = null;
+  try { memo = JSON.parse(localStorage.getItem(EXPORT_CLE) || 'null'); } catch { memo = null; }
+  const du0 = memo?.du || `${an}-01`, au0 = memo?.au || moisAffiche;
+  const raccourcis = [
+    [`Année ${an}`, `${an}-01`, `${an}-12`],
+    [`Année ${Number(an) - 1}`, `${Number(an) - 1}-01`, `${Number(an) - 1}-12`],
+    ['12 derniers mois', shiftMonth(moisAffiche, -11), moisAffiche],
+  ];
+  // Les biens qui ont des lots ou des baux, comme partout dans la gestion locative.
+  const tousBiens = propItems().map(i => db.byId('properties', i.id)).filter(Boolean);
+  const proprios = [...new Set(tousBiens.map(proprioDe))].sort((a, b) => a.localeCompare(b, 'fr'));
+  const garde = (liste, memoire) => new Set(Array.isArray(memoire) && memoire.some(x => liste.includes(x)) ? memoire.filter(x => liste.includes(x)) : liste);
+  const selP = garde(proprios, memo?.proprios);
+  const biensOk = (b) => selP.has(proprioDe(b));
+  const exclus = new Set(Array.isArray(memo?.exclus) ? memo.exclus : []);
+  const puce = (k, v, actif, n) => `<button type="button" class="btn ${actif ? '' : 'ghost'} sm" data-${k}="${esc(v)}" aria-pressed="${actif}">${esc(v)} <span style="opacity:.7">${n}</span></button>`;
+  const m = openModal('Exporter les loyers', `<form class="form" id="xl">
+    <div class="field"><span>Propriétaire</span><div id="xl-proprios" style="display:flex;flex-wrap:wrap;gap:6px"></div></div>
+    <div class="field" style="margin-top:10px"><span>Biens</span><div id="xl-biens" style="display:flex;flex-direction:column;gap:4px;max-height:180px;overflow:auto;padding:8px 10px;border:1px solid var(--line);border-radius:10px"></div></div>
+    <div class="field" style="margin-top:14px"><span>Période</span></div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">${raccourcis.map(([l, d, a]) =>
+      `<button type="button" class="btn ghost sm" data-du="${d}" data-au="${a}">${esc(l)}</button>`).join('')}</div>
+    <div class="grid c2" style="gap:12px">
+      <label class="field"><span>Du mois de</span><input type="month" id="xl-du" value="${du0}" required></label>
+      <label class="field"><span>Au mois de (inclus)</span><input type="month" id="xl-au" value="${au0}" required></label>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:6px;margin-top:12px">
+      <label class="check"><input type="radio" name="xl-forme" value="detail" ${memo?.forme !== 'total' ? 'checked' : ''}> Détail mois par mois <span class="muted small">— une ligne par locataire et par mois</span></label>
+      <label class="check"><input type="radio" name="xl-forme" value="total" ${memo?.forme === 'total' ? 'checked' : ''}> Total par locataire <span class="muted small">— dû, reçu et manquant sur la période</span></label>
+    </div>
+    <p class="muted small" id="xl-resume" style="margin:12px 0 0"></p>
+    <div class="form-actions"><button type="button" class="btn ghost" data-close>Annuler</button><button class="btn" type="submit" id="xl-ok">Télécharger le CSV</button></div>
+  </form>`);
+  const $ = (s) => m.querySelector(s);
+  const forme = () => m.querySelector('input[name="xl-forme"]:checked')?.value || 'detail';
+  const props = () => tousBiens.filter(b => biensOk(b) && !exclus.has(b.id));
+  const dessinerChoix = () => {
+    $('#xl-proprios').innerHTML = proprios.map(v => puce('proprio', v, selP.has(v), tousBiens.filter(b => proprioDe(b) === v).length)).join('');
+    const visibles = tousBiens.filter(biensOk).sort((a, b) => proprioDe(a).localeCompare(proprioDe(b), 'fr') || a.name.localeCompare(b.name, 'fr'));
+    $('#xl-biens').innerHTML = visibles.map(b => `<label class="check" style="text-transform:none;letter-spacing:0;font-weight:600;font-size:13.5px;color:var(--text)"><input type="checkbox" data-bien="${b.id}" ${exclus.has(b.id) ? '' : 'checked'}> ${esc(b.name)} <span style="text-transform:none;letter-spacing:0;font-weight:500;font-size:12px;color:var(--muted)">— ${esc(proprioDe(b))}</span></label>`).join('')
+      || '<span class="muted small">Choisissez au moins un propriétaire.</span>';
+    m.querySelectorAll('[data-proprio]').forEach(b => b.onclick = () => { const v = b.dataset.proprio; selP.has(v) ? selP.delete(v) : selP.add(v); dessinerChoix(); majResume(); });
+    m.querySelectorAll('[data-bien]').forEach(c => c.onchange = () => { c.checked ? exclus.delete(c.dataset.bien) : exclus.add(c.dataset.bien); majResume(); });
+  };
+
+  const calculer = () => {
+    const du = $('#xl-du').value, au = $('#xl-au').value;
+    if (!du || !au || du > au) return { erreur: !du || !au ? 'Choisissez les deux mois.' : 'Le premier mois doit précéder le second.' };
+    const mois = moisEntre(du, au);
+    const detail = [];
+    for (const p of props()) {
+      const units = db.t('units').filter(u => u.property_id === p.id);
+      const baux = db.t('leases').filter(l => l.property_id === p.id);
+      for (const k of mois) {
+        for (const l of baux.filter(l => activeInMonth(l, k) && (l.active !== false || (l.end_date && l.end_date.slice(0, 7) >= k)))) {
+          const u = units.find(x => x.id === l.unit_id);
+          const row = rowOf(l.id, k);
+          const due = dueOf(l, row), rec = receivedOf(row);
+          detail.push({ p, u, l, k, row, due, rec, apl: Number(row?.apl) || 0, tp: Number(row?.tenant_paid ?? row?.amount ?? 0) || 0 });
+        }
+      }
+    }
+    return { du, au, mois, detail };
+  };
+  const majResume = () => {
+    const c = calculer();
+    if (c.erreur) { $('#xl-resume').textContent = c.erreur; $('#xl-ok').disabled = true; return; }
+    const totDu = c.detail.reduce((s, x) => s + x.due, 0), totRecu = c.detail.reduce((s, x) => s + x.rec, 0);
+    const baux = new Set(c.detail.map(x => x.l.id)).size, vides = c.detail.filter(x => !x.row).length;
+    $('#xl-ok').disabled = !c.detail.length;
+    $('#xl-resume').innerHTML = c.detail.length
+      ? `${c.mois.length} mois (${esc(monthLabel(c.du))} → ${esc(monthLabel(c.au))}) · ${baux} ${baux > 1 ? 'baux' : 'bail'} · dû <b>${eur2(totDu)}</b> · reçu <b>${eur2(totRecu)}</b>${vides ? ` · <span class="status-lost">${vides} mois non saisi${vides > 1 ? 's' : ''}</span>` : ''}`
+      : 'Aucun bail sur cette période pour les biens sélectionnés.';
+  };
+  m.querySelectorAll('[data-du]').forEach(b => b.onclick = () => { $('#xl-du').value = b.dataset.du; $('#xl-au').value = b.dataset.au; majResume(); });
+  ['#xl-du', '#xl-au'].forEach(s => $(s).addEventListener('input', majResume));
+  m.querySelectorAll('input[name="xl-forme"]').forEach(r => r.onchange = majResume);
+  dessinerChoix();
+  majResume();
+
+  $('#xl').onsubmit = (e) => {
+    e.preventDefault();
+    const c = calculer(); if (c.erreur || !c.detail.length) return;
+    try { localStorage.setItem(EXPORT_CLE, JSON.stringify({ du: c.du, au: c.au, forme: forme(), proprios: [...selP], exclus: [...exclus] })); } catch { /* préférence perdue, sans gravité */ }
+    const lot = (x) => x.u?.name || x.l.lot || '';
+    const tri = (a, b) => proprioDe(a.p).localeCompare(proprioDe(b.p), 'fr') || a.p.name.localeCompare(b.p.name) || String(lot(a)).localeCompare(String(lot(b)), 'fr', { numeric: true }) || String(a.l.tenant).localeCompare(String(b.l.tenant)) || a.k.localeCompare(b.k);
+    const lignes = [...c.detail].sort(tri);
+    let rows;
+    if (forme() === 'total') {
+      const parBail = new Map();
+      for (const x of lignes) {
+        const t = parBail.get(x.l.id) || { x, mois: 0, non: 0, due: 0, apl: 0, tp: 0, rec: 0 };
+        t.mois++; if (!x.row) t.non++; t.due += x.due; t.apl += x.apl; t.tp += x.tp; t.rec += x.rec;
+        parBail.set(x.l.id, t);
+      }
+      rows = [...parBail.values()].map(t => ({
+        proprietaire: proprioDe(t.x.p), immeuble: t.x.p.name, lot: lot(t.x), locataire: t.x.l.tenant, entree: t.x.l.start_date || '', sortie: t.x.l.end_date || '',
+        periode_du: c.du, periode_au: c.au, mois: t.mois, mois_non_saisis: t.non || '',
+        du: virgule(t.due), apl: virgule(t.apl), locataire_paye: virgule(t.tp), recu: virgule(t.rec),
+        manquant_periode: virgule(t.due - t.rec), reste_du_fin_periode: virgule(balanceOf(t.x.l.id, c.au)),
+      }));
+    } else {
+      rows = lignes.map(x => ({
+        mois: x.k, proprietaire: proprioDe(x.p), immeuble: x.p.name, lot: lot(x), locataire: x.l.tenant,
+        loyer_hc: virgule(x.l.rent), charges: virgule(x.l.charges), du: virgule(x.due), apl: virgule(x.apl),
+        locataire_paye: virgule(x.tp), recu: virgule(x.rec), mode: x.row?.mode || '', manquant: virgule(x.due - x.rec),
+        saisie: x.row ? '' : 'mois non saisi', commentaire: x.row?.note || '',
+      }));
+    }
+    csvDownload(`loyers-${c.du}_${c.au}${forme() === 'total' ? '-total' : ''}.csv`, rows);
+    closeModal(true);
+    toast(`Export du ${monthLabel(c.du)} au ${monthLabel(c.au)} : ${rows.length} ligne${rows.length > 1 ? 's' : ''}`);
+  };
+}
+
 export const locatifPage = {
   title: () => 'Gestion locative — suivi des loyers',
   render(root) {
@@ -377,7 +527,7 @@ export const locatifPage = {
         const l = db.byId('leases', el.dataset.lease); const f = el.dataset.f; const v = el.type === 'number' ? (el.value === '' ? 0 : Number(el.value)) : el.value;
         try { await upsertRow(l, k, { [f]: v }); draw(); } catch (err) { toast(err.message, 'err'); }
       });
-      root.querySelector('#lo-export').onclick = () => csvDownload(`loyers-${k}.csv`, groups.flatMap(g => g.lines.filter(x => x.l).map(({ u, l }) => { const row = rowOf(l.id, k); const due = dueOf(l, row); const rec = receivedOf(row); return { immeuble: g.p.name, lot: u?.name || l.lot, locataire: l.tenant, entree: l.start_date, loyer_hc: l.rent, charges: l.charges, du: due, apl: row?.apl || 0, locataire_paye: row?.tenant_paid || 0, recu: rec, mode: row?.mode || '', manquant: round2(due - rec), retard_anterieur: round2(balanceOf(l.id, shiftMonth(k, -1))), reste: round2(balanceOf(l.id, k)), commentaire: row?.note || '' }; })));
+      root.querySelector('#lo-export').onclick = () => exportLoyers(k);
     };
     const draw = async () => { try { await drawInner(); } catch (err) { console.error(err); root.innerHTML = `<div class="card"><div class="empty">Erreur d'affichage : ${esc(err.message)}<br><span class="small">Faites une capture de ce message et envoyez-la à Claude.</span></div></div>`; } };
     draw();
