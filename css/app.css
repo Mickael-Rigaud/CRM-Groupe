@@ -7291,6 +7291,28 @@ span.rpv-statut { display: inline-block; margin-bottom: 4px; }
 .com-feed-reste { margin: 12px 0 0; font-size: 12.5px; color: var(--muted); }
 .com-feed-aide { margin: 6px 0 0; font-size: 12px; color: var(--muted); }
 
+/* La bande des stories (24/11/2026) — RGD Renova ne publie QUE des stories :
+   sans elle, son aperçu était exact et vide. Elles se posent au-dessus de la
+   grille, là où Instagram les met, mais en 9:16 et non en ronds : un rond
+   rogne le cadrage, c'est-à-dire ce qu'on vient vérifier. La bande défile à
+   l'horizontale — une story de plus ne doit pas rallonger la page. */
+.com-stories-bloc, .com-feed-bloc { margin-bottom: 18px; }
+.com-feed-bloc:last-child, .com-stories-bloc:last-child { margin-bottom: 0; }
+.com-stories-bloc h4, .com-feed-bloc h4 { display: flex; align-items: baseline; gap: 8px; margin: 0 0 8px;
+  font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+.com-stories-bloc h4 span, .com-feed-bloc h4 span { font-size: 11px; font-weight: 600; letter-spacing: 0;
+  text-transform: none; color: var(--text); }
+.com-stories-bloc h4 span.est-fade { color: var(--muted); font-weight: 500; }
+.com-stories { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px; scrollbar-width: thin; }
+.com-story { position: relative; flex: none; width: 92px; aspect-ratio: 9 / 16; padding: 0; overflow: hidden;
+  cursor: pointer; border: 2px solid var(--st); border-radius: 10px; background: var(--card-2); }
+.com-story img, .com-story video { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* Une story passée n'est plus en ligne : elle reste consultable, en retrait. */
+.com-story.est-passee { border-color: var(--line); }
+.com-story.est-passee img, .com-story.est-passee video { opacity: .45; filter: grayscale(.5); }
+.com-story-bas { position: absolute; left: 0; right: 0; bottom: 0; padding: 4px 5px; font-size: 10px;
+  font-weight: 600; color: #fff; text-align: center; background: linear-gradient(transparent, rgb(0 0 0 / .68)); }
+
 @media screen and (max-width: 1100px) {
   .com-corps { grid-template-columns: 1fr; }
   .com-idees { position: static; }

@@ -73,20 +73,40 @@ const titreDe = (c) => c.titre || (c.texte ? c.texte.split('\n')[0].slice(0, 60)
 //     dit rien du vrai rendu : ce qu'on vient y juger, c'est la façon dont
 //     trois images voisines s'accordent.
 //   — Une STORY n'est pas dans le feed, jamais. Un reel, si.
+//
+// ⚠ ET C'EST POURQUOI L'APERÇU DE RGD ÉTAIT VIDE (24/11/2026, Élodie : « mets-le
+// aussi sur RGD Renova » — il Y ÉTAIT). Compté en base : RGD n'a QUE des
+// stories, 50 sur 50 ; courtage et BTP n'en ont aucune. La grille était donc
+// exacte et inutile, et un écran vide se lit comme un écran absent. Les stories
+// ont maintenant leur propre bande, AU-DESSUS de la grille — là où Instagram
+// les met —, en vignettes 9:16 et non en ronds : un rond rogne le cadrage,
+// c'est-à-dire précisément ce qu'on vient vérifier.
 //   — Un contenu SANS VISUEL n'a pas de vignette, et un contenu SANS DATE n'a
 //     pas de rang. Les écarter en silence ferait croire à une perte : ils sont
 //     comptés et nommés sous la grille.
 const DANS_LE_FEED = (c) => (c.reseaux || []).includes('instagram') && c.format !== 'story';
 const quandDe = (c) => `${c.date_prevue || ''} ${c.heure || '00:00'}`;
-const feedDe = (contenus) => {
+const feedDe = (contenus, ajd) => {
   const siens = contenus.filter(DANS_LE_FEED);
   const places = siens.filter(c => c.date_prevue && (c.visuels || []).length)
     .sort((a, b) => quandDe(b).localeCompare(quandDe(a)));
+  // ⚠ LA BANDE DES STORIES SE LIT DANS L'AUTRE SENS : une story s'enchaîne du
+  // plus ancien au plus récent, et ce qu'on vient y vérifier est la FILE
+  // D'ATTENTE — ce qui part aujourd'hui, puis demain. Les stories déjà passées
+  // sont rangées après, pas mêlées : elles ne sont plus en ligne.
+  const toutes = contenus.filter(c => (c.reseaux || []).includes('instagram') && c.format === 'story');
+  const illustrees = toutes.filter(c => c.date_prevue && (c.visuels || []).length)
+    .sort((a, b) => quandDe(a).localeCompare(quandDe(b)));
   return {
     places,
-    sansVisuel: siens.filter(c => c.date_prevue && !(c.visuels || []).length).length,
-    sansDate: siens.filter(c => !c.date_prevue).length,
-    stories: contenus.filter(c => (c.reseaux || []).includes('instagram') && c.format === 'story').length,
+    // ⚠ LES STORIES COMPTENT DANS LES MÊMES ÉCARTS : sans leur `toutes`, une
+    // story sans visuel ne figurait ni dans la bande ni dans le relevé du bas —
+    // elle disparaissait purement et simplement de l'écran.
+    sansVisuel: [...siens, ...toutes].filter(c => c.date_prevue && !(c.visuels || []).length).length,
+    sansDate: [...siens, ...toutes].filter(c => !c.date_prevue).length,
+    stories: toutes.length,
+    aVenir: illustrees.filter(c => c.date_prevue >= ajd),
+    passees: illustrees.filter(c => c.date_prevue < ajd).reverse(),
   };
 };
 
@@ -106,6 +126,21 @@ const caseFeed = (c, ajd) => {
       : `<img src="${esc(v.url)}" alt="" loading="lazy">`}
     ${marque ? `<span class="com-case-format" aria-hidden="true">${marque}</span>` : ''}
     <span class="com-case-bas"><i></i>${esc(String(Number(c.date_prevue.slice(8))))}/${esc(c.date_prevue.slice(5, 7))}</span>
+  </button>`;
+};
+
+// Une story de la bande. Même donnée que `caseFeed`, mais en 9:16 — le cadrage
+// d'une story ne se juge pas dans un carré.
+const caseStory = (c, passee) => {
+  const v = (c.visuels || [])[0];
+  const st = STATUTS[c.statut] || {};
+  return `<button type="button" class="com-story${passee ? ' est-passee' : ''}" data-ouvrir="${esc(c.id)}"
+      style="--st:${st.couleur || '#94A3B8'}"
+      title="${esc(jourLong(c.date_prevue))}${c.heure ? ` à ${esc(c.heure)}` : ''} — ${esc(st.label || '')} — ${esc(titreDe(c))}">
+    ${v.type === 'video'
+      ? `<video src="${esc(v.url)}" preload="metadata" muted playsinline></video>`
+      : `<img src="${esc(v.url)}" alt="" loading="lazy">`}
+    <span class="com-story-bas">${esc(String(Number(c.date_prevue.slice(8))))}/${esc(c.date_prevue.slice(5, 7))}${c.heure ? ` · ${esc(c.heure)}` : ''}</span>
   </button>`;
 };
 
@@ -193,7 +228,7 @@ export function pageCommunication(cle) {
         // un feed ne connaît pas les mois. La navigation mensuelle s'effacerait
         // donc pour rien sur cette vue — elle laisse la place au compte.
         const avecInsta = reseaux.includes('instagram');
-        const feed = avecInsta && state.vue === 'feed' ? feedDe(visibles) : null;
+        const feed = avecInsta && state.vue === 'feed' ? feedDe(visibles, ajd) : null;
         const bascule = avecInsta ? `<div class="com-vues">
             <button type="button" data-vue="calendrier" class="${state.vue === 'calendrier' ? 'actif' : ''}">Calendrier</button>
             <button type="button" data-vue="feed" class="${state.vue === 'feed' ? 'actif' : ''}">${logoReseau('instagram', 15)}Aperçu du feed</button>
@@ -222,9 +257,15 @@ export function pageCommunication(cle) {
 
           <div class="com-legende">
             ${Object.entries(STATUTS).map(([k, v]) => `<span style="--st:${v.couleur}"><i></i>${esc(v.label)}
-              <b>${(feed ? feed.places : duMois).filter(c => c.statut === k).length}</b></span>`).join('')}
+              ${'' /* ⚠ LA LÉGENDE COMPTE CE QUE L'ÉCRAN MONTRE : en vue feed, la
+                     grille ET la bande des stories. Sur les seules `places`,
+                     RGD — qui ne publie que des stories — affichait des zéros
+                     sous une bande pleine. */}
+              <b>${(feed ? [...feed.places, ...feed.aVenir, ...feed.passees] : duMois)
+                .filter(c => c.statut === k).length}</b></span>`).join('')}
             <span class="com-legende-total">${feed
-              ? `${feed.places.length} publication${feed.places.length > 1 ? 's' : ''} dans le feed`
+              ? (() => { const n = feed.places.length + feed.aVenir.length + feed.passees.length;
+                  return `${n} visuel${n > 1 ? 's' : ''} dans l’aperçu`; })()
               : `${duMois.length} contenu${duMois.length > 1 ? 's' : ''} ce mois-ci`}</span>
           </div>
 
@@ -234,25 +275,41 @@ export function pageCommunication(cle) {
                 <span class="com-feed-rond">${esc(NOMS[cle].split(' ').map(m => m[0]).join('').slice(0, 2))}</span>
                 <div>
                   <b>${esc(NOMS[cle])}</b>
-                  <em>${feed.places.length} publication${feed.places.length > 1 ? 's' : ''} — la plus récente en haut à gauche</em>
+                  <em>${feed.places.length} publication${feed.places.length > 1 ? 's' : ''} dans le feed${
+                    /* ⚠ « stories », PAS « storys » : le pluriel se prend à l'anglais, comme le mot. */
+                    feed.stories ? ` · ${feed.stories} ${feed.stories > 1 ? 'stories' : 'story'}` : ''}</em>
                 </div>
               </header>
+              ${'' /* LA BANDE DES STORIES EN PREMIER, comme sur un profil. */}
+              ${feed.aVenir.length || feed.passees.length ? `
+                <section class="com-stories-bloc">
+                  <h4>Stories ${feed.aVenir.length
+                    ? `<span>${feed.aVenir.length} à venir</span>`
+                    : '<span class="est-fade">aucune à venir</span>'}</h4>
+                  <div class="com-stories">
+                    ${feed.aVenir.map(c => caseStory(c, false)).join('')}
+                    ${feed.passees.map(c => caseStory(c, true)).join('')}
+                  </div>
+                  <p class="com-feed-aide">Une story ne reste en ligne que 24 h : elles se lisent donc
+                    de gauche à droite, les prochaines d’abord${feed.passees.length
+                      ? `, les ${feed.passees.length} déjà passées ensuite, en grisé` : ''}.</p>
+                </section>` : ''}
               ${feed.places.length
-                ? `<div class="com-feed-grille">${feed.places.map(c => caseFeed(c, ajd)).join('')}</div>`
-                : '<div class="com-vide">Aucune publication Instagram datée avec un visuel : l’aperçu est vide.</div>'}
-              ${'' /* Ce qui n'a pas pu entrer dans la grille, nommé. */}
-              ${[
-                feed.sansVisuel ? `${feed.sansVisuel} contenu${feed.sansVisuel > 1 ? 's' : ''} Instagram sans visuel` : '',
-                feed.sansDate ? `${feed.sansDate} sans date` : '',
-                feed.stories ? `${feed.stories} story${feed.stories > 1 ? 's' : ''} (jamais dans le feed)` : '',
-              ].filter(Boolean).length
+                ? `<section class="com-feed-bloc">
+                    ${feed.aVenir.length || feed.passees.length ? '<h4>Le feed <span>la plus récente en haut à gauche</span></h4>' : ''}
+                    <div class="com-feed-grille">${feed.places.map(c => caseFeed(c, ajd)).join('')}</div>
+                    <p class="com-feed-aide">Les publications à venir sont encadrées de la couleur de leur statut :
+                      vous voyez le feed tel qu’il <b>sera</b>. Cliquez une vignette pour ouvrir le contenu.</p>
+                  </section>`
+                : `<div class="com-vide">${feed.stories
+                    ? `Rien dans la grille : tout ce qui est prévu sur Instagram ${feed.stories > 1 ? 'est en stories' : 'est une story'}.`
+                    : 'Aucune publication Instagram datée avec un visuel : l’aperçu est vide.'}</div>`}
+              ${'' /* Ce qui n'a pu entrer NI dans la grille NI dans la bande. */}
+              ${feed.sansVisuel || feed.sansDate
                 ? `<p class="com-feed-reste">Hors de l’aperçu : ${[
                     feed.sansVisuel ? `${feed.sansVisuel} contenu${feed.sansVisuel > 1 ? 's' : ''} sans visuel` : '',
                     feed.sansDate ? `${feed.sansDate} sans date` : '',
-                    feed.stories ? `${feed.stories} story${feed.stories > 1 ? 's' : ''} — une story ne s’affiche jamais dans le feed` : '',
                   ].filter(Boolean).join(' · ')}.</p>` : ''}
-              <p class="com-feed-aide">Les publications à venir sont encadrées de la couleur de leur statut : vous voyez le feed
-                tel qu’il <b>sera</b>. Cliquez une vignette pour ouvrir le contenu.</p>
             </section>
           </div>` : `<div class="com-corps">
             <section class="com-cal">
