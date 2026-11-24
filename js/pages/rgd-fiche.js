@@ -133,6 +133,30 @@ const siens = (liste, f) => liste.filter(x =>
   (!!x.contact_id && x.contact_id === f.contact_id)
   || (!!x.organisation_id && x.organisation_id === f.organisation_id));
 
+// Les factures Costructor d'une fiche (24/11/2026, Élodie : « la facture de
+// SCI Bardock je ne la vois pas sur le crm »). La fiche montrait devis et
+// chantiers, jamais l'argent facturé.
+// ⚠ DEUX CHEMINS, PAS UN : `rgd_paiements` ne porte ni contact ni société,
+// seulement une affaire (`deal_id`). Une facture dont l'affaire appartient à
+// la fiche est à elle ; une facture sans affaire se retrouve par le NUMÉRO DE
+// DEVIS qu'elle porte (`costructor_quote_number`), si ce devis est sur la
+// fiche. Le second chemin est celui des clients créés chez Costructor sans
+// chantier — c'est le cas le plus courant (89 paiements sur 165 sans affaire).
+const facturesDe = (f, devis) => {
+  const numeros = new Set(devis.map(d => d.numero).filter(Boolean));
+  return scope.rgd('rgd_paiements').filter((p) => {
+    if (p.statut === 'annule') return false;
+    const deal = p.deal_id && db.byId('deals', p.deal_id);
+    if (deal) return (!!deal.contact_id && deal.contact_id === f.contact_id)
+      || (!!deal.organisation_id && deal.organisation_id === f.organisation_id);
+    return !!p.costructor_quote_number && numeros.has(p.costructor_quote_number);
+  });
+};
+const TYPE_FACTURE = { acompte: 'Acompte', situation: 'Situation', solde: 'Solde',
+  avenant: 'Avenant', remboursement: 'Avoir' };
+// Du plus récent au plus ancien : ce qui vient d'arriver se lit en haut.
+const recentEnHaut = (date) => (a, b) => String(date(b) || '').localeCompare(String(date(a) || ''));
+
 // ⚠ LES PICTOGRAMMES SONT EN SVG, PAS EN ÉMOJI. Un émoji change de dessin et
 // de couleur selon le système : deux postes n'afficheraient pas la même fiche,
 // et aucun ne prendrait la couleur qu'on lui demande. Ceux-ci héritent de la
@@ -486,7 +510,12 @@ export function ouvrirFicheRgd(x, onChange, retour = null) {
 
 
   const dessine = () => {
-    const devis = x.genre === 'fiche' ? siens(scope.rgd('rgd_devis'), f) : [];
+    const devis = x.genre === 'fiche'
+      ? siens(scope.rgd('rgd_devis'), f).sort(recentEnHaut(d => d.date_creation || d.date_envoi || d.created_at))
+      : [];
+    const factures = x.genre === 'fiche'
+      ? facturesDe(f, devis).sort(recentEnHaut(p => p.date_facturation || p.date_reception || p.created_at))
+      : [];
     // ⚠ CEUX-LÀ NE DÉPENDENT PAS DE L'ÉTAPE : un dépannage se chiffre au
     // premier appel, sans passer par « Devis en cours ».
     const devisCrm = devisCrmDe(x);
@@ -834,7 +863,33 @@ export function ouvrirFicheRgd(x, onChange, retour = null) {
             </tbody></table></div>
           </section>` : ''}
 
-          ${devis.length || chantiers.length ? `<p class="rgdf-source">Devis et chantiers viennent de
+          ${auDevis && factures.length ? (() => {
+            const somme = (l) => l.reduce((t, p) => t + (Number(p.montant_ht) || 0), 0);
+            const encaisse = somme(factures.filter(p => p.statut === 'recu'));
+            const reste = somme(factures.filter(p => p.statut !== 'recu' && p.type !== 'remboursement'));
+            return `<section class="rgdf-bloc">
+            <h3>Factures <span class="rgdf-compte">${factures.length}</span></h3>
+            <p class="s muted" style="margin:-2px 0 8px">${eur(encaisse)} HT encaissés${
+              reste ? ` · <b style="color:var(--amber,#b45309)">${eur(reste)} HT à encaisser</b>` : ''}</p>
+            <div class="rgdf-tableau"><table><tbody>
+              ${factures.map(p => {
+                const e = p.statut === 'recu' ? { label: 'Encaissée', ton: 'green' }
+                  : { label: 'À encaisser', ton: 'amber' };
+                const quand = p.statut === 'recu' && p.date_reception
+                  ? `encaissée le ${fmtDate(p.date_reception)}`
+                  : p.date_facturation ? `émise le ${fmtDate(p.date_facturation)}` : '';
+                return `<tr>
+                  <td><b>${esc(p.reference_facture || p.libelle || '—')}</b>
+                      <div class="s muted">${esc(TYPE_FACTURE[p.type] || p.type || 'Facture')}${
+                        p.costructor_quote_number ? ' · devis ' + esc(p.costructor_quote_number) : ''}${
+                        quand ? ' · ' + esc(quand) : ''}</div></td>
+                  <td class="num">${eur(p.montant_ht)}</td>
+                  <td class="rgdf-fin"><span class="chip ${e.ton}">${esc(e.label)}</span></td>
+                </tr>`; }).join('')}
+            </tbody></table></div>
+          </section>`; })() : ''}
+
+          ${devis.length || chantiers.length || factures.length ? `<p class="rgdf-source">Devis, factures et chantiers viennent de
             Costructor, relevés toutes les 30 minutes. Ils se modifient dans
             l’application RGD.</p>` : ''}
         </div>

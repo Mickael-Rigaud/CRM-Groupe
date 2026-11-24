@@ -1448,6 +1448,9 @@ function carteArgent(cles, r, state) {
   }).sort((x, y) => (y.reste ?? -1) - (x.reste ?? -1) || y.ca - x.ca);
   const suivies = parStructure.filter(x => x.reste !== null).map(x => x.label);
   const pct = (l) => (l.montant ? Math.round(l.facture / l.montant * 100) : 0);
+  // « 23 nov. » : le jour de signature, pour que le tri par date se lise.
+  const fmtJourCourt = (iso) => (iso ? new Date(String(iso).slice(0, 10) + 'T12:00:00')
+    .toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : '');
   return `<section class="card tb-argent">
     <h2>Le chemin de l'argent</h2>
     <span class="tb-sous">ce qui reste \u00e0 facturer, et l'argent du mois \u00b7 ${esc(periodeAffichee(state, cles))}</span>
@@ -1503,13 +1506,24 @@ function carteArgent(cles, r, state) {
       <div style="font-size:11.5px;opacity:.78;padding-top:2px">à droite, ce qui reste \u00e0 facturer</div>
     </div>`
     : a && a.lignes.length ? `<div style="margin-top:16px;border-top:1px solid rgba(255,255,255,.22);padding-top:6px">
-      <span class="tb-sous" style="display:block;margin-bottom:2px">chantier par chantier</span>
-      ${a.lignes.slice(0, 3).map(l => `<div style="display:flex;align-items:baseline;gap:10px;padding:6px 0;font-size:12.5px">
-        <span style="font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:42%">${esc(l.client)}</span>
-        <span style="opacity:.8;font-size:11.5px">${eur(l.montant)} sign\u00e9s \u00b7 ${pct(l)}\u00a0% factur\u00e9</span>
+      <span class="tb-sous" style="display:block;margin-bottom:2px">chantier par chantier \u00b7 du plus r\u00e9cent au plus ancien</span>
+      ${/* \u26a0 TOUS LES CHANTIERS, DU PLUS R\u00c9CENT AU PLUS ANCIEN (24/11/2026,
+            \u00c9lodie ne trouvait pas SCI Bardock sign\u00e9 la veille). Coup\u00e9e \u00e0 3 et
+            rang\u00e9e par reste \u00e0 facturer, la liste rel\u00e9guait un chantier SOLD\u00c9
+            dans un \u00ab + 1 autre \u00bb qu'on ne pouvait pas ouvrir : plus il \u00e9tait
+            pay\u00e9, moins il se voyait. Le tri est fait ICI et non dans
+            `cheminDesSignes`, dont l'ordre sert ailleurs.
+            Au-del\u00e0 de six lignes, la liste d\u00e9file au lieu d'allonger la carte. */ ''}
+      <div style="${a.lignes.length > 6 ? 'max-height:228px;overflow-y:auto;padding-right:6px;' : ''}">
+      ${[...a.lignes].sort((x, y) => String(y.date).localeCompare(String(x.date)) || y.montant - x.montant)
+        .map(l => `<div style="display:flex;align-items:baseline;gap:10px;padding:6px 0;font-size:12.5px">
+        <span style="font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:42%"${
+          l.client && l.client !== '\u2014' ? '' : ' title="Aucune fiche client dans le CRM pour ce devis"'}>${
+          esc(l.client && l.client !== '\u2014' ? l.client : `Devis ${l.numero || ''} \u00b7 sans fiche`)}</span>
+        <span style="opacity:.8;font-size:11.5px">${fmtJourCourt(l.date)} \u00b7 ${eur(l.montant)} sign\u00e9s \u00b7 ${pct(l)}\u00a0% factur\u00e9</span>
         <b style="margin-left:auto;font-variant-numeric:tabular-nums">${l.reste ? eur(l.reste) : 'sold\u00e9'}</b>
       </div>`).join('')}
-      ${a.lignes.length > 3 ? `<div style="font-size:11.5px;opacity:.78;padding-top:2px">+ ${a.lignes.length - 3} autre${a.lignes.length - 3 > 1 ? 's' : ''}</div>` : ''}
+      </div>
     </div>` : ''}
     ${/* ⚠ CE SIGNAL NE PEUT PAS APPARAÎTRE DANS UNE VUE AU MOIS : un devis
           signé depuis plus de deux mois n'est pas dans le mois en cours. Il ne
