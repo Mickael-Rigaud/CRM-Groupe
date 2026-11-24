@@ -730,7 +730,7 @@ function carteObjectifs(cles, deals, grand = false) {
     blocs.push(blocObjectif(mesurables, 'var(--accent)', deals, '<span class="ob-groupe">Groupe</span>', '', grand));
   }
   return `<section class="card">${entete}<div class="ob-liste"${grand ? ' style="flex:1 1 auto"' : ''}>${blocs.join('')}</div>
-    <p class="muted small tb-legend"><i></i> Le trait marque où il faudrait être aujourd'hui pour tenir l'objectif.</p>
+    <p class="muted small tb-legend"><i></i> Le trait sépare ce qui est acquis de ce qui reste à faire.</p>
     ${/* ⚠ LE RETRAIT SE DIT, IL NE SE DEVINE PAS. Sans cette phrase, quelqu'un
           qui additionne les objectifs affichés ne retombe pas sur le total et
           croit à une erreur de saisie. Elle n'apparaît que s'il reste quelque
@@ -867,8 +867,19 @@ function jaugeObjectif(libelle, realise, vise, r, unite, partForcee = null) {
   return `<div class="ob-jauge">
     <div class="ob-ligne"><span class="ob-lbl">${esc(libelle)}</span><span class="ob-pct ${etat}">${pct(p)} %</span></div>
     <div class="ob-montants"><b>${eur(realise)}</b><span class="muted"> sur ${eur(vise)}</span></div>
+    ${'' /* ⚠ LE TRAIT EST À LA LIMITE ACQUIS / RESTE (24/11/2026, Élodie : « le
+           trait n'est pas proportionnel à ce qui a déjà été acquis et le reste
+           par rapport à l'objectif »). Il marquait jusque-là où il FAUDRAIT être
+           selon le temps écoulé de l'exercice — un prorata linéaire, la même
+           règle de trois que le verdict « en retard sur le rythme » retiré le
+           17/11. Lu comme « ce qui est fait », il mentait : 0 € acquis, et un
+           trait à 15 %. Il sépare maintenant les deux parts de la barre, et
+           chacune est dite en euros dessous. */}
     <div class="ob-barre"><span class="ob-rempli" style="width:${Math.min(100, p * 100).toFixed(1)}%"></span>
-      ${part > 0 && part < 1 ? `<span class="ob-repere" style="left:${(part * 100).toFixed(1)}%" title="Où il faudrait être aujourd'hui"></span>` : ''}</div>
+      <span class="ob-repere" style="left:${Math.min(100, p * 100).toFixed(1)}%;opacity:.85" title="Acquis ${eur(realise)} · reste ${eur(reste)}"></span></div>
+    <div style="display:flex;justify-content:space-between;gap:8px;margin-top:6px;font-size:12px;font-variant-numeric:tabular-nums">
+      <span><b style="color:var(--c)">${eur(realise)}</b> <span class="muted">acquis</span></span>
+      <span>${reste ? `<b>${eur(reste)}</b> <span class="muted">restant</span>` : '<span class="muted">objectif couvert</span>'}</span></div>
     ${verdict ? `<p class="ob-verdict ${etat}">${verdict}</p>` : ''}
     ${'' /* ⚠ `ob-reste` N'EST PAS DÉCORATIF : il dit « ceci est un CHIFFRE, pas
            une note ». `mobile.css` masque sur téléphone les `p.small.muted` qui
@@ -878,7 +889,12 @@ function jaugeObjectif(libelle, realise, vise, r, unite, partForcee = null) {
            temps : le tableau de bord du téléphone ne disait plus la même chose
            que celui de l'ordinateur (19/11/2026, Élodie). Les vraies notes —
            les deux légendes et les sources — restent masquées, elles. */}
-    <p class="muted small ob-reste">${reste ? `Reste ${eur(reste)}${rythme}` : 'Plus rien à faire sur cette période.'}</p>
+    ${'' /* Le reste est dit en euros sous la barre : cette ligne ne porte plus que
+           le RYTHME qui va avec (« soit 32 727 € par mois sur 11 mois »). */}
+    <p class="muted small ob-reste">${!reste ? 'Plus rien à faire sur cette période.'
+      : rythme.startsWith(', soit') ? `Soit${rythme.slice(6)}`
+      : rythme.startsWith(' en ') ? `À faire en${rythme.slice(3)}`
+      : rythme === ' ce mois-ci' ? 'À faire ce mois-ci' : `Reste ${eur(reste)}`}</p>
   </div>`;
 }
 /**
