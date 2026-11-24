@@ -41,6 +41,7 @@ export const pages = {
   locatif_lots: ecran('./locatif.js', 'unitsPage'),
   locatif_suivi: ecran('./locatif.js', 'rentalTodoPage'),
   locatif_contacts: ecran('./locatif.js', 'tenantContactsPage'),
+  locatif_pros: ecran('./locatif.js', 'prosPage'),
   patrimoine_charges: ecran('./patrimoine.js', 'expensesPage'),
   // Espace RGD Renova. Tous les écrans vivent dans le CRM : l'onglet qui
   // affichait l'application d'origine est parti le 28/09/2026, avec elle.

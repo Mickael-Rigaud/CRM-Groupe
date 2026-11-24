@@ -13,6 +13,8 @@ import { SEED_SITE, deplierSite } from './seed-site.js';
 export const TABLES = ['profiles', 'organisations', 'contacts', 'deals', 'activities', 'events', 'settings',
   // module Patrimoine
   'properties', 'units', 'loans', 'leases', 'rent_payments', 'expenses',
+  // gestion locative : la base des professionnels (24/11/2026), droits = has_rental()
+  'locatif_pros',
   // module Vivier courtiers
   'broker_profiles',
   // documents (pièces jointes)

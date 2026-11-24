@@ -132,6 +132,7 @@ const NAV = [
       { hash: '#/locatif', label: 'Suivi des loyers', exact: true },
       { hash: '#/locatif/baux', label: 'Baux et locataires' },
       { hash: '#/locatif/contacts', label: 'Contacts locataires' },
+      { hash: '#/locatif/pros', label: 'Professionnels' },
       { hash: '#/locatif/lots', label: 'Lots' },
       { hash: '#/locatif/suivi', label: 'À faire locatif', count: lateRent },
     ],

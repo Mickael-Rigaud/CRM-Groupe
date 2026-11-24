@@ -513,6 +513,332 @@ export const rentalTodoPage = {
 };
 
 // ======================================================================
+//  Professionnels : artisans, syndics, notaires, assureurs… (24/11/2026)
+// ======================================================================
+// Élodie : « rajouter une base de données pour les professionnels » — société,
+// nom et prénom, profession, ville, téléphone, mail — « et pouvoir filtrer cette
+// base de données par tous ces champs ».
+//
+// ⚠ UNE TABLE À ELLE, `locatif_pros`, et pas `organisations` : les partenaires des
+// structures y sont cloisonnés par structure et remontent dans la recherche
+// universelle. Le plombier d'un immeuble de rapport n'est le partenaire d'aucune
+// structure ; il reste derrière l'accès « gestion locative » (`has_rental()`).
+//
+// ⚠ UN FILTRE PAR CHAMP, dans une barre AU-DESSUS du tableau et pas dans son
+// en-tête : sur téléphone le tableau devient des fiches et l'en-tête disparaît,
+// les filtres seraient partis avec. C'est la demande, mot pour mot. La
+// profession et la ville sont des listes (les valeurs déjà saisies) : on filtre
+// « Plombier » ou « Nice » d'un geste, sans craindre une faute de frappe. Les
+// autres colonnes sont des champs libres qui cherchent « contient », accents et
+// majuscules ignorés. Le champ de recherche du haut cherche dans tout à la fois.
+const aplat = (v) => String(v || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+const nomPro = (p) => [p.prenom, p.nom].filter(Boolean).join(' ');
+const villePro = (p) => String(p.ville || '').trim();
+
+// ⚠ LE FORMULAIRE EST CELUI DE LA MAQUETTE VALIDÉE (24/11/2026, Élodie : « je
+// voudrais que le formulaire soit plus moderne et dynamique », puis « c'est ok
+// comme ça » sur la maquette cliquable). Une carte se construit en haut pendant
+// la saisie, le métier se touche en pastille illustrée (« Autre… » ouvre un
+// champ libre), la ville se pique parmi celles déjà dans la base, le téléphone se
+// met en forme tout seul et se coche quand il a ses dix chiffres, le mail est
+// vérifié en direct. Les six informations de la base sont comptées dans l'anneau.
+//
+// ⚠ LES STYLES VIVENT DANS LE FORMULAIRE (`<style>` en tête, classes `pf-*`) :
+// app.css est partagé par plusieurs sessions au même moment, et ce formulaire
+// n'existe que dans cette fenêtre.
+const METIERS = [
+  ['Plombier', '#2563EB', '<path d="M7 3v5a5 5 0 0 0 10 0V3M12 13v8M9 21h6"/>'],
+  ['Électricien', '#D97706', '<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>'],
+  ['Chauffagiste', '#E11D48', '<path d="M12 3c2 3 5 5 5 9a5 5 0 0 1-10 0c0-2 1-3 2-4 0 2 1 3 2 3 0-3-1-5 1-8z"/>'],
+  ['Serrurier', '#475569', '<circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M17 6l3 3M15 8l2 2"/>'],
+  ['Peintre', '#9333EA', '<rect x="3" y="3" width="14" height="6" rx="1"/><path d="M17 6h3v5h-8v3M11 14h2v7h-2z"/>'],
+  ['Menuisier', '#92400E', '<path d="M3 21l9-9M14 4l6 6-4 4-6-6zM12 12l-2 2"/>'],
+  ['Multiservices', '#0D9488', '<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/>'],
+  ['Syndic', '#4F46E5', '<path d="M3 21h18M5 21V8l7-5 7 5v13M10 21v-5h4v5"/>'],
+  ['Notaire', '#1E3A8A', '<path d="M6 3h9l4 4v14H6zM14 3v5h5M9 13h7M9 17h5"/>'],
+  ['Assureur', '#059669', '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/>'],
+  ['Diagnostiqueur', '#0891B2', '<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/>'],
+];
+const AUTRE = ['Autre…', '#6B7280', '<circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/>'];
+const ICO = {
+  societe: '<path d="M3 21h18M5 21V7l7-4 7 4v14M9 9h1M14 9h1M9 13h1M14 13h1M10 21v-4h4v4"/>',
+  personne: '<circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/>',
+  ville: '<path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/>',
+  tel: '<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/>',
+  mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>',
+  notes: '<path d="M4 5h16M4 10h16M4 15h10"/>',
+  crayon: '<path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+};
+const COCHE = '<span class="pf-etat"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>';
+const PF_CSS = `<style>
+.pf { display: flex; flex-direction: column; gap: 20px; }
+.pf-carte { display: flex; align-items: center; gap: 14px; padding: 14px; border-radius: 18px; border: 1px solid var(--line);
+  background: radial-gradient(120% 160% at 0% 0%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 55%),
+  radial-gradient(90% 140% at 100% 0%, color-mix(in srgb, #F0802C 14%, transparent), transparent 60%), var(--card-2); }
+.pf-pop { animation: pfPop .35s cubic-bezier(.2,.8,.2,1.4); }
+@keyframes pfPop { from { transform: scale(.94); opacity: .5 } to { transform: none; opacity: 1 } }
+.pf-avatar { flex: none; width: 54px; height: 54px; border-radius: 15px; display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 19px;
+  background: linear-gradient(135deg, var(--pf-t, var(--accent)), color-mix(in srgb, var(--pf-t, var(--accent)) 55%, #F0802C)); }
+.pf-avatar svg { width: 26px; height: 26px; stroke: #fff; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.pf-ctxt { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 3px; }
+.pf-cnom { font-size: 17px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pf-cnom.vide, .pf-cl .vide { color: var(--muted); font-weight: 500; font-style: italic; }
+.pf-cl { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; color: var(--muted); font-size: 12.5px; }
+.pf-pill { padding: 2px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 700; background: var(--accent-soft); color: var(--accent); }
+.pf-jauge { flex: none; position: relative; width: 46px; height: 46px; }
+.pf-jauge svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.pf-jauge circle { fill: none; stroke-width: 5; }
+.pf-jauge .f { stroke: var(--line); } .pf-jauge .p { stroke: var(--green); stroke-linecap: round; transition: stroke-dashoffset .5s cubic-bezier(.2,.8,.2,1); }
+.pf-jauge b { position: absolute; inset: 0; display: grid; place-items: center; font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.pf-bloc { display: flex; flex-direction: column; gap: 10px; }
+.pf-leg { font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.pf-duo { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 560px) { .pf-duo { grid-template-columns: 1fr; } }
+.pf-champ { position: relative; }
+.pf-champ input, .pf-champ textarea { width: 100%; box-sizing: border-box; font: inherit; font-size: 15px; color: var(--text); background: var(--card-2);
+  border: 1.5px solid var(--line); border-radius: 13px; padding: 21px 38px 7px 40px; outline: none; transition: border-color .2s, background .2s, box-shadow .2s; }
+.pf-champ textarea { min-height: 76px; resize: vertical; padding-top: 23px; }
+.pf-champ label { position: absolute; left: 40px; top: 14px; color: var(--muted); font-size: 14px; pointer-events: none; transition: all .18s ease; }
+.pf-champ input:focus, .pf-champ textarea:focus { border-color: var(--accent); background: var(--card); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 15%, transparent); }
+.pf-champ input:focus + label, .pf-champ input:not(:placeholder-shown) + label,
+.pf-champ textarea:focus + label, .pf-champ textarea:not(:placeholder-shown) + label { top: 6px; font-size: 10.5px; font-weight: 700; letter-spacing: .03em; color: var(--accent); }
+.pf-ico { position: absolute; left: 13px; top: 16px; width: 18px; height: 18px; stroke: var(--muted); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.pf-champ:focus-within .pf-ico { stroke: var(--accent); }
+.pf-etat { position: absolute; right: 11px; top: 14px; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; opacity: 0; transform: scale(.4); transition: all .25s cubic-bezier(.2,.8,.2,1.4); background: var(--green-soft); }
+.pf-etat.ok { opacity: 1; transform: none; }
+.pf-etat svg { width: 13px; height: 13px; fill: none; stroke: var(--green); stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+.pf-aide { margin: 4px 0 0 4px; font-size: 12px; color: var(--muted); }
+.pf-aide.warn { color: var(--amber); }
+.pf-metiers, .pf-villes { display: flex; flex-wrap: wrap; gap: 7px; }
+.pf-metier { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px 7px 9px; border-radius: 999px; border: 1.5px solid var(--line); background: var(--card);
+  color: var(--text); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; transition: all .2s; }
+.pf-metier svg { width: 16px; height: 16px; stroke: var(--muted); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.pf-metier:hover { border-color: color-mix(in srgb, var(--accent) 50%, var(--line)); transform: translateY(-1px); }
+.pf-metier[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent, #fff); box-shadow: 0 8px 18px -10px var(--accent); }
+.pf-metier[aria-pressed="true"] svg { stroke: var(--on-accent, #fff); }
+.pf-autre { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .3s ease; }
+.pf-autre.ouvert { grid-template-rows: 1fr; } .pf-autre > div { overflow: hidden; }
+.pf-ville { padding: 4px 11px; border-radius: 999px; border: 1px dashed var(--line-strong, var(--line)); background: transparent; color: var(--muted); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+.pf-ville:hover { color: var(--accent); border-color: var(--accent); border-style: solid; }
+.pf-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.pf-manque { flex: 1; min-width: 160px; color: var(--muted); font-size: 12.5px; }
+.pf .btn[type="submit"]:disabled { opacity: .45; cursor: not-allowed; }
+.pf-fini { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; padding: 26px 8px 10px; animation: pfPop .4s cubic-bezier(.2,.8,.2,1.4); }
+.pf-coche { width: 68px; height: 68px; border-radius: 50%; background: var(--green-soft); display: grid; place-items: center; }
+.pf-coche svg { width: 34px; height: 34px; stroke: var(--green); fill: none; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 40; stroke-dashoffset: 40; animation: pfTrace .5s .15s forwards ease-out; }
+@keyframes pfTrace { to { stroke-dashoffset: 0 } }
+.pf-fini h3 { margin: 6px 0 0; font-size: 18px; } .pf-fini p { margin: 0; color: var(--muted); }
+@media (prefers-reduced-motion: reduce) { .pf *, .pf-fini, .pf-fini * { animation: none !important; transition: none !important; } .pf-coche svg { stroke-dashoffset: 0; } }
+</style>`;
+
+export function proForm(existing = null, onSaved, onClose = null) {
+  const e0 = existing || {};
+  const connu = METIERS.find(([m]) => aplat(m) === aplat(e0.profession));
+  let metier = e0.profession ? (connu ? connu[0] : AUTRE[0]) : '';
+  const villes = [...new Map(db.t('locatif_pros').map(villePro).filter(Boolean).map(v => [aplat(v), v])).values()]
+    .sort((a, b) => a.localeCompare(b, 'fr')).slice(0, 8);
+  const champ = (id, label, ico, val, extra = '') => `<div class="pf-champ"><svg class="pf-ico" viewBox="0 0 24 24">${ico}</svg>
+    <input id="${id}" placeholder=" " value="${esc(val || '')}" ${extra}><label for="${id}">${esc(label)}</label>${extra.includes('data-coche') ? COCHE : ''}</div>`;
+  const autres = [...new Set(db.t('locatif_pros').map(p => p.profession).filter(Boolean))]
+    .filter(p => !METIERS.some(([m]) => aplat(m) === aplat(p)));
+  const corps = `${PF_CSS}
+    <form class="pf" id="pf" novalidate>
+      <div class="pf-carte" id="pf-carte">
+        <div class="pf-avatar" id="pf-avatar" aria-hidden="true"></div>
+        <div class="pf-ctxt"><div class="pf-cnom" id="pf-cnom"></div>
+          <div class="pf-cl"><span id="pf-cmetier"></span><span id="pf-cqui"></span></div>
+          <div class="pf-cl"><span id="pf-ccontact"></span></div></div>
+        <div class="pf-jauge" title="Informations remplies"><svg viewBox="0 0 46 46"><circle class="f" cx="23" cy="23" r="19"/><circle class="p" id="pf-anneau" cx="23" cy="23" r="19" stroke-dasharray="119.4" stroke-dashoffset="119.4"/></svg><b id="pf-compte">0/6</b></div>
+      </div>
+      <div class="pf-bloc"><span class="pf-leg">Son métier</span>
+        <div class="pf-metiers" role="group" aria-label="Profession">${[...METIERS, AUTRE].map(([m, , svg]) =>
+          `<button type="button" class="pf-metier" data-m="${esc(m)}" aria-pressed="${m === metier}"><svg viewBox="0 0 24 24">${svg}</svg>${esc(m)}</button>`).join('')}</div>
+        <div class="pf-autre ${metier === AUTRE[0] ? 'ouvert' : ''}" id="pf-autre"><div>
+          ${champ('pf-f-autre', 'Quel métier ?', ICO.crayon, connu ? '' : e0.profession, 'autocomplete="off" list="pf-autres"')}
+          <datalist id="pf-autres">${autres.map(a => `<option value="${esc(a)}">`).join('')}</datalist></div></div>
+      </div>
+      <div class="pf-bloc"><span class="pf-leg">La société et la personne</span>
+        ${champ('pf-f-societe', 'Nom de la société', ICO.societe, e0.societe, 'autocomplete="organization"')}
+        <div class="pf-duo">${champ('pf-f-prenom', 'Prénom', ICO.personne, e0.prenom, 'autocomplete="given-name"')}${champ('pf-f-nom', 'Nom', ICO.personne, e0.nom, 'autocomplete="family-name"')}</div>
+        <div>${champ('pf-f-ville', 'Ville', ICO.ville, e0.ville, 'autocomplete="address-level2"')}
+          ${villes.length ? `<div class="pf-villes" style="margin-top:7px">${villes.map(v => `<button type="button" class="pf-ville" data-v="${esc(v)}">${esc(v)}</button>`).join('')}</div>` : ''}</div>
+      </div>
+      <div class="pf-bloc"><span class="pf-leg">Pour le joindre</span>
+        <div class="pf-duo">
+          <div>${champ('pf-f-tel', 'Téléphone', ICO.tel, e0.telephone, 'inputmode="tel" autocomplete="tel" data-coche')}<p class="pf-aide" id="pf-a-tel"></p></div>
+          <div>${champ('pf-f-mail', 'Mail', ICO.mail, e0.email, 'inputmode="email" autocomplete="email" data-coche')}<p class="pf-aide" id="pf-a-mail"></p></div>
+        </div>
+        <div class="pf-champ"><svg class="pf-ico" viewBox="0 0 24 24">${ICO.notes}</svg>
+          <textarea id="pf-f-notes" placeholder=" ">${esc(e0.notes || '')}</textarea><label for="pf-f-notes">Notes — immeubles, tarifs, disponibilités…</label></div>
+      </div>
+      <div class="pf-actions"><span class="pf-manque" id="pf-manque"></span>
+        ${existing ? '<button type="button" class="btn ghost" id="pf-del">Supprimer</button>' : ''}
+        <button type="button" class="btn ghost" data-close>Annuler</button>
+        <button class="btn" type="submit" id="pf-ok">Enregistrer</button></div>
+    </form>`;
+  const m = openModal(existing ? 'Modifier le professionnel' : 'Nouveau professionnel', corps, { onClose });
+  const $ = (id) => m.querySelector('#' + id);
+  const val = (id) => ($(id)?.value || '').trim();
+  const chiffres = (v) => String(v || '').replace(/\D/g, '');
+  const formaterTel = (v) => {
+    let d = chiffres(v);
+    if (String(v).trim().startsWith('+33') || d.startsWith('33')) d = '0' + d.replace(/^33/, '');
+    return d.slice(0, 10).replace(/(\d{2})(?=\d)/g, '$1 ');
+  };
+  const mailOk = (v) => /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(v);
+  const leMetier = () => (metier === AUTRE[0] ? val('pf-f-autre') : metier);
+  const teinte = () => ([...METIERS, AUTRE].find(([x]) => x === metier) || [])[1] || 'var(--accent)';
+  const icone = () => ([...METIERS, AUTRE].find(([x]) => x === metier) || AUTRE)[2];
+
+  const maj = (anime = false) => {
+    const s = val('pf-f-societe'), qui = [val('pf-f-prenom'), val('pf-f-nom')].filter(Boolean).join(' ');
+    const v = val('pf-f-ville'), t = val('pf-f-tel'), ml = val('pf-f-mail'), job = leMetier();
+    const nom = $('pf-cnom');
+    nom.textContent = s || qui || 'Nom de la société';
+    nom.classList.toggle('vide', !s && !qui);
+    $('pf-cmetier').innerHTML = job ? `<span class="pf-pill">${esc(job)}</span>` : '<span class="vide">métier ?</span>';
+    $('pf-cqui').textContent = [s && qui ? qui : '', v].filter(Boolean).join(' · ');
+    $('pf-ccontact').textContent = [t, ml].filter(Boolean).join(' · ');
+    const ini = (s || qui).split(/\s+/).filter(Boolean).slice(0, 2).map(x => x[0].toUpperCase()).join('');
+    const av = $('pf-avatar');
+    av.innerHTML = ini ? esc(ini) : `<svg viewBox="0 0 24 24">${icone()}</svg>`;
+    av.style.setProperty('--pf-t', teinte());
+    const telBon = chiffres(t).length === 10, mailBon = mailOk(ml);
+    $('pf-f-tel').parentElement.querySelector('.pf-etat').classList.toggle('ok', telBon);
+    $('pf-f-mail').parentElement.querySelector('.pf-etat').classList.toggle('ok', mailBon);
+    const reste = 10 - chiffres(t).length;
+    $('pf-a-tel').textContent = t && !telBon && reste > 0 ? `${reste} chiffre${reste > 1 ? 's' : ''} encore` : '';
+    const mailFaux = !!(ml && !mailBon);
+    $('pf-a-mail').textContent = mailFaux ? 'Il manque quelque chose : nom@domaine.fr' : '';
+    $('pf-a-mail').classList.toggle('warn', mailFaux && document.activeElement !== $('pf-f-mail'));
+    const remplis = [s, qui, job, v, telBon ? t : '', mailBon ? ml : ''].filter(Boolean).length;
+    $('pf-compte').textContent = `${remplis}/6`;
+    $('pf-anneau').style.strokeDashoffset = String(119.4 * (1 - remplis / 6));
+    const peut = !!(s || qui);
+    $('pf-ok').disabled = !peut;
+    $('pf-manque').textContent = !peut ? 'Indiquez au moins une société ou un nom'
+      : remplis === 6 ? 'Fiche complète' : `${6 - remplis} information${6 - remplis > 1 ? 's' : ''} à compléter, si vous les avez`;
+    if (anime) { const c = $('pf-carte'); c.classList.remove('pf-pop'); void c.offsetWidth; c.classList.add('pf-pop'); }
+  };
+
+  m.querySelectorAll('.pf-metier').forEach(b => b.onclick = () => {
+    metier = metier === b.dataset.m ? '' : b.dataset.m;
+    m.querySelectorAll('.pf-metier').forEach(x => x.setAttribute('aria-pressed', String(x.dataset.m === metier)));
+    $('pf-autre').classList.toggle('ouvert', metier === AUTRE[0]);
+    if (metier === AUTRE[0]) setTimeout(() => $('pf-f-autre')?.focus(), 250);
+    maj(true);
+  });
+  m.querySelectorAll('.pf-ville').forEach(b => b.onclick = () => { $('pf-f-ville').value = b.dataset.v; maj(true); });
+  $('pf-f-tel').addEventListener('input', (e) => {
+    const el = e.target;
+    // On ne reformate qu'un numéro français : un « +44 … » reste tel qu'on le tape.
+    if (!/^\s*\+(?!33)/.test(el.value)) el.value = formaterTel(el.value);
+    maj();
+  });
+  ['pf-f-societe', 'pf-f-prenom', 'pf-f-nom', 'pf-f-ville', 'pf-f-mail', 'pf-f-autre'].forEach(id => $(id)?.addEventListener('input', () => maj()));
+  $('pf-f-mail').addEventListener('blur', () => maj());
+
+  $('pf').onsubmit = async (e) => {
+    e.preventDefault();
+    if ($('pf-ok').disabled) return;
+    const v = {
+      societe: val('pf-f-societe') || null, prenom: val('pf-f-prenom') || null, nom: val('pf-f-nom') || null,
+      profession: leMetier() || null, ville: val('pf-f-ville') || null,
+      telephone: val('pf-f-tel') || null, email: val('pf-f-mail') || null, notes: val('pf-f-notes') || null,
+    };
+    $('pf-ok').disabled = true;
+    try {
+      let id = existing?.id;
+      if (existing) await db.update('locatif_pros', id, { ...v, updated_at: new Date().toISOString() });
+      else id = (await db.insert('locatif_pros', v)).id;
+      onSaved?.(id);
+      if (existing) { closeModal(true); toast('Professionnel enregistré'); return; }
+      // La confirmation animée, et de quoi enchaîner sur le suivant.
+      const nom = v.societe || [v.prenom, v.nom].filter(Boolean).join(' ');
+      $('pf').outerHTML = `<div class="pf-fini"><div class="pf-coche"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+        <h3>${esc(nom)} est dans la base</h3><p>Filtrable par métier, par ville et par chacun de ses champs.</p>
+        <div class="form-actions" style="margin-top:12px"><button type="button" class="btn ghost" data-close>Fermer</button><button type="button" class="btn" id="pf-encore">Ajouter un autre professionnel</button></div></div>`;
+      m.querySelector('#pf-encore')?.addEventListener('click', () => proForm(null, onSaved, onClose));
+    } catch (err) { $('pf-ok').disabled = false; toast(err.message, 'err'); }
+  };
+  $('pf-del')?.addEventListener('click', async () => {
+    if (!await confirm(`Supprimer ${existing.societe || nomPro(existing)} de la base des professionnels ?`)) return;
+    await db.remove('locatif_pros', existing.id); closeModal(true); onSaved?.(null);
+  });
+  maj();
+  if (!existing) setTimeout(() => $('pf-f-societe')?.focus(), 60);
+}
+
+export const prosPage = {
+  title: () => 'Professionnels',
+  render(root) {
+    if (!scope.canRental) return denied(root);
+    const state = { q: '', focus: null, f: { societe: '', nom: '', profession: '', ville: '', telephone: '', email: '' } };
+    const draw = () => {
+      const tous = db.t('locatif_pros');
+      const qt = terms(state.q);
+      const f = state.f;
+      const chiffres = (v) => String(v || '').replace(/\D/g, '').replace(/^33/, '0');
+      const list = tous.filter(p =>
+        hit([p.societe, nomPro(p), p.profession, p.ville, p.telephone, p.email, p.notes], qt)
+        && (!f.societe || aplat(p.societe).includes(aplat(f.societe)))
+        && (!f.nom || aplat(nomPro(p)).includes(aplat(f.nom)))
+        && (!f.profession || p.profession === f.profession)
+        && (!f.ville || aplat(villePro(p)) === aplat(f.ville))
+        && (!f.telephone || chiffres(p.telephone).includes(chiffres(f.telephone)) || String(p.telephone || '').includes(f.telephone))
+        && (!f.email || aplat(p.email).includes(aplat(f.email))))
+        .sort((a, b) => String(a.profession || '~').localeCompare(String(b.profession || '~'), 'fr')
+          || String(a.societe || nomPro(a)).localeCompare(String(b.societe || nomPro(b)), 'fr'));
+      const valeurs = (fn) => [...new Map(tous.map(fn).filter(Boolean).map(v => [aplat(v), v])).values()].sort((a, b) => a.localeCompare(b, 'fr'));
+      const professions = valeurs(p => p.profession);
+      const villes = valeurs(villePro);
+      const actifs = Object.values(f).filter(Boolean).length;
+      const champ = (k, ph) => `<input type="search" style="width:100%;min-width:86px;box-sizing:border-box;font:inherit;font-size:12px;font-weight:500;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--card)" data-filtre="${k}" value="${esc(f[k])}" placeholder="${esc(ph)}" aria-label="Filtrer : ${esc(ph)}">`;
+      const liste = (k, opts, tout) => `<select style="width:100%;min-width:86px;box-sizing:border-box;font:inherit;font-size:12px;font-weight:500;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--card)" data-filtre="${k}" aria-label="Filtrer : ${esc(tout)}"><option value="">${esc(tout)}</option>${opts.map(o => `<option ${aplat(o) === aplat(f[k]) ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`;
+      const tel = (t) => t ? `<a href="tel:${esc(String(t).replace(/[^\d+]/g, ''))}">${esc(t)}</a>` : '<span class="muted">—</span>';
+      const mail = (m) => m ? `<a href="mailto:${esc(m)}">${esc(m)}</a>` : '<span class="muted">—</span>';
+      root.innerHTML = `
+        <div class="toolbar">${searchInput('lp-q', state, 'Rechercher dans toute la base…')}
+          <span class="muted small grow">${list.length} professionnel${list.length > 1 ? 's' : ''}${list.length !== tous.length ? ` sur ${tous.length}` : ''}</span>
+          ${actifs ? '<button class="btn ghost sm" id="lp-raz">Effacer les filtres</button>' : ''}
+          <button class="btn ghost sm" id="lp-export">Export CSV</button>
+          <button class="btn" id="lp-new">+ Professionnel</button></div>
+        <div class="lp-filtres" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px 10px;margin:0 0 14px">
+          ${[['Société', champ('societe', 'Nom de la société')], ['Nom et prénom', champ('nom', 'Nom ou prénom')],
+             ['Profession', liste('profession', professions, 'Toutes')], ['Ville', liste('ville', villes, 'Toutes')],
+             ['Téléphone', champ('telephone', 'Numéro')], ['Mail', champ('email', 'Adresse mail')]]
+            .map(([l, c]) => `<label style="display:flex;flex-direction:column;gap:4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)">${l}${c}</label>`).join('')}
+        </div>
+        <div class="card"><div class="table-wrap"><table class="lp-table"><thead>
+          <tr><th>Société</th><th>Nom et prénom</th><th>Profession</th><th>Ville</th><th>Téléphone</th><th>Mail</th></tr>
+        </thead><tbody>
+          ${list.map(p => `<tr class="click" data-pro="${p.id}"><td><b>${esc(p.societe || '')}</b></td><td>${esc(nomPro(p))}</td><td>${p.profession ? `<span class="pill">${esc(p.profession)}</span>` : ''}</td><td>${esc(villePro(p))}</td><td class="nowrap">${tel(p.telephone)}</td><td>${mail(p.email)}</td></tr>`).join('')
+            || `<tr><td colspan="6" class="empty">${tous.length ? 'Aucun professionnel ne correspond à ces filtres' : 'Aucun professionnel pour l’instant — « + Professionnel » pour en ajouter un'}</td></tr>`}
+        </tbody></table></div><p class="muted small">Cliquer sur une ligne pour modifier ou supprimer la fiche.</p></div>`;
+      bindSearch(root, 'lp-q', state, draw);
+      restoreFocus(root, state);
+      root.querySelectorAll('[data-filtre]').forEach(el => {
+        const k = el.dataset.filtre;
+        if (el.tagName === 'SELECT') el.onchange = () => { f[k] = el.value; draw(); };
+        else el.oninput = () => {
+          f[k] = el.value;
+          const pos = el.selectionStart;
+          draw();
+          const neuf = root.querySelector(`[data-filtre="${k}"]`);
+          if (neuf) { neuf.focus(); try { neuf.setSelectionRange(pos, pos); } catch { /* type search */ } }
+        };
+      });
+      root.querySelector('#lp-raz')?.addEventListener('click', () => { Object.keys(f).forEach(k => { f[k] = ''; }); draw(); });
+      root.querySelector('#lp-new').onclick = () => proForm(null, draw);
+      root.querySelectorAll('[data-pro]').forEach(tr => tr.onclick = e => { if (e.target.closest('a')) return; proForm(db.byId('locatif_pros', tr.dataset.pro), draw); });
+      root.querySelector('#lp-export').onclick = () => csvDownload('professionnels.csv', list.map(p => ({ societe: p.societe, nom: p.nom, prenom: p.prenom, profession: p.profession, ville: p.ville, telephone: p.telephone, email: p.email, notes: p.notes })));
+    };
+    draw();
+    return { refresh: draw };
+  },
+};
+
+// ======================================================================
 //  Contacts locataires : téléphones, emails, tutelles, consignes
 // ======================================================================
 export const tenantContactsPage = {
