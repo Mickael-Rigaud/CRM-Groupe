@@ -184,6 +184,17 @@ const lignesProjet = (f) => {
     ['Apport dégagé par la vente', euros(f.apport_degage_par_la_vente) || f.apport_degage_par_la_vente],
     ['Taux actuel', f.taux_actuel],
     ['Travaux', euros(f.travaux) || f.travaux],
+    // ⚠ 25/11/2026 — LE SIMULATEUR DE REGROUPEMENT DE CRÉDITS.
+    // Ces deux lignes ne concernent pas un achat, et c'est pour cela
+    // qu'elles sont ici plutôt que dans « Les chiffres » : elles disent de
+    // QUELLE OPÉRATION il s'agit. La nature se déduit de ce que le client
+    // déclare — un prêt immobilier racheté et un bien à mettre en garantie
+    // — et non d'un choix qu'on lui aurait demandé.
+    ['Nature de l’opération', f.nature_operation],
+    // ⚠ CELLE-CI DÉCIDE SI LE DOSSIER EST PRÉSENTABLE EN L'ÉTAT. Elle vaut
+    // « Aucun », « Régularisés » ou « En cours » : noyée dans le
+    // récapitulatif, elle se serait lue trop tard, au téléphone.
+    ['Retards de paiement', f.retards_paiement],
   ].filter(([, v]) => v);
 };
 
@@ -193,6 +204,13 @@ const lignesChiffres = (f) => {
   const ptz = [f.ptz_statut, f.ptz_montant, f.ptz_zone ? `zone ${f.ptz_zone}` : ''].filter(Boolean).join(' · ');
   return [
     ['Budget', f.budget || euros(f.montant_projet)],
+    // ⚠ 25/11/2026 — `capital_rachete` N'EST PAS `budget`, et la ligne est
+    // séparée exprès. Le budget est le prix d'un bien qu'on achète ; celui-ci
+    // est la somme des capitaux restant dus qu'on rachète. Les ranger sous le
+    // même libellé ferait lire un achat là où il y a un rachat.
+    ['Capital à racheter', euros(f.capital_rachete) || f.capital_rachete],
+    ['Trésorerie demandée', euros(f.tresorerie) || f.tresorerie],
+    ['Pour quel projet', f.tresorerie_motif],
     ['Apport', euros(f.apport) || f.apport],
     // Ce que la banque attend, et ce qu'il dit pouvoir réunir : les quatre
     // lignes de la section « Apport » du formulaire.
@@ -232,11 +250,24 @@ const lignesChiffres = (f) => {
 };
 
 // Les trois chiffres en gros, en tête de « Les chiffres ».
-const calculsDe = (f) => [
-  ['Mensualité estimée', euros(f.mensualite)],
-  ['Taux d’endettement', pourcent(f.endettement)],
-  ['Capacité d’emprunt', euros(f.capacite)],
-].filter(([, v]) => v);
+// ⚠ 25/11/2026 — L'ENDETTEMENT SE LIT EN MOUVEMENT QUAND ON A LES DEUX BOUTS.
+// Sur un regroupement, le chiffre d'arrivée seul ne dit rien : « 43 % » peut
+// être une catastrophe évitée comme une dégradation. C'est l'écart qui porte
+// le sens, et c'est lui que le client vient chercher. Le simulateur
+// immobilier, lui, n'envoie pas d'`endettement_avant` : la ligne reprend alors
+// son libellé d'origine et son chiffre unique, inchangés.
+const calculsDe = (f) => {
+  const avant = pourcent(f.endettement_avant);
+  const apres = pourcent(f.endettement);
+  return [
+    ['Mensualité estimée', euros(f.mensualite)],
+    [avant ? 'Endettement avant → après' : 'Taux d’endettement',
+      avant && apres ? `${avant} → ${apres}` : (apres || avant)],
+    // Vide sur un regroupement : on ne calcule pas une capacité d'achat.
+    // La ligne disparaît d'elle-même, comme toutes les autres.
+    ['Capacité d’emprunt', euros(f.capacite)],
+  ].filter(([, v]) => v);
+};
 
 // ---------------------------------------------------------------- la fiche
 // Le bloc « Le simulateur » de la fiche d'une affaire. Rien si l'affaire n'en vient pas.
